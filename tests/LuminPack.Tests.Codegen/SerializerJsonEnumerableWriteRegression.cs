@@ -2,9 +2,10 @@ using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 /// <summary>Checks shared JSON sequence loops, concurrent emptiness queries and iterator failure state.</summary>
-internal static class SerializerJsonEnumerableWriteRegression
+internal static partial class SerializerJsonEnumerableWriteRegression
 {
     /// <summary>Executes independent byte and iterator-state comparisons in every generation mode and profile.</summary>
     /// <param name="references">The actual platform and runtime metadata references.</param>
@@ -19,11 +20,32 @@ internal static class SerializerJsonEnumerableWriteRegression
             GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
             driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            CheckIntegerSelection(output);
             using var image = new MemoryStream(); var result = output.Emit(image);
             Require(result.Success, string.Join(Environment.NewLine, result.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
             Assembly.Load(image.ToArray()).GetType("SequenceEntry")!.GetMethod("Check")!.Invoke(null, null);
         }
         Console.WriteLine("Passed shared JSON sequence bytes, iterator failure state and concurrent controls in four profiles and four generation modes.");
+    }
+
+    /// <summary>Checks canonical integer selection without bypassing other element contracts.</summary>
+    /// <param name="output">The generated consumer compilation.</param>
+    private static void CheckIntegerSelection(Compilation output)
+    {
+        int selected = 0, excluded = 0;
+        foreach (var tree in output.SyntaxTrees.Skip(1))
+        foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            if (method.Identifier.ValueText != "RootWriteJson" || method.ParameterList.Parameters.Count != 2) continue;
+            var symbol = output.GetSemanticModel(tree).GetDeclaredSymbol(method);
+            if (symbol?.Parameters[1].Type is not INamedTypeSymbol type ||
+                type.OriginalDefinition.ToDisplayString() != "System.Collections.Generic.Queue<T>") continue;
+            bool integer = type.TypeArguments[0].SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64;
+            bool usesEntry = method.ToString().Contains(".WriteEnumerationElement", StringComparison.Ordinal);
+            Require(integer == usesEntry, "Enumeration policy bypassed an element contract: " + type);
+            if (integer) selected++; else excluded++;
+        }
+        Require(selected >= 2 && excluded >= 4, "Enumeration policy selection was not exercised.");
     }
 
     /// <summary>Builds concrete calls for the shared sequence families without relying on generic registration.</summary>
@@ -53,7 +75,7 @@ internal static class SerializerJsonEnumerableWriteRegression
                 : "new " + type + "(" + argument + ")";
             calls.AppendLine("{ " + type + " value = " + expression + "; string expected = Expected(value); buffer.ResetCore(); LuminPackSerializer.SerializeJson<TProfile>(value, buffer); EqualText<TProfile>(buffer, expected); (value as IDisposable)?.Dispose(); }");
         }
-        return Source.Replace("MODE", mode, StringComparison.Ordinal).Replace("SEQUENCE_CASES", calls.ToString(), StringComparison.Ordinal);
+        return Source.Replace("MODE", mode, StringComparison.Ordinal).Replace("SEQUENCE_CASES", calls.ToString(), StringComparison.Ordinal) + BoundarySource;
     }
 
     /// <summary>Reports a focused contract violation.</summary>
@@ -80,8 +102,10 @@ internal static class SerializerJsonEnumerableWriteRegression
         using LuminPack.Option;
         using LuminPack.Utility;
         [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+        public enum SequenceNumber { One = 1, Two = 2 }
+        [LuminPackable] public sealed class SequenceValue { public int Number; }
         [LuminPackable] public sealed class SequenceGraph { public ConcurrentStack<int> Values; }
-        public static class SequenceEntry
+        public static partial class SequenceEntry
         {
             private static readonly JsonSerializerOptions jsonOptions = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
             public static void Check()
@@ -112,6 +136,13 @@ internal static class SerializerJsonEnumerableWriteRegression
                     string expected = FaultState<TProfile>(fault,false), actual = FaultState<TProfile>(fault,true);
                     if (expected != actual) throw new Exception("Iterator exception state changed: " + fault + " / " + expected + " / " + actual);
                 }
+                var nullableValues = new Queue<int?>(new int?[] { 1, null, -2 });
+                buffer.ResetCore(); LuminPackSerializer.SerializeJson<TProfile>(nullableValues,buffer); EqualText<TProfile>(buffer,"[1,null,-2]");
+                var enumValues = new Queue<SequenceNumber>(new[] { SequenceNumber.One, SequenceNumber.Two });
+                buffer.ResetCore(); LuminPackSerializer.SerializeJson<TProfile>(enumValues,buffer); EqualText<TProfile>(buffer,"[1,2]");
+                var objectValues = new Queue<SequenceValue>(new[] { new SequenceValue { Number = 3 } });
+                buffer.ResetCore(); LuminPackSerializer.SerializeJson<TProfile>(objectValues,buffer); EqualText<TProfile>(buffer,"[{\"Number\":3}]");
+                BoundaryProfile<TProfile>();
                 ConcurrentQueue<int> nullQueue = null; buffer.ResetCore(); LuminPackSerializer.SerializeJson<TProfile>(nullQueue,buffer); EqualText<TProfile>(buffer,"null");
             }
             // The fixture's supplementary character is literal in LuminPack's established wire representation.

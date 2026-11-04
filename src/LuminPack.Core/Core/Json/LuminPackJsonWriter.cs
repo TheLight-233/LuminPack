@@ -2360,6 +2360,95 @@ namespace LuminPack.Core
             WriteIntegerValue<TOptions>(value);
         }
 
+        /// <summary>Reports whether the default profile selects the isolated UTF-8 enumeration operation.</summary>
+        /// <returns>Whether enumeration uses the UTF-8 integer entry.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool UsesUtf8Enumeration() => UsesUtf8Enumeration<global::LuminPack.Option.LuminPackDefaultOptions>();
+
+        /// <summary>Reports whether the compiled profile selects the isolated UTF-8 enumeration operation.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>A profile constant which the JIT folds before executing the loop.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public readonly bool UsesUtf8Enumeration<TOptions>() where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            => default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;
+
+        /// <summary>Writes a generated enumeration element with the default profile and an independent native budget.</summary>
+        /// <param name="value">The integer element.</param>
+        /// <param name="separate">Whether a preceding element requires a comma.</param>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteEnumerationElement(int value, bool separate) => WriteEnumerationElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
+
+        /// <summary>Writes a generated enumeration element with the default profile and an independent native budget.</summary>
+        /// <param name="value">The integer element.</param>
+        /// <param name="separate">Whether a preceding element requires a comma.</param>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteEnumerationElement(long value, bool separate) => WriteEnumerationElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
+
+        /// <summary>Combines an enumeration separator and integer without importing formatting into the caller.</summary>
+        /// <param name="value">The integer element.</param>
+        /// <param name="separate">Whether a preceding element requires a comma.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <remarks>Near a storage boundary, the original separator, flag and scalar operations preserve growth and failure state.</remarks>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteEnumerationElement<TOptions>(int value, bool separate)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(12))
+            {
+                int skip = separate ? 1 : 0;
+                ref byte output = ref Current;
+                output = Comma;
+                Advance(skip + LuminPackJsonNumberFormatter.WriteInt32(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, (nint)(uint)skip), 11), value));
+                IsFirstElement = false;
+                return;
+            }
+            if (separate) WriteByteRaw<TOptions>(Comma);
+            IsFirstElement = true;
+            Write<TOptions>(value);
+        }
+
+        /// <summary>Combines an enumeration separator and long integer without importing formatting into the caller.</summary>
+        /// <param name="value">The integer element.</param>
+        /// <param name="separate">Whether a preceding element requires a comma.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <remarks>Near a storage boundary, the original separator, flag and scalar operations preserve growth and failure state.</remarks>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteEnumerationElement<TOptions>(long value, bool separate)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(21))
+            {
+                int skip = separate ? 1 : 0;
+                ref byte output = ref Current;
+                output = Comma;
+                Advance(skip + LuminPackJsonNumberFormatter.WriteLong(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, (nint)(uint)skip), 20), value));
+                IsFirstElement = false;
+                return;
+            }
+            if (separate) WriteByteRaw<TOptions>(Comma);
+            IsFirstElement = true;
+            Write<TOptions>(value);
+        }
+
+        /// <summary>Tests the complete fused write range without growing or committing a storage window.</summary>
+        /// <param name="count">The positive maximum fused payload width.</param>
+        /// <returns>Whether the complete payload already fits in the current window.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool HasEnumerationCapacity(int count)
+        {
+#if NET8_0_OR_GREATER
+            return (long)Unsafe.ByteOffset(ref Cursor, ref _end) >= count;
+#else
+            return (long)(_end - Cursor) >= count;
+#endif
+        }
+
         /// <summary>Opens one dictionary entry array and writes its string key and the inner separator.</summary>
         /// <param name = "key">The entry key.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>

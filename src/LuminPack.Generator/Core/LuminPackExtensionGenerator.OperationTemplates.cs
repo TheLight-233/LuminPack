@@ -121,6 +121,8 @@ public static partial class LuminPackExtensionGenerator
             field.CanBuildSortedSet = EmitterTypeTraits.CanBuildSortedSet(sortedSet.TypeArguments[0], compilation);
             field.CanRebuildSortedSet = EmitterTypeTraits.CanRebuildSortedSet(sortedSet.TypeArguments[0], compilation);
         }
+        if (type is INamedTypeSymbol { TypeArguments.Length: > 0 } sequence)
+            field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, sequence.TypeArguments[0]);
         if (type is INamedTypeSymbol { MetadataName: "SortedList`2", TypeArguments.Length: 2 } sortedList &&
             sortedList.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

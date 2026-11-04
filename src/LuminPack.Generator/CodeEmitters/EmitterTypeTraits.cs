@@ -66,6 +66,31 @@ internal static class EmitterTypeTraits
     /// <returns>Whether the element is a string, int or long.</returns>
     internal static bool HasJsonElementWriter(string type) => JsonFusedKind(type) != null;
 
+    /// <summary>Checks both compiled-profile and default entries of the optional enumeration writer.</summary>
+    /// <param name="compilation">The consumer's actual runtime metadata.</param>
+    /// <param name="element">The canonical integer element.</param>
+    /// <returns>Whether the original scalar loop may use the isolated runtime entry.</returns>
+    internal static bool HasJsonEnumerationWriter(Compilation compilation, ITypeSymbol element)
+    {
+        if (!GeneratedExecutionPolicy.IsolateJsonIntegerEnumeration(element)) return false;
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        bool Profile(IMethodSymbol method) => method.Arity == 0 || method.Arity == 1 &&
+            method.TypeParameters[0].HasValueTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options);
+        var methods = owner?
+            .GetMembers("WriteEnumerationElement").OfType<IMethodSymbol>().Where(method => !method.IsStatic && method.ReturnsVoid &&
+                method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 &&
+                method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, element) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Boolean && Profile(method)).ToArray();
+        var queries = owner?.GetMembers("UsesUtf8Enumeration").OfType<IMethodSymbol>().Where(method => !method.IsStatic &&
+            method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean && !method.ReturnsByRef && !method.ReturnsByRefReadonly && Profile(method)).ToArray();
+        return methods != null && queries != null && methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1) &&
+            queries.Any(method => method.Arity == 0) && queries.Any(method => method.Arity == 1);
+    }
+
     /// <summary>Recognizes concurrent collections whose public emptiness query avoids a full count.</summary>
     /// <param name="typeName">The canonical constructed collection name.</param>
     /// <returns>Whether the empty JSON branch can use the public IsEmpty property.</returns>

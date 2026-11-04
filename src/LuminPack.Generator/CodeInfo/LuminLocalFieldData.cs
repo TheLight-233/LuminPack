@@ -39,6 +39,8 @@ public sealed class LuminLocalFieldData
     internal bool CanAppendSortedListOrdered;
     /// <summary>Whether the referenced runtime exposes a checked allocation-free sorted-list traversal.</summary>
     internal bool CanTraverseSortedList;
+    /// <summary>Whether the referenced runtime provides isolated integer enumeration writes.</summary>
+    internal bool CanWriteJsonEnumerationElement;
     /// <summary>Stores the canonical local Union cursor slot selected for a dictionary operation, if any.</summary>
     internal string UnionCursorSuffix;
     /// <summary>Stores the string encoding of the Union root's declared binary slot.</summary>
