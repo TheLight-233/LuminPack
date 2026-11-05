@@ -9,6 +9,32 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
+    /// <summary>Checks callback-free framework hashing and the exact referenced complete-buffer set constructor.</summary>
+    /// <param name="element">The closed element contract.</param>
+    /// <param name="compilation">The consumer's core library and runtime metadata.</param>
+    /// <returns>Whether hashing may be deferred until the existing element operations finish.</returns>
+    internal static bool CanBuildFrameworkImmutableHashSet(ITypeSymbol element, Compilation compilation)
+    {
+        if (element is null || !(element.SpecialType == SpecialType.System_String || IsKnownScalar(element)) ||
+            !SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly))
+            return false;
+        var set = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableHashSet`1");
+        if (set is null) return false;
+        var methods = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage")?
+            .GetMembers("CreateFrameworkImmutableHashSet").OfType<IMethodSymbol>().Where(method => method.IsStatic && method.Arity == 1 &&
+                method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 &&
+                method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, set.Construct(method.TypeParameters[0])));
+        return methods is not null && methods.Any(method =>
+                method.Parameters[0].Type is IArrayTypeSymbol { Rank: 1 } array &&
+                SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32) &&
+            methods.Any(method => method.Parameters.All(parameter => SymbolEqualityComparer.Default.Equals(parameter.Type, method.TypeParameters[0])));
+    }
+
     /// <summary>Checks a referenced public sequence factory instead of inferring its API from target symbols.</summary>
     /// <param name="compilation">The consuming compilation and its actual immutable collection references.</param>
     /// <param name="name">The concrete immutable sequence family name.</param>

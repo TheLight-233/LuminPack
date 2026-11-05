@@ -17,6 +17,7 @@ internal static class ImmutableScalarSetEmitter
         if (!EmitterTypeTraits.IsKnownScalar(element)) return false;
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         string family = sorted ? "ImmutableSortedSet" : "ImmutableHashSet";
+        string factory = !sorted && fieldData.CanBuildFrameworkImmutableHashSet ? "CreateFrameworkImmutableHashSet" : "Create" + family;
         string comparer = sorted ? "Comparer" : "EqualityComparer";
         string cache = "__LuminImmutableCandidate<global::System.Collections.Immutable." + family + "<" + elementType + ">>.Last";
         CollectionEmitterKit.AppendReadLength(sb, element, elementType, "value = null;", "            ", scalarElements: true);
@@ -36,7 +37,7 @@ internal static class ImmutableScalarSetEmitter
             "    }",
             "    finally { global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(prior, false); }",
             "}",
-            "var completed = global::LuminPack.Utility.LuminTreeStorage.Create" + family + "(__pooled, length);",
+            "var completed = global::LuminPack.Utility.LuminTreeStorage." + factory + "(__pooled, length);",
             cache + ".SetTarget(completed);",
             "value = completed;"
         }, "            ", scalarElements: true);

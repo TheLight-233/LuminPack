@@ -65,6 +65,30 @@ public static class InterfaceImmutableSetEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        if (fieldData.CanBuildFrameworkImmutableHashSet)
+        {
+            sb.AppendLine("            if (length == 2)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                {elementType} first = default!, second = default!;");
+            sb.AppendLine("                reader.ReadValue(ref first);");
+            sb.AppendLine("                reader.ReadValue(ref second);");
+            sb.AppendLine("                value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(first, second);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine($"            var items = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                for (int i = 0; i < length; i++)");
+            sb.AppendLine("                {");
+            sb.AppendLine($"                    {elementType} item = default!;");
+            sb.AppendLine("                    reader.ReadValue(ref item);");
+            sb.AppendLine("                    items[i] = item;");
+            sb.AppendLine("                }");
+            sb.AppendLine("                value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(items, length);");
+            sb.AppendLine("            }");
+            sb.AppendLine($"            finally {{ global::System.Buffers.ArrayPool<{elementType}>.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>()); }}");
+            return;
+        }
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableHashSet.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");

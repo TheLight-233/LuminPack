@@ -116,7 +116,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
         sb.AppendLine("                } while (reader.Read());");
-        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableSequenceFromSpan);
+        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableSequenceFromSpan, fieldData.CanBuildFrameworkImmutableHashSet);
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
@@ -129,7 +129,8 @@ internal static class ImmutableCollectionEmitterHelper
     /// <param name="elementType">The element type used by this operation.</param>
     /// <param name="baseType">The base type used by this operation.</param>
     /// <param name="canCreateFromSpan">Whether the actual sequence factory accepts a complete span.</param>
-    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateFromSpan)
+    /// <param name="canBuildHashSet">Whether framework hashing and the referenced constructor permit complete-buffer construction.</param>
+    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateFromSpan, bool canBuildHashSet)
     {
         if (baseType == "global::System.Collections.Immutable.ImmutableArray")
         {
@@ -159,6 +160,11 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                }");
         if (target is "ImmutableHashSet" or "ImmutableSortedSet")
             sb.AppendLine("                if (count == 1) { value = global::System.Collections.Immutable." + target + ".Create<" + elementType + ">(buffer[0]); return; }");
+        if (target == "ImmutableHashSet" && canBuildHashSet)
+        {
+            sb.AppendLine("                value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(buffer, count);");
+            return;
+        }
         if (target == "ImmutableList")
         {
             // The buffered sequence can build a balanced tree directly instead of inserting and rebalancing every item.

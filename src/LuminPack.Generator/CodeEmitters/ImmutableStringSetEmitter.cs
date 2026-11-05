@@ -15,6 +15,7 @@ internal static class ImmutableStringSetEmitter
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
         if (element?.SpecialType != SpecialType.System_String) return false;
         string family = sorted ? "ImmutableSortedSet" : "ImmutableHashSet";
+        string factory = !sorted && fieldData.CanBuildFrameworkImmutableHashSet ? "CreateFrameworkImmutableHashSet" : "Create" + family;
         string comparer = sorted ? "Comparer" : "EqualityComparer";
         string cache = "__LuminImmutableCandidate<global::System.Collections.Immutable." + family + "<string>>.Last";
         CollectionEmitterKit.AppendReadLength(sb, element, "string", "value = null;", "            ", scalarElements: true);
@@ -47,7 +48,7 @@ internal static class ImmutableStringSetEmitter
             sb.AppendLine("                }");
         }
         sb.AppendLine("                if (same) { " + cache + ".SetTarget(candidate!); value = candidate!; return; }");
-        sb.AppendLine("                var completed = global::LuminPack.Utility.LuminTreeStorage.Create" + family + "(items, length);");
+        sb.AppendLine("                var completed = global::LuminPack.Utility.LuminTreeStorage." + factory + "(items, length);");
         sb.AppendLine("                " + cache + ".SetTarget(completed);");
         sb.AppendLine("                value = completed;");
         sb.AppendLine("            }");

@@ -14,11 +14,12 @@ namespace LuminPack.Utility;
 /// bytes are unchanged; each build produces a tree that answers every operation as the collection's own construction does.</para>
 /// <para>The fields of each collection and node type are located at run time by <see cref="LuminFieldLayout"/> for the closed
 /// types in use, then the family is checked once through its public API. A field that cannot be located, a failed check, a
-/// derived or view collection, input that is not strictly ordered, equal hash codes and duplicates use the public API, which
-/// keeps every exception of the original paths. Writes into destinations stay bounds-checked.</para>
+/// derived or view collection and unsupported input use the public API, preserving the original fallback exceptions.
+/// General hash construction retains its collision fallback; the separately validated framework-element constructor
+/// also builds collision buckets. Writes into destinations stay bounds-checked.</para>
 /// </remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class LuminTreeStorage
+public static partial class LuminTreeStorage
 {
     /// <summary>Copies a sorted set's items in order.</summary>
     /// <typeparam name="T">The element type.</typeparam>
@@ -1006,6 +1007,11 @@ public static class LuminTreeStorage
         /// <summary>Allocates a node of the collection's own node type; every field the trees use is assigned afterwards.</summary>
         /// <returns>The new node.</returns>
         internal object New() => _factory is not null ? _factory() : RuntimeHelpers.GetUninitializedObject(Type!);
+
+        /// <summary>Allocates a collision-construction node, cloning the established empty node when no direct allocator is bound.</summary>
+        /// <param name="empty">The existing empty node of the exact validated node type.</param>
+        /// <returns>A fresh unpublished node whose payload and links the caller completes.</returns>
+        internal object New(object empty) => _factory is not null ? _factory() : Clone(empty);
     }
 
 #if NET10_0_OR_GREATER

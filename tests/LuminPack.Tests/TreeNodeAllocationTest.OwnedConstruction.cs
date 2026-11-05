@@ -8,6 +8,75 @@ namespace LuminPackUnitTest;
 
 public sealed partial class TreeNodeAllocationTest
 {
+    /// <summary>Rejects invalid complete-buffer counts before reading elements or renting ordering storage.</summary>
+    [Fact]
+    public void FrameworkHashConstructionChecksItsBufferRange()
+    {
+        long[] items = [7, 11];
+        Assert.Equal("LuminPackException", Assert.ThrowsAny<Exception>(() => LuminTreeStorage.CreateFrameworkImmutableHashSet(items, -1)).GetType().Name);
+        Assert.Equal("LuminPackException", Assert.ThrowsAny<Exception>(() => LuminTreeStorage.CreateFrameworkImmutableHashSet(items, 3)).GetType().Name);
+        Assert.Same(ImmutableHashSet<long>.Empty, LuminTreeStorage.CreateFrameworkImmutableHashSet(items, 0));
+        Assert.Equal(new long[] { 7 }, LuminTreeStorage.CreateFrameworkImmutableHashSet(items, 1).ToArray());
+        Assert.Equal(new long[] { 7, 11 }, items);
+    }
+
+    /// <summary>Requires duplicate and colliding framework sets to allocate only their final owner and reachable nodes.</summary>
+    /// <param name="count">The decoded element count around collision-list rotation boundaries.</param>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(6)]
+    [InlineData(12)]
+    [InlineData(17)]
+    [InlineData(65)]
+    [InlineData(257)]
+    public void FrameworkHashBucketsAllocateOnlyTheirResult(int count)
+    {
+        var gate = typeof(LuminTreeStorage).GetNestedType("GroupedHashLayout", BindingFlags.NonPublic)!;
+        Assert.True((bool)gate.GetField("Available", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!);
+        for (int shape = 0; shape < 3; shape++)
+        {
+            long[] items = Enumerable.Range(0, count).Select(index =>
+            {
+                int value = shape == 1 ? index % 3 : index;
+                return ((long)value << 32) | (uint)(shape == 2 ? value ^ (index % 3) : value);
+            }).Append(long.MinValue).ToArray();
+            long[] original = (long[])items.Clone();
+            long[] input = items.Take(count).ToArray();
+            var reference = ImmutableHashSet.CreateRange(input);
+            Func<object> build = () => LuminTreeStorage.CreateFrameworkImmutableHashSet(items, count);
+            var result = (ImmutableHashSet<long>)build();
+            Assert.Equal(reference.ToArray(), result.ToArray());
+
+            object root = typeof(ImmutableHashSet<long>).GetField("_root", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(result)!;
+            object bucket = root.GetType().GetField("_value", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(root)!;
+            object tail = bucket.GetType().GetField("_additionalElements", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(bucket)!;
+            long ownerBytes = MinimumAllocation(() => RuntimeHelpers.GetUninitializedObject(result.GetType()));
+            long hashBytes = MinimumAllocation(() => RuntimeHelpers.GetUninitializedObject(root.GetType()));
+            long listBytes = MinimumAllocation(() => RuntimeHelpers.GetUninitializedObject(tail.GetType()));
+            int hashes = input.Select(item => item.GetHashCode()).Distinct().Count();
+            long expected = ownerBytes + hashes * hashBytes + (reference.Count - hashes) * listBytes;
+            Assert.Equal(expected, MinimumAllocation(build));
+            if (count == 2)
+            {
+                Assert.Equal(expected, MinimumAllocation(() => LuminTreeStorage.CreateFrameworkImmutableHashSet(items[0], items[1])));
+                Assert.Equal(reference.ToArray(), LuminTreeStorage.CreateFrameworkImmutableHashSet(items[0], items[1]).ToArray());
+            }
+
+            var changed = result;
+            var expectedChanged = reference;
+            for (int step = 0; step < 16; step++)
+            {
+                long item = input[(step * 37) % count];
+                changed = (step & 1) == 0 ? changed.Remove(item) : changed.Add(item);
+                expectedChanged = (step & 1) == 0 ? expectedChanged.Remove(item) : expectedChanged.Add(item);
+                Assert.Equal(expectedChanged.ToArray(), changed.ToArray());
+            }
+            Assert.Equal(original, items);
+            Assert.Equal(reference.ToArray(), result.ToArray());
+        }
+    }
+
     /// <summary>Requires warmed distinct-key construction to allocate only the returned owner and its reachable nodes.</summary>
     /// <param name="count">The number of distinct ordered keys.</param>
     [Theory]

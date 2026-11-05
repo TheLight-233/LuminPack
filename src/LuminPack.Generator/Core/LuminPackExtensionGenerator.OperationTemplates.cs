@@ -134,6 +134,9 @@ public static partial class LuminPackExtensionGenerator
             field.CanBuildSortedSet = EmitterTypeTraits.CanBuildSortedSet(sortedSet.TypeArguments[0], compilation);
             field.CanRebuildSortedSet = EmitterTypeTraits.CanRebuildSortedSet(sortedSet.TypeArguments[0], compilation);
         }
+        if (type is INamedTypeSymbol { MetadataName: "ImmutableHashSet`1" or "IImmutableSet`1", TypeArguments.Length: 1 } immutableHashSet &&
+            immutableHashSet.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
+            field.CanBuildFrameworkImmutableHashSet = EmitterTypeTraits.CanBuildFrameworkImmutableHashSet(immutableHashSet.TypeArguments[0], compilation);
         if (type is INamedTypeSymbol { MetadataName: "IReadOnlySet`1" } readOnlySet && readOnlySet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
             field.CanEnumerateFrozenSet = compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1")?
                 .GetMembers("GetEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
