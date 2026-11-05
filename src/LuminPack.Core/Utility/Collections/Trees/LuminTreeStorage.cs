@@ -876,12 +876,64 @@ public static class LuminTreeStorage
         int i = 1;
         while (i < count && (int)(keys[i - 1] >> 32) < (int)(keys[i] >> 32)) i++;
         if (i == count) return true;
+        if (i < count && keys[i - 1] <= keys[i])
+        {
+            int ordered = i + 1;
+            while (ordered < count && keys[ordered - 1] <= keys[ordered]) ordered++;
+            if (ordered == count) return false;
+        }
+#if NETSTANDARD2_1
+        if (LegacyHashSort.Enabled) SortHashKeys(keys, count);
+        else Array.Sort(keys, 0, count);
+#else
         Array.Sort(keys, 0, count);
+#endif
         for (i = 1; i < count; i++)
             if ((int)(keys[i - 1] >> 32) == (int)(keys[i] >> 32))
                 return false;
         return true;
     }
+
+#if NETSTANDARD2_1
+    /// <summary>Identifies legacy core libraries whose range-sort adapters can allocate a comparison delegate per call.</summary>
+    private static class LegacyHashSort
+    {
+        internal static readonly bool Enabled = typeof(object).Assembly.GetName().Name == "mscorlib";
+    }
+
+    /// <summary>Orders the valid packed-key prefix without delegates, recursion or additional scratch storage.</summary>
+    /// <param name="keys">The caller-owned ordering lease; its unused tail is preserved.</param>
+    /// <param name="count">The number of initialized packed hash and original-index keys.</param>
+    private static void SortHashKeys(long[] keys, int count)
+    {
+        for (int parent = (count >> 1) - 1; parent >= 0; parent--)
+            SiftHashKey(keys, parent, count, keys[parent]);
+        for (int end = count - 1; end > 0; end--)
+        {
+            long value = keys[end];
+            keys[end] = keys[0];
+            SiftHashKey(keys, 0, end, value);
+        }
+    }
+
+    /// <summary>Restores the maximum heap below a displaced key using only children within the active prefix.</summary>
+    /// <param name="keys">The initialized ordering storage.</param>
+    /// <param name="parent">The position vacated by the displaced key.</param>
+    /// <param name="count">The exclusive end of the active heap.</param>
+    /// <param name="value">The key to reinsert.</param>
+    private static void SiftHashKey(long[] keys, int parent, int count, long value)
+    {
+        while (parent < (count >> 1))
+        {
+            int child = (parent << 1) + 1;
+            if (child + 1 < count && keys[child] < keys[child + 1]) child++;
+            if (value >= keys[child]) break;
+            keys[parent] = keys[child];
+            parent = child;
+        }
+        keys[parent] = value;
+    }
+#endif
 
     /// <summary>Copies an object of any type, allocating the object's own type.</summary>
     /// <param name="source">The object to copy.</param>
