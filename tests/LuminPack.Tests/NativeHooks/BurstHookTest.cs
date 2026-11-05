@@ -163,6 +163,37 @@ public sealed unsafe class BurstHookTest : IDisposable
         }
     }
 
+    /// <summary>Checks widened ASCII batches with misaligned buffers and exact or shortened output windows.</summary>
+    [Fact]
+    public void BoundedUtf16AsciiBatchesRespectAllAlignments()
+    {
+        byte[] source = new byte[64];
+        byte[] destination = new byte[96];
+        fixed (byte* inputBase = source)
+        fixed (byte* outputBase = destination)
+        foreach (int inputOffset in Enumerable.Range(0, 8))
+        foreach (int outputOffset in Enumerable.Range(1, 8))
+        foreach (int length in new[] { 3, 4, 5, 7, 8, 9, 15, 16, 17, 32 })
+        foreach (int capacity in new[] { length - 1, length, length + 1 })
+        {
+            for (int index = 0; index < length; index++) source[inputOffset + index] = (byte)('A' + index % 26);
+            destination.AsSpan().Fill(0xA5);
+            var status = StringSerializer.TranscodeToUtf16(inputBase + inputOffset, length,
+                (char*)(outputBase + outputOffset), capacity, out byte* inputEnd, out char* outputEnd);
+            int written = Math.Min(length, capacity);
+            Assert.Equal(capacity < length ? OperationStatus.DestinationTooSmall : OperationStatus.Done, status);
+            Assert.Equal(written, (int)(inputEnd - (inputBase + inputOffset)));
+            Assert.Equal(written, (int)(outputEnd - (char*)(outputBase + outputOffset)));
+            for (int index = 0; index < written; index++)
+            {
+                Assert.Equal(source[inputOffset + index], destination[outputOffset + index * 2 + (BitConverter.IsLittleEndian ? 0 : 1)]);
+                Assert.Equal((byte)0, destination[outputOffset + index * 2 + (BitConverter.IsLittleEndian ? 1 : 0)]);
+            }
+            for (int index = 0; index < outputOffset; index++) Assert.Equal((byte)0xA5, destination[index]);
+            for (int index = outputOffset + written * 2; index < destination.Length; index++) Assert.Equal((byte)0xA5, destination[index]);
+        }
+    }
+
     /// <summary>Checks strict and replacement results for every UTF-16 code unit and surrogate pairs across packed prefixes.</summary>
     [Fact]
     public void CompleteUtf8EncodingMatchesEveryCodeUnit()

@@ -1355,12 +1355,11 @@ public static unsafe partial class StringSerializer
             if (littleEndian && Unsafe.SizeOf<IntPtr>() == 8 && inputEnd - input >= 8 &&
                 (long)unchecked((nint)outputEnd - (nint)output) >= 8)
             {
-                ulong lower = Unsafe.ReadUnaligned<ulong>(input);
-                ulong upper = Unsafe.ReadUnaligned<ulong>(input + 4);
+                ulong lower = ((Utf8PackedWord64*)input)->Value;
+                ulong upper = ((Utf8PackedWord64*)(input + 4))->Value;
                 if (((lower | upper) & 0xFF80FF80FF80FF80UL) == 0)
                 {
-                    Unsafe.WriteUnaligned(output,
-                        PackAscii4(lower) | ((ulong)PackAscii4(upper) << 32));
+                    ((Utf8PackedWord64*)output)->Value = PackAscii4(lower) | ((ulong)PackAscii4(upper) << 32);
                     input += 8;
                     output += 8;
                     continue;
@@ -1376,12 +1375,21 @@ public static unsafe partial class StringSerializer
                 {
                     // IL2CPP permits typed unaligned values only up to four bytes on 32-bit.
                     ulong four = IntPtr.Size == 8
+#if NETSTANDARD2_1
+                        ? ((Utf8PackedWord64*)input)->Value
+#else
                         ? Unsafe.ReadUnaligned<ulong>(input)
+#endif
                         : Unsafe.ReadUnaligned<uint>(input) | ((ulong)Unsafe.ReadUnaligned<uint>(input + 2) << 32);
                     if ((four & 0xFF80FF80FF80FF80UL) == 0)
                     {
                         uint ascii = (uint)(four & 0xFFUL) | (uint)((four >> 8) & 0xFF00UL) | (uint)((four >> 16) & 0xFF0000UL) | (uint)((four >> 24) & 0xFF000000UL);
+#if NETSTANDARD2_1
+                        if (IntPtr.Size == 8) ((Utf8PackedWord32*)output)->Value = ascii;
+                        else Unsafe.WriteUnaligned(output, ascii);
+#else
                         Unsafe.WriteUnaligned(output, ascii);
+#endif
                         input += 4;
                         output += 4;
                         continue;
@@ -1530,11 +1538,11 @@ public static unsafe partial class StringSerializer
                 if (BitConverter.IsLittleEndian && Unsafe.SizeOf<IntPtr>() == 8 &&
                     (long)unchecked((nint)inputEnd - (nint)pInputBuffer) >= 8 && outputEnd - pOutputBuffer >= 8)
                 {
-                    ulong eight = Unsafe.ReadUnaligned<ulong>(pInputBuffer);
+                    ulong eight = ((Utf8PackedWord64*)pInputBuffer)->Value;
                     if ((eight & 0x8080808080808080UL) == 0)
                     {
-                        Unsafe.WriteUnaligned(pOutputBuffer, SpreadAscii4((uint)eight));
-                        Unsafe.WriteUnaligned(pOutputBuffer + 4, SpreadAscii4((uint)(eight >> 32)));
+                        ((Utf8PackedWord64*)pOutputBuffer)->Value = SpreadAscii4((uint)eight);
+                        ((Utf8PackedWord64*)(pOutputBuffer + 4))->Value = SpreadAscii4((uint)(eight >> 32));
                         pInputBuffer += 8;
                         pOutputBuffer += 8;
                         continue;

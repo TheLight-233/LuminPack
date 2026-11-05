@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs 1AD425A91BEBAF4FC08EAAE7AD5F205654267CDE78F8F9DD2A3D1FF084FD3A51
+// Core source SHA256: Utility/Text/StringSerializer.cs 69431893C37F9033BDB21BAC550F9051F00F5D89CD8DA6FA5F15CB210EAC1BBD
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
