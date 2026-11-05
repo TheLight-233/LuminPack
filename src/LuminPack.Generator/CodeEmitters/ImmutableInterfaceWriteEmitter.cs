@@ -22,7 +22,10 @@ internal static class ImmutableInterfaceWriteEmitter
         string[] implementations = direct ? new[] { type.Substring(type.LastIndexOf('.') + 1) } : GetImplementations(type);
         if (implementations.Length == 0)
         {
-            AppendLoop(field, sb, "value", "            ", json, dictionary, type is "global::System.Collections.Immutable.ImmutableArray" or "global::System.Collections.Immutable.ImmutableQueue" or "global::System.Collections.Immutable.ImmutableStack");
+            if (json && field.CanTraverseUncachedImmutableQueue && type == "global::System.Collections.Immutable.ImmutableQueue")
+                AppendQueueLoop(field, sb, "value", "            ");
+            else
+                AppendLoop(field, sb, "value", "            ", json, dictionary, type is "global::System.Collections.Immutable.ImmutableArray" or "global::System.Collections.Immutable.ImmutableQueue" or "global::System.Collections.Immutable.ImmutableStack");
             return;
         }
         string arguments = GetFirstGeneric(field.TypeName);
@@ -57,6 +60,8 @@ internal static class ImmutableInterfaceWriteEmitter
             sb.AppendLine("            {");
             if (implementations[i] is "ImmutableHashSet" or "ImmutableDictionary")
                 AppendSnapshot(field, sb, arguments, json, dictionary);
+            else if (json && field.CanTraverseUncachedImmutableQueue && implementations[i] == "ImmutableQueue")
+                AppendQueueLoop(field, sb, "source", "                ");
             else
                 AppendLoop(field, sb, "source", "                ", json, dictionary, implementations[i] is "ImmutableArray" or "ImmutableQueue" or "ImmutableStack");
             sb.AppendLine("            }");
@@ -84,9 +89,10 @@ internal static class ImmutableInterfaceWriteEmitter
     /// <param name="json">Whether the writer uses JSON framing.</param>
     /// <param name="dictionary">Whether the element exposes a key and value.</param>
     /// <param name="isolateInteger">Whether this linear or staged loop benefits from isolating integer formatting.</param>
-    private static void AppendLoop(LuminLocalFieldData field, StringBuilder sb, string collection, string indent, bool json, bool dictionary, bool isolateInteger = false)
+    /// <param name="declareFirst">Whether to start a delimiter state instead of continuing the preceding queue stack.</param>
+    private static void AppendLoop(LuminLocalFieldData field, StringBuilder sb, string collection, string indent, bool json, bool dictionary, bool isolateInteger = false, bool declareFirst = true)
     {
-        if (json && !dictionary) sb.AppendLine(indent + "bool isFirst = true;");
+        if (json && !dictionary && declareFirst) sb.AppendLine(indent + "bool isFirst = true;");
         sb.AppendLine(indent + "foreach (var item in " + collection + ")");
         sb.AppendLine(indent + "{");
         if (!json) sb.AppendLine(indent + "    writer.CheckBuffer();");
@@ -106,6 +112,40 @@ internal static class ImmutableInterfaceWriteEmitter
             sb.AppendLine(indent + "    var temp = item;");
             sb.AppendLine(indent + "    writer.WriteValue(in temp);");
         }
+        sb.AppendLine(indent + "}");
+    }
+
+    /// <summary>Writes a concrete queue while retaining cached stacks and staging only an uncached back stack.</summary>
+    /// <param name="field">The immutable queue contract and compiled element operation.</param>
+    /// <param name="sb">The generated method body.</param>
+    /// <param name="collection">The exact framework queue expression.</param>
+    /// <param name="indent">The enclosing indentation.</param>
+    private static void AppendQueueLoop(LuminLocalFieldData field, StringBuilder sb, string collection, string indent)
+    {
+        string type = GetFirstGeneric(field.TypeName);
+        sb.AppendLine(indent + "bool isFirst = true;");
+        sb.AppendLine(indent + "if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(" + collection + ", out var forwards, out var backwards, out bool reverse))");
+        sb.AppendLine(indent + "{");
+        AppendLoop(field, sb, "forwards!", indent + "    ", true, false, true, false);
+        sb.AppendLine(indent + "    if (reverse) WriteReversed(ref writer, backwards!, ref isFirst);");
+        sb.AppendLine(indent + "    else");
+        sb.AppendLine(indent + "    {");
+        AppendLoop(field, sb, "backwards!", indent + "        ", true, false, true, false);
+        sb.AppendLine(indent + "    }");
+        sb.AppendLine(indent + "}");
+        sb.AppendLine(indent + "else");
+        sb.AppendLine(indent + "{");
+        AppendLoop(field, sb, collection, indent + "    ", true, false, true, false);
+        sb.AppendLine(indent + "}");
+        sb.AppendLine(indent + "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine(indent + "static void WriteReversed(ref global::LuminPack.Core.LuminPackJsonWriter writer, global::System.Collections.Immutable.ImmutableStack<" + type + "> stack, ref bool isFirst)");
+        sb.AppendLine(indent + "{");
+        sb.AppendLine(indent + "    var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count);");
+        sb.AppendLine(indent + "    try");
+        sb.AppendLine(indent + "    {");
+        AppendLoop(field, sb, "new global::System.ReadOnlySpan<" + type + ">(items, 0, count)", indent + "        ", true, false, true, false);
+        sb.AppendLine(indent + "    }");
+        sb.AppendLine(indent + "    finally { global::System.Buffers.ArrayPool<" + type + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + type + ">()); }");
         sb.AppendLine(indent + "}");
     }
 

@@ -1,4 +1,5 @@
 using System.Text;
+using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
@@ -179,17 +180,25 @@ internal static class CollectionEmitterKit
     /// <param name="element">The element symbol.</param>
     /// <param name="queue">An expression producing the exact non-null queue.</param>
     /// <param name="indent">Statement indentation.</param>
+    /// <param name="canReverseUncached">Whether the runtime exposes the validated uncached-stack traversal and lease helpers.</param>
     /// <remarks>The stacks are the ones the queue's enumerator walks, in the same order and with the same count.</remarks>
-    internal static void AppendImmutableQueueWrite(StringBuilder sb, ITypeSymbol element, string queue, string indent)
+    internal static void AppendImmutableQueueWrite(StringBuilder sb, ITypeSymbol element, string queue, string indent, bool canReverseUncached)
     {
         string[] body = { "var v = item;", "writer.WriteValue(in v);" };
         sb.AppendLine(indent + "{");
-        sb.AppendLine(indent + "    if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueStacks(" + queue + ", out var __forwards, out var __backwards))");
+        sb.AppendLine(indent + "    if (global::LuminPack.Code.LuminPackCollectionAccess." +
+            (canReverseUncached ? "TryGetImmutableQueueTraversal" : "TryGetImmutableQueueStacks") + "(" + queue +
+            ", out var __forwards, out var __backwards" + (canReverseUncached ? ", out var __reverse" : "") + "))");
         sb.AppendLine(indent + "    {");
         sb.AppendLine(indent + "        int __countPosition = writer.BeginCollection();");
         sb.AppendLine(indent + "        int __count = 0;");
         foreach (string stack in new[] { "__forwards!", "__backwards!" })
         {
+            if (canReverseUncached && stack == "__backwards!")
+            {
+                sb.AppendLine(indent + "        if (__reverse) __count += WriteReversed(ref writer, __backwards!);");
+                sb.AppendLine(indent + "        else");
+            }
             sb.AppendLine(indent + "        foreach (var item in " + stack + ")");
             sb.AppendLine(indent + "        {");
             if (!ChecksItself(element)) sb.AppendLine(indent + "            writer.CheckBuffer();");
@@ -202,6 +211,25 @@ internal static class CollectionEmitterKit
         sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "    else");
         AppendCountedWrite(sb, "var item", queue, body, indent + "    ", element);
+        if (canReverseUncached)
+        {
+            string type = FormatterTypeName.Get(element);
+            sb.AppendLine(indent + "    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+            sb.AppendLine(indent + "    static int WriteReversed(ref global::LuminPack.Core.LuminPackWriter writer, global::System.Collections.Immutable.ImmutableStack<" + type + "> stack)");
+            sb.AppendLine(indent + "    {");
+            sb.AppendLine(indent + "        var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count);");
+            sb.AppendLine(indent + "        try");
+            sb.AppendLine(indent + "        {");
+            sb.AppendLine(indent + "            foreach (var item in new global::System.ReadOnlySpan<" + type + ">(items, 0, count))");
+            sb.AppendLine(indent + "            {");
+            if (!ChecksItself(element)) sb.AppendLine(indent + "                writer.CheckBuffer();");
+            foreach (string line in body) sb.AppendLine(indent + "                " + line);
+            sb.AppendLine(indent + "            }");
+            sb.AppendLine(indent + "            return count;");
+            sb.AppendLine(indent + "        }");
+            sb.AppendLine(indent + "        finally { global::System.Buffers.ArrayPool<" + type + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + type + ">()); }");
+            sb.AppendLine(indent + "    }");
+        }
         sb.AppendLine(indent + "}");
     }
 

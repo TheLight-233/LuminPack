@@ -9,6 +9,31 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
+    /// <summary>Checks both optional queue traversal operations against their complete generic signatures.</summary>
+    /// <param name="compilation">The consumer's actual runtime and immutable collection references.</param>
+    /// <returns>Whether generated writers can stage an uncached reverse stack.</returns>
+    internal static bool CanTraverseUncachedImmutableQueue(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var queue = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableQueue`1");
+        var stack = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableStack`1");
+        if (access is null || queue is null || stack is null) return false;
+        var methods = access.GetMembers().OfType<IMethodSymbol>().Where(method => method.IsStatic && method.Arity == 1 &&
+            method.DeclaredAccessibility == Accessibility.Public && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+            !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasValueTypeConstraint &&
+            !method.TypeParameters[0].HasUnmanagedTypeConstraint && !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint);
+        return methods.Any(method => method.Name == "TryGetImmutableQueueTraversal" && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+            method.Parameters.Length == 4 && method.Parameters[0].RefKind == RefKind.None && method.Parameters.Skip(1).All(parameter => parameter.RefKind == RefKind.Out) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, queue.Construct(method.TypeParameters[0])) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, stack.Construct(method.TypeParameters[0])) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, stack.Construct(method.TypeParameters[0])) &&
+            method.Parameters[3].Type.SpecialType == SpecialType.System_Boolean) &&
+            methods.Any(method => method.Name == "RentImmutableQueueReversal" && method.ReturnType is IArrayTypeSymbol { Rank: 1 } array &&
+                SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) && method.Parameters.Length == 2 &&
+                method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, stack.Construct(method.TypeParameters[0])) &&
+                method.Parameters[1].RefKind == RefKind.Out && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Checks callback-free framework hashing and the exact referenced complete-buffer set constructor.</summary>
     /// <param name="element">The closed element contract.</param>
     /// <param name="compilation">The consumer's core library and runtime metadata.</param>

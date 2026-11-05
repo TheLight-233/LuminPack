@@ -12,7 +12,7 @@ internal static partial class SerializerImmutableListWriteRegression
         {
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
             var compilation = CSharpCompilation.Create("ImmutableInterfaces" + Guid.NewGuid().ToString("N"),
-                [CSharpSyntaxTree.ParseText(InterfaceSource.Replace("MODE", mode, StringComparison.Ordinal), parse, "Entry.cs")], references,
+                [CSharpSyntaxTree.ParseText(InterfaceSource.Replace("MODE", mode, StringComparison.Ordinal) + UncachedQueueSource, parse, "Entry.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             var driver = Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
@@ -30,7 +30,8 @@ internal static partial class SerializerImmutableListWriteRegression
                 local.Identifier.ValueText.StartsWith("WriteKnownElements", StringComparison.Ordinal) && local.Modifiers.Any(SyntaxKind.StaticKeyword) &&
                 local.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal))), "Concrete iterator state lost its native boundary.");
         }
-        Console.WriteLine("Passed immutable interface writes: eight concrete implementations, custom fallbacks, binary and JSON profiles, warmed allocations, failures and four tiers.");
+        CheckQueueTraversalCapability(references);
+        Console.WriteLine("Passed immutable interface writes: eight concrete implementations, custom fallbacks, binary and JSON profiles, first queue writes, metadata changes, failures and four tiers.");
     }
 
     private const string InterfaceSource = """
@@ -106,6 +107,7 @@ internal static partial class SerializerImmutableListWriteRegression
         {
             public static void Check()
             {
+                UncachedQueueCases.Check();
                 CheckProfile<LuminPackUtf8LengthOptions>();
                 CheckProfile<LuminPackUtf16LengthOptions>();
                 CheckProfile<LuminPackUtf8TokenOptions>();

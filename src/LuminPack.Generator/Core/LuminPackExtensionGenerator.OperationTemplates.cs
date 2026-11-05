@@ -128,6 +128,9 @@ public static partial class LuminPackExtensionGenerator
             immutableSequence.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
             field.CanCreateImmutableSequenceFromSpan = EmitterTypeTraits.CanCreateImmutableSequenceFromSpan(compilation,
                 immutableSequence.Name is "ImmutableQueue" or "IImmutableQueue" ? "ImmutableQueue" : "ImmutableList");
+        if (type is INamedTypeSymbol { MetadataName: "ImmutableQueue`1" or "IImmutableQueue`1" } immutableQueue &&
+            immutableQueue.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
+            field.CanTraverseUncachedImmutableQueue = EmitterTypeTraits.CanTraverseUncachedImmutableQueue(compilation);
         if (type is INamedTypeSymbol { MetadataName: "SortedSet`1", TypeArguments.Length: 1 } sortedSet &&
             sortedSet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

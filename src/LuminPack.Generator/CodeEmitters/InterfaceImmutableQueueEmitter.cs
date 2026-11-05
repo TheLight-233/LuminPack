@@ -19,7 +19,7 @@ public static class InterfaceImmutableQueueEmitter
         sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
         sb.AppendLine("            if (value.GetType() == typeof(global::System.Collections.Immutable.ImmutableQueue<" + InterfaceCollectionEmitterHelper.RuntimeName(element, elementType) + ">))");
         sb.AppendLine("            {");
-        CollectionEmitterKit.AppendImmutableQueueWrite(sb, element, "global::System.Runtime.CompilerServices.Unsafe.As<global::System.Collections.Immutable.ImmutableQueue<" + elementType + ">>(value)", "                ");
+        CollectionEmitterKit.AppendImmutableQueueWrite(sb, element, "global::System.Runtime.CompilerServices.Unsafe.As<global::System.Collections.Immutable.ImmutableQueue<" + elementType + ">>(value)", "                ", fieldData.CanTraverseUncachedImmutableQueue);
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         CollectionEmitterKit.AppendCountedWrite(sb, "var item", "value", new[] { "var v = item;", "writer.WriteValue(in v);" }, "            ", element);

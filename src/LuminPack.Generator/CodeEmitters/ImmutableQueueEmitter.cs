@@ -17,7 +17,7 @@ public static class ImmutableQueueEmitter
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
         string elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
-        CollectionEmitterKit.AppendImmutableQueueWrite(sb, element, "value", "            ");
+        CollectionEmitterKit.AppendImmutableQueueWrite(sb, element, "value", "            ", fieldData.CanTraverseUncachedImmutableQueue);
     }
 
     /// <summary>Appends binary reading statements for immutable queue values.</summary>
