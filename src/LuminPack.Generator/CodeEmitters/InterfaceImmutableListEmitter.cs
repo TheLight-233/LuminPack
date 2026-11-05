@@ -50,7 +50,9 @@ public static class InterfaceImmutableListEmitter
         sb.AppendLine("            if (length == 0) { value = global::System.Collections.Immutable.ImmutableList<" + elementType + ">.Empty; return; }");
         CollectionEmitterKit.AppendPooledRead(sb, element, elementType, new[]
         {
-            "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + elementType + ">(__pooled, 0, length));"
+            fieldData.CanCreateImmutableSequenceFromSpan
+                ? "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + elementType + ">(__pooled, 0, length));"
+                : "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + elementType + ">(__pooled, 0, length));"
         }, "            ", scalarElements: true);
     }
 }

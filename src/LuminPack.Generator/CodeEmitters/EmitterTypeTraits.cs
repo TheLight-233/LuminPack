@@ -9,14 +9,15 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
-    /// <summary>Checks the referenced public queue factory instead of inferring its API from target symbols.</summary>
+    /// <summary>Checks a referenced public sequence factory instead of inferring its API from target symbols.</summary>
     /// <param name="compilation">The consuming compilation and its actual immutable collection references.</param>
-    /// <returns>Whether the factory can construct a queue from the complete buffered span.</returns>
-    internal static bool CanCreateImmutableQueueFromSpan(Compilation compilation)
+    /// <param name="name">The concrete immutable sequence family name.</param>
+    /// <returns>Whether the factory can construct the sequence from the complete buffered span.</returns>
+    internal static bool CanCreateImmutableSequenceFromSpan(Compilation compilation, string name)
     {
         var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
-        var queue = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableQueue`1");
-        return span is not null && queue is not null && compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableQueue")?
+        var sequence = compilation.GetTypeByMetadataName("System.Collections.Immutable." + name + "`1");
+        return span is not null && sequence is not null && compilation.GetTypeByMetadataName("System.Collections.Immutable." + name)?
             .GetMembers("Create").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 &&
                 method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
                 method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint &&
@@ -24,7 +25,7 @@ internal static class EmitterTypeTraits
                 !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint &&
                 method.Parameters[0].RefKind == RefKind.None &&
                 SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span.Construct(method.TypeParameters[0])) &&
-                SymbolEqualityComparer.Default.Equals(method.ReturnType, queue.Construct(method.TypeParameters[0]))) == true;
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, sequence.Construct(method.TypeParameters[0]))) == true;
     }
 
     /// <summary>Reads a zero-initialized element using the operation graph's publication policy.</summary>

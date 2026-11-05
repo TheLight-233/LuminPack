@@ -78,11 +78,9 @@ public static class ImmutableListEmitter
         sb.AppendLine("            if (length == 0) { value = global::System.Collections.Immutable.ImmutableList<" + elementType + ">.Empty; return; }");
         CollectionEmitterKit.AppendPooledRead(sb, element, elementType, new[]
         {
-            "#if NET9_0_OR_GREATER",
-            "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + elementType + ">(__pooled, 0, length));",
-            "#else",
-            "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + elementType + ">(__pooled, 0, length));",
-            "#endif"
+            fieldData.CanCreateImmutableSequenceFromSpan
+                ? "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + elementType + ">(__pooled, 0, length));"
+                : "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + elementType + ">(__pooled, 0, length));"
         }, "            ", scalarElements: true);
     }
 }

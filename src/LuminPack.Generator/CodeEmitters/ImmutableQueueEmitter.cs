@@ -32,7 +32,7 @@ public static class ImmutableQueueEmitter
         sb.AppendLine("            if (length == 0) { value = global::System.Collections.Immutable.ImmutableQueue<" + elementType + ">.Empty; return; }");
         CollectionEmitterKit.AppendPooledRead(sb, element, elementType, new[]
         {
-            fieldData.CanCreateImmutableQueueFromSpan
+            fieldData.CanCreateImmutableSequenceFromSpan
                 ? "value = global::System.Collections.Immutable.ImmutableQueue.Create(new global::System.ReadOnlySpan<" + elementType + ">(__pooled, 0, length));"
                 : "value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(new global::System.ArraySegment<" + elementType + ">(__pooled, 0, length));"
         }, "            ", scalarElements: true);

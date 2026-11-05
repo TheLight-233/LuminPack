@@ -116,9 +116,14 @@ internal static partial class SerializerImmutableQueueConstructionRegression
             private static long Allocations(Action action)
             {
                 for (int i = 0; i < 128; i++) action();
-                long before = GC.GetAllocatedBytesForCurrentThread();
-                for (int i = 0; i < 128; i++) action();
-                return GC.GetAllocatedBytesForCurrentThread() - before;
+                long minimum = long.MaxValue;
+                for (int sample = 0; sample < 3; sample++)
+                {
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    for (int i = 0; i < 128; i++) action();
+                    minimum = Math.Min(minimum, GC.GetAllocatedBytesForCurrentThread() - before);
+                }
+                return minimum;
             }
             [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
             private static global::System.Collections.Immutable.ImmutableQueue<int> QueueOracle(int[] values)

@@ -166,6 +166,11 @@ try
         SerializerImmutableQueueConstructionRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-immutable-list-construction"])
+    {
+        SerializerImmutableQueueConstructionRegression.RunLists(references);
+        return 0;
+    }
     if (args is ["--verify-reference-property-metadata"])
     {
         SerializerReferencePropertyMetadataRegression.Run(references);
@@ -358,6 +363,7 @@ try
     SerializerFrameworkEntryRegression.RunMemoryLoops(references);
     SerializerBuilderPathRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.Run(references);
+    SerializerImmutableQueueConstructionRegression.RunLists(references);
     SerializerImmutableListWriteRegression.RunInterfaces(references);
     SerializerImmutableListWriteRegression.RunLeases(references);
     SerializerImmutableListWriteRegression.RunSortedJson(references);

@@ -116,7 +116,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
         sb.AppendLine("                } while (reader.Read());");
-        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableQueueFromSpan);
+        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableSequenceFromSpan);
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
@@ -128,8 +128,8 @@ internal static class ImmutableCollectionEmitterHelper
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="elementType">The element type used by this operation.</param>
     /// <param name="baseType">The base type used by this operation.</param>
-    /// <param name="canCreateQueueFromSpan">Whether the actual queue factory accepts a complete span.</param>
-    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateQueueFromSpan)
+    /// <param name="canCreateFromSpan">Whether the actual sequence factory accepts a complete span.</param>
+    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateFromSpan)
     {
         if (baseType == "global::System.Collections.Immutable.ImmutableArray")
         {
@@ -162,9 +162,11 @@ internal static class ImmutableCollectionEmitterHelper
         if (target == "ImmutableList")
         {
             // The buffered sequence can build a balanced tree directly instead of inserting and rebalancing every item.
-            sb.AppendLine("#if NET9_0_OR_GREATER");
-            sb.AppendLine("                value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + elementType + ">(buffer, 0, count));");
-            sb.AppendLine("#else");
+            if (canCreateFromSpan)
+            {
+                sb.AppendLine("                value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + elementType + ">(buffer, 0, count));");
+                return;
+            }
             sb.AppendLine("                if (count == 1) value = global::System.Collections.Immutable.ImmutableList.Create<" + elementType + ">(buffer[0]);");
             sb.AppendLine("                else if (count <= 3)");
             sb.AppendLine("                {");
@@ -173,7 +175,6 @@ internal static class ImmutableCollectionEmitterHelper
             sb.AppendLine("                    value = builder.ToImmutable();");
             sb.AppendLine("                }");
             sb.AppendLine("                else value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + elementType + ">(buffer, 0, count));");
-            sb.AppendLine("#endif");
             return;
         }
         if (target == "ImmutableStack")
@@ -185,7 +186,7 @@ internal static class ImmutableCollectionEmitterHelper
         }
         if (target == "ImmutableQueue")
         {
-            sb.AppendLine(canCreateQueueFromSpan
+            sb.AppendLine(canCreateFromSpan
                 ? "                value = global::System.Collections.Immutable.ImmutableQueue.Create(new global::System.ReadOnlySpan<" + elementType + ">(buffer, 0, count));"
                 : "                value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(new global::System.ArraySegment<" + elementType + ">(buffer, 0, count));");
             return;
