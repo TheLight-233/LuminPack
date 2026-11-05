@@ -2959,7 +2959,7 @@ namespace LuminPack.Core
                 if (utf8.Length == 1 && utf8[0] <= 0x7F)
                     return (char)utf8[0];
                 Span<char> chars = stackalloc char[2];
-                int len = Encoding.UTF8.GetChars(utf8, chars);
+                int len = Utf8PlatformDecoder.Decode(utf8, chars);
                 return len > 0 ? chars[0] : '\0';
             }
             else
@@ -3122,7 +3122,7 @@ namespace LuminPack.Core
 #endif
         }
 
-        /// <summary>Decodes UTF-8 through the BCL replacement fallback without allocating a token string.</summary>
+        /// <summary>Decodes UTF-8 with platform replacement semantics without allocating a token string.</summary>
         /// <param name="utf8">The complete unescaped token content.</param>
         /// <returns>The parsed arbitrary-precision integer.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -3132,7 +3132,7 @@ namespace LuminPack.Core
             Span<char> text = utf8.Length <= 256 ? stackalloc char[256] : (rented = ArrayPool<char>.Shared.Rent(utf8.Length));
             try
             {
-                int written = Encoding.UTF8.GetChars(utf8, text);
+                int written = Utf8PlatformDecoder.Decode(utf8, text);
 #if NET10_0_OR_GREATER
                 return System.Numerics.BigInteger.Parse(text.Slice(0, written), provider: System.Globalization.CultureInfo.InvariantCulture);
 #else
@@ -3251,16 +3251,18 @@ namespace LuminPack.Core
             const int limit = LuminPackTimeZoneInfoCache.MaximumCachedTextLength;
             // A UTF-16 code unit accounts for at most three UTF-8 bytes. Longer snapshots cannot fit
             // the cache, so retain the original decode without an additional full-input count pass.
-            if (utf8.Length > limit * 3 || utf8.Length > limit && Encoding.UTF8.GetCharCount(utf8) > limit)
+            if (utf8.Length <= limit * 3)
             {
-                string source = CreateUtf8String(utf8);
-                CompleteValue();
-                return LuminPackTimeZoneInfoCache.Parse(source);
+                Span<char> buffer = stackalloc char[limit];
+                if (Utf8PlatformDecoder.TryDecode(utf8, buffer, out int length))
+                {
+                    CompleteValue();
+                    return LuminPackTimeZoneInfoCache.ParseSnapshot(buffer.Slice(0, length));
+                }
             }
-            Span<char> buffer = stackalloc char[limit];
-            int length = Encoding.UTF8.GetChars(utf8, buffer);
+            string source = CreateUtf8String(utf8);
             CompleteValue();
-            return LuminPackTimeZoneInfoCache.ParseSnapshot(buffer.Slice(0, length));
+            return LuminPackTimeZoneInfoCache.Parse(source);
         }
 
         /// <summary>Reads a version string with the library default profile.</summary>

@@ -25,7 +25,7 @@ internal readonly ref struct Utf8TextBuffer
     /// <param name="source">The complete token without JSON quotes or escapes.</param>
     /// <returns>The initialized decoded characters, valid until this lease is disposed.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal ReadOnlySpan<char> Decode(ReadOnlySpan<byte> source) => _buffer.Slice(0, Encoding.UTF8.GetChars(source, _buffer));
+    internal ReadOnlySpan<char> Decode(ReadOnlySpan<byte> source) => _buffer.Slice(0, Utf8PlatformDecoder.Decode(source, _buffer));
 
     /// <summary>Returns pooled storage after the caller has finished consuming the characters.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

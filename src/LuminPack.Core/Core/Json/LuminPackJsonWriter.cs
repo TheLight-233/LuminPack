@@ -1048,7 +1048,7 @@ namespace LuminPack.Core
                 : (rented = System.Buffers.ArrayPool<char>.Shared.Rent(utf8PropertyName.Length));
             try
             {
-                int length = Encoding.UTF8.GetChars(utf8PropertyName, chars);
+                int length = Utf8PlatformDecoder.Decode(utf8PropertyName, chars);
                 WriteStringContentUtf16<TOptions>(chars.Slice(0, length));
             }
             finally

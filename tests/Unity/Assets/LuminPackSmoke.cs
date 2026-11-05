@@ -15,6 +15,7 @@ public static class LuminPackSmoke
     public static void Verify()
     {
         VerifyLayouts();
+        LuminPackUtf8FallbackSmoke.Verify();
         var value = new UnityMessage
         {
             Id = 42,

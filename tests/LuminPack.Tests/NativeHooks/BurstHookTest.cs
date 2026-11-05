@@ -187,6 +187,18 @@ public sealed unsafe class BurstHookTest : IDisposable
         }
     }
 
+    /// <summary>Keeps BCL-compatible JSON decodes independent of the native string hook contract.</summary>
+    [Fact]
+    public void PlatformUtf8ConsumersDoNotInvokeNativeDecode()
+    {
+        LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, Utf8Decode = &Decode });
+        int before = _decodeCalls;
+        var tests = new PortableUtf8FallbackTest();
+        tests.PlatformReadersKeepResultsAndFailures();
+        tests.PlatformPropertyNamesKeepUtf16Bytes();
+        Assert.Equal(before, _decodeCalls);
+    }
+
     /// <summary>Checks short ASCII decoding at every byte alignment and rejects high bits in every input position.</summary>
     [Fact]
     public void ShortAsciiStringsRespectAlignmentAndValidation()
