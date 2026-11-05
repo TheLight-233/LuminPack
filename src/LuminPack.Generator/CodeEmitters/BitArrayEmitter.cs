@@ -33,9 +33,9 @@ public static class BitArrayEmitter
         sb.AppendLine("            writer.Write<int>(view.m_array.AsSpan(0, words), length);");
         sb.AppendLine("#endif");
         sb.AppendLine("#else");
-        sb.AppendLine("            var storage = global::System.Buffers.ArrayPool<int>.Shared.Rent(global::System.Math.Max(words, 1));");
+        sb.AppendLine("            var storage = words == 0 ? null : global::System.Buffers.ArrayPool<int>.Shared.Rent(words);");
         sb.AppendLine("            try { if (words != 0) value.CopyTo(storage, 0); writer.Write<int>(storage.AsSpan(0, words), length); }");
-        sb.AppendLine("            finally { global::System.Buffers.ArrayPool<int>.Shared.Return(storage); }");
+        sb.AppendLine("            finally { if (storage is not null) global::System.Buffers.ArrayPool<int>.Shared.Return(storage); }");
         sb.AppendLine("#endif");
     }
 
@@ -61,7 +61,7 @@ public static class BitArrayEmitter
         sb.AppendLine("            reader.Read<int>(view.m_array.AsSpan(0, words));");
         sb.AppendLine("#endif");
         sb.AppendLine("#else");
-        sb.AppendLine("            var storage = new int[words];");
+        sb.AppendLine("            var storage = words == 0 ? global::System.Array.Empty<int>() : new int[words];");
         sb.AppendLine("            reader.Read<int>(storage.AsSpan());");
         sb.AppendLine("            value = new global::System.Collections.BitArray(storage) { Length = length };");
         sb.AppendLine("#endif");

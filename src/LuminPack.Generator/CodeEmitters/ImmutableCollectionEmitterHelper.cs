@@ -89,12 +89,17 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine("            if (!reader.Read() || reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = global::System.Collections.Immutable." + GetSequenceTarget(baseType) + "<" + elementType + ">.Empty;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
         sb.AppendLine("            const int initialCapacity = 16;");
         sb.AppendLine("            var buffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(initialCapacity);");
         sb.AppendLine("            var count = 0;");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                while (reader.Read())");
+        sb.AppendLine("                do");
         sb.AppendLine("                {");
         sb.AppendLine("                    if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                        break;");
@@ -110,7 +115,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                    " + elementType + " item = default!;");
         sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
-        sb.AppendLine("                }");
+        sb.AppendLine("                } while (reader.Read());");
         AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableQueueFromSpan);
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
@@ -145,15 +150,7 @@ internal static class ImmutableCollectionEmitterHelper
             return;
         }
 
-        string target = baseType switch
-        {
-            "global::System.Collections.Immutable.ImmutableList" or "global::System.Collections.Immutable.IImmutableList" => "ImmutableList",
-            "global::System.Collections.Immutable.ImmutableHashSet" or "global::System.Collections.Immutable.IImmutableSet" => "ImmutableHashSet",
-            "global::System.Collections.Immutable.ImmutableSortedSet" => "ImmutableSortedSet",
-            "global::System.Collections.Immutable.ImmutableQueue" or "global::System.Collections.Immutable.IImmutableQueue" => "ImmutableQueue",
-            "global::System.Collections.Immutable.ImmutableStack" or "global::System.Collections.Immutable.IImmutableStack" => "ImmutableStack",
-            _ => LuminPackExceptionHelper.ThrowInvalidOperationException<string>("Unsupported immutable collection: " + baseType)
-        };
+        string target = GetSequenceTarget(baseType);
 
         sb.AppendLine("                if (count == 0)");
         sb.AppendLine("                {");
@@ -201,6 +198,20 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                value = builder.ToImmutable();");
     }
 
+    /// <summary>Gets the concrete immutable sequence family used by the existing result construction.</summary>
+    /// <param name="baseType">The concrete or interface declaration.</param>
+    /// <returns>The factory and empty-result family name.</returns>
+    private static string GetSequenceTarget(string baseType) => baseType switch
+    {
+        "global::System.Collections.Immutable.ImmutableArray" => "ImmutableArray",
+        "global::System.Collections.Immutable.ImmutableList" or "global::System.Collections.Immutable.IImmutableList" => "ImmutableList",
+        "global::System.Collections.Immutable.ImmutableHashSet" or "global::System.Collections.Immutable.IImmutableSet" => "ImmutableHashSet",
+        "global::System.Collections.Immutable.ImmutableSortedSet" => "ImmutableSortedSet",
+        "global::System.Collections.Immutable.ImmutableQueue" or "global::System.Collections.Immutable.IImmutableQueue" => "ImmutableQueue",
+        "global::System.Collections.Immutable.ImmutableStack" or "global::System.Collections.Immutable.IImmutableStack" => "ImmutableStack",
+        _ => LuminPackExceptionHelper.ThrowInvalidOperationException<string>("Unsupported immutable collection: " + baseType)
+    };
+
     /// <summary>Appends JSON writing statements for immutable dictionary values.</summary>
     /// <param name="fieldData">The concrete or interface dictionary contract.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
@@ -237,9 +248,14 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                value = null;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + keyType + ", " + valueType + ">();");
         sb.AppendLine("            reader.TryConsumeArrayStart();");
-        sb.AppendLine("            while (reader.Read())");
+        sb.AppendLine("            if (!reader.Read() || reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = global::System.Collections.Immutable." + target + "<" + keyType + ", " + valueType + ">.Empty;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + keyType + ", " + valueType + ">();");
+        sb.AppendLine("            do");
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                    break;");
@@ -250,7 +266,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                " + valueType + " itemValue = default!;");
         DictionaryEmitter.AppendJsonEntryRead(sb, keyType, valueType, fused: false, completeEntry: fieldData.CanReadJsonCompleteEntry);
         sb.AppendLine("                builder.Add(key!, itemValue);");
-        sb.AppendLine("            }");
+        sb.AppendLine("            } while (reader.Read());");
         sb.AppendLine("            value = builder.ToImmutable();");
     }
 

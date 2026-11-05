@@ -32,6 +32,11 @@ public static class ConcurrentDictionaryEmitter
         // That constructor rejects duplicate keys, which the original insertions ignore, so they rebuild through TryAdd.
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
+        sb.AppendLine("                if (length == 0)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentDictionary(global::System.Array.Empty<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>(), length);");
+        sb.AppendLine("                    return;");
+        sb.AppendLine("                }");
         sb.AppendLine("                var pairs = global::System.Buffers.ArrayPool<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>.Shared.Rent(length);");
         sb.AppendLine("                try");
         sb.AppendLine("                {");

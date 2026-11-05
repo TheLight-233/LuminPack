@@ -23,15 +23,16 @@ public static class ImmutableListEmitter
             // Raw elements: the tree's own in-order copy, then the count and its payload as one contiguous record,
             // which are exactly the bytes of the counted per-element loop.
             sb.AppendLine("            int count = value.Count;");
-            sb.AppendLine("            var items = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(count);");
+            // A null empty lease feeds the same span call, avoiding duplicate inlining of the complete writer on Mono.
+            sb.AppendLine("            var items = count == 0 ? null : global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(count);");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
-            sb.AppendLine("                value.CopyTo(items);");
+            sb.AppendLine("                if (count != 0) value.CopyTo(items);");
             sb.AppendLine("                writer.Write<" + elementType + ">(new global::System.ReadOnlySpan<" + elementType + ">(items, 0, count), count);");
             sb.AppendLine("            }");
             sb.AppendLine("            finally");
             sb.AppendLine("            {");
-            sb.AppendLine("                global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(items, false);");
+            sb.AppendLine("                if (items is not null) global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(items, false);");
             sb.AppendLine("            }");
             return;
         }

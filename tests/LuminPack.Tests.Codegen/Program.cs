@@ -116,6 +116,11 @@ try
         SerializerImmutableListWriteRegression.RunRemainingCollections(references);
         return 0;
     }
+    if (args is ["--verify-empty-collections"])
+    {
+        SerializerImmutableListWriteRegression.RunEmptyCollections(references);
+        return 0;
+    }
     if (args is ["--verify-priority-json"])
     {
         SerializerImmutableListWriteRegression.RunPriorityJson(references);

@@ -17,6 +17,12 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                int length = reader.CountArrayElements();");
+        sb.AppendLine("                if (length == 0)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    reader.ConsumeArrayEnd();");
+        sb.AppendLine("                    " + target + ".Clear();");
+        sb.AppendLine("                    return;");
+        sb.AppendLine("                }");
         sb.AppendLine("                int oldCount = " + target + ".Count;");
         sb.AppendLine("                var entries = global::System.Buffers.ArrayPool<" + pair + ">.Shared.Rent(global::System.Math.Max(length, oldCount));");
         sb.AppendLine("                int count = 0;");
