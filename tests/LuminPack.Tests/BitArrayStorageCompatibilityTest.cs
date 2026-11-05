@@ -8,6 +8,69 @@ namespace LuminPackUnitTest;
 /// <summary>Checks bit-count framing across the integer and byte runtime storage layouts.</summary>
 public class BitArrayStorageCompatibilityTest
 {
+    private static BitArray? s_allocationSink;
+
+    /// <summary>Checks optional final storage allocates only its published owner and backing array.</summary>
+    [Fact]
+    public void PortableFinalStorageMatchesConstructionAllocations()
+    {
+        foreach (int length in new[] { 1, 33, 257, 4096 })
+        {
+            for (int iteration = 0; iteration < 64; iteration++)
+            {
+                Assert.True(global::LuminPack.Code.LuminPackCollectionAccess.TryCreateBitArrayPayload(length, out var fresh, out var bytes));
+                Assert.Equal(((length + 31) >> 5) * 4, bytes.Length);
+                bytes.Fill(0xA5);
+                fresh!.Length = length;
+                s_allocationSink = fresh;
+            }
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int iteration = 0; iteration < 128; iteration++)
+                s_allocationSink = new BitArray((length + 31) & ~31) { Length = length };
+            long expected = GC.GetAllocatedBytesForCurrentThread() - before;
+            before = GC.GetAllocatedBytesForCurrentThread();
+            for (int iteration = 0; iteration < 128; iteration++)
+            {
+                global::LuminPack.Code.LuminPackCollectionAccess.TryCreateBitArrayPayload(length, out var fresh, out _);
+                fresh!.Length = length;
+                s_allocationSink = fresh;
+            }
+            Assert.Equal(expected, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+        s_allocationSink = null;
+        Assert.False(global::LuminPack.Code.LuminPackCollectionAccess.TryCreateBitArrayPayload(0, out _, out _));
+        Assert.False(global::LuminPack.Code.LuminPackCollectionAccess.TryCreateBitArrayPayload(int.MaxValue, out _, out _));
+    }
+
+    /// <summary>Checks direct writes preserve CopyTo padding without changing input and leave excess capacity to fallback.</summary>
+    [Fact]
+    public void PortableDirectWritesPreserveCopyToAndSourceStorage()
+    {
+        using var output = new global::LuminPack.Utility.LuminBufferWriter(true);
+        foreach (int length in new[] { 1, 7, 31, 32, 33, 65, 257 })
+        {
+            Assert.True(global::LuminPack.Code.LuminPackCollectionAccess.TryCreateBitArrayPayload(length, out var source, out var payload));
+            payload.Fill(0xFF);
+            source!.Length = length;
+            byte[] original = payload.ToArray();
+            var words = new int[(length + 31) / 32];
+            source.CopyTo(words, 0);
+            byte[] expected = new byte[4 + words.Length * 4];
+            BinaryPrimitives.WriteInt32LittleEndian(expected, length);
+            global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(words.AsSpan()).CopyTo(expected.AsSpan(4));
+            output.ResetCore();
+            var writer = new global::LuminPack.Core.LuminPackWriter(output);
+            Assert.True(global::LuminPack.Code.LuminPackCollectionAccess.TryWriteBitArrayPayload(ref writer, source));
+            Assert.Equal(expected, writer.Buffer[..writer.Position].ToArray());
+            Assert.Equal(original, payload.ToArray());
+        }
+        var excess = new BitArray(96, true) { Length = 32 };
+        var fallbackWriter = new global::LuminPack.Core.LuminPackWriter(output);
+        int position = fallbackWriter.Position;
+        Assert.False(global::LuminPack.Code.LuminPackCollectionAccess.TryWriteBitArrayPayload(ref fallbackWriter, excess));
+        Assert.Equal(position, fallbackWriter.Position);
+    }
+
     /// <summary>Checks established word-padded bytes, fresh reads and reuse on each target runtime.</summary>
     [Fact]
     public void BitArraysKeepTheWordPaddedWire()

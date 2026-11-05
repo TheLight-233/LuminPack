@@ -6,6 +6,11 @@ try
         .Split(Path.PathSeparator)
         .Select(path => MetadataReference.CreateFromFile(path))
         .ToArray();
+    if (args is ["--verify-bit-storage"])
+    {
+        SerializerFrameworkEntryRegression.RunBitStorage(references);
+        return 0;
+    }
     if (args is ["--verify-json-scalars"])
     {
         SerializerJsonScalarLoopRegression.Run(references);
@@ -360,6 +365,7 @@ try
     SerializerCodegenPerformanceRegression.Run(references);
     SerializerTimeZoneCacheRegression.Run(references);
     SerializerFrameworkEntryRegression.RunTextWrappers(references);
+    SerializerFrameworkEntryRegression.RunBitStorage(references);
     SerializerFrameworkEntryRegression.RunMemoryLoops(references);
     SerializerBuilderPathRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.Run(references);

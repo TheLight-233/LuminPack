@@ -13,6 +13,10 @@ public sealed class LuminLocalFieldData
     internal bool CanCreateImmutableSequenceFromSpan;
     /// <summary>Whether the referenced runtime can stage uncached immutable queue reversals without changing the queue.</summary>
     internal bool CanTraverseUncachedImmutableQueue;
+    /// <summary>Whether the runtime exposes validated fresh bit-array payload construction.</summary>
+    internal bool CanCreateBitArrayPayload;
+    /// <summary>Whether the referenced runtime exposes validated portable bit-storage writing.</summary>
+    internal bool CanWriteBitArrayPayload;
     /// <summary>Whether callback-free framework elements can use the referenced immutable hash-set constructor.</summary>
     internal bool CanBuildFrameworkImmutableHashSet;
     /// <summary>Whether the referenced runtime exposes bounded BigInteger JSON formatting.</summary>

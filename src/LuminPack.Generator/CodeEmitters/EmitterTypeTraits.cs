@@ -9,6 +9,40 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
+    /// <summary>Checks the exact optional portable bit-storage writer signature.</summary>
+    /// <param name="compilation">The consumer's referenced runtime metadata.</param>
+    /// <returns>Whether the direct writer can be emitted.</returns>
+    internal static bool CanWriteBitArrayPayload(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var bits = compilation.GetTypeByMetadataName("System.Collections.BitArray");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return access is not null && bits is not null && writer is not null &&
+            access.GetMembers("TryWriteBitArrayPayload").OfType<IMethodSymbol>().Any(method =>
+                method.IsStatic && method.Arity == 0 && method.DeclaredAccessibility == Accessibility.Public &&
+                !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) && method.Parameters[1].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, bits));
+    }
+
+    /// <summary>Checks the complete optional fresh bit-array construction signature.</summary>
+    /// <param name="compilation">The consumer's actual runtime and framework metadata.</param>
+    /// <returns>Whether portable readers can fill final bit storage.</returns>
+    internal static bool CanCreateBitArrayPayload(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var bits = compilation.GetTypeByMetadataName("System.Collections.BitArray");
+        var span = compilation.GetTypeByMetadataName("System.Span`1");
+        return access is not null && bits is not null && span is not null &&
+            access.GetMembers("TryCreateBitArrayPayload").OfType<IMethodSymbol>().Any(method =>
+                method.IsStatic && method.Arity == 0 && method.DeclaredAccessibility == Accessibility.Public &&
+                !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+                method.Parameters.Length == 3 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 &&
+                method.Parameters[1].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, bits) &&
+                method.Parameters[2].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, span.Construct(compilation.GetSpecialType(SpecialType.System_Byte))));
+    }
+
     /// <summary>Checks both optional queue traversal operations against their complete generic signatures.</summary>
     /// <param name="compilation">The consumer's actual runtime and immutable collection references.</param>
     /// <returns>Whether generated writers can stage an uncached reverse stack.</returns>
