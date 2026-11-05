@@ -33,6 +33,18 @@ internal static partial class SerializerImmutableListWriteRegression
                         LuminPackSerializer.DeserializeJson<P>(output.GetSpan(),ref restored);
                         if(restored.Tail!=137||!restored.Queue.UnorderedItems.SequenceEqual(graph.Queue.UnorderedItems))throw new Exception("Nested priority pair tokens changed.");
                     }
+                    foreach(string ignored in new[]{"1", "\"ignored\"", "true,false,null", "{\"nested\":[[\"hidden\",5]]}"})
+                    foreach(bool reuse in new[]{false,true})
+                    {
+                        var encoding=default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode;
+                        PriorityQueue<string,int> result=reuse?new(new[]{("old",-1)}):null;var prior=result;
+                        LuminPackSerializer.DeserializeJson<P>(encoding.GetBytes("["+ignored+"]"),ref result);
+                        if(result.Count!=0||reuse&&!ReferenceEquals(prior,result))throw new Exception("Ignored priority value changed reuse or contents.");
+                        var graph=new PriorityEnvelope{Queue=result};
+                        string json="{\"Queue\":["+ignored+",[\"first\",1],"+ignored+",[\"second\",2],"+ignored+"],\"Tail\":137}";
+                        LuminPackSerializer.DeserializeJson<P>(encoding.GetBytes(json),ref graph);
+                        if(graph.Tail!=137||graph.Queue.Count!=2||graph.Queue.Dequeue()!="first"||graph.Queue.Dequeue()!="second")throw new Exception("Ignored priority value consumed a pair or following field.");
+                    }
                     if(!default(P).ValidateJsonSyntax)return;
                     foreach(string text in new[]{"[[1,]]","[[1 2]]","[[1,2,3]]","[[1,2]"})
                     {
@@ -55,8 +67,9 @@ internal static partial class SerializerImmutableListWriteRegression
             using var image = new MemoryStream();
             var emitted = output.Emit(image);
             Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
-            Assembly.Load(image.ToArray()).GetType("PriorityJsonEntry")!.GetMethod("Check")!.Invoke(null, null);
+            Task.Run(() => Assembly.Load(image.ToArray()).GetType("PriorityJsonEntry")!.GetMethod("Check")!.Invoke(null, null))
+                .WaitAsync(TimeSpan.FromSeconds(60)).GetAwaiter().GetResult();
         }
-        Console.WriteLine("Passed strict/permissive UTF-8/UTF-16 priority JSON, nested values, reuse and malformed pairs in four tiers.");
+        Console.WriteLine("Passed strict/permissive UTF-8/UTF-16 priority JSON, ignored values, nested boundaries, reuse and malformed pairs in four tiers.");
     }
 }

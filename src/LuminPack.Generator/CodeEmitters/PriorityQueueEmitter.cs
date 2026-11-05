@@ -208,8 +208,7 @@ public static class PriorityQueueEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                    break;");
-        sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayStart)");
-        sb.AppendLine("                    continue;");
+        DictionaryEmitter.AppendSkipNonArrayEntry(sb, "                ");
         sb.AppendLine("                reader.Read();");
         sb.AppendLine("                " + elementType + " element = default!;");
         sb.AppendLine("                reader.ReadValue(ref element);");

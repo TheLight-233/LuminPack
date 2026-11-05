@@ -113,8 +113,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                    break;");
-        sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayStart)");
-        sb.AppendLine("                    continue;");
+        AppendSkipNonArrayEntry(sb, "                ");
         sb.AppendLine();
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
@@ -695,8 +694,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                    break;");
-        sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayStart)");
-        sb.AppendLine("                    continue;");
+        AppendSkipNonArrayEntry(sb, "                ");
         sb.AppendLine();
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
@@ -705,6 +703,19 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                value[key] = itemValue;");
         sb.AppendLine("            }");
     }
+    /// <summary>Consumes an ignored non-array value before the next entry-loop iteration.</summary>
+    /// <param name="sb">The generated operation builder.</param>
+    /// <param name="indent">The indentation of the enclosing entry loop.</param>
+    /// <remarks>The caller handles the outer array end before this branch. Skipping nested values preserves that boundary.</remarks>
+    internal static void AppendSkipNonArrayEntry(StringBuilder sb, string indent)
+    {
+        sb.AppendLine(indent + "if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayStart)");
+        sb.AppendLine(indent + "{");
+        sb.AppendLine(indent + "    reader.Skip();");
+        sb.AppendLine(indent + "    continue;");
+        sb.AppendLine(indent + "}");
+    }
+
     /// <summary>Appends the token reads of one dictionary entry array after its opening bracket.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="keyType">The generated key type name.</param>

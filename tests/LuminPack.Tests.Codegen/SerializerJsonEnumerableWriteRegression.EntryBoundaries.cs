@@ -20,7 +20,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             ExecuteDictionaryEntriesBounded(output);
         }
-        Console.WriteLine("Passed missing dictionary values, following entries/fields, nested array values and reuse in four generation modes and six profiles.");
+        Console.WriteLine("Passed dictionary progress over ignored values, missing values, following entries/fields, nested arrays and reuse in four modes and six profiles.");
     }
 
     /// <summary>Bounds executable fixture evaluation so a parser progress regression cannot hang the test process.</summary>
@@ -95,15 +95,31 @@ internal static partial class SerializerJsonEnumerableWriteRegression
         {
          foreach(bool reuse in new[]{false,true})
          foreach(bool extra in new[]{false,true})
+         foreach(string ignored in new[]{"", "1,", "\"ignored\\u0020value\",", "true,false,null,", "{\"nested\":[[\"hidden\",5]],\"text\":\"skip\"},"})
          {
           var seed=new Dictionary<string,VALUE>();TYPE prior=FACTORY;MODEL target=reuse?new MODEL{Map=prior}:null;
           string second=ARRAYS?"[1,2]":"2";
           string first=extra?(ARRAYS?"[3]":"3")+",9":"";
-          string json="{\"Map\":[[\"k\""+(extra?","+first:"")+"],[\"m\","+second+"]],\"Tail\":123}";
+          string json="{\"Map\":["+ignored+"[\"k\""+(extra?","+first:"")+"],"+ignored+"[\"m\","+second+"]"+(ignored.Length==0?"":","+ignored.TrimEnd(','))+"],\"Tail\":123}";
           byte[] bytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(json);
           LuminPackSerializer.DeserializeJson<P>(bytes,ref target);
           string expected="k:"+(extra?"3":ARRAYS?"null":"0")+"|m:"+(ARRAYS?"1,2":"2");
           if(target.Tail!=123||Values(target.Map)!=expected)throw new Exception("Dictionary entry consumed a following entry or field: MODEL / "+typeof(P).Name+" / "+Values(target.Map));
+          if(ignored.Length!=0)
+          {
+           TYPE empty=reuse?target.Map:null;
+           var emptyBytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes("["+ignored.TrimEnd(',')+"]");
+           LuminPackSerializer.DeserializeJson<P>(emptyBytes,ref empty);
+           if(empty is null||Values(empty)!="")throw new Exception("Ignored dictionary values produced entries: MODEL");
+          }
+         }
+         if(default(P).ValidateJsonSyntax)
+         foreach(string invalid in new[]{"[1,]", "[{\"nested\":[1,]}]", "[\"\\uZZZZ\"]", "[{\"nested\":1]"})
+         {
+          TYPE target=null;bool rejected=false;
+          var bytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(invalid);
+          try{LuminPackSerializer.DeserializeJson<P>(bytes,ref target);}catch(FormatException){rejected=true;}
+          if(!rejected)throw new Exception("Invalid ignored dictionary value was accepted: MODEL / "+invalid);
          }
         }
         """;

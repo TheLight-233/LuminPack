@@ -36,7 +36,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                    while (reader.Read())");
         sb.AppendLine("                    {");
         sb.AppendLine("                        if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd) break;");
-        sb.AppendLine("                        if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayStart) continue;");
+        AppendSkipNonArrayEntry(sb, "                        ");
         sb.AppendLine("                        " + keyType + " key = default!;");
         sb.AppendLine("                        " + valueType + " itemValue = default!;");
         AppendJsonEntryRead(sb, keyType, valueType, target + ".TryGetValue(key, out itemValue);", fused: false,
