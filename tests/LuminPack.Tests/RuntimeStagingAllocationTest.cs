@@ -85,6 +85,46 @@ public class RuntimeStagingAllocationTest
         Assert.Equal(source.Text, chunked!.Text);
     }
 
+    /// <summary>Known-length input retains its first lease through the required EOF read at pool boundaries.</summary>
+    /// <returns>The asynchronous boundary and limit verification.</returns>
+    [Fact]
+    public async Task SeekableInputKeepsItsLeaseForTheEofRead()
+    {
+        foreach (int length in new[] { 16, 256, 4096, 65536 })
+        {
+            byte[] bytes = new byte[length + 7];
+            for (int index = 0; index < bytes.Length; index++) bytes[index] = (byte)(index * 19);
+            using var stream = new ObservedInputStream(bytes) { Position = 7 };
+            using var input = await global::LuminPack.Utility.LuminPackStreamInput.ReadAsync(stream, length, default);
+            Assert.Equal(bytes.AsSpan(7).ToArray(), input.Span.ToArray());
+            Assert.Same(stream.FirstBuffer, stream.EofBuffer);
+            Assert.Equal(2, stream.ReadCount);
+            stream.Position = 7;
+            await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            {
+                using var rejected = await global::LuminPack.Utility.LuminPackStreamInput.ReadAsync(stream, length - 1, default);
+            });
+        }
+    }
+
+    /// <summary>Observes backing-array identity without allocating inside synchronous stream reads.</summary>
+    private sealed class ObservedInputStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        internal byte[]? FirstBuffer;
+        internal byte[]? EofBuffer;
+        internal int ReadCount;
+
+        /// <inheritdoc/>
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            global::System.Runtime.InteropServices.MemoryMarshal.TryGetArray((ReadOnlyMemory<byte>)buffer, out var storage);
+            FirstBuffer ??= storage.Array;
+            ReadCount++;
+            if (Position == Length) EofBuffer = storage.Array;
+            return base.ReadAsync(buffer, cancellationToken);
+        }
+    }
+
     /// <summary>Reports no length, so input storage grows while the stream is read.</summary>
     private sealed class UnseekableStream(byte[] bytes) : MemoryStream(bytes)
     {

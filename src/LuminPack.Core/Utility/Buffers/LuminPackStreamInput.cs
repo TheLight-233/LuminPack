@@ -34,7 +34,12 @@ public struct LuminPackStreamInput : IDisposable
         long ceiling = (long)maximum + 1;
         long capacity = InitialCapacity;
         // A seekable stream reports what remains, so the first rental usually holds the whole payload.
-        if (stream.CanSeek) capacity = Math.Max(1, stream.Length - stream.Position);
+        if (stream.CanSeek)
+        {
+            capacity = Math.Max(1, stream.Length - stream.Position);
+            // Keep room for the existing EOF read when the payload exactly fills a pool bucket.
+            if (capacity < MaxArrayLength) capacity++;
+        }
         byte[] array = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Min(capacity, ceiling), MaxArrayLength));
         int length = 0;
         try
