@@ -14,6 +14,13 @@ public static class FrozenSetEmitter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
+        var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
+        if (CollectionEmitterKit.IsRawScalar(element, elementType))
+        {
+            sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
+            CollectionEmitterKit.AppendSpanWrite(sb, element, elementType, "value.Items.AsSpan()", "            ", scalarElements: true);
+            return;
+        }
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -58,7 +65,14 @@ public static class FrozenSetEmitter
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            if (length == 0) { value = global::System.Collections.Frozen.FrozenSet<" + elementType + ">.Empty; return; }");
-        sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">(length);");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            var set = global::LuminPack.Utility.LuminFrozenConstruction.RentSet<" + elementType + ">(length);");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+        }
+        else
+            sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">(length);");
         sb.AppendLine();
         sb.AppendLine("            for (var i = 0; i < length; i++)");
         sb.AppendLine("            {");
@@ -68,6 +82,11 @@ public static class FrozenSetEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(set);");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { global::LuminPack.Utility.LuminFrozenConstruction.ReturnSet(set); }");
+        }
     }
 
     /// <summary>Appends JSON writing statements for frozen set values.</summary>
@@ -106,7 +125,14 @@ public static class FrozenSetEmitter
         sb.AppendLine("            reader.TryConsumeArrayStart();");
         sb.AppendLine("            if (!reader.Read() || reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("            { value = global::System.Collections.Frozen.FrozenSet<" + elementType + ">.Empty; return; }");
-        sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">();");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            var set = global::LuminPack.Utility.LuminFrozenConstruction.RentSet<" + elementType + ">(0);");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+        }
+        else
+            sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">();");
         sb.AppendLine("            do");
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
@@ -119,5 +145,10 @@ public static class FrozenSetEmitter
         sb.AppendLine("            }");
         sb.AppendLine("            while (reader.Read());");
         sb.AppendLine("            value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(set);");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { global::LuminPack.Utility.LuminFrozenConstruction.ReturnSet(set); }");
+        }
     }
 }

@@ -6,6 +6,11 @@ try
         .Split(Path.PathSeparator)
         .Select(path => MetadataReference.CreateFromFile(path))
         .ToArray();
+    if (args is ["--verify-frozen-collections"])
+    {
+        SerializerImmutableListWriteRegression.RunFrozen(references);
+        return 0;
+    }
     if (args is ["--verify-concurrent-collections"])
     {
         SerializerImmutableListWriteRegression.RunConcurrent(references);
@@ -380,6 +385,7 @@ try
     SerializerBuilderPathRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.RunLists(references);
+    SerializerImmutableListWriteRegression.RunFrozen(references);
     SerializerImmutableListWriteRegression.RunConcurrent(references);
     SerializerImmutableQueueConstructionRegression.RunBuilders(references);
     SerializerImmutableListWriteRegression.RunInterfaces(references);

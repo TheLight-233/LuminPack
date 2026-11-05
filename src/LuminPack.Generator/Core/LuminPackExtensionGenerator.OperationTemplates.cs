@@ -142,6 +142,11 @@ public static partial class LuminPackExtensionGenerator
             if (builderFamily.Length != 0)
                 field.CanReuseImmutableBuilder = ImmutableBuilderEmitter.Available(compilation, builderFamily, builderCollection.Arity);
         }
+        if (type is INamedTypeSymbol { Name: "FrozenDictionary" or "FrozenSet" } frozen && frozen.ContainingNamespace.ToDisplayString() == "System.Collections.Frozen")
+        {
+            field.CanRentFrozenBuilder = FrozenConstructionEmitter.Available(compilation, frozen.Name == "FrozenSet" ? "Set" : "Dictionary", frozen.Arity);
+            field.CanWriteFrozenPairs = frozen.Name == "FrozenDictionary" && FrozenConstructionEmitter.CanWritePairs(compilation);
+        }
         if (type is INamedTypeSymbol { Name: "ConcurrentStack" or "ConcurrentDictionary" } concurrent &&
             concurrent.ContainingNamespace.ToDisplayString() == "System.Collections.Concurrent")
         {

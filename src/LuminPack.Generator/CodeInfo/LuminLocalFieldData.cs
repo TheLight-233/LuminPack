@@ -13,6 +13,10 @@ public sealed class LuminLocalFieldData
     internal bool CanCreateImmutableSequenceFromSpan;
     /// <summary>Whether the referenced runtime exposes a matched rental for this family's BCL builder.</summary>
     internal bool CanReuseImmutableBuilder;
+    /// <summary>Whether frozen reads may rent exclusive mutable construction storage.</summary>
+    internal bool CanRentFrozenBuilder;
+    /// <summary>Whether raw scalar frozen pairs can reserve and write their complete payload once.</summary>
+    internal bool CanWriteFrozenPairs;
     /// <summary>Whether a matched value traversal is available for the concurrent family.</summary>
     internal bool CanTraverseConcurrent;
     /// <summary>Whether callback-free JSON stack elements can be published from one staged range.</summary>

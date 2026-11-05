@@ -15,6 +15,13 @@ public static class FrozenDictionaryEmitter
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
         var valueType = GetSecondGeneric(fieldData.TypeName);
+        if (fieldData.CanWriteFrozenPairs && fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol pair &&
+            CollectionEmitterKit.IsRawScalar(pair.TypeArguments[0], keyType) && CollectionEmitterKit.IsRawScalar(pair.TypeArguments[1], valueType))
+        {
+            sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
+            sb.AppendLine("            global::LuminPack.Utility.LuminFrozenConstruction.WritePairs<" + keyType + ", " + valueType + ">(ref writer, value.Keys.AsSpan(), value.Values.AsSpan());");
+            return;
+        }
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -26,21 +33,20 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
+        sb.AppendLine("            var count = value.Count;");
+        sb.AppendLine("            writer.WriteCollectionHeader(ref index, count);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            var count = value.Count;");
         sb.AppendLine("            var i = 0;");
         sb.AppendLine("            var keys = value.Keys.AsSpan();");
         sb.AppendLine("            var values = value.Values.AsSpan();");
         sb.AppendLine("            for (; i < keys.Length;)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(keys[i], values[i]);");
+        sb.AppendLine("                var key = keys[i];");
+        sb.AppendLine("                var itemValue = values[i];");
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                i++;");
-        sb.AppendLine("                var key = item.Key;");
         sb.AppendLine("                writer.WriteValue(in key);");
-        sb.AppendLine("                var itemValue = item.Value;");
         sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -70,7 +76,15 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            var dict = new global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">(length);");
+        sb.AppendLine("            if (length == 0) { value = global::System.Collections.Frozen.FrozenDictionary<" + keyType + ", " + valueType + ">.Empty; return; }");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            var dict = global::LuminPack.Utility.LuminFrozenConstruction.RentDictionary<" + keyType + ", " + valueType + ">(length);");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+        }
+        else
+            sb.AppendLine("            var dict = new global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">(length);");
         sb.AppendLine();
         sb.AppendLine("            for (var i = 0; i < length; i++)");
         sb.AppendLine("            {");
@@ -81,6 +95,11 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("                dict.Add(k!, v);");
         sb.AppendLine("            }");
         sb.AppendLine("            value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { global::LuminPack.Utility.LuminFrozenConstruction.ReturnDictionary(dict); }");
+        }
     }
 
     /// <summary>Appends JSON writing statements for frozen dictionary values.</summary>
@@ -116,7 +135,14 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("                value = null;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            var dict = new global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">();");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            var dict = global::LuminPack.Utility.LuminFrozenConstruction.RentDictionary<" + keyType + ", " + valueType + ">(0);");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+        }
+        else
+            sb.AppendLine("            var dict = new global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">();");
         sb.AppendLine("            reader.TryConsumeArrayStart();");
         sb.AppendLine("            while (reader.Read())");
         sb.AppendLine("            {");
@@ -131,5 +157,10 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("                dict.Add(key!, itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");
+        if (fieldData.CanRentFrozenBuilder)
+        {
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally { global::LuminPack.Utility.LuminFrozenConstruction.ReturnDictionary(dict); }");
+        }
     }
 }
