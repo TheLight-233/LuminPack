@@ -187,6 +187,36 @@ public sealed unsafe class BurstHookTest : IDisposable
         }
     }
 
+    /// <summary>Checks short ASCII decoding at every byte alignment and rejects high bits in every input position.</summary>
+    [Fact]
+    public void ShortAsciiStringsRespectAlignmentAndValidation()
+    {
+        byte[] source = new byte[32];
+        for (int offset = 0; offset < 8; offset++)
+        for (int length = 4; length <= 16; length++)
+        for (int first = 0; first < 128; first++)
+        {
+            source.AsSpan().Fill(0xA5);
+            for (int index = 0; index < length; index++) source[offset + index] = (byte)((first + index) & 127);
+            string? decoded = StringSerializer.TryDecodeShortAscii(ref source[offset], length);
+            if (IntPtr.Size == 8 && BitConverter.IsLittleEndian)
+            {
+                Assert.Equal(Encoding.UTF8.GetString(source, offset, length), decoded);
+                for (int index = 0; index < length; index++)
+                {
+                    source[offset + index] |= 0x80;
+                    Assert.Null(StringSerializer.TryDecodeShortAscii(ref source[offset], length));
+                    source[offset + index] &= 0x7F;
+                }
+            }
+            else Assert.Null(decoded);
+            for (int index = 0; index < offset; index++) Assert.Equal((byte)0xA5, source[index]);
+            for (int index = offset + length; index < source.Length; index++) Assert.Equal((byte)0xA5, source[index]);
+        }
+        Assert.Null(StringSerializer.TryDecodeShortAscii(ref source[0], 3));
+        Assert.Null(StringSerializer.TryDecodeShortAscii(ref source[0], 17));
+    }
+
     /// <summary>Exercises bounded ASCII word batches with every source and output alignment on both pointer sizes.</summary>
     [Fact]
     public void BoundedUtf8AsciiBatchesRespectAllAlignments()

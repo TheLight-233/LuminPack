@@ -1274,10 +1274,8 @@ public static unsafe partial class StringSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint PackAscii4(ulong value)
     {
-        ulong packed = value & 0x00FF00FF00FF00FFUL;
-        packed = (packed | (packed >> 8)) & 0x0000FFFF0000FFFFUL;
-        packed = (packed | (packed >> 16)) & 0x00000000FFFFFFFFUL;
-        return (uint)packed;
+        ulong packed = (value | (value >> 8)) & 0x0000FFFF0000FFFFUL;
+        return (uint)(packed | (packed >> 16));
     }
 
     /// <summary>Allocates a string whose characters the caller overwrites completely before publication.</summary>
@@ -1303,13 +1301,22 @@ public static unsafe partial class StringSerializer
         if (!BitConverter.IsLittleEndian || Unsafe.SizeOf<IntPtr>() != 8 || length < 4 || length > 16)
             return null;
 
+        // Packed fields avoid Mono's bytewise generic unaligned helpers; managed refs survive the result allocation.
         int index = 0;
         for (; index + 8 <= length; index += 8)
+#if NETSTANDARD2_1
+            if ((Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref source, index)).Value & 0x8080808080808080UL) != 0)
+#else
             if ((Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, index)) & 0x8080808080808080UL) != 0)
+#endif
                 return null;
         if (length - index >= 4)
         {
+#if NETSTANDARD2_1
+            if ((Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref source, index)).Value & 0x80808080U) != 0)
+#else
             if ((Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, index)) & 0x80808080U) != 0)
+#endif
                 return null;
             index += 4;
         }
@@ -1322,14 +1329,25 @@ public static unsafe partial class StringSerializer
         index = 0;
         for (; index + 8 <= length; index += 8)
         {
+#if NETSTANDARD2_1
+            ulong value = Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref source, index)).Value;
+            Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref output, index * 2)).Value = SpreadAscii4((uint)value);
+            Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref output, index * 2 + 8)).Value = SpreadAscii4((uint)(value >> 32));
+#else
             ulong value = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, index));
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index * 2), SpreadAscii4((uint)value));
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index * 2 + 8), SpreadAscii4((uint)(value >> 32)));
+#endif
         }
         if (length - index >= 4)
         {
+#if NETSTANDARD2_1
+            uint value = Unsafe.As<byte, Utf8PackedWord32>(ref Unsafe.Add(ref source, index)).Value;
+            Unsafe.As<byte, Utf8PackedWord64>(ref Unsafe.Add(ref output, index * 2)).Value = SpreadAscii4(value);
+#else
             uint value = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, index));
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index * 2), SpreadAscii4(value));
+#endif
             index += 4;
         }
         for (; index < length; index++)
@@ -1354,24 +1372,24 @@ public static unsafe partial class StringSerializer
         bool littleEndian = BitConverter.IsLittleEndian;
         while (input < inputEnd)
         {
-#if NETSTANDARD2_1
-            if (littleEndian && Unsafe.SizeOf<IntPtr>() == 8 && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 &&
-                (long)unchecked((nint)outputEnd - (nint)output) >= 8)
-            {
-                ulong lower = ((Utf8PackedWord64*)input)->Value;
-                ulong upper = ((Utf8PackedWord64*)(input + 4))->Value;
-                if (((lower | upper) & 0xFF80FF80FF80FF80UL) == 0)
-                {
-                    ((Utf8PackedWord64*)output)->Value = PackAscii4(lower) | ((ulong)PackAscii4(upper) << 32);
-                    input += 8;
-                    output += 8;
-                    continue;
-                }
-            }
-#endif
             uint c = *input;
             if (c < 0x80)
             {
+#if NETSTANDARD2_1
+                if (littleEndian && Unsafe.SizeOf<IntPtr>() == 8 && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 &&
+                    (long)unchecked((nint)outputEnd - (nint)output) >= 8)
+                {
+                    ulong lower = ((Utf8PackedWord64*)input)->Value;
+                    ulong upper = ((Utf8PackedWord64*)(input + 4))->Value;
+                    if (((lower | upper) & 0xFF80FF80FF80FF80UL) == 0)
+                    {
+                        ((Utf8PackedWord64*)output)->Value = PackAscii4(lower) | ((ulong)PackAscii4(upper) << 32);
+                        input += 8;
+                        output += 8;
+                        continue;
+                    }
+                }
+#endif
                 // ASCII SWAR: 4 UTF-16 code units -> one exact 32-bit write.
                 // This is the portable fast path for netstandard2.1 as well.
                 if (littleEndian && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 4 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
