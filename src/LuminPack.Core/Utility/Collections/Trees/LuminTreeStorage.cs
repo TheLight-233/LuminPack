@@ -385,9 +385,13 @@ public static partial class LuminTreeStorage
     {
         if (ImmutableSortedDictionaryLayout<TKey, TValue>.Available && IsStrictlyAscending(pairs, count))
             return BuildSortedDictionary(pairs, count);
-        var builder = ImmutableSortedDictionary.CreateBuilder<TKey, TValue>();
-        for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
-        return builder.ToImmutable();
+        var builder = LuminImmutableBuilders.RentSortedDictionary<TKey, TValue>();
+        try
+        {
+            for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
+            return builder.ToImmutable();
+        }
+        finally { LuminImmutableBuilders.ReturnSortedDictionary(builder); }
     }
 
     /// <summary>Fills a new, empty sorted dictionary with the default comparer from pairs.</summary>
@@ -434,9 +438,13 @@ public static partial class LuminTreeStorage
             }
             finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
-        var builder = ImmutableHashSet.CreateBuilder<T>();
-        for (int i = 0; i < count; i++) builder.Add(items[i]);
-        return builder.ToImmutable();
+        var builder = LuminImmutableBuilders.RentHashSet<T>();
+        try
+        {
+            for (int i = 0; i < count; i++) builder.Add(items[i]);
+            return builder.ToImmutable();
+        }
+        finally { LuminImmutableBuilders.ReturnHashSet(builder); }
     }
 
     /// <summary>Builds an immutable dictionary with the default comparers from pairs.</summary>
@@ -449,6 +457,7 @@ public static partial class LuminTreeStorage
     /// duplicate keys, add the pairs through the builder, which throws for duplicates as before.</remarks>
     public static ImmutableDictionary<TKey, TValue> CreateImmutableDictionary<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count) where TKey : notnull
     {
+        if (count == 1) return ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
         if (count > 1 && ImmutableDictionaryLayout<TKey, TValue>.Available)
         {
             var keys = System.Buffers.ArrayPool<long>.Shared.Rent(count);
@@ -465,9 +474,13 @@ public static partial class LuminTreeStorage
             }
             finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
-        var builder = ImmutableDictionary.CreateBuilder<TKey, TValue>();
-        for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
-        return builder.ToImmutable();
+        var builder = LuminImmutableBuilders.RentDictionary<TKey, TValue>();
+        try
+        {
+            for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
+            return builder.ToImmutable();
+        }
+        finally { LuminImmutableBuilders.ReturnDictionary(builder); }
     }
 
     // Each walk keeps its offsets in locals: a store through the destination could otherwise alias the offsets and force reloads.

@@ -128,6 +128,20 @@ public static partial class LuminPackExtensionGenerator
             immutableSequence.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
             field.CanCreateImmutableSequenceFromSpan = EmitterTypeTraits.CanCreateImmutableSequenceFromSpan(compilation,
                 immutableSequence.Name is "ImmutableQueue" or "IImmutableQueue" ? "ImmutableQueue" : "ImmutableList");
+        if (type is INamedTypeSymbol builderCollection && builderCollection.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
+        {
+            string builderFamily = builderCollection.Name switch
+            {
+                "ImmutableList" or "IImmutableList" => "List",
+                "ImmutableHashSet" or "IImmutableSet" => "HashSet",
+                "ImmutableSortedSet" => "SortedSet",
+                "ImmutableDictionary" or "IImmutableDictionary" => "Dictionary",
+                "ImmutableSortedDictionary" => "SortedDictionary",
+                _ => string.Empty
+            };
+            if (builderFamily.Length != 0)
+                field.CanReuseImmutableBuilder = ImmutableBuilderEmitter.Available(compilation, builderFamily, builderCollection.Arity);
+        }
         if (type is INamedTypeSymbol { MetadataName: "BitArray" } bitArray &&
             bitArray.ContainingNamespace.ToDisplayString() == "System.Collections")
         {

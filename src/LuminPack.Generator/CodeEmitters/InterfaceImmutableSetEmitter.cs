@@ -89,7 +89,7 @@ public static class InterfaceImmutableSetEmitter
             sb.AppendLine($"            finally {{ global::System.Buffers.ArrayPool<{elementType}>.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>()); }}");
             return;
         }
-        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableHashSet.CreateBuilder<{elementType}>();");
+        ImmutableBuilderEmitter.Begin(sb, fieldData.CanReuseImmutableBuilder, "HashSet", elementType, "            ");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine($"                {elementType} item = default;");
@@ -98,5 +98,6 @@ public static class InterfaceImmutableSetEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            value = builder.ToImmutable();");
+        ImmutableBuilderEmitter.End(sb, fieldData.CanReuseImmutableBuilder, "HashSet", "            ");
     }
 }

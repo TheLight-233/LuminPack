@@ -58,7 +58,19 @@ public static class InterfaceImmutableDictionaryEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<{keyType}, {valueType}>();");
+        if (fieldData.CanReuseImmutableBuilder)
+        {
+            sb.AppendLine("            if (length == 1)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                {keyType} key = default!;");
+            sb.AppendLine($"                {valueType} item = default!;");
+            sb.AppendLine("                reader.ReadValue(ref key);");
+            sb.AppendLine("                reader.ReadValue(ref item);");
+            sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableDictionary<{keyType}, {valueType}>.Empty.Add(key!, item);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
+        ImmutableBuilderEmitter.Begin(sb, fieldData.CanReuseImmutableBuilder, "Dictionary", keyType + ", " + valueType, "            ");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine($"                {keyType} k = default!;");
@@ -69,5 +81,6 @@ public static class InterfaceImmutableDictionaryEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            value = builder.ToImmutable();");
+        ImmutableBuilderEmitter.End(sb, fieldData.CanReuseImmutableBuilder, "Dictionary", "            ");
     }
 }

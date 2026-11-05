@@ -11,6 +11,8 @@ public sealed class LuminLocalFieldData
     internal bool CanFormatJsonScalar;
     /// <summary>Whether the referenced immutable list or queue factory accepts a complete span.</summary>
     internal bool CanCreateImmutableSequenceFromSpan;
+    /// <summary>Whether the referenced runtime exposes a matched rental for this family's BCL builder.</summary>
+    internal bool CanReuseImmutableBuilder;
     /// <summary>Whether the referenced runtime can stage uncached immutable queue reversals without changing the queue.</summary>
     internal bool CanTraverseUncachedImmutableQueue;
     /// <summary>Whether the runtime exposes validated fresh bit-array payload construction.</summary>

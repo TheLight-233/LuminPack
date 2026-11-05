@@ -116,7 +116,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
         sb.AppendLine("                } while (reader.Read());");
-        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableSequenceFromSpan, fieldData.CanBuildFrameworkImmutableHashSet);
+        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableSequenceFromSpan, fieldData.CanBuildFrameworkImmutableHashSet, fieldData.CanReuseImmutableBuilder);
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
@@ -130,7 +130,8 @@ internal static class ImmutableCollectionEmitterHelper
     /// <param name="baseType">The base type used by this operation.</param>
     /// <param name="canCreateFromSpan">Whether the actual sequence factory accepts a complete span.</param>
     /// <param name="canBuildHashSet">Whether framework hashing and the referenced constructor permit complete-buffer construction.</param>
-    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateFromSpan, bool canBuildHashSet)
+    /// <param name="canReuseBuilder">Whether matched public builder rentals are available.</param>
+    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateFromSpan, bool canBuildHashSet, bool canReuseBuilder)
     {
         if (baseType == "global::System.Collections.Immutable.ImmutableArray")
         {
@@ -176,9 +177,10 @@ internal static class ImmutableCollectionEmitterHelper
             sb.AppendLine("                if (count == 1) value = global::System.Collections.Immutable.ImmutableList.Create<" + elementType + ">(buffer[0]);");
             sb.AppendLine("                else if (count <= 3)");
             sb.AppendLine("                {");
-            sb.AppendLine("                    var builder = global::System.Collections.Immutable.ImmutableList.CreateBuilder<" + elementType + ">();");
+            ImmutableBuilderEmitter.Begin(sb, canReuseBuilder, "List", elementType, "                    ");
             sb.AppendLine("                    for (int i = 0; i < count; i++) builder.Add(buffer[i]);");
             sb.AppendLine("                    value = builder.ToImmutable();");
+            ImmutableBuilderEmitter.End(sb, canReuseBuilder, "List", "                    ");
             sb.AppendLine("                }");
             sb.AppendLine("                else value = global::System.Collections.Immutable.ImmutableList.CreateRange(" + CollectionEmitterKit.CopyingFactorySource(elementType, "buffer", "count") + ");");
             return;
@@ -197,12 +199,13 @@ internal static class ImmutableCollectionEmitterHelper
                 : "                value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(" + CollectionEmitterKit.CopyingFactorySource(elementType, "buffer", "count") + ");");
             return;
         }
-        sb.AppendLine("                var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + elementType + ">();");
+        ImmutableBuilderEmitter.Begin(sb, canReuseBuilder, target.Substring("Immutable".Length), elementType, "                ");
         sb.AppendLine("                for (int i = 0; i < count; i++)");
         sb.AppendLine("                {");
         sb.AppendLine("                    builder.Add(buffer[i]);");
         sb.AppendLine("                }");
         sb.AppendLine("                value = builder.ToImmutable();");
+        ImmutableBuilderEmitter.End(sb, canReuseBuilder, target.Substring("Immutable".Length), "                ");
     }
 
     /// <summary>Gets the concrete immutable sequence family used by the existing result construction.</summary>
@@ -261,7 +264,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                value = global::System.Collections.Immutable." + target + "<" + keyType + ", " + valueType + ">.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + keyType + ", " + valueType + ">();");
+        ImmutableBuilderEmitter.Begin(sb, fieldData.CanReuseImmutableBuilder, target.Substring("Immutable".Length), keyType + ", " + valueType, "            ");
         sb.AppendLine("            do");
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
@@ -274,6 +277,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                builder.Add(key!, itemValue);");
         sb.AppendLine("            } while (reader.Read());");
         sb.AppendLine("            value = builder.ToImmutable();");
+        ImmutableBuilderEmitter.End(sb, fieldData.CanReuseImmutableBuilder, target.Substring("Immutable".Length), "            ");
     }
 
     /// <summary>Determines whether the supplied value has the dictionary classification.</summary>

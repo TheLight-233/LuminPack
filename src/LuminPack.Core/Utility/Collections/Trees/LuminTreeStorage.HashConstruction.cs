@@ -35,10 +35,14 @@ public static partial class LuminTreeStorage
     {
         if (ImmutableHashSetLayout<T>.Available && GroupedHashLayout.Available)
             return BuildFrameworkHashPair(first, second);
-        var builder = ImmutableHashSet.CreateBuilder<T>();
-        builder.Add(first);
-        builder.Add(second);
-        return builder.ToImmutable();
+        var builder = LuminImmutableBuilders.RentHashSet<T>();
+        try
+        {
+            builder.Add(first);
+            builder.Add(second);
+            return builder.ToImmutable();
+        }
+        finally { LuminImmutableBuilders.ReturnHashSet(builder); }
     }
 
     /// <summary>Completes a fresh singleton with at most one additional hash or collision node.</summary>
