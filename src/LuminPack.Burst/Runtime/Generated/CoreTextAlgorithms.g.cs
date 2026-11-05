@@ -1217,6 +1217,559 @@ internal static unsafe bool Matches(ReadOnlySpan<byte> bytes, ReadOnlySpan<char>
     return byteOffset == bytes.Length;
 }
     }
+// Core source SHA256: Core/Json/LuminPackJsonReader.Capacity.cs 2744E070158ACD3759108CABB09BAA975DC4B84C54B793A0AB9C028F7C285E4F
+internal static unsafe class CoreJsonCapacity
+{
+/// <summary>Scans complete UTF-8 blocks with cross-block quote and escape state.</summary>
+/// <param name = "input">The complete input window.</param>
+/// <param name = "entries">Whether members are flat scalar/string pairs.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static unsafe int ScanHintByte(ReadOnlySpan<byte> input, bool entries = false)
+{
+    int offset = 0;
+    while (offset < input.Length && (input[offset] == ' ' || input[offset] == '\t' || input[offset] == '\n' || input[offset] == '\r'))
+        offset++;
+    if (offset == input.Length)
+        return -1;
+    if (input[offset] == ']')
+        return 0;
+    int count = entries ? 0 : 1, depth = 0;
+    ulong pairDepth = 0;
+    bool quoted = false, slashCarry = false;
+    while (offset < input.Length)
+    {
+        int remaining = input.Length - offset;
+        int start = offset, width;
+        ulong opens, closes, commas, quotes, slashes;
+        if ((Avx2.IsSupported) && remaining >= 32)
+        {
+            var v = Vector256.LoadUnsafe(ref Unsafe.As<byte, byte>(ref MemoryMarshal.GetReference(input)), (nuint)offset);
+            var folded = v | Vector256.Create((byte)32);
+            quotes = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((byte)'"')));
+            slashes = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((byte)'\\')));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 32;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintByte(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = Vector256.ExtractMostSignificantBits(Vector256.Equals(folded, Vector256.Create((byte)'{')));
+            closes = Vector256.ExtractMostSignificantBits(Vector256.Equals(folded, Vector256.Create((byte)'}')));
+            commas = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((byte)',')));
+            width = 32;
+        }
+        else if ((Sse2.IsSupported || AdvSimd.IsSupported) && remaining >= 16)
+        {
+            var v = Vector128.LoadUnsafe(ref Unsafe.As<byte, byte>(ref MemoryMarshal.GetReference(input)), (nuint)offset);
+            var folded = v | Vector128.Create((byte)32);
+            quotes = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((byte)'"')));
+            slashes = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((byte)'\\')));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 16;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintByte(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = Vector128.ExtractMostSignificantBits(Vector128.Equals(folded, Vector128.Create((byte)'{')));
+            closes = Vector128.ExtractMostSignificantBits(Vector128.Equals(folded, Vector128.Create((byte)'}')));
+            commas = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((byte)',')));
+            width = 16;
+        }
+        else if (IntPtr.Size == 8 && remaining >= 8)
+        {
+            var v = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<byte, byte>(ref MemoryMarshal.GetReference(input.Slice(offset, 8))));
+            var folded = v | 0x2020202020202020UL;
+            quotes = PackByte64(ExactZero64(v ^ 0x2222222222222222UL, 0x8080808080808080UL));
+            slashes = PackByte64(ExactZero64(v ^ 0x5C5C5C5C5C5C5C5CUL, 0x8080808080808080UL));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 8;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintByte(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = PackByte64(ExactZero64(folded ^ 0x7B7B7B7B7B7B7B7BUL, 0x8080808080808080UL));
+            closes = PackByte64(ExactZero64(folded ^ 0x7D7D7D7D7D7D7D7DUL, 0x8080808080808080UL));
+            commas = PackByte64(ExactZero64(v ^ 0x2C2C2C2C2C2C2C2CUL, 0x8080808080808080UL));
+            width = 8;
+        }
+        else if (remaining >= 4)
+        {
+            var v = Unsafe.ReadUnaligned<uint>(ref Unsafe.As<byte, byte>(ref MemoryMarshal.GetReference(input.Slice(offset, 4))));
+            var folded = v | 0x20202020U;
+            quotes = PackByte32(ExactZero32(v ^ 0x22222222U, 0x80808080U));
+            slashes = PackByte32(ExactZero32(v ^ 0x5C5C5C5CU, 0x80808080U));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 4;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintByte(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = PackByte32(ExactZero32(folded ^ 0x7B7B7B7BU, 0x80808080U));
+            closes = PackByte32(ExactZero32(folded ^ 0x7D7D7D7DU, 0x80808080U));
+            commas = PackByte32(ExactZero32(v ^ 0x2C2C2C2CU, 0x80808080U));
+            width = 4;
+        }
+        else
+        {
+            var ch = input[offset];
+            quotes = ch == '"' ? 1UL : 0;
+            slashes = ch == '\\' ? 1UL : 0;
+            opens = ch == '[' || ch == '{' ? 1UL : 0;
+            closes = ch == ']' || ch == '}' ? 1UL : 0;
+            commas = ch == ',' ? 1UL : 0;
+            width = 1;
+        }
+
+        offset += width;
+        if (slashes != 0 || slashCarry)
+            quotes = RemoveEscapedQuotes(quotes, slashes, width, ref slashCarry);
+        if (quotes != 0 || quoted)
+        {
+            ulong inside = quotes;
+            inside ^= inside << 1;
+            inside ^= inside << 2;
+            inside ^= inside << 4;
+            inside ^= inside << 8;
+            inside ^= inside << 16;
+            inside ^= inside << 32;
+            if (quoted)
+                inside = ~inside;
+            quoted = ((inside >> (width - 1)) & 1) != 0;
+            opens &= ~inside;
+            closes &= ~inside;
+            commas &= ~inside;
+        }
+
+        if (entries)
+        {
+            ulong unmatched = closes & (closes - opens - pairDepth);
+            if (unmatched != 0)
+            {
+                ulong end = unmatched & (0UL - unmatched);
+                return count + CountHintBits(opens & (end - 1));
+            }
+
+            count += CountHintBits(opens);
+            pairDepth = closes < opens + pairDepth ? 1UL : 0UL;
+            continue;
+        }
+
+        ulong boundaries = opens | closes;
+        while (boundaries != 0)
+        {
+            ulong bit = boundaries & (0UL - boundaries);
+            boundaries &= boundaries - 1;
+            if (depth == 0)
+                count += CountHintBits(commas & (bit - 1));
+            commas &= ~(bit - 1);
+            if ((opens & bit) != 0)
+                depth++;
+            else if (depth == 0)
+                return input[start + HintTrailingZero(bit)] == ']' ? count : -1;
+            else
+                depth--;
+        }
+
+        if (depth == 0)
+            count += CountHintBits(commas);
+    }
+
+    return -1;
+}
+/// <summary>Scans complete UTF-16 blocks with cross-block quote and escape state.</summary>
+/// <param name = "input">The complete input window.</param>
+/// <param name = "entries">Whether members are flat scalar/string pairs.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static unsafe int ScanHintChar(ReadOnlySpan<char> input, bool entries = false)
+{
+    int offset = 0;
+    while (offset < input.Length && (input[offset] == ' ' || input[offset] == '\t' || input[offset] == '\n' || input[offset] == '\r'))
+        offset++;
+    if (offset == input.Length)
+        return -1;
+    if (input[offset] == ']')
+        return 0;
+    int count = entries ? 0 : 1, depth = 0;
+    ulong pairDepth = 0;
+    bool quoted = false, slashCarry = false;
+    while (offset < input.Length)
+    {
+        int remaining = input.Length - offset;
+        int start = offset, width;
+        ulong opens, closes, commas, quotes, slashes;
+        if ((Avx2.IsSupported) && remaining >= 16)
+        {
+            var v = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(input)), (nuint)offset);
+            var folded = v | Vector256.Create((ushort)32);
+            quotes = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((ushort)'"')));
+            slashes = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((ushort)'\\')));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 16;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintChar(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = Vector256.ExtractMostSignificantBits(Vector256.Equals(folded, Vector256.Create((ushort)'{')));
+            closes = Vector256.ExtractMostSignificantBits(Vector256.Equals(folded, Vector256.Create((ushort)'}')));
+            commas = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((ushort)',')));
+            width = 16;
+        }
+        else if ((Sse2.IsSupported || AdvSimd.IsSupported) && remaining >= 8)
+        {
+            var v = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(input)), (nuint)offset);
+            var folded = v | Vector128.Create((ushort)32);
+            quotes = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((ushort)'"')));
+            slashes = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((ushort)'\\')));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 8;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintChar(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = Vector128.ExtractMostSignificantBits(Vector128.Equals(folded, Vector128.Create((ushort)'{')));
+            closes = Vector128.ExtractMostSignificantBits(Vector128.Equals(folded, Vector128.Create((ushort)'}')));
+            commas = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((ushort)',')));
+            width = 8;
+        }
+        else if (IntPtr.Size == 8 && remaining >= 4)
+        {
+            var v = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(input.Slice(offset, 4))));
+            var folded = v | 0x20002000200020UL;
+            quotes = PackChar64(ExactZero64(v ^ 0x22002200220022UL, 0x8000800080008000UL));
+            slashes = PackChar64(ExactZero64(v ^ 0x5C005C005C005CUL, 0x8000800080008000UL));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 4;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintChar(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = PackChar64(ExactZero64(folded ^ 0x7B007B007B007BUL, 0x8000800080008000UL));
+            closes = PackChar64(ExactZero64(folded ^ 0x7D007D007D007DUL, 0x8000800080008000UL));
+            commas = PackChar64(ExactZero64(v ^ 0x2C002C002C002CUL, 0x8000800080008000UL));
+            width = 4;
+        }
+        else if (remaining >= 2)
+        {
+            var v = Unsafe.ReadUnaligned<uint>(ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(input.Slice(offset, 2))));
+            var folded = v | 0x200020U;
+            quotes = PackChar32(ExactZero32(v ^ 0x220022U, 0x80008000U));
+            slashes = PackChar32(ExactZero32(v ^ 0x5C005CU, 0x80008000U));
+            if (quoted && (quotes | slashes) == 0)
+            {
+                offset += 2;
+                slashCarry = false;
+                if (input.Length - offset >= 128)
+                {
+                    int next = FindHintChar(input.Slice(offset));
+                    if (next < 0)
+                        return -1;
+                    offset += next;
+                }
+
+                continue;
+            }
+
+            opens = PackChar32(ExactZero32(folded ^ 0x7B007BU, 0x80008000U));
+            closes = PackChar32(ExactZero32(folded ^ 0x7D007DU, 0x80008000U));
+            commas = PackChar32(ExactZero32(v ^ 0x2C002CU, 0x80008000U));
+            width = 2;
+        }
+        else
+        {
+            var ch = input[offset];
+            quotes = ch == '"' ? 1UL : 0;
+            slashes = ch == '\\' ? 1UL : 0;
+            opens = ch == '[' || ch == '{' ? 1UL : 0;
+            closes = ch == ']' || ch == '}' ? 1UL : 0;
+            commas = ch == ',' ? 1UL : 0;
+            width = 1;
+        }
+
+        offset += width;
+        if (slashes != 0 || slashCarry)
+            quotes = RemoveEscapedQuotes(quotes, slashes, width, ref slashCarry);
+        if (quotes != 0 || quoted)
+        {
+            ulong inside = quotes;
+            inside ^= inside << 1;
+            inside ^= inside << 2;
+            inside ^= inside << 4;
+            inside ^= inside << 8;
+            inside ^= inside << 16;
+            inside ^= inside << 32;
+            if (quoted)
+                inside = ~inside;
+            quoted = ((inside >> (width - 1)) & 1) != 0;
+            opens &= ~inside;
+            closes &= ~inside;
+            commas &= ~inside;
+        }
+
+        if (entries)
+        {
+            ulong unmatched = closes & (closes - opens - pairDepth);
+            if (unmatched != 0)
+            {
+                ulong end = unmatched & (0UL - unmatched);
+                return count + CountHintBits(opens & (end - 1));
+            }
+
+            count += CountHintBits(opens);
+            pairDepth = closes < opens + pairDepth ? 1UL : 0UL;
+            continue;
+        }
+
+        ulong boundaries = opens | closes;
+        while (boundaries != 0)
+        {
+            ulong bit = boundaries & (0UL - boundaries);
+            boundaries &= boundaries - 1;
+            if (depth == 0)
+                count += CountHintBits(commas & (bit - 1));
+            commas &= ~(bit - 1);
+            if ((opens & bit) != 0)
+                depth++;
+            else if (depth == 0)
+                return input[start + HintTrailingZero(bit)] == ']' ? count : -1;
+            else
+                depth--;
+        }
+
+        if (depth == 0)
+            count += CountHintBits(commas);
+    }
+
+    return -1;
+}
+/// <summary>Removes quotes preceded by odd-length backslash runs across block boundaries.</summary>
+/// <param name = "quotes">Quote positions.</param>
+/// <param name = "slashes">Backslash positions.</param>
+/// <param name = "width">Valid lanes in this block.</param>
+/// <param name = "carry">Odd trailing backslash state.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static unsafe ulong RemoveEscapedQuotes(ulong quotes, ulong slashes, int width, ref bool carry)
+{
+    ulong escaped = carry ? 1UL : 0UL;
+    bool next = false;
+    while (slashes != 0)
+    {
+        int start = HintTrailingZero(slashes);
+        int length = HintTrailingZero(~(slashes >> start));
+        if (length > width - start)
+            length = width - start;
+        int end = start + length;
+        bool odd = ((length + (start == 0 && carry ? 1 : 0)) & 1) != 0;
+        if (odd)
+        {
+            if (end == width)
+                next = true;
+            else
+                escaped |= 1UL << end;
+        }
+
+        slashes = end == 64 ? 0 : slashes & (ulong.MaxValue << end);
+    }
+
+    carry = next;
+    return quotes & ~escaped;
+}
+/// <summary>Identifies zero byte or word lanes without cross-lane borrow artifacts.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <param name = "high">The high bit of each lane.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe ulong ExactZero64(ulong value, ulong high)
+{
+    ulong low = ~high;
+    return ~(((value & low) + low) | value | low);
+}
+/// <summary>Identifies zero lanes in a bounded four-byte word.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <param name = "high">The high bit of each lane.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe uint ExactZero32(uint value, uint high)
+{
+    uint low = ~high;
+    return ~(((value & low) + low) | value | low);
+}
+/// <summary>Packs eight byte sign bits in increasing address order.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe ulong PackByte64(ulong value) => ((value & 0x8080808080808080UL) * 0x0002040810204081UL) >> 56;
+/// <summary>Packs four UTF-16 sign bits in increasing address order.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe ulong PackChar64(ulong value) => ((value & 0x8000800080008000UL) * 0x0000200040008001UL) >> 60;
+/// <summary>Packs four byte sign bits in increasing address order.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe uint PackByte32(uint value) => ((value & 0x80808080U) * 0x00204081U) >> 28;
+/// <summary>Packs two UTF-16 sign bits in increasing address order.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe uint PackChar32(uint value) => ((value & 0x80008000U) * 0x00008001U) >> 30;
+/// <summary>Counts structural mask bits using native or portable arithmetic.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe int CountHintBits(ulong value)
+{
+    return BitOperations.PopCount(value);
+}
+/// <summary>Finds the next mask bit, returning sixty-four for an empty mask.</summary>
+/// <param name = "value">The input word or mask.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe int HintTrailingZero(ulong value)
+{
+    return BitOperations.TrailingZeroCount(value);
+}
+/// <summary>Skips a plain UTF-8 string run within its complete input window.</summary>
+/// <param name = "input">The complete input window.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static unsafe int FindHintByte(ReadOnlySpan<byte> input)
+{
+    int i = 0;
+    while (i < input.Length)
+    {
+        int remaining = input.Length - i, width;
+        ulong mask;
+        if ((Avx2.IsSupported) && remaining >= 32)
+        {
+            var v = Vector256.LoadUnsafe(ref Unsafe.As<byte, byte>(ref MemoryMarshal.GetReference(input)), (nuint)i);
+            mask = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((byte)'"')) | Vector256.Equals(v, Vector256.Create((byte)'\\')));
+            width = 32;
+        }
+        else if ((Sse2.IsSupported || AdvSimd.IsSupported) && remaining >= 16)
+        {
+            var v = Vector128.LoadUnsafe(ref Unsafe.As<byte, byte>(ref MemoryMarshal.GetReference(input)), (nuint)i);
+            mask = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((byte)'"')) | Vector128.Equals(v, Vector128.Create((byte)'\\')));
+            width = 16;
+        }
+        else
+        {
+            var ch = input[i];
+            mask = ch == '"' || ch == '\\' ? 1UL : 0;
+            width = 1;
+        }
+
+        if (mask != 0)
+            return i + HintTrailingZero(mask);
+        i += width;
+    }
+
+    return -1;
+}
+/// <summary>Skips a plain UTF-16 string run within its complete input window.</summary>
+/// <param name = "input">The complete input window.</param>
+/// <returns>The computed count, position or mask.</returns>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static unsafe int FindHintChar(ReadOnlySpan<char> input)
+{
+    int i = 0;
+    while (i < input.Length)
+    {
+        int remaining = input.Length - i, width;
+        ulong mask;
+        if ((Avx2.IsSupported) && remaining >= 16)
+        {
+            var v = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(input)), (nuint)i);
+            mask = Vector256.ExtractMostSignificantBits(Vector256.Equals(v, Vector256.Create((ushort)'"')) | Vector256.Equals(v, Vector256.Create((ushort)'\\')));
+            width = 16;
+        }
+        else if ((Sse2.IsSupported || AdvSimd.IsSupported) && remaining >= 8)
+        {
+            var v = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(input)), (nuint)i);
+            mask = Vector128.ExtractMostSignificantBits(Vector128.Equals(v, Vector128.Create((ushort)'"')) | Vector128.Equals(v, Vector128.Create((ushort)'\\')));
+            width = 8;
+        }
+        else
+        {
+            var ch = input[i];
+            mask = ch == '"' || ch == '\\' ? 1UL : 0;
+            width = 1;
+        }
+
+        if (mask != 0)
+            return i + HintTrailingZero(mask);
+        i += width;
+    }
+
+    return -1;
+}
+}
 // Core source SHA256: Cryptography/ChaCha20.cs 352583433CAE12ECEF708ECB09CA4D41A6CD5C8177398F0394A568FA47EEFE1B
 internal static unsafe class CoreChaCha20
 {

@@ -3,6 +3,13 @@ using LuminPack.Burst;
 
 unsafe
 {
+    if (args is ["--verify-json-capacity"])
+    {
+        int cases = LuminPack.Burst.Tests.JsonCapacityKernelContract.Verify(BurstKernels.JsonArrayHintUtf8, BurstKernels.JsonArrayHintUtf16);
+        Console.WriteLine("Passed portable JSON sizing contracts: " + cases + "; native execution is not established.");
+        return;
+    }
+    LuminPack.Burst.Tests.JsonCapacityKernelContract.Verify(BurstKernels.JsonArrayHintUtf8, BurstKernels.JsonArrayHintUtf16);
     KernelContract.Verify(BurstKernels.Copy, BurstKernels.CountMatch,
         BurstKernels.Xor, BurstKernels.CopyMatch);
     LuminPack.Burst.Tests.TextKernelContract.Verify(BurstKernels.Utf8Encode, BurstKernels.Utf8Decode,

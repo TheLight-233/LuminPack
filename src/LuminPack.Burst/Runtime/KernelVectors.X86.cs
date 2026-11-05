@@ -179,6 +179,7 @@ namespace LuminPack.Burst
     /// <summary>Maps the ARM64 table lookup used by Core layout conversion.</summary>
     internal static class AdvSimd
     {
+        internal static bool IsSupported => Arm.Neon.IsNeonSupported;
         /// <summary>Exposes the exact 64-bit Neon execution requirement.</summary>
         internal static unsafe class Arm64
         {

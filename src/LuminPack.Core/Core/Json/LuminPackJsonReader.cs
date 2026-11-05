@@ -41,9 +41,9 @@ namespace LuminPack.Core
     [SkipLocalsInit]
 #endif
 #if NET8_0_OR_GREATER
-    public ref struct LuminPackJsonReader
+    public ref partial struct LuminPackJsonReader
 #else
-    public unsafe ref struct LuminPackJsonReader
+    public unsafe ref partial struct LuminPackJsonReader
 #endif
     {
         private ReadOnlySpan<byte> _buffer;

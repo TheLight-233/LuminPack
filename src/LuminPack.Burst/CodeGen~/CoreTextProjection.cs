@@ -65,6 +65,12 @@ internal static class CoreTextProjection
             }
             output.AppendLine("    }");
         }
+        AppendOrigin(output, coreRoot, "Core/Json/LuminPackJsonReader.Capacity.cs");
+        output.AppendLine("internal static unsafe class CoreJsonCapacity");
+        output.AppendLine("{");
+        var capacityNames = new HashSet<string> { "ScanHintByte", "ScanHintChar", "RemoveEscapedQuotes", "ExactZero64", "ExactZero32", "PackByte64", "PackChar64", "PackByte32", "PackChar32", "CountHintBits", "HintTrailingZero", "FindHintByte", "FindHintChar" };
+        foreach (var method in Read(coreRoot, "Core/Json/LuminPackJsonReader.Capacity.cs", Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => capacityNames.Contains(m.Identifier.ValueText))) AppendMethod(output, method);
+        output.AppendLine("}");
         AppendCrypto(output, coreRoot);
         AppendLayout(output, coreRoot);
         AppendLatin1Records(output, coreRoot);

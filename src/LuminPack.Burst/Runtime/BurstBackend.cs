@@ -84,6 +84,7 @@ namespace LuminPack.Burst
                     if (!CompileTextKernels(ref _table)) return false;
                     if (!CompileLayoutAndCrypto(ref _table)) return false;
                     if (!CompileLatin1Kernels(ref _table)) return false;
+                    if (!CompileJsonKernels(ref _table)) return false;
                     Capabilities = available;
                     _compiled = true;
                 }

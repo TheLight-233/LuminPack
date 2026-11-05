@@ -44,6 +44,9 @@ public unsafe class BurstNativeTests
                 BurstCompiler.CompileFunctionPointer<BurstBackend.Utf8DecodeFunction>(BurstKernels.Utf8Decode).Invoke,
                 BurstCompiler.CompileFunctionPointer<BurstBackend.Utf8EqualFunction>(BurstKernels.Utf8Equal).Invoke,
                 BurstCompiler.CompileFunctionPointer<BurstBackend.AsciiEncodeFunction>(BurstKernels.AsciiEncode).Invoke);
+            LuminPack.Burst.Tests.JsonCapacityKernelContract.Verify(
+                BurstCompiler.CompileFunctionPointer<BurstBackend.JsonUtf8Function>(BurstKernels.JsonArrayHintUtf8).Invoke,
+                BurstCompiler.CompileFunctionPointer<BurstBackend.JsonUtf16Function>(BurstKernels.JsonArrayHintUtf16).Invoke);
             LuminPack.Burst.Tests.TextKernelContract.VerifyBytes(
                 BurstCompiler.CompileFunctionPointer<BurstBackend.EqualFunction>(BurstKernels.Equal).Invoke);
             LuminPack.Burst.Tests.Latin1KernelContract.Verify(

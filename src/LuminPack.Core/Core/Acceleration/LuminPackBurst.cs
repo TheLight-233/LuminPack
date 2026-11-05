@@ -15,13 +15,13 @@ namespace LuminPack.Core;
 public static unsafe partial class LuminPackBurst
 {
     /// <summary>The supported native kernel table ABI.</summary>
-    public const uint AbiVersion = 3;
+    public const uint AbiVersion = 4;
 
     /// <summary>A copied table of optional Cdecl kernels; a null field leaves that operation on its existing path.</summary>
     /// <remarks>Pointers receive pinned, complete caller-owned ranges and must never retain them or throw across the ABI.</remarks>
     public struct KernelTable
     {
-        /// <summary>Must equal <see cref="AbiVersion"/> when registering a table.</summary>
+        /// <summary>Selects the current ABI or a supported legacy version; newer slots are disabled for legacy tables.</summary>
         public uint Version;
 
         /// <summary>Copies destination, source and byte count; returns one on completion, or zero without writes to retain Core's native copy.</summary>
@@ -71,6 +71,10 @@ public static unsafe partial class LuminPackBurst
 
         /// <summary>Converts a complete element prefix using Core's immutable precomputed layout plan.</summary>
         public delegate* unmanaged[Cdecl]<byte*, byte*, int, global::LuminPack.Utility.LuminLayoutPlan*, int> LayoutPlanned;
+        /// <summary>Returns a structural JSON array length hint for complete UTF-8 input after the opening bracket; flags select ordinary (zero) or flat entry (one) scanning.</summary>
+        public delegate* unmanaged[Cdecl]<byte*, int, uint, int> JsonArrayHintUtf8;
+        /// <summary>Returns a structural JSON array length hint for complete UTF-16 code units after the opening bracket; minus one declines sizing.</summary>
+        public delegate* unmanaged[Cdecl]<char*, int, uint, int> JsonArrayHintUtf16;
 
     }
 
@@ -92,7 +96,7 @@ public static unsafe partial class LuminPackBurst
     /// <param name="kernels">The table with <see cref="KernelTable.Version"/> set to <see cref="AbiVersion"/>.</param>
     public static void Register(KernelTable kernels)
     {
-        if (kernels.Version != 2 && kernels.Version != AbiVersion)
+        if (kernels.Version != 2 && kernels.Version != 3 && kernels.Version != AbiVersion)
             LuminPackExceptionHelper.ThrowArgumentException("Unsupported LuminPackBurst kernel table ABI.", nameof(kernels));
         if (kernels.Version == 2)
         {
@@ -102,6 +106,11 @@ public static unsafe partial class LuminPackBurst
             kernels.WidenLatin1 = null;
             kernels.Latin1Equal = null;
             kernels.LayoutPlanned = null;
+        }
+        if (kernels.Version < 4)
+        {
+            kernels.JsonArrayHintUtf8 = null;
+            kernels.JsonArrayHintUtf16 = null;
         }
         Volatile.Write(ref _registration, new Registration(kernels));
     }

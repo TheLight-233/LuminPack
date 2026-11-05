@@ -156,6 +156,14 @@ namespace LuminPack.Burst
                 if (sizeof(T) == 1) return (uint)X86.Sse2.movemask_epi8(value.Value);
                 if (sizeof(T) == 2) { uint bits = (uint)X86.Sse2.movemask_epi8(X86.Sse2.packs_epi16(value.Value, value.Value)); return bits & 255u; }
             }
+            if (Arm.Neon.IsNeonSupported)
+            {
+                if (sizeof(T) == 2)
+                {
+                    ulong signs = Arm.Neon.vshrn_n_u16(value.Value, 8).ULong0;
+                    return (uint)(((signs & 0x8080808080808080UL) * 0x0002040810204081UL) >> 56);
+                }
+            }
             v128 copy = value.Value; uint mask = 0; for (int i = 0; i < 16 / sizeof(T); i++) mask |= (uint)(((byte*)&copy)[(i + 1) * sizeof(T) - 1] >> 7) << i; return mask;
         }
         /// <summary>Constructs a vector in lane order.</summary><param name="a0">Lane 0.</param><param name="a1">Lane 1.</param><param name="a2">Lane 2.</param><param name="a3">Lane 3.</param><param name="a4">Lane 4.</param><param name="a5">Lane 5.</param><param name="a6">Lane 6.</param><param name="a7">Lane 7.</param><param name="a8">Lane 8.</param><param name="a9">Lane 9.</param><param name="a10">Lane 10.</param><param name="a11">Lane 11.</param><param name="a12">Lane 12.</param><param name="a13">Lane 13.</param><param name="a14">Lane 14.</param><param name="a15">Lane 15.</param><returns>The vector.</returns>

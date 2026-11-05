@@ -102,6 +102,18 @@ namespace LuminPack.Burst
     internal static class KernelBits
     {
         /// <summary>Counts set bits without requiring optional CPU features.</summary><param name="value">Input.</param><returns>The population count.</returns>
+        internal static int PopCount(ulong value)
+        {
+            if (global::Unity.Burst.Intrinsics.X86.Popcnt.IsPopcntSupported)
+            {
+                if (KernelMemory.Is64Bit) return global::Unity.Burst.Intrinsics.X86.Popcnt.popcnt_u64(value);
+                return PopCount((uint)value) + PopCount((uint)(value >> 32));
+            }
+            value -= (value >> 1) & 0x5555555555555555UL;
+            value = (value & 0x3333333333333333UL) + ((value >> 2) & 0x3333333333333333UL);
+            return (int)((((value + (value >> 4)) & 0x0F0F0F0F0F0F0F0FUL) * 0x0101010101010101UL) >> 56);
+        }
+        /// <summary>Counts set bits in a four-byte word without requiring optional CPU features.</summary><param name="value">Input.</param><returns>The population count.</returns>
         internal static int PopCount(uint value)
         {
             if (global::Unity.Burst.Intrinsics.X86.Popcnt.IsPopcntSupported) return global::Unity.Burst.Intrinsics.X86.Popcnt.popcnt_u32(value);
