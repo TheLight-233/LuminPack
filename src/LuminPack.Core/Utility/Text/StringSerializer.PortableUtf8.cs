@@ -3,11 +3,36 @@ using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using LuminPack.Code;
 
 namespace LuminPack.Utility;
 
 public static partial class StringSerializer
 {
+    /// <summary>Completes a declined native decode in its unpublished result using the established runtime decoder.</summary>
+    /// <param name = "source">The first byte of the validated payload window.</param>
+    /// <param name = "length">The complete encoded byte count.</param>
+    /// <param name = "result">The unpublished string sized to the recorded UTF-16 count.</param>
+    /// <returns>The same string after complete strict decoding.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static string DeserializeUtf8AfterDecline(ref byte source, int length, string result)
+    {
+        try
+        {
+            int written = StrictUtf8.GetChars(MemoryMarshal.CreateReadOnlySpan(ref source, length),
+                MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(result.AsSpan()), result.Length));
+            if (written != result.Length)
+                LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
+            return result;
+        }
+        catch (ArgumentException)
+        {
+            // Both malformed UTF-8 and a short recorded destination retain the original framing failure.
+            LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
+            return null!;
+        }
+    }
+
     /// <summary>Encodes a final UTF-16 block into a previously proven worst-case UTF-8 destination without fallback-buffer allocation.</summary>
     /// <param name = "source">The complete input block.</param>
     /// <param name = "destination">Storage with at least three bytes per source code unit.</param>

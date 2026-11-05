@@ -513,6 +513,7 @@ public static unsafe partial class StringSerializer
                     LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
                 return native;
             }
+            return DeserializeUtf8AfterDecline(ref source, length, native);
         }
 #endif
 #if NETSTANDARD2_1

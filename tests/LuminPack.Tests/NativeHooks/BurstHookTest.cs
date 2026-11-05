@@ -135,6 +135,58 @@ public sealed unsafe class BurstHookTest : IDisposable
         Assert.Equal(useNativeHook, _encodeCalls > encodeBefore);
     }
 
+    /// <summary>Reuses unpublished string storage after a native decline and preserves strict failures and pinning.</summary>
+    [Fact]
+    public void DeclinedUtf8StringsPreserveTextAndValidation()
+    {
+        LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, Utf8Decode = &UnsupportedDecode });
+        foreach (string text in new[] { "A", "ASCII", "\u00e9\u4e2d\ud83d\ude00", new string('x', 129), new string('\u4e2d', 4096) })
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(text);
+            _collect = true;
+            try { Assert.Equal(text, StringSerializer.DeserializeUtf8(ref bytes[0], bytes.Length, text.Length)); }
+            finally { _collect = false; }
+            foreach (int count in new[] { 1, text.Length - 1, text.Length + 1, bytes.Length + 1 })
+                if (count > 0 && count != text.Length)
+                    Assert.Equal("Failed in Utf8 encoding/decoding process, status: InvalidData.",
+                        Assert.ThrowsAny<Exception>(() => StringSerializer.DeserializeUtf8(ref bytes[0], bytes.Length, count)).Message);
+        }
+        foreach (byte[] bytes in new[]
+        {
+            new byte[] { 0x80 }, new byte[] { 0xC0, 0x80 }, new byte[] { 0xC2 },
+            new byte[] { 0xE0, 0x80, 0x80 }, new byte[] { 0xED, 0xA0, 0x80 },
+            new byte[] { 0xF0, 0x9F }, new byte[] { 0xF4, 0x90, 0x80, 0x80 },
+            new byte[] { 0x41, 0xF0, 0x9F, 0x98, 0x80, 0x80 }
+        })
+        {
+            for (int count = 1; count <= bytes.Length; count++)
+                Assert.Equal("Failed in Utf8 encoding/decoding process, status: InvalidData.",
+                        Assert.ThrowsAny<Exception>(() => StringSerializer.DeserializeUtf8(ref bytes[0], bytes.Length, count)).Message);
+            Assert.Equal(Encoding.UTF8.GetString(bytes), StringSerializer.DeserializeUtf8(ref bytes[0], bytes.Length, 0));
+        }
+    }
+
+    /// <summary>Allows only the final string allocation when a native decoder declines a valid payload.</summary>
+    [Fact]
+    public void DeclinedUtf8StringsAllocateOnlyTheResult()
+    {
+        LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, Utf8Decode = &UnsupportedDecode });
+        foreach (string text in new[] { "A", "ASCII", "\u00e9\u4e2d\ud83d\ude00", new string('x', 129), new string('\u4e2d', 4096) })
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(text);
+            for (int index = 0; index < 64; index++)
+                GC.KeepAlive(StringSerializer.DeserializeUtf8(ref bytes[0], bytes.Length, text.Length));
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int index = 0; index < 256; index++)
+                GC.KeepAlive(new string('\0', text.Length));
+            long resultBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            before = GC.GetAllocatedBytesForCurrentThread();
+            for (int index = 0; index < 256; index++)
+                GC.KeepAlive(StringSerializer.DeserializeUtf8(ref bytes[0], bytes.Length, text.Length));
+            Assert.Equal(resultBytes, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
+    }
+
     /// <summary>Exercises bounded ASCII word batches with every source and output alignment on both pointer sizes.</summary>
     [Fact]
     public void BoundedUtf8AsciiBatchesRespectAllAlignments()
@@ -530,6 +582,17 @@ public sealed unsafe class BurstHookTest : IDisposable
     /// <returns>Unsupported.</returns>
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static int UnsupportedEncode(char* input, int length, byte* output, int capacity, int* read, int* written, uint flags) { *read = *written = 0; return -1; }
+
+    /// <summary>Declines decoding after optionally collecting while both managed ranges are pinned.</summary>
+    /// <param name="input">Untouched input.</param><param name="length">Input count.</param><param name="output">Untouched output.</param><param name="capacity">Output count.</param><param name="read">Zero consumed.</param><param name="written">Zero produced.</param><param name="flags">Unused codec flags.</param>
+    /// <returns>Unsupported without writing either range.</returns>
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static int UnsupportedDecode(byte* input, int length, char* output, int capacity, int* read, int* written, uint flags)
+    {
+        if (_collect) GC.Collect(2, GCCollectionMode.Forced, true, true);
+        *read = *written = 0;
+        return -1;
+    }
 
     /// <summary>Copies only complete leading elements in ordered byte descriptors.</summary>
     /// <param name="input">Input.</param><param name="output">Output.</param><param name="count">Elements.</param><param name="sourceStride">Input stride.</param><param name="destinationStride">Output stride.</param><param name="from">Input offsets.</param><param name="to">Output offsets.</param><param name="bytes">Semantic byte count.</param>
