@@ -8,6 +8,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Checks that tree builds allocate nodes through the bound accessors and still match the public construction.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public sealed partial class TreeNodeAllocationTest
 {
     /// <summary>Reads a private static field of a nested layout type.</summary>

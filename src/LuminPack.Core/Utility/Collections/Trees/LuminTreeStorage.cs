@@ -153,9 +153,12 @@ public static class LuminTreeStorage
             return;
         }
         var pooled = System.Buffers.ArrayPool<T>.Shared.Rent(count);
-        CopyTo(set, pooled.AsSpan(0, count));
-        writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
-        System.Buffers.ArrayPool<T>.Shared.Return(pooled);
+        try
+        {
+            CopyTo(set, pooled.AsSpan(0, count));
+            writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
+        }
+        finally { System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
     }
 
     /// <summary>Writes an immutable sorted set of raw elements as the count followed by the elements in order.</summary>
@@ -173,9 +176,12 @@ public static class LuminTreeStorage
             return;
         }
         var pooled = System.Buffers.ArrayPool<T>.Shared.Rent(count);
-        CopyTo(set, pooled.AsSpan(0, count));
-        writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
-        System.Buffers.ArrayPool<T>.Shared.Return(pooled);
+        try
+        {
+            CopyTo(set, pooled.AsSpan(0, count));
+            writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
+        }
+        finally { System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
     }
 
     /// <summary>Writes an immutable hash set of raw elements as the count followed by the elements in enumeration order.</summary>
@@ -193,9 +199,12 @@ public static class LuminTreeStorage
             return;
         }
         var pooled = System.Buffers.ArrayPool<T>.Shared.Rent(count);
-        CopyTo(set, pooled.AsSpan(0, count));
-        writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
-        System.Buffers.ArrayPool<T>.Shared.Return(pooled);
+        try
+        {
+            CopyTo(set, pooled.AsSpan(0, count));
+            writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
+        }
+        finally { System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
     }
 
     /// <summary>Reserves a raw record and writes its count, exposing the element block as typed storage.</summary>
@@ -409,13 +418,20 @@ public static class LuminTreeStorage
     public static ImmutableHashSet<T> CreateImmutableHashSet<T>(T[] items, int count)
     {
         if (count == 1) return ImmutableHashSet.Create<T>(items[0]);
-        if (count > 1 && ImmutableHashSetLayout<T>.Available && TrySortHashes(items, count, out var keys))
+        if (count > 1 && ImmutableHashSetLayout<T>.Available)
         {
-            var result = ImmutableHashSet.Create(items[0]);
-            BuildHash<T>(Field<object>(result, ImmutableHashSetLayout<T>.Root), in ImmutableHashSetLayout<T>.Hash, items, keys, count);
-            System.Buffers.ArrayPool<long>.Shared.Return(keys);
-            Field<int>(result, ImmutableHashSetLayout<T>.Count) = count;
-            return result;
+            var keys = System.Buffers.ArrayPool<long>.Shared.Rent(count);
+            try
+            {
+                if (TrySortHashes(items, count, keys))
+                {
+                    var result = ImmutableHashSet.Create(items[0]);
+                    BuildHash<T>(Field<object>(result, ImmutableHashSetLayout<T>.Root), in ImmutableHashSetLayout<T>.Hash, items, keys, count);
+                    Field<int>(result, ImmutableHashSetLayout<T>.Count) = count;
+                    return result;
+                }
+            }
+            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
         var builder = ImmutableHashSet.CreateBuilder<T>();
         for (int i = 0; i < count; i++) builder.Add(items[i]);
@@ -432,14 +448,21 @@ public static class LuminTreeStorage
     /// duplicate keys, add the pairs through the builder, which throws for duplicates as before.</remarks>
     public static ImmutableDictionary<TKey, TValue> CreateImmutableDictionary<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count) where TKey : notnull
     {
-        if (count > 1 && ImmutableDictionaryLayout<TKey, TValue>.Available && TrySortHashes(pairs, count, out var keys))
+        if (count > 1 && ImmutableDictionaryLayout<TKey, TValue>.Available)
         {
-            var result = ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
-            BuildHash<KeyValuePair<TKey, TValue>>(Field<object>(result, ImmutableDictionaryLayout<TKey, TValue>.Root),
-                in ImmutableDictionaryLayout<TKey, TValue>.Hash, pairs, keys, count);
-            System.Buffers.ArrayPool<long>.Shared.Return(keys);
-            Field<int>(result, ImmutableDictionaryLayout<TKey, TValue>.Count) = count;
-            return result;
+            var keys = System.Buffers.ArrayPool<long>.Shared.Rent(count);
+            try
+            {
+                if (TrySortHashes(pairs, count, keys))
+                {
+                    var result = ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
+                    BuildHash<KeyValuePair<TKey, TValue>>(Field<object>(result, ImmutableDictionaryLayout<TKey, TValue>.Root),
+                        in ImmutableDictionaryLayout<TKey, TValue>.Hash, pairs, keys, count);
+                    Field<int>(result, ImmutableDictionaryLayout<TKey, TValue>.Count) = count;
+                    return result;
+                }
+            }
+            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
         var builder = ImmutableDictionary.CreateBuilder<TKey, TValue>();
         for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
@@ -813,10 +836,9 @@ public static class LuminTreeStorage
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="items">The items, in the order they were read or stored.</param>
     /// <param name="count">The number of items.</param>
-    /// <param name="keys">The ordered hash keys, each holding a hash code above an item index.</param>
-    private static bool TrySortHashes<T>(T[] items, int count, out long[] keys)
+    /// <param name="keys">Caller-owned storage for a hash code above each item index.</param>
+    private static bool TrySortHashes<T>(T[] items, int count, long[] keys)
     {
-        keys = System.Buffers.ArrayPool<long>.Shared.Rent(count);
         var comparer = EqualityComparer<T>.Default;
         for (int i = 0; i < count; i++)
         {
@@ -832,26 +854,21 @@ public static class LuminTreeStorage
     /// <typeparam name="TValue">The value type.</typeparam>
     /// <param name="pairs">The pairs, in the order they were read.</param>
     /// <param name="count">The number of items.</param>
-    /// <param name="keys">The ordered hash keys, each holding a hash code above an item index.</param>
-    private static bool TrySortHashes<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count, out long[] keys)
+    /// <param name="keys">Caller-owned storage for a hash code above each pair index.</param>
+    private static bool TrySortHashes<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count, long[] keys)
     {
-        keys = System.Buffers.ArrayPool<long>.Shared.Rent(count);
         var comparer = EqualityComparer<TKey>.Default;
         for (int i = 0; i < count; i++)
         {
             var key = pairs[i].Key;
-            if (key is null)
-            {
-                System.Buffers.ArrayPool<long>.Shared.Return(keys);
-                return false;
-            }
+            if (key is null) return false;
             keys[i] = ((long)comparer.GetHashCode(key) << 32) | (uint)i;
         }
         return SortDistinct(keys, count);
     }
 
     /// <summary>Orders hash keys, skipping the sort for the hash order a LuminPack write produces.</summary>
-    /// <returns>Whether every hash code is distinct; otherwise the pooled keys have been returned.</returns>
+    /// <returns>Whether every hash code is distinct; the caller retains ownership of the supplied storage.</returns>
     /// <param name="keys">The ordered hash keys, each holding a hash code above an item index.</param>
     /// <param name="count">The number of items.</param>
     private static bool SortDistinct(long[] keys, int count)
@@ -862,10 +879,7 @@ public static class LuminTreeStorage
         Array.Sort(keys, 0, count);
         for (i = 1; i < count; i++)
             if ((int)(keys[i - 1] >> 32) == (int)(keys[i] >> 32))
-            {
-                System.Buffers.ArrayPool<long>.Shared.Return(keys);
                 return false;
-            }
         return true;
     }
 
@@ -1312,15 +1326,20 @@ public static class LuminTreeStorage
                 ref copy[0], copy.Length, index);
             if (index != source.Count || !copy.SequenceEqual(source)) return false;
             var items = Enumerable.Range(-20, 41).ToArray();
-            if (!TrySortHashes(items, items.Length, out var keys)) return false;
-            var template = ImmutableHashSet.Create(items[0]);
-            object root = BuildHash<int>(Field<object>(template, ImmutableHashSetLayout<int>.Root), in ImmutableHashSetLayout<int>.Hash, items, keys, items.Length);
-            var built = Unsafe.As<ImmutableHashSet<int>>(Clone(template));
-            Field<object>(built, ImmutableHashSetLayout<int>.Root) = root;
-            Field<int>(built, ImmutableHashSetLayout<int>.Count) = items.Length;
-            var modified = built.Remove(0).Add(100).Add(-20);
-            return built.Count == 41 && built.SetEquals(items) && built.SequenceEqual(ImmutableHashSet.CreateRange(items)) && built.Contains(-20) &&
-                !built.Contains(21) && modified.Count == 41 && modified.Contains(100) && !modified.Contains(0) && built.Contains(0);
+            var keys = System.Buffers.ArrayPool<long>.Shared.Rent(items.Length);
+            try
+            {
+                if (!TrySortHashes(items, items.Length, keys)) return false;
+                var template = ImmutableHashSet.Create(items[0]);
+                object root = BuildHash<int>(Field<object>(template, ImmutableHashSetLayout<int>.Root), in ImmutableHashSetLayout<int>.Hash, items, keys, items.Length);
+                var built = Unsafe.As<ImmutableHashSet<int>>(Clone(template));
+                Field<object>(built, ImmutableHashSetLayout<int>.Root) = root;
+                Field<int>(built, ImmutableHashSetLayout<int>.Count) = items.Length;
+                var modified = built.Remove(0).Add(100).Add(-20);
+                return built.Count == 41 && built.SetEquals(items) && built.SequenceEqual(ImmutableHashSet.CreateRange(items)) && built.Contains(-20) &&
+                    !built.Contains(21) && modified.Count == 41 && modified.Contains(100) && !modified.Contains(0) && built.Contains(0);
+            }
+            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
     }
 
@@ -1351,15 +1370,20 @@ public static class LuminTreeStorage
                 ref copy[0], copy.Length, index);
             if (index != source.Count || !copy.SequenceEqual(source)) return false;
             var pairs = Enumerable.Range(-15, 31).Select(i => new KeyValuePair<int, int>(i, i * 5)).ToArray();
-            if (!TrySortHashes(pairs, pairs.Length, out var keys)) return false;
-            var template = ImmutableDictionary<int, int>.Empty.Add(pairs[0].Key, pairs[0].Value);
-            object root = BuildHash<KeyValuePair<int, int>>(Field<object>(template, ImmutableDictionaryLayout<int, int>.Root), in ImmutableDictionaryLayout<int, int>.Hash, pairs, keys, pairs.Length);
-            var built = Unsafe.As<ImmutableDictionary<int, int>>(Clone(template));
-            Field<object>(built, ImmutableDictionaryLayout<int, int>.Root) = root;
-            Field<int>(built, ImmutableDictionaryLayout<int, int>.Count) = pairs.Length;
-            var modified = built.Remove(3).SetItem(4, -1).Add(99, 0);
-            return built.Count == 31 && built[-15] == -75 && built[15] == 75 && !built.ContainsKey(16) &&
-                built.SequenceEqual(ImmutableDictionary.CreateRange(pairs)) && modified.Count == 31 && modified[4] == -1 && built[4] == 20 && !modified.ContainsKey(3);
+            var keys = System.Buffers.ArrayPool<long>.Shared.Rent(pairs.Length);
+            try
+            {
+                if (!TrySortHashes(pairs, pairs.Length, keys)) return false;
+                var template = ImmutableDictionary<int, int>.Empty.Add(pairs[0].Key, pairs[0].Value);
+                object root = BuildHash<KeyValuePair<int, int>>(Field<object>(template, ImmutableDictionaryLayout<int, int>.Root), in ImmutableDictionaryLayout<int, int>.Hash, pairs, keys, pairs.Length);
+                var built = Unsafe.As<ImmutableDictionary<int, int>>(Clone(template));
+                Field<object>(built, ImmutableDictionaryLayout<int, int>.Root) = root;
+                Field<int>(built, ImmutableDictionaryLayout<int, int>.Count) = pairs.Length;
+                var modified = built.Remove(3).SetItem(4, -1).Add(99, 0);
+                return built.Count == 31 && built[-15] == -75 && built[15] == 75 && !built.ContainsKey(16) &&
+                    built.SequenceEqual(ImmutableDictionary.CreateRange(pairs)) && modified.Count == 31 && modified[4] == -1 && built[4] == 20 && !modified.ContainsKey(3);
+            }
+            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
     }
 
