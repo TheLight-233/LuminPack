@@ -1,4 +1,6 @@
+using System;
 using System.Text;
+using Microsoft.CodeAnalysis;
 using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
@@ -39,7 +41,7 @@ public static class ConcurrentBagEmitter
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
         string elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
-        if (fieldData.CanWriteConcurrentBagRaw && CollectionEmitterKit.IsRaw(element, elementType))
+        if (fieldData.CanWriteConcurrentBagRaw && !IsNullableElement(element, elementType) && CollectionEmitterKit.IsRaw(element, elementType))
             sb.AppendLine("            if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteConcurrentBagRaw(ref writer, value)) return;");
         if (fieldData.CanSnapshotConcurrentBag)
         {
@@ -53,6 +55,14 @@ public static class ConcurrentBagEmitter
         }
         CollectionEmitterKit.AppendSpanWrite(sb, element, elementType, "value.ToArray()", "            ");
     }
+
+    /// <summary>Determines whether the element is a nullable value type that cannot use the raw bag path.</summary>
+    /// <param name="element">The element symbol.</param>
+    /// <param name="elementType">The generated element type name.</param>
+    /// <returns>Whether the element is nullable.</returns>
+    private static bool IsNullableElement(ITypeSymbol element, string elementType)
+        => element is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
+            || elementType.EndsWith("?", StringComparison.Ordinal);
 
     /// <summary>Appends binary reading statements for concurrent bag values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
