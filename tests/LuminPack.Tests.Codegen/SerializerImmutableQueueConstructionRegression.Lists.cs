@@ -58,7 +58,7 @@ internal static partial class SerializerImmutableQueueConstructionRegression
         string generated = string.Join("\n", Trees(driver));
         Require(generated.Contains("ImmutableList.Create(new global::System.ReadOnlySpan", StringComparison.Ordinal) == span,
             "List span construction does not match the actual factory.");
-        Require(generated.Contains("ImmutableList.CreateRange(new global::System.ArraySegment", StringComparison.Ordinal) != span,
+        Require(generated.Contains("ImmutableList.CreateRange(", StringComparison.Ordinal) != span,
             "Concrete or interface list construction retained the wrong enumerable fallback.");
         using var image = new MemoryStream();
         var emitted = output.Emit(image);

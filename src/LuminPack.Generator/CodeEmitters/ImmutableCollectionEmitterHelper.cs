@@ -180,7 +180,7 @@ internal static class ImmutableCollectionEmitterHelper
             sb.AppendLine("                    for (int i = 0; i < count; i++) builder.Add(buffer[i]);");
             sb.AppendLine("                    value = builder.ToImmutable();");
             sb.AppendLine("                }");
-            sb.AppendLine("                else value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + elementType + ">(buffer, 0, count));");
+            sb.AppendLine("                else value = global::System.Collections.Immutable.ImmutableList.CreateRange(" + CollectionEmitterKit.CopyingFactorySource(elementType, "buffer", "count") + ");");
             return;
         }
         if (target == "ImmutableStack")
@@ -194,7 +194,7 @@ internal static class ImmutableCollectionEmitterHelper
         {
             sb.AppendLine(canCreateFromSpan
                 ? "                value = global::System.Collections.Immutable.ImmutableQueue.Create(new global::System.ReadOnlySpan<" + elementType + ">(buffer, 0, count));"
-                : "                value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(new global::System.ArraySegment<" + elementType + ">(buffer, 0, count));");
+                : "                value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(" + CollectionEmitterKit.CopyingFactorySource(elementType, "buffer", "count") + ");");
             return;
         }
         sb.AppendLine("                var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + elementType + ">();");

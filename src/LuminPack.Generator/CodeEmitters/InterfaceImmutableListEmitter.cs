@@ -52,7 +52,7 @@ public static class InterfaceImmutableListEmitter
         {
             fieldData.CanCreateImmutableSequenceFromSpan
                 ? "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + elementType + ">(__pooled, 0, length));"
-                : "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + elementType + ">(__pooled, 0, length));"
+                : "value = global::System.Collections.Immutable.ImmutableList.CreateRange(" + CollectionEmitterKit.CopyingFactorySource(elementType, "__pooled", "length") + ");"
         }, "            ", scalarElements: true);
     }
 }

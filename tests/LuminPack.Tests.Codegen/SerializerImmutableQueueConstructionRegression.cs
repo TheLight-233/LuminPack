@@ -157,7 +157,7 @@ internal static partial class SerializerImmutableQueueConstructionRegression
     private static void VerifySelection(GeneratorDriver driver, bool span)
     {
         string generated = string.Join("\n", Trees(driver));
-        Require(generated.Contains(span ? "ImmutableQueue.Create(new global::System.ReadOnlySpan" : "ImmutableQueue.CreateRange(new global::System.ArraySegment", StringComparison.Ordinal),
+        Require(generated.Contains(span ? "ImmutableQueue.Create(new global::System.ReadOnlySpan" : "ImmutableQueue.CreateRange(", StringComparison.Ordinal),
             "The queue construction does not match the referenced public API.");
     }
 
