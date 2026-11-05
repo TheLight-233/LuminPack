@@ -74,7 +74,7 @@ public static class ObservableCollectionEmitter
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
-        sb.AppendLine($"                LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref value).items = new global::System.Collections.Generic.List<{elementType}>(length);");
+        // GetListSpan reuses the existing backing list and grows its capacity only when needed.
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine($"            var list = LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref value);");

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.ObjectModel;
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Code;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -70,6 +71,40 @@ public class RuntimeStagingAllocationTest
         for (int i = 0; i < 256; i++) LuminPackSerializer.DeserializeJson(json, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Equal("Aé", target!.Text);
+    }
+
+    /// <summary>Binary reuse keeps the existing ObservableCollection backing list instead of replacing it.</summary>
+    [Fact]
+    public void ObservableCollectionBinaryReuseKeepsBackingList()
+    {
+        var source = new ObservableCollection<int> { 1, 2, 3, 4 };
+        byte[] sourceBytes = LuminPackSerializer.Serialize(source);
+
+        var target = new ObservableCollection<int>();
+        for (int index = 0; index < 64; index++) target.Add(index);
+        target.Clear();
+        var before = LuminPackMarshal.As<ObservableCollection<int>, ObservableCollectionView<int>>(ref target).items;
+        LuminPackSerializer.Deserialize(sourceBytes, ref target);
+        var after = LuminPackMarshal.As<ObservableCollection<int>, ObservableCollectionView<int>>(ref target).items;
+        Assert.Same(before, after);
+        Assert.Equal(source, target);
+
+        var small = new ObservableCollection<int> { 0, 1, 2, 3 };
+        var largeSource = new ObservableCollection<int>();
+        for (int index = 0; index < 64; index++) largeSource.Add(index);
+        byte[] largeBytes = LuminPackSerializer.Serialize(largeSource);
+        var smallBefore = LuminPackMarshal.As<ObservableCollection<int>, ObservableCollectionView<int>>(ref small).items;
+        LuminPackSerializer.Deserialize(largeBytes, ref small);
+        var smallAfter = LuminPackMarshal.As<ObservableCollection<int>, ObservableCollectionView<int>>(ref small).items;
+        Assert.Same(smallBefore, smallAfter);
+        Assert.Equal(largeSource, small);
+
+        byte[] emptyBytes = LuminPackSerializer.Serialize(new ObservableCollection<int>());
+        var reused = LuminPackMarshal.As<ObservableCollection<int>, ObservableCollectionView<int>>(ref target).items;
+        LuminPackSerializer.Deserialize(emptyBytes, ref target);
+        var reusedAfter = LuminPackMarshal.As<ObservableCollection<int>, ObservableCollectionView<int>>(ref target).items;
+        Assert.Same(reused, reusedAfter);
+        Assert.Empty(target);
     }
 
     /// <summary>Asynchronous stream input is read into pooled storage, including streams that report no length.</summary>
