@@ -141,7 +141,7 @@ public static partial class StringSerializer
 
                     if (!replaceInvalidSequences)
                     {
-                        charsRead = (int)(input - sourceStart) - 1;
+                        charsRead = (int)((long)(unchecked((nint)input - (nint)sourceStart) >> 1)) - 1;
                         bytesWritten = (int)unchecked((nint)output - (nint)outputStart);
                         return OperationStatus.InvalidData;
                     }

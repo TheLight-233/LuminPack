@@ -30,6 +30,8 @@ public enum SerializeMode : byte
 /// Other input uses the platform transcoder when it can preserve buffering and replacement semantics.
 /// Portable and bounded fallback: netstandard2.1 with 64-bit SWAR ASCII paths; SIMD: NET8_0_OR_GREATER.
 /// </summary>
+/// <remarks>UTF-16 window endpoints advance in two-byte units. Their even native byte distances may be
+/// halved with arithmetic shifts, preserving signed wrap semantics without pointer-division instructions.</remarks>
 public static unsafe partial class StringSerializer
 {
 #if !NET8_0_OR_GREATER
@@ -962,7 +964,7 @@ public static unsafe partial class StringSerializer
             while (true)
             {
                 // Subtract byte addresses at native width before widening; Mono otherwise retains division by one.
-                status = TranscodeToUtf8(input, (int)(inputEnd - input), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out input, out output);
+                status = TranscodeToUtf8(input, (int)((long)(unchecked((nint)inputEnd - (nint)input) >> 1)), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out input, out output);
                 if (status == OperationStatus.Done || status == OperationStatus.DestinationTooSmall)
                     break;
                 if (status == OperationStatus.NeedMoreData && !isFinalBlock)
@@ -988,7 +990,7 @@ public static unsafe partial class StringSerializer
                 output += 3;
             }
 
-            charsRead = (int)(input - originalInput);
+            charsRead = (int)((long)(unchecked((nint)input - (nint)originalInput) >> 1));
             bytesWritten = (int)((long)unchecked((nint)output - (nint)originalOutput));
             return status;
         }
@@ -1017,7 +1019,7 @@ public static unsafe partial class StringSerializer
             OperationStatus status;
             while (true)
             {
-                status = TranscodeToUtf16(pInput, (int)((long)unchecked((nint)inputEnd - (nint)pInput)), pOutput, (int)(outputEnd - pOutput), out byte* pInputRemaining, out char* pOutputRemaining);
+                status = TranscodeToUtf16(pInput, (int)((long)unchecked((nint)inputEnd - (nint)pInput)), pOutput, (int)((long)(unchecked((nint)outputEnd - (nint)pOutput) >> 1)), out byte* pInputRemaining, out char* pOutputRemaining);
                 pInput = pInputRemaining;
                 pOutput = pOutputRemaining;
                 if (status is OperationStatus.Done or OperationStatus.DestinationTooSmall)
@@ -1042,7 +1044,7 @@ public static unsafe partial class StringSerializer
             }
 
             bytesRead = (int)((long)unchecked((nint)pInput - (nint)pSource));
-            charsWritten = (int)(pOutput - pDest);
+            charsWritten = (int)((long)(unchecked((nint)pOutput - (nint)pDest) >> 1));
             return status;
         }
     }
@@ -1148,7 +1150,7 @@ public static unsafe partial class StringSerializer
             // not for every character in general text.
             if (Ssse3.IsSupported)
             {
-                while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
                 {
                     uint lead = *input;
                     if (lead >= 0x80 && (lead < 0x800 || IsBmp3(lead)))
@@ -1158,7 +1160,7 @@ public static unsafe partial class StringSerializer
                             // Sparse ASCII delimiter between large CJK runs.
                             // Only consume it here when the next vector-friendly
                             // run is plausibly of the same 3-byte class.
-                            if (inputEnd - input >= 33 && (long)unchecked((nint)outputEnd - (nint)output) >= 25 && *input < 0x80 && IsBmp3(input[1]))
+                            if ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 33 && (long)unchecked((nint)outputEnd - (nint)output) >= 25 && *input < 0x80 && IsBmp3(input[1]))
                             {
                                 *output++ = (byte)*input++;
                                 continue;
@@ -1179,16 +1181,16 @@ public static unsafe partial class StringSerializer
         // that tail to the native bounded transcoder. `false, false` preserves
         // this low-level method's InvalidData / NeedMoreData behavior; the
         // outer SerializeAsUtf8 loop performs replacement if requested.
-        if (input != pInputBuffer && inputEnd - input >= 64)
+        if (input != pInputBuffer && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 64)
         {
-            OperationStatus nativeStatus = Utf8.FromUtf16(new ReadOnlySpan<char>(input, (int)(inputEnd - input)), new Span<byte>(output, (int)((long)unchecked((nint)outputEnd - (nint)output))), out int nativeChars, out int nativeBytes, replaceInvalidSequences: false, isFinalBlock: false);
+            OperationStatus nativeStatus = Utf8.FromUtf16(new ReadOnlySpan<char>(input, (int)((long)(unchecked((nint)inputEnd - (nint)input) >> 1))), new Span<byte>(output, (int)((long)unchecked((nint)outputEnd - (nint)output))), out int nativeChars, out int nativeBytes, replaceInvalidSequences: false, isFinalBlock: false);
             pInputBufferRemaining = input + nativeChars;
             pOutputBufferRemaining = output + nativeBytes;
             return nativeStatus;
         }
 
 #endif
-        OperationStatus status = TranscodeToUtf8Scalar(input, (int)(inputEnd - input), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out char* remainingInput, out byte* remainingOutput);
+        OperationStatus status = TranscodeToUtf8Scalar(input, (int)((long)(unchecked((nint)inputEnd - (nint)input) >> 1)), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out char* remainingInput, out byte* remainingOutput);
         pInputBufferRemaining = remainingInput;
         pOutputBufferRemaining = remainingOutput;
         return status;
@@ -1211,7 +1213,7 @@ public static unsafe partial class StringSerializer
             EncodeVector512Run(ref input, ref output, inputEnd, outputEnd, 0);
         if (Avx2.IsSupported)
         {
-            while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
+            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
             {
                 var a = Vector256.Load((ushort*)input);
                 var b = Vector256.Load((ushort*)(input + 16));
@@ -1226,7 +1228,7 @@ public static unsafe partial class StringSerializer
 
         Vector128<ushort> nonAsciiMask = Vector128.Create((ushort)0xFF80);
         Vector128<short> zero = Vector128<short>.Zero;
-        while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
+        while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
         {
             Vector128<ushort> a = Unsafe.ReadUnaligned<Vector128<ushort>>(input);
             Vector128<ushort> b = Unsafe.ReadUnaligned<Vector128<ushort>>(input + 8);
@@ -1241,7 +1243,7 @@ public static unsafe partial class StringSerializer
             output += 32;
         }
 
-        while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
+        while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
         {
             Vector128<ushort> a = Unsafe.ReadUnaligned<Vector128<ushort>>(input);
             Vector128<ushort> b = Unsafe.ReadUnaligned<Vector128<ushort>>(input + 8);
@@ -1352,7 +1354,7 @@ public static unsafe partial class StringSerializer
         while (input < inputEnd)
         {
 #if NETSTANDARD2_1
-            if (littleEndian && Unsafe.SizeOf<IntPtr>() == 8 && inputEnd - input >= 8 &&
+            if (littleEndian && Unsafe.SizeOf<IntPtr>() == 8 && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 &&
                 (long)unchecked((nint)outputEnd - (nint)output) >= 8)
             {
                 ulong lower = ((Utf8PackedWord64*)input)->Value;
@@ -1371,7 +1373,7 @@ public static unsafe partial class StringSerializer
             {
                 // ASCII SWAR: 4 UTF-16 code units -> one exact 32-bit write.
                 // This is the portable fast path for netstandard2.1 as well.
-                if (littleEndian && inputEnd - input >= 4 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
+                if (littleEndian && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 4 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
                 {
                     // IL2CPP permits typed unaligned values only up to four bytes on 32-bit.
                     ulong four = IntPtr.Size == 8
@@ -1411,7 +1413,7 @@ public static unsafe partial class StringSerializer
             {
                 // Two adjacent Latin / Cyrillic / Arabic UTF-16 code units can be
                 // emitted with a single 32-bit store. No unrelated CJK checks here.
-                if (littleEndian && inputEnd - input >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
+                if (littleEndian && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
                 {
                     uint next = input[1];
                     if (next >= 0x80 && next < 0x800)
@@ -1440,7 +1442,7 @@ public static unsafe partial class StringSerializer
             if (IsBmp3(c))
             {
                 // Two BMP characters -> exactly 6 UTF-8 bytes (4 + 2 stores).
-                if (littleEndian && inputEnd - input >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 6)
+                if (littleEndian && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 6)
                 {
                     uint next = input[1];
                     if (IsBmp3(next))
@@ -1471,7 +1473,7 @@ public static unsafe partial class StringSerializer
 
             if (c <= 0xDBFF) // high surrogate
             {
-                if (inputEnd - input < 2)
+                if ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) < 2)
                 {
                     status = OperationStatus.NeedMoreData;
                     break;
@@ -1536,7 +1538,7 @@ public static unsafe partial class StringSerializer
             {
 #if NETSTANDARD2_1
                 if (BitConverter.IsLittleEndian && Unsafe.SizeOf<IntPtr>() == 8 &&
-                    (long)unchecked((nint)inputEnd - (nint)pInputBuffer) >= 8 && outputEnd - pOutputBuffer >= 8)
+                    (long)unchecked((nint)inputEnd - (nint)pInputBuffer) >= 8 && (long)(unchecked((nint)outputEnd - (nint)pOutputBuffer) >> 1) >= 8)
                 {
                     ulong eight = ((Utf8PackedWord64*)pInputBuffer)->Value;
                     if ((eight & 0x8080808080808080UL) == 0)
@@ -1613,7 +1615,7 @@ public static unsafe partial class StringSerializer
                 uint fourthByte = pInputBuffer[3];
                 if (!IsUtf8ContinuationByte(fourthByte))
                     return Complete(OperationStatus.InvalidData);
-                if (outputEnd - pOutputBuffer < 2)
+                if ((long)(unchecked((nint)outputEnd - (nint)pOutputBuffer) >> 1) < 2)
                     return Complete(OperationStatus.DestinationTooSmall);
                 uint codePoint = ((firstByte & 0x07) << 18) | ((secondByte & 0x3F) << 12) | ((thirdByte & 0x3F) << 6) | (fourthByte & 0x3F);
                 codePoint -= 0x10000;
@@ -1709,7 +1711,7 @@ public static unsafe partial class StringSerializer
             if (Avx2.IsSupported)
             {
                 Vector256<ushort> highMask = Vector256.Create((ushort)0xFF80);
-                while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
                 {
                     Vector256<ushort> chars = Unsafe.ReadUnaligned<Vector256<ushort>>(input);
                     Vector256<short> ascii = Avx2.CompareEqual(Avx2.And(chars, highMask).AsInt16(), Vector256<short>.Zero);
@@ -1726,7 +1728,7 @@ public static unsafe partial class StringSerializer
             if (Ssse3.IsSupported)
             {
                 Vector128<ushort> highMask = Vector128.Create((ushort)0xFF80);
-                while (inputEnd - input >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 8)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 8)
                 {
                     Vector128<ushort> chars = Unsafe.ReadUnaligned<Vector128<ushort>>(input);
                     Vector128<short> ascii = Sse2.CompareEqual(Sse2.And(chars, highMask).AsInt16(), Vector128<short>.Zero);
@@ -1748,7 +1750,7 @@ public static unsafe partial class StringSerializer
                 Vector256<ushort> sixBits = Vector256.Create((ushort)63);
                 Vector256<ushort> leadBits = Vector256.Create((ushort)0xC0);
                 Vector256<ushort> trailBits = Vector256.Create((ushort)0x80);
-                while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 64)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 64)
                 {
                     var a = Unsafe.ReadUnaligned<Vector256<ushort>>(input);
                     var b = Unsafe.ReadUnaligned<Vector256<ushort>>(input + 16);
@@ -1766,7 +1768,7 @@ public static unsafe partial class StringSerializer
                     output += 64;
                 }
 
-                while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
                 {
                     Vector256<ushort> chars = Unsafe.ReadUnaligned<Vector256<ushort>>(input);
                     Vector256<short> valid = Avx2.And(Avx2.CompareGreaterThan(chars.AsInt16(), min), Avx2.CompareGreaterThan(max, chars.AsInt16()));
@@ -1787,7 +1789,7 @@ public static unsafe partial class StringSerializer
                 Vector128<ushort> sixBits = Vector128.Create((ushort)63);
                 Vector128<ushort> leadBits = Vector128.Create((ushort)0xC0);
                 Vector128<ushort> trailBits = Vector128.Create((ushort)0x80);
-                while (inputEnd - input >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
                 {
                     Vector128<ushort> chars = Unsafe.ReadUnaligned<Vector128<ushort>>(input);
                     Vector128<short> valid = Sse2.And(Sse2.CompareGreaterThan(chars.AsInt16(), min), Sse2.CompareGreaterThan(max, chars.AsInt16()));
@@ -1810,7 +1812,7 @@ public static unsafe partial class StringSerializer
                 Vector256<ushort> e0 = Vector256.Create((ushort)0xE0);
                 Vector256<ushort> trail = Vector256.Create((ushort)0x80);
                 Vector256<ushort> sixBits = Vector256.Create((ushort)63);
-                while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 48)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 48)
                 {
                     Vector256<ushort> chars = Unsafe.ReadUnaligned<Vector256<ushort>>(input);
                     Vector256<short> top = Avx2.And(chars, topMask).AsInt16();
@@ -1841,7 +1843,7 @@ public static unsafe partial class StringSerializer
                 Vector128<ushort> e0 = Vector128.Create((ushort)0xE0);
                 Vector128<ushort> trail = Vector128.Create((ushort)0x80);
                 Vector128<ushort> sixBits = Vector128.Create((ushort)63);
-                while (inputEnd - input >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
+                while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
                 {
                     Vector128<ushort> chars = Unsafe.ReadUnaligned<Vector128<ushort>>(input);
                     Vector128<short> top = Sse2.And(chars, topMask).AsInt16();

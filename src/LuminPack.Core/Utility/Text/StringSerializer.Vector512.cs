@@ -18,7 +18,7 @@ public static partial class StringSerializer
     {
         if (lead < 0x80)
         {
-            while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
+            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
             {
                 var chars = Vector512.Load((ushort*)input);
                 if (!Vector512.EqualsAll(chars & Vector512.Create((ushort)0xFF80), Vector512<ushort>.Zero)) break;
@@ -29,7 +29,7 @@ public static partial class StringSerializer
         }
         else if (lead < 0x800)
         {
-            while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 64)
+            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 64)
             {
                 var chars = Vector512.Load((ushort*)input);
                 var valid = Vector512.GreaterThan(chars, Vector512.Create((ushort)127)) &
@@ -50,7 +50,7 @@ public static partial class StringSerializer
             var second0 = Vector512.Create(BmpS0x2, BmpS0x2);
             var second1 = Vector512.Create(BmpS1x2, BmpS1x2);
             var second2 = Vector512.Create(BmpS2x2, BmpS2x2);
-            while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 96)
+            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 96)
             {
                 var chars = Vector512.Load((ushort*)input);
                 var top = chars & Vector512.Create((ushort)0xF800);
