@@ -305,15 +305,29 @@ public static class LuminTreeStorage
 #endif
         if (count > 1 && ImmutableSortedSetLayout<T>.Available && IsStrictlyAscending(items, count))
         {
-            var template = ImmutableSortedSet.Create(items[0]);
+            var result = ImmutableSortedSet.Create(items[0]);
             var offsets = ImmutableSortedSetLayout<T>.Nodes;
-            object node = Field<object>(template, ImmutableSortedSetLayout<T>.Root);
-            object root = LinkItems(Field<object>(node, offsets.Left), in offsets, items, 0, count - 1);
-            object result = Clone(template);
-            Field<object>(result, ImmutableSortedSetLayout<T>.Root) = root;
-            return Unsafe.As<ImmutableSortedSet<T>>(result);
+            object node = Field<object>(result, ImmutableSortedSetLayout<T>.Root);
+            BuildItems(node, in offsets, items, count);
+            return result;
         }
         return ImmutableSortedSet.CreateRange(new ArraySegment<T>(items, 0, count));
+    }
+
+    /// <summary>Completes a fresh singleton's unpublished root with balanced frozen children.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="node">The exclusively owned root of a newly constructed singleton.</param>
+    /// <param name="offsets">The validated node fields.</param>
+    /// <param name="items">The complete strictly ascending item block.</param>
+    /// <param name="count">The positive item count.</param>
+    private static void BuildItems<T>(object node, in NodeOffsets offsets, T[] items, int count)
+    {
+        object empty = Field<object>(node, offsets.Left);
+        int middle = (count - 1) >> 1;
+        Field<T>(node, offsets.Key) = items[middle];
+        object left = LinkItems(empty, in offsets, items, 0, middle - 1);
+        object right = LinkItems(empty, in offsets, items, middle + 1, count - 1);
+        Seal(node, left, right, in offsets);
     }
 
     /// <summary>Links an AVL subtree of new frozen item nodes with subtree counts.</summary>
@@ -397,13 +411,11 @@ public static class LuminTreeStorage
         if (count == 1) return ImmutableHashSet.Create<T>(items[0]);
         if (count > 1 && ImmutableHashSetLayout<T>.Available && TrySortHashes(items, count, out var keys))
         {
-            var template = ImmutableHashSet.Create(items[0]);
-            object root = BuildHash<T>(Field<object>(template, ImmutableHashSetLayout<T>.Root), in ImmutableHashSetLayout<T>.Hash, items, keys, count);
+            var result = ImmutableHashSet.Create(items[0]);
+            BuildHash<T>(Field<object>(result, ImmutableHashSetLayout<T>.Root), in ImmutableHashSetLayout<T>.Hash, items, keys, count);
             System.Buffers.ArrayPool<long>.Shared.Return(keys);
-            object result = Clone(template);
-            Field<object>(result, ImmutableHashSetLayout<T>.Root) = root;
             Field<int>(result, ImmutableHashSetLayout<T>.Count) = count;
-            return Unsafe.As<ImmutableHashSet<T>>(result);
+            return result;
         }
         var builder = ImmutableHashSet.CreateBuilder<T>();
         for (int i = 0; i < count; i++) builder.Add(items[i]);
@@ -422,14 +434,12 @@ public static class LuminTreeStorage
     {
         if (count > 1 && ImmutableDictionaryLayout<TKey, TValue>.Available && TrySortHashes(pairs, count, out var keys))
         {
-            var template = ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
-            object root = BuildHash<KeyValuePair<TKey, TValue>>(Field<object>(template, ImmutableDictionaryLayout<TKey, TValue>.Root),
+            var result = ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
+            BuildHash<KeyValuePair<TKey, TValue>>(Field<object>(result, ImmutableDictionaryLayout<TKey, TValue>.Root),
                 in ImmutableDictionaryLayout<TKey, TValue>.Hash, pairs, keys, count);
             System.Buffers.ArrayPool<long>.Shared.Return(keys);
-            object result = Clone(template);
-            Field<object>(result, ImmutableDictionaryLayout<TKey, TValue>.Root) = root;
             Field<int>(result, ImmutableDictionaryLayout<TKey, TValue>.Count) = count;
-            return Unsafe.As<ImmutableDictionary<TKey, TValue>>(result);
+            return result;
         }
         var builder = ImmutableDictionary.CreateBuilder<TKey, TValue>();
         for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
@@ -604,42 +614,45 @@ public static class LuminTreeStorage
         if (BclTrees.ImmutableSortedDictionary<TKey, TValue>.Available)
             return BclTrees.ImmutableSortedDictionary<TKey, TValue>.Build(pairs, count);
 #endif
-        var template = ImmutableSortedDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
+        var result = ImmutableSortedDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
         var offsets = ImmutableSortedDictionaryLayout<TKey, TValue>.Nodes;
-        object node = Field<object>(template, ImmutableSortedDictionaryLayout<TKey, TValue>.Root);
-        object root = LinkPairs(node, Field<object>(node, offsets.Left), in offsets, pairs, 0, count - 1);
-        object result = Clone(template);
-        Field<object>(result, ImmutableSortedDictionaryLayout<TKey, TValue>.Root) = root;
+        object node = Field<object>(result, ImmutableSortedDictionaryLayout<TKey, TValue>.Root);
+        object empty = Field<object>(node, offsets.Left);
+        int middle = (count - 1) >> 1;
+        Field<TKey>(node, offsets.Key) = pairs[middle].Key;
+        Field<TValue>(node, offsets.Value) = pairs[middle].Value;
+        object left = LinkPairs(empty, in offsets, pairs, 0, middle - 1);
+        object right = LinkPairs(empty, in offsets, pairs, middle + 1, count - 1);
+        Seal(node, left, right, in offsets);
         Field<int>(result, ImmutableSortedDictionaryLayout<TKey, TValue>.Count) = count;
-        return Unsafe.As<ImmutableSortedDictionary<TKey, TValue>>(result);
+        return result;
     }
 
     /// <summary>Links an AVL subtree of new frozen pair nodes.</summary>
     /// <typeparam name="TKey">The key type.</typeparam>
     /// <typeparam name="TValue">The value type.</typeparam>
-    /// <param name="template">A node of the collection's own node type.</param>
     /// <param name="empty">The collection's shared empty node.</param>
     /// <param name="offsets">The field offsets of the collection's node type.</param>
     /// <param name="pairs">The pairs, in the order they were read.</param>
     /// <param name="start">The first index of the range.</param>
     /// <param name="end">The last index of the range.</param>
     /// <returns>The root of the linked subtree.</returns>
-    private static object LinkPairs<TKey, TValue>(object template, object empty, in NodeOffsets offsets, KeyValuePair<TKey, TValue>[] pairs, int start, int end)
+    private static object LinkPairs<TKey, TValue>(object empty, in NodeOffsets offsets, KeyValuePair<TKey, TValue>[] pairs, int start, int end)
     {
         if (start > end) return empty;
         int middle = start + ((end - start) >> 1);
         object node = offsets.New();
         Field<TKey>(node, offsets.Key) = pairs[middle].Key;
         Field<TValue>(node, offsets.Value) = pairs[middle].Value;
-        object left = LinkPairs(template, empty, in offsets, pairs, start, middle - 1);
-        object right = LinkPairs(template, empty, in offsets, pairs, middle + 1, end);
+        object left = LinkPairs(empty, in offsets, pairs, start, middle - 1);
+        object right = LinkPairs(empty, in offsets, pairs, middle + 1, end);
         Seal(node, left, right, in offsets);
         return node;
     }
 
-    /// <summary>Links new single-item hash buckets, ordered by hash code, into an AVL tree of frozen nodes.</summary>
+    /// <summary>Completes an exclusively owned singleton root with frozen buckets ordered by hash code.</summary>
     /// <typeparam name="T">The element type.</typeparam>
-    /// <param name="template">A node of the collection's own node type.</param>
+    /// <param name="template">The unpublished root of a newly constructed singleton.</param>
     /// <param name="offsets">The field offsets of the collection's node type.</param>
     /// <param name="items">The items, in the order they were read or stored.</param>
     /// <param name="keys">The ordered hash keys, each holding a hash code above an item index.</param>
@@ -649,7 +662,15 @@ public static class LuminTreeStorage
     {
         object empty = Field<object>(template, offsets.Tree.Left);
         object emptyList = Field<object>(ref Field<byte>(template, offsets.Tree.Value), offsets.Additional);
-        return LinkHash(empty, emptyList, in offsets, items, keys, 0, count - 1);
+        int middle = (count - 1) >> 1;
+        Field<int>(template, offsets.Tree.Key) = (int)(keys[middle] >> 32);
+        ref byte bucket = ref Field<byte>(template, offsets.Tree.Value);
+        Field<T>(ref bucket, offsets.First) = items[(int)(uint)keys[middle]];
+        Field<object>(ref bucket, offsets.Additional) = emptyList;
+        object left = LinkHash(empty, emptyList, in offsets, items, keys, 0, middle - 1);
+        object right = LinkHash(empty, emptyList, in offsets, items, keys, middle + 1, count - 1);
+        Seal(template, left, right, in offsets.Tree);
+        return template;
     }
 
     /// <summary>Creates and links the bucket nodes of a range of ordered hash keys.</summary>
@@ -1234,7 +1255,7 @@ public static class LuminTreeStorage
             var offsets = ImmutableSortedSetLayout<int>.Nodes;
             object node = Field<object>(template, ImmutableSortedSetLayout<int>.Root);
             var built = Unsafe.As<ImmutableSortedSet<int>>(Clone(template));
-            Field<object>(built, ImmutableSortedSetLayout<int>.Root) = LinkItems(Field<object>(node, offsets.Left), in offsets, items, 0, items.Length - 1);
+            BuildItems(node, in offsets, items, items.Length);
             var modified = built.Remove(0).Add(100).Add(-100);
             return built.Count == 19 && built.SequenceEqual(items) && built[7] == -2 && built.IndexOf(9) == 18 && built.Min == -9 && built.Max == 9 &&
                 modified.Count == 20 && modified[0] == -100 && !modified.Contains(0) && built.Contains(0) && built.Reverse().First() == 9;
