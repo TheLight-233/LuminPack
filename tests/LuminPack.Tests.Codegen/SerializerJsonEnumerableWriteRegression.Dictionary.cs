@@ -122,7 +122,17 @@ internal static partial class SerializerJsonEnumerableWriteRegression
         public static class DictionaryEntryCases
         {
          private static readonly System.Text.StringBuilder Transcript=new();
-         public static string Check(){Transcript.Clear();Run<LuminPackUtf8LengthOptions>();Run<LuminPackUtf16LengthOptions>();Run<LuminPackUtf8TokenOptions>();Run<LuminPackUtf16TokenOptions>();return Transcript.ToString();}
+         public static string Check(){Transcript.Clear();CheckExactTraversal<LuminPackUtf8LengthOptions>();CheckExactTraversal<LuminPackUtf16LengthOptions>();Run<LuminPackUtf8LengthOptions>();Run<LuminPackUtf16LengthOptions>();Run<LuminPackUtf8TokenOptions>();Run<LuminPackUtf16TokenOptions>();return Transcript.ToString();}
+         static void CheckExactTraversal<P>()where P:struct,ILuminPackOptions
+         {
+          var map=Enumerable.Range(0,17).ToDictionary(i=>i,i=>i*7);
+          IDictionary<int,int> writable=map;IReadOnlyDictionary<int,int> readable=map;
+          using var output=new LuminBufferWriter(true);
+          for(int i=0;i<128;i++){output.ResetCore();LuminPackSerializer.SerializeJson<P>(writable,output);output.ResetCore();LuminPackSerializer.SerializeJson<P>(readable,output);}
+          long before=GC.GetAllocatedBytesForCurrentThread();
+          for(int i=0;i<128;i++){output.ResetCore();LuminPackSerializer.SerializeJson<P>(writable,output);output.ResetCore();LuminPackSerializer.SerializeJson<P>(readable,output);}
+          if(GC.GetAllocatedBytesForCurrentThread()!=before)throw new Exception("Exact dictionary interface traversal allocated");
+         }
          static void Run<P>()where P:struct,ILuminPackOptions
          {
           foreach(bool wide in new[]{false,true}) foreach(bool nested in new[]{false,true})

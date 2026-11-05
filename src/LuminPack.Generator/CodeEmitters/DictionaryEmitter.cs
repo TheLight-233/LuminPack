@@ -21,6 +21,10 @@ public static partial class DictionaryEmitter
             AppendSortedListJsonWrite(fieldData, sb);
             return;
         }
+        bool interfaceType = GetDictionaryBaseType(fieldData.TypeName) is
+            "global::System.Collections.Generic.IDictionary" or "global::System.Collections.Generic.IReadOnlyDictionary";
+        string keyType = GetFirstGeneric(fieldData.TypeName), valueType = GetSecondGeneric(fieldData.TypeName);
+        string concrete = "global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">";
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -31,13 +35,37 @@ public static partial class DictionaryEmitter
         sb.AppendLine(EmitterTypeTraits.HasConcurrentEmptyQuery(fieldData.TypeName)
             ? "            if (!value.IsEmpty)" : "            if (value.Count > 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                foreach (var item in " + ConcurrentTraversalEmitter.Source(fieldData, "ConcurrentDictionary", "value") + ")");
-        sb.AppendLine("                {");
-        AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ",
-            EmitterTypeTraits.HasJsonEntryWriter(GetFirstGeneric(fieldData.TypeName), GetSecondGeneric(fieldData.TypeName)));
-        sb.AppendLine("                }");
+        if (interfaceType)
+        {
+            sb.AppendLine("                if (value.GetType() == typeof(" + concrete + ")) WriteExactDictionary(ref writer, (" + concrete + ")value);");
+            sb.AppendLine("                else WriteInterfaceDictionary(ref writer, value);");
+        }
+        else
+        {
+            sb.AppendLine("                foreach (var item in " + ConcurrentTraversalEmitter.Source(fieldData, "ConcurrentDictionary", "value") + ")");
+            sb.AppendLine("                {");
+            AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ",
+                EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType));
+            sb.AppendLine("                }");
+        }
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
+        if (interfaceType)
+        {
+            // Keep the same public enumerator and pair capture without boxing it through the interface.
+            foreach (var traversal in new[] { (Name: "WriteExactDictionary", Type: concrete), (Name: "WriteInterfaceDictionary", Type: fieldData.TypeName) })
+            {
+                sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+                sb.AppendLine("            static void " + traversal.Name + "(ref global::LuminPack.Core.LuminPackJsonWriter writer, " + traversal.Type + " value)");
+                sb.AppendLine("            {");
+                sb.AppendLine("                foreach (var item in value)");
+                sb.AppendLine("                {");
+                AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ",
+                    EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType));
+                sb.AppendLine("                }");
+                sb.AppendLine("            }");
+            }
+        }
     }
 
     /// <summary>Writes validated sorted-list storage while preserving pair capture and enumerator invalidation.</summary>
