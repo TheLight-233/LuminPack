@@ -124,7 +124,10 @@ namespace LuminPack.Core
         private bool _pooledLookahead;
         /// <summary>Bit (depth - 1) is set while the container at that depth is an object.</summary>
         public ulong ObjectContainerBits;
-        /// <summary>Container kinds for depths above 64; allocated only for unusually deep documents.</summary>
+        /// <summary>Container kinds for depths 65 through 192; no allocation is needed for these depths.</summary>
+        private ulong _deepContainerBits0;
+        private ulong _deepContainerBits1;
+        /// <summary>Container kinds for depths above 192; allocated only for unusually deep documents.</summary>
         public byte[]? DeepContainerKinds;
         /// <summary>The selected token, released after its complete value operation.</summary>
         public JsonTokenType CurrentTokenType;
@@ -263,6 +266,8 @@ namespace LuminPack.Core
             Depth = 0;
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
+            _deepContainerBits0 = 0;
+            _deepContainerBits1 = 0;
             DeepContainerKinds = null;
             _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
@@ -282,6 +287,8 @@ namespace LuminPack.Core
             Depth = 0;
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
+            _deepContainerBits0 = 0;
+            _deepContainerBits1 = 0;
             DeepContainerKinds = null;
             _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
@@ -300,6 +307,8 @@ namespace LuminPack.Core
             Depth = 0;
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
+            _deepContainerBits0 = 0;
+            _deepContainerBits1 = 0;
             DeepContainerKinds = null;
             _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
@@ -393,6 +402,8 @@ namespace LuminPack.Core
             Depth = 0;
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
+            _deepContainerBits0 = 0;
+            _deepContainerBits1 = 0;
             DeepContainerKinds = null;
             _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
@@ -430,7 +441,42 @@ namespace LuminPack.Core
         {
             if (Depth == 0)
                 return false;
-            return Depth <= 64 ? (ObjectContainerBits & (1UL << (Depth - 1))) != 0 : DeepContainerKinds![Depth - 1] != 0;
+            if (Depth <= 64)
+                return (ObjectContainerBits & (1UL << (Depth - 1))) != 0;
+            if (Depth <= 192)
+                return GetDeepContainerKind(Depth);
+            return DeepContainerKinds![Depth - 1] != 0;
+        }
+
+        /// <summary>Reads the inline container kind used by depths 65 through 192.</summary>
+        /// <param name = "depth">The one-based nesting depth.</param>
+        /// <returns>Whether the container at this depth is an object.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool GetDeepContainerKind(int depth)
+        {
+            int bit = depth - 65;
+            return bit < 64
+                ? (_deepContainerBits0 & (1UL << bit)) != 0
+                : (_deepContainerBits1 & (1UL << (bit - 64))) != 0;
+        }
+
+        /// <summary>Updates the inline container kind used by depths 65 through 192.</summary>
+        /// <param name = "depth">The one-based nesting depth.</param>
+        /// <param name = "isObject">Whether the container is an object.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void SetDeepContainerKindInline(int depth, bool isObject)
+        {
+            int bit = depth - 65;
+            if (bit < 64)
+            {
+                ulong mask = 1UL << bit;
+                _deepContainerBits0 = isObject ? _deepContainerBits0 | mask : _deepContainerBits0 & ~mask;
+            }
+            else
+            {
+                ulong mask = 1UL << (bit - 64);
+                _deepContainerBits1 = isObject ? _deepContainerBits1 | mask : _deepContainerBits1 & ~mask;
+            }
         }
 
         /// <summary>Performs the push container step for the current operation.</summary>
@@ -447,6 +493,12 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void SetDeepContainerKind(int depth, bool isObject)
         {
+            if (depth <= 192)
+            {
+                SetDeepContainerKindInline(depth, isObject);
+                return;
+            }
+
             byte[] kinds = DeepContainerKinds!;
             if (kinds is null || depth > kinds.Length)
             {

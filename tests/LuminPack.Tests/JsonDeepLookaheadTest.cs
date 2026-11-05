@@ -57,7 +57,39 @@ public sealed unsafe class JsonDeepLookaheadTest
             }
         }
     }
-    /// <summary>Supplies strict UTF-8 grammar without generated profile state.</summary>
+    /// <summary>Checks ordinary deep grammar state stays inline through the supported depth window.</summary>
+    /// <param name="depth">The nesting depth to exercise.</param>
+    /// <param name="utf16">Whether the complete input contains UTF-16 code units.</param>
+    [Theory]
+    [InlineData(65, false)]
+    [InlineData(128, false)]
+    [InlineData(192, false)]
+    [InlineData(193, false)]
+    [InlineData(65, true)]
+    [InlineData(128, true)]
+    [InlineData(192, true)]
+    [InlineData(193, true)]
+    public void OrdinaryDeepStateAvoidsAllocationThroughInlineDepth(int depth, bool utf16)
+    {
+        string text = new string('[', depth) + "1" + new string(']', depth);
+        byte[] bytes = (utf16 ? Encoding.Unicode : Encoding.UTF8).GetBytes(text);
+        fixed (byte* pin = bytes)
+        {
+            ReadOnlySpan<byte> input = bytes;
+            long best = long.MaxValue;
+            for (int iteration = 0; iteration < 24; iteration++)
+            {
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                var reader = new LuminPackJsonReader(ref input, null!);
+                for (int index = 0; index <= depth; index++)
+                    if (utf16) reader.Read<Strict16>(); else reader.Read<Strict8>();
+                long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                if (iteration >= 4) best = Math.Min(best, allocated);
+            }
+            if (depth <= 192) Assert.Equal(0, best);
+        }
+    }
+
     private readonly struct Strict8 : ILuminPackOptions
     {
         public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
