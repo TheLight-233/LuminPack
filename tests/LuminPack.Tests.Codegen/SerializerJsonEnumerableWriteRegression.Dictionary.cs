@@ -14,6 +14,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
         var missing = MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(runtime.Display!, "WriteIntegerEntry"), filePath: "CoreWithoutIntegerEntry.dll");
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
+            CheckObjectEntrySeparators(references, mode);
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
             var input = CSharpCompilation.Create("DictionaryEntries" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(BuildDictionarySource(mode), parse, "Entry.cs")], references,
@@ -39,6 +40,80 @@ internal static partial class SerializerJsonEnumerableWriteRegression
         }
         Console.WriteLine("Passed 14 dictionary implementations, int/long entries, four profiles and modes, fixed and streaming failures, and retained/fresh optional API transitions.");
     }
+
+    /// <summary>Checks generated object prefixes honor the enclosing value separator in each encoding.</summary>
+    /// <param name="references">The actual platform and runtime metadata.</param>
+    /// <param name="mode">The generation mode under test.</param>
+    private static void CheckObjectEntrySeparators(MetadataReference[] references, string mode)
+    {
+        foreach (bool modern in new[] { false, true })
+        {
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: modern ? ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"] : []);
+            var input = CSharpCompilation.Create("ObjectEntries" + Guid.NewGuid().ToString("N"),
+                [CSharpSyntaxTree.ParseText(ObjectEntryFixture.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            CreateEntryDriver(parse).RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+            Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            ExecuteEntries(output);
+        }
+    }
+
+    /// <summary>Exercises literal object prefixes after scalar and object keys without changing sequence framing.</summary>
+    private const string ObjectEntryFixture = """
+        using System;
+        using System.Collections.Generic;
+        using System.Text;
+        using System.Text.Json;
+        using LuminPack;
+        using LuminPack.Attribute;
+        using LuminPack.Core;
+        using LuminPack.Option;
+        using LuminPack.Utility;
+        [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+        [LuminPackable] public sealed class Payload { public int Number; public string Text; }
+        [LuminPackable] public struct ValuePayload { public int Number; }
+        [LuminPackable] public sealed class TextPayload { public string Text; }
+        [LuminPackable] public sealed class EmptyPayload { }
+        public static class DictionaryEntryCases
+        {
+            public static string Check()
+            {
+                Run<LuminPackUtf8LengthOptions>();Run<LuminPackUtf16LengthOptions>();
+                Run<LuminPackUtf8TokenOptions>();Run<LuminPackUtf16TokenOptions>();
+                return "Object entry separators passed";
+            }
+            static void Run<P>() where P:struct,ILuminPackOptions
+            {
+                using var buffer=new LuminBufferWriter(true);
+                var item=new Payload{Number=7,Text="x"};
+                var map=new Dictionary<int,Payload>{{1,item},{2,null},{3,item}};
+                LuminPackSerializer.SerializeJson<P>(map,buffer);
+                Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7,\"Text\":\"x\"}],[2,null],[3,{\"Number\":7,\"Text\":\"x\"}]]");
+                buffer.ResetCore();IDictionary<int,Payload> writable=map;LuminPackSerializer.SerializeJson<P>(writable,buffer);
+                Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7,\"Text\":\"x\"}],[2,null],[3,{\"Number\":7,\"Text\":\"x\"}]]");
+                buffer.ResetCore();IReadOnlyDictionary<int,Payload> readable=map;LuminPackSerializer.SerializeJson<P>(readable,buffer);
+                Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7,\"Text\":\"x\"}],[2,null],[3,{\"Number\":7,\"Text\":\"x\"}]]");
+                buffer.ResetCore();var pair=new KeyValuePair<int,Payload>(1,item);LuminPackSerializer.SerializeJson<P>(pair,buffer);
+                Assert<P>(buffer.GetSpan(),"[1,{\"Number\":7,\"Text\":\"x\"}]");
+                buffer.ResetCore();var objects=new Dictionary<Payload,Payload>{{item,item}};LuminPackSerializer.SerializeJson<P>(objects,buffer);
+                Assert<P>(buffer.GetSpan(),"[[{\"Number\":7,\"Text\":\"x\"},{\"Number\":7,\"Text\":\"x\"}]]");
+                buffer.ResetCore();var structs=new Dictionary<int,ValuePayload>{{1,new ValuePayload{Number=7}}};LuminPackSerializer.SerializeJson<P>(structs,buffer);
+                Assert<P>(buffer.GetSpan(),"[[1,{\"Number\":7}]]");
+                buffer.ResetCore();var strings=new Dictionary<int,TextPayload>{{1,new TextPayload{Text="x"}}};LuminPackSerializer.SerializeJson<P>(strings,buffer);
+                Assert<P>(buffer.GetSpan(),"[[1,{\"Text\":\"x\"}]]");
+                buffer.ResetCore();var empty=new Dictionary<int,EmptyPayload>{{1,new EmptyPayload()}};LuminPackSerializer.SerializeJson<P>(empty,buffer);
+                Assert<P>(buffer.GetSpan(),"[[1,{}]]");
+                buffer.ResetCore();var sequence=new[]{item,item};LuminPackSerializer.SerializeJson<P>(sequence,buffer);
+                Assert<P>(buffer.GetSpan(),"[{\"Number\":7,\"Text\":\"x\"},{\"Number\":7,\"Text\":\"x\"}]");
+            }
+            static void Assert<P>(ReadOnlySpan<byte> bytes,string expected) where P:struct,ILuminPackOptions
+            {
+                string json=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetString(bytes);
+                using var document=JsonDocument.Parse(json);
+                if(json!=expected)throw new Exception(typeof(P).Name+": "+json);
+            }
+        }
+        """;
 
     /// <summary>Creates an independent generator driver for metadata-change comparisons.</summary>
     /// <param name="parse">The consumer language and target symbols.</param>

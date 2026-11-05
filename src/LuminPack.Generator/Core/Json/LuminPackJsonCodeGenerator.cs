@@ -338,6 +338,9 @@ public static class LuminPackJsonCodeGenerator
             return;
         }
         sb.AppendLine();
+        // The first literal includes the opening brace, so retain the enclosing
+        // value separator normally supplied by WriteObjectStart.
+        sb.AppendLine("            if (!writer.IsFirstElement) writer.WriteByteRaw((byte)',');");
         sb.AppendLine("            bool isUtf8 = writer.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;");
         sb.AppendLine();
         for (int num = 0; num < data.fields.Count; num++)
