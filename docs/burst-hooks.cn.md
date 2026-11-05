@@ -46,3 +46,5 @@ UTF 编解码返回 `OperationStatus` 整数：Done 0、DestinationTooSmall 1、
 未来的后端需要自己检测精确的 CPU 特性：非空指针不代表特性检查。在每个运行时上审查标量、128/256/512 位和 ARM64 行为、有界尾部、非对齐访问、真实重叠和生命周期。固定宽度的算法需要以块为单位的理由。编译和标量 ABI 探针不能验证 Burst 代码生成、IL2CPP 或本地没有的硬件。启用后端之前请遵循 [SIMD 规则](mechanism-contract.cn.md#4-simd)。
 
 `tests/LuminPack.Tests` 的 `Hooks` 测试区（`-p:LuminPackTestArea=Hooks`）在新版宿主中用标量非托管 ABI 探针执行实际的 `netstandard2.1` 资产；它既不是发布的后端，也不是性能测试。新版运行时的单元测试另外检查 Hook 类型不存在。
+
+新建 JSON List/Queue 和顺序包装集合可以在原逐项循环前使用结构容量提示；已有目标保留原复用循环，提示不完整时继续扩容。Capacity 可以变化，额外扫描可能以 CPU 成本换取消除增长数组。数组、哈希集合/字典及 Lookup 字典保持原构造。CountArrayElements 仅为私有深层语法副本租借原生池存储，不修改原 reader 状态；冷池缺失仍可分配。

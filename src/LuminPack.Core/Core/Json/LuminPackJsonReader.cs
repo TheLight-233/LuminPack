@@ -121,6 +121,7 @@ namespace LuminPack.Core
         public const byte JsonStateAfterValue = 5;
         /// <summary>The expected token sequence when syntax validation is enabled.</summary>
         public byte GrammarState;
+        private bool _pooledLookahead;
         /// <summary>Bit (depth - 1) is set while the container at that depth is an object.</summary>
         public ulong ObjectContainerBits;
         /// <summary>Container kinds for depths above 64; allocated only for unusually deep documents.</summary>
@@ -263,6 +264,7 @@ namespace LuminPack.Core
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
             DeepContainerKinds = null;
+            _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
             Utf8StringScratch = null;
             Utf16StringScratch = null;
@@ -281,6 +283,7 @@ namespace LuminPack.Core
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
             DeepContainerKinds = null;
+            _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
             Utf8StringScratch = null;
             Utf16StringScratch = null;
@@ -298,6 +301,7 @@ namespace LuminPack.Core
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
             DeepContainerKinds = null;
+            _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
             Utf8StringScratch = null;
             Utf16StringScratch = null;
@@ -390,6 +394,7 @@ namespace LuminPack.Core
             GrammarState = JsonStateValue;
             ObjectContainerBits = 0;
             DeepContainerKinds = null;
+            _pooledLookahead = false;
             CurrentTokenType = JsonTokenType.None;
         }
 
@@ -446,7 +451,17 @@ namespace LuminPack.Core
             if (kinds is null || depth > kinds.Length)
             {
                 int size = Math.Max(depth, 256);
-                Array.Resize(ref kinds, size);
+                if (_pooledLookahead)
+                {
+                    var next = ArrayPool<byte>.Shared.Rent(size);
+                    if (kinds is not null)
+                    {
+                        kinds.AsSpan().CopyTo(next);
+                        ArrayPool<byte>.Shared.Return(kinds);
+                    }
+                    kinds = next;
+                }
+                else Array.Resize(ref kinds, size);
                 DeepContainerKinds = kinds;
             }
 
@@ -4349,18 +4364,31 @@ namespace LuminPack.Core
         {
             var scan = this;
             // Deep grammar storage is mutable; a lookahead must own its copy.
-            scan.DeepContainerKinds = DeepContainerKinds is null ? null : DeepContainerKinds.AsSpan().ToArray();
-            scan.TryConsumeArrayStart<TOptions>();
-            int count = 0;
-            while (scan.Read<TOptions>())
+            scan._pooledLookahead = true;
+            scan.DeepContainerKinds = null;
+            try
             {
-                if (scan.CurrentTokenType == JsonTokenType.ArrayEnd)
-                    return count;
-                scan.Skip<TOptions>();
-                count = checked(count + 1);
+                if (default(TOptions).ValidateJsonSyntax && DeepContainerKinds is not null)
+                {
+                    scan.DeepContainerKinds = ArrayPool<byte>.Shared.Rent(DeepContainerKinds.Length);
+                    DeepContainerKinds.AsSpan().CopyTo(scan.DeepContainerKinds);
+                }
+                scan.TryConsumeArrayStart<TOptions>();
+                int count = 0;
+                while (scan.Read<TOptions>())
+                {
+                    if (scan.CurrentTokenType == JsonTokenType.ArrayEnd)
+                        return count;
+                    scan.Skip<TOptions>();
+                    count = checked(count + 1);
+                }
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON array");
+                return 0;
             }
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON array");
-            return 0;
+            finally
+            {
+                if (scan.DeepContainerKinds is not null) ArrayPool<byte>.Shared.Return(scan.DeepContainerKinds);
+            }
         }
 
         /// <summary>Attempts to consume array start and reports whether it succeeded.</summary>

@@ -51,6 +51,11 @@ try
         SerializerJsonEnumerableWriteRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-json-sequence-capacity"])
+    {
+        SerializerJsonSequenceCapacityRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-json-reuse"])
     {
         SerializerJsonReuseRegression.Run(references);
@@ -406,6 +411,7 @@ try
     SerializerSourcePresentationRegression.Run(references);
     SerializerUnionCursorRegression.Run(references);
     SerializerCapacityTierRegression.Run(references);
+    SerializerJsonSequenceCapacityRegression.Run(references);
     SerializerJsonReuseRegression.Run(references);
     SerializerJsonScalarLoopRegression.Run(references);
     SerializerJsonEnumerableWriteRegression.Run(references);

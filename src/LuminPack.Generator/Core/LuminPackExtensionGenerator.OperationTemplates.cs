@@ -181,6 +181,7 @@ public static partial class LuminPackExtensionGenerator
             field.CanEnumerateFrozenSet = compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1")?
                 .GetMembers("GetEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
                     method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 && method.ReturnType.IsValueType) == true;
+        field.CanHintJsonCapacity = JsonCapacityEmitter.Available(compilation);
         if (type is INamedTypeSymbol { TypeArguments.Length: > 0 } sequence)
         {
             field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, sequence.TypeArguments[0]);

@@ -43,7 +43,7 @@ public static partial class ListEmitter
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
             sb.AppendLine("            var list = value as global::System.Collections.Generic.List<" + elementType + ">;");
-            AppendJsonListRead(sb, elementType, "list");
+            AppendJsonListRead(sb, elementType, "list", fieldData.CanHintJsonCapacity);
             sb.AppendLine("            value = list;");
             return;
         }
@@ -67,6 +67,8 @@ public static partial class ListEmitter
         else if (baseType == "global::System.Collections.ObjectModel.ReadOnlyObservableCollection")
         {
             sb.AppendLine("            var observable = new global::System.Collections.ObjectModel.ObservableCollection<" + elementType + ">();");
+            if (fieldData.CanHintJsonCapacity && fieldData.CanGetSequenceStorage)
+                sb.AppendLine("            if (global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + elementType + ">(observable) is global::System.Collections.Generic.List<" + elementType + "> backing) backing.Capacity = reader.GetArrayCapacityHint(10);");
             sb.AppendLine("            var observableItems = global::LuminPack.Code.LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<" + elementType + ">, global::LuminPack.Code.ObservableCollectionView<" + elementType + ">>(ref observable).items;");
         }
         else if (setInterface)
@@ -76,7 +78,7 @@ public static partial class ListEmitter
         else if (readOnly || interfaceType)
         {
             // The list becomes the result or its only backing store.
-            sb.AppendLine("            var tempList = new global::System.Collections.Generic.List<" + elementType + ">();");
+            sb.AppendLine("            var tempList = new global::System.Collections.Generic.List<" + elementType + ">(" + (fieldData.CanHintJsonCapacity ? "reader.GetArrayCapacityHint(10)" : "") + ");");
         }
         else if (baseType == "global::System.Collections.Concurrent.BlockingCollection")
         {
@@ -86,7 +88,14 @@ public static partial class ListEmitter
         {
             sb.AppendLine("            if (value is null)");
             sb.AppendLine("            {");
-            sb.AppendLine("                value = new " + type + "();");
+            if (fieldData.CanHintJsonCapacity && baseType == "global::System.Collections.Generic.Queue")
+                sb.AppendLine("                value = new " + type + "(reader.GetArrayCapacityHint(10));");
+            else
+            {
+                sb.AppendLine("                value = new " + type + "();");
+                if (fieldData.CanHintJsonCapacity && fieldData.CanGetSequenceStorage && (baseType is "global::System.Collections.ObjectModel.ObservableCollection" or "global::System.Collections.ObjectModel.Collection"))
+                    sb.AppendLine("                if (global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + elementType + ">(value) is global::System.Collections.Generic.List<" + elementType + "> backing) backing.Capacity = reader.GetArrayCapacityHint(10);");
+            }
             sb.AppendLine("            }");
             sb.AppendLine("            else");
             sb.AppendLine("            {");
@@ -189,14 +198,15 @@ public static partial class ListEmitter
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = GetFirstGeneric(fieldData.TypeName);
-        AppendJsonListRead(sb, elementType, "value");
+        AppendJsonListRead(sb, elementType, "value", fieldData.CanHintJsonCapacity);
     }
 
     /// <summary>Refills exact list storage and seeds each incoming element from its existing position.</summary>
     /// <param name="sb">The generated operation builder.</param>
     /// <param name="elementType">The closed element spelling.</param>
     /// <param name="target">The mutable list local.</param>
-    private static void AppendJsonListRead(StringBuilder sb, string elementType, string target)
+    /// <param name="canHint">Whether optional capacity sizing is available in the referenced runtime.</param>
+    private static void AppendJsonListRead(StringBuilder sb, string elementType, string target, bool canHint)
     {
         sb.AppendLine("            if (reader.IsNull())");
         sb.AppendLine("            {");
@@ -208,7 +218,7 @@ public static partial class ListEmitter
         sb.AppendLine();
         sb.AppendLine("            if (" + target + " is null || " + target + ".GetType() != typeof(global::System.Collections.Generic.List<" + elementType + ">))");
         sb.AppendLine("            {");
-        sb.AppendLine("                " + target + " = new global::System.Collections.Generic.List<" + elementType + ">();");
+        sb.AppendLine("                " + target + " = new global::System.Collections.Generic.List<" + elementType + ">(" + (canHint ? "reader.GetArrayCapacityHint(10)" : "") + ");");
         sb.AppendLine("            }");
         sb.AppendLine("            int count = 0;");
         sb.AppendLine();

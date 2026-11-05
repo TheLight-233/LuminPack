@@ -9,6 +9,8 @@ public sealed class LuminLocalFieldData
     public Microsoft.CodeAnalysis.ITypeSymbol TypeSymbol;
     /// <summary>Whether the referenced JSON writer has the exact bounded framework-scalar overload.</summary>
     internal bool CanFormatJsonScalar;
+    /// <summary>Whether the referenced reader exposes the complete optional structural sizing API.</summary>
+    internal bool CanHintJsonCapacity;
     /// <summary>Whether the referenced immutable list or queue factory accepts a complete span.</summary>
     internal bool CanCreateImmutableSequenceFromSpan;
     /// <summary>Whether the referenced runtime exposes a matched rental for this family's BCL builder.</summary>
