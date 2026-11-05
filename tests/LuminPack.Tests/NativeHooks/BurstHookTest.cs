@@ -47,11 +47,11 @@ public sealed unsafe class BurstHookTest : IDisposable
         LuminPackBurst.Register(table);
         table.Copy = null;
         int before = _copyCalls;
-        LuminPackMarshal.CopyBlockUnaligned(ref output[0], ref input[0], 67);
+        LuminPackMarshal.CopyBlockUnaligned(ref output[0], ref input[0], 32);
         Assert.Equal(before + (IntPtr.Size == 8 ? 1 : 0), _copyCalls);
         LuminPackBurst.Clear();
         Assert.False(LuminPackBurst.IsRegistered);
-        LuminPackMarshal.CopyBlockUnaligned(ref output[0], ref input[0], 67);
+        LuminPackMarshal.CopyBlockUnaligned(ref output[0], ref input[0], 32);
         Assert.Equal(before + (IntPtr.Size == 8 ? 1 : 0), _copyCalls);
     }
 
