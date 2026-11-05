@@ -31,7 +31,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine(EmitterTypeTraits.HasConcurrentEmptyQuery(fieldData.TypeName)
             ? "            if (!value.IsEmpty)" : "            if (value.Count > 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                foreach (var item in value)");
+        sb.AppendLine("                foreach (var item in " + ConcurrentTraversalEmitter.Source(fieldData, "ConcurrentDictionary", "value") + ")");
         sb.AppendLine("                {");
         AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ",
             EmitterTypeTraits.HasJsonEntryWriter(GetFirstGeneric(fieldData.TypeName), GetSecondGeneric(fieldData.TypeName)));

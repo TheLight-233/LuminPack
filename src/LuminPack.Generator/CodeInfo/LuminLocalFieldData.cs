@@ -13,6 +13,14 @@ public sealed class LuminLocalFieldData
     internal bool CanCreateImmutableSequenceFromSpan;
     /// <summary>Whether the referenced runtime exposes a matched rental for this family's BCL builder.</summary>
     internal bool CanReuseImmutableBuilder;
+    /// <summary>Whether a matched value traversal is available for the concurrent family.</summary>
+    internal bool CanTraverseConcurrent;
+    /// <summary>Whether callback-free JSON stack elements can be published from one staged range.</summary>
+    internal bool CanStageConcurrentStack;
+    /// <summary>Whether the referenced runtime can lease a frozen bag snapshot.</summary>
+    internal bool CanSnapshotConcurrentBag;
+    /// <summary>Whether a raw bag snapshot can be copied straight into reserved output.</summary>
+    internal bool CanWriteConcurrentBagRaw;
     /// <summary>Whether the referenced runtime can stage uncached immutable queue reversals without changing the queue.</summary>
     internal bool CanTraverseUncachedImmutableQueue;
     /// <summary>Whether the runtime exposes validated fresh bit-array payload construction.</summary>

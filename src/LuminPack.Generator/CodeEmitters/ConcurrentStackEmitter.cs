@@ -49,6 +49,11 @@ public static class ConcurrentStackEmitter
     /// <param name="sb">The generated statements.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (fieldData.CanStageConcurrentStack)
+        {
+            GenerateStagedJsonRead(fieldData, sb);
+            return;
+        }
         ListEmitter.GenerateJsonEnumerableDeserializeCode(fieldData, sb);
         string elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(value, out var count);");
@@ -62,5 +67,48 @@ public static class ConcurrentStackEmitter
         sb.AppendLine("                global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(snapshot, " +
             CollectionEmitterKit.ClearExpression(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType) + ");");
         sb.AppendLine("            }");
+    }
+
+    /// <summary>Builds callback-free stack elements once and restores the established prefix on read failure.</summary>
+    /// <param name="field">The framework element and runtime capability.</param>
+    /// <param name="sb">The generated statements.</param>
+    private static void GenerateStagedJsonRead(LuminLocalFieldData field, StringBuilder sb)
+    {
+        string type = GetFirstGeneric(field.TypeName);
+        string clear = CollectionEmitterKit.ClearExpression(EmitterTypeTraits.GetFirstTypeArgument(field), type);
+        sb.AppendLine("            if (reader.IsNull()) { value = null; return; }");
+        sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine("            if (value is null) value = new global::System.Collections.Concurrent.ConcurrentStack<" + type + ">();");
+        sb.AppendLine("            else value.Clear();");
+        sb.AppendLine("            var items = global::System.Buffers.ArrayPool<" + type + ">.Shared.Rent(16);");
+        sb.AppendLine("            int count = 0;");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    while (reader.Read())");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd) break;");
+        sb.AppendLine("                        if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) continue;");
+        sb.AppendLine("                        " + type + " item = default!;");
+        sb.AppendLine("                        reader.ReadValue(ref item);");
+        sb.AppendLine("                        if (count == items.Length)");
+        sb.AppendLine("                        {");
+        sb.AppendLine("                            var larger = global::System.Buffers.ArrayPool<" + type + ">.Shared.Rent(checked(count * 2));");
+        sb.AppendLine("                            global::System.Array.Copy(items, larger, count);");
+        sb.AppendLine("                            global::System.Buffers.ArrayPool<" + type + ">.Shared.Return(items, " + clear + ");");
+        sb.AppendLine("                            items = larger;");
+        sb.AppendLine("                        }");
+        sb.AppendLine("                        items[count++] = item;");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                }");
+        sb.AppendLine("                catch (global::System.Exception error)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, items, count, false);");
+        sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(error);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, items, count, true);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally { global::System.Buffers.ArrayPool<" + type + ">.Shared.Return(items, " + clear + "); }");
     }
 }

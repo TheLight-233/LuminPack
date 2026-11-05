@@ -15,7 +15,7 @@ public static class ConcurrentDictionaryEmitter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
-        CollectionEmitterKit.AppendCountedWrite(sb, "var item", "value",
+        CollectionEmitterKit.AppendCountedWrite(sb, "var item", ConcurrentTraversalEmitter.Source(fieldData, "ConcurrentDictionary", "value"),
             new[] { "var key = item.Key;", "writer.WriteValue(in key);", "var itemValue = item.Value;", "writer.WriteValue(in itemValue);" }, "            ");
     }
 

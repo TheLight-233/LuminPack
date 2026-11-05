@@ -142,6 +142,18 @@ public static partial class LuminPackExtensionGenerator
             if (builderFamily.Length != 0)
                 field.CanReuseImmutableBuilder = ImmutableBuilderEmitter.Available(compilation, builderFamily, builderCollection.Arity);
         }
+        if (type is INamedTypeSymbol { Name: "ConcurrentStack" or "ConcurrentDictionary" } concurrent &&
+            concurrent.ContainingNamespace.ToDisplayString() == "System.Collections.Concurrent")
+        {
+            field.CanTraverseConcurrent = ConcurrentTraversalEmitter.Available(compilation, concurrent.Name, concurrent.Arity);
+            if (concurrent.Name == "ConcurrentStack")
+                field.CanStageConcurrentStack = ConcurrentTraversalEmitter.CanStageStack(compilation, concurrent.TypeArguments[0]);
+        }
+        if (type is INamedTypeSymbol { Name: "ConcurrentBag" } bag && bag.ContainingNamespace.ToDisplayString() == "System.Collections.Concurrent")
+        {
+            field.CanSnapshotConcurrentBag = ConcurrentTraversalEmitter.HasBagSnapshot(compilation, raw: false);
+            field.CanWriteConcurrentBagRaw = ConcurrentTraversalEmitter.HasBagSnapshot(compilation, raw: true);
+        }
         if (type is INamedTypeSymbol { MetadataName: "BitArray" } bitArray &&
             bitArray.ContainingNamespace.ToDisplayString() == "System.Collections")
         {

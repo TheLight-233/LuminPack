@@ -19,7 +19,12 @@ public static partial class ListEmitter
     public static void GenerateJsonEnumerableSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseType = GetCollectionBaseType(fieldData.TypeName);
-        bool hasCount = baseType != "global::System.Collections.Generic.IEnumerable";
+        if (baseType == "global::System.Collections.Concurrent.ConcurrentBag" && fieldData.CanSnapshotConcurrentBag)
+        {
+            ConcurrentBagEmitter.GenerateJsonSerializeCode(fieldData, sb);
+            return;
+        }
+        bool hasCount = baseType is not ("global::System.Collections.Generic.IEnumerable" or "global::System.Collections.Concurrent.ConcurrentBag");
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -46,7 +51,7 @@ public static partial class ListEmitter
             sb.AppendLine("            bool isFirst = true;");
             // ConcurrentBag's public enumerator owns this same snapshot, plus an array enumerator object.
             sb.AppendLine(baseType == "global::System.Collections.Concurrent.ConcurrentBag"
-                ? "            foreach (var item in value.ToArray())" : "            foreach (var item in value)");
+                ? "            foreach (var item in value.ToArray())" : "            foreach (var item in " + ConcurrentTraversalEmitter.Source(fieldData, "ConcurrentStack", "value") + ")");
             sb.AppendLine("            {");
             JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                ");
             sb.AppendLine("            }");

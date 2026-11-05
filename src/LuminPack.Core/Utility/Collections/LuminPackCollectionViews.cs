@@ -919,7 +919,7 @@ public static partial class LuminPackCollectionAccess
     {
         T[] items = global::System.Buffers.ArrayPool<T>.Shared.Rent(16);
         int written = 0;
-        foreach (T item in stack)
+        foreach (T item in EnumerateConcurrentStack(stack))
         {
             if (written == items.Length)
                 items = Grow(items, written);
