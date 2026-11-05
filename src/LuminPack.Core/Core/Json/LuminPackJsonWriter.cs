@@ -2330,6 +2330,8 @@ namespace LuminPack.Core
                 return;
             }
 
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+                return;
             if (separate)
                 WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
@@ -2355,6 +2357,8 @@ namespace LuminPack.Core
                 return;
             }
 
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+                return;
             if (separate)
                 WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
@@ -2408,6 +2412,8 @@ namespace LuminPack.Core
                 IsFirstElement = false;
                 return;
             }
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+                return;
             if (separate) WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
             Write<TOptions>(value);
@@ -2432,6 +2438,8 @@ namespace LuminPack.Core
                 IsFirstElement = false;
                 return;
             }
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+                return;
             if (separate) WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
             Write<TOptions>(value);
@@ -2505,11 +2513,120 @@ namespace LuminPack.Core
                 IsFirstElement = false;
                 return;
             }
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && HasEnumerationCapacity(70))
+            {
+                int count = IsFirstElement ? 0 : 1;
+                ref char output = ref Unsafe.As<byte, char>(ref Current);
+                output = ',';
+                Unsafe.Add(ref output, count++) = '[';
+                key.TryFormat(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, count), 11), out int keyWritten);
+                count += keyWritten;
+                Unsafe.Add(ref output, count++) = ',';
+                value.TryFormat(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, count), 20), out int written);
+                count += written;
+                Unsafe.Add(ref output, count++) = ']';
+                Advance(count << 1);
+                IsFirstElement = false;
+                return;
+            }
             WriteArrayStart<TOptions>();
             Write<TOptions>(key);
             Write<TOptions>(value);
             WriteArrayEnd<TOptions>();
         }
+
+        /// <summary>Formats a bounded UTF-16 integer operation after its profile branch is selected.</summary>
+        /// <param name="value">The integer to format with the current culture.</param>
+        /// <param name="separate">Whether an outer separator is required.</param>
+        /// <returns>Whether the complete current window allowed the fused write.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryWriteUtf16Element(int value, bool separate)
+        {
+            if (!HasEnumerationCapacity(24)) return false;
+
+            int skip = separate ? 1 : 0;
+            ref char output = ref Unsafe.As<byte, char>(ref Current);
+            output = ',';
+            value.TryFormat(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, skip), 11), out int written);
+            Advance((skip + written) << 1);
+            IsFirstElement = false;
+            return true;
+        }
+
+        /// <summary>Formats a bounded UTF-16 integer operation after its profile branch is selected.</summary>
+        /// <param name="value">The integer to format with the current culture.</param>
+        /// <param name="separate">Whether an outer separator is required.</param>
+        /// <returns>Whether the complete current window allowed the fused write.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryWriteUtf16Element(long value, bool separate)
+        {
+            if (!HasEnumerationCapacity(42)) return false;
+
+            int skip = separate ? 1 : 0;
+            ref char output = ref Unsafe.As<byte, char>(ref Current);
+            output = ',';
+            value.TryFormat(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, skip), 20), out int written);
+            Advance((skip + written) << 1);
+            IsFirstElement = false;
+            return true;
+        }
+
+        /// <summary>Formats a bounded UTF-16 integer operation after its profile branch is selected.</summary>
+        /// <param name="key">The integer to format with the current culture.</param>
+        /// <returns>Whether the complete current window allowed the fused write.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryWriteUtf16EntryKey(int key)
+        {
+            if (!HasEnumerationCapacity(28)) return false;
+
+            int count = IsFirstElement ? 0 : 1;
+            ref char output = ref Unsafe.As<byte, char>(ref Current);
+            output = ',';
+            Unsafe.Add(ref output, count++) = '[';
+            key.TryFormat(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, count), 11), out int written);
+            count += written;
+            Unsafe.Add(ref output, count++) = ',';
+            Advance(count << 1);
+            IsFirstElement = true;
+            return true;
+        }
+
+        /// <summary>Formats a bounded UTF-16 integer operation after its profile branch is selected.</summary>
+        /// <param name="value">The integer to format with the current culture.</param>
+        /// <returns>Whether the complete current window allowed the fused write.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryWriteUtf16EntryValue(int value)
+        {
+            if (!HasEnumerationCapacity(26)) return false;
+
+            int skip = IsFirstElement ? 0 : 1;
+            ref char output = ref Unsafe.As<byte, char>(ref Current);
+            output = ',';
+            value.TryFormat(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, skip), 11), out int written);
+            Unsafe.Add(ref output, skip + written) = ']';
+            Advance((skip + written + 1) << 1);
+            IsFirstElement = false;
+            return true;
+        }
+
+        /// <summary>Formats a bounded UTF-16 integer operation after its profile branch is selected.</summary>
+        /// <param name="value">The integer to format with the current culture.</param>
+        /// <returns>Whether the complete current window allowed the fused write.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryWriteUtf16EntryValue(long value)
+        {
+            if (!HasEnumerationCapacity(44)) return false;
+
+            int skip = IsFirstElement ? 0 : 1;
+            ref char output = ref Unsafe.As<byte, char>(ref Current);
+            output = ',';
+            value.TryFormat(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, skip), 20), out int written);
+            Unsafe.Add(ref output, skip + written) = ']';
+            Advance((skip + written + 1) << 1);
+            IsFirstElement = false;
+            return true;
+        }
+
 
         /// <summary>Tests the complete fused write range without growing or committing a storage window.</summary>
         /// <param name="count">The positive maximum fused payload width.</param>
@@ -2587,6 +2704,8 @@ namespace LuminPack.Core
                 return;
             }
 
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryKey(key))
+                return;
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(OpenBracket);
             IsFirstElement = true;
@@ -2645,6 +2764,8 @@ namespace LuminPack.Core
                 return;
             }
 
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryValue(value))
+                return;
             WriteIntegerValue<TOptions>(value);
             WriteByteRaw<TOptions>(CloseBracket);
             IsFirstElement = false;
@@ -2668,6 +2789,8 @@ namespace LuminPack.Core
                 return;
             }
 
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryValue(value))
+                return;
             WriteIntegerValue<TOptions>(value);
             WriteByteRaw<TOptions>(CloseBracket);
             IsFirstElement = false;
