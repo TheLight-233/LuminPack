@@ -33,7 +33,14 @@ public static class MemoryEmitter
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, checked((int)value.Length));");
         sb.AppendLine("            writer.Advance(4);");
-        sb.AppendLine("            foreach (var memory in value)");
+        sb.AppendLine("            var position = value.Start;");
+        sb.AppendLine("            while (value.TryGet(ref position, out var memory))");
+        if (element?.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String)
+        {
+            sb.AppendLine("                writer.WriteStrings(memory.Span);");
+            sb.AppendLine("            writer.CheckBuffer();");
+            return;
+        }
         sb.AppendLine("            {");
         sb.AppendLine("                foreach (var item in memory.Span)");
         sb.AppendLine("                {");

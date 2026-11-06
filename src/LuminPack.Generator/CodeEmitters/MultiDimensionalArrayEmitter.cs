@@ -79,6 +79,12 @@ public static class MultiDimensionalArrayEmitter
             sb.AppendLine("            writer.CheckBuffer();");
             return;
         }
+        if (EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol)?.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String)
+        {
+            sb.AppendLine("            writer.WriteStrings(global::System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref first, value.Length));");
+            sb.AppendLine("            writer.CheckBuffer();");
+            return;
+        }
         sb.AppendLine("            for (nint i = 0; i < value.Length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.CheckBuffer();");

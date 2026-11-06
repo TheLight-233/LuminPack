@@ -19,6 +19,35 @@ public class SequenceRawWriteTest
         Check<LuminPackUtf8LengthOptions>();Check<LuminPackUtf8TokenOptions>();
         Check<LuminPackUtf16LengthOptions>();Check<LuminPackUtf16TokenOptions>();
     }
+
+    /// <summary>Checks string segment slices and row-major matrix order against individual string records.</summary>
+    [Fact]
+    public void BatchedStringsKeepFramingAcrossProfiles()
+    {
+        CheckStrings<LuminPackUtf16LengthOptions>();
+        CheckStrings<LuminPackUtf8LengthOptions>();
+        CheckStrings<LuminPackUtf16TokenOptions>();
+        CheckStrings<LuminPackUtf8TokenOptions>();
+        CheckStrings<LuminPackUtf16VarIntOptions>();
+        CheckStrings<LuminPackUtf8VarIntOptions>();
+    }
+
+    /// <summary>Writes the same strings through sliced segments, a matrix, and individual profile operations.</summary>
+    /// <typeparam name="TOptions">The compiled binary profile.</typeparam>
+    private static void CheckStrings<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        string?[] storage = ["skip", null, "", "\u00e9", "\u4e2d", new string('a', 70_000), "last", "skip"];
+        var head = new Segment<string?>(storage.AsMemory(0, 4));
+        var tail = head.Append(ReadOnlyMemory<string?>.Empty).Append(storage.AsMemory(4));
+        var sequence = new ReadOnlySequence<string?>(head, 1, tail, 3);
+        var matrix = new string?[,] { { storage[1], storage[2], storage[3] }, { storage[4], storage[5], storage[6] } };
+        var records = storage[1..^1].SelectMany(text => LuminPackSerializer.Serialize<TOptions>(text)).ToArray();
+        byte[] counted = BitConverter.GetBytes(6).Concat(records).ToArray();
+        Assert.Equal(counted, LuminPackSerializer.Serialize<TOptions>(sequence));
+        byte[] shape = [0, 2, 0, 0, 0, 3, 0, 0, 0];
+        Assert.Equal(shape.Concat(counted).ToArray(), LuminPackSerializer.Serialize<TOptions>(matrix));
+    }
+
     /// <summary>Compares each selected segmented record with independent contiguous element storage.</summary>
     /// <typeparam name="T">The original binary profile.</typeparam>
     private static void Check<T>() where T:struct,ILuminPackOptions
