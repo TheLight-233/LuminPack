@@ -867,18 +867,19 @@ public static partial class LuminPackMarshal
         if (s.Length > 5)
             return Encoding.UTF8.GetByteCount(s);
 
-        int total = 0;
+        // Every code unit contributes its first byte; only non-ASCII units update the extra count.
+        int total = s.Length;
         for (int index = 0; index < s.Length; index++)
         {
             char c = s[index];
-            if (c <= 0x7F) total += 1;
-            else if (c <= 0x7FF) total += 2;
-            else if (char.IsHighSurrogate(c) && index + 1 < s.Length && char.IsLowSurrogate(s[index + 1]))
+            if (c <= 0x7F) continue;
+            if (c <= 0x7FF) total += 1;
+            else
             {
-                index++;
-                total += 4;
+                total += 2;
+                // The low surrogate's first byte is already counted, so a valid pair needs no second update.
+                if (char.IsHighSurrogate(c) && index + 1 < s.Length && char.IsLowSurrogate(s[index + 1])) index++;
             }
-            else total += 3;
         }
         return total;
     }
