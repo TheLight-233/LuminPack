@@ -251,24 +251,30 @@ LuminPackSerializer.DeserializeJson("{\"$id\":0,\"Number\":44,\"Next\":{\"$id\":
     [Fact]
     public void JsonArrayLookaheadPreservesDeepReaderState()
     {
-        CheckJsonLookahead<TestStrictUtf8Length>();
-        CheckJsonLookahead<TestStrictUtf16Length>();
+        // Depths through 192 keep their container kinds inline; deeper documents allocate DeepContainerKinds.
+        foreach (int depth in new[] { 70, 200 })
+        {
+            CheckJsonLookahead<TestStrictUtf8Length>(depth);
+            CheckJsonLookahead<TestStrictUtf16Length>(depth);
+        }
     }
 
     /// <summary>Counts a nested array without publishing the lookahead's grammar or cursor changes.</summary>
     /// <typeparam name="TOptions">The strict JSON document encoding.</typeparam>
-    private static void CheckJsonLookahead<TOptions>() where TOptions : struct, ILuminPackOptions
+    /// <param name="depth">The array nesting depth.</param>
+    private static void CheckJsonLookahead<TOptions>(int depth) where TOptions : struct, ILuminPackOptions
     {
-        string json = new string('[', 70) + "\"\\u4e2d\"" + new string(']', 70);
+        string json = new string('[', depth) + "\"\\u4e2d\"" + new string(']', depth);
         ReadOnlySpan<byte> bytes = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
         var reader = new LuminPackJsonReader(ref bytes, new LuminPackReaderOptionalState());
-        for (int i = 0; i < 70; i++) Assert.True(reader.Read<TOptions>());
+        for (int i = 0; i < depth; i++) Assert.True(reader.Read<TOptions>());
         int position = reader.CurrentIndex;
         byte grammar = reader.GrammarState;
-        byte[] kinds = reader.DeepContainerKinds!.ToArray();
+        byte[]? kinds = reader.DeepContainerKinds?.ToArray();
+        Assert.Equal(depth > 192, kinds is not null);
         Assert.Equal(1, reader.CountArrayElements<TOptions>());
         Assert.Equal(position, reader.CurrentIndex);
-        Assert.Equal(70, reader.Depth);
+        Assert.Equal(depth, reader.Depth);
         Assert.Equal(grammar, reader.GrammarState);
         Assert.Equal(kinds, reader.DeepContainerKinds);
         reader.Skip<TOptions>();

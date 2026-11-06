@@ -14,9 +14,9 @@ public sealed class KernelPolicyTest
         foreach (bool medium in new[] { false, true })
         foreach (bool narrow in new[] { false, true })
         foreach (bool bit64 in new[] { false, true })
-        foreach (uint count in new uint[] { 0, 1, 8, 15, 16, 17, 31, 32, 63, 64, 127, 128, 129, 160, 192, 224, 255, 256, 257, 1024, uint.MaxValue })
+        foreach (uint count in new uint[] { 0, 1, 8, 15, 16, 17, 31, 32, 33, 63, 64, 127, 128, 129, 160, 192, 224, 255, 256, 257, 1024, uint.MaxValue })
         {
-            bool expected = bit64 && narrow && count <= 256 && (count <= 128 || medium || wide);
+            bool expected = bit64 && narrow && count <= LuminKernelPolicy.ShortCopyLimit;
             Assert.Equal(expected, LuminKernelPolicy.UseShortCopy(bit64, narrow, medium, wide, count));
         }
     }
