@@ -2,7 +2,7 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
-/// <summary>Runs legacy suites that drain shared pools without concurrent borrowers from other test collections.</summary>
+/// <summary>Runs suites that drain shared pools, or measure registry revisions and thread allocations, without concurrent tests from other collections.</summary>
 [CollectionDefinition(nameof(RuntimeStateCollection), DisableParallelization = true)]
 public sealed class RuntimeStateCollection
 {

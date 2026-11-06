@@ -8,6 +8,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Checks concrete declaration profiles and explicit registration after missing generic lookups.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public class LazyFormatterRegressionTest
 {
     /// <summary>Concrete entries preserve declaration profiles while generic payload APIs require registration.</summary>

@@ -6,6 +6,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Checks the fused JSON element and dictionary entry writers and the fused entry reader against the token paths.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public class JsonFusedCollectionTest
 {
     private static readonly string?[] Strings =

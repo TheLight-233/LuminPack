@@ -35,6 +35,8 @@ namespace LuminPack
         private static readonly MethodInfo[] TestStateMethods = typeof(LuminPackSerializer)
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
 
+        private static readonly object TestRegistrationGate = new();
+
         /// <summary>Registers generated roots for the managed test harness's legacy profile adapter.</summary>
         /// <typeparam name="T">The fixture payload.</typeparam>
         /// <typeparam name="TOptions">The statically closed matrix profile.</typeparam>
@@ -52,14 +54,18 @@ namespace LuminPack
             /// <returns>True after an existing or newly published registration is available.</returns>
             private static bool Register()
             {
-                if (Code.LuminPackFormatterRegistry<TOptions>.TryGetCachedValue<T>(out _)) return true;
-                nint write = Find("Serialize", typeof(LuminPackWriter));
-                nint read = Find("Deserialize", typeof(LuminPackReader));
-                if (write == 0 || read == 0)
-                    throw new InvalidOperationException("The profile fixture has no complete concrete binary roots: " + typeof(T));
-                Code.LuminPackFormatterRegistry<TOptions>.Register(typeof(T), write, read,
-                    Find("SerializeJson", typeof(LuminPackJsonWriter)), Find("DeserializeJson", typeof(LuminPackJsonReader)));
-                return true;
+                // Profiles with identical constants share one table, so their closed initializers can race on the same payload.
+                lock (TestRegistrationGate)
+                {
+                    if (Code.LuminPackFormatterRegistry<TOptions>.TryGetCachedValue<T>(out _)) return true;
+                    nint write = Find("Serialize", typeof(LuminPackWriter));
+                    nint read = Find("Deserialize", typeof(LuminPackReader));
+                    if (write == 0 || read == 0)
+                        throw new InvalidOperationException("The profile fixture has no complete concrete binary roots: " + typeof(T));
+                    Code.LuminPackFormatterRegistry<TOptions>.Register(typeof(T), write, read,
+                        Find("SerializeJson", typeof(LuminPackJsonWriter)), Find("DeserializeJson", typeof(LuminPackJsonReader)));
+                    return true;
+                }
             }
 
             /// <summary>Finds the concrete generated operation with this exact state and payload signature.</summary>
