@@ -138,7 +138,7 @@ internal static class ImmutableCollectionEmitterHelper
             sb.AppendLine("                    value = global::System.Collections.Immutable.ImmutableArray<" + elementType + ">.Empty;");
             sb.AppendLine("                    return;");
             sb.AppendLine("                }");
-            sb.AppendLine("                var finalArray = new " + elementType + "[count];");
+            sb.AppendLine("                var finalArray = new " + ArrayEmitter.WithOuterRank(elementType, "[count]") + ";");
             sb.AppendLine("                global::System.Array.Copy(buffer, finalArray, count);");
             sb.AppendLine("#if NET8_0_OR_GREATER");
             sb.AppendLine("                value = global::System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsImmutableArray(finalArray);");

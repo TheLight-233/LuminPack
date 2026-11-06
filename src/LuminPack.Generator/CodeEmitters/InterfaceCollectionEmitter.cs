@@ -579,9 +579,9 @@ internal static class InterfaceCollectionEmitterHelper
             "global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + Unsafe + ".As<" + list + ">(value))", "                ");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            if (value.GetType() == typeof(" + exact + "[]))");
+        sb.AppendLine("            if (value.GetType() == typeof(" + ArrayEmitter.WithOuterRank(exact) + "))");
         sb.AppendLine("            {");
-        CollectionEmitterKit.AppendSpanWrite(sb, element, elementType, Unsafe + ".As<" + elementType + "[]>(value)", "                ");
+        CollectionEmitterKit.AppendSpanWrite(sb, element, elementType, Unsafe + ".As<" + ArrayEmitter.WithOuterRank(elementType) + ">(value)", "                ");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: false);
@@ -614,11 +614,11 @@ internal static class InterfaceCollectionEmitterHelper
         string elementType = GetFirstGeneric(fieldData.TypeName);
         string exact = RuntimeName(element, elementType);
         string list = "global::System.Collections.Generic.List<" + elementType + ">";
-        string array = elementType + "[]";
+        string array = ArrayEmitter.WithOuterRank(elementType);
         foreach (bool isList in new[] { true, false })
         {
             string concrete = isList ? list : array;
-            string runtime = isList ? "global::System.Collections.Generic.List<" + exact + ">" : exact + "[]";
+            string runtime = isList ? "global::System.Collections.Generic.List<" + exact + ">" : ArrayEmitter.WithOuterRank(exact);
             string helper = isList ? "ReadKnownList" : "ReadKnownArray";
             sb.AppendLine("            if (value is not null && value.GetType() == typeof(" + runtime + "))");
             sb.AppendLine("            {");

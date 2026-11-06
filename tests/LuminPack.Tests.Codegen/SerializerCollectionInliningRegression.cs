@@ -19,6 +19,11 @@ internal static class SerializerCollectionInliningRegression
         {
             ("Child[,]", "new Child[,] { { new Child(), null! }, { new Child(), new Child() } }"),
             ("List<short[,]>", "new List<short[,]> { new short[,] { { 2, 7 }, { 0, 3 } } }"),
+            ("List<string>[,]", "new List<string>[,] { { new() { \"cell\" } } }"),
+            ("SortedList<int, short[,]>", "new SortedList<int, short[,]> { [5] = new short[,] { { 2, 3 } } }"),
+            ("IEnumerable<int[,]>", "new int[][,] { new int[,] { { 1, 2 } } }"),
+            ("ArraySegment<int[,]>", "new ArraySegment<int[,]>(new int[][,] { new int[,] { { 3 } } })"),
+            ("ImmutableArray<int[,]>", "ImmutableArray.Create<int[,]>(new int[,] { { 4 } })"),
             ("Tuple<int[,], List<string[,,]>>", "Tuple.Create(new int[,] { { 2, 5 } }, new List<string[,,]> { new string[,,] { { { \"map\" } } } })"),
             ("Tuple<Child, Child>", "Tuple.Create(new Child(), new Child())"),
             ("KeyValuePair<string, Child>", "new KeyValuePair<string, Child>(\"key\", new Child())"),

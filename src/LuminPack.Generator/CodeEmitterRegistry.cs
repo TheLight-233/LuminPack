@@ -332,8 +332,10 @@ namespace LuminPack.SourceGenerator
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static (Action<LuminLocalFieldData, StringBuilder>, Action<LuminLocalFieldData, StringBuilder>) GetCompressEmitter(string typeName)
         {
-            // T[] — any array type
-            if (MultiDimensionalArrayEmitter.GetRank(typeName) == 1)
+            int rank = MultiDimensionalArrayEmitter.GetRank(typeName);
+            if (rank > 1)
+                return (null, null);
+            if (rank == 1)
             {
                 // Primitive/known-value arrays registered in Emitters use the
                 // UnmanagedArrayEmitter compress path directly.

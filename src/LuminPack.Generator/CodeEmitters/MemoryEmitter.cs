@@ -84,7 +84,7 @@ public static class MemoryEmitter
     /// <param name="baseType">The mutable memory or array-segment family.</param>
     private static void AppendReferenceStorageRead(StringBuilder sb, Microsoft.CodeAnalysis.ITypeSymbol element, string elementType, string baseType)
     {
-        sb.AppendLine("            " + elementType + "[] array;");
+        sb.AppendLine("            " + ArrayEmitter.WithOuterRank(elementType) + " array;");
         sb.AppendLine("            int __start = 0;");
         sb.AppendLine("            bool __reused = true;");
         if (baseType == "global::System.Memory")
@@ -98,7 +98,7 @@ public static class MemoryEmitter
         else
         {
             sb.AppendLine("            var __storage = value;");
-            sb.AppendLine("            if (__storage.Count == length && __storage.Array is not null && __storage.Array.GetType() == typeof(" + elementType + "[]))");
+            sb.AppendLine("            if (__storage.Count == length && __storage.Array is not null && __storage.Array.GetType() == typeof(" + ArrayEmitter.WithOuterRank(elementType) + "))");
             sb.AppendLine("            {");
             sb.AppendLine("                array = __storage.Array;");
             sb.AppendLine("                __start = __storage.Offset;");
@@ -190,14 +190,14 @@ public static class MemoryEmitter
         if (baseType is "global::System.Memory" or "global::System.ArraySegment")
         {
             sb.AppendLine("            int length = reader.CountArrayElements();");
-            sb.AppendLine("            " + elementType + "[] array;");
+            sb.AppendLine("            " + ArrayEmitter.WithOuterRank(elementType) + " array;");
             sb.AppendLine("            int start = 0;");
             if (baseType == "global::System.Memory")
                 sb.AppendLine("            bool reused = global::LuminPack.Code.LuminPackMarshal.TryGetExactArray(value, out var storage, out start, out var storageLength) && storageLength == length;");
             else
             {
                 sb.AppendLine("            var storage = value.Array;");
-                sb.AppendLine("            bool reused = storage is not null && storage.GetType() == typeof(" + elementType + "[]) && value.Count == length;");
+                sb.AppendLine("            bool reused = storage is not null && storage.GetType() == typeof(" + ArrayEmitter.WithOuterRank(elementType) + ") && value.Count == length;");
                 sb.AppendLine("            if (reused) start = value.Offset;");
             }
             sb.AppendLine("            if (reused) array = storage!;");

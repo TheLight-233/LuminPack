@@ -42,6 +42,16 @@ public static class ArrayEmitter
         return open < 0 ? typeName : typeName.Remove(open, typeName.IndexOf(']', open) - open + 1).TrimEnd();
     }
 
+    /// <summary>Forms an outer vector type or allocation without reversing a nested element's array ranks.</summary>
+    /// <param name="elementType">The source-ready element type.</param>
+    /// <param name="rank">The outer brackets, optionally containing the allocation length.</param>
+    /// <returns>The array spelling with the outer rank first.</returns>
+    internal static string WithOuterRank(string elementType, string rank = "[]")
+    {
+        int start = OuterRankStart(elementType);
+        return start < 0 ? elementType + rank : elementType.Insert(start, rank);
+    }
+
     /// <summary>Appends binary writing statements for array values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>

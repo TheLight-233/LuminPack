@@ -40,7 +40,7 @@ public static class ImmutableArrayEmitter
             sb.AppendLine("#endif");
             return;
         }
-        sb.AppendLine($"            {elementType}[]? array = null;");
+        sb.AppendLine($"            {ArrayEmitter.WithOuterRank(elementType)}? array = null;");
         sb.AppendLine("            ref var readIndex = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
         sb.AppendLine("            {");

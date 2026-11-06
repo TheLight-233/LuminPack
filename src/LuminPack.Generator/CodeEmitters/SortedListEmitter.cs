@@ -38,7 +38,7 @@ public static class SortedListEmitter
         sb.AppendLine("            static void WriteFallback(ref global::LuminPack.Core.LuminPackWriter writer, " + fieldData.TypeName + " value, int pairCount)");
         sb.AppendLine("            {");
         sb.AppendLine("                var keys = global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Rent(pairCount);");
-        sb.AppendLine("                " + valueType + "[]? values = null;");
+        sb.AppendLine("                " + ArrayEmitter.WithOuterRank(valueType) + "? values = null;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         sb.AppendLine("                    values = global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Rent(pairCount);");
@@ -78,7 +78,7 @@ public static class SortedListEmitter
         sb.AppendLine("            if (value is null && length > 1)");
         sb.AppendLine("            {");
         sb.AppendLine("                var keys = global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Rent(length);");
-        sb.AppendLine("                " + valueType + "[]? values = null;");
+        sb.AppendLine("                " + ArrayEmitter.WithOuterRank(valueType) + "? values = null;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         sb.AppendLine("                    values = global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Rent(length);");
@@ -156,7 +156,7 @@ public static class SortedListEmitter
         // left it; a list still empty afterwards takes keys already in order with one comparison per pair.
         sb.AppendLine("                int __reuseCount = global::System.Math.Min(length, value.Count);");
         sb.AppendLine("                var keys = global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Rent(length);");
-        sb.AppendLine("                " + valueType + "[]? values = null;");
+        sb.AppendLine("                " + ArrayEmitter.WithOuterRank(valueType) + "? values = null;");
         sb.AppendLine("                int __completed = 0;");
         sb.AppendLine("                try");
         sb.AppendLine("                {");

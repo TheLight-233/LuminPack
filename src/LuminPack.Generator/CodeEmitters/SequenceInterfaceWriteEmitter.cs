@@ -35,7 +35,7 @@ internal static class SequenceInterfaceWriteEmitter
         bool counted = !json && !fixedHeader;
         if (fixedHeader)
         {
-            sb.AppendLine("            if (__wrapperCount != 0 && global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + element + ">(value) is " + element + "[] sequenceArray)");
+            sb.AppendLine("            if (__wrapperCount != 0 && global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + element + ">(value) is " + ArrayEmitter.WithOuterRank(element) + " sequenceArray)");
             sb.AppendLine("            {");
             AppendLoop(field, sb, "sequenceArray", json: false, fixedHeader: true);
             sb.AppendLine("            }");
@@ -65,7 +65,7 @@ internal static class SequenceInterfaceWriteEmitter
             else if (name == "global::System.Collections.Generic.ICollection")
                 types.Add("LinkedList");
         }
-        string Concrete(string kind, string item) => kind == "Array" ? item + "[]" : "global::System.Collections.Generic." + kind + "<" + item + ">";
+        string Concrete(string kind, string item) => kind == "Array" ? ArrayEmitter.WithOuterRank(item) : "global::System.Collections.Generic." + kind + "<" + item + ">";
         for (int i = 0; i < types.Count; i++)
         {
             sb.AppendLine("            " + (i == 0 ? "if" : "else if") + " (value.GetType() == typeof(" + Concrete(types[i], runtime) + "))");

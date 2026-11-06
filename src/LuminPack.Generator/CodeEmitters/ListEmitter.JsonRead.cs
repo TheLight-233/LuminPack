@@ -32,7 +32,8 @@ public static partial class ListEmitter
         if (interfaceType)
         {
             sb.AppendLine("            if (reader.IsNull()) { value = null; return; }");
-            sb.AppendLine("            if (value is " + elementType + "[] existingArray && existingArray.GetType() == typeof(" + elementType + "[]) && reader.CountArrayElements() == existingArray.Length)");
+            string arrayType = ArrayEmitter.WithOuterRank(elementType);
+            sb.AppendLine("            if (value is " + arrayType + " existingArray && existingArray.GetType() == typeof(" + arrayType + ") && reader.CountArrayElements() == existingArray.Length)");
             sb.AppendLine("            {");
             sb.AppendLine("                for (int i = 0; i < existingArray.Length; i++)");
             sb.AppendLine("                {");
