@@ -117,7 +117,7 @@ internal static class CoreTextProjection
         var methods = Read(root, file, Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
         bool hasSpanClassifier = methods.Any(m => m.Identifier.ValueText == "IsLatin1" &&
             m.ParameterList.Parameters.FirstOrDefault()?.Type is GenericNameSyntax { Identifier.ValueText: "ReadOnlySpan" });
-        foreach (var method in methods.Where(m => m.Identifier.ValueText is "IsLatin1" or "IsLatin1Range" or "IsLatin1Long" or "TryNarrowLatin1" or "TryNarrowLatin1Long" or "PackLatin1" or "WidenLatin1" or "WidenLatin1Long" or "MatchesLatin1" or "MatchesLatin1Long"))
+        foreach (var method in methods.Where(m => m.Identifier.ValueText is "IsLatin1" or "IsLatin1Range" or "IsLatin1Long" or "TryNarrowLatin1" or "TryNarrowLatin1Long" or "PackLatin1" or "WidenLatin1" or "WidenShortLatin1" or "WidenFourLatin1" or "WidenLatin1Long" or "MatchesLatin1" or "MatchesLatin1Long"))
         {
             // Mapping the string forwarder to a span would duplicate the canonical span overload.
             if (hasSpanClassifier && method.Identifier.ValueText == "IsLatin1" &&
@@ -336,6 +336,8 @@ internal static class CoreTextProjection
         {
             if (node.ToString() == "global::System.Runtime.Intrinsics.X86.Avx2")
                 return SyntaxFactory.IdentifierName("Avx2").WithTriviaFrom(node);
+            if (node.ToString() == "global::System.Runtime.Intrinsics.X86.Sse2")
+                return SyntaxFactory.IdentifierName("Sse2").WithTriviaFrom(node);
             return base.VisitMemberAccessExpression(node);
         }
 

@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs 834B30798FF15E1DDBBA05F1B456740315114E9B3BBE746ECEB3488A84A267C5
+// Core source SHA256: Utility/Text/StringSerializer.cs 5DC5BD1AD139CCAFC5105E7CAF24910FA483B1E82C48BF240ABBC635180D6493
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -928,7 +928,7 @@ private static readonly Vector256<byte> BmpF2x2 = Vector256.Create(BmpF2, BmpF2)
 private static readonly Vector256<byte> BmpS0x2 = Vector256.Create(BmpS0, BmpS0);
 private static readonly Vector256<byte> BmpS1x2 = Vector256.Create(BmpS1, BmpS1);
 private static readonly Vector256<byte> BmpS2x2 = Vector256.Create(BmpS2, BmpS2);
-// Core source SHA256: Utility/Text/StringSerializer.Latin1.cs E984062698CE28A54DC1EACC0C2550FB3BD260765F8C09C268031E0BC0FBC419
+// Core source SHA256: Utility/Text/StringSerializer.Latin1.cs D1FE97F6A41A55AE48F4E0F5B1B7DA14933E42CFF2D2BFE93E88E070F6AA36A3
 /// <summary>Keeps mixed Latin1 conversion and platform fallback state outside the ordinary encoder's stack frame.</summary>
 /// <param name = "source">The input beginning with non-ASCII Latin1.</param>
 /// <param name = "destination">The bounded byte destination.</param>
@@ -1101,7 +1101,7 @@ internal static unsafe bool NeedsJsonEscape(Vector128<byte> bytes)
     return !Vector128.EqualsAll(escapes, Vector128<byte>.Zero);
 }
     }
-// Core source SHA256: Internal/Utf8Latin1Transcoder.cs FA1B14619B4E12FC95398903A569477A2377E74741BA92D81D552F5975D5B9A5
+// Core source SHA256: Internal/Utf8Latin1Transcoder.cs BF4B37A1D48BA592CBCB0E65817756F88921F8F4C4F62E7AD5C7AF7B11C392AF
     internal static unsafe class CoreLatinUtf8
     {
 private static readonly ulong[] ShuffleMaskWords = new ulong[] {
@@ -1770,7 +1770,7 @@ internal static unsafe int FindHintChar(ReadOnlySpan<char> input)
     return -1;
 }
 }
-// Core source SHA256: Cryptography/ChaCha20.cs 352583433CAE12ECEF708ECB09CA4D41A6CD5C8177398F0394A568FA47EEFE1B
+// Core source SHA256: Cryptography/ChaCha20.cs 7F5828D28558D0ACA00693AFC95A444F20ED3585F58A45189B920E0E8D501375
 internal static unsafe class CoreChaCha20
 {
 private static bool UseSse2 => Sse2.IsSupported;
@@ -2020,7 +2020,7 @@ internal static unsafe uint ReadUnaligned(ref byte b) => Unsafe.ReadUnaligned<ui
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static unsafe void WriteUnaligned(ref byte b, uint value) => Unsafe.WriteUnaligned(ref b, value);
 }
-// Core source SHA256: Utility/Layout/LuminLayout.cs 1A600257CE0388EF459CC5E1094401CBE0B45583D501D6C758D5B4506EAFEF9F
+// Core source SHA256: Utility/Layout/LuminLayout.cs 1CEC0E4E236B7D209C26DA25ADE759B72086A8E8DED6FEB928FAAC488494969F
 internal unsafe struct CoreLayout
 {
 private int _sourceStride;
@@ -2136,7 +2136,7 @@ internal int Blocks(ref byte input, ref byte output, int count)
     return done;
 }
 }
-// Core source SHA256: Utility/Layout/LuminLayoutPlan.cs 06CC690C69942F9F402C77851A003025EF3BADDE8CBC34FFC69C450F63D0E9AF
+// Core source SHA256: Utility/Layout/LuminLayoutPlan.cs 7FBF35773BBFB5976BDB6D9FAB19C8F628D092096894F3125DFBC93824542F8B
 /// <summary>Contains a complete immutable shuffle plan shared by Core and optional native backends.</summary>
 /// <remarks>This process-local descriptor is not serialized. Native callbacks receive it only while its owner is pinned.</remarks>
 [StructLayout(LayoutKind.Sequential)]
@@ -2293,7 +2293,7 @@ public readonly struct CoreLayoutPlan
         unpackPlan = new CoreLayoutPlan(wire, size, mode, perBlock, reserve, wireVectors, nativeVectors, unpack);
     }
 }
-// Core source SHA256: Utility/Layout/Simd/LuminByteShuffle.cs DCBE3A6A0D8DBAE2E4798AC230A63C615F47FDFA0A165C940A28935DC9167B9F
+// Core source SHA256: Utility/Layout/Simd/LuminByteShuffle.cs 031ED08E3D1DECEDC6287CA57C0AC7AE117DFC47F69ECE6AAF78A6DACF3D0995
 internal static unsafe class CoreByteShuffle
 {
 /// <summary>Moves leading full groups and leaves narrower blocks to the caller.</summary>
@@ -2358,7 +2358,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 8052C9E985094C59321CFEBA770034619E4E0FD76F4366453EC0852E8814065C
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 37CFF3C76190F35BE5A40E3486AB52E3D7861453C7B73A411EDF6F6647A99FA1
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Checks a character span using the same bounded Latin-1 kernels as string records.</summary>
@@ -2590,6 +2590,11 @@ internal static unsafe bool TryNarrowLatin1Long(ref ushort source, ref byte dest
         return true;
     }
 }
+/// <summary>Widens four bounded bytes without consuming more of the payload.</summary>
+/// <param name = "bytes">The four input bytes.</param>
+/// <returns>The widened characters in the low half; the upper half is unspecified.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe Vector128<ushort> WidenFourLatin1(uint bytes) => Sse2.IsSupported ? Vector128.WidenLower(Vector128.CreateScalarUnsafe(bytes).AsByte()) : Vector128.CreateScalarUnsafe(WidenLatin1(bytes)).AsUInt16();
 /// <summary>Widens a Latin-1 payload into an unpublished string.</summary>
 /// <param name = "source">The first payload byte.</param>
 /// <param name = "destination">The first character of the string.</param>
@@ -2599,27 +2604,16 @@ internal static unsafe void WidenLatin1(ref byte source, ref ushort destination,
 {
     if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && length >= 8)
     {
-        if (length > 16)
-        {
+        if (length <= 16)
+            WidenShortLatin1(ref source, ref destination, length);
+        else
             WidenLatin1Long(ref source, ref destination, (nuint)(uint)length);
-            return;
-        }
-
-        // 8 to 16 bytes: the first eight and the last eight.
-        var first = Vector128.CreateScalarUnsafe(KernelMemory.ReadUnaligned<ulong>(ref source)).AsByte();
-        var last = Vector128.CreateScalarUnsafe(KernelMemory.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)(length - 8)))).AsByte();
-        Vector128.WidenLower(first).StoreUnsafe(ref destination);
-        Vector128.WidenLower(last).StoreUnsafe(ref destination, (nuint)(uint)(length - 8));
         return;
     }
 
     if (Unsafe.SizeOf<IntPtr>() == 8 && (uint)(length - 4) < 4)
     {
-        // 4 to 7 bytes: the first four and the last four.
-        ulong head = WidenLatin1(KernelMemory.ReadUnaligned<uint>(ref source));
-        ulong tail = WidenLatin1(KernelMemory.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)(length - 4))));
-        KernelMemory.WriteUnaligned(ref Unsafe.As<ushort, byte>(ref destination), head);
-        KernelMemory.WriteUnaligned(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4))), tail);
+        WidenShortLatin1(ref source, ref destination, length);
         return;
     }
 
@@ -2647,6 +2641,30 @@ internal static unsafe ulong WidenLatin1(uint bytes)
     ulong value = bytes;
     value = (value | (value << 16)) & 0x0000FFFF0000FFFFUL;
     return (value | (value << 8)) & 0x00FF00FF00FF00FFUL;
+}
+/// <summary>Widens the first and last four or eight bytes of a validated short Latin-1 payload.</summary>
+/// <param name = "source">The first byte of the validated four- to sixteen-byte payload.</param>
+/// <param name = "destination">The first character of the unpublished string.</param>
+/// <param name = "length">The number of bytes to widen.</param>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe void WidenShortLatin1(ref byte source, ref ushort destination, int length)
+{
+    if (length >= 8)
+    {
+        // 8 to 16 bytes: the first eight and the last eight.
+        var first = Vector128.CreateScalarUnsafe(KernelMemory.ReadUnaligned<ulong>(ref source)).AsByte();
+        var last = Vector128.CreateScalarUnsafe(KernelMemory.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)(length - 8)))).AsByte();
+        Vector128.WidenLower(first).StoreUnsafe(ref destination);
+        Vector128.WidenLower(last).StoreUnsafe(ref destination, (nuint)(uint)(length - 8));
+    }
+    else
+    {
+        // 4 to 7 bytes: the first four and the last four.
+        ulong head = WidenFourLatin1(KernelMemory.ReadUnaligned<uint>(ref source)).AsUInt64().ToScalar();
+        ulong tail = WidenFourLatin1(KernelMemory.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)(length - 4)))).AsUInt64().ToScalar();
+        KernelMemory.WriteUnaligned(ref Unsafe.As<ushort, byte>(ref destination), head);
+        KernelMemory.WriteUnaligned(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4))), tail);
+    }
 }
 /// <summary>Widens more than sixteen Latin-1 bytes.</summary>
 /// <param name = "source">The first payload byte.</param>
