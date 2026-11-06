@@ -177,7 +177,11 @@ public static partial class LuminPackExtensionGenerator
         if (type is INamedTypeSymbol { Name: "SortedDictionary" or "ImmutableSortedDictionary", TypeArguments.Length: 2 } sortedPairs &&
             sortedPairs.ContainingNamespace.ToDisplayString() is "System.Collections.Generic" or "System.Collections.Immutable" &&
             sortedPairs.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String))
-            field.CanWriteTreeStringPairs = EmitterTypeTraits.HasTreeStringPairWriter(compilation);
+            field.CanWriteTreeStringPairs = EmitterTypeTraits.HasStringPrefixWriter(compilation, pairs: true);
+        if (type is IArrayTypeSymbol { IsSZArray: true, ElementType.SpecialType: SpecialType.System_String } ||
+            type is INamedTypeSymbol { Name: "Queue" or "Stack", TypeArguments.Length: 1 } linear &&
+            linear.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" && linear.TypeArguments[0].SpecialType == SpecialType.System_String)
+            field.CanWriteStringPrefix = EmitterTypeTraits.HasStringPrefixWriter(compilation, pairs: false);
         if (type is INamedTypeSymbol { MetadataName: "ImmutableHashSet`1" or "IImmutableSet`1", TypeArguments.Length: 1 } immutableHashSet &&
             immutableHashSet.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
             field.CanBuildFrameworkImmutableHashSet = EmitterTypeTraits.CanBuildFrameworkImmutableHashSet(immutableHashSet.TypeArguments[0], compilation);

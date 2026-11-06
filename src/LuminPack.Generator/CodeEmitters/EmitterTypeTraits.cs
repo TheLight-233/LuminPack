@@ -609,23 +609,25 @@ internal static class EmitterTypeTraits
                 method.ReturnsVoid && method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
     }
 
-    /// <summary>Checks both profile overloads for a single span of captured string pairs.</summary>
+    /// <summary>Checks both profile overloads for writing a prefix of a string or pair span.</summary>
     /// <param name="compilation">The consumer's runtime and framework metadata.</param>
-    /// <returns>Whether the generated writer can pass its pair snapshot directly.</returns>
-    internal static bool HasTreeStringPairWriter(Compilation compilation)
+    /// <param name="pairs">Whether the span contains captured key/value pairs.</param>
+    /// <returns>Whether the generated writer can pass the selected span directly.</returns>
+    internal static bool HasStringPrefixWriter(Compilation compilation, bool pairs)
     {
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
         var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
-        var pair = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
         var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
-        if (writer == null || options == null || pair == null || span == null) return false;
+        if (writer == null || options == null || span == null) return false;
         var text = compilation.GetSpecialType(SpecialType.System_String);
-        var pairs = span.Construct(pair.Construct(text, text));
-        var overloads = writer.GetMembers("WriteStringPairPrefix").OfType<IMethodSymbol>().Where(method =>
+        var element = pairs ? compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2")?.Construct(text, text) : text;
+        if (element == null) return false;
+        var input = span.Construct(element);
+        var overloads = writer.GetMembers(pairs ? "WriteStringPairPrefix" : "WriteStringPrefix").OfType<IMethodSymbol>().Where(method =>
             !method.IsStatic && !method.ReturnsByRef && !method.ReturnsByRefReadonly &&
             method.ReturnType.SpecialType == SpecialType.System_Int32 && method.DeclaredAccessibility == Accessibility.Public &&
             method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
-            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, pairs)).ToArray();
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, input)).ToArray();
         return overloads.Any(method => method.Arity == 0) && overloads.Any(method => method.Arity == 1 &&
             method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
             method.TypeParameters[0].ConstraintTypes.Length == 1 && SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options));

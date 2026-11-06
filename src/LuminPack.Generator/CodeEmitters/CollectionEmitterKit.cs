@@ -14,6 +14,32 @@ internal static class CollectionEmitterKit
     private const string Unsafe = "global::System.Runtime.CompilerServices.Unsafe";
     private const string MemoryMarshal = "global::System.Runtime.InteropServices.MemoryMarshal";
 
+    /// <summary>Writes the live slots of a contiguous collection segment in storage order.</summary>
+    /// <param name="sb">The generated writer body.</param>
+    /// <param name="span">The local holding the segment.</param>
+    /// <param name="stringPrefix">Whether the referenced writer can group complete string records.</param>
+    /// <param name="item">The original element expression for the per-slot traversal.</param>
+    /// <param name="checkBuffer">Whether the collection checks capacity before an individual element write.</param>
+    internal static void AppendSegmentWrite(StringBuilder sb, string span, bool stringPrefix, string item = "item", bool checkBuffer = true)
+    {
+        if (stringPrefix)
+        {
+            sb.AppendLine("            for (int i = 0; i < " + span + ".Length; i++)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                i += writer.WriteStringPrefix(" + span + ".Slice(i));");
+            sb.AppendLine("                if (i == " + span + ".Length) break;");
+            item = span + "[i]";
+        }
+        else
+        {
+            sb.AppendLine("            foreach (ref var item in " + span + ")");
+            sb.AppendLine("            {");
+        }
+        if (checkBuffer) sb.AppendLine("                writer.CheckBuffer();");
+        sb.AppendLine("                writer.WriteValue(in " + item + ");");
+        sb.AppendLine("            }");
+    }
+
     /// <summary>Determines whether elements are written as their complete raw storage.</summary>
     /// <param name="element">The element symbol.</param>
     /// <param name="elementType">The generated element type name.</param>

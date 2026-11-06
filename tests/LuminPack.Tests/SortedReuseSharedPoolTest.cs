@@ -12,7 +12,7 @@ public sealed class SortedReuseSharedPoolTest
 {
     /// <summary>Verifies that probing a captured write run never invokes a consumer's profile getters.</summary>
     [Fact]
-    public void CapturedPairProbeLeavesCustomProfileToTheOriginalWrites()
+    public void CapturedRunsLeaveCustomProfileToTheOriginalWrites()
     {
         SharedCollectionPoolOptions.Expected = ["alpha"];
         SharedCollectionPoolOptions.SawPopulatedRental = false;
@@ -22,6 +22,7 @@ public sealed class SortedReuseSharedPoolTest
             var writer = new global::LuminPack.Core.LuminPackWriter(ref storage);
             KeyValuePair<string, string?>[] pairs = [new("k", "v")];
             Assert.Equal(0, writer.WriteStringPairPrefix<SharedCollectionPoolOptions>(pairs));
+            Assert.Equal(0, writer.WriteStringPrefix<SharedCollectionPoolOptions>(["k", "v"]));
             Assert.Equal(0, writer.Position);
             Assert.False(SharedCollectionPoolOptions.SawPopulatedRental);
             writer.Write<SharedCollectionPoolOptions>(pairs[0].Key);

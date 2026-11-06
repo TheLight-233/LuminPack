@@ -209,6 +209,58 @@ public sealed class StringRunWriteTest
         }
     }
 
+    /// <summary>Checks the wire order of both parts of a wrapped queue and the bottom-to-top stack storage.</summary>
+    [Fact]
+    public void WrappedQueueAndStackMatchIndividualStringRecords()
+    {
+        string?[] values = Mixed(96);
+        var queue = new Queue<string?>(values);
+        for (int i = 0; i < 31; i++) queue.Enqueue(queue.Dequeue());
+        string?[] ordered = values.Skip(31).Concat(values.Take(31)).ToArray();
+        var stack = new Stack<string?>(ordered);
+        Check<LuminPackUtf16LengthOptions>();
+        Check<LuminPackUtf16TokenOptions>();
+        Check<LuminPackUtf16VarIntOptions>();
+        Check<LuminPackUtf8LengthOptions>();
+        Check<LuminPackUtf8TokenOptions>();
+        Check<LuminPackUtf8VarIntOptions>();
+
+        void Check<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            byte[] records = ordered.SelectMany(text => LuminPackSerializer.Serialize<TOptions>(text)).ToArray();
+            byte[] stackBytes = Counted(ordered.Length, records);
+            Assert.Equal(stackBytes, LuminPackSerializer.Serialize<TOptions>(stack));
+            Assert.Equal(Counted(ordered.Length, new byte[8].Concat(stackBytes)), LuminPackSerializer.Serialize<TOptions>(queue));
+        }
+    }
+
+    /// <summary>Checks that every bounded prefix writes exactly the complete records accepted by individual raw bounds.</summary>
+    [Fact]
+    public void StringPrefixRespectsTheRemainingFixedBuffer()
+    {
+        string?[] values = [null, "", "a", "compact", "réservé", "\u0100\u0301", "end"];
+        for (int room = 0; room <= 96; room++)
+        {
+            byte[] actual = Enumerable.Repeat((byte)0xA5, room + 8).ToArray();
+            byte[] expected = (byte[])actual.Clone();
+            Span<byte> full = actual.AsSpan(3, room + 2);
+            Span<byte> reference = expected.AsSpan(3, room + 2);
+            var batch = new LuminPackWriter(ref full) { Position = 2 };
+            var single = new LuminPackWriter(ref reference) { Position = 2 };
+            int count = 0;
+            foreach (string? value in values)
+            {
+                if (sizeof(int) + (value?.Length ?? 0) * sizeof(char) > reference.Length - single.Position) break;
+                single.CheckBuffer();
+                single.Write<LuminPackUtf16LengthOptions>(value);
+                count++;
+            }
+            Assert.Equal(count, batch.WriteStringPrefix<LuminPackUtf16LengthOptions>(values));
+            Assert.Equal(single.Position, batch.Position);
+            Assert.Equal(expected, actual);
+        }
+    }
+
     /// <summary>Checks string-keyed sorted lists, whose pairs alternate key and value records.</summary>
     [Fact]
     public void SortedListPairsMatchPerElementRecords()

@@ -51,11 +51,7 @@ public static class StackEmitter
         {
             sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
             sb.AppendLine("            writer.Advance(sizeof(int));");
-            sb.AppendLine("            foreach (ref var item in span)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                writer.CheckBuffer();");
-            sb.AppendLine("                writer.WriteValue(in item!);");
-            sb.AppendLine("            }");
+            CollectionEmitterKit.AppendSegmentWrite(sb, "span", fieldData.CanWriteStringPrefix, "item!");
             sb.AppendLine("            writer.CheckBuffer();");
         }
         else

@@ -1779,6 +1779,31 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes the leading string records that fit the default profile's current window.</summary>
+        /// <param name="values">The source slots in wire order.</param>
+        /// <returns>The number of complete records written.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public int WriteStringPrefix(scoped ReadOnlySpan<string?> values) => WriteStringPrefix<LuminPackDefaultOptions>(values);
+
+        /// <summary>Writes leading records for which the caller's per-element buffer check cannot grow storage.</summary>
+        /// <typeparam name="TOptions">The compiled string profile.</typeparam>
+        /// <param name="values">The source slots in wire order.</param>
+        /// <returns>The number of complete records written, or zero for a profile with observable getters.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int WriteStringPrefix<TOptions>(scoped ReadOnlySpan<string?> values) where TOptions : struct, ILuminPackOptions
+        {
+#if NET8_0_OR_GREATER
+            if (ConstantStringProfile<TOptions>() && UsesUtf16LengthRecords<TOptions>())
+            {
+                int count = 0;
+                AdvanceProven(WriteUtf16Run(ref Current, PrefixRoom(), values, ref count));
+                return count;
+            }
+#endif
+            return 0;
+        }
+
         /// <summary>Writes the leading captured string pairs that fit the default profile's current window.</summary>
         /// <param name="pairs">The pairs in their original enumeration order.</param>
         /// <returns>The number of complete pairs written.</returns>
@@ -1802,6 +1827,16 @@ namespace LuminPack.Core
         }
 
 #if NET8_0_OR_GREATER
+        /// <summary>Returns the bytes between an in-range cursor and the next capacity or completion limit.</summary>
+        /// <returns>Available bytes, or zero for a cursor outside the window.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private uint PrefixRoom()
+        {
+            nuint offset = (nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Current);
+            uint limit = Math.Min((uint)_buffer.Length, BufferCheckLimit - 1);
+            return offset < limit ? limit - (uint)offset : 0;
+        }
+
         /// <summary>Writes complete captured key/value pairs while both raw record bounds fit the current window.</summary>
         /// <param name="pairs">The captured pairs.</param>
         /// <returns>The number of complete pairs written.</returns>
@@ -1809,10 +1844,8 @@ namespace LuminPack.Core
         private int WriteUtf16PairPrefix(scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs)
         {
             ref byte start = ref Current;
-            nuint offset = (nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref start);
-            uint limit = Math.Min((uint)_buffer.Length, BufferCheckLimit - 1);
-            if (offset >= limit) return 0;
-            int room = (int)(limit - (uint)offset);
+            int room = (int)PrefixRoom();
+            if (room == 0) return 0;
             int written = 0;
             int i = 0;
             for (; i < pairs.Length; i++)

@@ -63,6 +63,8 @@ public sealed class LuminLocalFieldData
     internal bool CanRebuildSortedSet;
     /// <summary>Whether both writer overloads for captured string pairs are available.</summary>
     internal bool CanWriteTreeStringPairs;
+    /// <summary>Whether contiguous string slots can use the writer's checked prefix operation.</summary>
+    internal bool CanWriteStringPrefix;
     /// <summary>Whether a string-keyed sorted list can use the referenced runtime's ordered append helper.</summary>
     internal bool CanAppendSortedListOrdered;
     /// <summary>Whether the referenced runtime exposes a checked allocation-free sorted-list traversal.</summary>

@@ -87,12 +87,9 @@ public static class ArrayEmitter
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            foreach (ref var item in value.AsSpan())");
-        sb.AppendLine("            {");
-        if ((fieldData.TypeSymbol as Microsoft.CodeAnalysis.IArrayTypeSymbol)?.ElementType.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
-            sb.AppendLine("                writer.CheckBuffer();");
-        sb.AppendLine("                writer.WriteValue(in item);");
-        sb.AppendLine("            }");
+        bool stringElements = (fieldData.TypeSymbol as Microsoft.CodeAnalysis.IArrayTypeSymbol)?.ElementType.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
+        if (fieldData.CanWriteStringPrefix) sb.AppendLine("            var items = value.AsSpan();");
+        CollectionEmitterKit.AppendSegmentWrite(sb, fieldData.CanWriteStringPrefix ? "items" : "value.AsSpan()", fieldData.CanWriteStringPrefix, checkBuffer: !stringElements);
         sb.AppendLine("            writer.CheckBuffer();");
     }
 

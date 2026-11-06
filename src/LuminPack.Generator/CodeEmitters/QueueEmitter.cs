@@ -87,16 +87,8 @@ public static class QueueEmitter
         sb.AppendLine("            var referenceFirstLength = global::System.Math.Min(size, referenceStorage.Length - referenceHead);");
         sb.AppendLine("            var first = referenceStorage.Slice(referenceHead, referenceFirstLength);");
         sb.AppendLine("            var second = referenceStorage.Slice(0, size - referenceFirstLength);");
-        sb.AppendLine("            foreach (ref var item in first)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.CheckBuffer();");
-        sb.AppendLine("                writer.WriteValue(in item);");
-        sb.AppendLine("            }");
-        sb.AppendLine("            foreach (ref var item in second)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.CheckBuffer();");
-        sb.AppendLine("                writer.WriteValue(in item);");
-        sb.AppendLine("            }");
+        CollectionEmitterKit.AppendSegmentWrite(sb, "first", fieldData.CanWriteStringPrefix);
+        CollectionEmitterKit.AppendSegmentWrite(sb, "second", fieldData.CanWriteStringPrefix);
         sb.AppendLine("#else");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
