@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.RegularExpressions;
 using LuminPack.Code;
 
 
@@ -10,13 +9,28 @@ using static CodeEmitterRegistry;
 /// <summary>Provides array emitter functionality.</summary>
 public static class ArrayEmitter
 {
+    /// <summary>Removes the final single-dimensional array suffix with the original whitespace rule.</summary>
+    /// <param name="typeName">The displayed array type.</param>
+    /// <returns>The unchanged prefix, or the original name when no suffix matches.</returns>
+    internal static string GetArrayElementTypeName(string typeName)
+    {
+        if (typeName is null) global::LuminPack.SourceGenerator.LuminPackExceptionHelper.ThrowArgumentNullException("input");
+        int index = typeName.Length - 1;
+        while (index >= 0 && char.IsWhiteSpace(typeName[index])) index--;
+        if (index < 0 || typeName[index] != ']') return typeName;
+        index--;
+        while (index >= 0 && char.IsWhiteSpace(typeName[index])) index--;
+        return index >= 0 && typeName[index] == '[' ? typeName.Substring(0, index) : typeName;
+    }
+
+
     /// <summary>Appends binary writing statements for array values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true)) return;
-        string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
         if (useUnmanagedPath)
@@ -90,7 +104,7 @@ public static class ArrayEmitter
         if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
         if (global::LuminPack.Code.Core.GeneratedExecutionPolicy.UseFreshUnionLoop(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol)))
             sb.AppendLine("            if (value is null) { reader.ReadFreshValue(ref value!); return; }");
-        string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
         if (useUnmanagedPath)
@@ -173,7 +187,7 @@ public static class ArrayEmitter
     public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
-        string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine(@"            if (!reader.TryReadCollectionHead(ref index, out var length" + CollectionEmitterKit.HeaderMinimumArgument(fieldData.TypeSymbol) + "))");
@@ -208,7 +222,7 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        string elementType = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        string elementType = GetArrayElementTypeName(fieldData.TypeName);
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -241,7 +255,7 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        string elementType = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        string elementType = GetArrayElementTypeName(fieldData.TypeName);
         string clearPooledArray = GetArrayPoolClearExpression(fieldData, elementType);
         sb.AppendLine("            if (reader.IsNull())");
         sb.AppendLine("            {");
@@ -316,7 +330,7 @@ public static class ArrayEmitter
     public static void GenerateSerializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true)) return;
-        string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
@@ -392,7 +406,7 @@ public static class ArrayEmitter
     public static void GenerateDeserializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
-        string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
