@@ -375,11 +375,22 @@ public static unsafe partial class StringSerializer
             return true;
         }
 
+        return MatchesShortUtf16(ref source, ref candidate, (uint)bytes);
+    }
+
+    /// <summary>Compares two validated UTF-16 byte ranges with overlapping 16-byte windows.</summary>
+    /// <param name="source">The first record byte.</param>
+    /// <param name="candidate">The first candidate byte.</param>
+    /// <param name="length">The byte length of both ranges, between 16 and 32.</param>
+    /// <returns>Whether all bytes match.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool MatchesShortUtf16(ref byte source, ref byte candidate, uint length)
+    {
         // 16 to 32 bytes: the first sixteen and the last sixteen bytes cover the record.
         var recordHead = Vector128.LoadUnsafe(ref source);
-        var recordTail = Vector128.LoadUnsafe(ref source, (nuint)(bytes - 16));
+        var recordTail = Vector128.LoadUnsafe(ref source, length - 16);
         var candidateHead = Vector128.LoadUnsafe(ref candidate);
-        var candidateTail = Vector128.LoadUnsafe(ref candidate, (nuint)(bytes - 16));
+        var candidateTail = Vector128.LoadUnsafe(ref candidate, length - 16);
         return Vector128.EqualsAll(recordHead, candidateHead) && Vector128.EqualsAll(recordTail, candidateTail);
     }
 
@@ -460,13 +471,37 @@ public static unsafe partial class StringSerializer
         return ReadUtf16PayloadCore(ref payload, bytes, current);
     }
 
-    /// <summary>Decodes or reuses a validated nonempty raw UTF-16 payload outside inlined record sites.</summary>
+    /// <summary>Decodes a validated nonempty raw UTF-16 payload, retaining an equal string.</summary>
     /// <param name = "payload">The first payload byte.</param>
     /// <param name = "bytes">The positive even payload width.</param>
     /// <param name = "current">The immutable storage available for reuse.</param>
     /// <returns>The existing equal string or a fresh one.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static string ReadUtf16Payload(ref byte payload, int bytes, string? current)
+    {
+#if NET8_0_OR_GREATER
+        if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)(bytes - 16) <= 16)
+        {
+            int length = bytes >> 1;
+            if (current is not null && current.Length == length &&
+                MatchesShortUtf16(ref payload, ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(current.AsSpan())), (uint)bytes))
+                return current;
+            string result = FastString.Allocate(length);
+            ref byte destination = ref Unsafe.As<char, byte>(ref Unsafe.AsRef(in result.GetPinnableReference()));
+            CopyShortUtf16(ref destination, ref payload, (uint)bytes);
+            return result;
+        }
+#endif
+        return ReadOtherUtf16Payload(ref payload, bytes, current);
+    }
+
+    /// <summary>Decodes raw UTF-16 payloads outside the short vector path.</summary>
+    /// <param name="payload">The first validated payload byte.</param>
+    /// <param name="bytes">The positive even byte length.</param>
+    /// <param name="current">The string available for reuse.</param>
+    /// <returns>The decoded string.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static string ReadUtf16Payload(ref byte payload, int bytes, string? current) => ReadUtf16PayloadCore(ref payload, bytes, current);
+    private static string ReadOtherUtf16Payload(ref byte payload, int bytes, string? current) => ReadUtf16PayloadCore(ref payload, bytes, current);
 
     /// <summary>Decodes or reuses a validated nonempty raw UTF-16 payload.</summary>
     /// <param name = "payload">The first payload byte.</param>
@@ -620,8 +655,7 @@ public static unsafe partial class StringSerializer
 
             if (length >= 16 && length <= 32)
             {
-                LuminPackWriter.Write(ref destination, LuminPackReader.Read<global::System.Runtime.Intrinsics.Vector128<byte>>(ref source));
-                LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)((nint)(length - 16))), LuminPackReader.Read<global::System.Runtime.Intrinsics.Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(uint)((nint)(length - 16)))));
+                CopyShortUtf16(ref destination, ref source, length);
                 return;
             }
 
@@ -649,6 +683,20 @@ public static unsafe partial class StringSerializer
 
         global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, length);
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Copies two bounded, potentially overlapping 16-byte windows on a 64-bit target.</summary>
+    /// <param name="destination">The first output byte.</param>
+    /// <param name="source">The first input byte.</param>
+    /// <param name="length">The validated byte length, between 16 and 32.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CopyShortUtf16(ref byte destination, ref byte source, uint length)
+    {
+        nuint tail = length - 16;
+        Vector128.LoadUnsafe(ref source).StoreUnsafe(ref destination);
+        Vector128.LoadUnsafe(ref source, tail).StoreUnsafe(ref destination, tail);
+    }
+#endif
 
     /// <summary>Serializes the supplied value using the selected format and options.</summary>
     /// <param name = "source">The input data to process.</param>

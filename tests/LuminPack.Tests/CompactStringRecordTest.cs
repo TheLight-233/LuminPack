@@ -297,19 +297,22 @@ public sealed class CompactStringRecordTest
     [Fact]
     public void ReuseRejectsEveryDifferingCharacter()
     {
-        foreach (int length in new[] { 1, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 64, 300 })
+        foreach (char fill in new[] { 'a', '\uD800' })
         {
-            string text = new string('a', length);
-            byte[] bytes = LuminPackSerializer.Serialize(text);
-            for (int at = 0; at < length; at++)
+            foreach (int length in new[] { 1, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 64, 300 })
             {
-                foreach (char other in new[] { 'b', '\u00e1', '\u0161' })
+                string text = new string(fill, length);
+                byte[] bytes = LuminPackSerializer.Serialize(text);
+                for (int at = 0; at < length; at++)
                 {
-                    char[] chars = text.ToCharArray();
-                    chars[at] = other;
-                    string? candidate = new string(chars);
-                    LuminPackSerializer.Deserialize(bytes, ref candidate);
-                    Assert.Equal(text, candidate);
+                    foreach (char other in new[] { 'b', '\u00e1', '\u0161' })
+                    {
+                        char[] chars = text.ToCharArray();
+                        chars[at] = other;
+                        string? candidate = new string(chars);
+                        LuminPackSerializer.Deserialize(bytes, ref candidate);
+                        Assert.Equal(text, candidate);
+                    }
                 }
             }
         }

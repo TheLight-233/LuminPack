@@ -1278,18 +1278,20 @@ namespace LuminPack.Core
                 if (RemainingWindowBytes >= sizeof(int))
                 {
                     int header = LuminPackReader.Read<int>(ref Current);
-                    int payload = StringSerializer.Utf16RecordPayload(header);
-                    if (payload > 0)
+                    if (header > 1)
                     {
                         // The checked Advance validates the complete record before the cursor moves; the payload is
                         // then decoded from its captured position.
                         ref byte text = ref Unsafe.Add(ref Current, sizeof(int));
-                        Advance(sizeof(int) + payload);
-                        // Compact Latin-1 records carry most text and stay inline; raw UTF-16 payloads use the
-                        // outlined decoder.
-                        return (header & 1) != 0
-                            ? StringSerializer.ReadLatin1Payload(ref text, payload, current)
-                            : StringSerializer.ReadUtf16Payload(ref text, payload, current);
+                        if ((header & 1) == 0)
+                        {
+                            Advance(sizeof(int) + header);
+                            return StringSerializer.ReadUtf16Payload(ref text, header, current);
+                        }
+
+                        int length = header >> 1;
+                        Advance(sizeof(int) + length);
+                        return StringSerializer.ReadLatin1Payload(ref text, length, current);
                     }
                 }
 #endif
