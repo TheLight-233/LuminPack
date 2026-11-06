@@ -11,6 +11,40 @@ namespace LuminPackUnitTest;
 /// <summary>Protects ordered fresh construction, public-constructor fallbacks and unchanged reuse boundaries.</summary>
 public sealed class SortedSetConstructionTest
 {
+    /// <summary>Preserves default ordering, the first equal string and publication before the final document check.</summary>
+    /// <param name="cultureName">The culture used by the default string comparer.</param>
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("sv-SE")]
+    [InlineData("tr-TR")]
+    public void JsonImmutableSetsPreserveBuilderResults(string cultureName)
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+            string[] words = ["z", "a", "\u00e4", "I", "\u0131"];
+            Array.Sort(words);
+            foreach (string[] input in new[] { words, words.AsEnumerable().Reverse().ToArray(), new[] { "\u00e9", "e\u0301", "x" } })
+            {
+                var builder = ImmutableSortedSet.CreateBuilder<string>();
+                foreach (var word in input) builder.Add(word);
+                var text = System.Text.Json.JsonSerializer.Serialize(input);
+                var result = ImmutableSortedSet.Create("prior");
+                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(System.Text.Encoding.UTF8.GetBytes(text), ref result);
+                Assert.Equal(builder.ToArray(), result.ToArray());
+                LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(System.Text.Encoding.Unicode.GetBytes(text), ref result);
+                Assert.Equal(builder.ToArray(), result.ToArray());
+            }
+            var numbers = ImmutableSortedSet.Create(99);
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson("[1,2,?", ref numbers));
+            Assert.Equal(new[] { 1, 2 }, numbers.ToArray());
+            LuminPackSerializer.DeserializeJson("[1,2,3]", ref numbers);
+            Assert.Equal(new[] { 1, 2, 3 }, numbers.ToArray());
+        }
+        finally { CultureInfo.CurrentCulture = saved; }
+    }
+
     /// <summary>Matches the public constructor's nodes, colors and later mutations around every small tree size.</summary>
     [Fact]
     public void OrderedFrameworkValuesKeepTheirTreeAndMutationBehavior()

@@ -53,7 +53,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 - `Register` APIs take function pointers: the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and an `unsafe` block.
 - Reuse is not transactional: a failed read can leave members already updated.
 - The default binary UTF-16 length reader reuses a zero-based `string[,]` when both dimensions match. Aliases observe completed slots even if a later record fails its bounds or string quota. Other string profiles allocate a new matrix.
-- JSON `ref` reads reuse objects, list elements, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked references. Unchanged decoded strings retain identity. JSON `null` clears the target; omitted members reset to `default` on an existing object. Immutable collections keep their construction behavior.
+- JSON `ref` reads reuse objects, list elements, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked references. Unchanged decoded strings retain identity. JSON `null` clears the target; omitted members reset to `default` on an existing object. After parsing JSON into a concrete `ImmutableSortedSet<int>` or `ImmutableSortedSet<string>`, .NET 10 and later can link a balanced frozen tree directly from two or more strictly ascending elements. Strings must be non-null and use an ordinary current culture. Duplicate or unordered elements, derived cultures, other element types and unavailable runtime bindings use the existing builder.
 
 ## Where to look
 

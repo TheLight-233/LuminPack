@@ -25,14 +25,16 @@ internal static partial class SerializerImmutableListWriteRegression
                         IImmutableSet<int> value=ImmutableHashSet.Create(3,7,11);
                         byte[] bytes=Binary(value);Read(bytes,ref value);
                         Json(System.Text.Encoding.Unicode.GetBytes("[3,7,11]"),ref value);
-                        return Convert.ToBase64String(bytes)+":"+string.Join(",",value);
+                        ImmutableSortedSet<int> sorted=null;
+                        LuminPackSerializer.DeserializeJson("[3,7,11]",ref sorted);
+                        return Convert.ToBase64String(bytes)+":"+string.Join(",",value)+":"+string.Join(",",sorted);
                     }
                 }
                 """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var access = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage")!;
         var original = references.OfType<PortableExecutableReference>().Single(reference =>
             SymbolEqualityComparer.Default.Equals(compilation.GetAssemblyOrModuleSymbol(reference), access.ContainingAssembly));
-        var changed = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(original.FilePath!, "CreateFrameworkImmutableHashSet")));
+        var changed = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(original.FilePath!, "CreateFrameworkImmutableHashSet", "CreateOrderedSetIfSupported")));
         var driver = Create(parse);
         string? expected = null;
         foreach (var current in new[] { compilation, changed, compilation })
@@ -41,6 +43,8 @@ internal static partial class SerializerImmutableListWriteRegression
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             Require(Trees(driver).Any(text => text.Contains(".CreateFrameworkImmutableHashSet(", StringComparison.Ordinal)) == ReferenceEquals(current, compilation),
                 "Immutable hash construction retained a stale runtime capability.");
+            Require(Trees(driver).Any(text => text.Contains(".CreateOrderedSetIfSupported(", StringComparison.Ordinal)) == ReferenceEquals(current, compilation),
+                "Ordered JSON set construction retained a stale runtime capability.");
             Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(current))), "A metadata edit retained stale immutable hash operations.");
             using var image = new MemoryStream();
             var emitted = output.Emit(image);

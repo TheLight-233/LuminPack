@@ -14,6 +14,31 @@ namespace LuminPackUnitTest;
 [Collection(nameof(RuntimeStateCollection))]
 public sealed class SortedReuseConstructionTest
 {
+#if NET10_0_OR_GREATER
+    /// <summary>Declines duplicate, null, unordered and observable string comparisons before building JSON set nodes.</summary>
+    [Fact]
+    public void OrderedJsonSetConstructionDeclinesIneligibleInput()
+    {
+        string[] words = ["a", "b"];
+        Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(words, 1));
+        Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(new[] { "a", "a" }, 2));
+        Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(new[] { "a", null! }, 2));
+        Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(new[] { null!, "a" }, 2));
+        Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(new[] { 2, 1 }, 2));
+        Assert.ThrowsAny<Exception>(() => LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(words, 3));
+        var saved = CultureInfo.CurrentCulture;
+        var observed = new ObservedCulture();
+        try
+        {
+            CultureInfo.CurrentCulture = observed;
+            int before = observed.Calls;
+            Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(words, 2));
+            Assert.Equal(before, observed.Calls);
+        }
+        finally { CultureInfo.CurrentCulture = saved; }
+    }
+#endif
+
     /// <summary>Compares every selected truncated string record, destination identity and version against Clear/Add.</summary>
     [Fact]
     public void SetProfilesAndFailedPrefixesMatchOriginalInsertion()

@@ -141,6 +141,8 @@ public static partial class LuminPackExtensionGenerator
             };
             if (builderFamily.Length != 0)
                 field.CanReuseImmutableBuilder = ImmutableBuilderEmitter.Available(compilation, builderFamily, builderCollection.Arity);
+            if (builderFamily == "SortedSet" && builderCollection.Arity == 1)
+                field.CanLinkOrderedJsonSet = EmitterTypeTraits.CanLinkOrderedJsonSet(builderCollection, compilation);
         }
         if (type is INamedTypeSymbol { Name: "FrozenDictionary" or "FrozenSet" } frozen && frozen.ContainingNamespace.ToDisplayString() == "System.Collections.Frozen")
         {

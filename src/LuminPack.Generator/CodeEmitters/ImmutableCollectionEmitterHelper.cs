@@ -116,7 +116,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
         sb.AppendLine("                } while (reader.Read());");
-        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableSequenceFromSpan, fieldData.CanBuildFrameworkImmutableHashSet, fieldData.CanReuseImmutableBuilder);
+        AppendSequenceConstruction(sb, elementType, baseType, fieldData);
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
@@ -128,10 +128,8 @@ internal static class ImmutableCollectionEmitterHelper
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="elementType">The element type used by this operation.</param>
     /// <param name="baseType">The base type used by this operation.</param>
-    /// <param name="canCreateFromSpan">Whether the actual sequence factory accepts a complete span.</param>
-    /// <param name="canBuildHashSet">Whether framework hashing and the referenced constructor permit complete-buffer construction.</param>
-    /// <param name="canReuseBuilder">Whether matched public builder rentals are available.</param>
-    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateFromSpan, bool canBuildHashSet, bool canReuseBuilder)
+    /// <param name="fieldData">The factory and builder capabilities of the referenced runtime.</param>
+    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, LuminLocalFieldData fieldData)
     {
         if (baseType == "global::System.Collections.Immutable.ImmutableArray")
         {
@@ -161,7 +159,9 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                }");
         if (target is "ImmutableHashSet" or "ImmutableSortedSet")
             sb.AppendLine("                if (count == 1) { value = global::System.Collections.Immutable." + target + ".Create<" + elementType + ">(buffer[0]); return; }");
-        if (target == "ImmutableHashSet" && canBuildHashSet)
+        if (fieldData.CanLinkOrderedJsonSet)
+            sb.AppendLine("                if (global::LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(buffer, count) is { } ordered) { value = ordered; return; }");
+        if (target == "ImmutableHashSet" && fieldData.CanBuildFrameworkImmutableHashSet)
         {
             sb.AppendLine("                value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(buffer, count);");
             return;
@@ -169,7 +169,7 @@ internal static class ImmutableCollectionEmitterHelper
         if (target == "ImmutableList")
         {
             // The buffered sequence can build a balanced tree directly instead of inserting and rebalancing every item.
-            if (canCreateFromSpan)
+            if (fieldData.CanCreateImmutableSequenceFromSpan)
             {
                 sb.AppendLine("                value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + elementType + ">(buffer, 0, count));");
                 return;
@@ -177,10 +177,10 @@ internal static class ImmutableCollectionEmitterHelper
             sb.AppendLine("                if (count == 1) value = global::System.Collections.Immutable.ImmutableList.Create<" + elementType + ">(buffer[0]);");
             sb.AppendLine("                else if (count <= 3)");
             sb.AppendLine("                {");
-            ImmutableBuilderEmitter.Begin(sb, canReuseBuilder, "List", elementType, "                    ");
+            ImmutableBuilderEmitter.Begin(sb, fieldData.CanReuseImmutableBuilder, "List", elementType, "                    ");
             sb.AppendLine("                    for (int i = 0; i < count; i++) builder.Add(buffer[i]);");
             sb.AppendLine("                    value = builder.ToImmutable();");
-            ImmutableBuilderEmitter.End(sb, canReuseBuilder, "List", "                    ");
+            ImmutableBuilderEmitter.End(sb, fieldData.CanReuseImmutableBuilder, "List", "                    ");
             sb.AppendLine("                }");
             sb.AppendLine("                else value = global::System.Collections.Immutable.ImmutableList.CreateRange(" + CollectionEmitterKit.CopyingFactorySource(elementType, "buffer", "count") + ");");
             return;
@@ -194,18 +194,18 @@ internal static class ImmutableCollectionEmitterHelper
         }
         if (target == "ImmutableQueue")
         {
-            sb.AppendLine(canCreateFromSpan
+            sb.AppendLine(fieldData.CanCreateImmutableSequenceFromSpan
                 ? "                value = global::System.Collections.Immutable.ImmutableQueue.Create(new global::System.ReadOnlySpan<" + elementType + ">(buffer, 0, count));"
                 : "                value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(" + CollectionEmitterKit.CopyingFactorySource(elementType, "buffer", "count") + ");");
             return;
         }
-        ImmutableBuilderEmitter.Begin(sb, canReuseBuilder, target.Substring("Immutable".Length), elementType, "                ");
+        ImmutableBuilderEmitter.Begin(sb, fieldData.CanReuseImmutableBuilder, target.Substring("Immutable".Length), elementType, "                ");
         sb.AppendLine("                for (int i = 0; i < count; i++)");
         sb.AppendLine("                {");
         sb.AppendLine("                    builder.Add(buffer[i]);");
         sb.AppendLine("                }");
         sb.AppendLine("                value = builder.ToImmutable();");
-        ImmutableBuilderEmitter.End(sb, canReuseBuilder, target.Substring("Immutable".Length), "                ");
+        ImmutableBuilderEmitter.End(sb, fieldData.CanReuseImmutableBuilder, target.Substring("Immutable".Length), "                ");
     }
 
     /// <summary>Gets the concrete immutable sequence family used by the existing result construction.</summary>

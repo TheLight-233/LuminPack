@@ -94,6 +94,23 @@ internal static class EmitterTypeTraits
             methods.Any(method => method.Parameters.All(parameter => SymbolEqualityComparer.Default.Equals(parameter.Type, method.TypeParameters[0])));
     }
 
+    /// <summary>Checks the exact referenced JSON constructor for a sorted set of framework integers or strings.</summary>
+    /// <param name="set">The closed immutable sorted set.</param>
+    /// <param name="compilation">The consumer's referenced assemblies.</param>
+    /// <returns>Whether the matching buffered constructor is available.</returns>
+    internal static bool CanLinkOrderedJsonSet(INamedTypeSymbol set, Compilation compilation)
+    {
+        var element = set.TypeArguments[0];
+        if (element.SpecialType is not (SpecialType.System_Int32 or SpecialType.System_String)) return false;
+        return compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage")?
+            .GetMembers("CreateOrderedSetIfSupported").OfType<IMethodSymbol>().Any(method =>
+                method.IsStatic && method.Arity == 0 && method.DeclaredAccessibility == Accessibility.Public &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, set) && method.Parameters.Length == 2 &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type is IArrayTypeSymbol { IsSZArray: true } array &&
+                SymbolEqualityComparer.Default.Equals(array.ElementType, element) &&
+                method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32) == true;
+    }
+
     /// <summary>Checks a referenced public sequence factory instead of inferring its API from target symbols.</summary>
     /// <param name="compilation">The consuming compilation and its actual immutable collection references.</param>
     /// <param name="name">The concrete immutable sequence family name.</param>

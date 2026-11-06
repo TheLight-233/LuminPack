@@ -35,6 +35,7 @@ public sealed class LuminLocalFieldData
     internal bool CanWriteBitArrayPayload;
     /// <summary>Whether callback-free framework elements can use the referenced immutable hash-set constructor.</summary>
     internal bool CanBuildFrameworkImmutableHashSet;
+    internal bool CanLinkOrderedJsonSet;
     /// <summary>Whether the referenced runtime exposes bounded BigInteger JSON formatting.</summary>
     internal bool CanWriteJsonBigInteger;
     /// <summary>Whether the referenced runtime exposes complete BigInteger JSON parsing.</summary>

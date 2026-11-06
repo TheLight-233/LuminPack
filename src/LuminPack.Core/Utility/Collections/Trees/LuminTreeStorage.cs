@@ -324,6 +324,43 @@ public static partial class LuminTreeStorage
         return ImmutableSortedSet.CreateRange(new ArraySegment<T>(items, 0, count));
     }
 
+#if NET10_0_OR_GREATER
+    /// <summary>Links a completed JSON integer set when its input is strictly ascending.</summary>
+    /// <param name="items">The staged elements.</param>
+    /// <param name="count">The valid element count.</param>
+    /// <returns>The completed set, or null to continue with the ordinary builder.</returns>
+    public static ImmutableSortedSet<int>? CreateOrderedSetIfSupported(int[] items, int count) =>
+        CanLinkOrderedSet(items, count) && IsStrictlyAscending(items, count)
+            ? BclTrees.ImmutableSortedSet<int>.Build(items, count) : null;
+
+    /// <summary>Links a completed JSON string set in strictly ascending default comparer order.</summary>
+    /// <param name="items">The staged strings.</param>
+    /// <param name="count">The valid element count.</param>
+    /// <returns>The completed set, or null to continue with the ordinary builder.</returns>
+    public static ImmutableSortedSet<string>? CreateOrderedSetIfSupported(string[] items, int count)
+    {
+        if (!CanLinkOrderedSet(items, count) || items[0] is null) return null;
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        if (culture.GetType() != typeof(System.Globalization.CultureInfo)) return null;
+        var comparison = culture.CompareInfo;
+        for (int i = 1; i < count; i++)
+            if (comparison.Compare(items[i - 1], items[i]) >= 0) return null;
+        return ReferenceEquals(culture, System.Globalization.CultureInfo.CurrentCulture)
+            ? BclTrees.ImmutableSortedSet<string>.Build(items, count) : null;
+    }
+
+    /// <summary>Checks the input range and the two framework tree probes before linking a JSON set.</summary>
+    /// <typeparam name="T">The framework element type.</typeparam>
+    /// <param name="items">The completed staging array.</param>
+    /// <param name="count">The valid element count.</param>
+    /// <returns>Whether the buffer can use the framework node constructor.</returns>
+    private static bool CanLinkOrderedSet<T>(T[] items, int count)
+    {
+        if ((uint)count > (uint)items.Length) LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        return count > 1 && ImmutableSortedSetLayout<T>.Available && BclTrees.ImmutableSortedSet<T>.Available;
+    }
+#endif
+
     /// <summary>Completes a fresh singleton's unpublished root with balanced frozen children.</summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="node">The exclusively owned root of a newly constructed singleton.</param>
