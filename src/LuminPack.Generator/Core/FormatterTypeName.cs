@@ -40,7 +40,14 @@ internal static class FormatterTypeName
         switch (type)
         {
             case IArrayTypeSymbol array:
-                return Build(array.ElementType) + "[" + new string(',', array.Rank - 1) + "]";
+                var ranks = new System.Text.StringBuilder();
+                ITypeSymbol element = array;
+                while (element is IArrayTypeSymbol level)
+                {
+                    ranks.Append('[').Append(',', level.Rank - 1).Append(']');
+                    element = level.ElementType;
+                }
+                return Build(element) + ranks;
             case IPointerTypeSymbol pointer:
                 return Build(pointer.PointedAtType) + "*";
             case ITypeParameterSymbol parameter:

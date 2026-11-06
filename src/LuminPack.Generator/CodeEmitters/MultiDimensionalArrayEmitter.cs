@@ -30,9 +30,7 @@ public static class MultiDimensionalArrayEmitter
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool IsMultiDimensionalArray(string typeName)
     {
-        int open = typeName.LastIndexOf('[');
-        return open >= 0 && typeName.EndsWith("]", StringComparison.Ordinal) &&
-            typeName.AsSpan(open).IndexOf(',') >= 0;
+        return GetRank(typeName) > 1;
     }
 
     /// <summary>Appends binary writing statements for multi dimensional array values.</summary>
@@ -41,7 +39,7 @@ public static class MultiDimensionalArrayEmitter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         int rank = GetRank(fieldData.TypeName);
-        string elementType = GetElementType(fieldData.TypeName);
+        string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         var portable = PortableStructPlan.TryCreate(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol));
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            if (value is null)");
@@ -100,7 +98,7 @@ public static class MultiDimensionalArrayEmitter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         int rank = GetRank(fieldData.TypeName);
-        string elementType = GetElementType(fieldData.TypeName);
+        string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         var portable = PortableStructPlan.TryCreate(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol));
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         if (portable != null) sb.AppendLine("            reader.EnsureCollectionPayload(index, 1);");
@@ -162,17 +160,19 @@ public static class MultiDimensionalArrayEmitter
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
+        int open = ArrayEmitter.OuterRankStart(fieldData.TypeName);
+        string allocation = fieldData.TypeName.Substring(0, open + 1) + JoinDimensions(rank) + fieldData.TypeName.Substring(fieldData.TypeName.IndexOf(']', open));
         if (EmitterTypeTraits.IsKnownScalar(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol)) &&
             HasRawElements(fieldData, elementType))
         {
             string dimensions = string.Join(" || ", System.Linq.Enumerable.Range(0, rank).Select(i =>
                 "value.GetLength(" + i + ") != dimension" + i + " || value.GetLowerBound(" + i + ") != 0"));
             sb.AppendLine("            if (value is null || " + dimensions + ")");
-            sb.AppendLine("                value = new " + elementType + "[" + JoinDimensions(rank) + "];");
+            sb.AppendLine("                value = new " + allocation + ";");
         }
         else
         {
-            sb.AppendLine("            value = new " + elementType + "[" + JoinDimensions(rank) + "];");
+            sb.AppendLine("            value = new " + allocation + ";");
         }
         sb.AppendLine("            ref var first = ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + elementType + ">(ref global::LuminPack.Code.LuminPackMarshal.DangerousGetArrayDataReference<" + elementType + ">(value));");
         if (portable != null)
@@ -199,7 +199,7 @@ public static class MultiDimensionalArrayEmitter
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         int rank = GetRank(fieldData.TypeName);
-        string elementType = GetElementType(fieldData.TypeName);
+        string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -232,7 +232,7 @@ public static class MultiDimensionalArrayEmitter
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         int rank = GetRank(fieldData.TypeName);
-        string elementType = GetElementType(fieldData.TypeName);
+        string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         sb.AppendLine("            if (reader.IsNull())");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");
@@ -242,7 +242,7 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            int[] lengths = null, lowerBounds = null;");
         sb.AppendLine("            bool hasValues = false;");
         // Values may precede the shape, so they are staged in pooled storage sized by their counted elements.
-        sb.AppendLine("            " + elementType + "[] items = global::System.Array.Empty<" + elementType + ">();");
+        sb.AppendLine("            var items = global::System.Array.Empty<" + elementType + ">();");
         sb.AppendLine("            int itemCount = 0;");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
@@ -324,7 +324,7 @@ public static class MultiDimensionalArrayEmitter
             sb.AppendLine("            evaluator += checked(" + PortableStructEmitter.PayloadSize(portable, "value.Length") + ");");
             return;
         }
-        string elementType = GetElementType(fieldData.TypeName);
+        string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         if (HasRawElements(fieldData, elementType))
         {
             // The writer copies raw elements as one row-major block, whatever framing their per-value formatter adds.
@@ -350,21 +350,16 @@ public static class MultiDimensionalArrayEmitter
     /// <summary>Obtains the rank for the supplied input.</summary>
     /// <param name="typeName">The C# type name to use in generated source.</param>
     /// <returns>The result of the operation.</returns>
-    private static int GetRank(string typeName)
+    internal static int GetRank(string typeName)
     {
-        int open = typeName.LastIndexOf('[');
+        int open = ArrayEmitter.OuterRankStart(typeName);
+        if (open < 0) return 0;
         int rank = 1;
-        for (int i = open; i < typeName.Length; i++)
-        {
+        for (int i = open + 1; typeName[i] != ']'; i++)
             if (typeName[i] == ',') rank++;
-        }
         return rank;
     }
 
-    /// <summary>Obtains the element type for the supplied input.</summary>
-    /// <param name="typeName">The C# type name to use in generated source.</param>
-    /// <returns>The result of the operation.</returns>
-    private static string GetElementType(string typeName) => typeName.Substring(0, typeName.LastIndexOf('['));
     /// <summary>Performs the join dimensions step for the current operation.</summary>
     /// <param name="rank">The rank used by this operation.</param>
     /// <returns>The result of the operation.</returns>

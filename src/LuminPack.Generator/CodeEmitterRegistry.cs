@@ -296,7 +296,7 @@ namespace LuminPack.SourceGenerator
         public static (Action<LuminLocalFieldData, StringBuilder> Write, Action<LuminLocalFieldData, StringBuilder> Read, Action<LuminLocalFieldData, StringBuilder> WriteJson, Action<LuminLocalFieldData, StringBuilder> ReadJson) GetEmitter(string typeName)
         {
 
-            if (typeName.EndsWith("[]"))
+            if (MultiDimensionalArrayEmitter.GetRank(typeName) == 1)
             {
                 return (ArrayEmitter.GenerateSerializeCode, ArrayEmitter.GenerateDeserializeCode,
                     ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode);
@@ -333,11 +333,11 @@ namespace LuminPack.SourceGenerator
         public static (Action<LuminLocalFieldData, StringBuilder>, Action<LuminLocalFieldData, StringBuilder>) GetCompressEmitter(string typeName)
         {
             // T[] — any array type
-            if (typeName.EndsWith("[]"))
+            if (MultiDimensionalArrayEmitter.GetRank(typeName) == 1)
             {
                 // Primitive/known-value arrays registered in Emitters use the
                 // UnmanagedArrayEmitter compress path directly.
-                string baseTypeName = typeName.Substring(0, typeName.Length - 2);
+                string baseTypeName = ArrayEmitter.GetArrayElementTypeName(typeName);
                 if (KnownValueTypes.Contains(baseTypeName) ||
                     Emitters.ContainsKey(typeName))
                 {

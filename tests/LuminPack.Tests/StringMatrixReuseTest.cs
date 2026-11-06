@@ -9,6 +9,35 @@ namespace LuminPackUnitTest;
 /// <summary>Checks ownership and failure publication in generated binary string matrix readers.</summary>
 public sealed class StringMatrixReuseTest
 {
+    /// <summary>Checks that a vector of matrices and a matrix of vectors preserve their distinct outer ranks.</summary>
+    [Fact]
+    public void MixedArrayRanksUseTheOuterCollectionFormatter()
+    {
+        string[][,] matrices = [new string[,] { { "one", "two" } }, new string[0, 3]];
+        string[,][] vectors = { { new[] { "one", "two" }, Array.Empty<string>() } };
+        string[][,]? readMatrices = null;
+        string[,][]? readVectors = null;
+        foreach (bool json in new[] { false, true })
+        {
+            if (json)
+            {
+                LuminPackSerializer.DeserializeJson(LuminPackSerializer.SerializeJson(matrices), ref readMatrices);
+                LuminPackSerializer.DeserializeJson(LuminPackSerializer.SerializeJson(vectors), ref readVectors);
+            }
+            else
+            {
+                LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(matrices), ref readMatrices);
+                LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(vectors), ref readVectors);
+            }
+            Assert.Equal(2, readMatrices!.Length);
+            Assert.Equal("two", readMatrices[0][0, 1]);
+            Assert.Equal(3, readMatrices[1].GetLength(1));
+            Assert.Equal(2, readVectors!.GetLength(1));
+            Assert.Equal(vectors[0, 0], readVectors[0, 0]);
+            Assert.Empty(readVectors[0, 1]);
+        }
+    }
+
     /// <summary>Retains both the matching matrix and equal strings, including empty shapes.</summary>
     [Fact]
     public void SameShapePublishesThroughExistingReferences()

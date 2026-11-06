@@ -9,20 +9,34 @@ using static CodeEmitterRegistry;
 /// <summary>Provides array emitter functionality.</summary>
 public static class ArrayEmitter
 {
-    /// <summary>Removes the final single-dimensional array suffix with the original whitespace rule.</summary>
+    /// <summary>Finds the first rank in a C# array suffix, which describes the outermost array.</summary>
+    /// <param name="typeName">The displayed type, possibly containing generic array arguments.</param>
+    /// <returns>The opening bracket of the outermost array or minus one for another type.</returns>
+    internal static int OuterRankStart(string typeName)
+    {
+        int end = typeName.Length - 1;
+        while (end >= 0 && char.IsWhiteSpace(typeName[end])) end--;
+        int outer = -1;
+        while (end >= 0 && typeName[end] == ']')
+        {
+            int open = typeName.LastIndexOf('[', end);
+            if (open < 0) return -1;
+            outer = open;
+            end = open - 1;
+            while (end >= 0 && char.IsWhiteSpace(typeName[end])) end--;
+        }
+        return outer;
+    }
+
+    /// <summary>Removes the outer rank while preserving all nested array ranks.</summary>
     /// <param name="typeName">The displayed array type.</param>
-    /// <returns>The unchanged prefix, or the original name when no suffix matches.</returns>
+    /// <returns>The C# element type.</returns>
     internal static string GetArrayElementTypeName(string typeName)
     {
         if (typeName is null) global::LuminPack.SourceGenerator.LuminPackExceptionHelper.ThrowArgumentNullException("input");
-        int index = typeName.Length - 1;
-        while (index >= 0 && char.IsWhiteSpace(typeName[index])) index--;
-        if (index < 0 || typeName[index] != ']') return typeName;
-        index--;
-        while (index >= 0 && char.IsWhiteSpace(typeName[index])) index--;
-        return index >= 0 && typeName[index] == '[' ? typeName.Substring(0, index) : typeName;
+        int open = OuterRankStart(typeName);
+        return open < 0 ? typeName : typeName.Remove(open, typeName.IndexOf(']', open) - open + 1).TrimEnd();
     }
-
 
     /// <summary>Appends binary writing statements for array values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
@@ -261,7 +275,7 @@ public static class ArrayEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            reader.TryConsumeArrayStart();");
-        sb.AppendLine("            if (value is not null && value.GetType() == typeof(" + elementType + "[]) && reader.CountArrayElements() == value.Length)");
+        sb.AppendLine("            if (value is not null && value.GetType() == typeof(" + fieldData.TypeName + ") && reader.CountArrayElements() == value.Length)");
         sb.AppendLine("            {");
         sb.AppendLine("                for (int i = 0; i < value.Length; i++)");
         sb.AppendLine("                {");
@@ -271,7 +285,7 @@ public static class ArrayEmitter
         sb.AppendLine("                reader.ConsumeArrayEnd();");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            " + elementType + "[]? buffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(4);");
+        sb.AppendLine("            " + fieldData.TypeName + "? buffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(4);");
         sb.AppendLine("            int count = 0;");
         sb.AppendLine("            int capacity = buffer.Length;");
         sb.AppendLine("            try");
@@ -290,7 +304,7 @@ public static class ArrayEmitter
         sb.AppendLine("                    if (count >= capacity)");
         sb.AppendLine("                    {");
         sb.AppendLine("                        int newCapacity = capacity * 2;");
-        sb.AppendLine("                        " + elementType + "[] newBuffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(newCapacity);");
+        sb.AppendLine("                        var newBuffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(newCapacity);");
         sb.AppendLine("                        buffer.AsSpan(0, count).CopyTo(newBuffer);");
         sb.AppendLine("                        global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(buffer, clearArray: " + clearPooledArray + ");");
         sb.AppendLine("                        buffer = newBuffer;");

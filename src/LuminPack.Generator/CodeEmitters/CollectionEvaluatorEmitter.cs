@@ -15,7 +15,7 @@ public static class CollectionEvaluatorEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateArrayCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        string elementType = fieldData.TypeName.Substring(0, fieldData.TypeName.LastIndexOf("[]", System.StringComparison.Ordinal));
+        string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
         sb.AppendLine("                evaluator += sizeof(int);");

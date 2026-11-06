@@ -20,7 +20,7 @@ public static class EvaluatorEmitterRegistry
             return UnityObjectEmitter.Size;
         if (MultiDimensionalArrayEmitter.IsMultiDimensionalArray(typeName))
             return MultiDimensionalArrayEmitter.GenerateCalculateOffsetCode;
-        if (typeName.EndsWith("[]", StringComparison.Ordinal))
+        if (MultiDimensionalArrayEmitter.GetRank(typeName) == 1)
         {
             return CollectionEvaluatorEmitter.GenerateArrayCalculateOffsetCode;
         }
