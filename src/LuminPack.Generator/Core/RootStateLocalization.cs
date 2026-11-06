@@ -94,6 +94,9 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
             payload.StartsWith("global::System.Collections.Generic.SortedList<", System.StringComparison.Ordinal) &&
             Own(body).OfType<InvocationExpressionSyntax>().Any(call =>
                 call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CompleteRun" });
+        // ReadStrings already owns the element loop. Keep its localized reader out of the
+        // public span entry so that entry can optimize its own state acquisition and release.
+        bool inlineRoot = !bulkStringRead && !sortedListRun && InlinedSize(body) <= InlineStatementLimit && !Enumerates(body);
         var attributes = method.AttributeLists.Select(list => list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
             !attribute.Name.ToString().EndsWith("MethodImpl", System.StringComparison.Ordinal))))).Where(list => list.Attributes.Count != 0);
         return method.WithBody(body).WithAttributeLists(SyntaxFactory.List(attributes))
@@ -101,7 +104,7 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
             SyntaxFactory.Attribute(SyntaxFactory.ParseName("global::System.Runtime.CompilerServices.MethodImpl"),
                 SyntaxFactory.AttributeArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.AttributeArgument(
                     SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.MethodImplOptions." +
-                        (!sortedListRun && InlinedSize(body) <= InlineStatementLimit && !Enumerates(body) ? "AggressiveInlining" : "NoInlining")))))))));
+                        (inlineRoot ? "AggressiveInlining" : "NoInlining")))))))));
     }
 
     /// <summary>Recognizes a root that traverses through an enumerator.</summary>
