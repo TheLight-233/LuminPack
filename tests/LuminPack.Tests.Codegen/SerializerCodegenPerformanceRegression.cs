@@ -485,7 +485,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             "An open generic list bypassed its possible Custom formatter contract: " + generic);
     }
 
-    /// <summary>Restricts cached dictionary string widths to element operations that cannot replace writer state.</summary>
+    /// <summary>Keeps dictionary string headers behind each string write and raw entry copies behind their own member contracts.</summary>
     /// <param name="compilation">Runtime references and existing managed model symbols.</param>
     private static void VerifyDictionaryHeaderTemplates(CSharpCompilation compilation)
     {
@@ -519,8 +519,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             };
             var text = new System.Text.StringBuilder();
             LuminPack.SourceGenerator.CodeEmitters.DictionaryEmitter.GenerateSerializeCode(metadata, text);
-            Require(text.ToString().Contains("int stringRecordLength = writer.StringRecordLength();", StringComparison.Ordinal) ==
-                (memberName is "Stable" or "Both"), "Dictionary string headers escaped their state-stability proof for " + memberName + ".");
+            Require(!text.ToString().Contains("stringRecordLength", StringComparison.Ordinal), "A dictionary cached a string header width across element writes for " + memberName + ".");
             string generated = text.ToString();
             Require(generated.Contains("byte>(ref entry.Key)", StringComparison.Ordinal) == (memberName is "RawKey") &&
                 generated.Contains("byte>(ref entry.Value)", StringComparison.Ordinal) == (memberName is "Stable" or "RawValue"),
@@ -646,7 +645,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             var block = cursor.Parent as BlockSyntax;
             int index = block?.Statements.IndexOf(cursor) ?? -1;
             // Either the range is checked before the cursor is captured, or the capture only takes the position and the
-            // next statement is the checked Advance (or its lowered EnsureReadable block) that precedes every load.
+            // next statement is the checked Advance (or its lowered EnsureReadable) that precedes every load.
             bool checkedBefore = index > 0 && IsEnsureReadable(block!.Statements[index - 1]);
             bool checkedAfterCapture = index >= 0 && index + 1 < block!.Statements.Count &&
                 cursor.Declaration.Variables.All(variable => variable.Initializer?.Value is RefExpressionSyntax
@@ -663,7 +662,7 @@ internal static partial class SerializerCodegenPerformanceRegression
 
         static bool IsCheckedAdvance(StatementSyntax statement) => statement is ExpressionStatementSyntax
             { Expression: InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax, Name.Identifier.ValueText: "Advance" } } } ||
-            statement is BlockSyntax { Statements.Count: > 0 } lowered && IsEnsureReadable(lowered.Statements[0]);
+            IsEnsureReadable(statement) || statement is BlockSyntax { Statements.Count: > 0 } lowered && IsEnsureReadable(lowered.Statements[0]);
     }
 
     /// <summary>Reports a code-generation or binary contract regression.</summary>

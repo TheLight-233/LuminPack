@@ -174,7 +174,8 @@ internal static class SerializerReferenceCollectionReuseRegression
             {
                 bool dictionaryExpected = type.Contains(", string>", StringComparison.Ordinal) || ordinary && type.Contains(", global::Plain>", StringComparison.Ordinal);
                 Require(method.ToString().Contains("value.GetType() == typeof(", StringComparison.Ordinal) == dictionaryExpected, "Dictionary-interface reuse selection differs: " + type);
-                bool matchingKey = hasStringKeyGuard && dictionaryExpected && type.Contains("<string,", StringComparison.Ordinal);
+                // The concrete reader's staged helper guards every string key; excluded interface values never reach it because their target stays null.
+                bool matchingKey = hasStringKeyGuard && type.Contains("<string,", StringComparison.Ordinal);
                 Require(method.ToString().Contains(".CanReuseEnumeratedStringKey<", StringComparison.Ordinal) == matchingKey, "Enumerated string-key selection differs: " + type);
             }
             if (type.Contains(".SortedList<", StringComparison.Ordinal))

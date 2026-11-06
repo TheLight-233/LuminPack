@@ -102,9 +102,12 @@ internal static class SerializerScalarStorageReuseRegression
             bool matrix = method.ParameterList.Parameters[1].Type is ArrayTypeSyntax array &&
                 array.RankSpecifiers.Any(rank => rank.Rank == 2);
             if (type.Contains(".ReadOnlyMemory<", StringComparison.Ordinal))
-                Require(!method.ToString().Contains("__storage.Count == length", StringComparison.Ordinal), "Read-only memory acquired mutable storage reuse.");
+                Require(!method.ToString().Contains("storage.Count == length", StringComparison.Ordinal) &&
+                    !method.ToString().Contains("TryGetExactArray(", StringComparison.Ordinal), "Read-only memory acquired mutable storage reuse.");
             if (!sequence && !view && !matrix) continue;
-            string marker = sequence ? "value.GetType() == typeof(" : view ? "__storage.Count == length" : "value.GetLowerBound(0)";
+            // Memory reuse locates its exact array slice through TryGetExactArray; ArraySegment compares its own count.
+            string marker = sequence ? "value.GetType() == typeof(" : type.Contains(".Memory<", StringComparison.Ordinal) ? "TryGetExactArray(" :
+                view ? "storage.Count == length" : "value.GetLowerBound(0)";
             Require(method.ToString().Contains(marker, StringComparison.Ordinal) == scalar, "Scalar reuse qualification differs: " + type);
             selected++;
             selectedTypes.Add(type);
