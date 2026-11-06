@@ -190,7 +190,8 @@ internal sealed class StableTypeIdentityFactory
         }
         if (type is not INamedTypeSymbol named || named.IsAnonymousType) return null;
         if (named.IsNativeIntegerType) return new StableTypeIdentity("native", -1, null, null, 0, 0, 0, type.SpecialType, type.NullableAnnotation, null, empty, noNames);
-        if (named.IsTupleType)
+        // CreateTupleTypeSymbol requires at least two elements. Rebind shorter ValueTuple types by metadata name.
+        if (named.IsTupleType && named.TupleElements.Length >= 2)
         {
             var elements = named.TupleElements.Select(field => Create(field.Type)).ToArray();
             if (elements.Any(element => element == null)) return null;

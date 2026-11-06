@@ -38,6 +38,13 @@ internal static class IncrementalGenerationChecks
         Verify("unrelated body", full, Replace(full, "Utility.cs", "17", "18"), 0);
         Verify("one model initializer", full, Replace(full, "A.cs", "= 1", "= 2"), 1);
         Verify("one model member", full, Replace(full, "A.cs", "int Value", "int Renamed"), 1);
+        var tuples = Replace(full, "B.cs", "public long Other;", """
+            public System.ValueTuple Empty;
+            public System.ValueTuple<int> Single;
+            public (int First, System.ValueTuple<string> Last) Pair;
+            """);
+        Verify("cached tuple fields after an unrelated edit", tuples, Replace(tuples, "Utility.cs", "17", "18"));
+        Verify("cached tuple fields after a model edit", tuples, Replace(tuples, "A.cs", "int Value", "long Value"));
         var versioned = Replace(full, "A.cs", "[LuminPack.Attribute.LuminPackable]", "[LuminPack.Attribute.LuminPackable(LuminPack.Attribute.GeneratorType.VersionTolerant)]");
         var oldName = Replace(versioned, "A.cs", "public int Value", "[LuminPack.Attribute.LuminPackOldName(\"Original\")] public int Value");
         Verify("version member alias added", versioned, oldName, 1);
