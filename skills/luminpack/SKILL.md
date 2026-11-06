@@ -52,6 +52,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 - Generic payload APIs (`Serialize<T>`, `Deserialize<T>`, `<T, TOptions>` and `Save<T>` wrappers) require explicit/Custom registration even for built-in and generated types; missing operations throw `LuminPackException`. Concrete calls and `<TOptions>` concrete overloads bind Roots directly. With unsafe disabled or registration disabled, generic payload APIs have no generated fallback. Generic document policies use assembly defaults or the explicit profile.
 - `Register` APIs take function pointers: the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and an `unsafe` block.
 - Reuse is not transactional: a failed read can leave members already updated.
+- The default binary UTF-16 length reader reuses a zero-based `string[,]` when both dimensions match. Aliases observe completed slots even if a later record fails its bounds or string quota. Other string profiles allocate a new matrix.
 - JSON `ref` reads reuse objects, list elements, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked references. Unchanged decoded strings retain identity. JSON `null` clears the target; omitted members reset to `default` on an existing object. Immutable collections keep their construction behavior.
 
 ## Where to look

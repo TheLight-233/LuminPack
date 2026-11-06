@@ -18,6 +18,7 @@ What is kept:
 | --- | --- |
 | Objects | The root keeps its identity. Non-null nested objects, auto-property storage and constructor-bound members are filled in place. A missing child uses its constructor or `[LuminPackPoolRent]` method. |
 | Arrays | Kept when the exact array type and length match. |
+| Binary `string[,]` | The default UTF-16 length reader (`LuminPackUtf16LengthOptions`) fills an existing matrix when both dimensions match and both lower bounds are zero. Other profiles and shapes allocate a matrix. Aliases see updates in row-major order. If a record is truncated or exceeds a string limit, only previously decoded slots have been updated. |
 | `List<T>` | Keeps its capacity and existing elements; grows when needed and clears removed references when it shrinks. |
 | `Dictionary<K,V>` | Keeps its comparer and reuses values by matching incoming keys; removed keys disappear after a successful read. |
 | `SortedList<string,T>` | Reuses a value when the incoming key at the same position is ordinally equal. |

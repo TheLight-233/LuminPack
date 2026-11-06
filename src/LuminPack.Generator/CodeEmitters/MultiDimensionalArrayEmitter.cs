@@ -154,6 +154,14 @@ public static class MultiDimensionalArrayEmitter
         else if (HasRawElements(fieldData, elementType))
             sb.AppendLine("            reader.EnsureCollectionPayload(index, checked(length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + elementType + ">()));");
         if (portable != null) PortableStructEmitter.AppendReadValidation(sb, portable, "length", "index");
+        if (fieldData.CanReuseStringMatrix)
+        {
+            sb.AppendLine("            if (reader.TryGetStringMatrixSlots(value, dimension0, dimension1, out var slots))");
+            sb.AppendLine("            {");
+            sb.AppendLine("                reader.ReadStrings(slots);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
         if (EmitterTypeTraits.IsKnownScalar(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol)) &&
             HasRawElements(fieldData, elementType))
         {

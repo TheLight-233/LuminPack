@@ -108,6 +108,8 @@ public sealed class LuminLocalFieldData
     internal bool CanReadStableStringKeys;
     /// <summary>Whether staged string-key reads can use the framework comparer's matching enumerated value.</summary>
     internal bool CanReuseEnumeratedStringKey;
+    /// <summary>Whether the runtime supports default-profile reuse of a rank-two framework string array.</summary>
+    internal bool CanReuseStringMatrix;
     /// <summary>Stores the certified narrow tags and case types whose existing exact instances an int-keyed dictionary can refill in place.</summary>
     internal System.Collections.Generic.List<(int Id, string Type)> UnionSlotCases;
     /// <summary>Stores the name.</summary>

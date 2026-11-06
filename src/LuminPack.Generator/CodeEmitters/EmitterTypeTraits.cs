@@ -633,6 +633,34 @@ internal static class EmitterTypeTraits
             method.TypeParameters[0].ConstraintTypes.Length == 1 && SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options));
     }
 
+    /// <summary>Checks both projected overloads for selecting and reading existing matrix slots.</summary>
+    /// <param name="compilation">The consumer's runtime and framework metadata.</param>
+    /// <returns>Whether the complete slot selection and read API is available.</returns>
+    internal static bool HasStringMatrixReader(Compilation compilation)
+    {
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var text = compilation.GetSpecialType(SpecialType.System_String);
+        var span = compilation.GetTypeByMetadataName("System.Span`1")?.Construct(text);
+        if (reader == null || options == null || span == null) return false;
+        var matrix = compilation.CreateArrayTypeSymbol(text, 2);
+        bool BothProfiles(string name, System.Func<IMethodSymbol, bool> signature)
+        {
+            var methods = reader.GetMembers(name).OfType<IMethodSymbol>().Where(m => !m.IsStatic && !m.ReturnsByRef &&
+                !m.ReturnsByRefReadonly && m.DeclaredAccessibility == Accessibility.Public && signature(m)).ToArray();
+            return methods.Any(m => m.Arity == 0) && methods.Any(m => m.Arity == 1 && m.TypeParameters[0].HasValueTypeConstraint &&
+                !m.TypeParameters[0].HasUnmanagedTypeConstraint && m.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(m.TypeParameters[0].ConstraintTypes[0], options));
+        }
+        return BothProfiles("TryGetStringMatrixSlots", m => m.ReturnType.SpecialType == SpecialType.System_Boolean &&
+            m.Parameters.Length == 4 && m.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, matrix) &&
+            m.Parameters[1].RefKind == RefKind.None && m.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+            m.Parameters[2].RefKind == RefKind.None && m.Parameters[2].Type.SpecialType == SpecialType.System_Int32 &&
+            m.Parameters[3].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(m.Parameters[3].Type, span)) &&
+            BothProfiles("ReadStrings", m => m.ReturnsVoid && m.Parameters.Length == 1 && m.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, span));
+    }
+
     /// <summary>Checks the writer operations used to reserve and complete runs of UTF-16 records.</summary>
     /// <param name="compilation">The compilation supplying the referenced writer.</param>
     /// <returns>Whether the default and compiled profiles both expose the required record operations.</returns>

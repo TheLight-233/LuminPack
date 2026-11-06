@@ -182,6 +182,8 @@ public static partial class LuminPackExtensionGenerator
             type is INamedTypeSymbol { Name: "Queue" or "Stack", TypeArguments.Length: 1 } linear &&
             linear.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" && linear.TypeArguments[0].SpecialType == SpecialType.System_String)
             field.CanWriteStringPrefix = EmitterTypeTraits.HasStringPrefixWriter(compilation, pairs: false);
+        if (type is IArrayTypeSymbol { Rank: 2, ElementType.SpecialType: SpecialType.System_String })
+            field.CanReuseStringMatrix = EmitterTypeTraits.HasStringMatrixReader(compilation);
         if (type is INamedTypeSymbol { MetadataName: "ImmutableHashSet`1" or "IImmutableSet`1", TypeArguments.Length: 1 } immutableHashSet &&
             immutableHashSet.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
             field.CanBuildFrameworkImmutableHashSet = EmitterTypeTraits.CanBuildFrameworkImmutableHashSet(immutableHashSet.TypeArguments[0], compilation);

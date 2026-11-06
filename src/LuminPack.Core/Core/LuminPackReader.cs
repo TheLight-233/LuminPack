@@ -1168,6 +1168,37 @@ namespace LuminPack.Core
             where TOptions : struct, ILuminPackOptions =>
             ConstantStringProfile<TOptions>() && ReferenceEquals(comparer, EqualityComparer<string>.Default);
 
+        /// <summary>Gets the reusable row-major slots for a validated default-profile string matrix.</summary>
+        /// <param name="matrix">The existing target.</param>
+        /// <param name="rows">The validated incoming row count.</param>
+        /// <param name="columns">The validated incoming column count.</param>
+        /// <param name="slots">The matching slots, including an empty span for matching empty shapes.</param>
+        /// <returns>Whether the existing matrix can be filled in place.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetStringMatrixSlots(string?[,]? matrix, int rows, int columns, out Span<string?> slots) =>
+            TryGetStringMatrixSlots<LuminPackUtf16LengthOptions>(matrix, rows, columns, out slots);
+
+        /// <summary>Gets the reusable slots for the framework's default binary UTF-16 length profile.</summary>
+        /// <typeparam name="TOptions">The effective compiled profile.</typeparam>
+        /// <param name="matrix">The existing target.</param>
+        /// <param name="rows">The validated incoming row count.</param>
+        /// <param name="columns">The validated incoming column count.</param>
+        /// <param name="slots">The matching row-major string slots.</param>
+        /// <returns>Whether this profile and shape permit reuse.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryGetStringMatrixSlots<TOptions>(string?[,]? matrix, int rows, int columns, out Span<string?> slots)
+            where TOptions : struct, ILuminPackOptions
+        {
+            slots = default;
+            if (typeof(TOptions) != typeof(LuminPackUtf16LengthOptions) || matrix is null ||
+                matrix.GetLength(0) != rows || matrix.GetLength(1) != columns ||
+                matrix.GetLowerBound(0) != 0 || matrix.GetLowerBound(1) != 0) return false;
+            if (matrix.Length != 0) slots = MemoryMarshal.CreateSpan(ref matrix[0, 0], matrix.Length);
+            return true;
+        }
+
         /// <summary>Reads a string with the default compiled profile, retaining equal immutable storage.</summary>
         /// <param name = "value">The current string and destination for the parsed string.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
