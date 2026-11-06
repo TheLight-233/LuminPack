@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Option;
 using static LuminPack.Code.LuminPackMarshal;
@@ -274,7 +275,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     {
         int index = CurrentIndex;
         if ((uint)count > (uint)(_capacity - index))
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(count));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(count));
         _writtenCount = index + count;
         _liveIndex = 0;
     }
@@ -319,7 +320,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     private void GrowForHint(int index, int sizeHint)
     {
         if (sizeHint < 0)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(sizeHint));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(sizeHint));
         EnsureCapacity(checked(index + Math.Max(sizeHint, 1)));
     }
 
@@ -344,7 +345,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
             Grow(InitialBufferSize);
 
         if ((uint)index > (uint)CurrentIndex)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(index));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(index));
 
         return new Memory<byte>(GetSpan().Slice(index).ToArray());
     }
@@ -562,7 +563,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     public int CompressToAndReset(LuminBufferWriter destination)
     {
         if (ReferenceEquals(this, destination))
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Source and destination writers must be different instances.", nameof(destination));
+            LuminPackExceptionHelper.ThrowArgumentException("Source and destination writers must be different instances.", nameof(destination));
         try
         {
             return LuminCompressor.Compress(this, destination);
@@ -589,7 +590,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     public int DecompressToAndReset(LuminBufferWriter destination)
     {
         if (ReferenceEquals(this, destination))
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Source and destination writers must be different instances.", nameof(destination));
+            LuminPackExceptionHelper.ThrowArgumentException("Source and destination writers must be different instances.", nameof(destination));
         try
         {
             return LuminCompressor.Decompress(this, destination);
@@ -717,7 +718,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     internal void EnsureCapacity(int minCapacity)
     {
         if (minCapacity < 0)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(minCapacity));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(minCapacity));
 
         if (_capacity < minCapacity)
             Grow(CalculateExpandedCapacity(_capacity, minCapacity, reserveWriteHeadroom: true));

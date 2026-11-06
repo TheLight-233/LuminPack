@@ -2,6 +2,7 @@ namespace LuminPack.Utility;
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using LuminPack.Code;
 
 #if NET8_0_OR_GREATER
 /// <summary>Provides i pooled object policy functionality.</summary>
@@ -77,7 +78,7 @@ public sealed class ObjectPool<T>
         int maxSize = 16)
     {
         if (maxSize < 0)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(maxSize));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(maxSize));
 
         _poolId = Interlocked.Increment(ref s_nextPoolId);
         if (_poolId == 0)
@@ -90,7 +91,7 @@ public sealed class ObjectPool<T>
 
 #if !NET8_0_OR_GREATER
         if (policy is null)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(policy));
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(policy));
 
         _policy = policy;
 #endif
@@ -192,7 +193,7 @@ public sealed class ObjectPool<T>
     public void Resize(int newSize)
     {
         if (newSize < 0)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(newSize));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(newSize));
 
         var oldRing = Volatile.Read(ref _ring);
         var newRing = new RingBuffer(Math.Max(1, newSize));

@@ -662,7 +662,7 @@ public static unsafe partial class StringSerializer
 #endif
             if (length > 16)
             {
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, length);
+                LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, length);
                 return;
             }
 
@@ -681,7 +681,7 @@ public static unsafe partial class StringSerializer
             return;
         }
 
-        global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, length);
+        LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, length);
     }
 
 #if NET8_0_OR_GREATER
@@ -1151,7 +1151,7 @@ public static unsafe partial class StringSerializer
         int bytesToCopy = maxChars * sizeof(char);
         if (bytesToCopy > 0)
         {
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(destination)), ref MemoryMarshal.GetReference(source), (uint)bytesToCopy);
+            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(destination)), ref MemoryMarshal.GetReference(source), (uint)bytesToCopy);
         }
 
         bytesRead = bytesToCopy;

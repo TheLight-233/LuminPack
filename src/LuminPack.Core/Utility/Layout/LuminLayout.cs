@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 #if NETSTANDARD2_1
 using System.Threading;
 #endif
@@ -185,7 +186,7 @@ internal sealed class LuminLayout
             for (int index = 0; index < segments.Length; index++)
             {
                 var segment = segments[index];
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref to, unchecked((nint)(uint)(segment.Destination))), ref Unsafe.Add(ref from, unchecked((nint)(uint)(segment.Source))), (uint)segment.Length);
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref to, unchecked((nint)(uint)(segment.Destination))), ref Unsafe.Add(ref from, unchecked((nint)(uint)(segment.Source))), (uint)segment.Length);
             }
         }
     }

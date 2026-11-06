@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using LuminPack.Code;
 
 namespace LuminPack.Core
 {
@@ -96,7 +97,7 @@ namespace LuminPack.Core
             Span<byte> dest, ulong value, int digits)
         {
             if (dest.Length < digits)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(
+                LuminPackExceptionHelper.ThrowArgumentException(
                     "Destination too small", nameof(dest));
 
             ref byte output = ref MemoryMarshal.GetReference(dest);

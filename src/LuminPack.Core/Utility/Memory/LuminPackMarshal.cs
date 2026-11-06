@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using LuminPack.Attribute;
+using LuminPack.Core;
 
 namespace LuminPack.Code;
 
@@ -449,7 +451,7 @@ public static partial class LuminPackMarshal
         int bytes = checked(count * Unsafe.SizeOf<T>());
         writer.EnsureAdditionalCapacity(checked(sizeof(int) + bytes));
         ref byte cursor = ref writer.CurrentReference;
-        global::LuminPack.Core.LuminPackWriter.Write(ref cursor, in count);
+        LuminPackWriter.Write(ref cursor, in count);
         if (count != 0)
         {
             ref byte destination = ref Unsafe.Add(ref cursor, sizeof(int));
@@ -466,7 +468,7 @@ public static partial class LuminPackMarshal
                 int left = count;
                 do
                 {
-                    global::LuminPack.Core.LuminPackWriter.Write(ref at, in entryCursor.Value);
+                    LuminPackWriter.Write(ref at, in entryCursor.Value);
                     entryCursor = ref Unsafe.Add(ref entryCursor, 1);
                     at = ref Unsafe.Add(ref at, Unsafe.SizeOf<T>());
                 } while (--left != 0);
@@ -478,7 +480,7 @@ public static partial class LuminPackMarshal
                 {
                     ref var current = ref Unsafe.Add(ref entry, (nint)i);
                     if (IsHashTableEntryActive(current.HashCode, current.Next))
-                        global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)written++ * Unsafe.SizeOf<T>()), in current.Value);
+                        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)written++ * Unsafe.SizeOf<T>()), in current.Value);
                 }
             }
         }
@@ -544,8 +546,8 @@ public static partial class LuminPackMarshal
             {
                 ref var current = ref Unsafe.Add(ref entry, (nint)i);
                 ref byte target = ref Unsafe.Add(ref destination, (nint)i * pair);
-                global::LuminPack.Core.LuminPackWriter.Write(ref target, in current.Key);
-                global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref target, unchecked((nint)(uint)(Unsafe.SizeOf<TKey>()))), in current.Value);
+                LuminPackWriter.Write(ref target, in current.Key);
+                LuminPackWriter.Write(ref Unsafe.Add(ref target, unchecked((nint)(uint)(Unsafe.SizeOf<TKey>()))), in current.Value);
             }
         }
     }
@@ -1276,7 +1278,7 @@ public static partial class LuminPackMarshal
     {
 #if !NETSTANDARD2_1
         if (Unsafe.SizeOf<IntPtr>() != 8)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowPlatformNotSupportedException(
+            LuminPackExceptionHelper.ThrowPlatformNotSupportedException(
                 "Direct Dictionary bucket rebuilding requires the modern 64-bit Dictionary layout.");
 #endif
 
@@ -1886,14 +1888,14 @@ public static partial class LuminPackMarshal
     /// <param name="writer">The complete output state.</param>
     /// <param name="set">The original non-null set.</param>
     /// <remarks>Only one- or two-byte dense elements are grouped; other widths, sparse entries and 32-bit targets retain scalar storage.</remarks>
-    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static void WriteSmallHashSetRaw<T>(ref global::LuminPack.Core.LuminPackWriter writer, HashSet<T> set) where T : unmanaged
     {
         int count = set.Count;
         int bytes = checked(count * Unsafe.SizeOf<T>());
         writer.EnsureAdditionalCapacity(checked(sizeof(int) + bytes));
         ref byte cursor = ref writer.CurrentReference;
-        global::LuminPack.Core.LuminPackWriter.Write(ref cursor, in count);
+        LuminPackWriter.Write(ref cursor, in count);
         if (count != 0)
         {
             ref byte destination = ref Unsafe.Add(ref cursor, sizeof(int));
@@ -1911,7 +1913,7 @@ public static partial class LuminPackMarshal
                             (uint)Unsafe.As<T, byte>(ref Unsafe.Add(ref entry, (nint)(uint)(index + 1)).Value) << 8 |
                             (uint)Unsafe.As<T, byte>(ref Unsafe.Add(ref entry, (nint)(uint)(index + 2)).Value) << 16 |
                             (uint)Unsafe.As<T, byte>(ref Unsafe.Add(ref entry, (nint)(uint)(index + 3)).Value) << 24;
-                        global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)index), in packed);
+                        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)index), in packed);
                     }
                 }
                 else if (Unsafe.SizeOf<IntPtr>() == 8 && Unsafe.SizeOf<T>() == 2)
@@ -1922,11 +1924,11 @@ public static partial class LuminPackMarshal
                             (ulong)Unsafe.As<T, ushort>(ref Unsafe.Add(ref entry, (nint)(uint)(index + 1)).Value) << 16 |
                             (ulong)Unsafe.As<T, ushort>(ref Unsafe.Add(ref entry, (nint)(uint)(index + 2)).Value) << 32 |
                             (ulong)Unsafe.As<T, ushort>(ref Unsafe.Add(ref entry, (nint)(uint)(index + 3)).Value) << 48;
-                        global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)index * 2), in packed);
+                        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)index * 2), in packed);
                     }
                 }
                 for (; index < count; index++)
-                    global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)index * Unsafe.SizeOf<T>()), in Unsafe.Add(ref entry, (nint)(uint)index).Value);
+                    LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)index * Unsafe.SizeOf<T>()), in Unsafe.Add(ref entry, (nint)(uint)index).Value);
             }
             else
             {
@@ -1935,7 +1937,7 @@ public static partial class LuminPackMarshal
                 {
                     ref var current = ref Unsafe.Add(ref entry, (nint)(uint)i);
                     if (IsHashTableEntryActive(current.HashCode, current.Next))
-                        global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)written++ * Unsafe.SizeOf<T>()), in current.Value);
+                        LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)written++ * Unsafe.SizeOf<T>()), in current.Value);
                 }
             }
         }

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 
 namespace LuminPack.Utility;
 
@@ -30,7 +31,7 @@ internal sealed class LuminIdentityMap
         int index = Slot(key, mask);
         while (true)
         {
-            object? current = Unsafe.Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value;
+            object? current = Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value;
             if (ReferenceEquals(current, key))
             {
                 exists = true;
@@ -42,7 +43,7 @@ internal sealed class LuminIdentityMap
         exists = false;
         // Keep the load factor at or below one half.
         if (_count >= keys.Length >> 1) return ref AddAfterGrowth(key);
-        Unsafe.Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value = key;
+        Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value = key;
         _count++;
         return ref _values[index];
     }
@@ -66,7 +67,7 @@ internal sealed class LuminIdentityMap
         int mask = keys.Length - 1;
         for (int index = Slot(key, mask);; index = (index + 1) & mask)
         {
-            object? current = Unsafe.Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value;
+            object? current = Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value;
             if (ReferenceEquals(current, key)) return true;
             if (current is null) return false;
         }

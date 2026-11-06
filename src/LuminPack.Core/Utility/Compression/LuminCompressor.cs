@@ -359,13 +359,13 @@ public static class LuminCompressor
             writer.EnsureAdditionalCapacity(compLen);
             ref byte p = ref LuminPackMarshal.GetArrayDataReference(rent);
 #if NET8_0_OR_GREATER
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(
+            LuminPackMarshal.CopyBlockUnaligned(
                 ref writer.Cursor,
                 ref p, (uint)compLen);
 #else
             unsafe
             {
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(
+                LuminPackMarshal.CopyBlockUnaligned(
                     ref Unsafe.AsRef<byte>(writer.Cursor),
                     ref p, (uint)compLen);
             }
@@ -554,7 +554,7 @@ public static class LuminCompressor
                        | (matchNib < 15 ? matchNib : 15));
             op = ref Unsafe.Add(ref op, 1);
             if (litLen >= 15) op = ref WriteLSIC(ref op, litLen - 15);
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref op, ref anchor, (uint)litLen);
+            LuminPackMarshal.CopyBlockUnaligned(ref op, ref anchor, (uint)litLen);
             op = ref Unsafe.Add(ref op, unchecked((nint)(uint)(litLen)));
             op = (byte)matchOff;
             Unsafe.Add(ref op, 1) = (byte)(matchOff >> 8);
@@ -581,7 +581,7 @@ public static class LuminCompressor
             op = (byte)((litLen < 15 ? litLen : 15) << 4);
             op = ref Unsafe.Add(ref op, 1);
             if (litLen >= 15) op = ref WriteLSIC(ref op, litLen - 15);
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref op, ref anchor, (uint)litLen);
+            LuminPackMarshal.CopyBlockUnaligned(ref op, ref anchor, (uint)litLen);
             op = ref Unsafe.Add(ref op, unchecked((nint)(uint)(litLen)));
         }
 
@@ -653,7 +653,7 @@ public static class LuminCompressor
                 if ((uint)litLen > (uint)(int)Unsafe.ByteOffset(ref ip, ref srcEnd)
                  || (uint)litLen > (uint)(int)Unsafe.ByteOffset(ref op, ref dstEnd))
                     ThrowInvalidData();
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref op, ref ip, (uint)litLen);
+                LuminPackMarshal.CopyBlockUnaligned(ref op, ref ip, (uint)litLen);
                 ip = ref Unsafe.Add(ref ip, unchecked((nint)(uint)(litLen)));
                 op = ref Unsafe.Add(ref op, unchecked((nint)(uint)(litLen)));
             }
@@ -751,7 +751,7 @@ public static class LuminCompressor
         if (global::LuminPack.Core.LuminPackBurst.TryCopyMatch(ref dst, len, offset)) return;
 #endif
         if (offset == 1) { Unsafe.InitBlockUnaligned(ref dst, src, (uint)len); return; }
-        if (len <= offset) { global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)len); return; }
+        if (len <= offset) { LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)len); return; }
 
         // Overlapping periodic fill.
         // KEY INSIGHT: when offset >= 8, no single 8-byte read window overlaps
@@ -794,7 +794,7 @@ public static class LuminCompressor
             if (Environment.Is64BitProcess)
                 Unsafe.WriteUnaligned(ref dst, Unsafe.ReadUnaligned<ulong>(ref src));
             else
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, 8);
+                LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, 8);
             dst = ref Unsafe.Add(ref dst, 8);
             src = ref Unsafe.Add(ref src, 8);
         }
@@ -1023,7 +1023,7 @@ public static class LuminCompressor
         if (Environment.Is64BitProcess)
             return Unsafe.ReadUnaligned<ulong>(ref p);
         ulong value = default;
-        global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<ulong, byte>(ref value), ref p, 8);
+        LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<ulong, byte>(ref value), ref p, 8);
         return value;
     }
 
@@ -1073,17 +1073,17 @@ public static class LuminCompressor
     /// <summary>Raises the exception for insufficient buffer.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInsufficientBuffer()
-        => global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Destination buffer is too small for LuminZ operation.");
+        => LuminPackExceptionHelper.ThrowArgumentException("Destination buffer is too small for LuminZ operation.");
 
     /// <summary>Raises the exception for source too large.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowSourceTooLarge()
-        => global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(
+        => LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(
             "sourceLength",
             "Source is too large to represent a bounded LuminZ output in a single Span<byte>.");
 
     /// <summary>Raises the exception for invalid data.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInvalidData()
-        => global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidDataException("LuminZ: compressed data is invalid or corrupted.");
+        => LuminPackExceptionHelper.ThrowInvalidDataException("LuminZ: compressed data is invalid or corrupted.");
 }

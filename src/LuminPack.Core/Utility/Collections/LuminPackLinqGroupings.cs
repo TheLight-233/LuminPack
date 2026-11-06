@@ -1,4 +1,5 @@
 using System.Collections;
+using System.ComponentModel;
 
 namespace LuminPack.Utility;
 
@@ -63,7 +64,7 @@ public sealed class LuminPackLookup<TKey, TElement> : ILookup<TKey, TElement>
 
     /// <summary>Creates an unboxed entry enumerator for generated traversal without allocating a values view.</summary>
     /// <returns>The dictionary enumerator whose values are the lookup's groups in enumeration order.</returns>
-    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public Dictionary<TKey, IGrouping<TKey, TElement>>.Enumerator GetEntryEnumerator() => groupings.GetEnumerator();
 
     /// <summary>Creates an enumerator over the entries in this collection.</summary>

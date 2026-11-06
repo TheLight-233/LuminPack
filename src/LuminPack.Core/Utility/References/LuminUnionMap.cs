@@ -43,7 +43,7 @@ public sealed class LuminUnionMap<TValue>
     /// <param name="capacity">The requested storage capacity.</param>
     public LuminUnionMap(int capacity)
     {
-        if (capacity < 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
+        if (capacity < 0) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
         _capacity = CalculateCapacity(capacity);
         _count = 0;
         InitializeTable();
@@ -118,7 +118,7 @@ public sealed class LuminUnionMap<TValue>
     public void Register(in nint key, TValue value)
     {
         if (!TryRegister(key, value))
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException($"An item with the same key has already been added. Key: {key}");
+            LuminPackExceptionHelper.ThrowArgumentException($"An item with the same key has already been added. Key: {key}");
     }
 
     /// <summary>Attempts to register and reports whether it succeeded.</summary>
@@ -218,7 +218,7 @@ public sealed class LuminUnionMap<TValue>
                 if (oldEntry.Key != default)
                 {
                     if (!TryRegister(oldEntry.Key, oldEntry.Value))
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash during resize");
+                        LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash during resize");
                 }
             }
         }
@@ -258,7 +258,7 @@ public sealed class LuminRawUnionMap<TValue>
     /// <param name="capacity">The requested storage capacity.</param>
     public LuminRawUnionMap(int capacity)
     {
-        if (capacity < 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
+        if (capacity < 0) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
         _capacity = CalculateCapacity(capacity);
         InitializeTable();
     }
@@ -349,7 +349,7 @@ public sealed class LuminRawUnionMap<TValue>
             ref Entry oldEntry = ref oldTable[i];
 #endif
             if (oldEntry.Key != default && !TryRegister(oldEntry.Key, oldEntry.Value))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash raw union map during resize");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash raw union map during resize");
         }
     }
 
@@ -412,7 +412,7 @@ public sealed class LuminFrozenUnionMap<TValue>
     public static LuminFrozenUnionMap<TValue> CreateFrom(LuminUnionMap<TValue> source, int maxSeedSearch = MAX_SEED_SEARCH)
     {
         if (source == null || source._count == 0)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Source map cannot be null or empty");
+            LuminPackExceptionHelper.ThrowArgumentException("Source map cannot be null or empty");
 
         var frozen = new LuminFrozenUnionMap<TValue>();
 
@@ -431,7 +431,7 @@ public sealed class LuminFrozenUnionMap<TValue>
             }
         }
 
-        global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException($"Could not find a perfect hash seed: Keys={source._count}");
+        LuminPackExceptionHelper.ThrowInvalidOperationException($"Could not find a perfect hash seed: Keys={source._count}");
         return frozen;
     }
 

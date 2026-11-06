@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -438,7 +439,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Span<byte> ReserveGeneratedIntegerPrefix(ulong first, ulong last, int byteCount, int maxDigits)
         {
-            return ReserveGeneratedIntegerPrefix<global::LuminPack.Option.LuminPackDefaultOptions>(first, last, byteCount, maxDigits);
+            return ReserveGeneratedIntegerPrefix<LuminPackDefaultOptions>(first, last, byteCount, maxDigits);
         }
 
         /// <summary>Performs the needs json escape step for the current operation.</summary>
@@ -464,9 +465,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private Span<byte> ReserveGeneratedIntegerPrefix<TOptions>(ulong first, ulong last, int byteCount, int maxDigits)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (!(default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if (!(default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Generated integer prefixes require UTF-8");
             if ((uint)(byteCount - 8) > 8)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(byteCount);
@@ -474,8 +475,8 @@ namespace LuminPack.Core
             // reservation also rejects a cursor past the window. Advance only after formatting.
             EnsureCapacity(byteCount + maxDigits);
             ref byte destination = ref Current;
-            global::LuminPack.Core.LuminPackWriter.Write(ref destination, first);
-            global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(byteCount - 8)), last);
+            LuminPackWriter.Write(ref destination, first);
+            LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(byteCount - 8)), last);
             IsFirstElement = false;
             return LuminPackMarshal.CreateSpan(ref Unsafe.Add(ref destination, (nint)(uint)byteCount), maxDigits);
         }
@@ -488,7 +489,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByteRaw(byte value)
         {
-            WriteByteRaw<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteByteRaw<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes raw to the current output.</summary>
@@ -554,8 +555,8 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(Position);
             EnsureCapacity(byteCount);
             ref byte destination = ref Current;
-            global::LuminPack.Core.LuminPackWriter.Write(ref destination, first);
-            global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(byteCount - 8)), last);
+            LuminPackWriter.Write(ref destination, first);
+            LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(byteCount - 8)), last);
             Advance(byteCount);
         }
 
@@ -567,7 +568,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, int value)
         {
-            WriteGeneratedInteger<global::LuminPack.Option.LuminPackDefaultOptions>(first, last, byteCount, value);
+            WriteGeneratedInteger<LuminPackDefaultOptions>(first, last, byteCount, value);
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
@@ -578,7 +579,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, uint value)
         {
-            WriteGeneratedInteger<global::LuminPack.Option.LuminPackDefaultOptions>(first, last, byteCount, value);
+            WriteGeneratedInteger<LuminPackDefaultOptions>(first, last, byteCount, value);
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
@@ -589,7 +590,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, long value)
         {
-            WriteGeneratedInteger<global::LuminPack.Option.LuminPackDefaultOptions>(first, last, byteCount, value);
+            WriteGeneratedInteger<LuminPackDefaultOptions>(first, last, byteCount, value);
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
@@ -600,42 +601,42 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, ulong value)
         {
-            WriteGeneratedInteger<global::LuminPack.Option.LuminPackDefaultOptions>(first, last, byteCount, value);
+            WriteGeneratedInteger<LuminPackDefaultOptions>(first, last, byteCount, value);
         }
 
         /// <summary>Writes comma if needed to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteCommaIfNeeded()
         {
-            WriteCommaIfNeeded<global::LuminPack.Option.LuminPackDefaultOptions>();
+            WriteCommaIfNeeded<LuminPackDefaultOptions>();
         }
 
         /// <summary>Writes object start to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectStart()
         {
-            WriteObjectStart<global::LuminPack.Option.LuminPackDefaultOptions>();
+            WriteObjectStart<LuminPackDefaultOptions>();
         }
 
         /// <summary>Writes object end to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectEnd()
         {
-            WriteObjectEnd<global::LuminPack.Option.LuminPackDefaultOptions>();
+            WriteObjectEnd<LuminPackDefaultOptions>();
         }
 
         /// <summary>Writes array start to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteArrayStart()
         {
-            WriteArrayStart<global::LuminPack.Option.LuminPackDefaultOptions>();
+            WriteArrayStart<LuminPackDefaultOptions>();
         }
 
         /// <summary>Writes array end to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteArrayEnd()
         {
-            WriteArrayEnd<global::LuminPack.Option.LuminPackDefaultOptions>();
+            WriteArrayEnd<LuminPackDefaultOptions>();
         }
 
         /// <summary>Writes property name to the current output.</summary>
@@ -643,7 +644,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName)
         {
-            WritePropertyName<global::LuminPack.Option.LuminPackDefaultOptions>(utf8PropertyName);
+            WritePropertyName<LuminPackDefaultOptions>(utf8PropertyName);
         }
 
         /// <summary>Writes property name to the current output.</summary>
@@ -651,7 +652,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WritePropertyName(ReadOnlySpan<char> utf16PropertyName)
         {
-            WritePropertyName<global::LuminPack.Option.LuminPackDefaultOptions>(utf16PropertyName);
+            WritePropertyName<LuminPackDefaultOptions>(utf16PropertyName);
         }
 
         /// <summary>
@@ -664,53 +665,53 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteFormattedValue(scoped ReadOnlySpan<char> text)
         {
-            WriteFormattedValue<global::LuminPack.Option.LuminPackDefaultOptions>(text);
+            WriteFormattedValue<LuminPackDefaultOptions>(text);
         }
 
         /// <summary>Writes a <see cref = "DateTime"/> in its round-trip ("O") form without allocating a string.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         public void Write(DateTime value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes a <see cref = "DateTimeOffset"/> in its round-trip ("O") form without allocating a string.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         public void Write(DateTimeOffset value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes a <see cref = "Guid"/> in its "D" form without allocating a string.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         public void Write(Guid value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes a <see cref = "TimeSpan"/> in its constant ("c") form without allocating a string.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         public void Write(TimeSpan value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
 #if NET8_0_OR_GREATER
         /// <summary>Writes a date in its round-trip JSON string form.</summary>
         /// <param name="value">The date to write.</param>
-        public void Write(DateOnly value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+        public void Write(DateOnly value) => Write<LuminPackDefaultOptions>(value);
 
         /// <summary>Writes a time in its round-trip JSON string form.</summary>
         /// <param name="value">The time to write.</param>
-        public void Write(TimeOnly value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+        public void Write(TimeOnly value) => Write<LuminPackDefaultOptions>(value);
 
         /// <summary>Writes a signed 128-bit integer as an invariant decimal JSON string.</summary>
         /// <param name="value">The integer to write.</param>
-        public void Write(Int128 value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+        public void Write(Int128 value) => Write<LuminPackDefaultOptions>(value);
 
         /// <summary>Writes an unsigned 128-bit integer as an invariant decimal JSON string.</summary>
         /// <param name="value">The integer to write.</param>
-        public void Write(UInt128 value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+        public void Write(UInt128 value) => Write<LuminPackDefaultOptions>(value);
 #endif
 
         // Conversion: xjb (https://github.com/xjb714/xjb) shortest-decimal core, ported in
@@ -728,7 +729,7 @@ namespace LuminPack.Core
 #endif
         public void Write(float value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes double to the current output.</summary>
@@ -739,7 +740,7 @@ namespace LuminPack.Core
 #endif
         public void Write(double value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes int to the current output.</summary>
@@ -750,7 +751,7 @@ namespace LuminPack.Core
 #endif
         public void Write(int value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes u int to the current output.</summary>
@@ -761,7 +762,7 @@ namespace LuminPack.Core
 #endif
         public void Write(uint value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes byte to the current output.</summary>
@@ -772,7 +773,7 @@ namespace LuminPack.Core
 #endif
         public void Write(byte value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes s byte to the current output.</summary>
@@ -783,7 +784,7 @@ namespace LuminPack.Core
 #endif
         public void Write(sbyte value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes short to the current output.</summary>
@@ -794,7 +795,7 @@ namespace LuminPack.Core
 #endif
         public void Write(short value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes u short to the current output.</summary>
@@ -805,7 +806,7 @@ namespace LuminPack.Core
 #endif
         public void Write(ushort value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes long to the current output.</summary>
@@ -816,7 +817,7 @@ namespace LuminPack.Core
 #endif
         public void Write(long value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes u long to the current output.</summary>
@@ -827,7 +828,7 @@ namespace LuminPack.Core
 #endif
         public void Write(ulong value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes decimal to the current output.</summary>
@@ -838,7 +839,7 @@ namespace LuminPack.Core
 #endif
         public void Write(decimal value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes char to the current output.</summary>
@@ -849,7 +850,7 @@ namespace LuminPack.Core
 #endif
         public void Write(char value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes bool to the current output.</summary>
@@ -857,21 +858,21 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write(bool value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes null to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNull()
         {
-            WriteNull<global::LuminPack.Option.LuminPackDefaultOptions>();
+            WriteNull<LuminPackDefaultOptions>();
         }
 
         /// <summary>Writes null internal to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteNullInternal()
         {
-            WriteNullInternal<global::LuminPack.Option.LuminPackDefaultOptions>();
+            WriteNullInternal<LuminPackDefaultOptions>();
         }
 
         /// <summary>Writes byte raw to the current output.</summary>
@@ -879,9 +880,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WriteByteRaw<TOptions>(byte value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(1);
                 Current = value;
@@ -891,7 +892,7 @@ namespace LuminPack.Core
             {
                 EnsureCapacity(2);
                 ref byte dst = ref Current;
-                global::LuminPack.Core.LuminPackWriter.Write(ref dst, (char)value);
+                LuminPackWriter.Write(ref dst, (char)value);
                 Advance(2);
             }
         }
@@ -904,7 +905,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger<TOptions>(ulong first, ulong last, int byteCount, int value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             Span<byte> number = ReserveGeneratedIntegerPrefix<TOptions>(first, last, byteCount, 11);
             int written = LuminPackJsonNumberFormatter.WriteInt32(number, value);
@@ -919,7 +920,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger<TOptions>(ulong first, ulong last, int byteCount, uint value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             Span<byte> number = ReserveGeneratedIntegerPrefix<TOptions>(first, last, byteCount, 10);
             int written = LuminPackJsonNumberFormatter.WriteUInt32(number, value);
@@ -934,7 +935,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger<TOptions>(ulong first, ulong last, int byteCount, long value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             Span<byte> number = ReserveGeneratedIntegerPrefix<TOptions>(first, last, byteCount, 20);
             int written = LuminPackJsonNumberFormatter.WriteLong(number, value);
@@ -949,7 +950,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger<TOptions>(ulong first, ulong last, int byteCount, ulong value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             Span<byte> number = ReserveGeneratedIntegerPrefix<TOptions>(first, last, byteCount, 20);
             int written = LuminPackJsonNumberFormatter.WriteULong(number, value);
@@ -960,7 +961,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteCommaIfNeeded<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (!IsFirstElement)
             {
@@ -974,7 +975,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WriteObjectStart<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(OpenBrace);
@@ -986,7 +987,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WriteObjectEnd<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteByteRaw<TOptions>(CloseBrace);
             Depth--;
@@ -997,7 +998,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WriteArrayStart<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(OpenBracket);
@@ -1009,7 +1010,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WriteArrayEnd<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteByteRaw<TOptions>(CloseBracket);
             Depth--;
@@ -1021,11 +1022,11 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WritePropertyName<TOptions>(ReadOnlySpan<byte> utf8PropertyName)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 WriteStringContentUtf8Raw<TOptions>(utf8PropertyName);
             else
                 WriteUtf8NameAsUtf16<TOptions>(utf8PropertyName);
@@ -1040,7 +1041,7 @@ namespace LuminPack.Core
         /// <remarks>A UTF-8 sequence never decodes to more UTF-16 code units than it has bytes, so no intermediate string is needed.</remarks>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private void WriteUtf8NameAsUtf16<TOptions>(ReadOnlySpan<byte> utf8PropertyName)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             char[]? rented = null;
             Span<char> chars = utf8PropertyName.Length <= 256
@@ -1062,11 +1063,11 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WritePropertyName<TOptions>(ReadOnlySpan<char> utf16PropertyName)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 WriteStringContentUtf8<TOptions>(utf16PropertyName);
             }
@@ -1090,11 +1091,11 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteFormattedValue<TOptions>(scoped ReadOnlySpan<char> text)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 WriteFormattedAscii(text);
             else
                 WriteRaw(text);
@@ -1131,7 +1132,7 @@ namespace LuminPack.Core
         private void WriteFormattedAscii(scoped ReadOnlySpan<char> text)
         {
             EnsureCapacity(text.Length);
-            var status = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(text, Buffer.Slice(Position), out _, out int written);
+            var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(text, Buffer.Slice(Position), out _, out int written);
             if (status != OperationStatus.Done)
                 LuminPackExceptionHelper.ThrowFailedEncoding(status);
             Advance(written);
@@ -1142,7 +1143,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(DateTime value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1172,7 +1173,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(DateTimeOffset value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1202,7 +1203,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(Guid value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1244,7 +1245,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void Write<TOptions>(TimeSpan value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1475,7 +1476,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void Write<TOptions>(DateOnly value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1501,7 +1502,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void Write<TOptions>(TimeOnly value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1527,7 +1528,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void Write<TOptions>(Int128 value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1553,7 +1554,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The stateless document profile.</typeparam>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void Write<TOptions>(UInt128 value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1580,13 +1581,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(float value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            EnsureCapacity((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 24 : 64);
+            EnsureCapacity((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 24 : 64);
             if (float.IsNaN(value) || float.IsInfinity(value))
                 LuminPackExceptionHelper.ThrowFormatException("NaN and Infinity are not valid JSON numbers");
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 Advance(LuminPackJsonFloatFormatter.WriteFloatUtf8(Buffer.Slice(Position), value));
             }
@@ -1601,13 +1602,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(double value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            EnsureCapacity((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 32 : 64);
+            EnsureCapacity((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 32 : 64);
             if (double.IsNaN(value) || double.IsInfinity(value))
                 LuminPackExceptionHelper.ThrowFormatException("NaN and Infinity are not valid JSON numbers");
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 Advance(LuminPackJsonFloatFormatter.WriteDoubleUtf8(Buffer.Slice(Position), value));
             }
@@ -1622,7 +1623,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(int value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteIntegerValue<TOptions>(value);
         }
@@ -1632,10 +1633,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteIntegerValue<TOptions>(int value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(11);
                 Advance(LuminPackJsonNumberFormatter.WriteInt32(Buffer.Slice(Position), value));
@@ -1654,10 +1655,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(uint value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(10);
                 Advance(LuminPackJsonNumberFormatter.WriteUInt32(Buffer.Slice(Position), value));
@@ -1676,10 +1677,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(byte value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(4); // packed store intentionally writes 4 bytes
                 Advance(LuminPackJsonNumberFormatter.WriteByte(Buffer.Slice(Position), value));
@@ -1698,10 +1699,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(sbyte value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(5); // sign + packed 4-byte store
                 Advance(LuminPackJsonNumberFormatter.WriteSByte(Buffer.Slice(Position), value));
@@ -1720,10 +1721,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(short value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(6);
                 Advance(LuminPackJsonNumberFormatter.WriteShort(Buffer.Slice(Position), value));
@@ -1742,10 +1743,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(ushort value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(5);
                 Advance(LuminPackJsonNumberFormatter.WriteUShort(Buffer.Slice(Position), value));
@@ -1764,7 +1765,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(long value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteIntegerValue<TOptions>(value);
         }
@@ -1774,10 +1775,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteIntegerValue<TOptions>(long value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(20);
                 Advance(LuminPackJsonNumberFormatter.WriteLong(MemoryMarshal.CreateSpan(ref Current, 20), value));
@@ -1796,10 +1797,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(ulong value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(20);
                 Advance(LuminPackJsonNumberFormatter.WriteULong(MemoryMarshal.CreateSpan(ref Current, 20), value));
@@ -1818,10 +1819,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(decimal value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(31);
                 Advance(LuminPackJsonNumberFormatter.WriteDecimal(Buffer.Slice(Position), value));
@@ -1840,7 +1841,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(char value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
@@ -1870,7 +1871,7 @@ namespace LuminPack.Core
                 WriteByteRaw<TOptions>(HexChar((value >> 4) & 0xF));
                 WriteByteRaw<TOptions>(HexChar(value & 0xF));
             }
-            else if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            else if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 if (value <= 0x7F)
                 {
@@ -1900,23 +1901,23 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(bool value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 if (value)
                 {
                     EnsureCapacity(4);
                     ref byte dst = ref Current;
-                    global::LuminPack.Core.LuminPackWriter.Write(ref dst, 0x65757274u); // "true"
+                    LuminPackWriter.Write(ref dst, 0x65757274u); // "true"
                     Advance(4);
                 }
                 else
                 {
                     EnsureCapacity(5);
                     ref byte dst = ref Current;
-                    global::LuminPack.Core.LuminPackWriter.Write(ref dst, 0x736C6166u); // "fals"
+                    LuminPackWriter.Write(ref dst, 0x736C6166u); // "fals"
                     Unsafe.Add(ref dst, 4) = (byte)'e';
                     Advance(5);
                 }
@@ -1949,7 +1950,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WriteNull<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteNullInternal<TOptions>();
@@ -1959,13 +1960,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteNullInternal<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 EnsureCapacity(4);
                 ref byte dst = ref Current;
-                global::LuminPack.Core.LuminPackWriter.Write(ref dst, 0x6C6C756Eu); // "null"
+                LuminPackWriter.Write(ref dst, 0x6C6C756Eu); // "null"
                 Advance(4);
                 return;
             }
@@ -1995,9 +1996,9 @@ namespace LuminPack.Core
 #endif
                 return false;
             ref byte destination = ref Current;
-            global::LuminPack.Core.LuminPackWriter.Write(ref destination, first);
+            LuminPackWriter.Write(ref destination, first);
             if (byteCount == 10)
-                global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, 8), last);
+                LuminPackWriter.Write(ref Unsafe.Add(ref destination, 8), last);
             Advance(byteCount);
             return true;
         }
@@ -2009,14 +2010,14 @@ namespace LuminPack.Core
         /// <param name = "propertyName">The property name used by this operation.</param>
         public void WritePropertyName(string propertyName)
         {
-            WritePropertyName<global::LuminPack.Option.LuminPackDefaultOptions>(propertyName);
+            WritePropertyName<LuminPackDefaultOptions>(propertyName);
         }
 
         /// <summary>Writes string to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         public void Write(string? value)
         {
-            Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            Write<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes string content utf8 to the current output.</summary>
@@ -2024,7 +2025,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8(scoped ReadOnlySpan<char> value)
         {
-            WriteStringContentUtf8<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteStringContentUtf8<LuminPackDefaultOptions>(value);
         }
 
 #if NET8_0_OR_GREATER
@@ -2032,7 +2033,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         private void WriteStringContentUtf8Encoded(scoped ReadOnlySpan<char> value)
         {
-            WriteStringContentUtf8Encoded<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteStringContentUtf8Encoded<LuminPackDefaultOptions>(value);
         }
 
 #endif
@@ -2042,7 +2043,7 @@ namespace LuminPack.Core
         /// <param name = "escapeIndex">The escape index used by this operation.</param>
         private void WriteStringContentUtf8Escaped(scoped ReadOnlySpan<char> value, int escapeIndex)
         {
-            WriteStringContentUtf8Escaped<global::LuminPack.Option.LuminPackDefaultOptions>(value, escapeIndex);
+            WriteStringContentUtf8Escaped<LuminPackDefaultOptions>(value, escapeIndex);
         }
 
 #endif
@@ -2061,7 +2062,7 @@ namespace LuminPack.Core
             }
 
             // Try the actual available space first, including exact-size caller spans.
-            var status = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(value, Buffer.Slice(Position), out _, out int bytesWritten);
+            var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value, Buffer.Slice(Position), out _, out int bytesWritten);
             if (status != OperationStatus.Done)
                 bytesWritten = WriteUtf8StringSegmentSlow(value);
             Advance(bytesWritten);
@@ -2074,7 +2075,7 @@ namespace LuminPack.Core
         {
             while (!value.IsEmpty)
             {
-                var result = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(value, Buffer.Slice(Position), out int charsRead, out int written);
+                var result = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value, Buffer.Slice(Position), out int charsRead, out int written);
                 Advance(written);
                 value = value.Slice(charsRead);
                 if (result == OperationStatus.Done)
@@ -2142,14 +2143,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8Raw(ReadOnlySpan<byte> value)
         {
-            WriteStringContentUtf8Raw<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteStringContentUtf8Raw<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes string content utf8 slow to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         private void WriteStringContentUtf8Slow(ReadOnlySpan<byte> value)
         {
-            WriteStringContentUtf8Slow<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteStringContentUtf8Slow<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes string content utf16 to the current output.</summary>
@@ -2157,7 +2158,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf16(scoped ReadOnlySpan<char> value)
         {
-            WriteStringContentUtf16<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteStringContentUtf16<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes an already-fitting common escape pair without changing cold growth or external output.</summary>
@@ -2181,7 +2182,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         private void WriteStringContentUtf16Slow(scoped ReadOnlySpan<char> value)
         {
-            WriteStringContentUtf16Slow<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteStringContentUtf16Slow<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes utf16 char direct to the current output.</summary>
@@ -2191,7 +2192,7 @@ namespace LuminPack.Core
         {
             EnsureCapacity(2);
             ref byte dst = ref Current;
-            global::LuminPack.Core.LuminPackWriter.Write(ref dst, c);
+            LuminPackWriter.Write(ref dst, c);
             Advance(2);
         }
 
@@ -2208,7 +2209,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         private void WriteStringContentSlow(scoped ReadOnlySpan<char> value)
         {
-            WriteStringContentSlow<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+            WriteStringContentSlow<LuminPackDefaultOptions>(value);
         }
 
         /// <summary>Writes property name to the current output.</summary>
@@ -2216,11 +2217,11 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void WritePropertyName<TOptions>(string propertyName)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 WriteStringContentUtf8<TOptions>(propertyName.AsSpan());
             else
                 WriteStringContentUtf16<TOptions>(propertyName.AsSpan());
@@ -2234,7 +2235,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Write<TOptions>(string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
             if (value == null)
@@ -2246,7 +2247,7 @@ namespace LuminPack.Core
 
             // Reserve the quotes and content together. The transcoder only writes
             // after validating the complete value, so misses retain the normal path.
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) && (uint)(value.Length - 4) <= 28 && global::LuminPack.Internal.ShortAsciiTranscoder.IsSupported)
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) && (uint)(value.Length - 4) <= 28 && global::LuminPack.Internal.ShortAsciiTranscoder.IsSupported)
             {
                 EnsureCapacity(value.Length + 2);
                 if (global::LuminPack.Internal.ShortAsciiTranscoder.TryEncode(value.AsSpan(), Buffer.Slice(Position + 1, value.Length), escapeJson: true))
@@ -2270,7 +2271,7 @@ namespace LuminPack.Core
 
 
             WriteByteRaw<TOptions>(Quote);
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 WriteStringContentUtf8<TOptions>(value.AsSpan());
             }
@@ -2365,44 +2366,44 @@ namespace LuminPack.Core
         /// <param name = "value">The value.</param>
         /// <param name = "separate">Whether a preceding element requires a comma.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteElement(string? value, bool separate) => WriteElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
+        public void WriteElement(string? value, bool separate) => WriteElement<LuminPackDefaultOptions>(value, separate);
 
         /// <summary>Applies <c>WriteElement</c> with the library default profile.</summary>
         /// <param name = "value">The value.</param>
         /// <param name = "separate">Whether a preceding element requires a comma.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteElement(int value, bool separate) => WriteElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
+        public void WriteElement(int value, bool separate) => WriteElement<LuminPackDefaultOptions>(value, separate);
 
         /// <summary>Applies <c>WriteElement</c> with the library default profile.</summary>
         /// <param name = "value">The value.</param>
         /// <param name = "separate">Whether a preceding element requires a comma.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteElement(long value, bool separate) => WriteElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
+        public void WriteElement(long value, bool separate) => WriteElement<LuminPackDefaultOptions>(value, separate);
 
         /// <summary>Applies <c>WriteEntryKey</c> with the library default profile.</summary>
         /// <param name = "key">The entry key.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteEntryKey(string? key) => WriteEntryKey<global::LuminPack.Option.LuminPackDefaultOptions>(key);
+        public void WriteEntryKey(string? key) => WriteEntryKey<LuminPackDefaultOptions>(key);
 
         /// <summary>Applies <c>WriteEntryKey</c> with the library default profile.</summary>
         /// <param name = "key">The entry key.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteEntryKey(int key) => WriteEntryKey<global::LuminPack.Option.LuminPackDefaultOptions>(key);
+        public void WriteEntryKey(int key) => WriteEntryKey<LuminPackDefaultOptions>(key);
 
         /// <summary>Applies <c>WriteEntryValue</c> with the library default profile.</summary>
         /// <param name = "value">The value.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteEntryValue(string? value) => WriteEntryValue<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+        public void WriteEntryValue(string? value) => WriteEntryValue<LuminPackDefaultOptions>(value);
 
         /// <summary>Applies <c>WriteEntryValue</c> with the library default profile.</summary>
         /// <param name = "value">The value.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteEntryValue(int value) => WriteEntryValue<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+        public void WriteEntryValue(int value) => WriteEntryValue<LuminPackDefaultOptions>(value);
 
         /// <summary>Applies <c>WriteEntryValue</c> with the library default profile.</summary>
         /// <param name = "value">The value.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteEntryValue(long value) => WriteEntryValue<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+        public void WriteEntryValue(long value) => WriteEntryValue<LuminPackDefaultOptions>(value);
 
         /// <summary>Writes one string array element and its separator with a single capacity check.</summary>
         /// <param name = "value">The element.</param>
@@ -2414,10 +2415,10 @@ namespace LuminPack.Core
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteElement<TOptions>(string? value, bool separate)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && value != null &&
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && value != null &&
                 (uint)(value.Length - 4) <= 28 && global::LuminPack.Internal.ShortAsciiTranscoder.IsSupported)
             {
                 int length = value.Length;
@@ -2450,9 +2451,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteElement<TOptions>(int value, bool separate)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
             {
                 EnsureCapacity(12);
                 int skip = separate ? 1 : 0;
@@ -2463,7 +2464,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
                 return;
             if (separate)
                 WriteByteRaw<TOptions>(Comma);
@@ -2477,9 +2478,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteElement<TOptions>(long value, bool separate)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
             {
                 EnsureCapacity(21);
                 int skip = separate ? 1 : 0;
@@ -2490,7 +2491,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
                 return;
             if (separate)
                 WriteByteRaw<TOptions>(Comma);
@@ -2500,43 +2501,43 @@ namespace LuminPack.Core
 
         /// <summary>Reports whether the default profile selects the isolated UTF-8 enumeration operation.</summary>
         /// <returns>Whether enumeration uses the UTF-8 integer entry.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool UsesUtf8Enumeration() => UsesUtf8Enumeration<global::LuminPack.Option.LuminPackDefaultOptions>();
+        public readonly bool UsesUtf8Enumeration() => UsesUtf8Enumeration<LuminPackDefaultOptions>();
 
         /// <summary>Reports whether the compiled profile selects the isolated UTF-8 enumeration operation.</summary>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>A profile constant which the JIT folds before executing the loop.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool UsesUtf8Enumeration<TOptions>() where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
-            => default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;
+        public readonly bool UsesUtf8Enumeration<TOptions>() where TOptions : struct, ILuminPackOptions
+            => default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
 
         /// <summary>Writes a generated enumeration element with the default profile.</summary>
         /// <param name="value">The integer element.</param>
         /// <param name="separate">Whether a preceding element requires a comma.</param>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteEnumerationElement(int value, bool separate) => WriteEnumerationElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
+        public void WriteEnumerationElement(int value, bool separate) => WriteEnumerationElement<LuminPackDefaultOptions>(value, separate);
 
         /// <summary>Writes a generated enumeration element with the default profile.</summary>
         /// <param name="value">The integer element.</param>
         /// <param name="separate">Whether a preceding element requires a comma.</param>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteEnumerationElement(long value, bool separate) => WriteEnumerationElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
+        public void WriteEnumerationElement(long value, bool separate) => WriteEnumerationElement<LuminPackDefaultOptions>(value, separate);
 
         /// <summary>Combines an enumeration separator and integer in the generated loop.</summary>
         /// <param name="value">The integer element.</param>
         /// <param name="separate">Whether a preceding element requires a comma.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <remarks>Near a storage boundary, the original separator, flag and scalar operations preserve growth and failure state.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEnumerationElement<TOptions>(int value, bool separate)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(12))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(12))
             {
                 int skip = separate ? 1 : 0;
                 ref byte output = ref Current;
@@ -2545,7 +2546,7 @@ namespace LuminPack.Core
                 IsFirstElement = false;
                 return;
             }
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
                 return;
             if (separate) WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
@@ -2557,12 +2558,12 @@ namespace LuminPack.Core
         /// <param name="separate">Whether a preceding element requires a comma.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <remarks>Near a storage boundary, the original separator, flag and scalar operations preserve growth and failure state.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEnumerationElement<TOptions>(long value, bool separate)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(21))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(21))
             {
                 int skip = separate ? 1 : 0;
                 ref byte output = ref Current;
@@ -2571,7 +2572,7 @@ namespace LuminPack.Core
                 IsFirstElement = false;
                 return;
             }
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
                 return;
             if (separate) WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
@@ -2581,21 +2582,21 @@ namespace LuminPack.Core
         /// <summary>Writes a complete scalar-framed integer dictionary entry with the default profile.</summary>
         /// <param name="key">The entry key.</param>
         /// <param name="value">The entry value.</param>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteIntegerEntry(int key, int value) => WriteIntegerEntry<global::LuminPack.Option.LuminPackDefaultOptions>(key, value);
+        public void WriteIntegerEntry(int key, int value) => WriteIntegerEntry<LuminPackDefaultOptions>(key, value);
 
         /// <summary>Combines one complete scalar-framed entry outside the enumerator's native inline budget.</summary>
         /// <param name="key">The entry key.</param>
         /// <param name="value">The entry value.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <remarks>The fast path cannot resize or call external code. Near a boundary, original array and scalar operations preserve depth, growth and failure state.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteIntegerEntry<TOptions>(int key, int value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(26))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(26))
             {
                 int count = IsFirstElement ? 0 : 1;
                 ref byte output = ref Current;
@@ -2618,21 +2619,21 @@ namespace LuminPack.Core
         /// <summary>Writes a complete scalar-framed integer dictionary entry with the default profile.</summary>
         /// <param name="key">The entry key.</param>
         /// <param name="value">The entry value.</param>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteIntegerEntry(int key, long value) => WriteIntegerEntry<global::LuminPack.Option.LuminPackDefaultOptions>(key, value);
+        public void WriteIntegerEntry(int key, long value) => WriteIntegerEntry<LuminPackDefaultOptions>(key, value);
 
         /// <summary>Combines one complete scalar-framed entry outside the enumerator's native inline budget.</summary>
         /// <param name="key">The entry key.</param>
         /// <param name="value">The entry value.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <remarks>The fast path cannot resize or call external code. Near a boundary, original array and scalar operations preserve depth, growth and failure state.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteIntegerEntry<TOptions>(int key, long value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(35))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(35))
             {
                 int count = IsFirstElement ? 0 : 1;
                 ref byte output = ref Current;
@@ -2646,7 +2647,7 @@ namespace LuminPack.Core
                 IsFirstElement = false;
                 return;
             }
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && HasEnumerationCapacity(70))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && HasEnumerationCapacity(70))
             {
                 int count = IsFirstElement ? 0 : 1;
                 ref char output = ref Unsafe.As<byte, char>(ref Current);
@@ -2783,10 +2784,10 @@ namespace LuminPack.Core
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEntryKey<TOptions>(string? key)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && key != null &&
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && key != null &&
                 (uint)(key.Length - 4) <= 28 && global::LuminPack.Internal.ShortAsciiTranscoder.IsSupported)
             {
                 int length = key.Length;
@@ -2821,9 +2822,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEntryKey<TOptions>(int key)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
             {
                 EnsureCapacity(14);
                 int skip = IsFirstElement ? 0 : 1;
@@ -2837,7 +2838,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryKey(key))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryKey(key))
                 return;
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(OpenBracket);
@@ -2852,10 +2853,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEntryValue<TOptions>(string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && value != null &&
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && value != null &&
                 (uint)(value.Length - 4) <= 28 && global::LuminPack.Internal.ShortAsciiTranscoder.IsSupported)
             {
                 int length = value.Length;
@@ -2884,9 +2885,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEntryValue<TOptions>(int value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
             {
                 EnsureCapacity(12);
                 ref byte output = ref Current;
@@ -2897,7 +2898,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryValue(value))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryValue(value))
                 return;
             WriteIntegerValue<TOptions>(value);
             WriteByteRaw<TOptions>(CloseBracket);
@@ -2909,9 +2910,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEntryValue<TOptions>(long value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
             {
                 EnsureCapacity(21);
                 ref byte output = ref Current;
@@ -2922,7 +2923,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryValue(value))
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16EntryValue(value))
                 return;
             WriteIntegerValue<TOptions>(value);
             WriteByteRaw<TOptions>(CloseBracket);
@@ -2934,7 +2935,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8<TOptions>(scoped ReadOnlySpan<char> value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NETSTANDARD2_1
             if (global::LuminPack.Core.LuminPackBurst.HasAsciiEncode)
@@ -3024,7 +3025,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private void WriteStringContentUtf8Encoded<TOptions>(scoped ReadOnlySpan<char> value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             int escapeIndex = value.IndexOfAny(StringEscapeCharacters);
             if (escapeIndex < 0)
@@ -3041,7 +3042,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private void WriteStringContentUtf8Escaped<TOptions>(scoped ReadOnlySpan<char> value, int escapeIndex)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             while (true)
             {
@@ -3088,7 +3089,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8Raw<TOptions>(ReadOnlySpan<byte> value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             int escapeIndex = value.IndexOfAny(StringEscapeBytes);
@@ -3131,7 +3132,7 @@ namespace LuminPack.Core
             {
                 EnsureCapacity(value.Length);
                 ref byte dst = ref Current;
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref MemoryMarshal.GetReference(value), (uint)value.Length);
+                LuminPackMarshal.CopyBlockUnaligned(ref dst, ref MemoryMarshal.GetReference(value), (uint)value.Length);
                 Advance(value.Length);
             }
             else
@@ -3146,7 +3147,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private void WriteStringContentUtf8Slow<TOptions>(ReadOnlySpan<byte> value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             for (int i = 0; i < value.Length; i++)
             {
@@ -3197,7 +3198,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf16<TOptions>(scoped ReadOnlySpan<char> value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             int escapeIndex = IndexOfJsonEscape(value);
 
@@ -3213,7 +3214,7 @@ namespace LuminPack.Core
                 EnsureCapacity(byteCount);
                 ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value));
                 ref byte dst = ref Current;
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
+                LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
                 Advance(byteCount);
             }
             else
@@ -3237,7 +3238,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private void WriteStringContentUtf16Slow<TOptions>(scoped ReadOnlySpan<char> value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             int lastWritten = 0;
             for (int i = 0; i < value.Length; i++)
@@ -3264,7 +3265,7 @@ namespace LuminPack.Core
                             EnsureCapacity(byteCount);
                             ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
                             ref byte dst = ref Current;
-                            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
+                            LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
                             Advance(byteCount);
                         }
                     }
@@ -3327,7 +3328,7 @@ namespace LuminPack.Core
                 EnsureCapacity(byteCount);
                 ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
                 ref byte dst = ref Current;
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
+                LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
                 Advance(byteCount);
             }
         }
@@ -3339,14 +3340,14 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The stateless serialization profile.</typeparam>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void WriteStringContentUtf16Prefix<TOptions>(scoped ReadOnlySpan<char> value, int escapeIndex)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             var prefix = value.Slice(0, escapeIndex);
             int byteCount = checked(prefix.Length * 2);
             EnsureCapacity(byteCount);
             ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(prefix));
             ref byte dst = ref Current;
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
+            LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
             Advance(byteCount);
             WriteStringContentUtf16Slow<TOptions>(value.Slice(escapeIndex));
         }
@@ -3382,7 +3383,7 @@ namespace LuminPack.Core
                     EnsureCapacity(byteCount);
                     ref byte source = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value));
                     ref byte destination = ref Current;
-                    global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+                    LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
                     Advance(byteCount);
                 }
 
@@ -3446,7 +3447,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private void WriteStringContentSlow<TOptions>(scoped ReadOnlySpan<char> value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             for (int i = 0; i < value.Length; i++)
             {

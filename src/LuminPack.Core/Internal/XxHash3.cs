@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using LuminPack.Code;
 
 namespace LuminPack.Internal
 {
@@ -130,7 +131,7 @@ namespace LuminPack.Internal
         {
             if (Unsafe.SizeOf<IntPtr>() == 8) return Unsafe.ReadUnaligned<ulong>(ref source);
             ulong value = 0;
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<ulong, byte>(ref value), ref source, 8);
+            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<ulong, byte>(ref value), ref source, 8);
             return value;
         }
     }

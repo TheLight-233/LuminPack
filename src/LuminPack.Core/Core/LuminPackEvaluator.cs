@@ -1,13 +1,15 @@
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
+using LuminPack.Option;
 
 namespace LuminPack.Core;
 
 /// <summary>Accumulates the exact binary width of a generated direct record before its allocating write.</summary>
 /// <remarks>Generated code uses this accumulator to size the output array of a direct record exactly. It is not a public
 /// size API; it supports no reference tracking, Union, Custom or registered payload.</remarks>
-[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+[EditorBrowsable(EditorBrowsableState.Never)]
 [StructLayout(LayoutKind.Auto)]
 public ref struct LuminPackEvaluator
 {
@@ -46,13 +48,13 @@ public ref struct LuminPackEvaluator
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int GetStringLength(scoped ref string? value)
-    { return GetStringLength<global::LuminPack.Option.LuminPackDefaultOptions>(ref value); }
+    { return GetStringLength<LuminPackDefaultOptions>(ref value); }
 
     /// <summary>Returns the size of the string header used by the current recording mode.</summary>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int StringRecordLength()
-    { return StringRecordLength<global::LuminPack.Option.LuminPackDefaultOptions>(); }
+    { return StringRecordLength<LuminPackDefaultOptions>(); }
 
     /// <summary>Calculates the serialized size contribution of string utf8.</summary>
     /// <param name="value">The value consumed or produced by this operation.</param>
@@ -90,13 +92,13 @@ public ref struct LuminPackEvaluator
     /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public int GetStringLength<TOptions>(scoped ref string? value)
-        where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        where TOptions : struct, ILuminPackOptions
     {
-        bool utf8 = default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;
+        bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
         var recording = default(TOptions).StringRecording;
-        if (recording == global::LuminPack.Option.LuminPackStringRecording.VarInt)
-            return global::LuminPack.Core.LuminPackWriter.VarIntRecordLength<TOptions>(value);
-        return (utf8, recording == global::LuminPack.Option.LuminPackStringRecording.Token) switch
+        if (recording == LuminPackStringRecording.VarInt)
+            return LuminPackWriter.VarIntRecordLength<TOptions>(value);
+        return (utf8, recording == LuminPackStringRecording.Token) switch
         {
             (true, true) => checked(CalculateStringUtf8(ref value) + 1),
             (true, false) => checked(CalculateStringUtf8(ref value) + sizeof(int) * 2),
@@ -109,12 +111,12 @@ public ref struct LuminPackEvaluator
     /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     public int StringRecordLength<TOptions>()
-        where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        where TOptions : struct, ILuminPackOptions
     {
         var recording = default(TOptions).StringRecording;
-        if (recording == global::LuminPack.Option.LuminPackStringRecording.VarInt)
-            return default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 ? 10 : 5;
-        return (recording == global::LuminPack.Option.LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : sizeof(ushort)) : ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? sizeof(int) * 2 : sizeof(int));
+        if (recording == LuminPackStringRecording.VarInt)
+            return default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 10 : 5;
+        return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : sizeof(ushort)) : ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? sizeof(int) * 2 : sizeof(int));
     }
 
     /// <summary>Adds a byte count to the accumulated width.</summary>

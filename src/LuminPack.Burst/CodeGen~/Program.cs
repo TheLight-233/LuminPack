@@ -34,7 +34,7 @@ foreach (var input in inputs)
         method = (MethodDeclarationSyntax)new RemoveInactiveBranches().Visit(method)!;
         method = method.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword)));
         string body = method.NormalizeWhitespace().ToFullString()
-            .Replace("global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned", "KernelMemory.CopyBlockUnaligned", StringComparison.Ordinal)
+            .Replace("LuminPackMarshal.CopyBlockUnaligned", "KernelMemory.CopyBlockUnaligned", StringComparison.Ordinal)
             .Replace("Unsafe.CopyBlockUnaligned", "KernelMemory.CopyBlockUnaligned", StringComparison.Ordinal)
             .Replace("Environment.Is64BitProcess", "KernelMemory.Is64Bit", StringComparison.Ordinal);
         builder.AppendLine(body);

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -446,7 +447,7 @@ namespace LuminPack.Cryptography
             }
             else
             {
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(keyBytes), "ChaCha20 requires a 16 or 32 byte key.");
+                LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(keyBytes), "ChaCha20 requires a 16 or 32 byte key.");
             }
 
             if (nonceBytes == 12)
@@ -458,7 +459,7 @@ namespace LuminPack.Cryptography
             }
             else
             {
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(nonceBytes), "ChaCha20 requires a 12 byte nonce.");
+                LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(nonceBytes), "ChaCha20 requires a 12 byte nonce.");
             }
         }
 

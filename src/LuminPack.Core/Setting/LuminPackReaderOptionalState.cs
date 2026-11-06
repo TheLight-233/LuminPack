@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using LuminPack.Code;
 using LuminPack.Utility;
@@ -77,7 +78,7 @@ namespace LuminPack.Option
         /// <returns>A reset state owned by the caller until <see cref="Release"/>.</returns>
         /// <remarks>The cached instance stays in its slot while leased, so leasing and releasing store no reference. A nested
         /// or concurrent operation that finds the lease receives an independent state, which then becomes the cached one.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static LuminPackReaderOptionalState Lease(ref LuminPackReaderOptionalState? cache)
         {
@@ -105,7 +106,7 @@ namespace LuminPack.Option
         }
 
         /// <summary>Clears the operation's references and ends the lease obtained from <see cref="Lease"/>.</summary>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Release()
         {
@@ -216,7 +217,7 @@ namespace LuminPack.Option
         /// <returns>Whether the candidate was registered and may be reused; otherwise nothing was registered.</returns>
         /// <remarks>One identity probe both tests and registers the candidate. A few sequential references are scanned
         /// without building the identity index.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public bool ClaimReference(uint id, object candidate)
         {
             if (!reuseIndexInitialized)

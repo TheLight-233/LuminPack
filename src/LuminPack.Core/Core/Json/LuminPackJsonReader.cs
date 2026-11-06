@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Text;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -421,7 +422,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SkipWhitespace()
         {
-            SkipWhitespace<global::LuminPack.Option.LuminPackDefaultOptions>();
+            SkipWhitespace<LuminPackDefaultOptions>();
         }
 
         /// <summary>Determines whether the supplied value has the value state classification.</summary>
@@ -484,7 +485,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void PushContainer(bool isObject)
         {
-            PushContainer<global::LuminPack.Option.LuminPackDefaultOptions>(isObject);
+            PushContainer<LuminPackDefaultOptions>(isObject);
         }
 
         /// <summary>Updates the deep container kind used by the current operation.</summary>
@@ -525,7 +526,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void PopContainer(bool isObject)
         {
-            PopContainer<global::LuminPack.Option.LuminPackDefaultOptions>(isObject);
+            PopContainer<LuminPackDefaultOptions>(isObject);
         }
 
         /// <summary>Re-reads the next character after a separator; returns false at end of input.</summary>
@@ -534,7 +535,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryReadCurrentChar(out char c)
         {
-            return TryReadCurrentChar<global::LuminPack.Option.LuminPackDefaultOptions>(out c);
+            return TryReadCurrentChar<LuminPackDefaultOptions>(out c);
         }
 
         /// <summary>Ensures a number or literal token ends at EOF or at a JSON structural delimiter.</summary>
@@ -542,7 +543,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RequireTokenEndBoundary(int index)
         {
-            RequireTokenEndBoundary<global::LuminPack.Option.LuminPackDefaultOptions>(index);
+            RequireTokenEndBoundary<LuminPackDefaultOptions>(index);
         }
 
         /// <summary>Determines whether the supplied value has the value delimiter at classification.</summary>
@@ -551,7 +552,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsValueDelimiterAt(int index)
         {
-            return IsValueDelimiterAt<global::LuminPack.Option.LuminPackDefaultOptions>(index);
+            return IsValueDelimiterAt<LuminPackDefaultOptions>(index);
         }
 
         /// <summary>
@@ -567,7 +568,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryReadPlainInteger(out long value)
         {
-            return TryReadPlainInteger<global::LuminPack.Option.LuminPackDefaultOptions>(out value);
+            return TryReadPlainInteger<LuminPackDefaultOptions>(out value);
         }
 
         /// <summary>Digit value at <paramref name = "index"/> or 10 when the buffer ends there.</summary>
@@ -576,7 +577,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private uint NumberDigitOrNonDigit(int index)
         {
-            return NumberDigitOrNonDigit<global::LuminPack.Option.LuminPackDefaultOptions>(index);
+            return NumberDigitOrNonDigit<LuminPackDefaultOptions>(index);
         }
 
         /// <summary>
@@ -590,7 +591,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadPropertyName(ReadOnlySpan<byte> utf8Name, ReadOnlySpan<char> utf16Name)
         {
-            return TryReadPropertyName<global::LuminPack.Option.LuminPackDefaultOptions>(utf8Name, utf16Name);
+            return TryReadPropertyName<LuminPackDefaultOptions>(utf8Name, utf16Name);
         }
 
         /// <summary>Determines whether the supplied value has the null classification.</summary>
@@ -604,21 +605,21 @@ namespace LuminPack.Core
         /// <summary>Skips the current JSON value, including any nested containers.</summary>
         public void Skip()
         {
-            Skip<global::LuminPack.Option.LuminPackDefaultOptions>();
+            Skip<LuminPackDefaultOptions>();
         }
 
         /// <summary>Verifies that no non-whitespace JSON remains after the current top-level value.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureEndOfDocument()
         {
-            EnsureEndOfDocument<global::LuminPack.Option.LuminPackDefaultOptions>();
+            EnsureEndOfDocument<LuminPackDefaultOptions>();
         }
 
         /// <summary>Performs the skip scalar token step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipScalarToken()
         {
-            SkipScalarToken<global::LuminPack.Option.LuminPackDefaultOptions>();
+            SkipScalarToken<LuminPackDefaultOptions>();
         }
 
         /// <summary>Performs the parse hex4 step for the current operation.</summary>
@@ -629,14 +630,14 @@ namespace LuminPack.Core
         private static int ParseHex4(ReadOnlySpan<byte> source, int index)
         {
             if (index < 0 || source.Length - index < 4)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
+                LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
             ref byte table = ref MemoryMarshal.GetReference(HexDigits.Values);
             int a = Unsafe.Add(ref table, (nint)(uint)source[index]);
             int b = Unsafe.Add(ref table, (nint)(uint)source[index + 1]);
             int c = Unsafe.Add(ref table, (nint)(uint)source[index + 2]);
             int d = Unsafe.Add(ref table, (nint)(uint)source[index + 3]);
             if (((a | b | c | d) & 0xF0) != 0)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
+                LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
             return (a << 12) | (b << 8) | (c << 4) | d;
         }
 
@@ -648,15 +649,15 @@ namespace LuminPack.Core
         private static int ParseHex4(ReadOnlySpan<char> source, int index)
         {
             if (index < 0 || source.Length - index < 4)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
+                LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
             uint a = source[index], b = source[index + 1], c = source[index + 2], d = source[index + 3];
             if ((a | b | c | d) > 255)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
+                LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
             ref byte table = ref MemoryMarshal.GetReference(HexDigits.Values);
             int first = Unsafe.Add(ref table, (nint)a), second = Unsafe.Add(ref table, (nint)b);
             int third = Unsafe.Add(ref table, (nint)c), fourth = Unsafe.Add(ref table, (nint)d);
             if (((first | second | third | fourth) & 0xF0) != 0)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
+                LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
             return (first << 12) | (second << 8) | (third << 4) | fourth;
         }
 
@@ -687,7 +688,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryConsumeObjectStart()
         {
-            return TryConsumeObjectStart<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return TryConsumeObjectStart<LuminPackDefaultOptions>();
         }
 
         /// <summary>Determines whether the supplied value has the number at end classification.</summary>
@@ -696,7 +697,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsNumberAtEnd(int index)
         {
-            return IsNumberAtEnd<global::LuminPack.Option.LuminPackDefaultOptions>(index);
+            return IsNumberAtEnd<LuminPackDefaultOptions>(index);
         }
 
         /// <summary>Performs the number char at step for the current operation.</summary>
@@ -705,7 +706,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private char NumberCharAt(int index)
         {
-            return NumberCharAt<global::LuminPack.Option.LuminPackDefaultOptions>(index);
+            return NumberCharAt<LuminPackDefaultOptions>(index);
         }
 
         /// <summary>Performs the number digit at step for the current operation.</summary>
@@ -714,7 +715,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private uint NumberDigitAt(int index)
         {
-            return NumberDigitAt<global::LuminPack.Option.LuminPackDefaultOptions>(index);
+            return NumberDigitAt<LuminPackDefaultOptions>(index);
         }
 
         /// <summary>Validates a complete number token: [minus] int [frac] [exp] followed by EOF or a value delimiter.</summary>
@@ -722,7 +723,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         private JsonNumberShape ScanJsonNumber(int start)
         {
-            return ScanJsonNumber<global::LuminPack.Option.LuminPackDefaultOptions>(start);
+            return ScanJsonNumber<LuminPackDefaultOptions>(start);
         }
 
         /// <summary>Converts token digits to mantissa * 10^exponent10 without dropping significant digits.</summary>
@@ -732,7 +733,7 @@ namespace LuminPack.Core
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool TryAccumulateDecimalDigits(in JsonNumberShape shape, out ulong mantissa, out int exponent10)
         {
-            return TryAccumulateDecimalDigits<global::LuminPack.Option.LuminPackDefaultOptions>(in shape, out mantissa, out exponent10);
+            return TryAccumulateDecimalDigits<LuminPackDefaultOptions>(in shape, out mantissa, out exponent10);
         }
 
         // Scan and accumulate together. A valid but inexact/long token can go straight
@@ -747,7 +748,7 @@ namespace LuminPack.Core
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool TryScanFloatingPoint(out ulong mantissa, out int exponent10, out bool negative, out int end, out bool exactMantissa)
         {
-            return TryScanFloatingPoint<global::LuminPack.Option.LuminPackDefaultOptions>(out mantissa, out exponent10, out negative, out end, out exactMantissa);
+            return TryScanFloatingPoint<LuminPackDefaultOptions>(out mantissa, out exponent10, out negative, out end, out exactMantissa);
         }
 
         /// <summary>
@@ -761,7 +762,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryParseDoubleExact(in JsonNumberShape shape, out double value)
         {
-            return TryParseDoubleExact<global::LuminPack.Option.LuminPackDefaultOptions>(in shape, out value);
+            return TryParseDoubleExact<LuminPackDefaultOptions>(in shape, out value);
         }
 
         /// <summary>Attempts to parse float exact and reports whether it succeeded.</summary>
@@ -771,7 +772,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryParseFloatExact(in JsonNumberShape shape, out float value)
         {
-            return TryParseFloatExact<global::LuminPack.Option.LuminPackDefaultOptions>(in shape, out value);
+            return TryParseFloatExact<LuminPackDefaultOptions>(in shape, out value);
         }
 
         /// <summary>Returns the value represented by the current true or false JSON token.</summary>
@@ -784,7 +785,7 @@ namespace LuminPack.Core
                 return true;
             else if (CurrentTokenType == JsonTokenType.False)
                 return false;
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Current token is not a boolean");
+            LuminPackExceptionHelper.ThrowInvalidOperationException("Current token is not a boolean");
             return false;
         }
 
@@ -792,7 +793,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipNumberToken()
         {
-            SkipNumberToken<global::LuminPack.Option.LuminPackDefaultOptions>();
+            SkipNumberToken<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reinterprets the validated UTF-16 number token as characters (callers only use this in UTF-16 mode).</summary>
@@ -811,13 +812,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         internal void SkipWhitespace<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             nint bytes = Remaining;
             int count = 0;
             ref byte first = ref Current;
-            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
             {
                 while (count < bytes)
                 {
@@ -853,7 +854,7 @@ namespace LuminPack.Core
             }
             if (count != 0) Advance(count);
 #else
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 while (Remaining > 0)
                 {
@@ -873,7 +874,7 @@ namespace LuminPack.Core
             {
                 while (Remaining > 1)
                 {
-                    char c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Current);
+                    char c = LuminPackReader.Read<char>(ref Current);
                     if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
                     {
                         if (c == ' ' && Remaining >= 8 && Unsafe.SizeOf<IntPtr>() == 8 && Unsafe.ReadUnaligned<ulong>(ref Current) == 0x0020002000200020UL)
@@ -927,7 +928,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void PushContainer<TOptions>(bool isObject)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             Depth++;
             if (default(TOptions).MaxJsonDepth > 0 && Depth > default(TOptions).MaxJsonDepth)
@@ -955,7 +956,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void PopContainer<TOptions>(bool isObject)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (default(TOptions).ValidateJsonSyntax && (Depth == 0 || IsCurrentContainerObject() != isObject))
                 ThrowMalformedJson("Mismatched JSON closing bracket");
@@ -970,9 +971,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool TryReadCurrentChar<TOptions>(out char c)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 if (Remaining <= 0)
                 {
@@ -990,7 +991,7 @@ namespace LuminPack.Core
                 return false;
             }
 
-            c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Current);
+            c = LuminPackReader.Read<char>(ref Current);
             return true;
         }
 
@@ -999,7 +1000,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void RequireTokenEndBoundary<TOptions>(int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (!default(TOptions).ValidateJsonSyntax)
                 return;
@@ -1013,9 +1014,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool IsValueDelimiterAt<TOptions>(int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 if ((uint)index >= (uint)Buffer.Length)
                     return true;
@@ -1025,7 +1026,7 @@ namespace LuminPack.Core
 
             if (index + 1 >= Buffer.Length)
                 return true;
-            char c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(index)));
+            char c = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(index)));
             return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ']' || c == '}';
         }
 
@@ -1042,10 +1043,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool TryReadPlainInteger<TOptions>(out long value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             value = 0;
-            int step = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
             int i = Position;
             bool negative = false;
             if (!IsNumberAtEnd<TOptions>(i) && NumberCharAt<TOptions>(i) == '-')
@@ -1101,7 +1102,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private uint NumberDigitOrNonDigit<TOptions>(int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions => IsNumberAtEnd<TOptions>(index) ? 10u : NumberDigitAt<TOptions>(index);
+            where TOptions : struct, ILuminPackOptions => IsNumberAtEnd<TOptions>(index) ? 10u : NumberDigitAt<TOptions>(index);
         /// <summary>
         /// Matches an unescaped generated property name and advances to its value token.
         /// A mismatch leaves the reader unchanged so ordinary property lookup can handle
@@ -1113,14 +1114,14 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public bool TryReadPropertyName<TOptions>(ReadOnlySpan<byte> utf8Name, ReadOnlySpan<char> utf16Name)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             int index = Position;
             if ((uint)index >= (uint)Buffer.Length)
                 return false;
             bool comma;
             int end;
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 comma = Buffer[index] == ',';
                 if (comma)
@@ -1189,7 +1190,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public void Skip<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             switch (CurrentTokenType)
             {
@@ -1207,7 +1208,7 @@ namespace LuminPack.Core
                         SkipScalarToken<TOptions>();
                     }
 
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
+                    LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
                     break;
                 }
 
@@ -1229,18 +1230,18 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void EnsureEndOfDocument<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             SkipWhitespace<TOptions>();
             if (Remaining != 0)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected data after the top-level JSON value");
+                LuminPackExceptionHelper.ThrowFormatException("Unexpected data after the top-level JSON value");
         }
 
         /// <summary>Performs the skip scalar token step for the current operation.</summary>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void SkipScalarToken<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             switch (CurrentTokenType)
             {
@@ -1261,7 +1262,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public bool TryConsumeObjectStart<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType == JsonTokenType.ObjectStart)
             {
@@ -1273,7 +1274,7 @@ namespace LuminPack.Core
                 return true;
             }
 
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON object");
+            LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON object");
             return false;
         }
 
@@ -1283,21 +1284,21 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool IsNumberAtEnd<TOptions>(int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions => (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? index >= Buffer.Length : index + 1 >= Buffer.Length;
+            where TOptions : struct, ILuminPackOptions => (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? index >= Buffer.Length : index + 1 >= Buffer.Length;
         /// <summary>Performs the number char at step for the current operation.</summary>
         /// <param name = "index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private char NumberCharAt<TOptions>(int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions => (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? (char)Buffer[index] : global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(index)));
+            where TOptions : struct, ILuminPackOptions => (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? (char)Buffer[index] : LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(index)));
         /// <summary>Performs the number digit at step for the current operation.</summary>
         /// <param name = "index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private uint NumberDigitAt<TOptions>(int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             char c = NumberCharAt<TOptions>(index);
             return (uint)(c - '0');
@@ -1309,9 +1310,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private JsonNumberShape ScanJsonNumber<TOptions>(int start)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
             int i = start;
             bool negative = false;
             if (!IsNumberAtEnd<TOptions>(i) && NumberCharAt<TOptions>(i) == '-')
@@ -1413,9 +1414,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool TryAccumulateDecimalDigits<TOptions>(in JsonNumberShape shape, out ulong mantissa, out int exponent10)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
             mantissa = 0;
             exponent10 = 0;
             int digits = 0;
@@ -1474,9 +1475,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool TryScanFloatingPoint<TOptions>(out ulong mantissa, out int exponent10, out bool negative, out int end, out bool exactMantissa)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
             int index = Position;
             negative = !IsNumberAtEnd<TOptions>(index) && NumberCharAt<TOptions>(index) == '-';
             if (negative)
@@ -1577,7 +1578,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool TryParseDoubleExact<TOptions>(in JsonNumberShape shape, out double value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             value = 0;
             if (!TryAccumulateDecimalDigits<TOptions>(shape, out ulong mantissa, out int exponent10))
@@ -1614,7 +1615,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool TryParseFloatExact<TOptions>(in JsonNumberShape shape, out float value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             value = 0;
             if (!TryAccumulateDecimalDigits<TOptions>(shape, out ulong mantissa, out int exponent10))
@@ -1649,7 +1650,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void SkipNumberToken<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             Position = ScanJsonNumber<TOptions>(Position).End;
         }
@@ -1737,7 +1738,7 @@ namespace LuminPack.Core
         /// <param name="key">The entry key storage.</param>
         /// <param name="value">The entry value storage.</param>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry(ref string key, ref int value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
 
@@ -1746,7 +1747,7 @@ namespace LuminPack.Core
         /// <param name="value">The entry value storage.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry<TOptions>(ref string key, ref int value)
             where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, string, int>(ref key, ref value);
@@ -1755,7 +1756,7 @@ namespace LuminPack.Core
         /// <param name="key">The entry key storage.</param>
         /// <param name="value">The entry value storage.</param>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry(ref string key, ref long value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
 
@@ -1764,7 +1765,7 @@ namespace LuminPack.Core
         /// <param name="value">The entry value storage.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry<TOptions>(ref string key, ref long value)
             where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, string, long>(ref key, ref value);
@@ -1773,7 +1774,7 @@ namespace LuminPack.Core
         /// <param name="key">The entry key storage.</param>
         /// <param name="value">The entry value storage.</param>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry(ref string key, ref string value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
 
@@ -1782,7 +1783,7 @@ namespace LuminPack.Core
         /// <param name="value">The entry value storage.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry<TOptions>(ref string key, ref string value)
             where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, string, string>(ref key, ref value);
@@ -1791,7 +1792,7 @@ namespace LuminPack.Core
         /// <param name="key">The entry key storage.</param>
         /// <param name="value">The entry value storage.</param>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry(ref int key, ref string value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
 
@@ -1800,7 +1801,7 @@ namespace LuminPack.Core
         /// <param name="value">The entry value storage.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCompleteEntry<TOptions>(ref int key, ref string value)
             where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, int, string>(ref key, ref value);
@@ -2254,21 +2255,21 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Read()
         {
-            return Read<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return Read<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads the next JSON token using the configured trusted-input path.</summary>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool ReadTrusted()
         {
-            return ReadTrusted<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadTrusted<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads the next JSON token with structural validation enabled.</summary>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool ReadStrict()
         {
-            return ReadStrict<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadStrict<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads next float value from the current input.</summary>
@@ -2276,7 +2277,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public float ReadNextFloatValue()
         {
-            return ReadNextFloatValue<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadNextFloatValue<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads int from the current input.</summary>
@@ -2284,7 +2285,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int ReadInt()
         {
-            return ReadInt<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadInt<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads u int from the current input.</summary>
@@ -2292,7 +2293,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private uint ReadUInt()
         {
-            return ReadUInt<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadUInt<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads byte from the current input.</summary>
@@ -2300,7 +2301,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte ReadByte()
         {
-            return ReadByte<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadByte<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads s byte from the current input.</summary>
@@ -2308,7 +2309,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private sbyte ReadSByte()
         {
-            return ReadSByte<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadSByte<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads short from the current input.</summary>
@@ -2316,7 +2317,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private short ReadShort()
         {
-            return ReadShort<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadShort<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads u short from the current input.</summary>
@@ -2324,7 +2325,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ushort ReadUShort()
         {
-            return ReadUShort<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadUShort<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads long from the current input.</summary>
@@ -2332,7 +2333,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private long ReadLong()
         {
-            return ReadLong<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadLong<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads u long from the current input.</summary>
@@ -2340,7 +2341,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ulong ReadULong()
         {
-            return ReadULong<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadULong<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads float from the current input.</summary>
@@ -2348,7 +2349,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private float ReadFloat()
         {
-            return ReadFloat<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadFloat<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads double from the current input.</summary>
@@ -2356,7 +2357,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private double ReadDouble()
         {
-            return ReadDouble<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadDouble<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads decimal from the current input.</summary>
@@ -2364,28 +2365,28 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private decimal ReadDecimal()
         {
-            return ReadDecimal<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadDecimal<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads char from the current input.</summary>
         /// <returns>The result of the operation.</returns>
         private char ReadChar()
         {
-            return ReadChar<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadChar<LuminPackDefaultOptions>();
         }
 
         /// <summary>Consumes a true or false literal and updates the current token and reader position.</summary>
         /// <returns>True when a complete boolean literal was consumed.</returns>
         private bool ReadBoolean()
         {
-            return ReadBoolean<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadBoolean<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads null from the current input.</summary>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool ReadNull()
         {
-            return ReadNull<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadNull<LuminPackDefaultOptions>();
         }
 
         /// <summary>
@@ -2396,7 +2397,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public bool Read<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (default(TOptions).ValidateJsonSyntax)
                 return ReadStrict<TOptions>();
@@ -2442,13 +2443,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private bool ReadTrusted<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             SkipWhitespace<TOptions>();
             if (Remaining <= 0)
                 return false;
             char c;
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 byte b = Current;
                 c = (char)b;
@@ -2457,7 +2458,7 @@ namespace LuminPack.Core
             {
                 if (Remaining <= 1)
                     return false;
-                c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Current);
+                c = LuminPackReader.Read<char>(ref Current);
             }
 
             while (true)
@@ -2466,26 +2467,26 @@ namespace LuminPack.Core
                 {
                     case '{':
                         CurrentTokenType = JsonTokenType.ObjectStart;
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         Depth++;
                         if (default(TOptions).MaxJsonDepth > 0 && Depth > default(TOptions).MaxJsonDepth)
-                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
+                            LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
                         return true;
                     case '}':
                         CurrentTokenType = JsonTokenType.ObjectEnd;
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         Depth--;
                         return true;
                     case '[':
                         CurrentTokenType = JsonTokenType.ArrayStart;
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         Depth++;
                         if (default(TOptions).MaxJsonDepth > 0 && Depth > default(TOptions).MaxJsonDepth)
-                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
+                            LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
                         return true;
                     case ']':
                         CurrentTokenType = JsonTokenType.ArrayEnd;
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         Depth--;
                         return true;
                     case '"':
@@ -2499,17 +2500,17 @@ namespace LuminPack.Core
                     case ',':
                     case ':':
                     {
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         SkipWhitespace<TOptions>();
                         if (Remaining <= 0)
                             return false;
-                        if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+                        if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                             c = (char)Current;
                         else
                         {
                             if (Remaining <= 1)
                                 return false;
-                            c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Current);
+                            c = LuminPackReader.Read<char>(ref Current);
                         }
 
                         continue;
@@ -2532,7 +2533,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool ReadStrict<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             SkipWhitespace<TOptions>();
             if (Remaining <= 0)
@@ -2543,7 +2544,7 @@ namespace LuminPack.Core
             }
 
             char c;
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 byte b = Current;
                 c = (char)b;
@@ -2557,7 +2558,7 @@ namespace LuminPack.Core
                     return false;
                 }
 
-                c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Current);
+                c = LuminPackReader.Read<char>(ref Current);
             }
 
             while (true)
@@ -2568,28 +2569,28 @@ namespace LuminPack.Core
                     case '{':
                         if (default(TOptions).ValidateJsonSyntax && !IsValueState(state))
                             ThrowMalformedJson("Expected a JSON value");
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         PushContainer<TOptions>(true);
                         CurrentTokenType = JsonTokenType.ObjectStart;
                         return true;
                     case '}':
                         if (default(TOptions).ValidateJsonSyntax && state != JsonStateNameOrEnd && state != JsonStateAfterValue)
                             ThrowMalformedJson("Unexpected '}' in JSON input");
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         PopContainer<TOptions>(true);
                         CurrentTokenType = JsonTokenType.ObjectEnd;
                         return true;
                     case '[':
                         if (default(TOptions).ValidateJsonSyntax && !IsValueState(state))
                             ThrowMalformedJson("Expected a JSON value");
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         PushContainer<TOptions>(false);
                         CurrentTokenType = JsonTokenType.ArrayStart;
                         return true;
                     case ']':
                         if (default(TOptions).ValidateJsonSyntax && state != JsonStateValueOrEnd && state != JsonStateAfterValue)
                             ThrowMalformedJson("Unexpected ']' in JSON input");
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         PopContainer<TOptions>(false);
                         CurrentTokenType = JsonTokenType.ArrayEnd;
                         return true;
@@ -2627,7 +2628,7 @@ namespace LuminPack.Core
                         }
 
                         GrammarState = IsCurrentContainerObject() ? JsonStateName : JsonStateValue;
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         SkipWhitespace<TOptions>();
                         if (!TryReadCurrentChar<TOptions>(out c))
                         {
@@ -2642,7 +2643,7 @@ namespace LuminPack.Core
                         if (default(TOptions).ValidateJsonSyntax && state != JsonStateColon)
                             ThrowMalformedJson("Unexpected ':' in JSON input");
                         GrammarState = JsonStateValue;
-                        Advance((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2);
+                        Advance((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2);
                         SkipWhitespace<TOptions>();
                         if (!TryReadCurrentChar<TOptions>(out c))
                             ThrowMalformedJson("Unexpected end of JSON input after ':'");
@@ -2669,10 +2670,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public float ReadNextFloatValue<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (!Read<TOptions>() || CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected a number in JSON array");
+                LuminPackExceptionHelper.ThrowFormatException("Expected a number in JSON array");
             return ReadFloat<TOptions>();
         }
 
@@ -2681,10 +2682,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private int ReadInt<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain) && plain >= int.MinValue && plain <= int.MaxValue)
                 return (int)plain;
             return ReadIntSlow<TOptions>();
@@ -2695,7 +2696,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private int ReadIntSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger)
@@ -2720,10 +2721,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private uint ReadUInt<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain) && plain >= 0 && plain <= uint.MaxValue)
                 return (uint)plain;
             return ReadUIntSlow<TOptions>();
@@ -2734,7 +2735,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private uint ReadUIntSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger || shape.Negative)
@@ -2751,10 +2752,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private byte ReadByte<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain) && plain >= 0 && plain <= byte.MaxValue)
                 return (byte)plain;
             return ReadByteSlow<TOptions>();
@@ -2765,7 +2766,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private byte ReadByteSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger || shape.Negative)
@@ -2782,10 +2783,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private sbyte ReadSByte<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain) && plain >= sbyte.MinValue && plain <= sbyte.MaxValue)
                 return (sbyte)plain;
             return ReadSByteSlow<TOptions>();
@@ -2796,7 +2797,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private sbyte ReadSByteSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger)
@@ -2821,10 +2822,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private short ReadShort<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain) && plain >= short.MinValue && plain <= short.MaxValue)
                 return (short)plain;
             return ReadShortSlow<TOptions>();
@@ -2835,7 +2836,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private short ReadShortSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger)
@@ -2860,10 +2861,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private ushort ReadUShort<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain) && plain >= 0 && plain <= ushort.MaxValue)
                 return (ushort)plain;
             return ReadUShortSlow<TOptions>();
@@ -2874,7 +2875,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private ushort ReadUShortSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger || shape.Negative)
@@ -2891,10 +2892,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private long ReadLong<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain))
                 return plain;
             return ReadLongSlow<TOptions>();
@@ -2905,7 +2906,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private long ReadLongSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger)
@@ -2930,10 +2931,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private ulong ReadULong<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryReadPlainInteger<TOptions>(out long plain) && plain >= 0)
                 return (ulong)plain;
             return ReadULongSlow<TOptions>();
@@ -2944,7 +2945,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private ulong ReadULongSlow<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             if (!shape.IsInteger || shape.Negative)
@@ -2959,10 +2960,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private float ReadFloat<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryScanFloatingPoint<TOptions>(out ulong mantissa, out int exponent, out bool negative, out int end, out bool exact))
             {
                 float result;
@@ -2979,7 +2980,7 @@ namespace LuminPack.Core
                 }
                 else
                 {
-                    result = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? FallbackParseFloatUtf8(Buffer.Slice(Position, end - Position)) : FallbackParseFloatUtf16(NumberChars(Position, end));
+                    result = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? FallbackParseFloatUtf8(Buffer.Slice(Position, end - Position)) : FallbackParseFloatUtf16(NumberChars(Position, end));
                 }
 
                 Position = end;
@@ -3000,7 +3001,7 @@ namespace LuminPack.Core
             float value;
             if (!TryParseFloatExact<TOptions>(shape, out value))
             {
-                value = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? FallbackParseFloatUtf8(Buffer.Slice(Position, shape.End - Position)) : FallbackParseFloatUtf16(NumberChars(Position, shape.End));
+                value = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? FallbackParseFloatUtf8(Buffer.Slice(Position, shape.End - Position)) : FallbackParseFloatUtf16(NumberChars(Position, shape.End));
             }
 
             Position = shape.End;
@@ -3012,10 +3013,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private double ReadDouble<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             if (TryScanFloatingPoint<TOptions>(out ulong mantissa, out int exponent, out bool negative, out int end, out bool exact))
             {
                 double result;
@@ -3031,7 +3032,7 @@ namespace LuminPack.Core
                 }
                 else
                 {
-                    result = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? FallbackParseDoubleUtf8(Buffer.Slice(Position, end - Position)) : FallbackParseDoubleUtf16(NumberChars(Position, end));
+                    result = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? FallbackParseDoubleUtf8(Buffer.Slice(Position, end - Position)) : FallbackParseDoubleUtf16(NumberChars(Position, end));
                 }
 
                 Position = end;
@@ -3052,7 +3053,7 @@ namespace LuminPack.Core
             double value;
             if (!TryParseDoubleExact<TOptions>(shape, out value))
             {
-                value = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? FallbackParseDoubleUtf8(Buffer.Slice(Position, shape.End - Position)) : FallbackParseDoubleUtf16(NumberChars(Position, shape.End));
+                value = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? FallbackParseDoubleUtf8(Buffer.Slice(Position, shape.End - Position)) : FallbackParseDoubleUtf16(NumberChars(Position, shape.End));
             }
 
             Position = shape.End;
@@ -3064,13 +3065,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private decimal ReadDecimal<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             decimal value;
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 var token = Buffer.Slice(Position, shape.End - Position);
                 if (!Utf8Parser.TryParse(token, out value, out int consumed) || consumed != token.Length)
@@ -3091,9 +3092,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private char ReadChar<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 var utf8 = ReadStringUtf8<TOptions>();
                 if (utf8.Length == 0)
@@ -3116,9 +3117,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool ReadBoolean<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 if (Current == 't')
                 {
@@ -3145,14 +3146,14 @@ namespace LuminPack.Core
             }
             else
             {
-                char c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Current);
+                char c = LuminPackReader.Read<char>(ref Current);
                 if (c == 't')
                 {
                     if (Remaining >= 8)
                     {
-                        char c1 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 2)));
-                        char c2 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 4)));
-                        char c3 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 6)));
+                        char c1 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 2)));
+                        char c2 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 4)));
+                        char c3 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 6)));
                         if (c1 == 'r' && c2 == 'u' && c3 == 'e')
                         {
                             Advance(8);
@@ -3167,10 +3168,10 @@ namespace LuminPack.Core
                 {
                     if (Remaining >= 10)
                     {
-                        char c1 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 2)));
-                        char c2 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 4)));
-                        char c3 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 6)));
-                        char c4 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 8)));
+                        char c1 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 2)));
+                        char c2 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 4)));
+                        char c3 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 6)));
+                        char c4 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 8)));
                         if (c1 == 'a' && c2 == 'l' && c3 == 's' && c4 == 'e')
                         {
                             Advance(10);
@@ -3183,7 +3184,7 @@ namespace LuminPack.Core
                 }
             }
 
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid boolean value");
+            LuminPackExceptionHelper.ThrowFormatException("Invalid boolean value");
             return false;
         }
 
@@ -3192,9 +3193,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private bool ReadNull<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 if (Remaining >= 4 && Current == 'n' && Buffer[Position + 1] == 'u' && Buffer[Position + 2] == 'l' && Buffer[Position + 3] == 'l')
                 {
@@ -3209,10 +3210,10 @@ namespace LuminPack.Core
             {
                 if (Remaining >= 8)
                 {
-                    char c0 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Current);
-                    char c1 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 2)));
-                    char c2 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 4)));
-                    char c3 = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 6)));
+                    char c0 = LuminPackReader.Read<char>(ref Current);
+                    char c1 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 2)));
+                    char c2 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 4)));
+                    char c3 = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position + 6)));
                     if (c0 == 'n' && c1 == 'u' && c2 == 'l' && c3 == 'l')
                     {
                         Advance(8);
@@ -3224,7 +3225,7 @@ namespace LuminPack.Core
                 }
             }
 
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid null value");
+            LuminPackExceptionHelper.ThrowFormatException("Invalid null value");
             return false;
         }
 
@@ -3356,14 +3357,14 @@ namespace LuminPack.Core
 
         /// <summary>Reads a time-zone snapshot using the library default profile.</summary>
         /// <returns>The cached or newly parsed zone.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public TimeZoneInfo? ReadTimeZoneInfo() => ReadTimeZoneInfo<LuminPackDefaultOptions>();
 
         /// <summary>Reads complete snapshot characters before consulting the existing bounded time-zone cache.</summary>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>The original cached or newly parsed zone.</returns>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.NoInlining)]
         public TimeZoneInfo? ReadTimeZoneInfo<TOptions>() where TOptions : struct, ILuminPackOptions
         {
@@ -3541,7 +3542,7 @@ namespace LuminPack.Core
                 return;
             }
             if (CurrentTokenType != JsonTokenType.String)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected string token");
+                LuminPackExceptionHelper.ThrowFormatException("Expected string token");
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
             {
                 var text = ReadStringUtf8<TOptions>();
@@ -3559,12 +3560,12 @@ namespace LuminPack.Core
         /// <summary>Raises the exception for malformed json.</summary>
         /// <param name = "message">The message describing the failure.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void ThrowMalformedJson(string message) => global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(message);
+        private static void ThrowMalformedJson(string message) => LuminPackExceptionHelper.ThrowFormatException(message);
         /// <summary>Performs the skip string token step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringToken()
         {
-            SkipStringToken<global::LuminPack.Option.LuminPackDefaultOptions>();
+            SkipStringToken<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads string utf8 from the current input.</summary>
@@ -3572,7 +3573,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> ReadStringUtf8()
         {
-            return ReadStringUtf8<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadStringUtf8<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads string utf8 from the current input.</summary>
@@ -3581,7 +3582,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<byte> ReadStringUtf8(bool unescape)
         {
-            return ReadStringUtf8<global::LuminPack.Option.LuminPackDefaultOptions>(unescape);
+            return ReadStringUtf8<LuminPackDefaultOptions>(unescape);
         }
 
         /// <summary>Reads string from the current input.</summary>
@@ -3589,7 +3590,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string ReadString()
         {
-            return ReadString<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadString<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads string utf16 from the current input.</summary>
@@ -3597,7 +3598,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<char> ReadStringUtf16()
         {
-            return ReadStringUtf16<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return ReadStringUtf16<LuminPackDefaultOptions>();
         }
 
         /// <summary>Reads string utf16 from the current input.</summary>
@@ -3606,21 +3607,21 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<char> ReadStringUtf16(bool unescape)
         {
-            return ReadStringUtf16<global::LuminPack.Option.LuminPackDefaultOptions>(unescape);
+            return ReadStringUtf16<LuminPackDefaultOptions>(unescape);
         }
 
         /// <summary>Performs the skip string utf8 step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf8()
         {
-            SkipStringUtf8<global::LuminPack.Option.LuminPackDefaultOptions>();
+            SkipStringUtf8<LuminPackDefaultOptions>();
         }
 
         /// <summary>Performs the skip string utf16 step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf16()
         {
-            SkipStringUtf16<global::LuminPack.Option.LuminPackDefaultOptions>();
+            SkipStringUtf16<LuminPackDefaultOptions>();
         }
 
         // The shared scanner already checked literal control characters and the closing quote.
@@ -3745,7 +3746,7 @@ namespace LuminPack.Core
                 if (value != '\\')
                 {
                     if (value < 0x20)
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+                        LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     destination[destinationIndex++] = value;
 #if NET8_0_OR_GREATER
                     if (sourceIndex == literalProbe && source.Length - sourceIndex >= 16 && source[sourceIndex] != '\\')
@@ -3764,7 +3765,7 @@ namespace LuminPack.Core
                 }
 
                 if (sourceIndex >= source.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
+                    LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                 byte escape = source[sourceIndex++];
                 switch (escape)
                 {
@@ -3800,18 +3801,18 @@ namespace LuminPack.Core
                         {
                             if (sourceIndex + 6 > source.Length || source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
                             {
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
                             }
 
                             int low = ParseHex4(source, sourceIndex + 2);
                             if ((uint)(low - 0xDC00) > 0x3FFu)
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+                                LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
                             sourceIndex += 6;
                             scalar = 0x10000 + ((scalar - 0xD800) << 10) + (low - 0xDC00);
                         }
                         else if ((uint)(scalar - 0xDC00) <= 0x3FFu)
                         {
-                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
+                            LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
                         }
 
                         WriteUtf8Scalar(destination, ref destinationIndex, scalar);
@@ -3819,7 +3820,7 @@ namespace LuminPack.Core
                     }
 
                     default:
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
+                        LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
                         break;
                 }
 #if NET8_0_OR_GREATER
@@ -3854,7 +3855,7 @@ namespace LuminPack.Core
                 if (value != '\\')
                 {
                     if (value < 0x20)
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+                        LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     destination[destinationIndex++] = value;
 #if NET8_0_OR_GREATER
                     if (sourceIndex == literalProbe && source.Length - sourceIndex >= 16 && source[sourceIndex] != '\\')
@@ -3873,7 +3874,7 @@ namespace LuminPack.Core
                 }
 
                 if (sourceIndex >= source.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
+                    LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                 char escape = source[sourceIndex++];
                 switch (escape)
                 {
@@ -3909,19 +3910,19 @@ namespace LuminPack.Core
                         {
                             if (sourceIndex + 6 > source.Length || source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
                             {
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
                             }
 
                             int low = ParseHex4(source, sourceIndex + 2);
                             if ((uint)(low - 0xDC00) > 0x3FFu)
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+                                LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
                             sourceIndex += 6;
                             destination[destinationIndex++] = (char)codeUnit;
                             destination[destinationIndex++] = (char)low;
                         }
                         else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
                         {
-                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
+                            LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
                         }
                         else
                         {
@@ -3932,7 +3933,7 @@ namespace LuminPack.Core
                     }
 
                     default:
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
+                        LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
                         break;
                 }
 #if NET8_0_OR_GREATER
@@ -3981,10 +3982,10 @@ namespace LuminPack.Core
         /// <param name = "secondUtf16">The second utf16 used by this operation.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public int ReadStringChoice(ReadOnlySpan<byte> firstUtf8, ReadOnlySpan<char> firstUtf16, ReadOnlySpan<byte> secondUtf8, ReadOnlySpan<char> secondUtf16)
         {
-            return ReadStringChoice<global::LuminPack.Option.LuminPackDefaultOptions>(firstUtf8, firstUtf16, secondUtf8, secondUtf16);
+            return ReadStringChoice<LuminPackDefaultOptions>(firstUtf8, firstUtf16, secondUtf8, secondUtf16);
         }
 
         /// <summary>Performs the parse unsigned digits step for the current operation.</summary>
@@ -3995,7 +3996,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ulong ParseUnsignedDigits(int start, int end, string error)
         {
-            return ParseUnsignedDigits<global::LuminPack.Option.LuminPackDefaultOptions>(start, end, error);
+            return ParseUnsignedDigits<LuminPackDefaultOptions>(start, end, error);
         }
 
 #if NET8_0_OR_GREATER
@@ -4025,9 +4026,9 @@ namespace LuminPack.Core
             else
                 parsed = float.TryParse(span, System.Globalization.NumberStyles.Float, System.Globalization.NumberFormatInfo.InvariantInfo, out v);
             if (!parsed)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+                LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             if (float.IsInfinity(v))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
+                LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
 #else
             char[]? rented = null;
@@ -4052,9 +4053,9 @@ namespace LuminPack.Core
         private static float FallbackParseFloatUtf16(ReadOnlySpan<char> chars)
         {
             if (!float.TryParse(chars, System.Globalization.NumberStyles.Float, System.Globalization.NumberFormatInfo.InvariantInfo, out float v))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+                LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             if (float.IsInfinity(v))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
+                LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
 
@@ -4072,9 +4073,9 @@ namespace LuminPack.Core
             else
                 parsed = double.TryParse(span, System.Globalization.NumberStyles.Float, System.Globalization.NumberFormatInfo.InvariantInfo, out v);
             if (!parsed)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+                LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             if (double.IsInfinity(v))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
+                LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
 #else
             char[]? rented = null;
@@ -4098,9 +4099,9 @@ namespace LuminPack.Core
         private static double FallbackParseDoubleUtf16(ReadOnlySpan<char> chars)
         {
             if (!double.TryParse(chars, System.Globalization.NumberStyles.Float, System.Globalization.NumberFormatInfo.InvariantInfo, out double v))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+                LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             if (double.IsInfinity(v))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
+                LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
 
@@ -4108,9 +4109,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void SkipStringToken<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 SkipStringUtf8<TOptions>();
             else
                 SkipStringUtf16<TOptions>();
@@ -4121,19 +4122,19 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> ReadStringUtf8<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions => ReadStringUtf8<TOptions>(true);
+            where TOptions : struct, ILuminPackOptions => ReadStringUtf8<TOptions>(true);
         /// <summary>Reads string utf8 from the current input.</summary>
         /// <param name = "unescape">The unescape used by this operation.</param>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<byte> ReadStringUtf8<TOptions>(bool unescape)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
-            if (!(default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-16 JSON");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
+            if (!(default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+                LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-16 JSON");
             Advance(1);
             int start = Position;
             int scan = Position;
@@ -4143,15 +4144,15 @@ namespace LuminPack.Core
             if (special >= 0 && remaining[special] == '"')
             {
                 if (default(TOptions).ValidateJsonSyntax && !StringSerializer.IsValidUtf8(remaining.Slice(0, special)))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid UTF-8 in JSON string");
+                    LuminPackExceptionHelper.ThrowFormatException("Invalid UTF-8 in JSON string");
                 Advance(special + 1);
                 return Buffer.Slice(start, special);
             }
 
             if (special < 0)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+                LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
             if (remaining[special] < 0x20)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+                LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
             scan += special;
 #endif
             return ReadStringUtf8Escaped<TOptions>(start, scan, unescape);
@@ -4165,7 +4166,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private ReadOnlySpan<byte> ReadStringUtf8Escaped<TOptions>(int start, int scan, bool unescape)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             bool hasEscape = false;
 #if NET8_0_OR_GREATER
@@ -4193,7 +4194,7 @@ namespace LuminPack.Core
                 {
                     var raw = Buffer.Slice(start, scan - start);
                     if (default(TOptions).ValidateJsonSyntax && !StringSerializer.IsValidUtf8(raw))
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid UTF-8 in JSON string");
+                        LuminPackExceptionHelper.ThrowFormatException("Invalid UTF-8 in JSON string");
                     Position = scan + 1;
                     if (!hasEscape)
                         return raw;
@@ -4207,7 +4208,7 @@ namespace LuminPack.Core
                     hasEscape = true;
                     scan++;
                     if (scan >= Buffer.Length)
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
+                        LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                     scan++;
 #if NET8_0_OR_GREATER
                     literalProbe = unchecked(scan + 32);
@@ -4216,7 +4217,7 @@ namespace LuminPack.Core
                 else
                 {
                     if (b < 0x20)
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+                        LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     scan++;
 #if NET8_0_OR_GREATER
                     if (scan == literalProbe && Buffer.Length - scan >= 32)
@@ -4230,7 +4231,7 @@ namespace LuminPack.Core
                 }
             }
 
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+            LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
             return default;
         }
 
@@ -4239,9 +4240,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private string ReadString<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 var utf8 = ReadStringUtf8<TOptions>();
                 return CreateUtf8String(utf8);
@@ -4288,19 +4289,19 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<char> ReadStringUtf16<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions => ReadStringUtf16<TOptions>(true);
+            where TOptions : struct, ILuminPackOptions => ReadStringUtf16<TOptions>(true);
         /// <summary>Reads string utf16 from the current input.</summary>
         /// <param name = "unescape">The unescape used by this operation.</param>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<char> ReadStringUtf16<TOptions>(bool unescape)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-8 JSON");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
+                LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-8 JSON");
             Advance(2);
             int start = Position;
             int scan = Position;
@@ -4316,9 +4317,9 @@ namespace LuminPack.Core
             }
 
             if (special < 0)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+                LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
             if (charSpan[special] < 0x20)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+                LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
             scan += special * 2;
 #endif
             return ReadStringUtf16Escaped<TOptions>(start, scan, unescape);
@@ -4332,7 +4333,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private ReadOnlySpan<char> ReadStringUtf16Escaped<TOptions>(int start, int scan, bool unescape)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             bool hasEscape = false;
 #if NET8_0_OR_GREATER
@@ -4341,7 +4342,7 @@ namespace LuminPack.Core
 #endif
             while (scan + 1 < Buffer.Length)
             {
-                char c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(scan)));
+                char c = LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(scan)));
                 if (c == '"')
                 {
                     int byteCount = scan - start;
@@ -4361,7 +4362,7 @@ namespace LuminPack.Core
                     hasEscape = true;
                     scan += 2;
                     if (scan + 1 >= Buffer.Length)
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
+                        LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                     scan += 2;
 #if NET8_0_OR_GREATER
                     literalProbe = unchecked(scan + 64);
@@ -4370,7 +4371,7 @@ namespace LuminPack.Core
                 else
                 {
                     if (c < 0x20)
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+                        LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     scan += 2;
 #if NET8_0_OR_GREATER
                     if (scan == literalProbe && Buffer.Length - scan >= 64)
@@ -4384,7 +4385,7 @@ namespace LuminPack.Core
                 }
             }
 
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+            LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
             return default;
         }
 
@@ -4410,7 +4411,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf8<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             _ = ReadStringUtf8<TOptions>(false);
         }
@@ -4419,7 +4420,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf16<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             _ = ReadStringUtf16<TOptions>(false);
         }
@@ -4432,11 +4433,11 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public int ReadStringChoice<TOptions>(ReadOnlySpan<byte> firstUtf8, ReadOnlySpan<char> firstUtf16, ReadOnlySpan<byte> secondUtf8, ReadOnlySpan<char> secondUtf16)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 var value = ReadStringUtf8<TOptions>();
                 if (value.SequenceEqual(firstUtf8))
@@ -4464,9 +4465,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private ulong ParseUnsignedDigits<TOptions>(int start, int end, string error)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            int step = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2;
+            int step = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2;
             if ((end - start) / step > 20)
                 ThrowMalformedJson(error);
             if (end - start == step)
@@ -4515,7 +4516,7 @@ namespace LuminPack.Core
                     scan.Skip<TOptions>();
                     count = checked(count + 1);
                 }
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON array");
+                LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON array");
                 return 0;
             }
             finally
@@ -4529,14 +4530,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryConsumeArrayStart()
         {
-            return TryConsumeArrayStart<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return TryConsumeArrayStart<LuminPackDefaultOptions>();
         }
 
         /// <summary>Performs the consume array end step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ConsumeArrayEnd()
         {
-            ConsumeArrayEnd<global::LuminPack.Option.LuminPackDefaultOptions>();
+            ConsumeArrayEnd<LuminPackDefaultOptions>();
         }
 
         /// <summary>Attempts to consume array start and reports whether it succeeded.</summary>
@@ -4544,13 +4545,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public bool TryConsumeArrayStart<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (CurrentTokenType == JsonTokenType.ArrayStart)
                 return true;
             if (Read<TOptions>() && CurrentTokenType == JsonTokenType.ArrayStart)
                 return true;
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON array");
+            LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON array");
             return false;
         }
 
@@ -4558,10 +4559,10 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public void ConsumeArrayEnd<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (!Read<TOptions>() || CurrentTokenType != JsonTokenType.ArrayEnd)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected the end of a JSON array");
+                LuminPackExceptionHelper.ThrowFormatException("Expected the end of a JSON array");
         }
 #endregion
     }

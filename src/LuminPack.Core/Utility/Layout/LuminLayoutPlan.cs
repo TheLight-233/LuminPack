@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using LuminPack.Core;
 namespace LuminPack.Utility;
 /// <summary>Contains a complete immutable shuffle plan shared by Core and optional native backends.</summary>
 /// <remarks>This process-local descriptor is not serialized. Native callbacks receive it only while its owner is pinned.</remarks>
@@ -43,10 +44,10 @@ public readonly struct LuminLayoutPlan
     {
         SourceStride = sourceStride; DestinationStride = destinationStride; Mode = mode; PerBlock = perBlock;
         Reserve = reserve; InputVectors = inputVectors; OutputVectors = outputVectors;
-        Mask0Low = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks)); Mask0High = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(8)));
-        Mask1Low = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(16))); Mask1High = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(24)));
-        Mask2Low = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(32))); Mask2High = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(40)));
-        Mask3Low = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(48))); Mask3High = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(56)));
+        Mask0Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks)); Mask0High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(8)));
+        Mask1Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(16))); Mask1High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(24)));
+        Mask2Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(32))); Mask2High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(40)));
+        Mask3Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(48))); Mask3High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(56)));
     }
     /// <summary>Builds Core's original bounded masks once for an immutable layout.</summary>
     /// <param name="source">Source offsets.</param><param name="sourceStride">Input stride.</param><param name="destination">Destination offsets.</param><param name="destinationStride">Output stride.</param><param name="segments">Established contiguous run count.</param>

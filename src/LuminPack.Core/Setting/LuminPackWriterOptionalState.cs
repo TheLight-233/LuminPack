@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 using LuminPack.Utility;
 
 namespace LuminPack.Option
@@ -69,7 +71,7 @@ namespace LuminPack.Option
         /// <returns>A reset state owned by the caller until <see cref="Release"/>.</returns>
         /// <remarks>The cached instance stays in its slot while leased, so leasing and releasing store no reference. A nested
         /// or concurrent operation that finds the lease receives an independent state, which then becomes the cached one.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static LuminPackWriterOptionalState Lease(ref LuminPackWriterOptionalState? cache)
         {
@@ -97,7 +99,7 @@ namespace LuminPack.Option
         }
 
         /// <summary>Clears the operation's references and ends the lease obtained from <see cref="Lease"/>.</summary>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Release()
         {
@@ -148,7 +150,7 @@ namespace LuminPack.Option
         /// <param name="value">The object about to be written.</param>
         /// <returns>The new identifier, or the bitwise complement of the identifier assigned earlier.</returns>
         /// <remarks>One probe of the identity table answers both cases, and the single integer result stays in a register.</remarks>
-        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public int TrackReference(object value)
         {
             if (!_hashed)
@@ -167,7 +169,7 @@ namespace LuminPack.Option
             }
             ref var id = ref ObjectToRef.GetValueRefOrAddDefault(value, out var exists);
             if (exists) return ~(int)id;
-            if (_nextId > int.MaxValue) global::LuminPack.Code.LuminPackExceptionHelper.ThrowMessage("Too many tracked references in one operation.");
+            if (_nextId > int.MaxValue) LuminPackExceptionHelper.ThrowMessage("Too many tracked references in one operation.");
             id = _nextId++;
             return (int)id;
         }

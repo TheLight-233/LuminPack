@@ -52,9 +52,9 @@ public static class LuminPackFormatterRegistry
         [System.Runtime.InteropServices.Optional] nint writeValueJson,
         [System.Runtime.InteropServices.Optional] nint readValueJson)
     {
-        if (type is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
-        if (writeValue == 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
-        if (readValue == 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
+        if (type is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
+        if (writeValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
+        if (readValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
 
         var entry = new LuminPackFormatter
         {

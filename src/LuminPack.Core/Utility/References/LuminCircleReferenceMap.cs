@@ -4,6 +4,7 @@ namespace LuminPack.Utility;
 
 using System.Collections;
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 
 
 /// <summary>
@@ -69,7 +70,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
             ref Entry entry2 = ref _table2[index2];
             if (entry2.IsOccupied && entry2.HashCode == hashCode && _keyComparer.Equals(entry2.Key, key))
                 return ref entry2.Value;
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowKeyNotFoundException();
+            LuminPackExceptionHelper.ThrowKeyNotFoundException();
             return ref Unsafe.NullRef<TValue>();
         }
     }
@@ -80,7 +81,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
     /// <param name="valueComparer">The value comparer used by this operation.</param>
     public LuminCircleReferenceMap(int capacity, IEqualityComparer<TKey> keyComparer = null, IEqualityComparer<TValue> valueComparer = null)
     {
-        if (capacity < 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
+        if (capacity < 0) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
         _keyComparer = keyComparer ?? EqualityComparer<TKey>.Default;
         _valueComparer = valueComparer ?? EqualityComparer<TValue>.Default;
         _capacity = CalculateCapacity(capacity);
@@ -100,7 +101,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
     /// <param name="source">The input data to process.</param>
     public LuminCircleReferenceMap(in LuminCircleReferenceMap<TKey, TValue> source)
     {
-        if (source == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
+        if (source == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
 
         _keyComparer = source._keyComparer;
         _valueComparer = source._valueComparer;
@@ -158,7 +159,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
     public void Add(in TKey key, in TValue value)
     {
         if (!TryAdd(key, value))
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("An item with the same key has already been added.");
+            LuminPackExceptionHelper.ThrowArgumentException("An item with the same key has already been added.");
     }
 
     /// <summary>Adds the supplied entry to the collection.</summary>
@@ -314,7 +315,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
         else
         {
             if (!TryAdd(key, default))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to add key to dictionary");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to add key to dictionary");
             return ref GetValueRefOrAddDefault(key, out _);
         }
     }
@@ -365,7 +366,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
         if (entry2.IsOccupied && entry2.HashCode == hashCode && _keyComparer.Equals(entry2.Key, key))
             return ref entry2.Value;
 
-        global::LuminPack.Code.LuminPackExceptionHelper.ThrowKeyNotFoundException();
+        LuminPackExceptionHelper.ThrowKeyNotFoundException();
         return ref Unsafe.NullRef<TValue>();
     }
 
@@ -523,11 +524,11 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
                 ref Entry oldEntry1 = ref oldTable1[i];
                 if (oldEntry1.IsOccupied)
                     if (!TryAdd(oldEntry1.Key, oldEntry1.Value))
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash during resize");
+                        LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash during resize");
                 ref Entry oldEntry2 = ref oldTable2[i];
                 if (oldEntry2.IsOccupied)
                     if (!TryAdd(oldEntry2.Key, oldEntry2.Value))
-                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash during resize");
+                        LuminPackExceptionHelper.ThrowInvalidOperationException("Failed to rehash during resize");
             }
         }
     }
@@ -564,7 +565,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
         public bool MoveNext()
         {
             if (_version != _dict._version)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Collection was modified");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Collection was modified");
             while (_table < 2)
             {
                 var table = _table == 0 ? _dict._table1 : _dict._table2;
@@ -588,7 +589,7 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
         public void Reset()
         {
             if (_version != _dict._version)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Collection was modified");
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Collection was modified");
             _index = -1;
             _table = 0;
             _current = default;

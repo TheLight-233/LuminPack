@@ -1,3 +1,4 @@
+using LuminPack.Code;
 using LuminPack.Option;
 
 namespace LuminPack.Attribute;
@@ -58,7 +59,7 @@ public sealed class LuminPackableAttribute : System.Attribute
     /// <param name="targetType">The referenced type to include in source generation.</param>
     public LuminPackableAttribute(System.Type targetType)
     {
-        TargetType = targetType ?? global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException<System.Type>(nameof(targetType));
+        TargetType = targetType ?? LuminPackExceptionHelper.ThrowArgumentNullException<System.Type>(nameof(targetType));
     }
 }
 

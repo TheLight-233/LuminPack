@@ -549,7 +549,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write(scoped ref byte source, int byteCount)
         {
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Current, ref source, (uint)byteCount);
+            LuminPackMarshal.CopyBlockUnaligned(ref Current, ref source, (uint)byteCount);
             Advance(byteCount);
         }
 
@@ -604,7 +604,7 @@ namespace LuminPack.Core
 
             ref byte current = ref Current;
             current = LuminPackCode.WideTag;
-            global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref current, 1), tag);
+            LuminPackWriter.Write(ref Unsafe.Add(ref current, 1), tag);
             Advance(3);
         }
 
@@ -689,7 +689,7 @@ namespace LuminPack.Core
             ref byte current = ref Current;
             LuminPackWriter.Write<int>(ref current, count);
             if (bytes != 0)
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref current, sizeof(int)),
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref current, sizeof(int)),
                     ref source, (uint)bytes);
         }
 
@@ -710,7 +710,7 @@ namespace LuminPack.Core
         public void Write<T>(in T value)
             where T : unmanaged
         {
-            Write(ref Current, value);
+            LuminPackWriter.Write(ref Current, value);
             Advance(Unsafe.SizeOf<T>());
         }
 
@@ -760,7 +760,7 @@ namespace LuminPack.Core
             ref byte source = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value));
             if (!compressed)
             {
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(destination), (nint)(uint)(prefix)), ref source, (uint)bytes);
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(destination), (nint)(uint)(prefix)), ref source, (uint)bytes);
                 return prefix + bytes;
             }
 
@@ -778,7 +778,7 @@ namespace LuminPack.Core
         {
             int length = LuminCompressor.Compress(LuminPackMarshal.CreateReadOnlySpan(ref source, bytes),
                 destination.Slice(prefix + sizeof(int)));
-            Write(ref Unsafe.Add(ref MemoryMarshal.GetReference(destination), (nint)(uint)(prefix)), length);
+            LuminPackWriter.Write(ref Unsafe.Add(ref MemoryMarshal.GetReference(destination), (nint)(uint)(prefix)), length);
             return checked(prefix + sizeof(int) + length);
         }
 
@@ -808,7 +808,7 @@ namespace LuminPack.Core
             else
             {
                 var view = UnmanagedViewModel.Create(value1);
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref reference, ref Unsafe.As<UnmanagedViewModel<T>, byte>(ref view), (uint)Unsafe.SizeOf<UnmanagedViewModel<T>>());
+                LuminPackMarshal.CopyBlockUnaligned(ref reference, ref Unsafe.As<UnmanagedViewModel<T>, byte>(ref view), (uint)Unsafe.SizeOf<UnmanagedViewModel<T>>());
             }
 
             return Unsafe.SizeOf<T>();
@@ -823,7 +823,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength()
         {
-            return StringRecordLength<global::LuminPack.Option.LuminPackDefaultOptions>();
+            return StringRecordLength<LuminPackDefaultOptions>();
         }
 
         /// <summary>
@@ -834,7 +834,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringRecordLengthHeader(int index, int length)
         {
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<int, byte>(ref length), sizeof(int));
+            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<int, byte>(ref length), sizeof(int));
         }
 
         /// <summary>Writes null utf8 length header to the current output.</summary>
@@ -864,7 +864,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int WriteUtf8WithToken(int index, string? value)
         {
-            return WriteUtf8WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value);
+            return WriteUtf8WithToken<LuminPackDefaultOptions>(index, value);
         }
 
         /// <summary>Writes utf8 with length to the current output.</summary>
@@ -901,7 +901,7 @@ namespace LuminPack.Core
             var dest = (uint)startIndex <= (uint)_buffer.Length ? _buffer.Slice(startIndex) : Span<byte>.Empty;
             // UTF8.GetMaxByteCount -> (length + 1) * 3
             var maxByteCount = checked((source.Length + 1) * 3);
-            var status = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(source, dest, out _, out var bytesWritten, replaceInvalidSequences: false);
+            var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(source, dest, out _, out var bytesWritten, replaceInvalidSequences: false);
             if (status != OperationStatus.Done)
             {
                 if (status == OperationStatus.DestinationTooSmall)
@@ -925,7 +925,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static int EncodeUtf8Slow(ReadOnlySpan<char> value, Span<byte> destination)
         {
-            var status = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(value, destination, out _, out var bytesWritten, replaceInvalidSequences: false);
+            var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value, destination, out _, out var bytesWritten, replaceInvalidSequences: false);
             if (status != OperationStatus.Done)
                 LuminPackExceptionHelper.ThrowFailedEncoding(status);
             return bytesWritten;
@@ -938,7 +938,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int WriteUtf16WithToken(int index, string? value)
         {
-            return WriteUtf16WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value);
+            return WriteUtf16WithToken<LuminPackDefaultOptions>(index, value);
         }
 
         /// <summary>Returns the size of the string header used by the current recording mode.</summary>
@@ -946,13 +946,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
             var recording = default(TOptions).StringRecording;
             if (recording == LuminPackStringRecording.VarInt)
-                return default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 ? 10 : 5;
-            return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 8 : 4;
+                return default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 10 : 5;
+            return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 8 : 4;
         }
 
         /// <summary>
@@ -962,9 +962,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void WriteStringRecordTokenHeader<TOptions>(int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
                 // UTF-8 token mode uses a single zero-byte terminator.
 #if NET8_0_OR_GREATER
@@ -977,7 +977,7 @@ namespace LuminPack.Core
             {
                 // UTF-16 token mode terminates at the two-byte null character 0x0000.
                 ushort token = 0;
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<ushort, byte>(ref token), sizeof(ushort));
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<ushort, byte>(ref token), sizeof(ushort));
             }
         }
 
@@ -988,17 +988,17 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private int WriteUtf8WithToken<TOptions>(int index, string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (string.IsNullOrEmpty(value) || value.Length is 0)
             {
                 EnsureCapacity(index, 1);
-                WriteStringRecordTokenHeader<global::LuminPack.Option.LuminPackUtf8TokenOptions>(index);
+                WriteStringRecordTokenHeader<LuminPackUtf8TokenOptions>(index);
                 return 0;
             }
 
             var destination = (uint)index <= (uint)_buffer.Length ? _buffer.Slice(index) : Span<byte>.Empty;
-            var status = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(value, destination, out var _, out var bytesWritten, replaceInvalidSequences: false);
+            var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value, destination, out var _, out var bytesWritten, replaceInvalidSequences: false);
             if (status != OperationStatus.Done)
             {
                 if (status == OperationStatus.DestinationTooSmall)
@@ -1012,7 +1012,7 @@ namespace LuminPack.Core
 
             EnsureCapacity(index, checked(bytesWritten + 1));
             var tokenIndex = index + bytesWritten;
-            WriteStringRecordTokenHeader<global::LuminPack.Option.LuminPackUtf8TokenOptions>(tokenIndex);
+            WriteStringRecordTokenHeader<LuminPackUtf8TokenOptions>(tokenIndex);
             return bytesWritten;
         }
 
@@ -1023,20 +1023,20 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private int WriteUtf16WithToken<TOptions>(int index, string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (string.IsNullOrEmpty(value) || value.Length is 0)
             {
                 EnsureCapacity(index, 2);
-                WriteStringRecordTokenHeader<global::LuminPack.Option.LuminPackUtf16TokenOptions>(index);
+                WriteStringRecordTokenHeader<LuminPackUtf16TokenOptions>(index);
                 return 0;
             }
 
             int bytesWritten = checked(value.Length * sizeof(char));
             EnsureCapacity(index, checked(bytesWritten + 2));
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)bytesWritten);
+            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)bytesWritten);
             var tokenIndex = index + bytesWritten;
-            WriteStringRecordTokenHeader<global::LuminPack.Option.LuminPackUtf16TokenOptions>(tokenIndex);
+            WriteStringRecordTokenHeader<LuminPackUtf16TokenOptions>(tokenIndex);
             return bytesWritten;
         }
 
@@ -1051,7 +1051,7 @@ namespace LuminPack.Core
             if (Unsafe.SizeOf<IntPtr>() == 8)
                 LuminPackWriter.Write(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), header);
             else
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<long, byte>(ref header), 8);
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(index)), ref Unsafe.As<long, byte>(ref header), 8);
         }
 
         /// <summary>Writes a complete string using the default compiled profile.</summary>
@@ -1259,7 +1259,7 @@ namespace LuminPack.Core
         public ref byte WriteRecordBlock(ref byte cursor, scoped ref byte source, int length)
         {
             ref byte at = ref ReserveRecord(ref cursor, length);
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref at, ref source, (uint)length);
+            LuminPackMarshal.CopyBlockUnaligned(ref at, ref source, (uint)length);
             return ref Unsafe.Add(ref at, (nint)(uint)length);
         }
 
@@ -1281,7 +1281,7 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte WriteRecordString<TOptions>(ref byte cursor, string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
             {
@@ -1363,7 +1363,7 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly int RecordBound<TOptions>(string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             int length = value is null ? 0 : value.Length;
             bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
@@ -1390,7 +1390,7 @@ namespace LuminPack.Core
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte WriteReservedRecordString<TOptions>(ref byte cursor, string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
                 return ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedUtf16Record(ref cursor, value));
@@ -1427,7 +1427,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref byte WriteReservedBlock(ref byte cursor, scoped ref byte source, int length)
         {
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref cursor, ref source, (uint)length);
+            LuminPackMarshal.CopyBlockUnaligned(ref cursor, ref source, (uint)length);
             return ref Unsafe.Add(ref cursor, (nint)(uint)length);
         }
 
@@ -1577,7 +1577,7 @@ namespace LuminPack.Core
         /// <returns>The position after the record.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ref byte WriteRecordStringOutlined<TOptions>(scoped ref LuminPackWriter writer, ref byte cursor, string? value)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             writer.CommitRecords(ref cursor);
             writer.Write<TOptions>(value);
@@ -1661,7 +1661,7 @@ namespace LuminPack.Core
             int bytes = elements.Length * Unsafe.SizeOf<T>();
             LuminPackWriter.Write<int>(ref destination, elements.Length);
             if (bytes != 0)
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, sizeof(int)),
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, sizeof(int)),
                     ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(elements)), (uint)bytes);
             return sizeof(int) + bytes;
         }
@@ -2297,296 +2297,296 @@ namespace LuminPack.Core
 
         #region Framing
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(byte x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
             }
             else
             {
-                ref byte __fixed0Reference = ref Current;
-                int __fixed0Length = 0;
-                __fixed0Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed0Reference, (nint)(uint)(__fixed0Length)), VarIntCodes.Byte);
-                __fixed0Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed0Reference, (nint)(uint)(__fixed0Length)), x);
-                Advance(__fixed0Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Byte);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), x);
+                Advance(length);
             }
         }
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(sbyte x)
         {
             if (VarIntCodes.MinSingleValue <= x)
             {
-                Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, x));
+                Advance(LuminPackWriter.Write(ref Current, x));
             }
             else
             {
-                ref byte __fixed1Reference = ref Current;
-                int __fixed1Length = 0;
-                __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, (nint)(uint)(__fixed1Length)), VarIntCodes.SByte);
-                __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, (nint)(uint)(__fixed1Length)), x);
-                Advance(__fixed1Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.SByte);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), x);
+                Advance(length);
             }
         }
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(ushort x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
             }
             else
             {
-                ref byte __fixed2Reference = ref Current;
-                int __fixed2Length = 0;
-                __fixed2Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed2Reference, (nint)(uint)(__fixed2Length)), VarIntCodes.UInt16);
-                __fixed2Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed2Reference, (nint)(uint)(__fixed2Length)), (UInt16)x);
-                Advance(__fixed2Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.UInt16);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (ushort)x);
+                Advance(length);
             }
         }
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(short x)
         {
             if (0 <= x)
             {
                 if (x <= VarIntCodes.MaxSingleValue) // same as sbyte.MaxValue
                 {
-                    Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                    Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
                 }
                 else
                 {
-                    ref byte __fixed3Reference = ref Current;
-                    int __fixed3Length = 0;
-                    __fixed3Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed3Reference, (nint)(uint)(__fixed3Length)), VarIntCodes.Int16);
-                    __fixed3Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed3Reference, (nint)(uint)(__fixed3Length)), (Int16)x);
-                    Advance(__fixed3Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int16);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (short)x);
+                    Advance(length);
                 }
             }
             else
             {
                 if (VarIntCodes.MinSingleValue <= x)
                 {
-                    Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                    Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
                 }
                 else if (sbyte.MinValue <= x)
                 {
-                    ref byte __fixed4Reference = ref Current;
-                    int __fixed4Length = 0;
-                    __fixed4Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed4Reference, (nint)(uint)(__fixed4Length)), VarIntCodes.SByte);
-                    __fixed4Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed4Reference, (nint)(uint)(__fixed4Length)), (SByte)x);
-                    Advance(__fixed4Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.SByte);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (sbyte)x);
+                    Advance(length);
                 }
                 else
                 {
-                    ref byte __fixed5Reference = ref Current;
-                    int __fixed5Length = 0;
-                    __fixed5Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed5Reference, (nint)(uint)(__fixed5Length)), VarIntCodes.Int16);
-                    __fixed5Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed5Reference, (nint)(uint)(__fixed5Length)), (Int16)x);
-                    Advance(__fixed5Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int16);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (short)x);
+                    Advance(length);
                 }
             }
         }
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(uint x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
             }
             else if (x <= ushort.MaxValue)
             {
-                ref byte __fixed6Reference = ref Current;
-                int __fixed6Length = 0;
-                __fixed6Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed6Reference, (nint)(uint)(__fixed6Length)), VarIntCodes.UInt16);
-                __fixed6Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed6Reference, (nint)(uint)(__fixed6Length)), (UInt16)x);
-                Advance(__fixed6Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.UInt16);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (ushort)x);
+                Advance(length);
             }
             else
             {
-                ref byte __fixed7Reference = ref Current;
-                int __fixed7Length = 0;
-                __fixed7Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed7Reference, (nint)(uint)(__fixed7Length)), VarIntCodes.UInt32);
-                __fixed7Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed7Reference, (nint)(uint)(__fixed7Length)), (UInt32)x);
-                Advance(__fixed7Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.UInt32);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (uint)x);
+                Advance(length);
             }
         }
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(int x)
         {
             if (0 <= x)
             {
                 if (x <= VarIntCodes.MaxSingleValue) // same as sbyte.MaxValue
                 {
-                    Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                    Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
                 }
                 else if (x <= short.MaxValue)
                 {
-                    ref byte __fixed8Reference = ref Current;
-                    int __fixed8Length = 0;
-                    __fixed8Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed8Reference, (nint)(uint)(__fixed8Length)), VarIntCodes.Int16);
-                    __fixed8Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed8Reference, (nint)(uint)(__fixed8Length)), (Int16)x);
-                    Advance(__fixed8Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int16);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (short)x);
+                    Advance(length);
                 }
                 else
                 {
-                    ref byte __fixed9Reference = ref Current;
-                    int __fixed9Length = 0;
-                    __fixed9Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed9Reference, (nint)(uint)(__fixed9Length)), VarIntCodes.Int32);
-                    __fixed9Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed9Reference, (nint)(uint)(__fixed9Length)), (Int32)x);
-                    Advance(__fixed9Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int32);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (int)x);
+                    Advance(length);
                 }
             }
             else
             {
                 if (VarIntCodes.MinSingleValue <= x)
                 {
-                    Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                    Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
                 }
                 else if (sbyte.MinValue <= x)
                 {
-                    ref byte __fixed10Reference = ref Current;
-                    int __fixed10Length = 0;
-                    __fixed10Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed10Reference, (nint)(uint)(__fixed10Length)), VarIntCodes.SByte);
-                    __fixed10Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed10Reference, (nint)(uint)(__fixed10Length)), (SByte)x);
-                    Advance(__fixed10Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.SByte);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (sbyte)x);
+                    Advance(length);
                 }
                 else if (short.MinValue <= x)
                 {
-                    ref byte __fixed11Reference = ref Current;
-                    int __fixed11Length = 0;
-                    __fixed11Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed11Reference, (nint)(uint)(__fixed11Length)), VarIntCodes.Int16);
-                    __fixed11Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed11Reference, (nint)(uint)(__fixed11Length)), (Int16)x);
-                    Advance(__fixed11Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int16);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (short)x);
+                    Advance(length);
                 }
                 else
                 {
-                    ref byte __fixed12Reference = ref Current;
-                    int __fixed12Length = 0;
-                    __fixed12Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed12Reference, (nint)(uint)(__fixed12Length)), VarIntCodes.Int32);
-                    __fixed12Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed12Reference, (nint)(uint)(__fixed12Length)), (Int32)x);
-                    Advance(__fixed12Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int32);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (int)x);
+                    Advance(length);
                 }
             }
         }
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(ulong x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
             }
             else if (x <= ushort.MaxValue)
             {
-                ref byte __fixed13Reference = ref Current;
-                int __fixed13Length = 0;
-                __fixed13Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed13Reference, (nint)(uint)(__fixed13Length)), VarIntCodes.UInt16);
-                __fixed13Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed13Reference, (nint)(uint)(__fixed13Length)), (UInt16)x);
-                Advance(__fixed13Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.UInt16);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (ushort)x);
+                Advance(length);
             }
             else if (x <= uint.MaxValue)
             {
-                ref byte __fixed14Reference = ref Current;
-                int __fixed14Length = 0;
-                __fixed14Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed14Reference, (nint)(uint)(__fixed14Length)), VarIntCodes.UInt32);
-                __fixed14Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed14Reference, (nint)(uint)(__fixed14Length)), (UInt32)x);
-                Advance(__fixed14Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.UInt32);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (uint)x);
+                Advance(length);
             }
             else
             {
-                ref byte __fixed15Reference = ref Current;
-                int __fixed15Length = 0;
-                __fixed15Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed15Reference, (nint)(uint)(__fixed15Length)), VarIntCodes.UInt64);
-                __fixed15Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed15Reference, (nint)(uint)(__fixed15Length)), (UInt64)x);
-                Advance(__fixed15Length);
+                ref byte destination = ref Current;
+                int length = 0;
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.UInt64);
+                length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (ulong)x);
+                Advance(length);
             }
         }
 
-        /// <summary>Writes var int to the current output.</summary>
-        /// <param name = "x">The x used by this operation.</param>
+        /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
+        /// <param name = "x">The value to encode.</param>
         public void WriteVarInt(long x)
         {
             if (0 <= x)
             {
                 if (x <= VarIntCodes.MaxSingleValue) // same as sbyte.MaxValue
                 {
-                    Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                    Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
                 }
                 else if (x <= short.MaxValue)
                 {
-                    ref byte __fixed16Reference = ref Current;
-                    int __fixed16Length = 0;
-                    __fixed16Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed16Reference, (nint)(uint)(__fixed16Length)), VarIntCodes.Int16);
-                    __fixed16Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed16Reference, (nint)(uint)(__fixed16Length)), (Int16)x);
-                    Advance(__fixed16Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int16);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (short)x);
+                    Advance(length);
                 }
                 else if (x <= int.MaxValue)
                 {
-                    ref byte __fixed17Reference = ref Current;
-                    int __fixed17Length = 0;
-                    __fixed17Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed17Reference, (nint)(uint)(__fixed17Length)), VarIntCodes.Int32);
-                    __fixed17Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed17Reference, (nint)(uint)(__fixed17Length)), (Int32)x);
-                    Advance(__fixed17Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int32);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (int)x);
+                    Advance(length);
                 }
                 else
                 {
-                    ref byte __fixed18Reference = ref Current;
-                    int __fixed18Length = 0;
-                    __fixed18Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed18Reference, (nint)(uint)(__fixed18Length)), VarIntCodes.Int64);
-                    __fixed18Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed18Reference, (nint)(uint)(__fixed18Length)), (Int64)x);
-                    Advance(__fixed18Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int64);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (long)x);
+                    Advance(length);
                 }
             }
             else
             {
                 if (VarIntCodes.MinSingleValue <= x)
                 {
-                    Advance(global::LuminPack.Core.LuminPackWriter.Write(ref Current, (sbyte)x));
+                    Advance(LuminPackWriter.Write(ref Current, (sbyte)x));
                 }
                 else if (sbyte.MinValue <= x)
                 {
-                    ref byte __fixed19Reference = ref Current;
-                    int __fixed19Length = 0;
-                    __fixed19Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed19Reference, (nint)(uint)(__fixed19Length)), VarIntCodes.SByte);
-                    __fixed19Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed19Reference, (nint)(uint)(__fixed19Length)), (SByte)x);
-                    Advance(__fixed19Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.SByte);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (sbyte)x);
+                    Advance(length);
                 }
                 else if (short.MinValue <= x)
                 {
-                    ref byte __fixed20Reference = ref Current;
-                    int __fixed20Length = 0;
-                    __fixed20Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed20Reference, (nint)(uint)(__fixed20Length)), VarIntCodes.Int16);
-                    __fixed20Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed20Reference, (nint)(uint)(__fixed20Length)), (Int16)x);
-                    Advance(__fixed20Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int16);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (short)x);
+                    Advance(length);
                 }
                 else if (int.MinValue <= x)
                 {
-                    ref byte __fixed21Reference = ref Current;
-                    int __fixed21Length = 0;
-                    __fixed21Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed21Reference, (nint)(uint)(__fixed21Length)), VarIntCodes.Int32);
-                    __fixed21Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed21Reference, (nint)(uint)(__fixed21Length)), (Int32)x);
-                    Advance(__fixed21Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int32);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (int)x);
+                    Advance(length);
                 }
                 else
                 {
-                    ref byte __fixed22Reference = ref Current;
-                    int __fixed22Length = 0;
-                    __fixed22Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed22Reference, (nint)(uint)(__fixed22Length)), VarIntCodes.Int64);
-                    __fixed22Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed22Reference, (nint)(uint)(__fixed22Length)), (Int64)x);
-                    Advance(__fixed22Length);
+                    ref byte destination = ref Current;
+                    int length = 0;
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), VarIntCodes.Int64);
+                    length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (long)x);
+                    Advance(length);
                 }
             }
         }
@@ -2603,13 +2603,13 @@ namespace LuminPack.Core
         {
             byte profile = BinaryProfile<TOptions>();
             EnsureAdditionalCapacity(4);
-            ref byte __fixed23Reference = ref Current;
-            int __fixed23Length = 0;
-            __fixed23Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed23Reference, (nint)(uint)(__fixed23Length)), (byte)251);
-            __fixed23Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed23Reference, (nint)(uint)(__fixed23Length)), (byte)1);
-            __fixed23Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed23Reference, (nint)(uint)(__fixed23Length)), profile);
-            __fixed23Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed23Reference, (nint)(uint)(__fixed23Length)), count);
-            Advance(__fixed23Length);
+            ref byte destination = ref Current;
+            int length = 0;
+            length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (byte)251);
+            length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), (byte)1);
+            length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), profile);
+            length += LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)length), count);
+            Advance(length);
         }
 
         /// <summary>Writes a generated fixed prefix with the default binary profile.</summary>

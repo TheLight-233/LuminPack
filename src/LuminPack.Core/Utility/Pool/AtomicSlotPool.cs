@@ -1,6 +1,7 @@
 namespace LuminPack.Utility;
 
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 
 /// <summary>
 /// Fixed-capacity, unordered storage for shared object-pool overflow.
@@ -22,7 +23,7 @@ internal sealed class AtomicSlotPool<T> where T : class
     internal AtomicSlotPool(int capacity)
     {
         if (capacity <= 0)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
 
         _slots = new T?[capacity];
         _indexMask = (capacity & (capacity - 1)) == 0 ? capacity - 1 : -1;
@@ -96,7 +97,7 @@ internal sealed class AtomicSlotPool<T> where T : class
     internal void Drain(Action<T> consume)
     {
         if (consume is null)
-            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(consume));
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(consume));
 
         for (var i = 0; i < _slots.Length; i++)
         {

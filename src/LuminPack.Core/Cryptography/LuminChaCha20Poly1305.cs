@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -436,7 +437,7 @@ namespace LuminPack.Cryptography
         private static void EnsureLength(bool condition, string message)
         {
             if (!condition)
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(message);
+                LuminPackExceptionHelper.ThrowArgumentException(message);
         }
 
         /// <summary>Performs the as ref step for the current operation.</summary>

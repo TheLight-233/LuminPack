@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.ComponentModel;
+using LuminPack.Code;
 
 namespace LuminPack.Utility;
 
@@ -30,7 +31,7 @@ public struct LuminPackStreamInput : IDisposable
     /// <remarks>At most one byte beyond the limit is read before the input is rejected, and the storage is returned on any failure.</remarks>
     public static async ValueTask<LuminPackStreamInput> ReadAsync(Stream stream, int maximum, CancellationToken cancellationToken)
     {
-        if (stream is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(stream));
+        if (stream is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(stream));
         long ceiling = (long)maximum + 1;
         long capacity = InitialCapacity;
         // A seekable stream reports what remains, so the first rental usually holds the whole payload.
@@ -64,7 +65,7 @@ public struct LuminPackStreamInput : IDisposable
         catch (global::System.Exception error)
         {
             ArrayPool<byte>.Shared.Return(array);
-            global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(error);
+            LuminPackExceptionHelper.Rethrow(error);
         }
         return new LuminPackStreamInput { _array = array, _length = length };
     }

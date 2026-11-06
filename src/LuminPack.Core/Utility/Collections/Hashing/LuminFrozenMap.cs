@@ -8,6 +8,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 using static LuminPack.Internal.HashHelpers;
 
 
@@ -71,7 +72,7 @@ public abstract class LuminFrozenMap<TKey, TValue> :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref readonly TValue GetValueRefOrNullRef(TKey key)
     {
-        if (key == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(key));
+        if (key == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(key));
         return ref GetValueRefOrNullRefCore(key);
     }
 
@@ -83,7 +84,7 @@ public abstract class LuminFrozenMap<TKey, TValue> :
         {
             ref readonly TValue valueRef = ref GetValueRefOrNullRef(key);
             if (Unsafe.IsNullRef(ref Unsafe.AsRef(in valueRef)))
-                global::LuminPack.Code.LuminPackExceptionHelper.ThrowKeyNotFoundException();
+                LuminPackExceptionHelper.ThrowKeyNotFoundException();
             return ref valueRef;
         }
     }
@@ -93,7 +94,7 @@ public abstract class LuminFrozenMap<TKey, TValue> :
     TValue IDictionary<TKey, TValue>.this[TKey key]
     {
         get => this[key];
-        set => global::LuminPack.Code.LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
+        set => LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
     }
 
     /// <summary>Gets or sets the value associated with the supplied index or key.</summary>
@@ -135,7 +136,7 @@ public abstract class LuminFrozenMap<TKey, TValue> :
     /// <param name="arrayIndex">The array index used by this operation.</param>
     public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
     {
-        if (array == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(array));
+        if (array == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(array));
         TKey[] keys = KeysCore;
         TValue[] values = ValuesCore;
         for (int i = 0; i < keys.Length; i++)
@@ -158,20 +159,20 @@ public abstract class LuminFrozenMap<TKey, TValue> :
     /// <summary>Rejects additions because the frozen dictionary is immutable.</summary>
     /// <param name="key">The key used to identify the entry.</param>
     /// <param name="value">The value consumed or produced by this operation.</param>
-    public void Add(TKey key, TValue value) => global::LuminPack.Code.LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
+    public void Add(TKey key, TValue value) => LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
     /// <summary>Rejects additions because the frozen dictionary is immutable.</summary>
     /// <param name="item">The entry to process.</param>
-    public void Add(KeyValuePair<TKey, TValue> item) => global::LuminPack.Code.LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
+    public void Add(KeyValuePair<TKey, TValue> item) => LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
     /// <summary>Rejects removal because the frozen dictionary is immutable.</summary>
     /// <param name="key">The key used to identify the entry.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    public bool Remove(TKey key) => global::LuminPack.Code.LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation<bool>();
+    public bool Remove(TKey key) => LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation<bool>();
     /// <summary>Rejects removal because the frozen dictionary is immutable.</summary>
     /// <param name="item">The entry to process.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    public bool Remove(KeyValuePair<TKey, TValue> item) => global::LuminPack.Code.LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation<bool>();
+    public bool Remove(KeyValuePair<TKey, TValue> item) => LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation<bool>();
     /// <summary>Rejects clearing because the frozen dictionary is immutable.</summary>
-    public void Clear() => global::LuminPack.Code.LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
+    public void Clear() => LuminPackExceptionHelper.ThrowReadOnlyCollectionMutation();
 
     /// <summary>Provides enumerator functionality.</summary>
     public struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>
@@ -446,7 +447,7 @@ public static class LuminFrozenMap
         this IEnumerable<KeyValuePair<TKey, TValue>> source,
         IEqualityComparer<TKey> comparer = null)
     {
-        if (source == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
+        if (source == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
 
         comparer = comparer ?? EqualityComparer<TKey>.Default;
 
@@ -486,9 +487,9 @@ public static class LuminFrozenMap
         Func<TSource, TValue> valueSelector,
         IEqualityComparer<TKey> comparer = null)
     {
-        if (source == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
-        if (keySelector == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(keySelector));
-        if (valueSelector == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(valueSelector));
+        if (source == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
+        if (keySelector == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(keySelector));
+        if (valueSelector == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(valueSelector));
 
         var dict = new Dictionary<TKey, TValue>(comparer ?? EqualityComparer<TKey>.Default);
         foreach (var item in source)

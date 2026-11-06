@@ -299,7 +299,7 @@ namespace LuminPack.Core
             // the copy then reads from the captured position.
             ref byte source = ref Current;
             Advance(byteCount);
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+            LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
         }
 
         /// <summary>Returns the current input byte and whether <paramref name="length"/> bytes remain from it.</summary>
@@ -336,7 +336,7 @@ namespace LuminPack.Core
                 ? Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)window))
                 : Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)window)) |
                   (ulong)Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)window + 4)) << 32;
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+            LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
             return (bits & mask) == 0;
         }
 
@@ -353,7 +353,7 @@ namespace LuminPack.Core
             ref byte source = ref Current;
             Advance(byteCount);
             uint bits = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)window));
-            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+            LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
             return (bits & mask) == 0;
         }
 
@@ -367,7 +367,7 @@ namespace LuminPack.Core
             int bytes = checked(value.Length * Unsafe.SizeOf<T>());
             ValidateCollectionPayload(Position, bytes);
             if (bytes != 0)
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value)), ref Current, (uint)bytes);
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value)), ref Current, (uint)bytes);
             Advance(bytes);
         }
 
@@ -702,7 +702,7 @@ namespace LuminPack.Core
             if (compressed)
                 LuminCompressor.Decompress(source, LuminPackMarshal.CreateSpan(ref destination, bytes));
             else
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref MemoryMarshal.GetReference(source), (uint)bytes, destinationIsNew);
+                LuminPackMarshal.CopyBlockUnaligned(ref destination, ref MemoryMarshal.GetReference(source), (uint)bytes, destinationIsNew);
         }
 
         /// <summary>Processes a fixed storage batch without introducing a Release bounds check.</summary>
@@ -722,7 +722,7 @@ namespace LuminPack.Core
             else
             {
                 value1 = default!;
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref reference, (uint)Unsafe.SizeOf<T1>());
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref reference, (uint)Unsafe.SizeOf<T1>());
             }
 
             return Unsafe.SizeOf<T1>();
@@ -767,11 +767,11 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static void ValidateStringLength<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (length < 0 && length != LuminPackCode.NullCollection)
                 LuminPackExceptionHelper.ThrowInvalidStringLength(length);
-            int headerSize = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? sizeof(int) * 2 : sizeof(int);
+            int headerSize = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? sizeof(int) * 2 : sizeof(int);
             if ((uint)index > (uint)buffer.Length || (uint)headerSize > (uint)(buffer.Length - index) || (length >= 0 && (uint)length > (uint)(buffer.Length - index - headerSize)))
                 LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
         }
@@ -785,12 +785,12 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static void ReadStringLength<TOptions>(Span<byte> buffer, ref int index, out int length)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringRecording == global::LuminPack.Option.LuminPackStringRecording.Token))
+            if ((default(TOptions).StringRecording == LuminPackStringRecording.Token))
             {
                 var remaining = buffer.Slice(index);
-                if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
+                if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 {
                     length = remaining.IndexOf((byte)0);
                 }
@@ -802,7 +802,7 @@ namespace LuminPack.Core
                 }
 
                 if (length < 0)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidDataException("String token terminator was not found.");
+                    LuminPackExceptionHelper.ThrowInvalidDataException("String token terminator was not found.");
                 return;
             }
 
@@ -820,13 +820,13 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private int StringRecordLength<TOptions>()
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
             var recording = default(TOptions).StringRecording;
             if (recording == LuminPackStringRecording.VarInt)
-                return default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 ? 10 : 5;
-            return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 8 : 4;
+                return default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 10 : 5;
+            return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8) ? 8 : 4;
         }
 
         /// <summary>
@@ -840,9 +840,9 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private static string? ReadStringAndAdvance<TOptions>(Span<byte> buffer, ref int index)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
-            bool isUtf8 = (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8);
+            bool isUtf8 = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8);
             var recording = default(TOptions).StringRecording;
             if (recording == LuminPackStringRecording.Token)
             {
@@ -895,7 +895,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private static string? ReadTokenStringAndAdvance<TOptions>(Span<byte> buffer, ref int index, bool isUtf8)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             ReadStringLength<TOptions>(buffer, ref index, out var length);
             // Token mode has no null marker: null and empty are both encoded as an empty
@@ -913,7 +913,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static string? ReadUtf8StringWithToken<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             ref var spanRef = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)index);
@@ -937,7 +937,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static string? ReadUtf16StringWithToken<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
 #if NET8_0_OR_GREATER
             ref var spanRef = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)index);
@@ -955,7 +955,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static string? ReadUtf8StringWithLength<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (length < 0)
                 return null;
@@ -973,7 +973,7 @@ namespace LuminPack.Core
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static string? ReadUtf16StringWithLength<TOptions>(Span<byte> buffer, int index, int length)
-            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+            where TOptions : struct, ILuminPackOptions
         {
             if (length < 0)
                 return null;
@@ -1022,10 +1022,10 @@ namespace LuminPack.Core
                 int available = buffer.Length;
                 if ((uint)start <= (uint)available && available - start >= sizeof(int) * 2)
                 {
-                    ref byte __fixed0Reference = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)(start));
-                    int __fixed0Length = 0;
-                    __fixed0Length += global::LuminPack.Core.LuminPackReader.Read(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed0Reference, (nint)(uint)(__fixed0Length)), out int bytes);
-                    __fixed0Length += global::LuminPack.Core.LuminPackReader.Read(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed0Reference, (nint)(uint)(__fixed0Length)), out int characters);
+                    ref byte destination = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)(start));
+                    int length = 0;
+                    length += LuminPackReader.Read(ref Unsafe.Add(ref destination, (nint)(uint)length), out int bytes);
+                    length += LuminPackReader.Read(ref Unsafe.Add(ref destination, (nint)(uint)length), out int characters);
                     if (bytes > 0 && bytes <= available - start - sizeof(int) * 2)
                     {
                         if (characters > 0 && characters != current.Length)
@@ -1119,7 +1119,7 @@ namespace LuminPack.Core
                 if (!token)
                 {
                     int characterIndex = index + 4;
-                    global::LuminPack.Core.LuminPackReader.Read(ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)(characterIndex)), out int characters);
+                    LuminPackReader.Read(ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)(characterIndex)), out int characters);
                     if (characters > 0 && characters != current.Length)
                         return false;
                 }
@@ -1514,7 +1514,7 @@ namespace LuminPack.Core
         public bool PeekIsNullCollection()
         {
             EnsureReadable(Position, sizeof(int));
-            return global::LuminPack.Core.LuminPackReader.Read<int>(ref Current) == LuminPackCode.NullCollection;
+            return LuminPackReader.Read<int>(ref Current) == LuminPackCode.NullCollection;
         }
 
         /// <summary>
@@ -2129,7 +2129,7 @@ namespace LuminPack.Core
             int available = _buffer.Length - Position;
             if ((uint)Position > (uint)_buffer.Length || available < 4 || metadata.Length > available - 4)
                 return false;
-            global::LuminPack.Core.LuminPackReader.Read(ref Current, out uint header);
+            LuminPackReader.Read(ref Current, out uint header);
             uint profile = LuminPackWriter.BinaryProfile<TOptions>();
             uint expected = 251u | (1u << 8) | (profile << 16) | ((uint)count << 24);
             if (header != expected || !System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref Current, 4), metadata.Length).SequenceEqual(metadata))
