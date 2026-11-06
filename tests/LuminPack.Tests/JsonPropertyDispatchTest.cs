@@ -63,6 +63,31 @@ public partial class JsonLargeDispatchModel
     public int F11;
 }
 
+/// <summary>Combines hashed canonical names and version-tolerant aliases in one metadata table.</summary>
+[LuminPackable(GeneratorType.VersionTolerant)]
+public partial class JsonAliasDispatchModel
+{
+    /// <summary>Accepts its canonical name and the historical name.</summary>
+    [LuminPackOldName("legacyF00")]
+    public int F00;
+    /// <summary>Keeps the table above the small-name dispatch threshold.</summary>
+    public int F01;
+    /// <summary>Keeps the table above the small-name dispatch threshold.</summary>
+    public int F02;
+    /// <summary>Keeps the table above the small-name dispatch threshold.</summary>
+    public int F03;
+    /// <summary>Keeps the table above the small-name dispatch threshold.</summary>
+    public int F04;
+    /// <summary>Keeps the table above the small-name dispatch threshold.</summary>
+    public int F05;
+    /// <summary>Keeps the table above the small-name dispatch threshold.</summary>
+    public int F06;
+    /// <summary>Checks another canonical property beside the alias.</summary>
+    public int F11;
+    /// <summary>Uses the same identifier as an old-name cache while remaining an ordinary canonical member.</summary>
+    public int Alias_0_0;
+}
+
 /// <summary>Provides json property dispatch test functionality.</summary>
 public class JsonPropertyDispatchTest
 {
@@ -97,6 +122,27 @@ public class JsonPropertyDispatchTest
         Assert.Equal(2, result.F01);
         Assert.Equal(0, result.F02);
         Assert.Equal(11, result.F11);
+    }
+
+    /// <summary>Distinguishes a canonical alias-shaped name from metadata stored in the old-name container.</summary>
+    /// <param name="encoding">The JSON document encoding.</param>
+    [Theory]
+    [InlineData(LuminPackStringEncoding.UTF8)]
+    [InlineData(LuminPackStringEncoding.UTF16)]
+    public void CanonicalAliasShapedNamesKeepTheirOwnLookupMetadata(LuminPackStringEncoding encoding)
+    {
+        var profile = new TestSerializationProfile { StringEncoding = encoding };
+        var result = LuminPackSerializer.DeserializeJson<JsonAliasDispatchModel>(
+            "{\"Alias_0_0\":42,\"legacyF00\":17,\"F11\":11}", profile);
+        Assert.NotNull(result);
+        Assert.Equal(42, result.Alias_0_0);
+        Assert.Equal(17, result.F00);
+        Assert.Equal(11, result.F11);
+        string json = LuminPackSerializer.SerializeJson(result, profile);
+        var repeated = LuminPackSerializer.DeserializeJson<JsonAliasDispatchModel>(json, profile);
+        Assert.NotNull(repeated);
+        Assert.Equal(42, repeated.Alias_0_0);
+        Assert.Equal(17, repeated.F00);
     }
 
     /// <summary>Verifies reference metadata is matched in the correct encoding.</summary>

@@ -18,11 +18,32 @@ public static class LuminPackJsonCodeGenerator
     /// <returns>The result of the operation.</returns>
     internal unsafe static ulong ComputeUtf8Hash(string str)
     {
-        byte[] bytes = Encoding.UTF8.GetBytes(str);
-        fixed (byte* input = bytes)
-        {
-            return ComputeXxHash3(input, bytes.Length);
-        }
+        return ComputeUtf8BytesHash(Encoding.UTF8.GetBytes(str));
+    }
+
+    /// <summary>Hashes already encoded name bytes without allocating the same payload again.</summary>
+    /// <param name="bytes">The complete UTF-8 encoding.</param>
+    /// <returns>The unchanged name hash.</returns>
+    private unsafe static ulong ComputeUtf8BytesHash(byte[] bytes)
+    {
+        fixed (byte* input = bytes) return ComputeXxHash3(input, bytes.Length);
+    }
+
+    /// <summary>Retains name facts only for one metadata emission, never across compilations.</summary>
+    private readonly struct JsonNameFact
+    {
+        internal readonly string Name, Suffix;
+        internal readonly int Index, Utf8Length;
+        internal readonly bool Alias;
+        internal readonly ulong Utf8Hash, Utf16Hash;
+
+        /// <summary>Captures the exact lengths and hashes already needed by static metadata.</summary>
+        /// <param name="name">The existing name.</param><param name="suffix">The existing cache suffix.</param>
+        /// <param name="index">The existing dispatch result.</param><param name="bytes">The existing UTF-8 encoding.</param>
+        /// <param name="utf8Hash">Its complete hash.</param><param name="utf16Hash">The code-unit hash.</param>
+        /// <param name="alias">Whether the cache lives in the original old-name container.</param>
+        internal JsonNameFact(string name, string suffix, int index, byte[] bytes, ulong utf8Hash, ulong utf16Hash, bool alias = false)
+        { Name = name; Suffix = suffix; Index = index; Utf8Length = bytes.Length; Utf8Hash = utf8Hash; Utf16Hash = utf16Hash; Alias = alias; }
     }
 
     /// <summary>Performs the compute utf16 hash step for the current operation.</summary>
@@ -116,39 +137,69 @@ public static class LuminPackJsonCodeGenerator
     /// <param name="data">The metadata describing the serializable type.</param>
     public static void GenerateStaticUtf8Fields(StringBuilder sb, LuminDataInfo data)
     {
-        foreach (LuminDataField field in data.fields)
+        int aliases = data.fields.Sum(field => field.OldNames.Length);
+        bool small = data.fields.Count + aliases <= 8;
+        var names = new List<JsonNameFact>(data.fields.Count + aliases + 2);
+        for (int index = 0; index < data.fields.Count; index++)
         {
-            string text = "_utf8_" + field.Name;
-            string text2 = "_utf16_" + field.Name;
-            string arg = "_utf8Hash_" + field.Name;
-            string arg2 = "_utf16Hash_" + field.Name;
+            var field = data.fields[index];
             byte[] bytes = Encoding.UTF8.GetBytes(field.Name);
-            string text3 = string.Join(", ", bytes.Select((byte b) => $"(byte){b}"));
-            sb.AppendLine("        internal static readonly byte[] " + text + " = new byte[] { " + text3 + " };");
-            string text4 = string.Join(", ", field.Name.Select((char c) => "'" + EscapeChar(c) + "'"));
-            sb.AppendLine("        internal static readonly char[] " + text2 + " = new char[] { " + text4 + " };");
-            ulong num = ComputeUtf8Hash(field.Name);
-            sb.AppendLine($"        internal const ulong {arg} = {num}UL;");
-            ulong num2 = ComputeUtf16Hash(field.Name);
-            sb.AppendLine($"        internal const ulong {arg2} = {num2}UL;");
+            ulong hash8 = ComputeUtf8BytesHash(bytes), hash16 = ComputeUtf16Hash(field.Name);
+            names.Add(new JsonNameFact(field.Name, field.Name, index, bytes, hash8, hash16));
+            sb.Append("        internal static readonly byte[] _utf8_").Append(field.Name).Append(" = new byte[] { ");
+            for (int part = 0; part < bytes.Length; part++)
+            {
+                if (part != 0) sb.Append(", ");
+                sb.Append("(byte)").Append(bytes[part]);
+            }
+            sb.AppendLine(" };");
+            sb.Append("        internal static readonly char[] _utf16_").Append(field.Name).Append(" = new char[] { ");
+            for (int part = 0; part < field.Name.Length; part++)
+            {
+                if (part != 0) sb.Append(", ");
+                sb.Append((char)39).Append(EscapeChar(field.Name[part])).Append((char)39);
+            }
+            sb.AppendLine(" };");
+            sb.Append("        internal const ulong _utf8Hash_").Append(field.Name).Append(" = ").Append(hash8).AppendLine("UL;");
+            sb.Append("        internal const ulong _utf16Hash_").Append(field.Name).Append(" = ").Append(hash16).AppendLine("UL;");
         }
-        bool hasAliases = data.fields.Any(field => field.OldNames.Length != 0);
-        if (hasAliases) sb.AppendLine("        internal static class __LuminPackOldNames {");
+        if (aliases != 0) sb.AppendLine("        internal static class __LuminPackOldNames {");
         for (int index = 0; index < data.fields.Count; index++)
         {
             for (int alias = 0; alias < data.fields[index].OldNames.Length; alias++)
             {
                 string name = data.fields[index].OldNames[alias];
                 string suffix = "Alias_" + index + "_" + alias;
-                sb.AppendLine("        internal static readonly byte[] _utf8_" + suffix + " = new byte[] { " +
-                    string.Join(", ", Encoding.UTF8.GetBytes(name).Select(value => "(byte)" + value)) + " };");
-                sb.AppendLine("        internal static readonly char[] _utf16_" + suffix + " = new char[] { " +
-                    string.Join(", ", name.Select(value => "(char)" + (int)value)) + " };");
+                byte[] bytes = Encoding.UTF8.GetBytes(name);
+                names.Add(new JsonNameFact(name, suffix, index, bytes, small ? 0 : ComputeUtf8BytesHash(bytes), small ? 0 : ComputeUtf16Hash(name), alias: true));
+                sb.Append("        internal static readonly byte[] _utf8_").Append(suffix).Append(" = new byte[] { ");
+                for (int part = 0; part < bytes.Length; part++)
+                {
+                    if (part != 0) sb.Append(", ");
+                    sb.Append("(byte)").Append(bytes[part]);
+                }
+                sb.AppendLine(" };");
+                sb.Append("        internal static readonly char[] _utf16_").Append(suffix).Append(" = new char[] { ");
+                for (int part = 0; part < name.Length; part++)
+                {
+                    if (part != 0) sb.Append(", ");
+                    sb.Append("(char)").Append((int)name[part]);
+                }
+                sb.AppendLine(" };");
             }
         }
-        if (hasAliases) sb.AppendLine("        }");
-        GenerateJsonPropertyLookup(sb, data, true);
-        GenerateJsonPropertyLookup(sb, data, false);
+        if (aliases != 0) sb.AppendLine("        }");
+        if (data.generatorType == GeneratorType.CircleReference && !data.isValueType)
+        {
+            foreach (string name in new[] { "$id", "$ref" })
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(name);
+                names.Add(new JsonNameFact(name, name.Substring(1), name == "$id" ? -2 : -3, bytes,
+                    small ? 0 : ComputeUtf8BytesHash(bytes), small ? 0 : ComputeUtf16Hash(name)));
+            }
+        }
+        GenerateJsonPropertyLookup(sb, names, small, true);
+        GenerateJsonPropertyLookup(sb, names, small, false);
         GenerateOrderedJsonPropertyLookup(sb, data);
     }
 
@@ -194,39 +245,30 @@ public static class LuminPackJsonCodeGenerator
 
     /// <summary>Builds the json property lookup source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="utf8">The utf8 used by this operation.</param>
-    private static void GenerateJsonPropertyLookup(StringBuilder sb, LuminDataInfo data, bool utf8)
+    /// <param name="names">The existing name order and locally retained metadata facts.</param>
+    /// <param name="small">Whether the established dispatch uses name length rather than hashes.</param>
+    /// <param name="utf8">Whether the existing UTF-8 lookup is being rendered.</param>
+    private static void GenerateJsonPropertyLookup(StringBuilder sb, List<JsonNameFact> names, bool small, bool utf8)
     {
         string encoding = utf8 ? "Utf8" : "Utf16";
         string element = utf8 ? "byte" : "char";
         string prefix = utf8 ? "_utf8_" : "_utf16_";
-        var names = data.fields.Select((field, index) => new { field.Name, Index = index, Cache = prefix + field.Name }).ToList();
-        for (int index = 0; index < data.fields.Count; index++)
-            for (int alias = 0; alias < data.fields[index].OldNames.Length; alias++)
-                names.Add(new { Name = data.fields[index].OldNames[alias], Index = index, Cache = "__LuminPackOldNames." + prefix + "Alias_" + index + "_" + alias });
-        if (data.generatorType == GeneratorType.CircleReference && !data.isValueType)
-        {
-            names.Add(new { Name = "$id", Index = -2, Cache = prefix + "id" });
-            names.Add(new { Name = "$ref", Index = -3, Cache = prefix + "ref" });
-        }
         sb.AppendLine("        internal static int GetJsonPropertyIndex" + encoding + "(global::System.ReadOnlySpan<" + element + "> name)");
         sb.AppendLine("        {");
-        bool small = data.fields.Count + data.fields.Sum(field => field.OldNames.Length) <= 8;
         sb.AppendLine(small
             ? "            switch (name.Length)"
             : "            switch (global::LuminPack.Internal.XxHash3.Hash64" + encoding + "(name))");
         sb.AppendLine("            {");
         // Group equal keys so even a compile-time hash collision produces valid C#.
         var groups = names.GroupBy(item => small
-            ? (ulong)(utf8 ? Encoding.UTF8.GetByteCount(item.Name) : item.Name.Length)
-            : (utf8 ? ComputeUtf8Hash(item.Name) : ComputeUtf16Hash(item.Name)));
+            ? (ulong)(utf8 ? item.Utf8Length : item.Name.Length)
+            : (utf8 ? item.Utf8Hash : item.Utf16Hash));
         foreach (var group in groups)
         {
             sb.AppendLine("                case " + group.Key + (small ? ":" : "UL:"));
             foreach (var item in group)
             {
-                string fieldName = item.Cache;
+                string fieldName = (item.Alias ? "__LuminPackOldNames." : "") + prefix + item.Suffix;
                 sb.AppendLine("                    if (global::System.MemoryExtensions.SequenceEqual<" + element + ">(name, " + fieldName + ")) return " + item.Index + ";");
             }
             sb.AppendLine("                    break;");
