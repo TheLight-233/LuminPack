@@ -28,15 +28,16 @@ public static class CultureInfoEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine("            ");
         sb.AppendLine("            if (!reader.TryReadObjectHead())");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
-        sb.AppendLine("            var str = reader.ReadStringAndAdvance(ref index);");
+        // A framework culture can lend its name to the string reader. Always resolve the result through
+        // GetCultureInfo, including after ClearCachedData, and never call a derived target's virtual getter.
+        sb.AppendLine("            var name = value?.GetType() == typeof(global::System.Globalization.CultureInfo) && value.IsReadOnly ? value.Name : null;");
+        sb.AppendLine("            var str = reader.ReadStringRecord(name);");
         sb.AppendLine("            ");
         sb.AppendLine("            value = global::System.Globalization.CultureInfo.GetCultureInfo(str ?? string.Empty);");
     }

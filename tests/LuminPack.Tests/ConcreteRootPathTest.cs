@@ -129,6 +129,42 @@ public class ConcreteRootPathTest
         }
     }
 
+    /// <summary>Checks that culture reads resolve the wire name even when the destination has a matching name.</summary>
+    [Fact]
+    public void CultureReadsUseTheFrameworkResultAndAvoidDerivedNameGetters()
+    {
+        var expected = CultureInfo.GetCultureInfo("en-US");
+        byte[] bytes = LuminPackSerializer.Serialize(expected);
+        var observed = (ObservedCulture)CultureInfo.ReadOnly(new ObservedCulture());
+        observed.NameReads = 0;
+        CultureInfo value = observed;
+        LuminPackSerializer.Deserialize(bytes.AsSpan(), ref value);
+        Assert.Equal(0, observed.NameReads);
+        Assert.Same(expected, value);
+
+        value = CultureInfo.ReadOnly((CultureInfo)expected.Clone());
+        LuminPackSerializer.Deserialize(bytes.AsSpan(), ref value);
+        Assert.Same(expected, value);
+
+        var changed = CultureInfo.InvariantCulture;
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(changed).AsSpan(), ref value);
+        Assert.Same(CultureInfo.GetCultureInfo(changed.Name), value);
+    }
+
+    private sealed class ObservedCulture : CultureInfo
+    {
+        public int NameReads;
+
+        /// <summary>Creates a destination whose virtual name getter records observations.</summary>
+        public ObservedCulture() : base("en-US") { }
+
+        /// <inheritdoc/>
+        public override string Name
+        {
+            get { NameReads++; return base.Name; }
+        }
+    }
+
     /// <summary>Checks pairs and tuples with string members and Lazy scalars, including null members and roots.</summary>
     [Fact]
     public void PairTupleAndLazyRecordsMatchThePooledPath()
