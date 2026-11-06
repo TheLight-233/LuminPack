@@ -154,7 +154,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             sb.AppendLine($"{padding}    }}");
             sb.AppendLine($"{padding}}}");
             sb.AppendLine();
-            sb.AppendLine($"{padding}private static bool __LuminPackTryGetRegistered_{suffix}(global::System.Type type, out {entryType} entry)");
+            sb.AppendLine($"{padding}private static bool LuminPackTryGetRegistered_{suffix}(global::System.Type type, out {entryType} entry)");
             sb.AppendLine($"{padding}{{");
             sb.AppendLine($"{padding}    lock (s_unionRegistry_{suffix}) return s_unionRegistry_{suffix}.TryGetValue((nint)global::LuminPack.Code.LuminPackMarshal.GetMethodTable(type), out entry);");
             sb.AppendLine($"{padding}}}");
@@ -163,14 +163,14 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
 
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{modifier}void __LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
+        sb.AppendLine($"{padding}{modifier}void LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
         if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
         {
-            sb.AppendLine($"{padding}    if (__LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var __entry) && __entry.WriteValue != 0)");
+            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValue != 0)");
             sb.AppendLine($"{padding}    {{");
-            sb.AppendLine($"{padding}        {rootType} __value = this;");
-            sb.AppendLine($"{padding}        unsafe {{ ((delegate*<ref global::LuminPack.Core.LuminPackWriter, ref {rootType}, void>)__entry.WriteValue)(ref writer, ref __value); }}");
+            sb.AppendLine($"{padding}        {rootType} rootValue = this;");
+            sb.AppendLine($"{padding}        unsafe {{ ((delegate*<ref global::LuminPack.Core.LuminPackWriter, ref {rootType}, void>)registration.WriteValue)(ref writer, ref rootValue); }}");
             sb.AppendLine($"{padding}        return;");
             sb.AppendLine($"{padding}    }}");
         }
@@ -180,14 +180,14 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
 
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{modifier}void __LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
+        sb.AppendLine($"{padding}{modifier}void LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
         if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
         {
-            sb.AppendLine($"{padding}    if (__LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var __entry) && __entry.WriteValueJson != 0)");
+            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValueJson != 0)");
             sb.AppendLine($"{padding}    {{");
-            sb.AppendLine($"{padding}        {rootType} __value = this;");
-            sb.AppendLine($"{padding}        unsafe {{ ((delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, ref {rootType}, void>)__entry.WriteValueJson)(ref writer, ref __value); }}");
+            sb.AppendLine($"{padding}        {rootType} rootValue = this;");
+            sb.AppendLine($"{padding}        unsafe {{ ((delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, ref {rootType}, void>)registration.WriteValueJson)(ref writer, ref rootValue); }}");
             sb.AppendLine($"{padding}        return;");
             sb.AppendLine($"{padding}    }}");
         }
@@ -238,7 +238,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
 
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
+        sb.AppendLine($"{padding}{prefix}LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
         if (fuseFixedWrite)
             sb.AppendLine($"{bodyPadding}writer.CurrentIndex = global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref writer, this, writer.CurrentIndex, (byte){members[0].Id});");
@@ -252,7 +252,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
 
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
+        sb.AppendLine($"{padding}{prefix}LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
         AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Json, extensionType);
         sb.AppendLine($"{padding}}}");
@@ -282,7 +282,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         }
 
         var suffix = GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
-        sb.AppendLine($"{padding}switch (__LuminPackUnionDispatchSlot_{suffix})");
+        sb.AppendLine($"{padding}switch (LuminPackUnionDispatchSlot_{suffix})");
         sb.AppendLine($"{padding}{{");
         foreach (var member in members)
         {
@@ -329,8 +329,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
     {
         var definition = members[0].Type.OriginalDefinition;
         var currentType = definition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var fieldName = $"__LuminPackUnionDispatchSlot_{suffix}";
-        var resolverName = $"__ResolveLuminPackUnionDispatchSlot_{suffix}";
+        var fieldName = $"LuminPackUnionDispatchSlot_{suffix}";
+        var resolverName = $"ResolveLuminPackUnionDispatchSlot_{suffix}";
 
         sb.AppendLine($"{padding}private static readonly int {fieldName} = {resolverName}();");
         sb.AppendLine();
@@ -379,7 +379,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         var memberType = IsConstructedMember(definition, member)
             ? member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             : definition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        sb.AppendLine($"{padding}    case var __runtimeType when __runtimeType == typeof({memberType}):");
+        sb.AppendLine($"{padding}    case var runtimeType when runtimeType == typeof({memberType}):");
         sb.AppendLine($"{padding}        return {GetDispatchSlot(data, members, member)};");
     }
 

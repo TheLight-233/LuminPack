@@ -128,7 +128,7 @@ internal static class SerializerRootApiRegression
             string Body(MethodDeclarationSyntax method)
             {
                 if (method.Body!.Statements is [ReturnStatementSyntax { Expression: InvocationExpressionSyntax { Expression: GenericNameSyntax helper } }] &&
-                    helper.Identifier.ValueText.StartsWith("__LuminFacade_", StringComparison.Ordinal))
+                    helper.Identifier.ValueText.StartsWith("LuminFacade_", StringComparison.Ordinal))
                     return allMethods.Single(candidate => candidate.Identifier.ValueText == helper.Identifier.ValueText).Body!.ToString();
                 return method.Body.ToString();
             }

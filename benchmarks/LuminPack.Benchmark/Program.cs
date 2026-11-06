@@ -170,7 +170,7 @@ internal static class Program
     private static void DescribePolymorphismRoots()
     {
         foreach (Type type in typeof(Program).Assembly.GetTypes().Where(type =>
-            type.IsNested && type.Name.StartsWith("__LuminRoots_", StringComparison.Ordinal)))
+            type.IsNested && type.Name.StartsWith("LuminRoots_", StringComparison.Ordinal)))
         {
             foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic))
             {

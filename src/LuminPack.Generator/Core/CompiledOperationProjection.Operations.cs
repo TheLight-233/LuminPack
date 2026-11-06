@@ -26,7 +26,7 @@ internal sealed partial class CompiledOperationProjection
             writer = identifier.StartsWith("Serialize", StringComparison.Ordinal);
         string stateType = facade ? "LuminPack.Core.LuminPack" + (identifier == "Sizeof" ? "Evaluator" : json ? writer ? "JsonWriter" : "JsonReader" : writer ? "Writer" : "Reader") : method.ParameterList.Parameters[0].Type.ToString();
         string stateName = facade ? identifier == "Sizeof" ? "evaluator" : writer ? "writer" : "reader" : method.ParameterList.Parameters[0].Identifier.ValueText;
-        string profile = "__LuminProfile";
+        string profile = "TLuminProfile";
         var identifiers = new HashSet<string>(method.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).Select(token => token.ValueText), StringComparer.Ordinal);
         foreach (var ancestor in method.Ancestors().OfType<TypeDeclarationSyntax>())
             if (ancestor.TypeParameterList != null)

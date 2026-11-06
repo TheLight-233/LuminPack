@@ -52,7 +52,7 @@ internal sealed class BinaryEntryInlining
         _rootInput = input.Enabled ? input : null;
         _types.Add(FormatterTypeName.Get(root), root);
         using (var hash = SHA256.Create())
-            _layoutPrefix = "__LuminLayout_" + string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(FormatterTypeName.Get(root)))
+            _layoutPrefix = "LuminLayout_" + string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(FormatterTypeName.Get(root)))
                 .Select(value => value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture))) + "_";
     }
 
@@ -99,7 +99,7 @@ internal sealed class BinaryEntryInlining
         string key = plan.TypeName + "|" + operationName;
         if (_inputReaders.TryGetValue(key, out string existing))
             return existing;
-        string name = "__InputRead_" + _layoutPrefix.Substring(14, 16) + "_" + _inputReaders.Count;
+        string name = "InputRead_" + _layoutPrefix.Substring(14, 16) + "_" + _inputReaders.Count;
         _inputReaders.Add(key, name);
         string selected = operationName;
         var operation = plan.Operations[selected];

@@ -49,7 +49,7 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
             return node;
         string previous = _limit;
         _limit = _generic && node.TypeParameterList?.Parameters.Any(p => p.Identifier.ValueText == "T") == true ?
-            "global::LuminPack.LuminPackSerializer.FormatterDispatch.__LuminPackInputLimit<T>()" : Limit(_options).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            "global::LuminPack.LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>()" : Limit(_options).ToString(System.Globalization.CultureInfo.InvariantCulture);
         string guard = "";
         // A forwarding overload leaves the check to the overload that reads.
         bool forwarding = node.ExpressionBody?.Expression is InvocationExpressionSyntax ||
@@ -60,7 +60,7 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
             string name = parameter.Identifier.Text, type = parameter.Type?.ToString() ?? "";
             if (type == "string" || type.Contains("Span<char>"))
                 guard += "global::LuminPack.Security.LuminPackInputPolicy.CheckCharacters(" + name + (type == "string" ? ".AsSpan()" : "") + ", " +
-                    (_generic ? "(int)global::LuminPack.LuminPackSerializer.FormatterDispatch.__LuminPackJsonEncoding<T>()" : _options.Encoding.ToString()) + ", " + _limit + ");";
+                    (_generic ? "(int)global::LuminPack.LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<T>()" : _options.Encoding.ToString()) + ", " + _limit + ");";
             else if (type.Contains("Span<byte>") || type.Contains("ReadOnlySequence<byte>"))
                 guard += "global::LuminPack.Security.LuminPackInputPolicy.CheckInput(" + name + ".Length, " + _limit + ");";
             else if (type.EndsWith("LuminBufferWriter", StringComparison.Ordinal))

@@ -539,8 +539,9 @@ public static partial class LuminPackExtensionGenerator
             {
                 stringBuilder.Append(c);
             }
-            else
+            else if (stringBuilder[stringBuilder.Length - 1] != '_')
             {
+                // Punctuation such as "::" or ">>" maps to one separator; two would form a reserved identifier.
                 stringBuilder.Append('_');
             }
         }

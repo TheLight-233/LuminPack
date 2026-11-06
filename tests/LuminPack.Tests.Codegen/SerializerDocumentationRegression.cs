@@ -80,7 +80,7 @@ internal static class SerializerDocumentationRegression
                 parameter.Type?.ToString().Replace(" ", string.Empty, StringComparison.Ordinal) is
                     "global::System.Collections.Generic.List<global::NavigationItem>" or "global::NavigationItem"))
             .SelectMany(method => ReadDocumentation(method).Descendants("see").Select(element => (string?)element.Attribute("cref")))
-            .Where(target => target?.StartsWith("__LuminRoots_", StringComparison.Ordinal) == true).OrderBy(target => target, StringComparer.Ordinal));
+            .Where(target => target?.StartsWith("LuminRoots_", StringComparison.Ordinal) == true).OrderBy(target => target, StringComparer.Ordinal));
 
     /// <summary>Requires final text rendering to match structured trivia across XML modes and declaration boundaries.</summary>
     private static void VerifyDocumentationText()
@@ -254,9 +254,9 @@ internal static class SerializerDocumentationRegression
                 !name.Contains("__Lumin", StringComparison.Ordinal)),
                 "Emitted XML must contain only the serializer facade and its caller-facing methods.");
             var rootReferences = rendered.Descendants("see").Select(element => (string?)element.Attribute("cref"))
-                .Where(reference => reference?.Contains(".__LuminRoots_", StringComparison.Ordinal) == true).ToArray();
+                .Where(reference => reference?.Contains(".LuminRoots_", StringComparison.Ordinal) == true).ToArray();
             Require(rootReferences.Length != 0 && rootReferences.All(reference =>
-                    reference!.StartsWith("M:LuminPack.LuminPackSerializer.__LuminRoots_", StringComparison.Ordinal)),
+                    reference!.StartsWith("M:LuminPack.LuminPackSerializer.LuminRoots_", StringComparison.Ordinal)),
                 "Compact Root references did not emit canonical method documentation identifiers.");
         }
         var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
@@ -266,7 +266,7 @@ internal static class SerializerDocumentationRegression
             {
                 var model = output.GetSemanticModel(file.SyntaxTree);
                 foreach (var link in file.SyntaxTree.GetRoot().DescendantNodes(descendIntoTrivia: true).OfType<XmlCrefAttributeSyntax>()
-                    .Where(attribute => attribute.Cref.ToString().StartsWith("__LuminRoots_", StringComparison.Ordinal)))
+                    .Where(attribute => attribute.Cref.ToString().StartsWith("LuminRoots_", StringComparison.Ordinal)))
                 {
                     Require(model.GetSymbolInfo(link.Cref).Symbol is IMethodSymbol target &&
                         target.Name.StartsWith("Root", StringComparison.Ordinal) && target.DeclaringSyntaxReferences.Length == 1,
@@ -322,7 +322,7 @@ internal static class SerializerDocumentationRegression
         var genericModelOverloads = methods.Where(method => method.Identifier.ValueText != "Sizeof" &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("global::DocumentationBox<int>", StringComparison.Ordinal) == true)).ToArray();
         Require(genericModelOverloads.Length > 2 && genericModelOverloads.All(method => ReadDocumentation(method).Descendants("see")
-            .Count(element => ((string?)element.Attribute("cref"))?.StartsWith("__LuminRoots_", StringComparison.Ordinal) == true) == 1),
+            .Count(element => ((string?)element.Attribute("cref"))?.StartsWith("LuminRoots_", StringComparison.Ordinal) == true) == 1),
             "Closed generic model overloads lost their direct Root navigation links.");
         var modelOverloads = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } && method.TypeParameterList == null &&
             (method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::DocumentationModel") ||
@@ -333,7 +333,7 @@ internal static class SerializerDocumentationRegression
             var documentation = ReadDocumentation(overload);
             var implementation = overload.GetLeadingTrivia().Where(trivia => trivia.HasStructure)
                 .SelectMany(trivia => trivia.GetStructure()!.DescendantNodes()).OfType<XmlCrefAttributeSyntax>()
-                .Where(attribute => attribute.Cref.ToString().StartsWith("__LuminRoots_", StringComparison.Ordinal)).ToArray();
+                .Where(attribute => attribute.Cref.ToString().StartsWith("LuminRoots_", StringComparison.Ordinal)).ToArray();
             if (overload.Identifier.ValueText != "Sizeof")
             {
                 Require(implementation.Length == 1, "A concrete model overload has no direct Root navigation link.");
@@ -397,7 +397,7 @@ internal static class SerializerDocumentationRegression
         };
         var roots = sources.SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.ParameterList.Parameters.Count == 2 && method.Identifier.ValueText is "RootWrite" or "RootRead" or "RootWriteJson" or "RootReadJson" &&
-                method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("__LuminRoots_", StringComparison.Ordinal))
+                method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("LuminRoots_", StringComparison.Ordinal))
             .ToDictionary(method => Payload(method.ParameterList.Parameters[1].Type!) + "|" + method.Identifier.ValueText,
                 method => ((ClassDeclarationSyntax)method.Parent!).Identifier.ValueText + "." + method.Identifier.ValueText,
                 StringComparer.Ordinal);
@@ -414,7 +414,7 @@ internal static class SerializerDocumentationRegression
                 (name.Contains("Json", StringComparison.Ordinal) ? "Json" : "");
             string? expected = name == "Sizeof" ? null : roots.GetValueOrDefault(payload + "|" + operation);
             var actual = ReadDocumentation(method).Descendants("see").Select(element => (string?)element.Attribute("cref"))
-                .Where(target => target?.StartsWith("__LuminRoots_", StringComparison.Ordinal) == true).ToArray();
+                .Where(target => target?.StartsWith("LuminRoots_", StringComparison.Ordinal) == true).ToArray();
             Require(expected == null ? actual.Length == 0 : actual.Length == 1 && actual[0] == expected,
                 "A concrete built-in API has missing or fictitious Root navigation: " + payload + " " + name + " (expected " + (expected ?? "none") +
                 ", found " + string.Join(", ", actual) + ")");

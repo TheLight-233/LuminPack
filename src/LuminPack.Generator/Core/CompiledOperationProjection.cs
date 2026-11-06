@@ -69,10 +69,10 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
             {
                 members.Add((MemberDeclarationSyntax)Visit(member));
                 continue; }
-            bool serializer = identifier.StartsWith("__InputRead_", StringComparison.Ordinal) || identifier is "SerializeJson" or "DeserializeJson" or "Serialize" or "Deserialize" or "Sizeof" or
+            bool serializer = identifier.StartsWith("InputRead_", StringComparison.Ordinal) || identifier is "SerializeJson" or "DeserializeJson" or "Serialize" or "Deserialize" or "Sizeof" or
                 "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress";
-            bool slot = identifier.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ||
-                identifier.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) || identifier.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
+            bool slot = identifier.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) ||
+                identifier.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) || identifier.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
             bool lookup = identifier == "TryReadOrderedJsonProperty";
             if (!serializer && !slot && !lookup && !facade)
             {
@@ -112,10 +112,10 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
     /// <returns>Whether an ambient profile can affect its generated work.</returns>
     private static bool HasProfileWork(MethodDeclarationSyntax method) => method.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
         call.Expression is MemberAccessExpressionSyntax access &&
-        (access.Name.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) ||
+        (access.Name.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) ||
          access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" && access.Name.Identifier.ValueText == "CheckInputProfile" ||
          access.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" && access.Name.Identifier.ValueText == "TryReadStableStringKeys" ||
-         access.Name.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ||
+         access.Name.Identifier.ValueText.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ||
          access.Name.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" ||
          // A version prefix stamps and compares the binary profile even when every member is raw.
          access.Name.Identifier.ValueText is "TryReadPrefix" or "WritePrefix" or "StorePrefix" ||

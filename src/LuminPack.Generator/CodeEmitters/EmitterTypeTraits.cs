@@ -252,7 +252,7 @@ internal static class EmitterTypeTraits
             sb.AppendLine(indent + "if (reader.PeekIsNullObject(ref reader.GetCurrentSpanOffset())) " + target + " = default!;");
         }
         else if (type is ITypeParameterSymbol { IsValueType: false })
-            sb.AppendLine(indent + "if (global::LuminPack.LuminPackSerializer.FormatterDispatch.__LuminPackShouldResetMember<" + type.ToDisplayString() + ">(ref reader)) " + target + " = default!;");
+            sb.AppendLine(indent + "if (global::LuminPack.LuminPackSerializer.FormatterDispatch.LuminPackShouldResetMember<" + type.ToDisplayString() + ">(ref reader)) " + target + " = default!;");
         sb.AppendLine(indent + "reader." + (compressed ? "ReadValueWithCompress" : "ReadValue") + "(ref " + target + "!);");
     }
 

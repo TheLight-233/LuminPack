@@ -64,7 +64,7 @@ internal static class SerializerStringListReadRegression
             var compilation = CSharpCompilation.Create("StringListReads" + mode + Guid.NewGuid().ToString("N"), [tree], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             var driver = Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
-            Require(Trees(driver).Any(text => text.Contains(".ReadStrings<__LuminProfile>", StringComparison.Ordinal)), "The string list lost its compiled bulk reader.");
+            Require(Trees(driver).Any(text => text.Contains(".ReadStrings<TLuminProfile>", StringComparison.Ordinal)), "The string list lost its compiled bulk reader.");
             Execute(output);
             string changed = text.Replace("using Element = System.String;", "using Element = System.Int32;", StringComparison.Ordinal);
             var edited = compilation.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(changed, parse, "Entry.cs"));

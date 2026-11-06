@@ -256,7 +256,7 @@ public static partial class DictionaryEmitter
                 // Approved exact fixed-case tests: each runs the body its case override runs; every other runtime type keeps the cursor slot.
                 foreach (var (id, caseType) in fieldData.UnionCursorCases ?? new System.Collections.Generic.List<(int Id, string Type)>())
                     sb.AppendLine($"                    else if (itemValue.GetType() == typeof({caseType})) nextIndex = global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref writer, global::System.Runtime.CompilerServices.Unsafe.As<{caseType}>(itemValue), nextIndex, (byte){id});");
-                sb.AppendLine($"                    else nextIndex = itemValue.__LuminPackUnionSerializeCursor_{fieldData.UnionCursorSuffix}(ref writer, nextIndex);");
+                sb.AppendLine($"                    else nextIndex = itemValue.LuminPackUnionSerializeCursor_{fieldData.UnionCursorSuffix}(ref writer, nextIndex);");
             }
             else
             {

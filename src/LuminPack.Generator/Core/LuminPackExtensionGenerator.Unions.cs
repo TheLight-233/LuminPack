@@ -83,11 +83,11 @@ public static partial class LuminPackExtensionGenerator
         {
             sb.AppendLine("                default:");
             sb.AppendLine("                {");
-            sb.AppendLine("                    if (" + data.classFullName + ".TryGetRegisteredFormatter(tag, out var __registered) && __registered.ReadValue != 0)");
+            sb.AppendLine("                    if (" + data.classFullName + ".TryGetRegisteredFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValue != 0)");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        " + data.classFullName + " __registeredValue = default!;");
-            sb.AppendLine("                        unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackReader, ref " + data.classFullName + ", void>)__registered.ReadValue)(ref reader, ref __registeredValue); }");
-            sb.AppendLine("                        value = __registeredValue;");
+            sb.AppendLine("                        " + data.classFullName + " registeredValue = default!;");
+            sb.AppendLine("                        unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackReader, ref " + data.classFullName + ", void>)registeredFormatter.ReadValue)(ref reader, ref registeredValue); }");
+            sb.AppendLine("                        value = registeredValue;");
             sb.AppendLine(reuse ? "                        return value;" : "                        return;");
             sb.AppendLine("                    }");
             sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + data.classFullName + ")); ");
@@ -216,11 +216,11 @@ public static partial class LuminPackExtensionGenerator
         {
             sb.AppendLine("                    default:");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        if (" + typeName + ".TryGetRegisteredFormatter(tag, out var __registered) && __registered.ReadValueJson != 0)");
+            sb.AppendLine("                        if (" + typeName + ".TryGetRegisteredFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != 0)");
             sb.AppendLine("                        {");
-            sb.AppendLine("                            " + typeName + " __registeredValue = default!;");
-            sb.AppendLine("                            unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref " + typeName + ", void>)__registered.ReadValueJson)(ref reader, ref __registeredValue); }");
-            sb.AppendLine("                            value = __registeredValue;");
+            sb.AppendLine("                            " + typeName + " registeredValue = default!;");
+            sb.AppendLine("                            unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref " + typeName + ", void>)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue); }");
+            sb.AppendLine("                            value = registeredValue;");
             sb.AppendLine("                            break;");
             sb.AppendLine("                        }");
             sb.AppendLine("                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + typeName + "));");

@@ -14,7 +14,7 @@ namespace LuminPack.Code.Core;
 /// record is a null object, so a nonnull record refills the existing child. Other member types keep the reset.</remarks>
 internal sealed class ClosedMemberResetProjection : CSharpSyntaxRewriter
 {
-    private const string Reset = "global::LuminPack.LuminPackSerializer.FormatterDispatch.__LuminPackShouldResetMember";
+    private const string Reset = "global::LuminPack.LuminPackSerializer.FormatterDispatch.LuminPackShouldResetMember";
     private readonly IReadOnlyDictionary<string, ITypeSymbol> _types;
 
     /// <summary>Captures the compilation's canonical formatter types.</summary>
@@ -27,7 +27,7 @@ internal sealed class ClosedMemberResetProjection : CSharpSyntaxRewriter
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         if (node.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } name } access &&
-            name.Identifier.ValueText == "__LuminPackShouldResetMember" && access.Expression.ToString() + "." + name.Identifier.ValueText == Reset &&
+            name.Identifier.ValueText == "LuminPackShouldResetMember" && access.Expression.ToString() + "." + name.Identifier.ValueText == Reset &&
             node.ArgumentList.Arguments.Count == 1 && node.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax reader &&
             _types.TryGetValue(name.TypeArgumentList.Arguments[0].ToString().TrimEnd('?'), out var type))
         {

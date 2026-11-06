@@ -191,13 +191,13 @@ internal static class SerializerMechanismRegression
         Require(generated.Contains("LuminPackMarshal.As<", StringComparison.Ordinal) && generated.Contains("Hidden", StringComparison.Ordinal) &&
             !generated.Contains("UnsafeAccessorAttribute", StringComparison.Ordinal), "Private storage lost its Local + As path.");
         var methods = output.SyntaxTrees.Skip(1).SelectMany(tree => tree.GetRoot().DescendantNodes()).OfType<MethodDeclarationSyntax>()
-            .Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal)).ToArray();
+            .Where(method => method.Identifier.ValueText.StartsWith("LuminPackUnion", StringComparison.Ordinal)).ToArray();
         var ordinary = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Case" }).ToArray();
         Require(ordinary.Length == 8 && ordinary.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
             !method.DescendantNodes().OfType<SwitchStatementSyntax>().Any()), "An ordinary Union override acquired a switch or lost virtual dispatch.");
         var generic = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "GenericCase" }).ToArray();
         Require(generic.Length == 8 && generic.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
-            method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement => statement.Expression.ToString().StartsWith("__LuminPackUnionDispatchSlot_", StringComparison.Ordinal))),
+            method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement => statement.Expression.ToString().StartsWith("LuminPackUnionDispatchSlot_", StringComparison.Ordinal))),
             "A generic Union override lost its cached-slot switch.");
         var bodies = methods.Where(method => method.TypeParameterList == null && !method.Identifier.ValueText.Contains("_Options_", StringComparison.Ordinal))
             .Select(method => ((TypeDeclarationSyntax)method.Parent!).Identifier.ValueText + ":" + method.Identifier.ValueText + ":" +
@@ -229,7 +229,7 @@ internal static class SerializerMechanismRegression
             if (node.ArgumentList.Arguments.Count == 2 && node.ArgumentList.Arguments[1].RefKindKeyword.IsKind(SyntaxKind.OutKeyword))
             {
                 ExpressionSyntax? registeredType = null;
-                if (node.Expression is IdentifierNameSyntax helper && helper.Identifier.ValueText.StartsWith("__LuminPackTryGetRegistered_", StringComparison.Ordinal))
+                if (node.Expression is IdentifierNameSyntax helper && helper.Identifier.ValueText.StartsWith("LuminPackTryGetRegistered_", StringComparison.Ordinal))
                     registeredType = node.ArgumentList.Arguments[0].Expression;
                 else if (node.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax registry, Name.Identifier.ValueText: "TryGetValue" } &&
                     registry.Identifier.ValueText.StartsWith("s_unionRegistry_", StringComparison.Ordinal) &&

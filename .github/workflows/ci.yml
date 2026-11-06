@@ -238,8 +238,8 @@ jobs:
           for operation in lumin-write lumin-read nino-write nino-read; do
             case "$operation" in
               lumin-write)
-                export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *__LuminPackUnionSerialize*'
-                required='LuminPackBenchmark[.]FooA:__LuminPackUnionSerialize.*\(Tier1'
+                export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *LuminPackUnionSerialize*'
+                required='LuminPackBenchmark[.]FooA:LuminPackUnionSerialize.*\(Tier1'
                 ;;
               lumin-read)
                 export DOTNET_JitDisasm='*LuminPackDeserialize* *RootRead* *TryPeekUnionHeader*'
@@ -262,7 +262,7 @@ jobs:
             fi
             cat "$metadata"
             if [[ "$operation" == lumin-read ]]; then
-              list_root=$(sed -n 's/^Generated root: .*\(__LuminRoots_[0-9a-f]*\):RootRead; parameter: System.Collections.Generic.List.*/\1/p' "$metadata")
+              list_root=$(sed -n 's/^Generated root: .*\(LuminRoots_[0-9a-f]*\):RootRead; parameter: System.Collections.Generic.List.*/\1/p' "$metadata")
               if [[ -z "$list_root" ]]; then
                 echo 'The generated polymorphic list reader was not identified.' >&2
                 exit 1

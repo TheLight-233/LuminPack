@@ -203,7 +203,7 @@ internal static class BinaryExtensionProjection
             if (access.Name is GenericNameSyntax selectedProfile)
             {
                 string profile = selectedProfile.TypeArgumentList.Arguments.Last().ToString();
-                if (!profile.StartsWith("__LuminProfile", StringComparison.Ordinal) &&
+                if (!profile.StartsWith("TLuminProfile", StringComparison.Ordinal) &&
                     !profile.StartsWith("global::LuminPack.Option.", StringComparison.Ordinal))
                     return rewritten;
             }

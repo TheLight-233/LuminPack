@@ -6,7 +6,7 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackExtensionGenerator
 {
     private const string Declared = "global::LuminPack.Option.LuminPackDeclaredOptions";
-    private const string ProfileConstraint = "where __LuminProfile : struct, global::LuminPack.Option.ILuminPackOptions";
+    private const string ProfileConstraint = "where TLuminProfile : struct, global::LuminPack.Option.ILuminPackOptions";
 
     /// <summary>Builds generic operation boundaries that invoke explicitly registered method pointers.</summary>
     /// <param name="metaInfo">Current language, framework, and registration settings.</param>
@@ -20,7 +20,7 @@ public static partial class LuminPackExtensionGenerator
         string scopedRef = metaInfo.IsNet8 ? "scoped ref " : "ref ";
         string scopedState = metaInfo.IsNet8 ? "scoped " : string.Empty;
         bool registry = metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled;
-        string fallbackProfile = "global::LuminPack.Option.LuminPackFallbackOptions<__LuminProfile, " + fallback.TypeName + ">";
+        string fallbackProfile = "global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, " + fallback.TypeName + ">";
         sb.AppendLine("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649");
         sb.AppendLine("using global::System;");
         sb.AppendLine("using global::System.Runtime.CompilerServices;");
@@ -50,7 +50,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            /// <typeparam name=\"T\">The member type.</typeparam>");
         sb.AppendLine("            /// <returns>Whether the member storage must be reset before the formatter reads it.</returns>");
         sb.AppendLine("            [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine("            internal static bool __LuminPackShouldResetMember<T>(ref global::LuminPack.Core.LuminPackReader reader)");
+        sb.AppendLine("            internal static bool LuminPackShouldResetMember<T>(ref global::LuminPack.Core.LuminPackReader reader)");
         sb.AppendLine("            {");
         sb.AppendLine("                if (typeof(T).IsValueType) return false;");
         sb.AppendLine("                return true;");
@@ -59,22 +59,22 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            /// <summary>Gets the assembly default encoding of an opaque registered JSON document.</summary>");
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
         sb.AppendLine("            /// <returns>The consuming assembly's compiled JSON encoding.</returns>");
-        sb.AppendLine("            internal static global::LuminPack.Option.LuminPackStringEncoding __LuminPackJsonEncoding<T>()");
+        sb.AppendLine("            internal static global::LuminPack.Option.LuminPackStringEncoding LuminPackJsonEncoding<T>()");
         sb.AppendLine("                => (global::LuminPack.Option.LuminPackStringEncoding)" + fallback.Encoding + ";");
         sb.AppendLine();
         sb.AppendLine("            /// <summary>Gets the JSON document encoding for a profile.</summary>");
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
         sb.AppendLine("            /// <typeparam name=\"TOptions\">The stateless profile.</typeparam>");
         sb.AppendLine("            /// <returns>The assembly encoding for the declared marker; otherwise the explicit profile's encoding.</returns>");
-        sb.AppendLine("            internal static global::LuminPack.Option.LuminPackStringEncoding __LuminPackJsonEncoding<T, TOptions>() where TOptions : struct, global::LuminPack.Option.ILuminPackOptions");
-        sb.AppendLine("                => typeof(TOptions) == typeof(" + Declared + ") ? __LuminPackJsonEncoding<T>() : default(TOptions).StringEncoding;");
+        sb.AppendLine("            internal static global::LuminPack.Option.LuminPackStringEncoding LuminPackJsonEncoding<T, TOptions>() where TOptions : struct, global::LuminPack.Option.ILuminPackOptions");
+        sb.AppendLine("                => typeof(TOptions) == typeof(" + Declared + ") ? LuminPackJsonEncoding<T>() : default(TOptions).StringEncoding;");
         sb.AppendLine();
         sb.AppendLine("            /// <summary>Reads the next JSON token or finishes the document with the assembly profile.</summary>");
         sb.AppendLine("            /// <param name=\"reader\">The JSON reader.</param>");
         sb.AppendLine("            /// <param name=\"complete\">Whether the complete document must now be exhausted.</param>");
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
         sb.AppendLine("            /// <returns>Whether a token was read, or true after a successful end-of-document check.</returns>");
-        sb.AppendLine("            internal static bool __LuminPackJsonReadBoundary<T>(ref global::LuminPack.Core.LuminPackJsonReader reader, bool complete)");
+        sb.AppendLine("            internal static bool LuminPackJsonReadBoundary<T>(ref global::LuminPack.Core.LuminPackJsonReader reader, bool complete)");
         sb.AppendLine("            {");
         if (fallback.Input.Enabled)
             sb.AppendLine("                global::LuminPack.Security.LuminPackInputPolicy.CheckInput(reader.Buffer.Length, " + SafeFacadeProjection.Limit(fallback) + ");");
@@ -88,9 +88,9 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
         sb.AppendLine("            /// <typeparam name=\"TOptions\">The stateless profile.</typeparam>");
         sb.AppendLine("            /// <returns>Whether a token was read, or true after a successful end-of-document check.</returns>");
-        sb.AppendLine("            internal static bool __LuminPackJsonReadBoundary<T, TOptions>(ref global::LuminPack.Core.LuminPackJsonReader reader, bool complete) where TOptions : struct, global::LuminPack.Option.ILuminPackOptions");
+        sb.AppendLine("            internal static bool LuminPackJsonReadBoundary<T, TOptions>(ref global::LuminPack.Core.LuminPackJsonReader reader, bool complete) where TOptions : struct, global::LuminPack.Option.ILuminPackOptions");
         sb.AppendLine("            {");
-        sb.AppendLine("                if (typeof(TOptions) == typeof(" + Declared + ")) return __LuminPackJsonReadBoundary<T>(ref reader, complete);");
+        sb.AppendLine("                if (typeof(TOptions) == typeof(" + Declared + ")) return LuminPackJsonReadBoundary<T>(ref reader, complete);");
         sb.AppendLine("                if (complete)");
         sb.AppendLine("                {");
         sb.AppendLine("                    reader.EnsureEndOfDocument<TOptions>();");
@@ -102,7 +102,7 @@ public static partial class LuminPackExtensionGenerator
         if (inputPolicies)
         {
             sb.AppendLine("            [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            sb.AppendLine("            internal static int __LuminPackInputLimit<T>() => " +
+            sb.AppendLine("            internal static int LuminPackInputLimit<T>() => " +
                 (fallback.Input.Enabled ? SafeFacadeProjection.Limit(fallback) : int.MaxValue) + ";");
         }
         sb.AppendLine("        }");
@@ -135,26 +135,26 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine();
         sb.AppendLine("            /// <summary>Processes a payload with a compiled profile through the generic fallback.</summary>");
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
-        sb.AppendLine("            /// <typeparam name=\"__LuminProfile\">The stateless profile.</typeparam>");
+        sb.AppendLine("            /// <typeparam name=\"TLuminProfile\">The stateless profile.</typeparam>");
         sb.AppendLine("            /// <param name=\"" + operation.Parameter + "\">The operation state.</param>");
         sb.AppendLine("            /// <param name=\"value\">The payload storage.</param>");
         sb.AppendLine("            /// <remarks>Uses supplied state directly, preserving buffer position and reference tracking. Options are compile-time; caller owns initialization and completion.</remarks>");
         sb.AppendLine("            [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine("            [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine("            internal static void " + operation.Name + "<T, __LuminProfile>" + signature);
+        sb.AppendLine("            internal static void " + operation.Name + "<T, TLuminProfile>" + signature);
         sb.AppendLine("                " + ProfileConstraint);
         sb.AppendLine("            {");
-        sb.AppendLine("                " + operation.Name + "Registered<T, __LuminProfile>" + call + ";");
+        sb.AppendLine("                " + operation.Name + "Registered<T, TLuminProfile>" + call + ";");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            /// <summary>Invokes the explicit registration of a generic payload.</summary>");
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
-        sb.AppendLine("            /// <typeparam name=\"__LuminProfile\">The stateless profile.</typeparam>");
+        sb.AppendLine("            /// <typeparam name=\"TLuminProfile\">The stateless profile.</typeparam>");
         sb.AppendLine("            /// <param name=\"" + operation.Parameter + "\">The operation state.</param>");
         sb.AppendLine("            /// <param name=\"value\">The payload storage.</param>");
         sb.AppendLine("            /// <remarks>Uses supplied state directly, preserving buffer position and reference tracking. Options are compile-time; caller owns initialization and completion.</remarks>");
         sb.AppendLine("            [MethodImpl(MethodImplOptions.NoInlining)]");
-        sb.AppendLine("            private static void " + operation.Name + "Registered<T, __LuminProfile>" + signature);
+        sb.AppendLine("            private static void " + operation.Name + "Registered<T, TLuminProfile>" + signature);
         sb.AppendLine("                " + ProfileConstraint);
         sb.AppendLine("            {");
         if (operation.Pointer == null)
@@ -168,8 +168,8 @@ public static partial class LuminPackExtensionGenerator
         }
         else
         {
-            sb.AppendLine("                global::LuminPack.Code.LuminPackFormatterRegistry<" + fallbackProfile + ">." + (operation.Binary ? "TryGetCachedValue" : "TryGetCachedJsonValue") + "<T>(out var __entry);");
-            sb.AppendLine("                if (__entry." + operation.Pointer + " == 0)");
+            sb.AppendLine("                global::LuminPack.Code.LuminPackFormatterRegistry<" + fallbackProfile + ">." + (operation.Binary ? "TryGetCachedValue" : "TryGetCachedJsonValue") + "<T>(out var registration);");
+            sb.AppendLine("                if (registration." + operation.Pointer + " == 0)");
             sb.AppendLine("                {");
             sb.AppendLine("                    " + MissingRegistration);
             sb.AppendLine("                    return;");
@@ -177,7 +177,7 @@ public static partial class LuminPackExtensionGenerator
             sb.AppendLine();
             sb.AppendLine("                unsafe");
             sb.AppendLine("                {");
-            sb.AppendLine("                    ((delegate*<ref " + stateType + ", " + operation.PointerKeyword + " T, void>)__entry." + operation.Pointer + ")(ref " + operation.Parameter + ", " + operation.PointerKeyword + " value);");
+            sb.AppendLine("                    ((delegate*<ref " + stateType + ", " + operation.PointerKeyword + " T, void>)registration." + operation.Pointer + ")(ref " + operation.Parameter + ", " + operation.PointerKeyword + " value);");
             sb.AppendLine("                }");
         }
         sb.AppendLine("            }");

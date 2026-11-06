@@ -299,7 +299,7 @@ internal static class SerializerBinaryInliningRegression
                     continue;
                 }
                 // Untrusted reads, the default, keep each nested record in one checked helper within the JIT's inlining budget.
-                if (symbol?.Name.StartsWith("__InputRead_", StringComparison.Ordinal) == true) continue;
+                if (symbol?.Name.StartsWith("InputRead_", StringComparison.Ordinal) == true) continue;
                 Require((symbol?.ContainingType.Name != "LuminPackSerializer" || symbol.MethodKind == MethodKind.LocalFunction) &&
                     !(symbol?.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) ?? false),
                     "An ordinary payload field retained a serializer or extension call instead of expanding: " + call);
@@ -317,7 +317,7 @@ internal static class SerializerBinaryInliningRegression
         // The property-name cache stays owned by the per-type Json_<Type> helper: it is declared
         // once for the whole compilation, never lifted and copied into each concrete entry.
         string[] generated = output.SyntaxTrees.Select(tree => tree.ToString()).ToArray();
-        Require(!generated.Any(text => Regex.IsMatch(text, "__LuminLayout_[0-9a-f]+_[A-Za-z0-9_]*_utf8_")),
+        Require(!generated.Any(text => Regex.IsMatch(text, "LuminLayout_[0-9a-f]+_[A-Za-z0-9_]*_utf8_")),
             "A shared JSON property-name cache was copied per concrete root.");
         Require(generated.Sum(text => Regex.Matches(text, @"readonly byte\[\] _utf8_First\b").Count) == 1 &&
                 generated.Sum(text => Regex.Matches(text, @"readonly char\[\] _utf16_First\b").Count) == 1,

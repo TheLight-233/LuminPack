@@ -58,9 +58,9 @@ internal static class SerializerTimeZoneCacheRegression
             var writer = methods.Single(method => method.Identifier.ValueText == "Serialize" &&
                 method.TypeParameterList?.Parameters.Count == 1 && method.ParameterList.Parameters.Count == 1 &&
                 method.ParameterList.Parameters[0].Type!.ToString().TrimEnd('?') == "global::System.TimeZoneInfo");
-            Require(writer.Body!.ToString().Contains("writer.WriteTimeZoneText<__LuminProfile>", StringComparison.Ordinal) &&
+            Require(writer.Body!.ToString().Contains("writer.WriteTimeZoneText<TLuminProfile>", StringComparison.Ordinal) &&
                 writer.Body.ToString().Contains("capacityReserved: true", StringComparison.Ordinal) &&
-                writer.Body.ToString().Contains("default(__LuminProfile).StringRecording", StringComparison.Ordinal),
+                writer.Body.ToString().Contains("default(TLuminProfile).StringRecording", StringComparison.Ordinal),
                 "The exact snapshot entry lost its common framed core or compiled-profile guard in " + mode);
             var reader = methods.Single(method => method.Identifier.ValueText == "Deserialize" &&
                 method.TypeParameterList?.Parameters.Count == 1 && method.ParameterList.Parameters.Count == 2 &&
@@ -68,7 +68,7 @@ internal static class SerializerTimeZoneCacheRegression
                 method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::System.TimeZoneInfo");
             var readBody = reader.Body!;
             var sharedRead = readBody.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(call =>
-                call.Expression is SimpleNameSyntax name && name.Identifier.ValueText.StartsWith("__LuminFacade", StringComparison.Ordinal));
+                call.Expression is SimpleNameSyntax name && name.Identifier.ValueText.StartsWith("LuminFacade", StringComparison.Ordinal));
             if (sharedRead?.Expression is SimpleNameSyntax sharedName)
                 readBody = methods.Single(method => method.Identifier.ValueText == sharedName.Identifier.ValueText).Body!;
             Require(!readBody.ToString().Contains("Lease", StringComparison.Ordinal) &&
@@ -76,8 +76,8 @@ internal static class SerializerTimeZoneCacheRegression
                 "A stateless snapshot read acquired reference-tracking state in " + mode);
             var root = methods.Single(method => method.Identifier.ValueText == "RootRead" &&
                 method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::System.TimeZoneInfo");
-            Require(root.Body!.ToString().Contains("GetTimeZoneCandidate<__LuminProfile>", StringComparison.Ordinal) &&
-                root.Body.ToString().Contains("TryReadTimeZoneInfo<__LuminProfile>", StringComparison.Ordinal) &&
+            Require(root.Body!.ToString().Contains("GetTimeZoneCandidate<TLuminProfile>", StringComparison.Ordinal) &&
+                root.Body.ToString().Contains("TryReadTimeZoneInfo<TLuminProfile>", StringComparison.Ordinal) &&
                 root.Body.ToString().Contains("LuminPackTimeZoneInfoCache.Parse", StringComparison.Ordinal),
                 "A snapshot read lost its complete-content cache or original parse fallback in " + mode);
             using var image = new MemoryStream();

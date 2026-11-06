@@ -161,7 +161,11 @@ public static class LuminPackLocalLayoutGenerator
         var sb = new StringBuilder(fullName.Length + 8);
         foreach (char c in fullName)
         {
-            sb.Append(Microsoft.CodeAnalysis.CSharp.SyntaxFacts.IsIdentifierPartCharacter(c) ? c : '_');
+            // Punctuation such as "::" or ", " maps to one separator; two would form a reserved identifier.
+            if (Microsoft.CodeAnalysis.CSharp.SyntaxFacts.IsIdentifierPartCharacter(c))
+                sb.Append(c);
+            else if (sb.Length == 0 || sb[sb.Length - 1] != '_')
+                sb.Append('_');
         }
 
         return sb.ToString();

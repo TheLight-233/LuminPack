@@ -291,7 +291,7 @@ public static class LuminPackUnionCodeGenerator
 
         sb.AppendLine();
         string suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
-        sb.AppendLine($"            value.__LuminPackUnionSerialize_{suffix}(ref writer);");
+        sb.AppendLine($"            value.LuminPackUnionSerialize_{suffix}(ref writer);");
         sb.AppendLine();
 
         foreach (var item in data.callBackMethods.Where(
@@ -410,7 +410,7 @@ public static class LuminPackUnionCodeGenerator
 
         sb.AppendLine();
         string suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
-        sb.AppendLine($"            value.__LuminPackUnionSerializeJson_{suffix}(ref writer);");
+        sb.AppendLine($"            value.LuminPackUnionSerializeJson_{suffix}(ref writer);");
         sb.AppendLine();
 
         foreach (var item in data.callBackMethods.Where(

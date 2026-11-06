@@ -200,7 +200,7 @@ internal static class SerializerPartitionRegression
     /// whole-class rendering cannot; both forms run the same root, whose profile argument the record may omit.</remarks>
     private static string DirectRoots(string body)
     {
-        body = Regex.Replace(body, @"(?:global::LuminPack\.LuminPackSerializer\.)?__LuminRoots_[0-9a-f]{16}\.Root(Write|Read|WriteJson|ReadJson)(?:<[^>(]*>)?\(ref (\w+), (?:in |ref )?(\w+)\)",
+        body = Regex.Replace(body, @"(?:global::LuminPack\.LuminPackSerializer\.)?LuminRoots_[0-9a-f]{16}\.Root(Write|Read|WriteJson|ReadJson)(?:<[^>(]*>)?\(ref (\w+), (?:in |ref )?(\w+)\)",
             match => "<" + match.Groups[1].Value + " " + match.Groups[2].Value + " " + match.Groups[3].Value + ">");
         return Regex.Replace(body, @"global::LuminPack\.LuminPackSerializer\.(Serialize|Deserialize|SerializeJson|DeserializeJson)(?:<[^>(]*>)?\(ref (\w+), (?:in |ref )?(\w+)\)",
             match => "<" + match.Groups[1].Value switch { "Serialize" => "Write", "Deserialize" => "Read", "SerializeJson" => "WriteJson", _ => "ReadJson" } +

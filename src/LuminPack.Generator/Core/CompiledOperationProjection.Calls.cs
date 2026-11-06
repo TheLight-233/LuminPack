@@ -72,7 +72,7 @@ internal sealed partial class CompiledOperationProjection
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            if (result.Expression is SimpleNameSyntax local && (IsFacadeOperation(local.Identifier.ValueText) || local.Identifier.ValueText.StartsWith("__InputRead_", StringComparison.Ordinal)))
+            if (result.Expression is SimpleNameSyntax local && (IsFacadeOperation(local.Identifier.ValueText) || local.Identifier.ValueText.StartsWith("InputRead_", StringComparison.Ordinal)))
             {
                 var localArguments = local is GenericNameSyntax localGeneric ? localGeneric.TypeArgumentList.Arguments : default;
                 if (localArguments.Count == 0 && _payload != null)
@@ -144,10 +144,10 @@ internal sealed partial class CompiledOperationProjection
             bool formatter = access.Expression.ToString().EndsWith("FormatterDispatch", StringComparison.Ordinal);
             bool serializer = (IsFacadeOperation(name) || name is "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress") &&
                 (access.Expression.ToString().Contains("LuminPackSerializer") || formatter);
-            if (formatter && name is "__LuminPackJsonEncoding" or "__LuminPackJsonReadBoundary")
+            if (formatter && name is "LuminPackJsonEncoding" or "LuminPackJsonReadBoundary")
                 serializer = true;
-            bool union = name.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) || name.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) ||
-                name.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
+            bool union = name.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) || name.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) ||
+                name.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
             bool boundary = union || name == "TryReadOrderedJsonProperty";
             if (!kernel && !serializer && !boundary)
                 return result;

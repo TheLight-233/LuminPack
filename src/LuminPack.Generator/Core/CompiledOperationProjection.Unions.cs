@@ -17,8 +17,8 @@ internal sealed partial class CompiledOperationProjection
     /// <param name="writer">Whether this slot writes a binary or JSON payload.</param>
     private void AppendUnionSlots(List<MemberDeclarationSyntax> members, MethodDeclarationSyntax method, TypeDeclarationSyntax owner, bool writer)
     {
-        string operation = method.Identifier.ValueText.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ? "__LuminPackUnionSerializeJson_" :
-            method.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ? "__LuminPackUnionCalculateOffset_" : "__LuminPackUnionSerialize_";
+        string operation = method.Identifier.ValueText.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) ? "LuminPackUnionSerializeJson_" :
+            method.Identifier.ValueText.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ? "LuminPackUnionCalculateOffset_" : "LuminPackUnionSerialize_";
         string suffix = method.Identifier.ValueText.Substring(operation.Length);
         var root = _types.Values.OfType<INamedTypeSymbol>().FirstOrDefault(type =>
             (type.IsAbstract || type.TypeKind == TypeKind.Interface) && LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type.OriginalDefinition) == suffix)?.OriginalDefinition;
@@ -38,7 +38,7 @@ internal sealed partial class CompiledOperationProjection
             return;
         string rootName = root == null ? owner.Identifier.ValueText : FormatterTypeName.Get(root);
         var source = new System.Text.StringBuilder();
-        string profileParameter = "__LuminProfile";
+        string profileParameter = "TLuminProfile";
         while (owner.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().Any(type =>
             type.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profileParameter) == true))
             profileParameter += "_";
@@ -51,8 +51,8 @@ internal sealed partial class CompiledOperationProjection
         source.Append("public static void ").Append(method.Identifier.ValueText).Append("_Compiled<").Append(profileParameter).Append(">(ref ").Append(method.ParameterList.Parameters[0].Type).Append(" writer, ")
             .Append(rootName).Append(" value) where ").Append(profileParameter).AppendLine(" : struct, global::LuminPack.Option.ILuminPackOptions {");
         // Write slots use the tiered dispatch; offset calculation keeps the original virtual call.
-        var tier = root != null && operation != "__LuminPackUnionCalculateOffset_" ? UnionDispatchTierPlan.Get(root, _compilation) : null;
-        if (operation == "__LuminPackUnionSerialize_" && HasCanonicalUnionProfiles(profiles))
+        var tier = root != null && operation != "LuminPackUnionCalculateOffset_" ? UnionDispatchTierPlan.Get(root, _compilation) : null;
+        if (operation == "LuminPackUnionSerialize_" && HasCanonicalUnionProfiles(profiles))
             foreach (var profile in profiles)
             {
                 string name = method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);

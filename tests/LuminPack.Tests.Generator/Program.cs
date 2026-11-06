@@ -586,7 +586,7 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
         throw new InvalidOperationException("The generic union hot path still contains a linear typeof(T) chain.");
     }
     if (!generated.Contains("LuminUnionMap<int>", StringComparison.Ordinal) ||
-        !generated.Contains("switch (__LuminPackUnionDispatchSlot_", StringComparison.Ordinal) ||
+        !generated.Contains("switch (LuminPackUnionDispatchSlot_", StringComparison.Ordinal) ||
         !generated.Contains("LuminPack.Code.LuminPackMarshal.GetMethodTable", StringComparison.Ordinal) ||
         !generated.Contains("LuminPack.Code.LuminPackMarshal.As<", StringComparison.Ordinal) ||
         !generated.Contains("typeof(global::ClosedGenericMember<TMember>)", StringComparison.Ordinal))
@@ -670,11 +670,11 @@ static void VerifySealedUnionDispatch(MetadataReference[] references)
         result.GeneratedSources
             .Where(static item => item.HintName.EndsWith(".UnionDispatch.g.cs", StringComparison.Ordinal))
             .Select(static item => item.SourceText?.ToString() ?? string.Empty));
-    if (!dispatch.Contains("internal sealed override void __LuminPackUnionSerialize_", StringComparison.Ordinal))
+    if (!dispatch.Contains("internal sealed override void LuminPackUnionSerialize_", StringComparison.Ordinal))
     {
         throw new InvalidOperationException("A leaf class-union member did not emit a sealed dispatch override.");
     }
-    if (!dispatch.Contains("internal override void __LuminPackUnionSerialize_", StringComparison.Ordinal))
+    if (!dispatch.Contains("internal override void LuminPackUnionSerialize_", StringComparison.Ordinal))
     {
         throw new InvalidOperationException("A class-union member with a LuminPackable subclass was incorrectly sealed.");
     }

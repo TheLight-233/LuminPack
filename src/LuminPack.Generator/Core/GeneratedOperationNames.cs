@@ -17,6 +17,11 @@ internal static class GeneratedOperationNames
     /// <returns>The same source with readable and collision-free method-local names.</returns>
     internal static SyntaxNode Rewrite(SyntaxNode root) => new MethodNames().Visit(root);
 
+    /// <summary>Replaces every remaining method-local identity that contains a reserved double underscore.</summary>
+    /// <param name="root">The completely projected source, after the last projection that can introduce a local.</param>
+    /// <returns>The same source, with reserved local identities replaced by readable, collision-free names.</returns>
+    internal static SyntaxNode RewriteReservedLocals(SyntaxNode root) => new ReservedLocals().Visit(root);
+
     /// <summary>Marks a local whose unique identity was reserved by a late projection against every existing token.</summary>
     /// <typeparam name="T">The generated syntax node containing its declaration and uses.</typeparam>
     /// <param name="node">The projection result containing the newly introduced local.</param>
@@ -26,6 +31,30 @@ internal static class GeneratedOperationNames
     internal static T MarkLocal<T>(T node, string identity, string role) where T : SyntaxNode
         => node.ReplaceTokens(node.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken) && token.ValueText == identity),
             (token, _) => token.WithAdditionalAnnotations(new SyntaxAnnotation(RoleAnnotation, role)));
+
+    /// <summary>Recognizes local declarations while excluding support types, fields and member signatures.</summary>
+    /// <param name="token">A marked token from a method body.</param>
+    /// <returns>Whether the token declares method-local storage or a control-flow label.</returns>
+    private static bool IsLocalDeclaration(SyntaxToken token) => token.Parent switch
+    {
+        VariableDeclaratorSyntax variable => variable.Identifier == token,
+        ForEachStatementSyntax iteration => iteration.Identifier == token,
+        SingleVariableDesignationSyntax designation => designation.Identifier == token,
+        CatchDeclarationSyntax exception => exception.Identifier == token,
+        ParameterSyntax parameter => parameter.Identifier == token,
+        LabeledStatementSyntax label => label.Identifier == token,
+        LocalFunctionStatementSyntax function => function.Identifier == token,
+        _ => false
+    };
+
+    /// <summary>Finds identifiers whose spelling a nameof expression turns into a string value.</summary>
+    /// <param name="body">The method body to inspect.</param>
+    /// <returns>Identifiers that must keep their spelling.</returns>
+    private static HashSet<string> ObservedNames(BlockSyntax body) => new(body.DescendantNodes().OfType<InvocationExpressionSyntax>()
+        .Where(call => call.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" })
+        .SelectMany(call => call.ArgumentList.Arguments)
+        .SelectMany(argument => argument.DescendantNodes().OfType<IdentifierNameSyntax>())
+        .Select(identifier => identifier.Identifier.ValueText), StringComparer.Ordinal);
 
     /// <summary>Reserves each method's existing identifiers before choosing presentation names for its private locals.</summary>
     private sealed class MethodNames : CSharpSyntaxRewriter
@@ -47,11 +76,7 @@ internal static class GeneratedOperationNames
             var tokens = node.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).ToArray();
             var occurrences = tokens.GroupBy(token => token.ValueText, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-            var observed = new HashSet<string>(node.Body.DescendantNodes().OfType<InvocationExpressionSyntax>()
-                .Where(call => call.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" })
-                .SelectMany(call => call.ArgumentList.Arguments)
-                .SelectMany(argument => argument.DescendantNodes().OfType<IdentifierNameSyntax>())
-                .Select(identifier => identifier.Identifier.ValueText), StringComparer.Ordinal);
+            var observed = ObservedNames(node.Body);
             var declarations = marked.Where(token => !observed.Contains(token.ValueText) &&
                 occurrences[token.ValueText].All(use => use.HasAnnotations(RoleAnnotation))).ToArray();
             if (declarations.Length == 0)
@@ -85,20 +110,61 @@ internal static class GeneratedOperationNames
                 return node;
             return node.WithBody((BlockSyntax)new LocalNames(replacements).Visit(node.Body));
         }
+    }
 
-        /// <summary>Recognizes local declarations while excluding support types, fields and member signatures.</summary>
-        /// <param name="token">A marked token from a method body.</param>
-        /// <returns>Whether the token declares method-local storage or a control-flow label.</returns>
-        private static bool IsLocalDeclaration(SyntaxToken token) => token.Parent switch
+    /// <summary>Removes reserved spellings from generated locals that no role annotation could follow to the final source.</summary>
+    private sealed class ReservedLocals : CSharpSyntaxRewriter
+    {
+        /// <summary>Selects names for one method's reserved locals; member names and signatures keep their spelling.</summary>
+        /// <param name="node">The completed method declaration.</param>
+        /// <returns>The method with renamed locals, or its original syntax when none is reserved.</returns>
+        public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
-            VariableDeclaratorSyntax variable => variable.Identifier == token,
-            ForEachStatementSyntax iteration => iteration.Identifier == token,
-            SingleVariableDesignationSyntax designation => designation.Identifier == token,
-            CatchDeclarationSyntax exception => exception.Identifier == token,
-            ParameterSyntax parameter => parameter.Identifier == token,
-            LabeledStatementSyntax label => label.Identifier == token,
-            LocalFunctionStatementSyntax function => function.Identifier == token,
-            _ => false
+            if (node.Body == null)
+                return node;
+            var declared = node.Body.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken) &&
+                token.ValueText.Contains("__") && IsLocalDeclaration(token)).Select(token => token.ValueText)
+                .Distinct(StringComparer.Ordinal).ToArray();
+            if (declared.Length == 0)
+                return node;
+            var observed = ObservedNames(node.Body);
+            var reserved = new HashSet<string>(node.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken))
+                .Select(token => token.ValueText), StringComparer.Ordinal);
+            var names = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (string identity in declared)
+            {
+                if (observed.Contains(identity))
+                    continue;
+                string role = identity.TrimStart('_');
+                while (role.Contains("__"))
+                    role = role.Replace("__", "_");
+                if (role.Length == 0 || !SyntaxFacts.IsValidIdentifier(role) || SyntaxFacts.GetKeywordKind(role) != SyntaxKind.None ||
+                    SyntaxFacts.GetContextualKeywordKind(role) != SyntaxKind.None)
+                    role = "local";
+                string name = role;
+                for (int suffix = 2; !reserved.Add(name); suffix++)
+                    name = role + suffix;
+                names.Add(identity, name);
+            }
+            if (names.Count == 0)
+                return node;
+            var tokens = node.Body.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken) &&
+                names.ContainsKey(token.ValueText) && (IsLocalDeclaration(token) || IsLocalUse(token)));
+            return node.WithBody(node.Body.ReplaceTokens(tokens,
+                (token, _) => SyntaxFactory.Identifier(names[token.ValueText]).WithTriviaFrom(token)));
+        }
+
+        /// <summary>Separates uses of a local from member names that merely share its spelling.</summary>
+        /// <param name="token">An identifier token from a method body.</param>
+        /// <returns>Whether the token can refer to method-local storage or a label.</returns>
+        private static bool IsLocalUse(SyntaxToken token) => token.Parent is IdentifierNameSyntax name && name.Parent switch
+        {
+            MemberAccessExpressionSyntax access => access.Expression == name,
+            MemberBindingExpressionSyntax => false,
+            NameColonSyntax => false,
+            NameEqualsSyntax => false,
+            AssignmentExpressionSyntax { Parent: InitializerExpressionSyntax } assignment => assignment.Left != name,
+            _ => true
         };
     }
 

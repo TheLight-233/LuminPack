@@ -97,7 +97,7 @@ internal static class SerializerCompoundStringReuseRegression
             if (selected)
             {
                 Require(method.ToString().Contains("NoInlining", StringComparison.Ordinal), "The compound string helper lost its independent inlining budget.");
-                Require(method.ToString().Contains("stringReader.Read<__LuminProfile>", StringComparison.Ordinal), "The compound string helper lost its selected profile.");
+                Require(method.ToString().Contains("stringReader.Read<TLuminProfile>", StringComparison.Ordinal), "The compound string helper lost its selected profile.");
             }
             roots++;
         }

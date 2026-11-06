@@ -228,8 +228,8 @@ internal static class SerializerOperationCacheRegression
         const string source = """
             namespace LuminPack {
             public static partial class LuminPackSerializer {
-                internal static void Serialize(ref Writer writer, in Payload value) { __LuminRoots_123.RootWrite(ref writer, in value); }
-                internal static void Serialize<TProfile>(ref Writer writer, in Payload value) { __LuminRoots_123.RootWrite<TProfile>(ref writer, in value); }
+                internal static void Serialize(ref Writer writer, in Payload value) { LuminRoots_123.RootWrite(ref writer, in value); }
+                internal static void Serialize<TProfile>(ref Writer writer, in Payload value) { LuminRoots_123.RootWrite<TProfile>(ref writer, in value); }
             } }
             """;
         var assembly = typeof(LuminPackSourceGenerator).Assembly;

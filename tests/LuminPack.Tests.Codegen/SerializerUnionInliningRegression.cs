@@ -167,7 +167,7 @@ internal static class SerializerUnionInliningRegression
                 if (name == "Serialize")
                 {
                     Require(calls.Any(call => call.Expression is MemberAccessExpressionSyntax forward &&
-                        forward.Name.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal)),
+                        forward.Name.Identifier.ValueText.StartsWith("LuminPackUnion", StringComparison.Ordinal)),
                         "A concrete union write entry lost its single virtual union forwarding layer: " + name);
                 }
             }

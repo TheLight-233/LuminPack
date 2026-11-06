@@ -12,10 +12,10 @@ namespace LuminPack.SourceGenerator;
 /// <summary>Shares identical convenience bodies while retaining concrete state dispatch and API signatures.</summary>
 internal sealed class SharedFacadeProjection
 {
-    private const string Payload = "__LuminFacadePayload";
-    private const string Profile = "__LuminFacadeProfile";
-    private const string Adapter = "__LuminFacadeAdapter";
-    private const string Operations = "__LuminFacadeOperations";
+    private const string Payload = "TFacadePayload";
+    private const string Profile = "TFacadeProfile";
+    private const string Adapter = "LuminFacadeAdapter";
+    private const string Operations = "LuminFacadeOperations";
     private const string Prefix = "class LuminPackSerializer {\n";
     private readonly ConditionalWeakTable<string, Contribution> _contributions = new();
     private readonly object _gate = new();
@@ -93,7 +93,7 @@ internal sealed class SharedFacadeProjection
         var root = CSharpSyntaxTree.ParseText(Prefix + source + "}", metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetRoot();
         var candidates = new List<Candidate>();
         var stateCalls = new Dictionary<string, bool>(StringComparer.Ordinal);
-        string adapterName = Identity("__LuminFacadeFor", type);
+        string adapterName = Identity("LuminFacadeFor", type);
         foreach (var method in root.DescendantNodes().OfType<ClassDeclarationSyntax>().Single().Members.OfType<MethodDeclarationSyntax>())
         {
             if (method.Body == null || method.TypeParameterList?.Parameters.Count != 1 ||
@@ -116,7 +116,7 @@ internal sealed class SharedFacadeProjection
             string key = method.Identifier.ValueText + "|" + returnType.WithoutTrivia().NormalizeWhitespace() + "|" +
                 parameters.WithoutTrivia().NormalizeWhitespace() + "|" + body.WithoutTrivia().NormalizeWhitespace() + "|" +
                 string.Concat(method.AttributeLists.Select(attribute => attribute.WithoutTrivia().NormalizeWhitespace().ToFullString()));
-            string helperName = Identity("__LuminFacade", key);
+            string helperName = Identity("LuminFacade", key);
             var helper = method.WithIdentifier(SyntaxFactory.Identifier(helperName))
                 .WithoutLeadingTrivia().WithoutTrailingTrivia()
                 .WithModifiers(SyntaxFactory.TokenList(method.Modifiers.Where(token => !token.IsKind(SyntaxKind.PublicKeyword) && !token.IsKind(SyntaxKind.InternalKeyword))).Insert(0, SyntaxFactory.Token(SyntaxKind.PrivateKeyword)))

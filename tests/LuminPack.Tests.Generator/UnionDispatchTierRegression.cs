@@ -15,12 +15,12 @@ internal static class UnionDispatchTierRegression
             """;
         // Without registration, a closed root with one sealed case calls the case directly.
         string direct = Compiled(Generate(single, register: false), "Root");
-        Require(direct.Contains("Unsafe.As<global::Only>(value).__LuminPackUnionSerialize_") && !direct.Contains("value is global::Only"),
+        Require(direct.Contains("Unsafe.As<global::Only>(value).LuminPackUnionSerialize_") && !direct.Contains("value is global::Only"),
             "A closed single-case root without registration must call its case directly.", direct);
 
         // Registration keeps the virtual fallback behind an exact guard.
         string guardedSingle = Compiled(Generate(single, register: true), "Root");
-        Require(guardedSingle.Contains("if (value is global::Only)") && guardedSingle.Contains("value.__LuminPackUnionSerialize_"),
+        Require(guardedSingle.Contains("if (value is global::Only)") && guardedSingle.Contains("value.LuminPackUnionSerialize_"),
             "A registrable single-case root must guard its case before the virtual fallback.", guardedSingle);
 
         // Another assembly can derive from a public root with a public constructor, so it keeps the guard.
@@ -45,7 +45,7 @@ internal static class UnionDispatchTierRegression
         Require(!five.Contains("value is global::Case"), "More than four cases must keep the single virtual call.", five);
 
         string collections = Generate(cases(5), register: true);
-        Require(!collections.Contains("__LuminPackUnionPartition") && !collections.Contains("LuminUnionPartitionMap"),
+        Require(!collections.Contains("LuminPackUnionPartition") && !collections.Contains("LuminUnionPartitionMap"),
             "Fixed Union lists, arrays and immutable arrays must retain per-element dispatch.", collections);
     }
 
@@ -83,7 +83,7 @@ internal static class UnionDispatchTierRegression
     /// <returns>The compiled slot's text.</returns>
     private static string Compiled(string generated, string root)
     {
-        string marker = "public static void __LuminPackUnionSerialize_global" + root + "_";
+        string marker = "public static void LuminPackUnionSerialize_global" + root + "_";
         int start = generated.IndexOf(marker, StringComparison.Ordinal);
         if (start < 0) throw new InvalidOperationException("Missing the compiled write slot of " + root + ".");
         int end = generated.IndexOf("ThrowInvalidOperationException", start, StringComparison.Ordinal);

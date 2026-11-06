@@ -119,7 +119,7 @@ internal static class SerializerExternalUnionRegression
             var generated = output.SyntaxTrees.Skip(1).SelectMany(tree => tree.GetRoot().DescendantNodes()).OfType<MethodDeclarationSyntax>().ToArray();
             Require(output.SyntaxTrees.Skip(1).Any(tree => tree.ToString().Contains("_rootPadding", StringComparison.Ordinal)),
                 "A source case lost the private layout slots of its referenced base.");
-            var overrides = generated.Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal) &&
+            var overrides = generated.Where(method => method.Identifier.ValueText.StartsWith("LuminPackUnion", StringComparison.Ordinal) &&
                 method.Parent is TypeDeclarationSyntax { Identifier.ValueText: "LocalCase" }).ToArray();
             Require(overrides.Length == 8 && overrides.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
                 method.Modifiers.Any(SyntaxKind.PublicKeyword) && !method.DescendantNodes().OfType<SwitchStatementSyntax>().Any()),
@@ -127,10 +127,10 @@ internal static class SerializerExternalUnionRegression
             // Generated XML now stays on caller-facing serializer APIs, so these hidden overrides keep only their attribute.
             Require(overrides.All(method => method.AttributeLists.ToString().Contains("EditorBrowsableState.Never", StringComparison.Ordinal)),
                 "An imported root override lost its hidden-completion attribute.");
-            var genericOverrides = generated.Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal) &&
+            var genericOverrides = generated.Where(method => method.Identifier.ValueText.StartsWith("LuminPackUnion", StringComparison.Ordinal) &&
                 method.Parent is TypeDeclarationSyntax { Identifier.ValueText: "LocalGeneric" }).ToArray();
             Require(genericOverrides.Length == 8 && genericOverrides.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
-                method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement => statement.Expression.ToString().StartsWith("__LuminPackUnionDispatchSlot_", StringComparison.Ordinal))),
+                method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement => statement.Expression.ToString().StartsWith("LuminPackUnionDispatchSlot_", StringComparison.Ordinal))),
                 "An imported generic root lost its virtual plus cached-slot switch: " + mode);
             Require(!generated.Any(method => method.Identifier.ValueText == "Register" &&
                 method.Parent is TypeDeclarationSyntax { Identifier.ValueText: "Root" or "GenericRoot" or "IRoot" }),

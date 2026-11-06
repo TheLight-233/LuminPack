@@ -53,7 +53,7 @@ public static partial class LuminPackSerializerGenerator
         out Dictionary<int, SerializerApiKind> kinds)
     {
         System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.ApiSignatureBuilds);
-        const string placeholder = "global::__LuminPackAnalysisPayload";
+        const string placeholder = "global::LuminPackAnalysisPayload";
         const string header = "using System; using System.Buffers; using System.IO; using System.Threading; using System.Threading.Tasks; " +
             "using LuminPack.Core; using LuminPack.Option; using LuminPack.Utility; namespace LuminPack { public static partial class LuminPackSerializer {";
         string previousAccess = _currentAccess;
@@ -144,7 +144,7 @@ public static partial class LuminPackSerializerGenerator
             state.EndsWith("LuminPackEvaluator", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonWriter", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonReader", StringComparison.Ordinal) ||
             method.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync" or "Register"))
             yield break;
-        string profile = "__LuminProfile";
+        string profile = "TLuminProfile";
         while (method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profile) == true)
             profile += "_";
         var parameters = (method.TypeParameterList?.Parameters ?? default).Add(SyntaxFactory.TypeParameter(profile));

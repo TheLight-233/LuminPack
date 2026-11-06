@@ -15,9 +15,9 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         AppendCursorDocumentation(sb, padding, false);
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}public virtual int __LuminPackUnionSerializeCursor_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer, int initialIndex)");
+        sb.AppendLine($"{padding}public virtual int LuminPackUnionSerializeCursor_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer, int initialIndex)");
         sb.AppendLine($"{padding}{{");
-        sb.AppendLine($"{padding}    return __LuminPackUnionCursorFallback_{suffix}(this, ref writer, initialIndex);");
+        sb.AppendLine($"{padding}    return LuminPackUnionCursorFallback_{suffix}(this, ref writer, initialIndex);");
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
         sb.AppendLine($"{padding}/// <summary>Publishes the cursor before calling the original virtual or registered formatter.</summary>");
@@ -27,10 +27,10 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}/// <returns>The absolute next byte index after the original operation, including any growth.</returns>");
         sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}protected static int __LuminPackUnionCursorFallback_{suffix}({rootType} value, ref global::LuminPack.Core.LuminPackWriter writer, int initialIndex)");
+        sb.AppendLine($"{padding}protected static int LuminPackUnionCursorFallback_{suffix}({rootType} value, ref global::LuminPack.Core.LuminPackWriter writer, int initialIndex)");
         sb.AppendLine($"{padding}{{");
         sb.AppendLine($"{padding}    writer.CurrentIndex = initialIndex;");
-        sb.AppendLine($"{padding}    value.__LuminPackUnionSerialize_{suffix}(ref writer);");
+        sb.AppendLine($"{padding}    value.LuminPackUnionSerialize_{suffix}(ref writer);");
         sb.AppendLine($"{padding}    return writer.GetCurrentSpanIndex();");
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
@@ -49,12 +49,12 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         AppendCursorDocumentation(sb, padding, fixedCursor);
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}public {(canSeal ? "sealed " : string.Empty)}override int __LuminPackUnionSerializeCursor_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer, int initialIndex)");
+        sb.AppendLine($"{padding}public {(canSeal ? "sealed " : string.Empty)}override int LuminPackUnionSerializeCursor_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer, int initialIndex)");
         sb.AppendLine($"{padding}{{");
         if (fixedCursor)
         {
             sb.AppendLine($"{padding}    if (((object)this).GetType() != typeof({concreteType}))");
-            sb.AppendLine($"{padding}        return __LuminPackUnionCursorFallback_{suffix}(this, ref writer, initialIndex);");
+            sb.AppendLine($"{padding}        return LuminPackUnionCursorFallback_{suffix}(this, ref writer, initialIndex);");
             sb.AppendLine($"{padding}    return global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref writer, this, initialIndex, (byte){member.Id});");
         }
         else
@@ -62,7 +62,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             // Known non-fixed cases retain the exact original virtual operation. A sealed
             // old slot can inline here without a second trip through the root fallback.
             sb.AppendLine($"{padding}    writer.CurrentIndex = initialIndex;");
-            sb.AppendLine($"{padding}    __LuminPackUnionSerialize_{suffix}(ref writer);");
+            sb.AppendLine($"{padding}    LuminPackUnionSerialize_{suffix}(ref writer);");
             sb.AppendLine($"{padding}    return writer.GetCurrentSpanIndex();");
         }
         sb.AppendLine($"{padding}}}");

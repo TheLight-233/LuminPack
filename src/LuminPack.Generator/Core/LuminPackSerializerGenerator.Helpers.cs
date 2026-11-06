@@ -65,9 +65,9 @@ public static partial class LuminPackSerializerGenerator
         builder.AppendLine("                }");
         builder.AppendLine("                else");
         builder.AppendLine("                {");
-        builder.AppendLine("                    " + typeName + " __luminSequenceValue = default!;");
-        builder.AppendLine("                    global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<" + typeName + ", byte>(ref __luminSequenceValue), ref MemoryMarshal.GetReference(" + span + "), (uint)size);");
-        builder.AppendLine("                    value = __luminSequenceValue;");
+        builder.AppendLine("                    " + typeName + " sequenceValue = default!;");
+        builder.AppendLine("                    global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<" + typeName + ", byte>(ref sequenceValue), ref MemoryMarshal.GetReference(" + span + "), (uint)size);");
+        builder.AppendLine("                    value = sequenceValue;");
         builder.AppendLine("                }");
     }
 }

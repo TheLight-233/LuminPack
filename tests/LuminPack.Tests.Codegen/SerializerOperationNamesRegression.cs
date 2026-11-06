@@ -15,7 +15,7 @@ internal static class SerializerOperationNamesRegression
             public sealed class Item { public int offset = 7; public int __lpCollision = 11; public int __cursor = 37; }
             public static class Entry
             {
-                private static int __LuminLayout0 = 13;
+                private static int LuminLayout0 = 13;
                 private static int Calls;
                 private static int Touch(ref int value) { Calls++; return ++value; }
                 public static int Check()
@@ -41,7 +41,7 @@ internal static class SerializerOperationNamesRegression
                     __lpResult = 0;
                     __lpExit:
                     return offset + __lpOffset + __lpResult + __lpCollision + item.__lpCollision + __lpKeyword + __lpFixed +
-                        __lpNamed + nameof(__lpNamed).Length + __lpPartial + __LuminLayout0 + Calls + cursor + __lpCursor + item.__cursor;
+                        __lpNamed + nameof(__lpNamed).Length + __lpPartial + LuminLayout0 + Calls + cursor + __lpCursor + item.__cursor;
                 }
             }
             """;
@@ -54,7 +54,7 @@ internal static class SerializerOperationNamesRegression
         {
             ["__lpOffset"] = "offset", ["__lpResult"] = "result", ["__lpCollision"] = "collision",
             ["__lpKeyword"] = "class", ["__lpFixed"] = "__luminFixedBlock", ["__lpNamed"] = "named",
-            ["__lpPartial"] = "partial", ["__lpAlias"] = "result", ["__lpExit"] = "end", ["__LuminLayout0"] = "cache", ["__lpCursor"] = "__cursor",
+            ["__lpPartial"] = "partial", ["__lpAlias"] = "result", ["__lpExit"] = "end", ["LuminLayout0"] = "cache", ["__lpCursor"] = "__cursor",
             ["__lpCompute"] = "compute", ["__lpObserved"] = "observed"
         };
         var marked = tree.GetRoot().ReplaceTokens(tree.GetRoot().DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)), (token, _) =>
@@ -67,7 +67,7 @@ internal static class SerializerOperationNamesRegression
                 IdentifierNameSyntax identifier => model.GetSymbolInfo(identifier).Symbol,
                 _ => null
             };
-            if (symbol is not (ILocalSymbol or ILabelSymbol or IMethodSymbol { MethodKind: MethodKind.LocalFunction }) && symbol?.Name != "__LuminLayout0" ||
+            if (symbol is not (ILocalSymbol or ILabelSymbol or IMethodSymbol { MethodKind: MethodKind.LocalFunction }) && symbol?.Name != "LuminLayout0" ||
                 !roles.TryGetValue(token.ValueText, out string? role) || token.ValueText == "__lpPartial" && token.Parent is not VariableDeclaratorSyntax)
                 return token;
             return token.WithAdditionalAnnotations(new SyntaxAnnotation("LuminPack.GeneratedLocalRole", role));
@@ -92,7 +92,7 @@ internal static class SerializerOperationNamesRegression
         var functions = method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Select(function => function.Identifier.ValueText).ToArray();
         Require(functions.Contains("Compute2") && functions.Contains("__lpObserved"),
             "A local function lost its PascalCase role, collision suffix or nameof identity.");
-        Require(rewritten.DescendantNodes().OfType<FieldDeclarationSyntax>().SelectMany(field => field.Declaration.Variables).Any(field => field.Identifier.ValueText == "__LuminLayout0"),
+        Require(rewritten.DescendantNodes().OfType<FieldDeclarationSyntax>().SelectMany(field => field.Declaration.Variables).Any(field => field.Identifier.ValueText == "LuminLayout0"),
             "A support field was renamed by a local presentation pass.");
         var changed = CSharpSyntaxTree.Create((CSharpSyntaxNode)rewritten, parse);
         var original = Load(compilation);

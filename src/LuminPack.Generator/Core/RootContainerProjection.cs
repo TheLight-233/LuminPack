@@ -17,7 +17,7 @@ internal static class RootContainerProjection
 {
     private const string Serializer = "global::LuminPack.LuminPackSerializer";
     /// <summary>The name prefix of every payload root container.</summary>
-    internal const string ContainerPrefix = "__LuminRoots_";
+    internal const string ContainerPrefix = "LuminRoots_";
 
     private static readonly HashSet<string> Roots = new(StringComparer.Ordinal)
     {

@@ -18,7 +18,7 @@ internal static class ImmutableStringSetEmitter
         string family = sorted ? "ImmutableSortedSet" : "ImmutableHashSet";
         string factory = !sorted && fieldData.CanBuildFrameworkImmutableHashSet ? "CreateFrameworkImmutableHashSet" : "Create" + family;
         string comparer = sorted ? "Comparer" : "EqualityComparer";
-        string cache = "__LuminImmutableCandidate<global::System.Collections.Immutable." + family + "<string>>.Last";
+        string cache = "LuminImmutableCandidate<global::System.Collections.Immutable." + family + "<string>>.Last";
         CollectionEmitterKit.AppendReadLength(sb, element, "string", "value = null;", "            ", scalarElements: true);
         sb.AppendLine("            if (length == 0) { value = global::System.Collections.Immutable." + family + "<string>.Empty; return; }");
         sb.AppendLine("            var items = global::System.Buffers.ArrayPool<string>.Shared.Rent(length);");

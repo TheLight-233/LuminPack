@@ -33,7 +33,7 @@ internal sealed class CompiledOptionApiProjection : CSharpSyntaxRewriter
         if (rewritten.Body != null)
         {
             if (node.Identifier.ValueText == "DeserializeJsonCore" && _genericJson)
-                rewritten = rewritten.WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{ var reader = new LuminPackJsonReader(ref buffer, state); if (!FormatterDispatch.__LuminPackJsonReadBoundary<T>(ref reader, false)) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\"); global::LuminPack.LuminPackSerializer.DeserializeJson(ref reader, ref value); FormatterDispatch.__LuminPackJsonReadBoundary<T>(ref reader, true); return reader.CurrentIndex; }"));
+                rewritten = rewritten.WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{ var reader = new LuminPackJsonReader(ref buffer, state); if (!FormatterDispatch.LuminPackJsonReadBoundary<T>(ref reader, false)) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\"); global::LuminPack.LuminPackSerializer.DeserializeJson(ref reader, ref value); FormatterDispatch.LuminPackJsonReadBoundary<T>(ref reader, true); return reader.CurrentIndex; }"));
             bool json = node.Identifier.ValueText.Contains("Json");
             rewritten = rewritten.WithBody((BlockSyntax)new CompiledOptionProjection(_options, "writer", json ? CompiledOptionProjection.JsonWriterMethods : CompiledOptionProjection.WriterMethods).Visit(rewritten.Body));
             rewritten = rewritten.WithBody((BlockSyntax)new CompiledOptionProjection(_options, "reader", json ? CompiledOptionProjection.JsonReaderMethods : CompiledOptionProjection.ReaderMethods).Visit(rewritten.Body));
@@ -110,7 +110,7 @@ internal sealed class CompiledOptionApiProjection : CSharpSyntaxRewriter
     /// <returns>The expression supplying the selected declaration constant.</returns>
     private ExpressionSyntax Property(string name) => SyntaxFactory.ParseExpression(name switch
     {
-        "StringEncoding" => _genericJson ? "FormatterDispatch.__LuminPackJsonEncoding<T>()" : "default(" + _options.TypeName + ").StringEncoding",
+        "StringEncoding" => _genericJson ? "FormatterDispatch.LuminPackJsonEncoding<T>()" : "default(" + _options.TypeName + ").StringEncoding",
         "StringRecording" => "(global::LuminPack.Option.LuminPackStringRecording)" + _options.Recording,
         "MaxJsonDepth" => _options.Depth.ToString(System.Globalization.CultureInfo.InvariantCulture),
         "ValidateJsonSyntax" => _options.Strict ? "true" : "false",

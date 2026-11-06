@@ -81,7 +81,7 @@ internal static class SerializerImmutableScalarSetReuseRegression
     {
         var cache = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
-            .Single(type => type.Identifier.ValueText == "__LuminImmutableCandidate");
+            .Single(type => type.Identifier.ValueText == "LuminImmutableCandidate");
         Require(cache.Modifiers.Any(SyntaxKind.PrivateKeyword) && cache.Modifiers.Any(SyntaxKind.StaticKeyword), "The immutable candidate slot leaked public state.");
         var fields = cache.Members.OfType<FieldDeclarationSyntax>().ToArray();
         Require(fields.Length == 1 && fields[0].Declaration.Type.ToString().Contains("WeakReference<", StringComparison.Ordinal), "An immutable candidate acquired a strong result field.");

@@ -125,7 +125,7 @@ internal static class SerializerSharedFacadeRegression
             var concrete = facade.Where(method => method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Type?.ToString() == type)).ToArray();
             Require(concrete.Count(method => method.TypeParameterList == null) == 15 && concrete.Count(method => method.TypeParameterList?.Parameters.Count == 1) == 15,
                 "Sharing changed the complete concrete signatures for " + type);
-            Require(concrete.Where(method => method.TypeParameterList != null).All(method => method.Body!.Statements.Count == 1 && method.Body.ToString().Contains("__LuminFacade_", StringComparison.Ordinal)),
+            Require(concrete.Where(method => method.TypeParameterList != null).All(method => method.Body!.Statements.Count == 1 && method.Body.ToString().Contains("LuminFacade_", StringComparison.Ordinal)),
                 "A managed full facade retained repeated profile bodies.");
             var adapters = methods.Where(method => method.Parent is StructDeclarationSyntax && method.ParameterList.Parameters.LastOrDefault()?.Type?.ToString() == type).ToArray();
             // Only direct records evaluate an exact width, so the other adapters reject it instead of dispatching.
@@ -141,12 +141,12 @@ internal static class SerializerSharedFacadeRegression
         string fixedBody = fixedWrite.Body!.ToString();
         Require(modern
                 ? fixedBody.Contains("new byte[", StringComparison.Ordinal) && !fixedBody.Contains("LuminBufferWriterPool", StringComparison.Ordinal)
-                : fixedBody.Contains("__LuminFacade_", StringComparison.Ordinal) || fixedBody.Contains("LuminBufferWriterPool", StringComparison.Ordinal),
+                : fixedBody.Contains("LuminFacade_", StringComparison.Ordinal) || fixedBody.Contains("LuminBufferWriterPool", StringComparison.Ordinal),
             "A fixed record changed its allocating entry selection.");
-        Require(facade.Any(method => method.Identifier.ValueText.StartsWith("__LuminFacade_", StringComparison.Ordinal) && method.TypeParameterList?.Parameters.Count == 3),
+        Require(facade.Any(method => method.Identifier.ValueText.StartsWith("LuminFacade_", StringComparison.Ordinal) && method.TypeParameterList?.Parameters.Count == 3),
             "No generic shared body was emitted.");
         Require(facade.Any(method => method.Identifier.ValueText == "Deserialize" && method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "int") &&
-            method.Body!.ToString().Contains("__luminSequenceValue", StringComparison.Ordinal)), "Sharing replaced architecture-specific raw sequence staging.");
+            method.Body!.ToString().Contains("sequenceValue", StringComparison.Ordinal)), "Sharing replaced architecture-specific raw sequence staging.");
         using var image = new MemoryStream();
         var emitted = output.Emit(image);
         Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
@@ -159,7 +159,7 @@ internal static class SerializerSharedFacadeRegression
         var retained = driver.RunGeneratorsAndUpdateCompilation(minimal, out var minimalOutput, out diagnostics);
         CheckErrors(minimalOutput, diagnostics);
         Require(Text(retained) == Text(NewDriver(parse).RunGenerators(minimal)), "Removing complete API roots retained stale shared support.");
-        Require(!Text(retained).Contains("__LuminFacadeOperations", StringComparison.Ordinal), "Pruned APIs acquired unused full-facade adapter support.");
+        Require(!Text(retained).Contains("LuminFacadeOperations", StringComparison.Ordinal), "Pruned APIs acquired unused full-facade adapter support.");
         var restoredDriver = retained.RunGeneratorsAndUpdateCompilation(input, out var restoredOutput, out diagnostics);
         CheckErrors(restoredOutput, diagnostics);
         Require(Text(restoredDriver) == Text(driver), "Restoring complete API roots lost shared operations.");

@@ -96,7 +96,7 @@ public class FixedUnionCursorTest
         {
             writer.CheckBuffer();
             if (value is null) writer.WriteNullUnionHeader();
-            else value.__LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
+            else value.LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
         }
         Assert.Equal(actual, reference.DangerousGetBuffer()[..writer.Position].ToArray());
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
@@ -235,7 +235,7 @@ public class FixedUnionCursorTest
                 writer.Advance(1);
             }
             else
-                pair.Value.__LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
+                pair.Value.LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
         }
 
         Assert.Equal(actual, destination.DangerousGetBuffer()[..writer.Position].ToArray());
@@ -456,13 +456,13 @@ public sealed class LegacyCase : FixedCase
     public static bool Throw;
     /// <summary>Observes published state before invoking the inherited original case body.</summary>
     /// <param name = "writer">The caller's current operation.</param>
-    public override void __LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref LuminPackWriter writer)
+    public override void LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref LuminPackWriter writer)
     {
         Calls++;
         Position = writer.Position;
         if (Throw)
             throw new InvalidOperationException("Controlled legacy-slot failure.");
-        base.__LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
+        base.LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
     }
 }
 
@@ -476,10 +476,10 @@ public sealed class CursorOverrideCase : FixedCase
     /// <param name="writer">The caller's active binary writer.</param>
     /// <param name="initialIndex">The incoming absolute cursor.</param>
     /// <returns>The cursor returned by the inherited implementation.</returns>
-    public override int __LuminPackUnionSerializeCursor_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref LuminPackWriter writer, int initialIndex)
+    public override int LuminPackUnionSerializeCursor_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref LuminPackWriter writer, int initialIndex)
     {
         Calls++;
-        return base.__LuminPackUnionSerializeCursor_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer, initialIndex);
+        return base.LuminPackUnionSerializeCursor_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer, initialIndex);
     }
 }
 

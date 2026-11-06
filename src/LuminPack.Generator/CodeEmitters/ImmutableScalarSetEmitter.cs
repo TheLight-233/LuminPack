@@ -20,7 +20,7 @@ internal static class ImmutableScalarSetEmitter
         string family = sorted ? "ImmutableSortedSet" : "ImmutableHashSet";
         string factory = !sorted && fieldData.CanBuildFrameworkImmutableHashSet ? "CreateFrameworkImmutableHashSet" : "Create" + family;
         string comparer = sorted ? "Comparer" : "EqualityComparer";
-        string cache = "__LuminImmutableCandidate<global::System.Collections.Immutable." + family + "<" + elementType + ">>.Last";
+        string cache = "LuminImmutableCandidate<global::System.Collections.Immutable." + family + "<" + elementType + ">>.Last";
         CollectionEmitterKit.AppendReadLength(sb, element, elementType, "value = null;", "            ", scalarElements: true);
         sb.AppendLine("            if (length == 0) { value = global::System.Collections.Immutable." + family + "<" + elementType + ">.Empty; return; }");
         CollectionEmitterKit.AppendPooledRead(sb, element, elementType, new[]

@@ -14,7 +14,7 @@ internal static partial class SerializerImmutableListWriteRegression
             .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
             .Where(type => type.Identifier.ValueText is "SortedListStorage" or "PriorityQueueStorage")
             .Select(type => type.ToString().Replace("LuminFieldLayout.Field<", "ProbeTrap.Field<", StringComparison.Ordinal));
-        string source = "using System; using LuminPack.Code; namespace CollectionProbe; public static class LuminPackCollectionAccess {\n" +
+        string source = "using System; using System.Collections.Generic; using LuminPack.Code; namespace CollectionProbe; public static class LuminPackCollectionAccess {\n" +
             string.Join("\n", probes) + "\n}\n" + """
             public static class ProbeTrap
             {

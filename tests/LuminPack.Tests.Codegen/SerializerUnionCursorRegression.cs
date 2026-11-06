@@ -93,21 +93,21 @@ internal static class SerializerUnionCursorRegression
             Require(!methods.Any(method => method.Identifier.ValueText == "SerializeUnionAt" &&
                 method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') is "global::Private" or "global::Callback" or "global::Specialized" or "global::Property"),
                 "A private, callback, property or versioned payload entered the raw cursor body.");
-            var cursorSlots = methods.Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnionSerializeCursor_", StringComparison.Ordinal)).ToArray();
+            var cursorSlots = methods.Where(method => method.Identifier.ValueText.StartsWith("LuminPackUnionSerializeCursor_", StringComparison.Ordinal)).ToArray();
             Require(cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Root" } && method.Modifiers.Any(SyntaxKind.VirtualKeyword)) &&
                 cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Fixed" } && method.Modifiers.Any(SyntaxKind.OverrideKeyword)),
                 "The fixed path omitted its virtual root or exact case override.");
             var fixedSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Fixed" } &&
-                method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
+                method.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
             Require(fixedSlots.Length == 6 && fixedSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal) &&
                 method.Body.ToString().Contains("writer.CurrentIndex", StringComparison.Ordinal)),
                 "The original virtual slots must publish the shared fixed tag and payload body for each binary profile.");
             var largeSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "BigCase" } &&
-                method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
+                method.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
             Require(largeSlots.Length == 6 && largeSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
                 "The large fixed-case fixture did not exercise the original-slot projection.");
             var variableSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Text" or "Callback" or "Guarded" } &&
-                method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
+                method.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
             Require(variableSlots.Length == 18 && variableSlots.All(method => method.Body!.ToString().Contains("WriteUnionHeader", StringComparison.Ordinal) &&
                 !method.Body.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
                 "Variable and callback cases must retain the original virtual operation path.");
@@ -117,10 +117,10 @@ internal static class SerializerUnionCursorRegression
             foreach (var forwarding in cursorSlots.Where(method => method.Parent is ClassDeclarationSyntax parent &&
                 parent.Identifier.ValueText is "Private" or "Callback" or "Specialized" or "Property" or "Text" or "Guarded"))
                 Require(forwarding.Body!.Statements.Count == 3 && forwarding.Body.Statements[0].ToString().Contains("writer.CurrentIndex = initialIndex", StringComparison.Ordinal) &&
-                    forwarding.Body.Statements[1].ToString().Contains("__LuminPackUnionSerialize_", StringComparison.Ordinal) &&
+                    forwarding.Body.Statements[1].ToString().Contains("LuminPackUnionSerialize_", StringComparison.Ordinal) &&
                     forwarding.Body.Statements[2].ToString().Contains("writer.Position", StringComparison.Ordinal),
                     "A non-fixed case bypassed publication or its original virtual operation.");
-            Require(methods.Any(method => method.Body?.ToString().Contains("__LuminPackUnionSerializeCursor_", StringComparison.Ordinal) == true &&
+            Require(methods.Any(method => method.Body?.ToString().Contains("LuminPackUnionSerializeCursor_", StringComparison.Ordinal) == true &&
                 SerializerExecutionAssertions.IsSerializerRootContainer(method.Parent)), "The retained dictionary did not reach the fixed virtual protocol.");
             Require(methods.SelectMany(method => method.DescendantNodes().OfType<AssignmentExpressionSyntax>()).Any(assignment =>
                 assignment.Right is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 1,
@@ -139,7 +139,7 @@ internal static class SerializerUnionCursorRegression
             var fresh = Driver().RunGenerators(after);
             Require(Files(retained).SequenceEqual(Files(fresh)), "A fixed-to-volatile edit retained stale nested Union cursor output.");
             Require(!retained.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(source =>
-                source.SourceText.ToString().Contains("__LuminPackUnionSerializeCursor_", StringComparison.Ordinal) && source.SourceText.ToString().Contains("globalRoot_", StringComparison.Ordinal)),
+                source.SourceText.ToString().Contains("LuminPackUnionSerializeCursor_", StringComparison.Ordinal) && source.SourceText.ToString().Contains("globalRoot_", StringComparison.Ordinal)),
                 "The last fixed case became volatile but its root cursor protocol survived.");
             Execute(updated);
 
@@ -222,7 +222,7 @@ internal static class SerializerUnionCursorRegression
                 parseOptions: options).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             string generated = Generated(driver);
-            Require(!generated.Contains("__LuminPackUnionPartition", StringComparison.Ordinal) &&
+            Require(!generated.Contains("LuminPackUnionPartition", StringComparison.Ordinal) &&
                 !generated.Contains("LuminUnionPartitionMap", StringComparison.Ordinal), "Fixed Union collections must use per-element dispatch.");
             Execute(output);
         }
@@ -235,7 +235,7 @@ internal static class SerializerUnionCursorRegression
     {
         // Source expansion reflows statements and may rename locals, so compare normalized text with captured names.
         string text = System.Text.RegularExpressions.Regex.Replace(generated, @"\s+", " ");
-        var slot = System.Text.RegularExpressions.Regex.Match(text, @"else nextIndex = (\w+)\.__LuminPackUnionSerializeCursor_\w+\((?:ref )?(\w+), nextIndex\);");
+        var slot = System.Text.RegularExpressions.Regex.Match(text, @"else nextIndex = (\w+)\.LuminPackUnionSerializeCursor_\w+\((?:ref )?(\w+), nextIndex\);");
         Require(slot.Success, "The dictionary lost its cursor slot fallback.");
         string value = slot.Groups[1].Value, state = slot.Groups[2].Value;
         int start = text.LastIndexOf("if (" + value + " is null)", slot.Index, StringComparison.Ordinal);

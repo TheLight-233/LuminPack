@@ -122,7 +122,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("    public static class LuminPackSerializer");
         sb.AppendLine("    {");
         sb.AppendLine("        // One weak immutable candidate per closed generated set; every input is still fully decoded.");
-        sb.AppendLine("        private static class __LuminImmutableCandidate<TValue> where TValue : class");
+        sb.AppendLine("        private static class LuminImmutableCandidate<TValue> where TValue : class");
         sb.AppendLine("        {");
         sb.AppendLine("            internal static readonly global::System.WeakReference<TValue> Last = new global::System.WeakReference<TValue>(null!);");
         sb.AppendLine("        }");

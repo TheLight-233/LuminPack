@@ -154,8 +154,8 @@ public static class LuminPackJsonCodeGenerator
             var field = data.fields[index];
             byte[] bytes = Encoding.UTF8.GetBytes(field.Name);
             ulong hash8 = ComputeUtf8BytesHash(bytes), hash16 = ComputeUtf16Hash(field.Name);
-            names.Add(new JsonNameFact(field.Name, field.Name, index, bytes, hash8, hash16));
-            sb.Append("        internal static readonly byte[] _utf8_").Append(field.Name).Append(" = new byte[] { ");
+            names.Add(new JsonNameFact(field.Name, MemberSuffix(field.Name), index, bytes, hash8, hash16));
+            sb.Append("        internal static readonly byte[] _utf8_").Append(MemberSuffix(field.Name)).Append(" = new byte[] { ");
             for (int part = 0; part < bytes.Length; part++)
             {
                 if (part != 0)
@@ -163,7 +163,7 @@ public static class LuminPackJsonCodeGenerator
                 sb.Append("(byte)").Append(bytes[part]);
             }
             sb.AppendLine(" };");
-            sb.Append("        internal static readonly char[] _utf16_").Append(field.Name).Append(" = new char[] { ");
+            sb.Append("        internal static readonly char[] _utf16_").Append(MemberSuffix(field.Name)).Append(" = new char[] { ");
             for (int part = 0; part < field.Name.Length; part++)
             {
                 if (part != 0)
@@ -171,11 +171,11 @@ public static class LuminPackJsonCodeGenerator
                 sb.Append((char)39).Append(EscapeChar(field.Name[part])).Append((char)39);
             }
             sb.AppendLine(" };");
-            sb.Append("        internal const ulong _utf8Hash_").Append(field.Name).Append(" = ").Append(hash8).AppendLine("UL;");
-            sb.Append("        internal const ulong _utf16Hash_").Append(field.Name).Append(" = ").Append(hash16).AppendLine("UL;");
+            sb.Append("        internal const ulong _utf8Hash_").Append(MemberSuffix(field.Name)).Append(" = ").Append(hash8).AppendLine("UL;");
+            sb.Append("        internal const ulong _utf16Hash_").Append(MemberSuffix(field.Name)).Append(" = ").Append(hash16).AppendLine("UL;");
         }
         if (aliases != 0)
-            sb.AppendLine("        internal static class __LuminPackOldNames {");
+            sb.AppendLine("        internal static class LuminPackOldNames {");
         for (int index = 0; index < data.fields.Count; index++)
         {
             for (int alias = 0; alias < data.fields[index].OldNames.Length; alias++)
@@ -249,7 +249,7 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine("            {");
         for (int i = 0; i < data.fields.Count; i++)
         {
-            string name = data.fields[i].Name;
+            string name = MemberSuffix(data.fields[i].Name);
             sb.AppendLine("                case " + i + ":");
             sb.AppendLine("                    " + utf8Local + " = _utf8_" + name + ";");
             sb.AppendLine("                    " + utf16Local + " = _utf16_" + name + ";");
@@ -286,7 +286,7 @@ public static class LuminPackJsonCodeGenerator
             sb.AppendLine("                case " + group.Key + (small ? ":" : "UL:"));
             foreach (var item in group)
             {
-                string fieldName = (item.Alias ? "__LuminPackOldNames." : "") + prefix + item.Suffix;
+                string fieldName = (item.Alias ? "LuminPackOldNames." : "") + prefix + item.Suffix;
                 AppendNameComparison(sb, item, fieldName, utf8);
             }
             sb.AppendLine("                    break;");
@@ -383,8 +383,8 @@ public static class LuminPackJsonCodeGenerator
                 string marker = i == 0 ? "Prefix" : "Sep";
                 string literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
                     (i == 0 ? "{" : ",") + "\"" + luminDataField.Name + "\":", true);
-                sb.AppendLine("        internal static global::System.ReadOnlySpan<byte> _json" + marker + "Utf8_" + luminDataField.Name + " { [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] get => " + literal + "u8; }");
-                sb.AppendLine("        internal static global::System.ReadOnlySpan<char> _json" + marker + "Utf16_" + luminDataField.Name + " { [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] get => global::System.MemoryExtensions.AsSpan(" + literal + "); }");
+                sb.AppendLine("        internal static global::System.ReadOnlySpan<byte> _json" + marker + "Utf8_" + MemberSuffix(luminDataField.Name) + " { [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] get => " + literal + "u8; }");
+                sb.AppendLine("        internal static global::System.ReadOnlySpan<char> _json" + marker + "Utf16_" + MemberSuffix(luminDataField.Name) + " { [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] get => global::System.MemoryExtensions.AsSpan(" + literal + "); }");
                 continue;
             }
             string text = string.Join(", ", from b in Encoding.UTF8.GetBytes(luminDataField.Name)
@@ -392,13 +392,13 @@ public static class LuminPackJsonCodeGenerator
             string text2 = string.Join(", ", luminDataField.Name.Select((char c) => "(char)'" + EscapeChar(c) + "'"));
             if (i == 0)
             {
-                sb.AppendLine("        internal static readonly byte[] _jsonPrefixUtf8_" + luminDataField.Name + " = new byte[] { (byte)'{', (byte)'\"', " + text + ", (byte)'\"', (byte)':' };");
-                sb.AppendLine("        internal static readonly char[] _jsonPrefixUtf16_" + luminDataField.Name + " = new char[] { (char)'{', (char)'\"', " + text2 + ", (char)'\"', (char)':' };");
+                sb.AppendLine("        internal static readonly byte[] _jsonPrefixUtf8_" + MemberSuffix(luminDataField.Name) + " = new byte[] { (byte)'{', (byte)'\"', " + text + ", (byte)'\"', (byte)':' };");
+                sb.AppendLine("        internal static readonly char[] _jsonPrefixUtf16_" + MemberSuffix(luminDataField.Name) + " = new char[] { (char)'{', (char)'\"', " + text2 + ", (char)'\"', (char)':' };");
             }
             else
             {
-                sb.AppendLine("        internal static readonly byte[] _jsonSepUtf8_" + luminDataField.Name + " = new byte[] { (byte)',', (byte)'\"', " + text + ", (byte)'\"', (byte)':' };");
-                sb.AppendLine("        internal static readonly char[] _jsonSepUtf16_" + luminDataField.Name + " = new char[] { (char)',', (char)'\"', " + text2 + ", (char)'\"', (char)':' };");
+                sb.AppendLine("        internal static readonly byte[] _jsonSepUtf8_" + MemberSuffix(luminDataField.Name) + " = new byte[] { (byte)',', (byte)'\"', " + text + ", (byte)'\"', (byte)':' };");
+                sb.AppendLine("        internal static readonly char[] _jsonSepUtf16_" + MemberSuffix(luminDataField.Name) + " = new char[] { (char)',', (char)'\"', " + text2 + ", (char)'\"', (char)':' };");
             }
         }
         sb.AppendLine();
@@ -502,7 +502,7 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine("                if (isUtf8)");
         // The fused branch already handled little-endian UTF-8. Its UTF-8 fallback
         // is necessarily big-endian and must use the existing raw property bytes.
-        sb.AppendLine("                    writer.WriteRaw(_json" + marker + "Utf8_" + field.Name + ");");
+        sb.AppendLine("                    writer.WriteRaw(_json" + marker + "Utf8_" + MemberSuffix(field.Name) + ");");
         sb.AppendLine("                else");
         GenerateJsonLiteralWrite(sb, field.Name, marker, utf8: false, metaInfo);
         sb.AppendLine("                writer.SetFirstElement(true);");
@@ -510,6 +510,11 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine("            }");
         return true;
     }
+
+    /// <summary>Forms the suffix of a generated JSON support field without creating a reserved double underscore.</summary>
+    /// <param name="name">The member name, which may start with an underscore.</param>
+    /// <returns>The name, with a leading "U" when it would touch the separator; prefixing every "U*_" name keeps the mapping unique.</returns>
+    internal static string MemberSuffix(string name) => name.TrimStart('U').StartsWith("_", System.StringComparison.Ordinal) ? "U" + name : name;
 
     /// <summary>Builds the json literal write source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
@@ -519,7 +524,7 @@ public static class LuminPackJsonCodeGenerator
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
     private static void GenerateJsonLiteralWrite(StringBuilder sb, string name, string marker, bool utf8, MetaInfo metaInfo)
     {
-        string field = "_json" + marker + (utf8 ? "Utf8_" : "Utf16_") + name;
+        string field = "_json" + marker + (utf8 ? "Utf8_" : "Utf16_") + MemberSuffix(name);
         string literal = (marker == "Prefix" ? "{" : ",") + "\"" + name + "\":";
         byte[] bytes = (utf8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(literal);
         if (metaInfo.IsNet8 && bytes.Length >= 8 && bytes.Length <= 16)
@@ -1172,9 +1177,9 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
             string accessor = ((field.IsPrivate || field.isProperty) ? "local" : "value");
             sb.AppendLine("            // Field: " + field.Name);
             sb.AppendLine("            if (isUtf8)");
-            sb.AppendLine("                writer.WritePropertyName(_utf8_" + field.Name + ");");
+            sb.AppendLine("                writer.WritePropertyName(_utf8_" + LuminPackJsonCodeGenerator.MemberSuffix(field.Name) + ");");
             sb.AppendLine("            else");
-            sb.AppendLine("                writer.WritePropertyName(_utf16_" + field.Name + ");");
+            sb.AppendLine("                writer.WritePropertyName(_utf16_" + LuminPackJsonCodeGenerator.MemberSuffix(field.Name) + ");");
             GenerateJsonSerializeFieldWithCircleReference(sb, field, accessor, "            ");
             sb.AppendLine();
         }

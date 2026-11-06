@@ -20,7 +20,7 @@ internal static class LuminPackUnionDispatchUtilities
         foreach (var operation in new[] { "Serialize", "SerializeJson" })
         {
             string state = operation == "Serialize" ? "Writer" : "JsonWriter";
-            if (!type.GetMembers("__LuminPackUnion" + operation + "_" + suffix).OfType<IMethodSymbol>()
+            if (!type.GetMembers("LuminPackUnion" + operation + "_" + suffix).OfType<IMethodSymbol>()
                 .Any(method => !method.IsStatic && method.ReturnsVoid && method.Parameters.Length == 1 &&
                     (method.IsVirtual || method.IsAbstract || method.IsOverride) &&
                     method.Parameters[0].RefKind == RefKind.Ref &&

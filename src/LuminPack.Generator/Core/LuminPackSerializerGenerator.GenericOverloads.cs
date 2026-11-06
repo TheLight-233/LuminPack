@@ -111,9 +111,9 @@ public static partial class LuminPackSerializerGenerator
                     try
                     {
                         var reader = new LuminPackJsonReader(bufferWriter);
-                        if (!FormatterDispatch.__LuminPackJsonReadBoundary<T>(ref reader, false)) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
+                        if (!FormatterDispatch.LuminPackJsonReadBoundary<T>(ref reader, false)) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
                         global::LuminPack.LuminPackSerializer.DeserializeJson(ref reader, ref value);
-                        FormatterDispatch.__LuminPackJsonReadBoundary<T>(ref reader, true);
+                        FormatterDispatch.LuminPackJsonReadBoundary<T>(ref reader, true);
                         return reader.CurrentIndex;
                     }
                     finally { bufferWriter.ReaderState.ResetOperationState(); }

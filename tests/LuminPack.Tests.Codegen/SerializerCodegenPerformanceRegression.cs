@@ -401,7 +401,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                 "A direct or staged sequence bypasses the 32-bit block-copy path.");
         }
         var dispatch = methods.Single(method => method.TypeParameterList == null && !method.Identifier.ValueText.Contains("_Options_", StringComparison.Ordinal) &&
-            method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) &&
+            method.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) &&
             method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "FixedChild" });
         Require(dispatch.Modifiers.Any(SyntaxKind.OverrideKeyword) && dispatch.Body!.ToString().Contains("writer.CurrentIndex =", StringComparison.Ordinal) &&
             dispatch.Body.ToString().Contains("LuminPackSerializer.SerializeUnionAt(ref writer, this, writer.CurrentIndex, (byte)11)", StringComparison.Ordinal),

@@ -26,8 +26,8 @@ internal sealed class CompiledOptions
         "P" + Precision + "D" + (Depth < 0 ? "N" + -(long)Depth : Depth.ToString(CultureInfo.InvariantCulture)) + "V" + (Strict ? "1" : "0") + Input.Identity;
     private string StringsType => "global::LuminPack.Option." + (Recording == 2 ? Encoding == 0 ? "LuminPackUtf8VarIntOptions" : "LuminPackUtf16VarIntOptions" : Mode == 1 ? "LuminPackUtf8LengthOptions" :
         Mode == 0 ? "LuminPackUtf8TokenOptions" : Mode == 2 ? "LuminPackUtf16TokenOptions" : "LuminPackUtf16LengthOptions");
-    private string FormatIdentity => "__LuminPackFormat_" + ((int)Format).ToString(CultureInfo.InvariantCulture) + "_" + Precision;
-    private string DepthIdentity => "__LuminPackDepth_" + (Depth < 0 ? "N" + -(long)Depth : Depth.ToString(CultureInfo.InvariantCulture));
+    private string FormatIdentity => "LuminPackFormat_" + ((int)Format).ToString(CultureInfo.InvariantCulture) + "_" + Precision;
+    private string DepthIdentity => "LuminPackDepth_" + (Depth < 0 ? "N" + -(long)Depth : Depth.ToString(CultureInfo.InvariantCulture));
     internal string TypeName => Format == 'G' && Precision == byte.MaxValue && Depth == 1024 && !Strict ? StringsType :
         "global::LuminPack.Option.LuminPackOptions<" + StringsType + ", " +
         (Format == 'G' && Precision == byte.MaxValue ? "global::LuminPack.Option.LuminPackGeneralFormat" : "global::LuminPack.Generated." + FormatIdentity) + ", " +

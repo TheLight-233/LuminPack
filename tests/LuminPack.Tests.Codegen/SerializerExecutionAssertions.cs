@@ -28,13 +28,13 @@ internal static class SerializerExecutionAssertions
     /// <returns>Whether the type is the Serializer or a container nested in it.</returns>
     internal static bool IsSerializerRootContainer(INamedTypeSymbol type)
         => type.Name == "LuminPackSerializer" ||
-            type.Name.StartsWith("__LuminRoots_", StringComparison.Ordinal) && type.ContainingType?.Name == "LuminPackSerializer";
+            type.Name.StartsWith("LuminRoots_", StringComparison.Ordinal) && type.ContainingType?.Name == "LuminPackSerializer";
 
     /// <summary>Recognizes a generated Serializer declaration or one of its payload root containers.</summary>
     /// <param name="declaration">The parent of a generated member.</param>
     /// <returns>Whether members of the declaration belong to the Serializer.</returns>
     internal static bool IsSerializerRootContainer(SyntaxNode? declaration)
         => declaration is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } ||
-            declaration is ClassDeclarationSyntax type && type.Identifier.ValueText.StartsWith("__LuminRoots_", StringComparison.Ordinal) &&
+            declaration is ClassDeclarationSyntax type && type.Identifier.ValueText.StartsWith("LuminRoots_", StringComparison.Ordinal) &&
             type.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" };
 }

@@ -157,7 +157,7 @@ internal static class SerializerScalarInterfaceReadRegression
     {
         var body = entry.Body!;
         var shared = body.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(call => call.Expression is SimpleNameSyntax name &&
-            name.Identifier.ValueText.StartsWith("__LuminFacade", StringComparison.Ordinal));
+            name.Identifier.ValueText.StartsWith("LuminFacade", StringComparison.Ordinal));
         return shared?.Expression is SimpleNameSyntax sharedName ? methods.Single(method => method.Identifier.ValueText == sharedName.Identifier.ValueText).Body! : body;
     }
 

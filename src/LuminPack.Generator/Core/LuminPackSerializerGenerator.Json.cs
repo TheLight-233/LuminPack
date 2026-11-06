@@ -228,18 +228,18 @@ public static partial class LuminPackSerializerGenerator
     {
         string padding = new string(' ', indent);
         builder.Append(padding).AppendLine("{");
-        builder.Append(padding).AppendLine("    var __jsonInlineState = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();");
-        builder.Append(padding).AppendLine("    __jsonInlineState.Init(options);");
+        builder.Append(padding).AppendLine("    var inlineReaderState = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();");
+        builder.Append(padding).AppendLine("    inlineReaderState.Init(options);");
         builder.Append(padding).AppendLine("    try");
         builder.Append(padding).AppendLine("    {");
-        builder.Append(padding).Append("        ReadOnlySpan<byte> __jsonInlineInput = ").Append(bytes).AppendLine(";");
-        builder.Append(padding).AppendLine("        var reader = new LuminPackJsonReader(ref __jsonInlineInput, __jsonInlineState);");
+        builder.Append(padding).Append("        ReadOnlySpan<byte> inlineInput = ").Append(bytes).AppendLine(";");
+        builder.Append(padding).AppendLine("        var reader = new LuminPackJsonReader(ref inlineInput, inlineReaderState);");
         builder.Append(padding).AppendLine("        if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
         AppendJsonOperation(builder, read: true, indent: indent + 8);
         builder.Append(padding).AppendLine("        reader.EnsureEndOfDocument();");
         builder.Append(padding).AppendLine("        return reader.CurrentIndex;");
         builder.Append(padding).AppendLine("    }");
-        builder.Append(padding).AppendLine("    finally { __jsonInlineState.Reset(); }");
+        builder.Append(padding).AppendLine("    finally { inlineReaderState.Reset(); }");
         builder.Append(padding).AppendLine("}");
     }
 

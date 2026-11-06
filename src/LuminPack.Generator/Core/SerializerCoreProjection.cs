@@ -213,6 +213,7 @@ internal static class SerializerCoreProjection
             rewritten = new BinaryWriterPublicationProjection().Visit(rewritten);
         }
         rewritten = PayloadCallTargets.Apply(rewritten, container.Identifier.ValueText);
+        rewritten = GeneratedOperationNames.RewriteReservedLocals(rewritten);
         var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
         normalized = normalized.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649, CS1591" + Environment.NewLine).AddRange(normalized.GetLeadingTrivia()));
         string result = LuminPackSerializerDocumentation.Enhance(normalized, closedRoot != null ? new[] { closedRoot } : contexts.Keys.Select(name => types[name]).ToArray(), compilation, metadata);
@@ -447,12 +448,12 @@ internal static class SerializerCoreProjection
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             if (node.Expression is MemberAccessExpressionSyntax jsonUnion &&
-                (jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ||
-                 jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) ||
-                 jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal)))
+                (jsonUnion.Name.Identifier.ValueText.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) ||
+                 jsonUnion.Name.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) ||
+                 jsonUnion.Name.Identifier.ValueText.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal)))
             {
-                string prefix = jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ? "__LuminPackUnionSerializeJson_" :
-                    jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ? "__LuminPackUnionCalculateOffset_" : "__LuminPackUnionSerialize_";
+                string prefix = jsonUnion.Name.Identifier.ValueText.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) ? "LuminPackUnionSerializeJson_" :
+                    jsonUnion.Name.Identifier.ValueText.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ? "LuminPackUnionCalculateOffset_" : "LuminPackUnionSerialize_";
                 string suffix = jsonUnion.Name.Identifier.ValueText.Substring(prefix.Length);
                 var pending = new Stack<ITypeSymbol>();
                 var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
