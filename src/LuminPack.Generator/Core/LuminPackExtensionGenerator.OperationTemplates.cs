@@ -190,6 +190,11 @@ public static partial class LuminPackExtensionGenerator
         }
         if (type is INamedTypeSymbol { TypeArguments.Length: 2 } entry)
         {
+            field.CanReuseEnumeratedStringKey = entry.MetadataName is "Dictionary`2" or "IDictionary`2" or "IReadOnlyDictionary`2" &&
+                entry.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" &&
+                entry.TypeArguments[0].SpecialType == SpecialType.System_String &&
+                (entry.TypeArguments[1].SpecialType == SpecialType.System_String || EmitterTypeTraits.UsesOrdinaryObjectHeader(entry.TypeArguments[1])) &&
+                EmitterTypeTraits.HasEnumeratedStringKeyCheck(compilation);
             field.CanWriteJsonIntegerEntry = EmitterTypeTraits.HasJsonIntegerEntryWriter(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
             field.CanReadJsonCompleteEntry = EmitterTypeTraits.HasJsonCompleteEntryReader(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
         }

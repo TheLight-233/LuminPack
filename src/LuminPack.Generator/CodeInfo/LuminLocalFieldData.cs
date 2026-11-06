@@ -102,6 +102,8 @@ public sealed class LuminLocalFieldData
     internal bool CanReuseDictionaryScalarSlots;
     /// <summary>Whether a closed string-key dictionary can use the optional complete-staging runtime kernel.</summary>
     internal bool CanReadStableStringKeys;
+    /// <summary>Whether staged string-key reads can use the framework comparer's matching enumerated value.</summary>
+    internal bool CanReuseEnumeratedStringKey;
     /// <summary>Stores the certified narrow tags and case types whose existing exact instances an int-keyed dictionary can refill in place.</summary>
     internal System.Collections.Generic.List<(int Id, string Type)> UnionSlotCases;
     /// <summary>Stores the name.</summary>

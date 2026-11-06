@@ -39,6 +39,47 @@ public sealed class DictionaryInterfaceReuseTest
         Assert.Equal("A", Assert.Single(target.Keys));
     }
 
+    /// <summary>A profile getter can replace the enumerated value while the matching key is being decoded.</summary>
+    [Fact]
+    public void KeyLookupObservesCustomProfileMutation()
+    {
+        var source = new Dictionary<string, DictionaryInterfaceConstructedValue> { ["a"] = new() { Number = 137 } };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        var old = new DictionaryInterfaceConstructedValue { Number = 719 };
+        var backing = new Dictionary<string, DictionaryInterfaceConstructedValue> { ["a"] = old };
+        IReadOnlyDictionary<string, DictionaryInterfaceConstructedValue> target = backing;
+        DictionaryInterfaceConstructedValue? replacement = null;
+        MutatingKeyProfile.OnEncoding = () => backing["a"] = replacement = new() { Number = 981 };
+        try
+        {
+            LuminPackSerializer.Deserialize<MutatingKeyProfile>(bytes, ref target);
+            Assert.Same(backing, target);
+            Assert.NotNull(replacement);
+            Assert.Same(replacement, target["a"]);
+            Assert.Equal(137, replacement.Number);
+            Assert.Equal(719, old.Number);
+        }
+        finally { MutatingKeyProfile.OnEncoding = null; }
+    }
+
+    /// <summary>Reordered keys reuse the matching values and retain wire insertion order after staging.</summary>
+    [Fact]
+    public void ReorderedKeysUseTheirMatchingDictionaryValues()
+    {
+        var source = new Dictionary<string, ReferenceReuseValue> { ["b"] = Make(137), ["a"] = Make(271), ["c"] = Make(313) };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        var a = Make(719);
+        var b = Make(981);
+        var target = new Dictionary<string, ReferenceReuseValue> { ["a"] = a, ["b"] = b };
+        LuminPackSerializer.Deserialize(bytes, ref target);
+        Assert.Equal(new[] { "b", "a", "c" }, target.Keys);
+        Assert.Same(a, target["a"]);
+        Assert.Same(b, target["b"]);
+        Assert.Equal(271, a.Number);
+        Assert.Equal(137, b.Number);
+        Assert.Equal(313, target["c"].Number);
+    }
+
     /// <summary>Preserves the original fresh fallback for derived and unrecognized implementations.</summary>
     [Fact]
     public void UnknownAndDerivedTargetsRemainUnobserved()
@@ -239,6 +280,24 @@ public sealed class DictionaryInterfaceReuseTest
     private static ReferenceReuseValue Make(int number) => new() { Number = number, Name = new('x', 7), Child = new() { Text = "child" }, Tags = ["a", "b"] };
 
     private sealed class DerivedDictionary : Dictionary<string, ReferenceReuseValue>;
+
+    private readonly struct MutatingKeyProfile : ILuminPackOptions
+    {
+        internal static Action? OnEncoding;
+        /// <inheritdoc/>
+        public LuminPackStringEncoding StringEncoding
+        {
+            get { OnEncoding?.Invoke(); return LuminPackStringEncoding.UTF16; }
+        }
+        /// <inheritdoc/>
+        public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
+        /// <inheritdoc/>
+        public StandardFormat StandardFormat => new('G');
+        /// <inheritdoc/>
+        public int MaxJsonDepth => 1024;
+        /// <inheritdoc/>
+        public bool ValidateJsonSyntax => false;
+    }
 
     private sealed class FailingComparer : IEqualityComparer<string>
     {

@@ -721,6 +721,7 @@ internal static class InterfaceCollectionEmitterHelper
         {
             TypeName = dictionary,
             TypeSymbol = fieldData.TypeSymbol,
+            CanReuseEnumeratedStringKey = fieldData.CanReuseEnumeratedStringKey,
             Name = fieldData.Name,
             DeclaringTypeName = fieldData.DeclaringTypeName,
             IsValue = false

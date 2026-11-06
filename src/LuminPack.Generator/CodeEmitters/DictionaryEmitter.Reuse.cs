@@ -1,4 +1,6 @@
 using System.Text;
+using LuminPack.Code;
+using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
@@ -6,22 +8,19 @@ public static partial class DictionaryEmitter
 {
     /// <summary>Adds a reusable dictionary path while retaining the original fresh bucket-building operation.</summary>
     /// <param name="sb">The generated operation builder.</param>
+    /// <param name="field">The dictionary's canonical types and available reuse paths.</param>
     /// <param name="keyType">The original key type.</param>
     /// <param name="valueType">The original value type.</param>
-    /// <param name="nonNullableValueKey">Whether null cannot be represented by the original key type.</param>
-    /// <param name="valueSymbol">The canonical dictionary value type.</param>
-    /// <param name="canReuseSlots">Whether canonical analysis proves an existing value cannot execute user code.</param>
-    /// <param name="unionSlotCases">Certified narrow Union cases refilled inside existing slots, or null.</param>
-    /// <param name="scalarSlots">Whether existing string or known scalar values are refilled inside their slots.</param>
     /// <param name="rawPair">Whether the writer stores each entry as the raw native storage of its key and value.</param>
-    /// <param name="stableStringKeys">Whether canonical metadata and the referenced runtime permit complete string-key staging.</param>
-    private static void AppendReusableDictionaryRead(StringBuilder sb, string keyType, string valueType, bool nonNullableValueKey,
-        Microsoft.CodeAnalysis.ITypeSymbol valueSymbol, bool canReuseSlots, System.Collections.Generic.List<(int Id, string Type)> unionSlotCases = null, bool scalarSlots = false,
-        bool rawPair = false, bool stableStringKeys = false)
+    private static void AppendReusableDictionaryRead(StringBuilder sb, LuminLocalFieldData field, string keyType, string valueType, bool rawPair)
     {
+        var dictionary = field.TypeSymbol as INamedTypeSymbol;
+        var valueSymbol = dictionary?.TypeArguments[1];
+        var keySymbol = dictionary?.TypeArguments[0];
+        bool nonNullableValueKey = keySymbol?.IsValueType == true && keySymbol.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T;
         sb.AppendLine("            if (value is not null)");
         sb.AppendLine("            {");
-        if (scalarSlots)
+        if (field.CanReuseDictionaryScalarSlots)
         {
             sb.AppendLine("#if NET8_0_OR_GREATER");
             sb.AppendLine($"                if (global::System.Object.ReferenceEquals(value.Comparer, global::System.Collections.Generic.EqualityComparer<{keyType}>.Default))");
@@ -31,7 +30,7 @@ public static partial class DictionaryEmitter
             sb.AppendLine("                }");
             sb.AppendLine("#endif");
         }
-        if (canReuseSlots)
+        if (field.CanReuseDictionarySlots)
         {
             sb.AppendLine("#if NET8_0_OR_GREATER");
             sb.AppendLine($"                if (global::System.Object.ReferenceEquals(value.Comparer, global::System.Collections.Generic.EqualityComparer<{keyType}>.Default))");
@@ -41,7 +40,7 @@ public static partial class DictionaryEmitter
             sb.AppendLine("                }");
             sb.AppendLine("#endif");
         }
-        if (unionSlotCases != null)
+        if (field.UnionSlotCases != null)
         {
             sb.AppendLine("#if NET8_0_OR_GREATER");
             sb.AppendLine($"                if (global::System.Object.ReferenceEquals(value.Comparer, global::System.Collections.Generic.EqualityComparer<{keyType}>.Default))");
@@ -54,10 +53,10 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                ReadExistingDictionary(ref reader, value, length);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        if (canReuseSlots) AppendDictionarySlotRead(sb, keyType, valueType, valueSymbol);
-        if (unionSlotCases != null) AppendDictionaryUnionSlotRead(sb, keyType, valueType, valueSymbol, unionSlotCases);
-        if (scalarSlots) AppendDictionaryScalarSlotRead(sb, keyType, valueType, valueSymbol);
-        AppendStagedDictionaryRead(sb, keyType, valueType, nonNullableValueKey, valueSymbol, false, rawPair, stableStringKeys);
+        if (field.CanReuseDictionarySlots) AppendDictionarySlotRead(sb, keyType, valueType, valueSymbol);
+        if (field.UnionSlotCases != null) AppendDictionaryUnionSlotRead(sb, keyType, valueType, valueSymbol, field.UnionSlotCases);
+        if (field.CanReuseDictionaryScalarSlots) AppendDictionaryScalarSlotRead(sb, keyType, valueType, valueSymbol);
+        AppendStagedDictionaryRead(sb, keyType, valueType, nonNullableValueKey, valueSymbol, false, rawPair, field.CanReadStableStringKeys, field.CanReuseEnumeratedStringKey);
     }
 
     /// <summary>Refills an existing default-comparer dictionary of raw unmanaged pairs through the fresh bucket build.</summary>
@@ -106,8 +105,9 @@ public static partial class DictionaryEmitter
     /// <param name="parsedPrefix">Whether keys and existing values have already been read before construction.</param>
     /// <param name="rawPair">Whether each entry was written as the raw storage of its key and value, which is also how it is read here.</param>
     /// <param name="stableStringKeys">Whether the existing reuse helper may attempt the complete staged string-key kernel.</param>
+    /// <param name="enumeratedStringKey">Whether matching string keys may reuse the enumerated value after decoding.</param>
     private static void AppendStagedDictionaryRead(StringBuilder sb, string keyType, string valueType, bool nonNullableValueKey,
-        Microsoft.CodeAnalysis.ITypeSymbol valueSymbol, bool parsedPrefix, bool rawPair = false, bool stableStringKeys = false)
+        Microsoft.CodeAnalysis.ITypeSymbol valueSymbol, bool parsedPrefix, bool rawPair = false, bool stableStringKeys = false, bool enumeratedStringKey = false)
     {
         string pair = $"global::System.Collections.Generic.KeyValuePair<{keyType}, {valueType}>";
         string dictionary = $"global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>";
@@ -131,6 +131,8 @@ public static partial class DictionaryEmitter
         sb.AppendLine($"                var items = global::System.Buffers.ArrayPool<{pair}>.Shared.Rent(count);");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
+        if (enumeratedStringKey)
+            sb.AppendLine("                    bool useEnumeratedValue = reader.CanReuseEnumeratedStringKey(destination.Comparer);");
         if (keyType is "string" or "System.String" or "global::System.String")
             sb.AppendLine("                    var previous = destination.GetEnumerator();");
         if (parsedPrefix)
@@ -139,7 +141,13 @@ public static partial class DictionaryEmitter
         }
         sb.AppendLine("                    for (int i = " + (parsedPrefix ? "parsed" : "0") + "; i < count; i++)");
         sb.AppendLine("                    {");
-        sb.AppendLine($"                        {keyType} key = " + (keyType is "string" or "System.String" or "global::System.String" ? "previous.MoveNext() ? previous.Current.Key : default!;" : "default!;"));
+        if (enumeratedStringKey)
+        {
+            sb.AppendLine("                        var previousPair = previous.MoveNext() ? previous.Current : default;");
+            sb.AppendLine($"                        {keyType} key = previousPair.Key;");
+        }
+        else
+            sb.AppendLine($"                        {keyType} key = " + (keyType is "string" or "System.String" or "global::System.String" ? "previous.MoveNext() ? previous.Current.Key : default!;" : "default!;"));
         if (rawPair && !rawIntValues && !parsedPrefix)
         {
             // The writer stored the pair as raw native storage (Nullable, KeyValuePair and other framed values included), and
@@ -164,7 +172,11 @@ public static partial class DictionaryEmitter
             sb.AppendLine("                        else reader.ReadValue(ref key!);");
         }
         else sb.AppendLine("                        reader.ReadValue(ref key!);");
-        sb.AppendLine($"                        {valueType} item = " + (rawIntValues ? "preserveValues && " : "") + (nonNullableValueKey ? "" : "key is { } && ") + "destination.TryGetValue(key, out var existing) ? existing : default!;");
+        string lookup = (rawIntValues ? "preserveValues && " : "") + (nonNullableValueKey ? "" : "key is { } && ") + "destination.TryGetValue(key, out var existing) ? existing : default!";
+        // Only a callback-free key read can still use the pair observed by MoveNext. Value callbacks run after selection.
+        if (enumeratedStringKey)
+            lookup = "useEnumeratedValue && key is not null && global::System.Object.ReferenceEquals(key, previousPair.Key) ? previousPair.Value : " + lookup;
+        sb.AppendLine($"                        {valueType} item = {lookup};");
         EmitterTypeTraits.AppendReusableElementRead(sb, valueSymbol, "item", "                        ");
         sb.AppendLine($"                        items[i] = new {pair}(key, item);");
         sb.AppendLine("                    }");

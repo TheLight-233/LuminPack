@@ -1158,6 +1158,16 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
         }
 
+        /// <summary>Checks whether a compiled string key can reuse its enumerated dictionary value.</summary>
+        /// <typeparam name="TOptions">The profile used to decode the key.</typeparam>
+        /// <param name="comparer">The destination dictionary's comparer.</param>
+        /// <returns>Whether the profile is a known framework profile and the dictionary uses the default string comparer.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool CanReuseEnumeratedStringKey<TOptions>(IEqualityComparer<string> comparer)
+            where TOptions : struct, ILuminPackOptions =>
+            ConstantStringProfile<TOptions>() && ReferenceEquals(comparer, EqualityComparer<string>.Default);
+
         /// <summary>Reads a string with the default compiled profile, retaining equal immutable storage.</summary>
         /// <param name = "value">The current string and destination for the parsed string.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

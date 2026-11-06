@@ -125,6 +125,19 @@ internal static class SerializerReferenceCollectionReuseRegression
             var (driver, output) = Generate(compilation, parse);
             CheckSelection(driver, ordinary: true);
             Execute(output);
+            if (mode == "Minimal")
+            {
+                string path = typeof(global::LuminPack.Core.LuminPackReader).Assembly.Location;
+                var runtime = references.OfType<PortableExecutableReference>().Single(reference => reference.FilePath == path);
+                byte[] image = File.ReadAllBytes(path);
+                int offset = image.AsSpan().IndexOf("CanReuseEnumeratedStringKey\0"u8);
+                Require(offset >= 0, "The optional string-key comparer guard is missing.");
+                image[offset] = (byte)'X';
+                var older = compilation.ReplaceReference(runtime, MetadataReference.CreateFromImage(image));
+                var compatibility = driver.RunGeneratorsAndUpdateCompilation(older, out var fallback, out _);
+                CheckSelection(compatibility, ordinary: true, hasStringKeyGuard: false);
+                Execute(fallback);
+            }
             string editedText = text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable(GeneratorType.VersionTolerant)] public sealed class Plain", StringComparison.Ordinal)
                 .Replace("public int Number; public string Text { get; set; }", "[LuminPackOrder(0)]public int Number; [LuminPackOrder(1)]public string Text { get; set; }", StringComparison.Ordinal);
             var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(editedText, parse, "Shape.cs"));
@@ -146,7 +159,8 @@ internal static class SerializerReferenceCollectionReuseRegression
     /// <summary>Checks every selected root without relying on broad source-text matches.</summary>
     /// <param name="driver">The completed generation.</param>
     /// <param name="ordinary">Whether Plain retains the ordinary object formatter.</param>
-    private static void CheckSelection(GeneratorDriver driver, bool ordinary)
+    /// <param name="hasStringKeyGuard">Whether this consumer references the optional compiled comparer guard.</param>
+    private static void CheckSelection(GeneratorDriver driver, bool ordinary, bool hasStringKeyGuard = true)
     {
         foreach (var method in driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
                      .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
@@ -160,6 +174,8 @@ internal static class SerializerReferenceCollectionReuseRegression
             {
                 bool dictionaryExpected = type.Contains(", string>", StringComparison.Ordinal) || ordinary && type.Contains(", global::Plain>", StringComparison.Ordinal);
                 Require(method.ToString().Contains("value.GetType() == typeof(", StringComparison.Ordinal) == dictionaryExpected, "Dictionary-interface reuse selection differs: " + type);
+                bool matchingKey = hasStringKeyGuard && dictionaryExpected && type.Contains("<string,", StringComparison.Ordinal);
+                Require(method.ToString().Contains(".CanReuseEnumeratedStringKey<", StringComparison.Ordinal) == matchingKey, "Enumerated string-key selection differs: " + type);
             }
             if (type.Contains(".SortedList<", StringComparison.Ordinal))
             {

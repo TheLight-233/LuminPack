@@ -150,7 +150,7 @@ public static partial class LuminPackMarshal
     /// <typeparam name="TOptions">The caller's original compiled string profile.</typeparam>
     /// <returns>Whether the profile is a known constant framework profile or its fixed wrapper.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool ConstantStringProfile<TOptions>() where TOptions : struct, ILuminPackOptions =>
+    internal static bool ConstantStringProfile<TOptions>() where TOptions : struct, ILuminPackOptions =>
         typeof(TOptions) == typeof(LuminPackUtf16LengthOptions) || typeof(TOptions) == typeof(LuminPackUtf8LengthOptions) ||
         typeof(TOptions) == typeof(LuminPackUtf16TokenOptions) || typeof(TOptions) == typeof(LuminPackUtf8TokenOptions) ||
         typeof(TOptions) == typeof(LuminPackDefaultOptions) ||

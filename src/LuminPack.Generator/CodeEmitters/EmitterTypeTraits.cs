@@ -750,6 +750,16 @@ internal static class EmitterTypeTraits
                     SymbolEqualityComparer.Default.Equals(dictionary.TypeArguments[1], method.TypeParameters[0]) &&
                     method.Parameters[2].Type.SpecialType == SpecialType.System_Int32) == true;
 
+    /// <summary>Checks that the referenced reader provides the compiled string-key comparer guard.</summary>
+    /// <param name="compilation">The consumer's runtime references.</param>
+    /// <returns>Whether generated reads can check the actual compiled profile and dictionary comparer.</returns>
+    internal static bool HasEnumeratedStringKeyCheck(Compilation compilation)
+        => compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader")?
+            .GetMembers("CanReuseEnumeratedStringKey").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 1 &&
+                method.DeclaredAccessibility == Accessibility.Public && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                method.Parameters[0].Type.ToDisplayString() == "System.Collections.Generic.IEqualityComparer<string>") == true;
+
     /// <summary>Identifies a pair or tuple member whose record is a raw scalar or a string record.</summary>
     /// <param name="type">The member type.</param>
     /// <returns>Whether the member never registers or resolves references and its exact width needs no traversal beyond the string.</returns>

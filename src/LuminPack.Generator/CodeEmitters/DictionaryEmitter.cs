@@ -540,12 +540,7 @@ public static partial class DictionaryEmitter
         if (!freshValue && unmanagedPair)
             AppendRawDictionaryRefill(sb, keyType, valueType);
         if (!freshValue)
-            AppendReusableDictionaryRead(sb, keyType, valueType,
-                fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol collection &&
-                collection.TypeArguments[0].IsValueType &&
-                collection.TypeArguments[0].OriginalDefinition.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_Nullable_T,
-                (fieldData.TypeSymbol as Microsoft.CodeAnalysis.INamedTypeSymbol)?.TypeArguments[1], fieldData.CanReuseDictionarySlots, fieldData.UnionSlotCases, fieldData.CanReuseDictionaryScalarSlots,
-                unmanagedPair, fieldData.CanReadStableStringKeys);
+            AppendReusableDictionaryRead(sb, fieldData, keyType, valueType, unmanagedPair);
         sb.AppendLine("            if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)");
         sb.AppendLine("            {");
         sb.AppendLine($"                var fallback = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");
