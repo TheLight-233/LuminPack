@@ -32,20 +32,23 @@ internal static partial class SerializerFrameworkEntryRegression
     {
         var owner = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter")!.ContainingAssembly;
         var original = references.OfType<PortableExecutableReference>().Single(reference => SymbolEqualityComparer.Default.Equals(compilation.GetAssemblyOrModuleSymbol(reference), owner));
-        var changed = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(original.FilePath!, "WriteTypeName")));
+        var changed = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(original.FilePath!, "WriteTypeName", "ResolveCulture")));
         string? expected = null;
         foreach (var current in new[] { compilation, changed, compilation })
         {
             driver = driver.RunGeneratorsAndUpdateCompilation(current, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             Require(Trees(driver).Any(text => text.Contains("writer.WriteTypeName", StringComparison.Ordinal)) == ReferenceEquals(current, compilation), "Stale type-name writer capability.");
+            Require(Trees(driver).Any(text => text.Contains("LuminPackCultureInfoCache.ResolveCulture", StringComparison.Ordinal)) == ReferenceEquals(current, compilation), "Stale culture cache capability.");
             Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(current))), "Runtime metadata edits retained stale type-name operations.");
             using var image = new MemoryStream();
             var emitted = output.Emit(image);
             Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
             string result = (string)Assembly.Load(image.ToArray()).GetType("FrameworkEntry")!.GetMethod("Evidence")!.Invoke(null, null)!;
             expected ??= result;
-            Require(result == expected, "The type-name fast path changed wire, exception or cursor observations.");
+            if (result != expected)
+                throw new InvalidOperationException("Text wrapper capability changed wire, exception or cursor observations: " +
+                    expected.Split('\n').Zip(result.Split('\n')).First(lines => lines.First != lines.Second));
         }
     }
 
@@ -83,6 +86,19 @@ internal static partial class SerializerFrameworkEntryRegression
             {
                 Profile<LuminPackUtf8LengthOptions>();Profile<LuminPackUtf16LengthOptions>();Profile<LuminPackUtf8TokenOptions>();Profile<LuminPackUtf16TokenOptions>();
                 Profile<LuminPackUtf8VarIntOptions>();Profile<LuminPackUtf16VarIntOptions>();Profile<TextStrict8>();Profile<TextStrict16>();
+                foreach (string name in new[] { "en-US", "fr-FR", "en-us", "", "zh-Hans" })
+                {
+                    CultureInfo current=CultureInfo.GetCultureInfo(name);
+                    byte[] bytes=LuminPackSerializer.Serialize(current);
+                    for(int round=0;round<4;round++)
+                    {
+                        if(round==2) CultureInfo.InvariantCulture.ClearCachedData();
+                        LuminPackSerializer.Deserialize(bytes,ref current);
+                        Require(ReferenceEquals(current,CultureInfo.GetCultureInfo(current.Name)),"Stale binary culture after cache invalidation");
+                        LuminPackSerializer.DeserializeJson("\""+name+"\"",ref current);
+                        Require(ReferenceEquals(current,CultureInfo.GetCultureInfo(name)),"Stale JSON culture after cache invalidation");
+                    }
+                }
             }
             static void Profile<P>()where P:struct,ILuminPackOptions
             {

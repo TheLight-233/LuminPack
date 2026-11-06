@@ -34,12 +34,11 @@ public static class CultureInfoEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
-        // A framework culture can lend its name to the string reader. Always resolve the result through
-        // GetCultureInfo, including after ClearCachedData, and never call a derived target's virtual getter.
-        sb.AppendLine("            var name = value?.GetType() == typeof(global::System.Globalization.CultureInfo) && value.IsReadOnly ? value.Name : null;");
+        string hint = fieldData.CanReuseCultureInfo ? "global::LuminPack.Code.LuminPackCultureInfoCache.Name" : "null";
+        sb.AppendLine("            var name = value?.GetType() == typeof(global::System.Globalization.CultureInfo) && value.IsReadOnly ? value.Name : " + hint + ";");
         sb.AppendLine("            var str = reader.ReadStringRecord(name);");
         sb.AppendLine("            ");
-        sb.AppendLine("            value = global::System.Globalization.CultureInfo.GetCultureInfo(str ?? string.Empty);");
+        AppendResolution(fieldData, sb);
     }
 
     /// <summary>Appends JSON writing statements for culture info values.</summary>
@@ -67,8 +66,22 @@ public static class CultureInfoEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var str = reader.ReadString();");
-        sb.AppendLine();
-        sb.AppendLine("            value = global::System.Globalization.CultureInfo.GetCultureInfo(str ?? string.Empty);");
+        if (fieldData.CanReuseCultureInfo)
+        {
+            sb.AppendLine("            string str = global::LuminPack.Code.LuminPackCultureInfoCache.Name!;");
+            sb.AppendLine("            if (str is not null && reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String) reader.Read(ref str);");
+            sb.AppendLine("            else str = reader.ReadString();");
+        }
+        else sb.AppendLine("            var str = reader.ReadString();");
+        AppendResolution(fieldData, sb);
+    }
+
+    /// <summary>Resolves the decoded name with the cache available in the referenced runtime.</summary>
+    /// <param name="fieldData">The framework type and available runtime capabilities.</param>
+    /// <param name="sb">The generated reader body.</param>
+    private static void AppendResolution(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string lookup = fieldData.CanReuseCultureInfo ? "global::LuminPack.Code.LuminPackCultureInfoCache.ResolveCulture" : "global::System.Globalization.CultureInfo.GetCultureInfo";
+        sb.AppendLine("            value = " + lookup + "(str ?? string.Empty);");
     }
 }

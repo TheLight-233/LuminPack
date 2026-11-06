@@ -91,6 +91,16 @@ public static partial class LuminPackExtensionGenerator
                     method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 &&
                     SymbolEqualityComparer.Default.Equals(method.ReturnType, type)) == true;
         }
+        if (field.TypeName == "global::System.Globalization.CultureInfo")
+        {
+            var cache = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCultureInfoCache");
+            field.CanReuseCultureInfo = cache?.DeclaredAccessibility == Accessibility.Public &&
+                cache.GetMembers("Name").OfType<IPropertySymbol>().Any(property => property.IsStatic &&
+                    property.GetMethod?.DeclaredAccessibility == Accessibility.Public && property.Type.SpecialType == SpecialType.System_String) &&
+                cache.GetMembers("ResolveCulture").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 0 &&
+                    method.DeclaredAccessibility == Accessibility.Public && SymbolEqualityComparer.Default.Equals(method.ReturnType, type) &&
+                    method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_String);
+        }
         if (field.TypeName == "global::System.Version")
         {
             field.CanWriteJsonVersion = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
