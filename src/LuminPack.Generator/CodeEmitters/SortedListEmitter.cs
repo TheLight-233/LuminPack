@@ -37,6 +37,15 @@ public static class SortedListEmitter
             sb.AppendLine("                var valueSpan = new global::System.ReadOnlySpan<" + valueType + ">(storedValues, 0, count);");
             sb.AppendLine("                for (int i = 0; i < keySpan.Length; i++)");
             sb.AppendLine("                {");
+            if (fieldData.CanWriteSortedListKeyRun)
+            {
+                sb.AppendLine("                    if (writer.UsesUtf16LengthRecords())");
+                sb.AppendLine("                    {");
+                sb.AppendLine("                        int written = WriteRun(ref writer.GetCurrentSpanReference(), writer.RecordRoom(), keySpan, valueSpan, ref i);");
+                sb.AppendLine("                        writer.CompleteRun(written);");
+                sb.AppendLine("                        if (i == keySpan.Length) break;");
+                sb.AppendLine("                    }");
+            }
             sb.AppendLine("                    writer.CheckBuffer();");
             sb.AppendLine("                    writer.WriteValue(keySpan[i]);");
             sb.AppendLine("                    writer.WriteValue(valueSpan[i]);");
@@ -45,6 +54,7 @@ public static class SortedListEmitter
         sb.AppendLine("            }");
         sb.AppendLine("            else if (count != 0) WriteFallback(ref writer, value, count);");
         sb.AppendLine("            writer.CheckBuffer();");
+        if (fieldData.CanWriteSortedListKeyRun) AppendKeyValueRun(sb, valueType);
         sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         sb.AppendLine("            static void WriteFallback(ref global::LuminPack.Core.LuminPackWriter writer, " + fieldData.TypeName + " value, int pairCount)");
         sb.AppendLine("            {");
@@ -74,6 +84,30 @@ public static class SortedListEmitter
         sb.AppendLine("                    global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Return(keys, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + keyType + ">());");
         sb.AppendLine("                    if (values != null) global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Return(values, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + valueType + ">());");
         sb.AppendLine("                }");
+        sb.AppendLine("            }");
+    }
+
+    /// <summary>Writes string keys and raw values while each complete pair fits the original buffer threshold.</summary>
+    /// <param name="sb">The generated writer body.</param>
+    /// <param name="valueType">The value's proven raw storage type.</param>
+    private static void AppendKeyValueRun(StringBuilder sb, string valueType)
+    {
+        const string writer = "global::LuminPack.Core.LuminPackWriter";
+        const string intrinsics = "global::System.Runtime.CompilerServices.Unsafe";
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine("            static int WriteRun(ref byte start, int room, global::System.ReadOnlySpan<string> keys, global::System.ReadOnlySpan<" + valueType + "> values, ref int index)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                int written = 0;");
+        sb.AppendLine("                int i = index;");
+        sb.AppendLine("                for (; i < keys.Length; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    string key = keys[i];");
+        sb.AppendLine("                    if (sizeof(int) + (long)(key?.Length ?? 0) * sizeof(char) + " + intrinsics + ".SizeOf<" + valueType + ">() > room - written) break;");
+        sb.AppendLine("                    written += " + writer + ".WriteReservedUtf16Record(ref " + intrinsics + ".Add(ref start, written), key);");
+        sb.AppendLine("                    written += " + writer + ".Write(ref " + intrinsics + ".Add(ref start, written), in values[i]);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                index = i;");
+        sb.AppendLine("                return written;");
         sb.AppendLine("            }");
     }
 

@@ -89,6 +89,11 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
             statements.Add(SyntaxFactory.ParseStatement(local + ".CopyTo(ref " + source + ");"));
             body = SyntaxFactory.Block(statements);
         }
+        // Keep the bounded pair loop and its growth fallback out of the pooled byte-array entry.
+        bool sortedListRun = method.Identifier.ValueText == "RootWrite" &&
+            payload.StartsWith("global::System.Collections.Generic.SortedList<", System.StringComparison.Ordinal) &&
+            Own(body).OfType<InvocationExpressionSyntax>().Any(call =>
+                call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CompleteRun" });
         var attributes = method.AttributeLists.Select(list => list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
             !attribute.Name.ToString().EndsWith("MethodImpl", System.StringComparison.Ordinal))))).Where(list => list.Attributes.Count != 0);
         return method.WithBody(body).WithAttributeLists(SyntaxFactory.List(attributes))
@@ -96,7 +101,7 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
             SyntaxFactory.Attribute(SyntaxFactory.ParseName("global::System.Runtime.CompilerServices.MethodImpl"),
                 SyntaxFactory.AttributeArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.AttributeArgument(
                     SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.MethodImplOptions." +
-                        (InlinedSize(body) <= InlineStatementLimit && !Enumerates(body) ? "AggressiveInlining" : "NoInlining")))))))));
+                        (!sortedListRun && InlinedSize(body) <= InlineStatementLimit && !Enumerates(body) ? "AggressiveInlining" : "NoInlining")))))))));
     }
 
     /// <summary>Recognizes a root that traverses through an enumerator.</summary>

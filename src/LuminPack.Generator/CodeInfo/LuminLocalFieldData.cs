@@ -65,6 +65,8 @@ public sealed class LuminLocalFieldData
     internal bool CanAppendSortedListOrdered;
     /// <summary>Whether the referenced runtime exposes a checked allocation-free sorted-list traversal.</summary>
     internal bool CanTraverseSortedList;
+    /// <summary>Whether a string-keyed sorted list can write complete raw-value pairs into a proven window.</summary>
+    internal bool CanWriteSortedListKeyRun;
     /// <summary>Whether the referenced runtime provides isolated integer enumeration writes.</summary>
     internal bool CanWriteJsonEnumerationElement;
     /// <summary>Whether the referenced FrozenSet exposes its public struct enumerator.</summary>

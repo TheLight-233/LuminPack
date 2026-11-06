@@ -42,7 +42,7 @@ internal static class SerializerSortedSetConstructionRegression
             var (restored, _) = Generate(compilation, parse);
             Require(Trees(driver).SequenceEqual(Trees(restored), StringComparer.Ordinal), "Restoring the optional runtime builder left stale fallback calls.");
 
-            foreach (string capability in new[] { "CanRebuildSortedSet", "TryRebuildSortedSet", "CanAppendSortedListOrdered", "TryAppendSortedListOrdered" })
+            foreach (string capability in new[] { "CanRebuildSortedSet", "TryRebuildSortedSet", "CanAppendSortedListOrdered", "TryAppendSortedListOrdered", "WriteReservedUtf16Record" })
             {
                 byte[] reduced = File.ReadAllBytes(typeof(LuminPackWriter).Assembly.Location);
                 int position = reduced.AsSpan().IndexOf(Encoding.UTF8.GetBytes(capability + "\0"));
@@ -51,7 +51,8 @@ internal static class SerializerSortedSetConstructionRegression
                 var withoutReuse = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(reduced));
                 driver = driver.RunGeneratorsAndUpdateCompilation(withoutReuse, out var fallbackOutput, out diagnostics);
                 Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
-                VerifyReuseSelection(driver, !capability.Contains("SortedSet", StringComparison.Ordinal), !capability.Contains("SortedList", StringComparison.Ordinal));
+                VerifyReuseSelection(driver, !capability.Contains("SortedSet", StringComparison.Ordinal),
+                    !capability.Contains("SortedList", StringComparison.Ordinal), keyRunExpected: capability != "WriteReservedUtf16Record");
                 Execute(fallbackOutput);
                 var (fallbackFresh, _) = Generate(withoutReuse, parse);
                 Require(Trees(driver).SequenceEqual(Trees(fallbackFresh), StringComparer.Ordinal), "Removing " + capability + " retained stale reuse code.");
@@ -110,6 +111,8 @@ internal static class SerializerSortedSetConstructionRegression
                 public static byte[] Nested(SetHolder value)=>LuminPackSerializer.Serialize(value);
                 public static string Json(SortedSet<int> value)=>LuminPackSerializer.SerializeJson(value);
                 public static byte[] WriteList(SortedList<string,UserElement> value)=>LuminPackSerializer.Serialize(value);
+                public static byte[] WriteScalars(SortedList<string,int> value)=>LuminPackSerializer.Serialize(value);
+                public static byte[] WriteCustom(SortedList<string,CustomElement> value)=>LuminPackSerializer.Serialize(value);
                 public static int ReadList(ReadOnlySpan<byte> bytes,ref SortedList<string,UserElement> value)=>LuminPackSerializer.Deserialize(bytes,ref value);
                 public static int IntegerKeys(ReadOnlySpan<byte> bytes,ref SortedList<int,string> value)=>LuminPackSerializer.Deserialize(bytes,ref value);
             """.Replace("MODE", mode, StringComparison.Ordinal));
@@ -171,10 +174,18 @@ internal static class SerializerSortedSetConstructionRegression
     /// <param name="driver">The completed generator.</param>
     /// <param name="setExpected">Whether both mutable set helpers are exposed.</param>
     /// <param name="listExpected">Whether both ordered list helpers are exposed.</param>
-    private static void VerifyReuseSelection(GeneratorDriver driver, bool setExpected, bool listExpected)
+    /// <param name="keyRunExpected">Whether the runtime can write a reserved UTF-16 record.</param>
+    private static void VerifyReuseSelection(GeneratorDriver driver, bool setExpected, bool listExpected, bool keyRunExpected = true)
     {
         var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .SelectMany(result => result.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        var listWrites = methods.Where(method => method.Identifier.ValueText == "RootWrite" &&
+            method.ParameterList.ToString().Contains("SortedList<string,", StringComparison.Ordinal)).ToArray();
+        bool HasRun(MethodDeclarationSyntax method) => method.ToString().Contains(".WriteReservedUtf16Record(", StringComparison.Ordinal);
+        Require(listWrites.Any(method => method.ParameterList.ToString().Contains("SortedList<string, int>", StringComparison.Ordinal) &&
+            HasRun(method) == keyRunExpected), "Raw sorted-list values must use a bounded run only when the runtime supports it.");
+        Require(listWrites.Any(method => method.ParameterList.ToString().Contains("CustomElement>", StringComparison.Ordinal) &&
+            !HasRun(method)), "Custom sorted-list values must retain their formatter.");
         var sets = methods.Where(method => method.Body?.ToString().Contains("LuminTreeStorage.TryRebuildSortedSet(", StringComparison.Ordinal) == true).ToArray();
         Require(setExpected ? sets.Length >= Types().Length : sets.Length == 0, "Mutable sorted-set helper selection changed.");
         foreach (var method in sets)

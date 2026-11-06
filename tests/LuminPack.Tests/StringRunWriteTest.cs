@@ -129,6 +129,31 @@ public sealed class StringRunWriteTest
         }
     }
 
+    /// <summary>Checks key and raw scalar framing on both sides of a growth-forcing key.</summary>
+    [Fact]
+    public void SortedListScalarPairsMatchPerElementRecordsAcrossGrowth()
+    {
+        var list = new SortedList<string, long>(StringComparer.Ordinal) { [""] = long.MinValue };
+        for (int i = 0; i < 96; i++)
+        {
+            string key = i.ToString("D3") + (i % 3 == 0 ? new string('\u0100', i == 48 ? 70_000 : 12) : "\u00e9");
+            list.Add(key, long.MaxValue - i);
+        }
+        Check<LuminPackUtf16LengthOptions>();
+        Check<LuminPackUtf16TokenOptions>();
+        Check<LuminPackUtf16VarIntOptions>();
+        Check<LuminPackUtf8LengthOptions>();
+        Check<LuminPackUtf8TokenOptions>();
+        Check<LuminPackUtf8VarIntOptions>();
+
+        void Check<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            byte[] expected = Counted(list.Count, list.SelectMany(pair =>
+                LuminPackSerializer.Serialize<TOptions>(pair.Key).Concat(LuminPackSerializer.Serialize<TOptions>(pair.Value))));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<TOptions>(list));
+        }
+    }
+
     /// <summary>Checks immutable queues before and after their back stack is reversed, and through their interface.</summary>
     [Fact]
     public void ImmutableQueueStacksMatchTheEnumeration()

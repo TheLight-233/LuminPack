@@ -609,6 +609,27 @@ internal static class EmitterTypeTraits
                 method.ReturnsVoid && method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
     }
 
+    /// <summary>Checks the writer operations used to reserve and complete runs of UTF-16 records.</summary>
+    /// <param name="compilation">The compilation supplying the referenced writer.</param>
+    /// <returns>Whether the default and compiled profiles both expose the required record operations.</returns>
+    internal static bool HasUtf16RecordWindow(Compilation compilation)
+    {
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        if (writer == null) return false;
+        var profiles = writer.GetMembers("UsesUtf16LengthRecords").OfType<IMethodSymbol>().Where(method => !method.IsStatic &&
+            method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 && method.ReturnType.SpecialType == SpecialType.System_Boolean);
+        return profiles.Any(method => method.Arity == 0) && profiles.Any(method => method.Arity == 1) &&
+            writer.GetMembers("RecordRoom").OfType<IMethodSymbol>().Any(method => method.DeclaredAccessibility == Accessibility.Public &&
+                !method.IsStatic && method.Arity == 0 && method.Parameters.Length == 0 && method.ReturnType.SpecialType == SpecialType.System_Int32) &&
+            writer.GetMembers("CompleteRun").OfType<IMethodSymbol>().Any(method => method.DeclaredAccessibility == Accessibility.Public &&
+                !method.IsStatic && method.Arity == 0 && method.ReturnsVoid && method.Parameters.Length == 1 &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_Int32) &&
+            writer.GetMembers("WriteReservedUtf16Record").OfType<IMethodSymbol>().Any(method => method.DeclaredAccessibility == Accessibility.Public &&
+                method.IsStatic && method.Arity == 0 && method.ReturnType.SpecialType == SpecialType.System_Int32 && method.Parameters.Length == 2 &&
+                method.Parameters[0].RefKind == RefKind.Ref && method.Parameters[0].Type.SpecialType == SpecialType.System_Byte &&
+                method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_String);
+    }
+
     /// <summary>Checks the optional version-preserving sorted-list traversal API on the referenced runtime.</summary>
     /// <param name="compilation">The compilation supplying the actual runtime signatures.</param>
     /// <returns>Whether both traversal operations expose their complete expected contracts.</returns>

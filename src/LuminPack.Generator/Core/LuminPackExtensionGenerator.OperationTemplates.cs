@@ -210,6 +210,8 @@ public static partial class LuminPackExtensionGenerator
         {
             field.CanAppendSortedListOrdered = EmitterTypeTraits.CanAppendSortedListOrdered(sortedList.TypeArguments[0], compilation);
             field.CanTraverseSortedList = EmitterTypeTraits.HasSortedListTraversal(compilation);
+            field.CanWriteSortedListKeyRun = sortedList.TypeArguments[0].SpecialType == SpecialType.System_String &&
+                EmitterTypeTraits.FormatterIsRawStorage(sortedList.TypeArguments[1]) && EmitterTypeTraits.HasUtf16RecordWindow(compilation);
         }
         if (type is INamedTypeSymbol { MetadataName: "HashSet`1" or "ISet`1" or "IReadOnlySet`1", TypeArguments.Length: 1 } hashSet &&
             hashSet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
