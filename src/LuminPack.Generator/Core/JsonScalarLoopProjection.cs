@@ -6,9 +6,30 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.Code.Core;
 
-/// <summary>Gives repeated compound JSON scalar reads their own native budget inside large composed roots.</summary>
+/// <summary>Applies execution hints to scalar JSON read and write loops after state localization.</summary>
 internal sealed class JsonScalarLoopProjection : CSharpSyntaxRewriter
 {
+    /// <summary>Sets the final inline preference for generated integer JSON HashSet loops after state localization.</summary>
+    /// <param name="node">The generated local function.</param>
+    /// <returns>The visited function with its selected implementation hint.</returns>
+    public override SyntaxNode VisitLocalFunctionStatement(LocalFunctionStatementSyntax node)
+    {
+        var result = (LocalFunctionStatementSyntax)base.VisitLocalFunctionStatement(node);
+        if (!result.Identifier.ValueText.StartsWith("WriteSetElements", System.StringComparison.Ordinal) ||
+            result.ParameterList.Parameters.Count != 2 ||
+            result.ParameterList.Parameters[0].Type.ToString() != "global::LuminPack.Core.LuminPackJsonWriter" ||
+            result.ParameterList.Parameters[1].Type.ToString() is not ("global::System.Collections.Generic.HashSet<int>" or "global::System.Collections.Generic.HashSet<long>"))
+            return result;
+        foreach (var list in result.AttributeLists)
+        foreach (var attribute in list.Attributes)
+        {
+            if (attribute.ArgumentList?.Arguments.Count == 1 &&
+                attribute.ArgumentList.Arguments[0].Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "NoInlining" } hint)
+                return result.ReplaceNode(hint.Name, SyntaxFactory.IdentifierName("AggressiveInlining").WithTriviaFrom(hint.Name));
+        }
+        return result;
+    }
+
     /// <summary>Retains small roots and isolates repeated floating-point parsers in call-heavy roots.</summary>
     /// <param name="node">A generated operation after scalar calls have their canonical typed form.</param>
     /// <returns>The same traversal and publication order with shared local scalar entry points when selected.</returns>

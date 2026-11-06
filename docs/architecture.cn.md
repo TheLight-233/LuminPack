@@ -140,7 +140,7 @@ Int32/UInt32 引用长度和 id 保持较小的正数单字节路径，原有带
 
 具体类型 `ConcurrentQueue<T>`、`ConcurrentStack<T>` 和 `ConcurrentDictionary<TKey, TValue>` 的 JSON 写入在原有空集合分支使用公开 `IsEmpty` 查询，保留公开枚举器及其快照或并发观察行为，避免仅为判断空集合而遍历完整栈或获取所有字典锁。`ConcurrentBag<T>` 保留数量查询，因为其他线程首次查询 `IsEmpty` 可能初始化线程本地存储。二进制计数遍历、集合构造、元素回调和读取发布保持不变；枚举器及快照分配仍取决于 BCL 和 Runtime。
 
-Set 接口写入器对精确的 `HashSet<T>` 和 `SortedSet<T>` 实现使用公开的值类型枚举器。如果引用框架的实际元数据提供 Frozen 的公开值类型枚举器，`IReadOnlySet<T>` 也采用该路径。具体循环放在独立的静态操作中，避免枚举器状态扩大接口调用方的内联预算；派生类型和未知实现保留接口遍历。JSON 保留原有的数量查询与数组 framing，二进制回退路径保留按实际写入数量发布头部的行为。精确 SortedSet 实现为空时，二进制写入在原有头部容量检查后跳过枚举器；非空集合仍保留公开 SortedSet 枚举器内部位于堆上的遍历栈。
+Set 接口写入器对精确的 `HashSet<T>` 和 `SortedSet<T>` 实现使用公开的值类型枚举器。如果引用框架的实际元数据提供 Frozen 的公开值类型枚举器，`IReadOnlySet<T>` 也采用该路径。具体循环放在独立的静态操作中。状态投影完成后，JSON 的 HashSet<int> 和 HashSet<long> 循环获得积极内联提示。派生类型和未知实现使用接口遍历。JSON 保留原有的数量查询与数组 framing，二进制回退路径保留按实际写入数量发布头部的行为。精确 SortedSet 实现为空时，二进制写入在原有头部容量检查后跳过枚举器；非空集合仍保留公开 SortedSet 枚举器内部位于堆上的遍历栈。
 
 空 Frozen 读取在原有二进制头部验证或 JSON token 消费之后返回框架共享的空结果。非空值保留原有构造和失败发布方式。运行时存储构造器与暂存式 JSON 读取器对单元素 immutable hash/sorted set 使用既有的公开单元素工厂，避免中间 builder。多元素构造、重复元素与 comparer 行为、池化暂存，以及现有二进制弱候选缓存均保留各自路径。这些特化不表示所有 Set 读取或任意接口实现都没有临时堆分配。
 
