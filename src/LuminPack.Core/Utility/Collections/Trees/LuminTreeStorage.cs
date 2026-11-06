@@ -367,6 +367,13 @@ public static partial class LuminTreeStorage
     /// <returns>Whether the condition holds.</returns>
     private static bool IsStrictlyAscending<T>(T[] items, int count)
     {
+        if (typeof(T) == typeof(string))
+        {
+            var strings = (string[])(object)items;
+            for (int i = 1; i < count; i++)
+                if (string.Compare(strings[i - 1], strings[i], StringComparison.CurrentCulture) >= 0) return false;
+            return true;
+        }
         var comparer = Comparer<T>.Default;
         for (int i = 1; i < count; i++)
             if (comparer.Compare(items[i - 1], items[i]) >= 0) return false;
@@ -633,6 +640,14 @@ public static partial class LuminTreeStorage
     private static bool IsStrictlyAscending<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count)
     {
         if (pairs[0].Key is null) return false;
+        if (typeof(TKey) == typeof(string))
+        {
+            var entries = (KeyValuePair<string, TValue>[])(object)pairs;
+            // A later null key cannot follow an earlier key in strictly ascending string order.
+            for (int i = 1; i < count; i++)
+                if (string.Compare(entries[i - 1].Key, entries[i].Key, StringComparison.CurrentCulture) >= 0) return false;
+            return true;
+        }
         var comparer = Comparer<TKey>.Default;
         for (int i = 1; i < count; i++)
             if (pairs[i].Key is null || comparer.Compare(pairs[i - 1].Key, pairs[i].Key) >= 0) return false;

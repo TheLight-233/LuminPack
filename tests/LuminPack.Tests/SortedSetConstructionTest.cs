@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Reflection;
 using LuminPack;
@@ -64,6 +65,52 @@ public sealed class SortedSetConstructionTest
         var result = LuminTreeStorage.CreateSortedSet(source, source.Length);
         source[0] = -123;
         Assert.DoesNotContain(-123, result);
+    }
+
+    /// <summary>Checks cultural key order and the public Add failure prefix when ordered construction declines.</summary>
+    /// <param name="culture">The culture used by the default string comparer.</param>
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("sv-SE")]
+    [InlineData("tr-TR")]
+    public void SortedDictionariesUseDefaultStringOrdering(string culture)
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+            var expected = new SortedDictionary<string, int>
+            {
+                ["a"] = 1, ["ä"] = 2, ["z"] = 3, ["I"] = 4, ["ı"] = 5
+            };
+            var pairs = expected.ToArray();
+            foreach (var input in new[] { pairs, pairs.AsEnumerable().Reverse().ToArray() })
+            {
+                var actual = new SortedDictionary<string, int>();
+                LuminTreeStorage.FillSortedDictionary(actual, input, input.Length);
+                Assert.Equal(pairs, actual.ToArray());
+                Assert.Equal(pairs, LuminTreeStorage.CreateImmutableSortedDictionary(input, input.Length).ToArray());
+                foreach (var pair in pairs) Assert.Equal(pair.Value, actual[pair.Key]);
+            }
+
+            foreach (string invalidKey in new[] { null!, "e\u0301" })
+            {
+                KeyValuePair<string, int>[] invalid = [new("é", 1), new(invalidKey, 2)];
+                var actual = new SortedDictionary<string, int>();
+                var reference = new SortedDictionary<string, int> { { "é", 1 } };
+                var failure = Record.Exception(() => reference.Add(invalidKey, 2));
+                Assert.NotNull(failure);
+                Assert.Throws(failure.GetType(), () => LuminTreeStorage.FillSortedDictionary(actual, invalid, invalid.Length));
+                Assert.Equal(reference.ToArray(), actual.ToArray());
+                var immutableFailure = Record.Exception(() => ImmutableSortedDictionary.Create<string, int>().Add("é", 1).Add(invalidKey, 2));
+                Assert.NotNull(immutableFailure);
+                Assert.Throws(immutableFailure.GetType(), () => LuminTreeStorage.CreateImmutableSortedDictionary(invalid, invalid.Length));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     /// <summary>Checks every binary string profile and rejects every incomplete record before fresh publication.</summary>
