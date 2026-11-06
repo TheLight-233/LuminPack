@@ -261,13 +261,14 @@ public sealed class StringRunWriteTest
         queue = queue.Dequeue().Enqueue("tail-1").Enqueue(null).Enqueue("tail-2");
         byte[] expected = Counted(queue.Count(), Records(queue));
 
-        // Counting above enumerated the queue, which cached its reversed back stack; a new queue has none until its
-        // first enumeration, which the fallback write performs.
+        // A fresh queue has an uncached back stack. Serialization borrows traversal storage until a caller enumerates it.
         string?[] items = queue.ToArray().Append("late").ToArray();
         var fresh = ImmutableQueue.CreateRange(queue.ToArray()).Enqueue("late");
         Assert.False(LuminPackCollectionAccess.TryGetImmutableQueueStacks(fresh, out _, out _));
         byte[] freshExpected = Counted(items.Length, Records(items));
         Assert.Equal(freshExpected, LuminPackSerializer.Serialize(fresh));
+        Assert.False(LuminPackCollectionAccess.TryGetImmutableQueueStacks(fresh, out _, out _));
+        Assert.Equal(items, fresh.ToArray());
         Assert.True(LuminPackCollectionAccess.TryGetImmutableQueueStacks(fresh, out _, out _));
         Assert.Equal(freshExpected, LuminPackSerializer.Serialize(fresh));
 
