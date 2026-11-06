@@ -1,3 +1,5 @@
+using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,6 +11,52 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Emits padding-free transfers while retaining the existing Local/As storage mechanism.</summary>
 internal static class PortableStructEmitter
 {
+    /// <summary>Finds the portable view marker with a bounded short scan or overlapping rented windows.</summary>
+    /// <param name="builder">The operation text accumulated so far.</param>
+    /// <returns>Whether the complete marker appears anywhere in that text.</returns>
+    internal static bool ContainsPortableViewMarker(StringBuilder builder)
+    {
+        const int window = 1024;
+        const string marker = "LocalPortable";
+        int length = builder.Length;
+        if (length <= 64)
+        {
+            int end = marker.Length - 1;
+            while (end < length)
+            {
+                char last = builder[end];
+                if (last == marker[marker.Length - 1])
+                {
+                    int index = marker.Length - 2;
+                    while (index >= 0 && builder[end - (marker.Length - 1) + index] == marker[index]) index--;
+                    if (index < 0) return true;
+                }
+                // Distances from the final character to its preceding occurrences in LocalPortable.
+                int skip = last switch { 'L' => 12, 'o' => 6, 'c' => 10, 'a' => 3, 'l' => 1, 'P' => 7, 'r' => 5, 't' => 4, 'b' => 2, _ => 13 };
+                if (length - end <= skip) return false;
+                end += skip;
+            }
+            return false;
+        }
+        char[] buffer = ArrayPool<char>.Shared.Rent(Math.Min(window, length));
+        try
+        {
+            int start = 0;
+            while (true)
+            {
+                int count = Math.Min(window, length - start);
+                builder.CopyTo(start, buffer, 0, count);
+                if (new ReadOnlySpan<char>(buffer, 0, count).IndexOf(marker.AsSpan()) >= 0) return true;
+                if (length - start <= count) return false;
+                start += count - (marker.Length - 1);
+            }
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(buffer);
+        }
+    }
+
     /// <summary>Names an ABI-preserving storage view independently of serialized member filters.</summary>
     /// <param name="plan">The aggregate storage plan.</param>
     /// <returns>A collision-free name in the existing generated extension container.</returns>
@@ -37,7 +85,7 @@ internal static class PortableStructEmitter
     /// <param name="type">The operation type.</param>
     internal static void AppendViews(StringBuilder sb, ITypeSymbol type)
     {
-        if (sb.ToString().IndexOf("LocalPortable", System.StringComparison.Ordinal) < 0) return;
+        if (!ContainsPortableViewMarker(sb)) return;
         var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var emitted = new HashSet<string>();
         Visit(type);
