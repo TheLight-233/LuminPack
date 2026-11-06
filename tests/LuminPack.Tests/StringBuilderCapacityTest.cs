@@ -7,6 +7,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Protects complete chunked text records at variable-length write boundaries.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public partial class StringBuilderCapacityTest
 {
     /// <summary>Reserves the entire text before copying chunks into a fresh native buffer.</summary>

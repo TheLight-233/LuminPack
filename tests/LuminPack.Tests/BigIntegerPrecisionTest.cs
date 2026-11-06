@@ -11,6 +11,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Checks exact signed BigInteger encoding beyond floating-point and stack-buffer limits.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public class BigIntegerPrecisionTest
 {
     /// <summary>Checks warmed writes allocate nothing and reads allocate only the BCL integer result storage.</summary>

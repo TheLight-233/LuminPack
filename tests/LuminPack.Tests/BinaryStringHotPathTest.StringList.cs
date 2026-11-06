@@ -7,6 +7,7 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+[Collection(nameof(RuntimeStateCollection))]
 public partial class BinaryStringHotPathTest
 {
     /// <summary>Checks the generated list reader against the generated producer under all compiled string profiles.</summary>

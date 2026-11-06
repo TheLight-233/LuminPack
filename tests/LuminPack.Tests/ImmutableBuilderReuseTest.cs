@@ -6,6 +6,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Protects exclusive empty-builder ownership and published immutable graphs.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public sealed class ImmutableBuilderReuseTest
 {
     /// <summary>Returns all builder families without allocating another shell after warmup.</summary>

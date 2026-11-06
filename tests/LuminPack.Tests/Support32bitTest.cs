@@ -10,6 +10,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Verifies architecture-independent opt-in unmanaged records and unchanged raw storage.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public class Support32bitTest
 {
     /// <summary>Verifies declaration order and eight-byte integers without internal or trailing padding.</summary>

@@ -6,6 +6,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Checks bit-count framing across the integer and byte runtime storage layouts.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public class BitArrayStorageCompatibilityTest
 {
     private static BitArray? s_allocationSink;

@@ -9,6 +9,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Separates independent implicit reference scopes while preserving explicitly shared scopes.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public unsafe class DefaultReferenceContextTest
 {
     /// <summary>Materializes private state only when the mutable owner requests it.</summary>

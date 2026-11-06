@@ -8,6 +8,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Protects priority-queue capacity reservations and validation before pooled staging.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public sealed class PriorityQueueCapacityTest
 {
     /// <summary>Preserves field framing, heap semantics and truncation boundaries in every binary profile.</summary>

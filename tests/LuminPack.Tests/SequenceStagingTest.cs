@@ -7,6 +7,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Provides sequence staging test functionality.</summary>
+[Collection(nameof(RuntimeStateCollection))]
 public class SequenceStagingTest
 {
     /// <summary>Provides segment functionality.</summary>

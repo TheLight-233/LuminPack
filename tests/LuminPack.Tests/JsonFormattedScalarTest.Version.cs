@@ -9,6 +9,7 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+[Collection(nameof(RuntimeStateCollection))]
 public partial class JsonFormattedScalarTest
 {
     /// <summary>Checks fixed binary component records, omitted components, fresh identity and truncated publication.</summary>
