@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Core;
+using LuminPack.Code;
 using LuminPack.Internal;
 #if NET8_0_OR_GREATER
 using System.Buffers;
@@ -273,6 +274,17 @@ public static unsafe partial class StringSerializer
         {
             if (TryNarrowLatin1Medium(ref Unsafe.As<char, ushort>(ref source), ref destination, length))
                 return Latin1Header(length);
+            if (Vector256.IsHardwareAccelerated && length > 32)
+            {
+                // The raw record is 66 to 128 bytes. Constant head and tail widths let the JIT
+                // finish the copy inline after the vectorized classification fails.
+                int rawBytes = length * sizeof(char);
+                ref byte first = ref Unsafe.As<char, byte>(ref source);
+                nuint tail = (nuint)(uint)(rawBytes - 64);
+                LuminPackMarshal.CopyBlockUnaligned(ref destination, ref first, 64);
+                LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref destination, tail), ref Unsafe.Add(ref first, tail), 64);
+                return rawBytes;
+            }
         }
         else
 #endif
