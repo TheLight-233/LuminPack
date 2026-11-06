@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using LuminPack;
 using LuminPack.Attribute;
@@ -47,6 +48,86 @@ public class CollectionStorageLayoutTest
         });
         Assert.Equal(dense.Length, shared.Count);
         Assert.All(dense, pair => Assert.Equal("new", shared[pair.Key + dense.Length]));
+    }
+
+    /// <summary>Checks generic bucket construction, including user hash and equality calls during collision and duplicate handling.</summary>
+    [Fact]
+    public void ConcurrentDictionaryUsesTheFrameworkComparerForAllEntries()
+    {
+        var ids = Enumerable.Range(0, 160).ToArray();
+        CheckMap(ids.Select(i => KeyValuePair.Create("key-" + i, (long)i * i)).ToArray());
+        CheckMap(ids.Select(i => KeyValuePair.Create((long)i - 80, new object())).ToArray());
+        CheckMap(ids.Select(i => KeyValuePair.Create(new Guid(i, 7, 3, new byte[8]), ((long?)i, (decimal?)null))).ToArray());
+        CheckMap(ids.Select(i => KeyValuePair.Create((DayOfWeek)i, new[] { i })).ToArray());
+        foreach (bool duplicate in new[] { false, true })
+        {
+            var trace = new List<int>();
+            var pairs = ids.Select(i => KeyValuePair.Create(new ObservedKey(duplicate ? i % 67 : i, trace), i)).ToArray();
+            var expected = OriginalMap(pairs);
+            var expectedCalls = trace.ToArray();
+            trace.Clear();
+            var actual = LuminPackCollectionAccess.CreateConcurrentDictionary(pairs, pairs.Length);
+            Assert.Equal(expectedCalls, trace);
+            Assert.Equal(expected.ToArray(), actual.ToArray());
+        }
+        var withNull = ids.Select(i => KeyValuePair.Create(i == 75 ? null! : i.ToString(), (object?)null)).ToArray();
+        Assert.Equal(Assert.Throws<ArgumentNullException>(() => OriginalMap(withNull)).ParamName,
+            Assert.Throws<ArgumentNullException>(() => LuminPackCollectionAccess.CreateConcurrentDictionary(withNull, withNull.Length)).ParamName);
+    }
+
+    /// <summary>Checks the constructed map after publication and mutation.</summary>
+    /// <typeparam name="TKey">The closed key type.</typeparam>
+    /// <typeparam name="TValue">The closed value type.</typeparam>
+    /// <param name="pairs">The parsed pairs.</param>
+    private static void CheckMap<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs) where TKey : notnull
+    {
+        var expected = OriginalMap(pairs);
+        var actual = LuminPackCollectionAccess.CreateConcurrentDictionary(pairs, pairs.Length);
+        Assert.Equal(expected.ToArray(), actual.ToArray());
+        foreach (var pair in pairs)
+        {
+            Assert.True(actual.TryRemove(pair.Key, out var value));
+            Assert.Equal(pair.Value, value);
+            Assert.True(actual.TryAdd(pair.Key, value));
+        }
+        Assert.Equal(expected.Count, actual.Count);
+    }
+
+    /// <summary>Reproduces the previous construction, including its duplicate exception filter.</summary>
+    /// <typeparam name="TKey">The closed key type.</typeparam>
+    /// <typeparam name="TValue">The closed value type.</typeparam>
+    /// <param name="pairs">The staged key/value entries.</param>
+    /// <returns>The framework reference result.</returns>
+    private static ConcurrentDictionary<TKey, TValue> OriginalMap<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs) where TKey : notnull
+    {
+        var seen = new HashSet<TKey>();
+        try { return new ConcurrentDictionary<TKey, TValue>(Environment.ProcessorCount, new ArraySegment<KeyValuePair<TKey, TValue>>(pairs), null); }
+        catch (ArgumentException) when (pairs.Any(pair => pair.Key is not null && !seen.Add(pair.Key)))
+        {
+            var map = new ConcurrentDictionary<TKey, TValue>(Environment.ProcessorCount, pairs.Length);
+            foreach (var pair in pairs) map.TryAdd(pair.Key, pair.Value);
+            return map;
+        }
+    }
+
+    /// <summary>Records every comparison and places distinct keys in a small number of buckets.</summary>
+    private sealed class ObservedKey(int id, List<int> trace) : IEquatable<ObservedKey>
+    {
+        private readonly int _id = id;
+
+        /// <summary>Records the hash callback.</summary>
+        /// <returns>A deliberately colliding hash.</returns>
+        public override int GetHashCode() { trace.Add(-1 - _id); return _id % 29; }
+
+        /// <summary>Records key comparison order.</summary>
+        /// <param name="other">The lookup key.</param>
+        /// <returns>Whether both ids match.</returns>
+        public bool Equals(ObservedKey? other) { trace.Add(_id * 1000 + (other?._id ?? 999)); return other?._id == _id; }
+
+        /// <summary>Compares the boxed key.</summary>
+        /// <param name="obj">The possible key.</param>
+        /// <returns>Whether its id matches.</returns>
+        public override bool Equals(object? obj) => obj is ObservedKey other && Equals(other);
     }
 
     /// <summary>Checks that records crossing the reusable buffer's growth points keep the bytes of the allocating entry.</summary>

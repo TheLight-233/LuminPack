@@ -871,49 +871,6 @@ public static partial class LuminPackCollectionAccess
         }
     }
 
-    /// <summary>Creates a concurrent dictionary from read pairs with the original concurrency level and comparer.</summary>
-    /// <param name="pairs">The pairs, in the order they were read.</param>
-    /// <param name="count">The number of pairs.</param>
-    /// <typeparam name="TKey">The key type.</typeparam>
-    /// <typeparam name="TValue">The value type.</typeparam>
-    /// <returns>A dictionary holding the first pair of each key, as the original insertions with <c>TryAdd</c> produce.</returns>
-    /// <remarks>The collection constructor sizes the table once and adds without taking locks. It rejects duplicate keys, so
-    /// input with a duplicate is inserted pair by pair instead; a null key throws in both paths.</remarks>
-    public static global::System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue> CreateConcurrentDictionary<TKey, TValue>(
-        global::System.Collections.Generic.KeyValuePair<TKey, TValue>[] pairs, int count) where TKey : notnull
-    {
-        var source = new global::System.ArraySegment<global::System.Collections.Generic.KeyValuePair<TKey, TValue>>(pairs, 0, count);
-#if NET10_0_OR_GREATER
-        if (count >= 32 && typeof(TKey) == typeof(int) && typeof(TValue) == typeof(string) && IntStringConstruction.Available)
-            return (global::System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue>)(object)
-                IntStringConstruction.Build((global::System.Collections.Generic.KeyValuePair<int, string>[])(object)pairs, count);
-#endif
-        try
-        {
-            return new global::System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue>(global::System.Environment.ProcessorCount, source, null);
-        }
-        catch (global::System.ArgumentException) when (HasDuplicateKey(pairs, count))
-        {
-            var dictionary = new global::System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue>(global::System.Environment.ProcessorCount, global::System.Math.Max(count, 1));
-            for (int i = 0; i < count; i++) dictionary.TryAdd(pairs[i].Key, pairs[i].Value);
-            return dictionary;
-        }
-    }
-
-    /// <summary>Checks read pairs for a repeated key under the default comparer.</summary>
-    /// <typeparam name="TKey">The key type.</typeparam>
-    /// <typeparam name="TValue">The value type.</typeparam>
-    /// <param name="pairs">The pairs, in the order they were read.</param>
-    /// <param name="count">The number of items.</param>
-    /// <returns>The result.</returns>
-    private static bool HasDuplicateKey<TKey, TValue>(global::System.Collections.Generic.KeyValuePair<TKey, TValue>[] pairs, int count) where TKey : notnull
-    {
-        var keys = new global::System.Collections.Generic.HashSet<TKey>();
-        for (int i = 0; i < count; i++)
-            if (pairs[i].Key is not null && !keys.Add(pairs[i].Key)) return true;
-        return false;
-    }
-
     /// <summary>Copies one traversal of a concurrent stack into pooled storage, from the top element down.</summary>
     /// <param name="stack">The stack to traverse; its enumerator observes one consistent snapshot.</param>
     /// <param name="count">Receives the number of copied elements.</param>

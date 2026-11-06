@@ -22,14 +22,12 @@ public static class ConcurrentDictionaryEmitter
     /// <summary>Appends binary reading statements for concurrent dictionary values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    /// <remarks>A fresh dictionary is presized with the default concurrency level, because every table resize recreates all nodes; twice the count keeps every lock below its resize budget.</remarks>
+    /// <remarks>A fresh dictionary is built only after all entries have been parsed into the staging buffer.</remarks>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
         string valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            if (!reader.TryReadCollectionHead(out var length" + CollectionEmitterKit.HeaderMinimumArgument(fieldData.TypeSymbol) + ")) { value = null; return; }");
-        // A new dictionary is built by its collection constructor, which sizes the table once and adds without taking locks.
-        // That constructor rejects duplicate keys, which the original insertions ignore, so they rebuild through TryAdd.
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
         sb.AppendLine("                if (length == 0)");

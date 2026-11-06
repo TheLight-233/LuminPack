@@ -133,8 +133,8 @@ public static partial class LuminPackCollectionAccess
             Array? buckets = _buckets;
             if (buckets is null)
             {
-                object tables = Volatile.Read(ref LuminFieldLayout.Field<object>(_dictionary, ConcurrentDictionaryStorage<TKey, TValue>.Tables));
-                _buckets = buckets = LuminFieldLayout.Field<Array>(tables, ConcurrentDictionaryStorage<TKey, TValue>.Buckets);
+                object tables = Volatile.Read(ref LuminFieldLayout.Field<object>(_dictionary, ConcurrentBucketStorage<TKey, TValue>.Tables));
+                _buckets = buckets = LuminFieldLayout.Field<Array>(tables, ConcurrentBucketStorage<TKey, TValue>.Buckets);
             }
             object? node = _node;
             if (!ConcurrentDictionaryTiming.ReadNextBeforeYield && node is not null)
@@ -182,20 +182,17 @@ public static partial class LuminPackCollectionAccess
         }
     }
 
-    /// <summary>Locates exact dictionary node fields and validates one-reference bucket storage.</summary>
+    /// <summary>Validates the dictionary's bucket references independently of the key and value layouts.</summary>
     /// <typeparam name="TKey">The key type.</typeparam>
     /// <typeparam name="TValue">The value type.</typeparam>
-    private static class ConcurrentDictionaryStorage<TKey, TValue> where TKey : notnull
+    private static class ConcurrentBucketStorage<TKey, TValue> where TKey : notnull
     {
         internal static readonly int Tables;
         internal static readonly int Buckets;
-        internal static readonly int Next;
-        internal static readonly int Key;
-        internal static readonly int Value;
-        internal static readonly bool Available;
+        internal static readonly Type? Node;
 
-        /// <summary>Rejects unavailable or incompatible bucket and node layouts.</summary>
-        static ConcurrentDictionaryStorage()
+        /// <summary>Checks that every slot holds exactly one managed reference to the expected framework node.</summary>
+        static ConcurrentBucketStorage()
         {
             try
             {
@@ -203,22 +200,41 @@ public static partial class LuminPackCollectionAccess
                 var buckets = LuminFieldLayout.Find(tables, "_buckets")?.FieldType;
                 var element = buckets?.GetElementType();
                 if (tables is null || buckets is null || !buckets.IsSZArray || element is null) return;
-                Type? node = element;
+                Type node = element;
                 if (element.IsValueType)
                 {
                     var link = LuminFieldLayout.Find(element, "_node");
                     if (link is null || link.FieldType.IsValueType || LuminFieldLayout.ValueField(element, "_node") != 0 || LuminFieldLayout.ArrayStride(element) != IntPtr.Size) return;
                     node = link.FieldType;
                 }
-                if (node.IsValueType || LuminFieldLayout.Find(node, "_next")?.FieldType != node || LuminFieldLayout.Find(node, "_key")?.FieldType != typeof(TKey) || LuminFieldLayout.Find(node, "_value")?.FieldType != typeof(TValue)) return;
+                if (node.IsValueType || LuminFieldLayout.Find(node, "_next")?.FieldType != node ||
+                    LuminFieldLayout.Find(node, "_key")?.FieldType != typeof(TKey) || LuminFieldLayout.Find(node, "_value")?.FieldType != typeof(TValue)) return;
                 Tables = LuminFieldLayout.ObjectField(typeof(ConcurrentDictionary<TKey, TValue>), "_tables");
                 Buckets = LuminFieldLayout.ObjectField(tables, "_buckets");
-                Next = LuminFieldLayout.ObjectField(node, "_next");
-                Key = LuminFieldLayout.ObjectField(node, "_key");
-                Value = LuminFieldLayout.ObjectField(node, "_value");
-                Available = Tables >= 0 && Buckets >= 0 && Next >= 0 && Key >= 0 && Value >= 0;
+                if (Tables >= 0 && Buckets >= 0) Node = node;
             }
             catch { }
+        }
+    }
+
+    /// <summary>Locates the node members needed to traverse a published dictionary.</summary>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    private static class ConcurrentDictionaryStorage<TKey, TValue> where TKey : notnull
+    {
+        internal static readonly int Next;
+        internal static readonly int Key;
+        internal static readonly int Value;
+        internal static readonly bool Available;
+
+        /// <summary>Rejects node fields whose closed storage offsets cannot be proved.</summary>
+        static ConcurrentDictionaryStorage()
+        {
+            if (ConcurrentBucketStorage<TKey, TValue>.Node is not { } node) return;
+            Next = LuminFieldLayout.ObjectField(node, "_next");
+            Key = LuminFieldLayout.ObjectField(node, "_key");
+            Value = LuminFieldLayout.ObjectField(node, "_value");
+            Available = Next >= 0 && Key >= 0 && Value >= 0;
         }
     }
 

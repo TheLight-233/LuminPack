@@ -1218,7 +1218,7 @@ public static partial class LuminPackMarshal
     /// <param name="divisor">The divisor used by this operation.</param>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ulong GetFastModMultiplier(uint divisor)
+    internal static ulong GetFastModMultiplier(uint divisor)
     {
         return ulong.MaxValue / divisor + 1;
     }
@@ -1229,7 +1229,7 @@ public static partial class LuminPackMarshal
     /// <param name="multiplier">The multiplier used by this operation.</param>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static uint FastMod(uint value, uint divisor, ulong multiplier)
+    internal static uint FastMod(uint value, uint divisor, ulong multiplier)
     {
         // Equivalent to value % divisor.
         // The divisor is invariant throughout Rebuild, so compute the multiplier once.
