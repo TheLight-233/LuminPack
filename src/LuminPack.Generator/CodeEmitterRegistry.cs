@@ -464,7 +464,7 @@ namespace LuminPack.SourceGenerator
             return SplitGenericParameters(typeString.Substring(startIndex + 1, endIndex - startIndex - 1));
         }
 
-        /// <summary>Performs the split generic parameters step for the current operation.</summary>
+        /// <summary>Splits top-level arguments while preserving nested type arguments, tuple elements and array ranks.</summary>
         /// <param name="genericPart">The generic part used by this operation.</param>
         /// <returns>The result of the operation.</returns>
         private static string[] SplitGenericParameters(string genericPart)
@@ -477,9 +477,9 @@ namespace LuminPack.SourceGenerator
             {
                 char c = genericPart[i];
 
-                if (c == '<')
+                if (c is '<' or '[' or '(')
                     bracketCount++;
-                else if (c == '>')
+                else if (c is '>' or ']' or ')')
                     bracketCount--;
                 else if (c == ',' && bracketCount == 0)
                 {

@@ -18,6 +18,8 @@ internal static class SerializerCollectionInliningRegression
         var shapes = new (string Type, string Value)[]
         {
             ("Child[,]", "new Child[,] { { new Child(), null! }, { new Child(), new Child() } }"),
+            ("List<short[,]>", "new List<short[,]> { new short[,] { { 2, 7 }, { 0, 3 } } }"),
+            ("Tuple<int[,], List<string[,,]>>", "Tuple.Create(new int[,] { { 2, 5 } }, new List<string[,,]> { new string[,,] { { { \"map\" } } } })"),
             ("Tuple<Child, Child>", "Tuple.Create(new Child(), new Child())"),
             ("KeyValuePair<string, Child>", "new KeyValuePair<string, Child>(\"key\", new Child())"),
             ("Memory<Child>", "new Child[] { new Child(), null!, new Child() }.AsMemory()"),
