@@ -174,6 +174,10 @@ public static partial class LuminPackExtensionGenerator
             field.CanBuildSortedSet = EmitterTypeTraits.CanBuildSortedSet(sortedSet.TypeArguments[0], compilation);
             field.CanRebuildSortedSet = EmitterTypeTraits.CanRebuildSortedSet(sortedSet.TypeArguments[0], compilation);
         }
+        if (type is INamedTypeSymbol { Name: "SortedDictionary" or "ImmutableSortedDictionary", TypeArguments.Length: 2 } sortedPairs &&
+            sortedPairs.ContainingNamespace.ToDisplayString() is "System.Collections.Generic" or "System.Collections.Immutable" &&
+            sortedPairs.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String))
+            field.CanWriteTreeStringPairs = EmitterTypeTraits.HasTreeStringPairWriter(compilation);
         if (type is INamedTypeSymbol { MetadataName: "ImmutableHashSet`1" or "IImmutableSet`1", TypeArguments.Length: 1 } immutableHashSet &&
             immutableHashSet.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
             field.CanBuildFrameworkImmutableHashSet = EmitterTypeTraits.CanBuildFrameworkImmutableHashSet(immutableHashSet.TypeArguments[0], compilation);

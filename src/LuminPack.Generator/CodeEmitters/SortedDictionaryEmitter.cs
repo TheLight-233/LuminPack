@@ -28,6 +28,11 @@ public static class SortedDictionaryEmitter
         sb.AppendLine("                    global::LuminPack.Utility.LuminTreeStorage.CopyTo(value, pairs);");
         sb.AppendLine("                    for (int i = 0; i < count; i++)");
         sb.AppendLine("                    {");
+        if (fieldData.CanWriteTreeStringPairs)
+        {
+            sb.AppendLine("                        i += writer.WriteStringPairPrefix(pairs.AsSpan(i, count - i));");
+            sb.AppendLine("                        if (i == count) break;");
+        }
         sb.AppendLine("                        writer.CheckBuffer();");
         sb.AppendLine("                        writer.WriteValue(pairs[i].Key);");
         sb.AppendLine("                        writer.WriteValue(pairs[i].Value);");

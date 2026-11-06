@@ -1779,6 +1779,55 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes the leading captured string pairs that fit the default profile's current window.</summary>
+        /// <param name="pairs">The pairs in their original enumeration order.</param>
+        /// <returns>The number of complete pairs written.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public int WriteStringPairPrefix(scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs) => WriteStringPairPrefix<LuminPackDefaultOptions>(pairs);
+
+        /// <summary>Writes complete pairs that fit before the next required capacity or profile check.</summary>
+        /// <typeparam name="TOptions">The compiled string profile.</typeparam>
+        /// <param name="pairs">The pairs in their original enumeration order.</param>
+        /// <returns>The number of complete pairs written. Unrecognized profiles leave all records to the caller.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int WriteStringPairPrefix<TOptions>(scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs)
+            where TOptions : struct, ILuminPackOptions
+        {
+#if NET8_0_OR_GREATER
+            if (ConstantStringProfile<TOptions>() && UsesUtf16LengthRecords<TOptions>())
+                return WriteUtf16PairPrefix(pairs);
+#endif
+            return 0;
+        }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Writes complete captured key/value pairs while both raw record bounds fit the current window.</summary>
+        /// <param name="pairs">The captured pairs.</param>
+        /// <returns>The number of complete pairs written.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int WriteUtf16PairPrefix(scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs)
+        {
+            ref byte start = ref Current;
+            nuint offset = (nuint)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref start);
+            uint limit = Math.Min((uint)_buffer.Length, BufferCheckLimit - 1);
+            if (offset >= limit) return 0;
+            int room = (int)(limit - (uint)offset);
+            int written = 0;
+            int i = 0;
+            for (; i < pairs.Length; i++)
+            {
+                var pair = pairs[i];
+                long chars = (long)(pair.Key?.Length ?? 0) + (pair.Value?.Length ?? 0);
+                if (2 * sizeof(int) + chars * sizeof(char) > (long)room - written) break;
+                written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Key);
+                written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Value);
+            }
+            AdvanceProven(written);
+            return i;
+        }
+#endif
+
         /// <summary>Writes UTF-16 length record pairs while the raw upper bound of the next pair fits the remaining room.</summary>
         /// <param name="current">The first record position.</param>
         /// <param name="room">The bytes available from <paramref name="current"/> under the capacity and completion limits.</param>

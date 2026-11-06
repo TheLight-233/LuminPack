@@ -13,33 +13,7 @@ public static class ImmutableSortedDictionaryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <remarks>Copies the pairs once through the in-order tree copy instead of the pooled-stack enumerator.</remarks>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
-    {
-        string keyType = GetFirstGeneric(fieldData.TypeName);
-        string valueType = GetSecondGeneric(fieldData.TypeName);
-        sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
-        sb.AppendLine("            int count = value.Count;");
-        sb.AppendLine("            writer.EnsureAdditionalCapacity(4);");
-        sb.AppendLine("            writer.Write(count);");
-        sb.AppendLine("            if (count != 0)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var pairs = global::System.Buffers.ArrayPool<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>.Shared.Rent(count);");
-        sb.AppendLine("                try");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    global::LuminPack.Utility.LuminTreeStorage.CopyTo(value, pairs);");
-        sb.AppendLine("                    for (int i = 0; i < count; i++)");
-        sb.AppendLine("                    {");
-        sb.AppendLine("                        writer.CheckBuffer();");
-        sb.AppendLine("                        writer.WriteValue(pairs[i].Key);");
-        sb.AppendLine("                        writer.WriteValue(pairs[i].Value);");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                }");
-        sb.AppendLine("                finally");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    global::System.Buffers.ArrayPool<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>.Shared.Return(pairs, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>());");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine("            writer.CheckBuffer();");
-    }
+        => SortedDictionaryEmitter.GenerateSerializeCode(fieldData, sb);
 
     /// <summary>Appends binary reading statements for immutable sorted dictionary values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>

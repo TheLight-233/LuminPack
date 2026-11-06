@@ -61,6 +61,8 @@ public sealed class LuminLocalFieldData
     internal bool CanBuildSortedSet;
     /// <summary>Whether the referenced runtime can reconstruct an eligible mutable sorted set.</summary>
     internal bool CanRebuildSortedSet;
+    /// <summary>Whether both writer overloads for captured string pairs are available.</summary>
+    internal bool CanWriteTreeStringPairs;
     /// <summary>Whether a string-keyed sorted list can use the referenced runtime's ordered append helper.</summary>
     internal bool CanAppendSortedListOrdered;
     /// <summary>Whether the referenced runtime exposes a checked allocation-free sorted-list traversal.</summary>

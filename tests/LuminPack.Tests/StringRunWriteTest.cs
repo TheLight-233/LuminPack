@@ -146,6 +146,69 @@ public sealed class StringRunWriteTest
         }
     }
 
+    /// <summary>Checks both sorted dictionary writers against individual string records across buffer growth.</summary>
+    [Fact]
+    public void TreeStringPairsMatchPerElementRecordsAcrossGrowth()
+    {
+        var sorted = new SortedDictionary<string, string?>(StringComparer.Ordinal);
+        string?[] values = Mixed(180);
+        for (int i = 0; i < values.Length; i++)
+            sorted.Add(i.ToString("D3") + (i == 40 ? new string('\u0100', 70_000) : ""), values[i]);
+        var immutable = sorted.ToImmutableSortedDictionary(StringComparer.Ordinal);
+        Check<LuminPackUtf16LengthOptions>();
+        Check<LuminPackUtf16TokenOptions>();
+        Check<LuminPackUtf16VarIntOptions>();
+        Check<LuminPackUtf8LengthOptions>();
+        Check<LuminPackUtf8TokenOptions>();
+        Check<LuminPackUtf8VarIntOptions>();
+
+        void Check<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            byte[] expected = Counted(sorted.Count, sorted.SelectMany(pair =>
+                LuminPackSerializer.Serialize<TOptions>(pair.Key).Concat(LuminPackSerializer.Serialize<TOptions>(pair.Value))));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<TOptions>(sorted));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<TOptions>(immutable));
+        }
+    }
+
+    /// <summary>Checks every short fixed destination, including a compact pair that fits only through scalar writes.</summary>
+    [Fact]
+    public void CapturedStringPairsKeepFixedBufferBoundaries()
+    {
+        KeyValuePair<string, string?>[] pairs = [new("", null), new("key", "compact"), new("raw", "\u0100")];
+        for (int room = 0; room <= 64; room++)
+        {
+            var expected = Run(false, room);
+            var actual = Run(true, room);
+            Assert.Equal(expected.failure, actual.failure);
+            Assert.Equal(expected.position, actual.position);
+            Assert.Equal(expected.bytes, actual.bytes);
+        }
+
+        (Type? failure, int position, byte[] bytes) Run(bool batch, int room)
+        {
+            byte[] bytes = Enumerable.Repeat((byte)0xA5, room + 8).ToArray();
+            Span<byte> destination = bytes.AsSpan(4, room);
+            var writer = new LuminPackWriter(ref destination);
+            try
+            {
+                for (int i = 0; i < pairs.Length; i++)
+                {
+                    if (batch)
+                    {
+                        i += writer.WriteStringPairPrefix<LuminPackUtf16LengthOptions>(pairs.AsSpan(i));
+                        if (i == pairs.Length) break;
+                    }
+                    writer.CheckBuffer();
+                    writer.Write<LuminPackUtf16LengthOptions>(pairs[i].Key);
+                    writer.Write<LuminPackUtf16LengthOptions>(pairs[i].Value);
+                }
+            }
+            catch (Exception ex) { return (ex.GetType(), writer.Position, bytes); }
+            return (null, writer.Position, bytes);
+        }
+    }
+
     /// <summary>Checks string-keyed sorted lists, whose pairs alternate key and value records.</summary>
     [Fact]
     public void SortedListPairsMatchPerElementRecords()

@@ -10,6 +10,30 @@ namespace LuminPackUnitTest;
 [Collection(nameof(RuntimeStateCollection))]
 public sealed class SortedReuseSharedPoolTest
 {
+    /// <summary>Verifies that probing a captured write run never invokes a consumer's profile getters.</summary>
+    [Fact]
+    public void CapturedPairProbeLeavesCustomProfileToTheOriginalWrites()
+    {
+        SharedCollectionPoolOptions.Expected = ["alpha"];
+        SharedCollectionPoolOptions.SawPopulatedRental = false;
+        try
+        {
+            Span<byte> storage = new byte[64];
+            var writer = new global::LuminPack.Core.LuminPackWriter(ref storage);
+            KeyValuePair<string, string?>[] pairs = [new("k", "v")];
+            Assert.Equal(0, writer.WriteStringPairPrefix<SharedCollectionPoolOptions>(pairs));
+            Assert.Equal(0, writer.Position);
+            Assert.False(SharedCollectionPoolOptions.SawPopulatedRental);
+            writer.Write<SharedCollectionPoolOptions>(pairs[0].Key);
+            Assert.True(SharedCollectionPoolOptions.SawPopulatedRental);
+        }
+        finally
+        {
+            SharedCollectionPoolOptions.Expected = null;
+            SharedCollectionPoolOptions.SawPopulatedRental = false;
+        }
+    }
+
     /// <summary>Observes one physical string rental in both set reuse and immutable-list materialization.</summary>
     [Fact]
     public void DifferentCollectionReadersShareTheSameStringRental()
