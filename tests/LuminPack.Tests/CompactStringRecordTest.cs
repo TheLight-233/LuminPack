@@ -97,6 +97,59 @@ public sealed class CompactStringRecordTest
         }
     }
 
+    /// <summary>Checks canonical short headers and the outlined tail at a nonzero input position.</summary>
+    /// <param name="hex">The canonical encoded header.</param>
+    /// <param name="expected">The original signed length.</param>
+    [Theory]
+    [InlineData("00", -1)]
+    [InlineData("01", 0)]
+    [InlineData("7F", 126)]
+    [InlineData("8001", 127)]
+    [InlineData("FF7F", 16382)]
+    [InlineData("808001", 16383)]
+    [InlineData("FFFFFF7F", 268435454)]
+    [InlineData("FFFFFFFF07", int.MaxValue - 1)]
+    [InlineData("8080808008", int.MaxValue)]
+    public void VarIntHeaderPublishesOnlyTheCompleteCanonicalPrefix(string hex, int expected)
+    {
+        byte[] header = Convert.FromHexString(hex);
+        byte[] input = new byte[header.Length + 2];
+        input[0] = 0xA5;
+        header.CopyTo(input, 1);
+        input[^1] = 0x5A;
+        int offset = 1;
+        Assert.Equal(expected, LuminPackReader.ReadVarIntHeader(input, ref offset));
+        Assert.Equal(header.Length + 1, offset);
+        Assert.Equal((byte)0x5A, input[offset]);
+        for (int cut = 0; cut < header.Length; cut++)
+        {
+            byte[] prefix = input.AsSpan(0, cut + 1).ToArray();
+            offset = 1;
+            Assert.ThrowsAny<Exception>(() => LuminPackReader.ReadVarIntHeader(prefix, ref offset));
+            Assert.Equal(1, offset);
+        }
+    }
+
+    /// <summary>Retains the original caller offset when short or long headers are noncanonical or overflowing.</summary>
+    /// <param name="hex">The invalid header, excluding its preceding sentinel.</param>
+    [Theory]
+    [InlineData("8000")]
+    [InlineData("FF00")]
+    [InlineData("808000")]
+    [InlineData("FFFFFFFF0F")]
+    [InlineData("8180808008")]
+    [InlineData("8080808080")]
+    public void InvalidVarIntHeaderLeavesTheCallerOffsetUnpublished(string hex)
+    {
+        byte[] input = new byte[hex.Length / 2 + 1];
+        input[0] = 0xA5;
+        Convert.FromHexString(hex).CopyTo(input, 1);
+        int offset = 1;
+        Assert.ThrowsAny<Exception>(() => LuminPackReader.ReadVarIntHeader(input, ref offset));
+        Assert.Equal(1, offset);
+        Assert.Equal((byte)0xA5, input[0]);
+    }
+
     /// <summary>Compares exact sizes and guarded writes across scalar, vector and header boundaries.</summary>
     /// <typeparam name="TOptions">The variable-length encoding profile.</typeparam>
     private static void VerifyVarIntRecords<TOptions>() where TOptions : struct, ILuminPackOptions

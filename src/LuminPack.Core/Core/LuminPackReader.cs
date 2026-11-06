@@ -1301,9 +1301,36 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int ReadVarIntHeader(ReadOnlySpan<byte> source, ref int offset)
         {
-            uint value = 0;
             int position = offset;
-            for (int shift = 0; shift <= 28; shift += 7)
+            if ((uint)position >= (uint)source.Length) LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
+            uint first = source[position++];
+            if (first < 128)
+            {
+                offset = position;
+                return unchecked((int)(first - 1));
+            }
+            if ((uint)position >= (uint)source.Length) LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
+            uint second = source[position++];
+            uint value = (first & 127) | ((second & 127) << 7);
+            if (second < 128)
+            {
+                if (second == 0) LuminPackExceptionHelper.ThrowInvalidStringLength(-2);
+                offset = position;
+                return unchecked((int)(value - 1));
+            }
+            return ReadVarIntHeaderTail(source, position, value, ref offset);
+        }
+
+        /// <summary>Decodes the checked remainder of a canonical multi-byte string header.</summary>
+        /// <param name="source">The complete input window.</param>
+        /// <param name="position">The position after two continuation bytes.</param>
+        /// <param name="value">The low fourteen payload bits.</param>
+        /// <param name="offset">Published only after the complete valid header.</param>
+        /// <returns>The original length header.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int ReadVarIntHeaderTail(ReadOnlySpan<byte> source, int position, uint value, ref int offset)
+        {
+            for (int shift = 14; shift <= 28; shift += 7)
             {
                 if ((uint)position >= (uint)source.Length) LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
                 uint next = source[position++];
