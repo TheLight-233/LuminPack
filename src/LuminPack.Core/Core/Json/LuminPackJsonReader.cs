@@ -4185,6 +4185,12 @@ namespace LuminPack.Core
         internal static string CreateUtf8String(ReadOnlySpan<byte> utf8)
         {
 #if NET8_0_OR_GREATER
+            if ((uint)(utf8.Length - 1) <= 2)
+            {
+                var tinyAscii = StringSerializer.ReadTinyAsciiString(ref MemoryMarshal.GetReference(utf8), utf8.Length);
+                if (tinyAscii is not null)
+                    return tinyAscii;
+            }
             if ((uint)(utf8.Length - 17) <= 15)
             {
                 var ascii = global::LuminPack.Internal.ShortAsciiTranscoder.TryDecodeMedium(ref MemoryMarshal.GetReference(utf8), utf8.Length);

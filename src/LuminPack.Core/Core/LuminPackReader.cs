@@ -917,6 +917,12 @@ namespace LuminPack.Core
         {
 #if NET8_0_OR_GREATER
             ref var spanRef = ref Unsafe.Add(ref MemoryMarshal.GetReference(buffer), (nint)(uint)index);
+            if ((uint)(length - 1) <= 2)
+            {
+                var tinyAscii = StringSerializer.ReadTinyAsciiString(ref spanRef, length);
+                if (tinyAscii is not null)
+                    return tinyAscii;
+            }
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(MemoryMarshal.GetReference(buffer)), (nint)(uint)index);
 #endif
