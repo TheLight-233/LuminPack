@@ -883,6 +883,11 @@ public static partial class LuminPackCollectionAccess
         global::System.Collections.Generic.KeyValuePair<TKey, TValue>[] pairs, int count) where TKey : notnull
     {
         var source = new global::System.ArraySegment<global::System.Collections.Generic.KeyValuePair<TKey, TValue>>(pairs, 0, count);
+#if NET10_0_OR_GREATER
+        if (count >= 32 && typeof(TKey) == typeof(int) && typeof(TValue) == typeof(string) && IntStringConstruction.Available)
+            return (global::System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue>)(object)
+                IntStringConstruction.Build((global::System.Collections.Generic.KeyValuePair<int, string>[])(object)pairs, count);
+#endif
         try
         {
             return new global::System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue>(global::System.Environment.ProcessorCount, source, null);

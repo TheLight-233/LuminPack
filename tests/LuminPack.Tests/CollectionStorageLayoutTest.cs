@@ -12,6 +12,43 @@ namespace LuminPackUnitTest;
 /// <remarks>Concrete cases bind generated overloads; shared generic checks explicitly register their fixture roots.</remarks>
 public class CollectionStorageLayoutTest
 {
+    /// <summary>Compares fresh integer-key tables with framework construction before and after subsequent mutations.</summary>
+    [Fact]
+    public void ConcurrentDictionaryBucketsPreserveInsertionAndGrowth()
+    {
+        foreach (int count in new[] { 31, 32, 37, 64, 500, 521 })
+        foreach (var keyAt in new Func<int, int>[] { i => i, i => i + 3, i => int.MinValue + i, i => -i, i => i * 521,
+                     i => i * Environment.ProcessorCount, i => i / 2, i => i == count - 1 ? 0 : i })
+        {
+            var pairs = Enumerable.Range(0, count).Select(i => KeyValuePair.Create(keyAt(i), i % 7 == 0 ? null : i.ToString())).ToArray();
+            var expected = pairs.Select(pair => pair.Key).Distinct().Count() == count
+                ? new System.Collections.Concurrent.ConcurrentDictionary<int, string?>(Environment.ProcessorCount, new ArraySegment<KeyValuePair<int, string?>>(pairs), null)
+                : new System.Collections.Concurrent.ConcurrentDictionary<int, string?>(Environment.ProcessorCount, count);
+            if (expected.IsEmpty)
+                foreach (var pair in pairs) expected.TryAdd(pair.Key, pair.Value);
+            var actual = LuminPackCollectionAccess.CreateConcurrentDictionary(pairs, pairs.Length);
+            Assert.Equal(expected.ToArray(), actual.ToArray());
+            foreach (var map in new[] { expected, actual })
+                for (int i = 0; i < count; i++)
+                {
+                    map.TryRemove(i * 5, out _);
+                    map.TryAdd(i * 719, "added");
+                }
+            Assert.Equal(expected.Count, actual.Count);
+            Assert.Equal(expected.ToArray(), actual.ToArray());
+            foreach (var pair in expected) Assert.Equal(pair.Value, actual[pair.Key]);
+        }
+        var dense = Enumerable.Range(0, 500).Select(i => KeyValuePair.Create(i, string.Empty)).ToArray();
+        var shared = LuminPackCollectionAccess.CreateConcurrentDictionary(dense, dense.Length);
+        Parallel.For(0, dense.Length, i =>
+        {
+            Assert.True(shared.TryRemove(i, out _));
+            Assert.True(shared.TryAdd(i + dense.Length, "new"));
+        });
+        Assert.Equal(dense.Length, shared.Count);
+        Assert.All(dense, pair => Assert.Equal("new", shared[pair.Key + dense.Length]));
+    }
+
     /// <summary>Checks that records crossing the reusable buffer's growth points keep the bytes of the allocating entry.</summary>
     /// <remarks>Each record is several times the initial native capacity, so the capacity and collection-threshold growth
     /// refreshes the cursor fields more than once within one operation.</remarks>
