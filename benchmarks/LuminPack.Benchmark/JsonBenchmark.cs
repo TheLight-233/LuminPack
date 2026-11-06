@@ -87,7 +87,7 @@ public class JsonBenchmark
         ParallelOptions = new REDox.Serialization.ParallelDeserializeOptions
         {
             ParallelDeserializeEnabled = true,
-            MaxDegreeOfParallelism = Environment.ProcessorCount,
+            MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount),
             MinimumNumberOfElements = 4,     // Library default.
             MinimumNumberOfTokens = 256,   // Lower the default 1000-element threshold so the 35 KB dataset exercises parallel array reading.
         },
