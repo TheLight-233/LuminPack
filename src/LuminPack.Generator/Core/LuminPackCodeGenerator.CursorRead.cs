@@ -156,7 +156,10 @@ public static partial class LuminPackCodeGenerator
                 foreach (var member in field.ClassFields)
                 {
                     string initial = fresh ? "default!" : (field.Type == LuminFiledType.Class ? target + " is null ? default! : " : "") + NestedStorage(field, member, target);
-                    builder.AppendLine(spaces + GetFieldLocalVariableType(member) + (member.FieldType == LuminDataType.Reference ? "?" : "") + " " + name + field.Name + member.Name + "Temp" + suffix + " = " + initial + ";");
+                    string storageType = GetGeneratedTypeName(member);
+                    if (member.TypeSymbol?.IsReferenceType == true)
+                        storageType += "?";
+                    builder.AppendLine(spaces + storageType + " " + name + field.Name + member.Name + "Temp" + suffix + " = " + initial + ";");
                 }
                 foreach (var member in field.ClassFields)
                     AppendCursorFieldRead(builder, member, name + field.Name + member.Name + "Temp" + suffix, spaces, depth + 1, fresh, allowBulkCopy, guardNestedReads);

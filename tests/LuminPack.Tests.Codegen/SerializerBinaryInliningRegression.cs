@@ -57,12 +57,24 @@ internal static class SerializerBinaryInliningRegression
                 public int Head() => _head;
             }
             [LuminPackable] public struct GenericValue<T> { public T Item; public List<T> Items; }
+            [LuminPackable] public sealed class Revision { public int? Number { get; set; } }
+            [LuminPackable] public sealed class Envelope { public Revision Current = new(); }
             [LuminPackable] public sealed class GenericBox<T> { public T Item { get; set; } public List<T> Items { get; set; } }
             public static class Entry
             {
                 public static int Check()
                 {
                     CheckGenerics();
+                    var source = new Envelope();
+                    Envelope copy = null!;
+                    foreach (int? number in new int?[] { 37, null, 0 })
+                    {
+                        source.Current.Number = number;
+                        byte[] bytes = LuminPackSerializer.Serialize(source);
+                        int consumed = LuminPackSerializer.Deserialize(bytes.AsSpan(), ref copy);
+                        if (consumed != bytes.Length || copy.Current.Number != number)
+                            throw new Exception("Nested nullable property lost its marker or payload.");
+                    }
                     int checkedCases = 0;
                     foreach (bool sparse in new[] { false, true })
                     foreach (int count in new[] { -1, 0, 3 })
