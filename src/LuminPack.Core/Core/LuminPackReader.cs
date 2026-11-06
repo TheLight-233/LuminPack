@@ -1192,6 +1192,17 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void ReadStrings<TOptions>(Span<string?> strings) where TOptions : struct, ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 &&
+                default(TOptions).StringRecording == LuminPackStringRecording.Length &&
+                Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 &&
+                !strings.IsEmpty && strings[0] is null && RemainingWindowBytes >= sizeof(int))
+            {
+                int header = Read<int>(ref Current);
+                if (IsShortLatin1Header(header))
+                    strings = strings.Slice(ReadFreshLatin1Prefix(strings, header));
+            }
+#endif
             ref string? first = ref MemoryMarshal.GetReference(strings);
             for (int i = 0; i < strings.Length; i++)
             {
@@ -1201,6 +1212,36 @@ namespace LuminPack.Core
                 if (!ReferenceEquals(current, decoded)) slot = decoded;
             }
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Tests for a compact length header carrying four to sixteen Latin-1 bytes.</summary>
+        /// <param name="header">The complete length header.</param>
+        /// <returns>Whether the short decoder can consume the payload.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool IsShortLatin1Header(int header) =>
+            (header & 1) != 0 && (uint)((header >> 1) - 4) <= 12;
+
+        /// <summary>Fills leading empty slots from short Latin-1 length records.</summary>
+        /// <param name="slots">The destination slots, starting with an empty slot.</param>
+        /// <param name="header">The first short Latin-1 header, already read at the cursor.</param>
+        /// <returns>The number of complete string records read.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int ReadFreshLatin1Prefix(Span<string?> slots, int header)
+        {
+            int i = 0;
+            ref string? first = ref MemoryMarshal.GetReference(slots);
+            do
+            {
+                int length = header >> 1;
+                ref byte payload = ref Unsafe.Add(ref Current, sizeof(int));
+                Advance(sizeof(int) + length);
+                Unsafe.Add(ref first, i++) = StringSerializer.CreateShortLatin1String(ref payload, length);
+                if (i == slots.Length || Unsafe.Add(ref first, i) is not null || RemainingWindowBytes < sizeof(int)) break;
+                header = Read<int>(ref Current);
+            } while (IsShortLatin1Header(header));
+            return i;
+        }
+#endif
 
         /// <summary>Gets the same relative readable width directly from the cached window end.</summary>
         private int RemainingWindowBytes

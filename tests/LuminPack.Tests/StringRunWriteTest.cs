@@ -73,6 +73,41 @@ public sealed class StringRunWriteTest
         }
     }
 
+    /// <summary>Checks the cursor, published slots and retained references at every truncation of a mixed string run.</summary>
+    [Fact]
+    public void StringSpanReadsPublishTheSamePrefixAsSingleRecords()
+    {
+        string?[] values = ["four", "se\u00ffven!", "12345678", "123456789", new string('\u00e9', 16), "keep",
+            "replace", new string('x', 17), "abc", "\u4e2d\u6587", null, "", "z"];
+        byte[] records = Records(values).ToArray();
+        var initial = new string?[values.Length];
+        initial[5] = new string("keep".ToCharArray());
+        initial[6] = "previous";
+        for (int length = 0; length <= records.Length; length++)
+        {
+            string?[] expected = (string?[])initial.Clone();
+            string?[] actual = (string?[])initial.Clone();
+            ReadOnlySpan<byte> input = records.AsSpan(0, length);
+            var single = new LuminPackReader(ref input);
+            var batch = new LuminPackReader(ref input);
+            Exception? singleFailure = null;
+            Exception? batchFailure = null;
+            try
+            {
+                for (int i = 0; i < expected.Length; i++)
+                    single.Read<LuminPackUtf16LengthOptions>(ref expected[i]);
+            }
+            catch (Exception ex) { singleFailure = ex; }
+            try { batch.ReadStrings<LuminPackUtf16LengthOptions>(actual); }
+            catch (Exception ex) { batchFailure = ex; }
+            Assert.Equal(length == records.Length, singleFailure is null);
+            Assert.Equal(singleFailure?.GetType(), batchFailure?.GetType());
+            Assert.Equal(single.Position, batch.Position);
+            Assert.Equal(expected, actual);
+            Assert.Same(initial[5], actual[5]);
+        }
+    }
+
     /// <summary>Checks that every binary profile keeps its own records through the batched entry point.</summary>
     [Fact]
     public void EveryProfileMatchesSingleRecordWrites()

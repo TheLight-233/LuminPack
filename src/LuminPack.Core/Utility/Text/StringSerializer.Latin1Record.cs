@@ -710,27 +710,16 @@ public static unsafe partial class StringSerializer
 #if NET8_0_OR_GREATER
         if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && length >= 8)
         {
-            if (length > 16)
-            {
+            if (length <= 16)
+                WidenShortLatin1(ref source, ref destination, length);
+            else
                 WidenLatin1Long(ref source, ref destination, (nuint)(uint)length);
-                return;
-            }
-
-            // 8 to 16 bytes: the first eight and the last eight.
-            var first = Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref source)).AsByte();
-            var last = Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref Unsafe.Add(ref source, (nint)(uint)(length - 8)))).AsByte();
-            Vector128.WidenLower(first).StoreUnsafe(ref destination);
-            Vector128.WidenLower(last).StoreUnsafe(ref destination, (nuint)(uint)(length - 8));
             return;
         }
 
         if (Unsafe.SizeOf<IntPtr>() == 8 && (uint)(length - 4) < 4)
         {
-            // 4 to 7 bytes: the first four and the last four.
-            ulong head = WidenLatin1(LuminPackReader.Read<uint>(ref source));
-            ulong tail = WidenLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref source, (nint)(uint)(length - 4))));
-            LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref destination), head);
-            LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4))), tail);
+            WidenShortLatin1(ref source, ref destination, length);
             return;
         }
 #endif
@@ -766,6 +755,44 @@ public static unsafe partial class StringSerializer
     }
 
 #if NET8_0_OR_GREATER
+    /// <summary>Allocates a string for a validated compact record of four to sixteen bytes on a 64-bit vector target.</summary>
+    /// <param name="source">The first payload byte.</param>
+    /// <param name="length">The Latin-1 payload length.</param>
+    /// <returns>The decoded string.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static string CreateShortLatin1String(ref byte source, int length)
+    {
+        string value = FastString.Allocate(length);
+        ref ushort chars = ref Unsafe.As<char, ushort>(ref Unsafe.AsRef(in value.GetPinnableReference()));
+        WidenShortLatin1(ref source, ref chars, length);
+        return value;
+    }
+
+    /// <summary>Widens the first and last four or eight bytes of a validated short Latin-1 payload.</summary>
+    /// <param name="source">The first byte of the validated four- to sixteen-byte payload.</param>
+    /// <param name="destination">The first character of the unpublished string.</param>
+    /// <param name="length">The number of bytes to widen.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WidenShortLatin1(ref byte source, ref ushort destination, int length)
+    {
+        if (length >= 8)
+        {
+            // 8 to 16 bytes: the first eight and the last eight.
+            var first = Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref source)).AsByte();
+            var last = Vector128.CreateScalarUnsafe(LuminPackReader.Read<ulong>(ref Unsafe.Add(ref source, (nint)(uint)(length - 8)))).AsByte();
+            Vector128.WidenLower(first).StoreUnsafe(ref destination);
+            Vector128.WidenLower(last).StoreUnsafe(ref destination, (nuint)(uint)(length - 8));
+        }
+        else
+        {
+            // 4 to 7 bytes: the first four and the last four.
+            ulong head = WidenFourLatin1(LuminPackReader.Read<uint>(ref source)).AsUInt64().ToScalar();
+            ulong tail = WidenFourLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref source, (nint)(uint)(length - 4)))).AsUInt64().ToScalar();
+            LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref destination), head);
+            LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4))), tail);
+        }
+    }
+
     /// <summary>Widens more than sixteen Latin-1 bytes.</summary>
     /// <param name="source">The first payload byte.</param>
     /// <param name="destination">The first character of the string.</param>
