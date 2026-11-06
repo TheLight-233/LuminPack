@@ -22,7 +22,7 @@ All changes are subject to the [mechanism contract](mechanism-contract.md).
 
 ### Core source layout
 
-Runtime entry points and cursor state live in `src/LuminPack.Core/Core`; the optional `netstandard2.1` hook dispatch lives in `Core/Acceleration`. Utilities are grouped by responsibility under `Utility`:
+Runtime entry points and cursor state live in `src/LuminPack.Core/Core`; the optional `netstandard2.1` hook dispatch lives in `Core/Acceleration`. `LuminPackWriter`, `LuminPackReader`, `LuminPackJsonReader` and `LuminPackJsonWriter` keep their fields, constructors and cursor helpers in the main file and their operations in partial files named by family (`.Values`, `.Strings`, `.Collections`, `.Framing`, `.FusedEntries`). Utilities are grouped by responsibility under `Utility`:
 
 | Directory | Responsibility |
 | --- | --- |

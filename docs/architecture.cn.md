@@ -22,7 +22,7 @@
 
 ### Core 源码布局
 
-运行时入口和游标状态位于 `src/LuminPack.Core/Core`；可选的 `netstandard2.1` Hook 派发位于 `Core/Acceleration`。工具代码按职责放在 `Utility` 下：
+运行时入口和游标状态位于 `src/LuminPack.Core/Core`；可选的 `netstandard2.1` Hook 派发位于 `Core/Acceleration`。`LuminPackWriter`、`LuminPackReader`、`LuminPackJsonReader` 和 `LuminPackJsonWriter` 的字段、构造函数和游标辅助方法位于主文件，各类操作位于按类别命名的 partial 文件（`.Values`、`.Strings`、`.Collections`、`.Framing`、`.FusedEntries`）。工具代码按职责放在 `Utility` 下：
 
 | 目录 | 职责 |
 | --- | --- |
