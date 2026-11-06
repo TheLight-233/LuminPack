@@ -19,7 +19,15 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
         var operations = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .Where(type => type.Identifier.ValueText == "LuminPackSerializer")
             .SelectMany(type => type.Members.OfType<MethodDeclarationSyntax>())
-            .Where(method => method.ParameterList.Parameters.Count == 2).ToArray();
+            .Where(method => method.ParameterList.Parameters.Count == 2);
+        var bySignature = new Dictionary<(string Name, int Arity, string State), List<MethodDeclarationSyntax>>();
+        foreach (var operation in operations)
+        {
+            var key = (operation.Identifier.ValueText, operation.TypeParameterList?.Parameters.Count ?? 0,
+                Normalize(operation.ParameterList.Parameters[0].Type));
+            if (!bySignature.TryGetValue(key, out var group)) bySignature.Add(key, group = new List<MethodDeclarationSyntax>());
+            group.Add(operation);
+        }
         var shells = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>
             method.ParameterList.Parameters.Count == 2 && method.Parent is ClassDeclarationSyntax owner &&
             (owner.Identifier.ValueText.StartsWith("Binary_", StringComparison.Ordinal) ||
@@ -42,8 +50,8 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
                     var arguments = selected is GenericNameSyntax generic ? generic.TypeArgumentList.Arguments.ToArray() : Array.Empty<TypeSyntax>();
                     MethodDeclarationSyntax target = null;
                     Dictionary<string, TypeSyntax> substitutions = null;
-                    foreach (var candidate in operations.Where(method => method.Identifier.ValueText == selected.Identifier.ValueText &&
-                        (method.TypeParameterList?.Parameters.Count ?? 0) == arguments.Length && Normalize(method.ParameterList.Parameters[0].Type) == state))
+                    if (!bySignature.TryGetValue((selected.Identifier.ValueText, arguments.Length, state), out var candidates)) break;
+                    foreach (var candidate in candidates)
                     {
                         var map = new Dictionary<string, TypeSyntax>(StringComparer.Ordinal);
                         for (int index = 0; index < arguments.Length; index++) map.Add(candidate.TypeParameterList.Parameters[index].Identifier.ValueText, arguments[index]);
