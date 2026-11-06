@@ -296,6 +296,11 @@ try
         SerializerSharedFacadeRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-wide-reads"])
+    {
+        SerializerWideReadRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-inlining"])
     {
         SerializerBinaryInliningRegression.Run(references);
@@ -380,6 +385,7 @@ try
     SerializerCustomFormatterRegression.Run(references);
     SerializerPartitionRegression.Run(references);
     SerializerSharedFacadeRegression.Run(references);
+    SerializerWideReadRegression.Run(references);
     SerializerBinaryInliningRegression.Run(references);
     SerializerCollectionInliningRegression.Run(references);
     SerializerUnionInliningRegression.Run(references);
