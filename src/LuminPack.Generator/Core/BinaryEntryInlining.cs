@@ -136,7 +136,7 @@ internal sealed class BinaryEntryInlining
         // Untrusted binary reads expand nested reads whose checks differ from their own entries; writes and JSON keep the trusted reuse decisions.
         bool expanded = (_streaming || _inputExpansionDepth > 0) && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackReader" &&
             !IsRawScalar(plan.TypeName) && !OwnsActiveChecks(plan, operation);
-        // Binary writes expand nested framework writers as well: a shared collection writer behind a call boundary costs more than
+        // Binary writes normally expand nested framework writers: a shared collection writer behind a call boundary costs more than
         // its copied body. A parent therefore regenerates when a nested record's writer changes. Raw scalars keep their lowered call.
         bool binaryWrite = operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter" && !IsRawScalar(plan.TypeName);
         if (!expanded && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
@@ -411,6 +411,7 @@ internal sealed class BinaryEntryInlining
         private readonly BinaryEntryInlining _owner;
         private readonly BinaryOperationPlan _plan;
         private readonly BinaryOperation _operation;
+        private readonly HashSet<string> _sharedWriterSlots;
         private readonly string _exit;
         private readonly HashSet<string> _stack;
         private readonly ExpressionSyntax _state;
@@ -435,7 +436,60 @@ internal sealed class BinaryEntryInlining
             _exit = exit;
             _stack = stack;
             _state = state;
-            _rootBindings = rootBindings; }
+            _rootBindings = rootBindings;
+            if (stack.Count == 1 && owner._reservedExpansionDepth == 0 && operation.Calls.Count >= 32 &&
+                operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter")
+                _sharedWriterSlots = FindRepeatedCollectionWrites();
+        }
+
+        /// <summary>Selects repeated complete collection traversals that would consume a wide writer's native inline budget.</summary>
+        /// <returns>Bound call-site identities that can use the same generated writer outside reserved regions.</returns>
+        private HashSet<string> FindRepeatedCollectionWrites()
+        {
+            // Count sibling sites in this method. Element loops, bounded regions and local functions own their own work.
+            var sites = _operation.Body.DescendantNodes(node => !node.HasAnnotations(BinaryCollectionCapacity.ReservedAnnotation) &&
+                    node is not (ForStatementSyntax or CommonForEachStatementSyntax or WhileStatementSyntax or DoStatementSyntax or
+                        LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax))
+                .OfType<ExpressionStatementSyntax>()
+                .Select(statement => statement.GetAnnotations(BinaryOperationPlan.CallAnnotation).SingleOrDefault()?.Data)
+                .Where(id => id != null && !_operation.Calls[id].Local && _operation.Calls[id].Operation == "WriteValue")
+                .GroupBy(id => _operation.Calls[id].TypeName, StringComparer.Ordinal);
+            var shared = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var group in sites)
+            {
+                if (group.Count() < 8 || CodeEmitterRegistry.GetEmitter(group.Key).Write == null)
+                    continue;
+                var type = _owner.Resolve(group.Key);
+                if (type is not IArrayTypeSymbol && type.OriginalDefinition.SpecialType != SpecialType.System_Collections_Generic_IEnumerable_T &&
+                    !type.AllInterfaces.Any(contract => contract.SpecialType == SpecialType.System_Collections_IEnumerable))
+                    continue;
+                var plan = _owner.GetPlan(type);
+                if (plan.Operations.TryGetValue("WriteValue", out var write) && WritesCompoundElements(write))
+                    shared.UnionWith(group);
+            }
+            return shared;
+        }
+
+        /// <summary>Checks whether a traversal expands another formatter inside its element loop.</summary>
+        /// <param name="write">The selected collection's binary writer template.</param>
+        /// <returns>Whether sharing the writer can remove repeated element formatting from the parent.</returns>
+        private bool WritesCompoundElements(BinaryOperation write)
+        {
+            foreach (var statement in write.Body.DescendantNodes(node => node is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax))
+                         .OfType<ExpressionStatementSyntax>())
+            {
+                var id = statement.GetAnnotations(BinaryOperationPlan.CallAnnotation).SingleOrDefault()?.Data;
+                if (id == null || !statement.Ancestors().Any(node => node is ForStatementSyntax or CommonForEachStatementSyntax or
+                    WhileStatementSyntax or DoStatementSyntax))
+                    continue;
+                var slot = write.Calls[id];
+                if (!slot.Local && slot.Operation == "WriteValue" && !IsRawScalar(slot.TypeName) &&
+                    _owner.GetPlan(_owner.Resolve(slot.TypeName)).Operations.TryGetValue("WriteValue", out var element) &&
+                    element.Calls.Values.Any(call => !call.Local && call.Operation == "WriteValue"))
+                    return true;
+            }
+            return false;
+        }
 
         /// <summary>Uses the caller's writer or reader directly without narrowing its ref-escape scope through a local alias.</summary>
         /// <param name="node">A template identifier.</param>
@@ -477,7 +531,7 @@ internal sealed class BinaryEntryInlining
                 CompilationTypeAnalysisCache.GetOrCreate(_owner._compilation).IsPackable(nested) && !RecursiveTypeAnalysis.IsRecursive(nested, _owner._compilation) &&
                 // A nested entry with the same checks takes the trusted expansion instead.
                 !(plan.Operations.TryGetValue(slot.Operation, out var sameChecks) && _owner.OwnsActiveChecks(plan, sameChecks));
-            var expanded = outline ? null : _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
+            var expanded = outline || _sharedWriterSlots?.Contains(annotation.Data) == true ? null : _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
                 OutlinesNestedUserWrites(_plan.TypeName));
             if (expanded != null)
                 return expanded.WithTriviaFrom(node);

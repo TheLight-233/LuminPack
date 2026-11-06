@@ -66,6 +66,17 @@ internal static class SerializerCollectionInliningRegression
             source.Append("[LuminPackable] public sealed class Model").Append(index).Append(" { public ").Append(shapes[index].Type)
                 .Append(" First; public ").Append(shapes[index].Type).AppendLine(" Second; public int Tail = 83; }");
         }
+        foreach (var (name, count) in new[] { ("WideChannels", 36), ("FourChannels", 4) })
+        {
+            source.Append("[LuminPackable] public sealed class ").Append(name).AppendLine(" {");
+            for (int index = 0; index < count; index++)
+            {
+                if (index % 2 != 0)
+                    source.Append("[LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF8)] ");
+                source.Append("public List<KeyValuePair<int,string>> Channel").Append(index).AppendLine(";");
+            }
+            source.AppendLine("}");
+        }
         source.AppendLine("""
             public static class Entry
             {
@@ -91,8 +102,34 @@ internal static class SerializerCollectionInliningRegression
                     value.Enqueue(new Child(), 5);
                     return value;
                 }
+                private static void CheckChannels()
+                {
+                    var wide = new WideChannels();
+                    var small = new FourChannels();
+                    var expected = new List<byte> { 36 };
+                    var shortExpected = new List<byte> { 4 };
+                    for (int i = 0; i < 36; i++)
+                    {
+                        List<KeyValuePair<int,string>> part = i % 3 == 0 ? null : new();
+                        if (i % 3 == 2) part.Add(new(i, "\u6E2C" + i));
+                        typeof(WideChannels).GetField("Channel" + i).SetValue(wide, part);
+                        byte[] payload = i % 2 == 0
+                            ? LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf16LengthOptions>(part)
+                            : LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf8LengthOptions>(part);
+                        expected.AddRange(payload);
+                        if (i < 4)
+                        {
+                            typeof(FourChannels).GetField("Channel" + i).SetValue(small, part);
+                            shortExpected.AddRange(payload);
+                        }
+                    }
+                    if (!expected.SequenceEqual(LuminPackSerializer.Serialize(wide)) ||
+                        !shortExpected.SequenceEqual(LuminPackSerializer.Serialize(small)))
+                        throw new Exception("Repeated collection payload, order or member encoding changed.");
+                }
                 public static int Check()
                 {
+                    CheckChannels();
             """);
         for (int index = 0; index < shapes.Length; index++) AppendCase(source, index, shapes[index].Type, shapes[index].Value);
         source.Append("return ").Append(shapes.Length).AppendLine("; } }");
@@ -112,6 +149,18 @@ internal static class SerializerCollectionInliningRegression
         var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(diagnostic => diagnostic.ToString() +
             (diagnostic.Location.SourceTree == null ? "" : "\n" + diagnostic.Location.SourceTree.GetText().Lines[diagnostic.Location.GetLineSpan().StartLinePosition.Line]))));
+        foreach (var (name, expectedSites) in new[] { ("WideChannels", 36), ("FourChannels", 0) })
+        {
+            var root = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+                .Single(method => method.Identifier.ValueText == "RootWrite" &&
+                    method.ParameterList.Parameters.Last().Type?.ToString().TrimEnd('?') == "global::" + name);
+            var semantics = output.GetSemanticModel(root.SyntaxTree);
+            int sites = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Select(call => semantics.GetSymbolInfo(call).Symbol).OfType<IMethodSymbol>()
+                .Count(symbol => symbol.Parameters.Length == 2 && symbol.Parameters[0].Type.Name == "LuminPackWriter" &&
+                    symbol.Parameters[1].Type is INamedTypeSymbol { Name: "List", IsGenericType: true });
+            Require(sites == expectedSites, $"{name} retained {sites} closed collection writes, expected {expectedSites}.");
+        }
         int inspected = 0;
         var signatures = new List<string>();
         foreach (var tree in output.SyntaxTrees.Where(tree => Path.GetFileName(tree.FilePath).StartsWith("LuminPackSerializer.", StringComparison.Ordinal)))
