@@ -1101,6 +1101,30 @@ namespace LuminPack.Core
             WriteByteRaw<TOptions>(Quote);
         }
 
+#if NET8_0_OR_GREATER
+        /// <summary>Writes the same quoted scalar framing around an already formatted UTF-8 payload.</summary>
+        /// <param name="text">The bounded ASCII scalar bytes.</param>
+        /// <typeparam name="TOptions">The unchanged UTF-8 document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteFormattedUtf8Value<TOptions>(scoped ReadOnlySpan<byte> text) where TOptions : struct, ILuminPackOptions
+        {
+            WriteCommaIfNeeded<TOptions>();
+            WriteByteRaw<TOptions>(Quote);
+            WriteFormattedUtf8Payload(text);
+            WriteByteRaw<TOptions>(Quote);
+        }
+
+        /// <summary>Preserves the original whole-payload reservation and publication boundary.</summary>
+        /// <param name="text">The completely formatted payload.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteFormattedUtf8Payload(scoped ReadOnlySpan<byte> text)
+        {
+            EnsureCapacity(text.Length);
+            text.CopyTo(Buffer.Slice(Position));
+            Advance(text.Length);
+        }
+#endif
+
         /// <summary>Transcodes bounded, escape-free scalar text without importing encoder state into each formatter.</summary>
         /// <param name="text">The known ASCII scalar representation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -1120,6 +1144,18 @@ namespace LuminPack.Core
         public void Write<TOptions>(DateTime value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[33];
+                if (value.TryFormat(utf8, out int utf8Written, "O"))
+                    WriteFormattedUtf8Value<TOptions>(utf8.Slice(0, utf8Written));
+                else
+                    Write<TOptions>(value.ToString("O"));
+                return;
+            }
+#endif
+
             // "yyyy-MM-ddTHH:mm:ss.fffffff" is 27 characters.
             Span<char> buffer = stackalloc char[33];
             if (value.TryFormat(buffer, out int written, "O"))
@@ -1138,6 +1174,18 @@ namespace LuminPack.Core
         public void Write<TOptions>(DateTimeOffset value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[33];
+                if (value.TryFormat(utf8, out int utf8Written, "O"))
+                    WriteFormattedUtf8Value<TOptions>(utf8.Slice(0, utf8Written));
+                else
+                    Write<TOptions>(value.ToString("O"));
+                return;
+            }
+#endif
+
             // Round-trip text plus the "+hh:mm" offset is 33 characters.
             Span<char> buffer = stackalloc char[33];
             if (value.TryFormat(buffer, out int written, "O"))
@@ -1156,6 +1204,14 @@ namespace LuminPack.Core
         public void Write<TOptions>(Guid value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                WriteGuidUtf8Destination<TOptions>(value);
+                return;
+            }
+#endif
+
             Span<char> buffer = stackalloc char[36];
             if (value.TryFormat(buffer, out int written))
             {
@@ -1166,6 +1222,23 @@ namespace LuminPack.Core
             Write<TOptions>(value.ToString());
         }
 
+#if NET8_0_OR_GREATER
+        /// <summary>Formats the fixed 36-byte GUID payload into the originally reserved output range.</summary>
+        /// <param name="value">The immutable GUID value captured by the caller.</param>
+        /// <typeparam name="TOptions">The existing UTF-8 profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteGuidUtf8Destination<TOptions>(Guid value) where TOptions : struct, ILuminPackOptions
+        {
+            WriteCommaIfNeeded<TOptions>();
+            WriteByteRaw<TOptions>(Quote);
+            EnsureCapacity(36);
+            if (!value.TryFormat(Buffer.Slice(Position, 36), out int written))
+                LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.DestinationTooSmall);
+            Advance(written);
+            WriteByteRaw<TOptions>(Quote);
+        }
+#endif
+
         /// <summary>Writes a <see cref = "TimeSpan"/> in its constant ("c") form without allocating a string.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
@@ -1173,6 +1246,18 @@ namespace LuminPack.Core
         public void Write<TOptions>(TimeSpan value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[32];
+                if (value.TryFormat(utf8, out int utf8Written, "c"))
+                    WriteFormattedUtf8Value<TOptions>(utf8.Slice(0, utf8Written));
+                else
+                    Write<TOptions>(value.ToString());
+                return;
+            }
+#endif
+
             // "-10675199.02:48:05.4775808" is 26 characters.
             Span<char> buffer = stackalloc char[32];
             if (value.TryFormat(buffer, out int written, "c"))
@@ -1392,6 +1477,18 @@ namespace LuminPack.Core
         public void Write<TOptions>(DateOnly value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[10];
+                if (value.TryFormat(utf8, out int utf8Written, "O"))
+                    WriteFormattedUtf8Value<TOptions>(utf8.Slice(0, utf8Written));
+                else
+                    Write<TOptions>(value.ToString("O"));
+                return;
+            }
+#endif
+
             Span<char> buffer = stackalloc char[10];
             if (value.TryFormat(buffer, out int written, "O"))
                 WriteFormattedValue<TOptions>(buffer.Slice(0, written));
@@ -1406,6 +1503,18 @@ namespace LuminPack.Core
         public void Write<TOptions>(TimeOnly value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[16];
+                if (value.TryFormat(utf8, out int utf8Written, "O"))
+                    WriteFormattedUtf8Value<TOptions>(utf8.Slice(0, utf8Written));
+                else
+                    Write<TOptions>(value.ToString("O"));
+                return;
+            }
+#endif
+
             Span<char> buffer = stackalloc char[16];
             if (value.TryFormat(buffer, out int written, "O"))
                 WriteFormattedValue<TOptions>(buffer.Slice(0, written));
@@ -1420,6 +1529,18 @@ namespace LuminPack.Core
         public void Write<TOptions>(Int128 value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[40];
+                if (value.TryFormat(utf8, out int utf8Written, default, System.Globalization.CultureInfo.InvariantCulture))
+                    WriteFormattedUtf8Value<TOptions>(utf8.Slice(0, utf8Written));
+                else
+                    Write<TOptions>(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                return;
+            }
+#endif
+
             Span<char> buffer = stackalloc char[40];
             if (value.TryFormat(buffer, out int written, default, System.Globalization.CultureInfo.InvariantCulture))
                 WriteFormattedValue<TOptions>(buffer.Slice(0, written));
@@ -1434,6 +1555,18 @@ namespace LuminPack.Core
         public void Write<TOptions>(UInt128 value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[39];
+                if (value.TryFormat(utf8, out int utf8Written, default, System.Globalization.CultureInfo.InvariantCulture))
+                    WriteFormattedUtf8Value<TOptions>(utf8.Slice(0, utf8Written));
+                else
+                    Write<TOptions>(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                return;
+            }
+#endif
+
             Span<char> buffer = stackalloc char[39];
             if (value.TryFormat(buffer, out int written, default, System.Globalization.CultureInfo.InvariantCulture))
                 WriteFormattedValue<TOptions>(buffer.Slice(0, written));
