@@ -2,6 +2,9 @@ using Microsoft.CodeAnalysis;
 
 try
 {
+    // These contracts read statements and comments as single lines; final line layout is whitespace only.
+    typeof(LuminPack.SourceGenerator.LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.GeneratedSourceLayout")!
+        .GetField("Enabled", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, false);
     var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
         .Split(Path.PathSeparator)
         .Select(path => MetadataReference.CreateFromFile(path))

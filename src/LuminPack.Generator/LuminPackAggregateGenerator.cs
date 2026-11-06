@@ -150,11 +150,11 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                     var formatters = LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport,
                         out var navigationTargets, cancellationToken);
                     foreach (var formatter in formatters)
-                        spc.AddSource(formatter.Name, formatter.Text);
+                        spc.AddSource(formatter.Name, GeneratedSourceLayout.Apply(formatter.Text));
 
                     foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments,
                         cancellationToken, navigationTargets))
-                        spc.AddSource(serializer.Name, serializer.Text);
+                        spc.AddSource(serializer.Name, GeneratedSourceLayout.Apply(serializer.Text));
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
@@ -177,7 +177,7 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(aggregateFiles, static (output, file) =>
         {
             System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.AggregateFileOutputCallbacks);
-            output.AddSource(file.Name, file.Text);
+            output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
         });
         var aggregateDiagnostics = aggregateResults.SelectMany(static (result, _) => result.Diagnostics);
         context.RegisterSourceOutput(aggregateDiagnostics.Combine(context.CompilationProvider), static (output, input) =>

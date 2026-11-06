@@ -89,6 +89,7 @@ Binary tables use MemoryPack as the baseline within each operation; JSON tables 
 - English for code, comments, XML documentation, diagnostics, tests and maintenance documents. README files and `*.cn.md` editions are the exception. Write multilingual test strings with Unicode escapes.
 - Every maintained source method, constructor, operator and conversion has XML documentation with a summary, parameters, type parameters and return value. Put comments before attributes. Generated code documents directly callable `LuminPackSerializer` APIs and the facade type; internal roots, forwarders and support declarations omit XML and suppress CS1591.
 - Keep emitters in separate files; split large generators into partial files by responsibility, keeping type and member names.
+- Put one statement on each line under `src` and do not use identifiers with two consecutive underscores; `tools/LuminPack.RepositoryChecks` enforces both. ChaCha20 and Poly1305 keep their rounds on one line each, and the public `MethodTable.__PInvoke` keeps its name.
 - Throw through `LuminPackExceptionHelper` and keep exception types, argument names and cleanup. Use `Rethrow` to keep an original exception's identity.
 - Changing names, member order, enum values, null markers, string modes, framing or storage views can break persisted data. Public members without call sites here can still be used by consumers or generated code.
 - Keep third-party notices (`docs/xjb-LICENSE.txt`, `docs/xjb-NOTICE.md`) when editing the ported formatters.

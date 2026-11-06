@@ -74,9 +74,9 @@ public sealed partial class LuminPackSourceGenerator
             try
             {
                 if (!string.IsNullOrEmpty(value.Extension))
-                    output.AddSource(value.HintName + ".Extension.g.cs", value.Extension);
+                    output.AddSource(value.HintName + ".Extension.g.cs", GeneratedSourceLayout.Apply(value.Extension));
                 if (!string.IsNullOrEmpty(value.Union))
-                    output.AddSource(value.HintName + ".UnionDispatch.g.cs", value.Union);
+                    output.AddSource(value.HintName + ".UnionDispatch.g.cs", GeneratedSourceLayout.Apply(value.Union));
             }
             catch (Exception exception)
             {
@@ -101,7 +101,7 @@ public sealed partial class LuminPackSourceGenerator
         context.RegisterSourceOutput(layoutFiles, static (output, file) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.LayoutFileOutputCallbacks);
-            output.AddSource(file.Name, file.Text);
+            output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
         });
         context.RegisterSourceOutput(layouts.SelectMany(static (result, _) => result.Diagnostics), static (output, diagnostic) =>
         {

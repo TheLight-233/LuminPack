@@ -200,6 +200,10 @@ Concrete model API remarks and built-in overloads with recognized execution root
 
 Local helper functions use PascalCase with collision-safe numeric suffixes. Scalar and Union call projections retain their original operand syntax and annotations so the presentation pass can still prove which identifiers belong to generated locals; names observed through `nameof` remain unchanged.
 
+Generated identifiers avoid two consecutive underscores, which the C# specification reserves for the implementation. Name sanitizers map a punctuation run to one separator, and JSON support fields of members starting with an underscore gain a `U` prefix through an injective mapping. The last projection renames any remaining reserved local; identities that exist only during projection may keep their spelling inside the generator, and names a user declares stay as written.
+
+Publication applies `GeneratedSourceLayout`: a line wider than 140 columns breaks at its outermost logical chain, conditional, argument list, parameter list or expression body, and XML comments put each paragraph on its own line. Each long line is parsed alone because parsing whole output files cost too much of a generator run. Files containing multi-line literals keep their code lines. These changes affect whitespace and comment text only, and the same projection removes nested blocks that declare nothing, so Release IL is unchanged. Qualified names stay `global::` qualified, so some lines remain wider than the limit. The generated-code contract suite turns this layout off because its assertions read statements as single lines.
+
 Write-proof eligibility is memoized only within its projection's unchanged type and settings. Canonical runtime-profile checks use a weak compilation key and retain only a Boolean result; a new compilation always checks its own profile identities, including consumer-defined shadow types.
 
 Final contract documentation is rendered as text changes limited to method-leading trivia. This avoids constructing XML syntax trees that would immediately be converted back to text, while preserving the exact comments, directives, indentation and executable source.

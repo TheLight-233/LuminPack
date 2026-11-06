@@ -89,6 +89,7 @@ python benchmarks/make-charts.py .tmp/benchmark-artifacts .tmp/benchmark-charts 
 - 代码、注释、XML 文档、诊断、测试和维护文档使用英文。README 和 `*.cn.md` 中文版是例外。测试中的多语言字符串用 Unicode 转义书写。
 - 维护的源码中每个方法、构造函数、运算符和转换都要有 XML 文档，包括摘要、参数、类型参数和返回值。注释写在特性之前。生成代码仅为可直接调用的 `LuminPackSerializer` API 和门面类型生成文档；内部根方法、转发方法及辅助声明省略 XML，并屏蔽 CS1591。
 - emitter 分文件存放；大型生成器按职责拆分为 partial 文件，保持类型和成员名称不变。
+- `src` 下每行只写一条语句，不使用含连续两个下划线的标识符；`tools/LuminPack.RepositoryChecks` 会检查这两点。ChaCha20 和 Poly1305 的轮函数各保持一行，公开成员 `MethodTable.__PInvoke` 保留原名。
 - 通过 `LuminPackExceptionHelper` 抛出异常，保留异常类型、参数名和清理逻辑。需要保留原始异常身份时使用 `Rethrow`。
 - 修改名称、成员顺序、枚举值、null 标记、字符串模式、帧格式或存储视图都可能破坏已持久化的数据。本仓库中没有调用点的公共成员仍可能被使用者或生成代码使用。
 - 修改移植的格式化代码时，保留第三方声明（`docs/xjb-LICENSE.txt`、`docs/xjb-NOTICE.md`）。
