@@ -33,7 +33,8 @@ public static class LuminPackJsonCodeGenerator
     private readonly struct JsonNameFact
     {
         internal readonly string Name, Suffix;
-        internal readonly int Index, Utf8Length;
+        internal readonly int Index;
+        internal readonly byte[] Utf8Bytes;
         internal readonly bool Alias;
         internal readonly ulong Utf8Hash, Utf16Hash;
 
@@ -43,7 +44,7 @@ public static class LuminPackJsonCodeGenerator
         /// <param name="utf8Hash">Its complete hash.</param><param name="utf16Hash">The code-unit hash.</param>
         /// <param name="alias">Whether the cache lives in the original old-name container.</param>
         internal JsonNameFact(string name, string suffix, int index, byte[] bytes, ulong utf8Hash, ulong utf16Hash, bool alias = false)
-        { Name = name; Suffix = suffix; Index = index; Utf8Length = bytes.Length; Utf8Hash = utf8Hash; Utf16Hash = utf16Hash; Alias = alias; }
+        { Name = name; Suffix = suffix; Index = index; Utf8Bytes = bytes; Utf8Hash = utf8Hash; Utf16Hash = utf16Hash; Alias = alias; }
     }
 
     /// <summary>Performs the compute utf16 hash step for the current operation.</summary>
@@ -261,7 +262,7 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine("            {");
         // Group equal keys so even a compile-time hash collision produces valid C#.
         var groups = names.GroupBy(item => small
-            ? (ulong)(utf8 ? item.Utf8Length : item.Name.Length)
+            ? (ulong)(utf8 ? item.Utf8Bytes.Length : item.Name.Length)
             : (utf8 ? item.Utf8Hash : item.Utf16Hash));
         foreach (var group in groups)
         {
@@ -269,13 +270,53 @@ public static class LuminPackJsonCodeGenerator
             foreach (var item in group)
             {
                 string fieldName = (item.Alias ? "__LuminPackOldNames." : "") + prefix + item.Suffix;
-                sb.AppendLine("                    if (global::System.MemoryExtensions.SequenceEqual<" + element + ">(name, " + fieldName + ")) return " + item.Index + ";");
+                AppendNameComparison(sb, item, fieldName, utf8);
             }
             sb.AppendLine("                    break;");
         }
         sb.AppendLine("            }");
         sb.AppendLine("            return -1;");
         sb.AppendLine("        }");
+    }
+
+    /// <summary>Emits length-checked constant comparisons for short names and ordinal equality for longer names.</summary>
+    /// <param name="sb">The lookup method being emitted.</param>
+    /// <param name="item">The encoded name and dispatch result.</param>
+    /// <param name="fieldName">The original metadata field for the general comparison.</param>
+    /// <param name="utf8">Whether the input contains bytes or UTF-16 code units.</param>
+    private static void AppendNameComparison(StringBuilder sb, JsonNameFact item, string fieldName, bool utf8)
+    {
+        string element = utf8 ? "byte" : "char";
+        string fallback = "global::System.MemoryExtensions.SequenceEqual<" + element + ">(name, " + fieldName + ")";
+        int length = utf8 ? item.Utf8Bytes.Length : item.Name.Length;
+        if (length > (utf8 ? 16 : 8))
+        {
+            sb.AppendLine("                    if (" + fallback + ") return " + item.Index + ";");
+            return;
+        }
+
+        sb.Append("                    if (global::System.BitConverter.IsLittleEndian ? name.Length == ").Append(length);
+        int byteLength = utf8 ? length : length * 2;
+        for (int offset = 0; offset < byteLength;)
+        {
+            int width = byteLength - offset >= 4 ? 4 : byteLength - offset >= 2 ? 2 : 1;
+            uint word = 0;
+            for (int i = 0; i < width; i++)
+            {
+                int position = offset + i;
+                int value = utf8 ? item.Utf8Bytes[position] : (byte)(item.Name[position / 2] >> (8 * (position & 1)));
+                word |= (uint)value << (8 * i);
+            }
+            sb.Append(" && ");
+            if (width > 1) sb.Append("global::System.Runtime.CompilerServices.Unsafe.ReadUnaligned<").Append(width == 4 ? "uint" : "ushort").Append(">(ref ");
+            if (offset != 0) sb.Append("global::System.Runtime.CompilerServices.Unsafe.Add(ref ");
+            sb.Append("global::System.Runtime.CompilerServices.Unsafe.As<").Append(element).Append(", byte>(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(name))");
+            if (offset != 0) sb.Append(", ").Append(offset).Append(')');
+            if (width > 1) sb.Append(')');
+            sb.Append(" == ").Append(word).Append('u');
+            offset += width;
+        }
+        sb.Append(" : ").Append(fallback).Append(") return ").Append(item.Index).AppendLine(";");
     }
 
     /// <summary>Performs the escape char step for the current operation.</summary>
