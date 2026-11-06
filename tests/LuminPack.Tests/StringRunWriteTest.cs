@@ -238,8 +238,9 @@ public sealed class StringRunWriteTest
     [Fact]
     public void StringPrefixRespectsTheRemainingFixedBuffer()
     {
-        string?[] values = [null, "", "a", "compact", "réservé", "\u0100\u0301", "end"];
-        for (int room = 0; room <= 96; room++)
+        string?[] values = [new string('a', 17), new string('\u0100', 32), null, "", "a", "compact", "réservé", "\u0100\u0301", "end"];
+        int rawBound = values.Sum(value => sizeof(int) + (value?.Length ?? 0) * sizeof(char));
+        for (int room = 0; room <= rawBound; room++)
         {
             byte[] actual = Enumerable.Repeat((byte)0xA5, room + 8).ToArray();
             byte[] expected = (byte[])actual.Clone();

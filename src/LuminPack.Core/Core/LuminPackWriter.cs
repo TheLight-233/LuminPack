@@ -1896,8 +1896,25 @@ namespace LuminPack.Core
         /// <param name="values">The strings.</param>
         /// <param name="index">The first string to write, updated to the first string not written.</param>
         /// <returns>The complete written width.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteUtf16Run(ref byte current, uint room, scoped ReadOnlySpan<string?> values, ref int index)
+        {
+#if NET8_0_OR_GREATER
+            if (Vector256.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && (uint)index < (uint)values.Length &&
+                values[index] is { Length: >= 17 and <= 32 })
+                return WriteMediumUtf16Run(ref current, room, values, ref index);
+#endif
+            return WriteGeneralUtf16Run(ref current, room, values, ref index);
+        }
+
+        /// <summary>Writes consecutive UTF-16 length records of any width.</summary>
+        /// <param name="current">The first output byte.</param>
+        /// <param name="room">The writable bytes before the capacity or completion limit.</param>
+        /// <param name="values">The string slots in storage order.</param>
+        /// <param name="index">The first remaining slot, advanced only after complete records.</param>
+        /// <returns>The complete written width.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int WriteGeneralUtf16Run(ref byte current, uint room, scoped ReadOnlySpan<string?> values, ref int index)
         {
             ref string? first = ref MemoryMarshal.GetReference(values);
             uint used = 0;
@@ -1914,6 +1931,68 @@ namespace LuminPack.Core
             index = i;
             return (int)used;
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Writes medium records within the validated window and resumes general encoding at the first other width.</summary>
+        /// <param name="current">The first output byte.</param>
+        /// <param name="room">The writable bytes before the capacity or completion limit.</param>
+        /// <param name="values">The string slots in storage order.</param>
+        /// <param name="index">The first remaining slot, advanced only after complete records.</param>
+        /// <returns>The complete written width.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int WriteMediumUtf16Run(ref byte current, uint room, scoped ReadOnlySpan<string?> values, ref int index)
+        {
+            uint used = 0;
+            int i = index;
+            for (; (uint)i < (uint)values.Length; i++)
+            {
+                string? value = values[i];
+                if (value is null || (uint)(value.Length - 17) > 15)
+                {
+                    index = i;
+                    return (int)used + WriteGeneralUtf16Run(ref Unsafe.Add(ref current, (nint)used), room - used, values, ref index);
+                }
+                uint bound = sizeof(int) + (uint)value.Length * sizeof(char);
+                if (bound > room - used) break;
+                used += (uint)WriteMediumUtf16RunRecord(ref Unsafe.Add(ref current, (nint)used), value);
+            }
+
+            index = i;
+            return (int)used;
+        }
+
+        /// <summary>Writes one reserved 17-to-32-character record inside a consecutive string run.</summary>
+        /// <param name="record">The record start, with room for the header and the raw UTF-16 payload.</param>
+        /// <param name="value">The string, on a 64-bit target with accelerated 256-bit vectors.</param>
+        /// <returns>The width of the complete compact or raw record.</returns>
+        /// <remarks>Two 16-character blocks cover the whole input and stay in bounds even at length 17.</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int WriteMediumUtf16RunRecord(ref byte record, string value)
+        {
+            int length = value.Length;
+            nuint tail = (nuint)(uint)(length - 16);
+            ref ushort chars = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value.AsSpan()));
+            ref byte payload = ref Unsafe.Add(ref record, sizeof(int));
+            var head = Vector256.LoadUnsafe(ref chars);
+            var end = Vector256.LoadUnsafe(ref chars, tail);
+            if (((head | end) & Vector256.Create((ushort)0xFF00)) == Vector256<ushort>.Zero)
+            {
+                var packed = StringSerializer.NarrowValidatedLatin1(head, end);
+                packed.GetLower().StoreUnsafe(ref payload);
+                packed.GetUpper().StoreUnsafe(ref payload, tail);
+                Write(ref record, StringSerializer.Latin1Header(length));
+                return sizeof(int) + length;
+            }
+
+            ref byte first = ref Unsafe.As<ushort, byte>(ref chars);
+            nuint rawTail = tail * sizeof(char);
+            LuminPackMarshal.CopyBlockUnaligned(ref payload, ref first, 32);
+            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref payload, rawTail), ref Unsafe.Add(ref first, rawTail), 32);
+            int bytes = length * sizeof(char);
+            Write(ref record, bytes);
+            return sizeof(int) + bytes;
+        }
+#endif
 
         /// <summary>Writes a UTF-16 length record into the remaining storage when it fits.</summary>
         /// <param name="current">The record position.</param>

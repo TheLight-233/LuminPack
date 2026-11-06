@@ -293,6 +293,43 @@ public sealed class CompactStringRecordTest
         }
     }
 
+    /// <summary>Compares consecutive compact and raw records at each narrowing position and destination alignment.</summary>
+    [Fact]
+    public void ConsecutiveMediumRecordsMatchIndividualWrites()
+    {
+        var texts = new List<string?>();
+        for (int length = 17; length <= 32; length++)
+        {
+            char[] chars = Enumerable.Range(0, length).Select(i => (char)((i * 73 + 91) & 255)).ToArray();
+            string compact = new string(chars);
+            for (int i = 0; i < length; i++)
+            {
+                texts.Add(compact);
+                chars[i] = i % 2 == 0 ? '\u0100' : '\uD800';
+                texts.Add(new string(chars));
+                chars[i] = compact[i];
+            }
+        }
+
+        texts.AddRange(new string?[] { null, string.Empty, new string('ä', 16), new string('\uD800', 33), new string('z', 24) });
+        string?[] values = texts.ToArray();
+        int capacity = values.Sum(value => sizeof(int) + (value?.Length ?? 0) * sizeof(char));
+        foreach (int offset in new[] { 0, 1, 15, 31 })
+        {
+            byte[] expected = Enumerable.Repeat((byte)0xA5, offset + capacity + 32).ToArray();
+            byte[] actual = (byte[])expected.Clone();
+            Span<byte> expectedSpan = expected.AsSpan(offset, capacity);
+            var single = new LuminPackWriter(ref expectedSpan);
+            foreach (string? value in values) single.Write<LuminPackUtf16LengthOptions>(value);
+
+            Span<byte> actualSpan = actual.AsSpan(offset, capacity);
+            var writer = new LuminPackWriter(ref actualSpan);
+            writer.WriteStrings<LuminPackUtf16LengthOptions>(values);
+            Assert.Equal(single.Position, writer.Position);
+            Assert.Equal(expected, actual);
+        }
+    }
+
     /// <summary>Checks that a candidate differing in any single character is replaced.</summary>
     [Fact]
     public void ReuseRejectsEveryDifferingCharacter()
