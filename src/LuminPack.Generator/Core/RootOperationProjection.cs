@@ -84,9 +84,13 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
     /// <param name="node">The signature fragment.</param>
     /// <param name="arguments">The actual closed or enclosing generic arguments.</param>
     /// <returns>The fragment with exactly those declared type parameters substituted.</returns>
-    private static SyntaxNode Substitute(SyntaxNode node, Dictionary<string, TypeSyntax> arguments) => node.ReplaceNodes(
-        node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Where(name => arguments.ContainsKey(name.Identifier.ValueText)),
-        (original, rewritten) => arguments[original.Identifier.ValueText].WithTriviaFrom(rewritten));
+    private static SyntaxNode Substitute(SyntaxNode node, Dictionary<string, TypeSyntax> arguments)
+    {
+        if (arguments.Count == 0) return node;
+        return node.ReplaceNodes(
+            node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Where(name => arguments.ContainsKey(name.Identifier.ValueText)),
+            (original, rewritten) => arguments[original.Identifier.ValueText].WithTriviaFrom(rewritten));
+    }
 
     /// <summary>Moves complete state bodies into roots and leaves aggressively inlineable forwarding entries.</summary>
     /// <param name="node">The generated serializer container.</param>
