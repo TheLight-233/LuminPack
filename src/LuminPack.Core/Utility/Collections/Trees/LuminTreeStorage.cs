@@ -1117,18 +1117,21 @@ public static partial class LuminTreeStorage
             /// <param name="items">The items.</param>
             /// <param name="count">The number of items, at least one.</param>
             /// <returns>The set.</returns>
-            internal static System.Collections.Immutable.ImmutableSortedSet<T> Build(T[] items, int count) => Wrap(Link(items, 0, count - 1), Comparer<T>.Default);
+            internal static System.Collections.Immutable.ImmutableSortedSet<T> Build(T[] items, int count) =>
+                Wrap(Link(items, 0, count - 1, Empty!), Comparer<T>.Default);
 
             /// <summary>Links a balanced subtree.</summary>
             /// <param name="items">The items.</param>
             /// <param name="start">The first index.</param>
             /// <param name="end">The last index.</param>
+            /// <param name="empty">The set's shared empty node.</param>
             /// <returns>The subtree root.</returns>
-            private static object Link(T[] items, int start, int end)
+            private static object Link(T[] items, int start, int end, object empty)
             {
-                if (start > end) return Empty!;
                 int middle = start + ((end - start) >> 1);
-                return NewNode(items[middle], Link(items, start, middle - 1), Link(items, middle + 1, end), true);
+                return NewNode(items[middle],
+                    start < middle ? Link(items, start, middle - 1, empty) : empty,
+                    middle < end ? Link(items, middle + 1, end, empty) : empty, true);
             }
 
             /// <summary>Checks the binding with a one-item build.</summary>
@@ -1183,19 +1186,26 @@ public static partial class LuminTreeStorage
             /// <param name="pairs">The pairs.</param>
             /// <param name="count">The number of pairs, at least one.</param>
             /// <returns>The dictionary.</returns>
-            internal static System.Collections.Immutable.ImmutableSortedDictionary<TKey, TValue> Build(KeyValuePair<TKey, TValue>[] pairs, int count) =>
-                Wrap(Link(pairs, 0, count - 1), count, Comparer<TKey>.Default, EqualityComparer<TValue>.Default);
+            internal static System.Collections.Immutable.ImmutableSortedDictionary<TKey, TValue> Build(KeyValuePair<TKey, TValue>[] pairs, int count)
+            {
+                int end = count - 1;
+                object empty = Empty!;
+                object root = end < 0 ? empty : Link(pairs, 0, end, empty);
+                return Wrap(root, count, Comparer<TKey>.Default, EqualityComparer<TValue>.Default);
+            }
 
             /// <summary>Links a balanced subtree.</summary>
             /// <param name="pairs">The pairs.</param>
             /// <param name="start">The first index.</param>
             /// <param name="end">The last index.</param>
+            /// <param name="empty">The dictionary's shared empty node.</param>
             /// <returns>The subtree root.</returns>
-            private static object Link(KeyValuePair<TKey, TValue>[] pairs, int start, int end)
+            private static object Link(KeyValuePair<TKey, TValue>[] pairs, int start, int end, object empty)
             {
-                if (start > end) return Empty!;
                 int middle = start + ((end - start) >> 1);
-                return NewNode(pairs[middle].Key, pairs[middle].Value, Link(pairs, start, middle - 1), Link(pairs, middle + 1, end), true);
+                return NewNode(pairs[middle].Key, pairs[middle].Value,
+                    start < middle ? Link(pairs, start, middle - 1, empty) : empty,
+                    middle < end ? Link(pairs, middle + 1, end, empty) : empty, true);
             }
 
             /// <summary>Checks the binding with a one-pair build.</summary>

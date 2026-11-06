@@ -77,6 +77,32 @@ public sealed partial class TreeNodeAllocationTest
         }
     }
 
+    /// <summary>Checks ordered prefixes with missing left or right children around each small tree height.</summary>
+    [Fact]
+    public void ImmutableSortedTreesLinkOnlyTheRequestedPrefix()
+    {
+        var records = Enumerable.Range(0, 66).Select(i => new TreeRecord { Id = i }).ToArray();
+        var pairs = records.Select(record => KeyValuePair.Create(record.Id, record)).ToArray();
+        for (int count = 1; count < records.Length; count++)
+        {
+            var set = LuminTreeStorage.CreateImmutableSortedSet(records, count);
+            var map = LuminTreeStorage.CreateImmutableSortedDictionary(pairs, count);
+            Assert.Equal(count, set.Count);
+            Assert.Equal(count, map.Count);
+            for (int i = 0; i < count; i++)
+            {
+                Assert.Same(records[i], set[i]);
+                Assert.Same(records[i], map[i]);
+            }
+            Assert.DoesNotContain(records[count], set);
+            Assert.DoesNotContain(count, map.Keys);
+            Assert.Same(records[count], set.Add(records[count]).Remove(records[0]).Max);
+            Assert.Same(records[count], map.Add(count, records[count]).Remove(0)[count]);
+            Assert.Same(records[0], set.Min);
+            Assert.Same(records[0], map[0]);
+        }
+    }
+
     /// <summary>Requires warmed distinct-key construction to allocate only the returned owner and its reachable nodes.</summary>
     /// <param name="count">The number of distinct ordered keys.</param>
     [Theory]
