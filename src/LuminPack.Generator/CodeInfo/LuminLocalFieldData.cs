@@ -29,6 +29,8 @@ public sealed class LuminLocalFieldData
     internal bool CanWriteConcurrentBagRaw;
     /// <summary>Whether the referenced runtime can stage uncached immutable queue reversals without changing the queue.</summary>
     internal bool CanTraverseUncachedImmutableQueue;
+    /// <summary>Whether the referenced runtime can copy the declared JSON list or sorted tree in sequence order.</summary>
+    internal bool CanCopyImmutableJsonTree;
     /// <summary>Whether the runtime exposes validated fresh bit-array payload construction.</summary>
     internal bool CanCreateBitArrayPayload;
     /// <summary>Whether the referenced runtime exposes validated portable bit-storage writing.</summary>

@@ -71,6 +71,23 @@ public static partial class LuminTreeStorage
             destination[position++] = pair;
     }
 
+    /// <summary>Copies immutable list elements in their public sequence order.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="list">The immutable list to copy.</param>
+    /// <param name="destination">Storage for at least the list count.</param>
+    public static void CopyTo<T>(ImmutableList<T> list, Span<T> destination)
+    {
+        if (ImmutableListLayout<T>.Available)
+        {
+            int index = 0;
+            WalkAvl(Field<object>(list, ImmutableListLayout<T>.Root), in ImmutableListLayout<T>.Nodes, destination, ref index);
+            return;
+        }
+        int position = 0;
+        foreach (var item in list)
+            destination[position++] = item;
+    }
+
     /// <summary>Copies an immutable sorted set's items in order.</summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="set">The set to copy.</param>
@@ -1491,6 +1508,33 @@ public static partial class LuminTreeStorage
                 in SortedSetLayout<KeyValuePair<int, int>>.Nodes, copy, ref index);
             return index == 9 && copy.SequenceEqual(pairs) && filled.Count == 9 && filled.SequenceEqual(pairs) && filled[16] == 8 &&
                 filled.Remove(8) && !filled.ContainsKey(8) && filled.TryAdd(9, 1) && filled.TryAdd(-1, 0) && filled.Keys.First() == -1 && filled.Count == 10;
+        }
+    }
+
+    private static class ImmutableListLayout<T>
+    {
+        internal static readonly int Root = ObjectField(typeof(ImmutableList<T>), "_root");
+        internal static readonly NodeOffsets Nodes = AvlList(FieldType(typeof(ImmutableList<T>), "_root"), null);
+        internal static readonly bool Available = Root >= 0 && Nodes.Located &&
+            FieldType(Nodes.Type, "_key") == typeof(T) && FieldType(Nodes.Type, "_left") == Nodes.Type &&
+            FieldType(Nodes.Type, "_right") == Nodes.Type && Check(Probe);
+
+        /// <summary>Verifies the empty sentinel and three in-order item addresses against the public list.</summary>
+        /// <returns>Whether the closed node layout supports the read-only walk.</returns>
+        private static bool Probe()
+        {
+            object? empty = Field<object?>(ImmutableList<T>.Empty, Root);
+            if (empty is null || Field<object?>(empty, Nodes.Left) is not null || Field<object?>(empty, Nodes.Right) is not null)
+                return false;
+            var list = ImmutableList<T>.Empty.Add(default!).Add(default!).Add(default!);
+            object? root = Field<object?>(list, Root);
+            if (root is null || Field<object?>(root, Nodes.Left) is not { } left || Field<object?>(root, Nodes.Right) is not { } right)
+                return false;
+            return ReferenceEquals(Field<object>(left, Nodes.Left), empty) && ReferenceEquals(Field<object>(left, Nodes.Right), empty) &&
+                ReferenceEquals(Field<object>(right, Nodes.Left), empty) && ReferenceEquals(Field<object>(right, Nodes.Right), empty) &&
+                Unsafe.AreSame(ref Field<T>(left, Nodes.Key), ref Unsafe.AsRef(in list.ItemRef(0))) &&
+                Unsafe.AreSame(ref Field<T>(root, Nodes.Key), ref Unsafe.AsRef(in list.ItemRef(1))) &&
+                Unsafe.AreSame(ref Field<T>(right, Nodes.Key), ref Unsafe.AsRef(in list.ItemRef(2)));
         }
     }
 

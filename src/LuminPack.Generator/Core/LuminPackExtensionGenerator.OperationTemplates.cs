@@ -181,6 +181,9 @@ public static partial class LuminPackExtensionGenerator
         if (type is INamedTypeSymbol { MetadataName: "ImmutableQueue`1" or "IImmutableQueue`1" } immutableQueue &&
             immutableQueue.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
             field.CanTraverseUncachedImmutableQueue = EmitterTypeTraits.CanTraverseUncachedImmutableQueue(compilation);
+        if (type is INamedTypeSymbol { MetadataName: "ImmutableList`1" or "IImmutableList`1" or "ImmutableSortedSet`1" or "ImmutableSortedDictionary`2" } tree &&
+            tree.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
+            field.CanCopyImmutableJsonTree = ImmutableInterfaceWriteEmitter.HasTreeCopy(compilation, tree);
         if (type is INamedTypeSymbol { MetadataName: "SortedSet`1", TypeArguments.Length: 1 } sortedSet &&
             sortedSet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

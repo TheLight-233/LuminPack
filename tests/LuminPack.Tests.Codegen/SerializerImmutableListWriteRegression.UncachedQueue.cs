@@ -4,9 +4,9 @@ using Microsoft.CodeAnalysis.CSharp;
 
 internal static partial class SerializerImmutableListWriteRegression
 {
-    /// <summary>Checks both optional queue APIs and invalidates retained operations when either reference signature disappears.</summary>
+    /// <summary>Checks that retained list and queue writers follow optional traversal APIs across runtime reference changes.</summary>
     /// <param name="references">The actual runtime and framework metadata references.</param>
-    private static void CheckQueueTraversalCapability(MetadataReference[] references)
+    private static void CheckTraversalCapabilities(MetadataReference[] references)
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
         var compilation = CSharpCompilation.Create("QueueCapabilities" + Guid.NewGuid().ToString("N"),
@@ -20,7 +20,10 @@ internal static partial class SerializerImmutableListWriteRegression
                     {
                         var queue=ImmutableQueue<int>.Empty.Enqueue(7).Enqueue(11).Enqueue(19);
                         IImmutableQueue<int> contract=queue;
-                        return Convert.ToBase64String(LuminPackSerializer.Serialize(queue))+":"+LuminPackSerializer.SerializeJson(contract);
+                        var list = ImmutableList.Create(11, 7, 19);
+                        IImmutableList<int> listContract = list;
+                        return Convert.ToBase64String(LuminPackSerializer.Serialize(queue))+":"+LuminPackSerializer.SerializeJson(contract)
+                            +":"+LuminPackSerializer.SerializeJson(list)+":"+LuminPackSerializer.SerializeJson(listContract);
                     }
                 }
                 """, parse, "Entry.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
@@ -31,21 +34,25 @@ internal static partial class SerializerImmutableListWriteRegression
             SymbolEqualityComparer.Default.Equals(compilation.GetAssemblyOrModuleSymbol(reference), access.ContainingAssembly));
         var noTraversal = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(original.FilePath!, "TryGetImmutableQueueTraversal")));
         var noRental = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(original.FilePath!, "RentImmutableQueueReversal")));
+        var noTreeCopy = compilation.ReplaceReference(original, MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(original.FilePath!, "LuminTreeStorage.CopyTo")));
         var driver = Create(parse);
         string? expected = null;
-        foreach (var current in new[] { compilation, noTraversal, noRental, compilation })
+        foreach (var current in new[] { compilation, noTraversal, noRental, noTreeCopy, compilation })
         {
             driver = driver.RunGeneratorsAndUpdateCompilation(current, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
-            Require(Trees(driver).Any(text => text.Contains(".TryGetImmutableQueueTraversal(", StringComparison.Ordinal)) == ReferenceEquals(current, compilation),
+            Require(Trees(driver).Any(text => text.Contains(".TryGetImmutableQueueTraversal(", StringComparison.Ordinal)) ==
+                !(ReferenceEquals(current, noTraversal) || ReferenceEquals(current, noRental)),
                 "Queue traversal retained a stale runtime capability.");
-            Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(current))), "Queue metadata edits differ from fresh generation.");
+            Require(Trees(driver).Count(text => text.Contains("LuminTreeStorage.CopyTo(", StringComparison.Ordinal)) ==
+                (ReferenceEquals(current, noTreeCopy) ? 0 : 2), "Concrete and interface lists retained a stale tree copy capability.");
+            Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(current))), "Traversal metadata edits differ from fresh generation.");
             using var image = new MemoryStream();
             var emitted = output.Emit(image);
             Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
             string result = (string)Assembly.Load(image.ToArray()).GetType("QueueCapabilityEntry")!.GetMethod("Evidence")!.Invoke(null, null)!;
             expected ??= result;
-            Require(result == expected, "Queue capability selection changed wire bytes.");
+            Require(result == expected, "Traversal capability selection changed wire bytes.");
         }
     }
 
@@ -127,6 +134,7 @@ internal static partial class SerializerImmutableListWriteRegression
             private static void CheckFailure<P>(LuminPack.Utility.LuminBufferWriter output,bool available)where P:struct,ILuminPackOptions
             {
                 unsafe{LuminPackSerializer.Register<QueueFailItem,P>(&QueueFailItem.Serialize,&QueueFailItem.Deserialize,&QueueFailItem.WriteJson<P>,&QueueFailItem.ReadJson<P>);}
+                CheckJsonTreeFailures<P>(output);
                 foreach(bool json in new[]{false,true})foreach(int failure in new[]{0,2})
                 {
                     var queue=ImmutableQueue<QueueFailItem>.Empty;
@@ -143,6 +151,49 @@ internal static partial class SerializerImmutableListWriteRegression
                         if(available&&(!ReferenceEquals(expected,actual)||actual.Any(item=>item!=null)))throw new Exception("Queue reversal lease was lost or retained references.");
                     }
                     finally{System.Buffers.ArrayPool<QueueFailItem>.Shared.Return(actual,true);}
+                }
+            }
+            private static void CheckJsonTreeFailures<P>(LuminPack.Utility.LuminBufferWriter output) where P:struct,ILuminPackOptions
+            {
+                var items = new[] { new QueueFailItem { Id = 2 }, new QueueFailItem { Id = 1 }, new QueueFailItem { Id = 3 } };
+                var list = ImmutableList.CreateRange(items);
+                var set = list.ToImmutableSortedSet(Comparer<QueueFailItem>.Create((a,b) => b.Id.CompareTo(a.Id)));
+                var map = ImmutableSortedDictionary.CreateRange(Comparer<int>.Create((a,b) => b.CompareTo(a)),
+                    list.Select(item => new KeyValuePair<int,QueueFailItem>(item.Id,item)));
+                Check(items, () => LuminPackSerializer.SerializeJson<P>(list, output), new[] { 2, 1 });
+                Check(items, () => LuminPackSerializer.SerializeJson<P>((IImmutableList<QueueFailItem>)list, output), new[] { 2, 1 });
+                Check(set.ToArray(), () => LuminPackSerializer.SerializeJson<P>(set, output), new[] { 3, 2 });
+                Check(map.ToArray(), () => LuminPackSerializer.SerializeJson<P>(map, output), new[] { 3, 2 });
+
+                void Check<T>(T[] contents, Action write, int[] prefix)
+                {
+                    output.ResetCore();
+                    QueueFailItem.ThrowOn = -1;
+                    write();
+                    byte[] complete = output.GetSpan().ToArray();
+                    var pool = System.Buffers.ArrayPool<T>.Shared;
+                    var expectedLease = pool.Rent(contents.Length);
+                    Array.Fill(expectedLease, contents[0]);
+                    pool.Return(expectedLease);
+                    QueueFailItem.Events.Clear();
+                    QueueFailItem.ThrowOn = prefix[1];
+                    output.ResetCore();
+                    Exception observed = null;
+                    try { write(); }
+                    catch (Exception error) { observed = error; }
+                    finally { QueueFailItem.ThrowOn = -1; }
+                    if (!ReferenceEquals(observed, QueueFailItem.Failure) || !QueueFailItem.Events.SequenceEqual(prefix))
+                        throw new Exception("JSON tree formatter order or exception changed.");
+                    var returned = pool.Rent(contents.Length);
+                    try
+                    {
+                        if (!ReferenceEquals(expectedLease, returned) || returned.Any(item => !EqualityComparer<T>.Default.Equals(item, default)))
+                            throw new Exception("JSON tree writer lost its lease or retained references.");
+                    }
+                    finally { pool.Return(returned, true); }
+                    output.ResetCore();
+                    write();
+                    if (!output.GetSpan().SequenceEqual(complete)) throw new Exception("JSON tree write changed after failure.");
                 }
             }
         }

@@ -91,6 +91,32 @@ public class ImmutableListWriteTest
         finally { ImmutableWriteNode.BeforeWrite = null; }
     }
 
+    /// <summary>Checks in-order copies of edited trees and the public fallback for unprobeable delegate fields.</summary>
+    [Fact]
+    public void ListCopiesRespectDestinationBoundsAndPublicOrder()
+    {
+        var edited = ImmutableList.CreateRange(Enumerable.Range(0, 37)).Insert(12, -17).RemoveAt(22).Reverse();
+        Check(edited, -99);
+        Func<int> first = () => 7, second = () => 11;
+        Check(ImmutableList.Create(second, first, second), () => -1);
+        Check(ImmutableList<Func<int>>.Empty, () => -1);
+
+        static void Check<T>(ImmutableList<T> items, T guard)
+        {
+            var output = Enumerable.Repeat(guard, items.Count + 2).ToArray();
+            LuminPack.Utility.LuminTreeStorage.CopyTo(items, output.AsSpan(1, items.Count));
+            Assert.Equal(guard, output[0]);
+            Assert.Equal(guard, output[^1]);
+            Assert.Equal(items.ToArray(), output.AsSpan(1, items.Count).ToArray());
+            if (items.Count > 0)
+            {
+                Array.Fill(output, guard);
+                Assert.Throws<IndexOutOfRangeException>(() => LuminPack.Utility.LuminTreeStorage.CopyTo(items, output.AsSpan(1, items.Count - 1)));
+                Assert.Equal(guard, output[items.Count]);
+            }
+        }
+    }
+
     /// <summary>Clears the shared rental when complete string reservation rejects a short fixed output.</summary>
     [Fact]
     public void CapacityFailureClearsStagingWithoutPublishingTheCursor()

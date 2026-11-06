@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using LuminPack.Code;
 using Microsoft.CodeAnalysis;
@@ -6,9 +7,39 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 
 using static CodeEmitterRegistry;
 
-/// <summary>Keeps immutable traversal state outside callers and reuses checked hash-tree copies.</summary>
+/// <summary>Keeps immutable traversal state outside callers and reuses checked tree copies.</summary>
 internal static class ImmutableInterfaceWriteEmitter
 {
+    /// <summary>Checks for the public tree copy overload for this concrete implementation and its span element type.</summary>
+    /// <param name="compilation">The consumer's runtime and framework references.</param>
+    /// <param name="tree">The declared list, list interface, sorted set or sorted dictionary.</param>
+    /// <returns>Whether the generator can emit a checked copy for this framework tree.</returns>
+    internal static bool HasTreeCopy(Compilation compilation, INamedTypeSymbol tree)
+    {
+        var concrete = tree.Name == "IImmutableList"
+            ? compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableList`1")
+            : tree.OriginalDefinition;
+        var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        var span = compilation.GetTypeByMetadataName("System.Span`1");
+        var pair = tree.Arity == 2 ? compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2") : null;
+        if (concrete is null || storage is null || span is null || tree.Arity == 2 && pair is null)
+            return false;
+        foreach (var method in storage.GetMembers("CopyTo").OfType<IMethodSymbol>())
+        {
+            if (!method.IsStatic || !method.ReturnsVoid || method.DeclaredAccessibility != Accessibility.Public ||
+                method.Arity != tree.Arity || method.Parameters.Length != 2 || method.Parameters.Any(p => p.RefKind != RefKind.None) ||
+                method.TypeParameters.Any(p => !p.ConstraintTypes.IsEmpty || p.HasConstructorConstraint || p.HasValueTypeConstraint ||
+                    p.HasReferenceTypeConstraint || p.HasUnmanagedTypeConstraint || p.HasNotNullConstraint && (tree.Arity != 2 || p.Ordinal != 0)))
+                continue;
+            var arguments = method.TypeParameters.Cast<ITypeSymbol>().ToArray();
+            var item = pair is null ? arguments[0] : pair.Construct(arguments);
+            if (SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, concrete.Construct(arguments)) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(item)))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>Writes elements through exact framework implementations or the original interface enumerator.</summary>
     /// <param name="field">The complete interface or concrete collection contract.</param>
     /// <param name="sb">The generated operation body.</param>
@@ -18,7 +49,9 @@ internal static class ImmutableInterfaceWriteEmitter
     {
         int generic = field.TypeName.IndexOf('<');
         string type = generic < 0 ? field.TypeName : field.TypeName.Substring(0, generic);
-        bool direct = type is "global::System.Collections.Immutable.ImmutableHashSet" or "global::System.Collections.Immutable.ImmutableDictionary";
+        bool copyTree = json && field.CanCopyImmutableJsonTree;
+        bool direct = type is "global::System.Collections.Immutable.ImmutableHashSet" or "global::System.Collections.Immutable.ImmutableDictionary" ||
+            copyTree && type != "global::System.Collections.Immutable.IImmutableList";
         string[] implementations = direct ? new[] { type.Substring(type.LastIndexOf('.') + 1) } : GetImplementations(type);
         if (implementations.Length == 0)
         {
@@ -59,8 +92,8 @@ internal static class ImmutableInterfaceWriteEmitter
             sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
             sb.AppendLine("            static void WriteKnownElements" + i + "(ref global::LuminPack.Core." + (json ? "LuminPackJsonWriter" : "LuminPackWriter") + " writer, " + concrete + " source)");
             sb.AppendLine("            {");
-            if (implementations[i] is "ImmutableHashSet" or "ImmutableDictionary")
-                AppendSnapshot(field, sb, arguments, json, dictionary);
+            if (implementations[i] is "ImmutableHashSet" or "ImmutableDictionary" || copyTree && implementations[i] != "ImmutableArray")
+                AppendSnapshot(sb, arguments, json, dictionary);
             else if (json && field.CanTraverseUncachedImmutableQueue && implementations[i] == "ImmutableQueue")
                 AppendQueueLoop(field, sb, "source", "                ");
             else
@@ -150,13 +183,12 @@ internal static class ImmutableInterfaceWriteEmitter
         sb.AppendLine(indent + "}");
     }
 
-    /// <summary>Uses the existing checked hash-tree copy to avoid abandoned BCL collision-enumerator leases.</summary>
-    /// <param name="field">The collection contract and runtime capabilities.</param>
+    /// <summary>Copies an immutable tree in order and returns the lease even when an element formatter throws.</summary>
     /// <param name="sb">The generated concrete writer body.</param>
     /// <param name="arguments">The collection's element or key/value type arguments.</param>
     /// <param name="json">Whether to retain JSON framing.</param>
     /// <param name="dictionary">Whether the copied items are key/value pairs.</param>
-    private static void AppendSnapshot(LuminLocalFieldData field, StringBuilder sb, string arguments, bool json, bool dictionary)
+    private static void AppendSnapshot(StringBuilder sb, string arguments, bool json, bool dictionary)
     {
         string item = dictionary ? "global::System.Collections.Generic.KeyValuePair<" + arguments + ">" : arguments;
         sb.AppendLine("                int count = source.Count;");

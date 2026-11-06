@@ -30,8 +30,8 @@ internal static partial class SerializerImmutableListWriteRegression
                 local.Identifier.ValueText.StartsWith("WriteKnownElements", StringComparison.Ordinal) && local.Modifiers.Any(SyntaxKind.StaticKeyword) &&
                 local.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal))), "Concrete iterator state lost its native boundary.");
         }
-        CheckQueueTraversalCapability(references);
-        Console.WriteLine("Passed immutable interface writes: eight concrete implementations, custom fallbacks, binary and JSON profiles, first queue writes, metadata changes, failures and four tiers.");
+        CheckTraversalCapabilities(references);
+        Console.WriteLine("Passed immutable interface writes, custom fallbacks, queue traversal, JSON tree lease cleanup, metadata changes and four generation tiers.");
     }
 
     private const string InterfaceSource = """

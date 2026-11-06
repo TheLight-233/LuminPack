@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -7,21 +8,33 @@ internal static class FrameworkRuntimeMetadata
 {
     /// <summary>Renames selected methods and refreshes the module identity without executing the resulting image.</summary>
     /// <param name="path">The referenced runtime image.</param>
-    /// <param name="names">The optional method names to hide.</param>
+    /// <param name="names">The optional method names to hide, optionally qualified by declaring type name.</param>
     /// <returns>An image for binding and compilation only.</returns>
     internal static byte[] WithoutMethods(string path, params string[] names)
     {
         byte[] image = File.ReadAllBytes(path);
         using var pe = new PEReader(new MemoryStream(image));
         var metadata = pe.GetMetadataReader();
-        int strings = pe.PEHeaders.MetadataStartOffset + metadata.GetHeapMetadataOffset(HeapIndex.String);
+        int methods = pe.PEHeaders.MetadataStartOffset + metadata.GetTableMetadataOffset(TableIndex.MethodDef);
+        int rowSize = metadata.GetTableRowSize(TableIndex.MethodDef);
         var found = new HashSet<string>(StringComparer.Ordinal);
         foreach (var handle in metadata.MethodDefinitions)
         {
             var method = metadata.GetMethodDefinition(handle);
             string name = metadata.GetString(method.Name);
-            if (!names.Contains(name, StringComparer.Ordinal)) continue;
-            image[strings + MetadataTokens.GetHeapOffset(method.Name)] = (byte)'X';
+            if (!names.Contains(name, StringComparer.Ordinal))
+            {
+                var owner = metadata.GetTypeDefinition(method.GetDeclaringType());
+                name = metadata.GetString(owner.Name) + "." + name;
+                if (!names.Contains(name, StringComparer.Ordinal)) continue;
+            }
+            // Skip the first character for this definition only. Member references can share its string heap entry.
+            int nameColumn = methods + (MetadataTokens.GetRowNumber(handle) - 1) * rowSize + 8;
+            int renamed = MetadataTokens.GetHeapOffset(method.Name) + 1;
+            if (metadata.GetHeapSize(HeapIndex.String) > ushort.MaxValue)
+                BinaryPrimitives.WriteInt32LittleEndian(image.AsSpan(nameColumn), renamed);
+            else
+                BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(nameColumn), checked((ushort)renamed));
             found.Add(name);
         }
         if (found.Count != names.Distinct(StringComparer.Ordinal).Count())
