@@ -130,12 +130,10 @@ public static partial class LuminPackMarshal
         }
 
 #if NET8_0_OR_GREATER
-        // An empty list grows to exactly the count once it is at least the default capacity, so SetCount alone
-        // allocates; other growth sets the exact capacity first rather than doubling.
-        int capacity = list.Capacity;
-        if (capacity < length && (capacity != 0 || length < 4))
-            list.Capacity = length;
-        CollectionsMarshal.SetCount(list, length);
+        if (LuminCollectionLayouts.ListVersion >= 0)
+            SetListSize(list, length);
+        else
+            ResizeList(list, length);
         return CollectionsMarshal.AsSpan(list).Slice(0, length);
 #else
         if (list.Capacity < length)
@@ -183,14 +181,8 @@ public static partial class LuminPackMarshal
             LuminFieldLayout.Field<int>(list, LuminCollectionLayouts.ListVersion)++;
             return;
         }
-#endif
 
-#if NET8_0_OR_GREATER
-        // As in GetListSpan: an empty list's own growth is exact from the default capacity on.
-        int capacity = list.Capacity;
-        if (capacity < size && (capacity != 0 || size < 4))
-            list.Capacity = size;
-        CollectionsMarshal.SetCount(list, size);
+        ResizeList(list, size);
         return;
 #else
         if (list.Capacity < size)
@@ -205,6 +197,22 @@ public static partial class LuminPackMarshal
         LuminFieldLayout.Field<int>(list, LuminCollectionLayouts.ListVersion)++;
 #endif
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Publishes the requested count with the existing exact-capacity growth policy.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="list">The list whose size is being published.</param>
+    /// <param name="size">The new logical count.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ResizeList<T>(List<T> list, int size)
+    {
+        // An empty list's own growth is exact from the default capacity on.
+        int capacity = list.Capacity;
+        if (capacity < size && (capacity != 0 || size < 4))
+            list.Capacity = size;
+        CollectionsMarshal.SetCount(list, size);
+    }
+#endif
 
     /// <summary>Gets the backing array of a list.</summary>
     /// <typeparam name="T">The element type.</typeparam>
