@@ -8,7 +8,7 @@ public static partial class DictionaryEmitter
 {
     /// <summary>Refills existing exact Union case instances in place, using staged construction for every other value.</summary>
     /// <param name="sb">The builder receiving the generated local operation.</param>
-    /// <param name="keyType">The canonical int key spelling.</param>
+    /// <param name="keyType">The callback-free fixed-width key type.</param>
     /// <param name="valueType">The Union root spelling.</param>
     /// <param name="valueSymbol">The canonical value framing contract.</param>
     /// <param name="cases">Narrow tags and their certified fixed case types.</param>
@@ -28,7 +28,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                    {");
         sb.AppendLine($"                        {keyType} key = default;");
         sb.AppendLine("                        reader.ReadValue(ref key);");
-        sb.AppendLine("                        if (seen is null && (!order.MoveNext() || order.Current.Key != key)) seen = RecordPrefix(destination, count, i);");
+        sb.AppendLine("                        if (seen is null && (!order.MoveNext() || !global::System.Collections.Generic.EqualityComparer<" + keyType + ">.Default.Equals(order.Current.Key, key))) seen = RecordPrefix(destination, count, i);");
         sb.AppendLine("                        if (seen is not null) seen[i] = key;");
         sb.AppendLine("                        ref var slot = ref global::System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrNullRef(destination, key);");
         // A single load lets the JIT prove the case instance nonnull, removing the original construction branch.

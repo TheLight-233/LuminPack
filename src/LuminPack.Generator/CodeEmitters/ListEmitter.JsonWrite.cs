@@ -53,7 +53,7 @@ public static partial class ListEmitter
             sb.AppendLine(baseType == "global::System.Collections.Concurrent.ConcurrentBag"
                 ? "            foreach (var item in value.ToArray())" : "            foreach (var item in " + ConcurrentTraversalEmitter.Source(fieldData, "ConcurrentStack", "value") + ")");
             sb.AppendLine("            {");
-            JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                ");
+            JsonCollectionElementEmitter.Append(sb, "item", "                ");
             sb.AppendLine("            }");
         }
         sb.AppendLine();

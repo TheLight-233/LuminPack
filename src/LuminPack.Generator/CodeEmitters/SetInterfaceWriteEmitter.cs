@@ -81,7 +81,7 @@ internal static class SetInterfaceWriteEmitter
         sb.AppendLine(indent + "bool isFirst = true;");
         sb.AppendLine(indent + "foreach (var item in " + source + ")");
         sb.AppendLine(indent + "{");
-        JsonCollectionElementEmitter.Append(field, sb, "item", indent + "    ");
+        JsonCollectionElementEmitter.Append(sb, "item", indent + "    ");
         sb.AppendLine(indent + "}");
     }
 }

@@ -94,20 +94,22 @@ internal static class EmitterTypeTraits
             methods.Any(method => method.Parameters.All(parameter => SymbolEqualityComparer.Default.Equals(parameter.Type, method.TypeParameters[0])));
     }
 
-    /// <summary>Checks the exact referenced JSON constructor for a sorted set of framework integers or strings.</summary>
+    /// <summary>Checks the generic ordered JSON set constructor in the referenced runtime.</summary>
     /// <param name="set">The closed immutable sorted set.</param>
     /// <param name="compilation">The consumer's referenced assemblies.</param>
     /// <returns>Whether the matching buffered constructor is available.</returns>
     internal static bool CanLinkOrderedJsonSet(INamedTypeSymbol set, Compilation compilation)
     {
-        var element = set.TypeArguments[0];
-        if (element.SpecialType is not (SpecialType.System_Int32 or SpecialType.System_String)) return false;
         return compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage")?
             .GetMembers("CreateOrderedSetIfSupported").OfType<IMethodSymbol>().Any(method =>
-                method.IsStatic && method.Arity == 0 && method.DeclaredAccessibility == Accessibility.Public &&
-                SymbolEqualityComparer.Default.Equals(method.ReturnType, set) && method.Parameters.Length == 2 &&
+                method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public &&
+                !method.ReturnsByRef && !method.ReturnsByRefReadonly && !method.TypeParameters[0].HasValueTypeConstraint &&
+                !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasConstructorConstraint &&
+                method.TypeParameters[0].ConstraintTypes.Length == 0 && method.Parameters.Length == 2 &&
+                method.ReturnType is INamedTypeSymbol result && SymbolEqualityComparer.Default.Equals(result.OriginalDefinition, set.OriginalDefinition) &&
+                SymbolEqualityComparer.Default.Equals(result.TypeArguments[0], method.TypeParameters[0]) &&
                 method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type is IArrayTypeSymbol { IsSZArray: true } array &&
-                SymbolEqualityComparer.Default.Equals(array.ElementType, element) &&
+                SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) &&
                 method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32) == true;
     }
 
@@ -150,89 +152,10 @@ internal static class EmitterTypeTraits
             sb.AppendLine(indent + "reader.ReadValue(ref " + target + "!);");
     }
 
-    /// <summary>Normalizes the generated spellings of the scalar types that have fused JSON element writers.</summary>
-    /// <param name="type">A generated element, key or value type name.</param>
-    /// <returns>The C# keyword for string, int or long; otherwise null.</returns>
-    private static string JsonFusedKind(string type)
-    {
-        switch (type?.Replace("global::", "").Trim())
-        {
-            case "string": case "string?": case "System.String": case "System.String?": return "string";
-            case "int": case "System.Int32": return "int";
-            case "long": case "System.Int64": return "long";
-            default: return null;
-        }
-    }
-
-    /// <summary>Recognizes array or list elements that <c>WriteElement</c> writes with their separator in one reservation.</summary>
-    /// <param name="type">The generated element type name.</param>
-    /// <returns>Whether the element is a string, int or long.</returns>
-    internal static bool HasJsonElementWriter(string type) => JsonFusedKind(type) != null;
-
-    /// <summary>Checks both compiled-profile and default entries of the optional enumeration writer.</summary>
-    /// <param name="compilation">The consumer's actual runtime metadata.</param>
-    /// <param name="element">The canonical integer element.</param>
-    /// <returns>Whether the original scalar loop may use the isolated runtime entry.</returns>
-    internal static bool HasJsonEnumerationWriter(Compilation compilation, ITypeSymbol element)
-    {
-        if (!GeneratedExecutionPolicy.IsolateJsonIntegerEnumeration(element)) return false;
-        var owner = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter");
-        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
-        bool Profile(IMethodSymbol method) => method.Arity == 0 || method.Arity == 1 &&
-            method.TypeParameters[0].HasValueTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 &&
-            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options);
-        var methods = owner?
-            .GetMembers("WriteEnumerationElement").OfType<IMethodSymbol>().Where(method => !method.IsStatic && method.ReturnsVoid &&
-                method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 &&
-                method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
-                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, element) &&
-                method.Parameters[1].Type.SpecialType == SpecialType.System_Boolean && Profile(method)).ToArray();
-        var queries = owner?.GetMembers("UsesUtf8Enumeration").OfType<IMethodSymbol>().Where(method => !method.IsStatic &&
-            method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 &&
-            method.ReturnType.SpecialType == SpecialType.System_Boolean && !method.ReturnsByRef && !method.ReturnsByRefReadonly && Profile(method)).ToArray();
-        return methods != null && queries != null && methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1) &&
-            queries.Any(method => method.Arity == 0) && queries.Any(method => method.Arity == 1);
-    }
-
-    /// <summary>Checks the complete integer-entry API against the actual key, value and option contracts.</summary>
-    /// <param name="compilation">The consumer's runtime metadata.</param>
-    /// <param name="key">The canonical key type.</param>
-    /// <param name="value">The canonical value type.</param>
-    /// <returns>Whether both default and compiled-profile overloads have the required public signatures.</returns>
-    internal static bool HasJsonIntegerEntryWriter(Compilation compilation, ITypeSymbol key, ITypeSymbol value)
-    {
-        if (key.SpecialType != SpecialType.System_Int32 || value.SpecialType is not (SpecialType.System_Int32 or SpecialType.System_Int64)) return false;
-        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
-        var methods = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
-            .GetMembers("WriteIntegerEntry").OfType<IMethodSymbol>().Where(method => !method.IsStatic && method.ReturnsVoid &&
-                method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
-                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, key) && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, value) &&
-                (method.Arity == 0 || method.Arity == 1 &&
-                    method.TypeParameters[0].HasValueTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 &&
-                    SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options))).ToArray();
-        return HasJsonEnumerationWriter(compilation, key) && methods != null && methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1);
-    }
-
-    /// <summary>Checks the complete scalar-entry reader against actual metadata.</summary>
-    /// <param name="compilation">The consumer runtime metadata.</param>
-    /// <param name="key">The canonical key type.</param>
-    /// <param name="value">The canonical value type.</param>
-    /// <returns>Whether all required default and compiled-profile members exist.</returns>
-    internal static bool HasJsonCompleteEntryReader(Compilation compilation, ITypeSymbol key, ITypeSymbol value)
-    {
-        if (!(key.SpecialType == SpecialType.System_String && value.SpecialType is SpecialType.System_String or SpecialType.System_Int32 or SpecialType.System_Int64 ||
-              key.SpecialType == SpecialType.System_Int32 && value.SpecialType == SpecialType.System_String)) return false;
-        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader");
-        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
-        if (reader == null || options == null) return false;
-        bool Profile(IMethodSymbol method) => method.Arity == 0 || method.Arity == 1 && method.TypeParameters[0].HasValueTypeConstraint &&
-            method.TypeParameters[0].ConstraintTypes.Length == 1 && SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options);
-        var methods = reader.GetMembers("TryReadCompleteEntry").OfType<IMethodSymbol>().Where(method => !method.IsStatic &&
-            method.DeclaredAccessibility == Accessibility.Public && Profile(method) && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
-            method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.Ref) &&
-            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, key) && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, value)).ToArray();
-        return methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1);
-    }
+    /// <summary>Recognizes individual string elements written with their JSON separator.</summary>
+    /// <param name="type">The generated element type.</param>
+    /// <returns>Whether the element uses the string codec.</returns>
+    internal static bool HasJsonElementWriter(string type) => type is "string" or "string?" or "global::System.String" or "global::System.String?";
 
     /// <summary>Recognizes concurrent collections whose public emptiness query avoids a full count.</summary>
     /// <param name="typeName">The canonical constructed collection name.</param>
@@ -242,13 +165,6 @@ internal static class EmitterTypeTraits
         typeName.StartsWith("global::System.Collections.Concurrent.ConcurrentQueue<", global::System.StringComparison.Ordinal) ||
         typeName.StartsWith("global::System.Collections.Concurrent.ConcurrentStack<", global::System.StringComparison.Ordinal) ||
         typeName.StartsWith("global::System.Collections.Concurrent.ConcurrentDictionary<", global::System.StringComparison.Ordinal);
-
-    /// <summary>Recognizes dictionary entries that <c>WriteEntryKey</c> and <c>WriteEntryValue</c> write as one fused pair array.</summary>
-    /// <param name="keyType">The generated key type name.</param>
-    /// <param name="valueType">The generated value type name.</param>
-    /// <returns>Whether the key is a string or int and the value a string, int or long.</returns>
-    internal static bool HasJsonEntryWriter(string keyType, string valueType)
-        => JsonFusedKind(keyType) is "string" or "int" && JsonFusedKind(valueType) != null;
 
     /// <summary>Identifies declaration-owned scalar framing that a raw unmanaged instance call would bypass.</summary>
     /// <param name="type">The actual scalar argument type.</param>
@@ -628,19 +544,16 @@ internal static class EmitterTypeTraits
 
     /// <summary>Checks both profile overloads for writing a prefix of a string or pair span.</summary>
     /// <param name="compilation">The consumer's runtime and framework metadata.</param>
-    /// <param name="pairs">Whether the span contains captured key/value pairs.</param>
     /// <returns>Whether the generated writer can pass the selected span directly.</returns>
-    internal static bool HasStringPrefixWriter(Compilation compilation, bool pairs)
+    internal static bool HasStringPrefixWriter(Compilation compilation)
     {
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
         var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
         var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
         if (writer == null || options == null || span == null) return false;
         var text = compilation.GetSpecialType(SpecialType.System_String);
-        var element = pairs ? compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2")?.Construct(text, text) : text;
-        if (element == null) return false;
-        var input = span.Construct(element);
-        var overloads = writer.GetMembers(pairs ? "WriteStringPairPrefix" : "WriteStringPrefix").OfType<IMethodSymbol>().Where(method =>
+        var input = span.Construct(text);
+        var overloads = writer.GetMembers("WriteStringPrefix").OfType<IMethodSymbol>().Where(method =>
             !method.IsStatic && !method.ReturnsByRef && !method.ReturnsByRefReadonly &&
             method.ReturnType.SpecialType == SpecialType.System_Int32 && method.DeclaredAccessibility == Accessibility.Public &&
             method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
@@ -676,27 +589,6 @@ internal static class EmitterTypeTraits
             m.Parameters[3].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(m.Parameters[3].Type, span)) &&
             BothProfiles("ReadStrings", m => m.ReturnsVoid && m.Parameters.Length == 1 && m.Parameters[0].RefKind == RefKind.None &&
                 SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, span));
-    }
-
-    /// <summary>Checks the writer operations used to reserve and complete runs of UTF-16 records.</summary>
-    /// <param name="compilation">The compilation supplying the referenced writer.</param>
-    /// <returns>Whether the default and compiled profiles both expose the required record operations.</returns>
-    internal static bool HasUtf16RecordWindow(Compilation compilation)
-    {
-        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
-        if (writer == null) return false;
-        var profiles = writer.GetMembers("UsesUtf16LengthRecords").OfType<IMethodSymbol>().Where(method => !method.IsStatic &&
-            method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 && method.ReturnType.SpecialType == SpecialType.System_Boolean);
-        return profiles.Any(method => method.Arity == 0) && profiles.Any(method => method.Arity == 1) &&
-            writer.GetMembers("RecordRoom").OfType<IMethodSymbol>().Any(method => method.DeclaredAccessibility == Accessibility.Public &&
-                !method.IsStatic && method.Arity == 0 && method.Parameters.Length == 0 && method.ReturnType.SpecialType == SpecialType.System_Int32) &&
-            writer.GetMembers("CompleteRun").OfType<IMethodSymbol>().Any(method => method.DeclaredAccessibility == Accessibility.Public &&
-                !method.IsStatic && method.Arity == 0 && method.ReturnsVoid && method.Parameters.Length == 1 &&
-                method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_Int32) &&
-            writer.GetMembers("WriteReservedUtf16Record").OfType<IMethodSymbol>().Any(method => method.DeclaredAccessibility == Accessibility.Public &&
-                method.IsStatic && method.Arity == 0 && method.ReturnType.SpecialType == SpecialType.System_Int32 && method.Parameters.Length == 2 &&
-                method.Parameters[0].RefKind == RefKind.Ref && method.Parameters[0].Type.SpecialType == SpecialType.System_Byte &&
-                method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_String);
     }
 
     /// <summary>Checks the optional version-preserving sorted-list traversal API on the referenced runtime.</summary>
@@ -801,23 +693,15 @@ internal static class EmitterTypeTraits
     internal static bool IsKnownScalar(ITypeSymbol type) =>
         type is not null && CodeEmitterRegistry.KnownValueTypes.Contains(FormatterTypeName.Get(type)) && CanUseUnmanagedSerialization(type);
 
-    /// <summary>Checks the closed raw scalar contract and the exact optional complete-staging runtime entry.</summary>
-    /// <param name="key">The canonical dictionary key type.</param>
-    /// <param name="value">The canonical dictionary value contract.</param>
-    /// <param name="compilation">The consuming compilation and referenced runtime API.</param>
-    /// <returns>Whether generation may attempt one-pass string-key staging without changing element operations.</returns>
-    internal static bool CanReadStableStringKeys(ITypeSymbol key, ITypeSymbol value, Compilation compilation)
-        => key.SpecialType == SpecialType.System_String && !LuminPackExtensionGenerator.IsCustomGeneratorType(key) && IsKnownScalar(value) &&
-            compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal")?
-                .GetMembers("TryReadStableStringKeys").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 2 &&
-                    method.DeclaredAccessibility == Accessibility.Public && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
-                    method.Parameters.Length == 3 && method.Parameters[0].RefKind == RefKind.Ref &&
-                    method.Parameters[0].Type.ToDisplayString() == "LuminPack.Core.LuminPackReader" &&
-                    method.Parameters[1].Type is INamedTypeSymbol { MetadataName: "Dictionary`2", TypeArguments.Length: 2 } dictionary &&
-                    dictionary.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" &&
-                    dictionary.TypeArguments[0].SpecialType == SpecialType.System_String &&
-                    SymbolEqualityComparer.Default.Equals(dictionary.TypeArguments[1], method.TypeParameters[0]) &&
-                    method.Parameters[2].Type.SpecialType == SpecialType.System_Int32) == true;
+    /// <summary>Identifies fixed-width framework keys whose formatter, hash and equality cannot invoke user code.</summary>
+    /// <param name="key">The closed key type.</param>
+    /// <param name="compilation">The actual core library and formatter metadata.</param>
+    /// <returns>Whether existing slots can be compared without changing user callback order.</returns>
+    internal static bool HasCallbackFreeFixedKey(ITypeSymbol key, Compilation compilation) =>
+        key is INamedTypeSymbol { IsValueType: true, IsGenericType: false } &&
+        (key.TypeKind == TypeKind.Enum || IsKnownScalar(key) &&
+            SymbolEqualityComparer.Default.Equals(key.ContainingAssembly, compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly)) &&
+        FormatterIsRawStorage(key);
 
     /// <summary>Checks that the referenced reader provides the compiled string-key comparer guard.</summary>
     /// <param name="compilation">The consumer's runtime references.</param>

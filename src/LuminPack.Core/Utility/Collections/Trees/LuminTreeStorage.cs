@@ -330,8 +330,29 @@ public static partial class LuminTreeStorage
     /// <param name="count">The valid element count.</param>
     /// <returns>The completed set, or null to continue with the ordinary builder.</returns>
     public static ImmutableSortedSet<int>? CreateOrderedSetIfSupported(int[] items, int count) =>
-        CanLinkOrderedSet(items, count) && IsStrictlyAscending(items, count)
-            ? BclTrees.ImmutableSortedSet<int>.Build(items, count) : null;
+        CreateOrderedSetIfSupported<int>(items, count);
+
+    /// <summary>Links a buffered JSON set when the default ordering has no user callbacks.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="items">The staged elements.</param>
+    /// <param name="count">The valid element count.</param>
+    /// <returns>The completed set, or null to continue with the ordinary builder.</returns>
+    public static ImmutableSortedSet<T>? CreateOrderedSetIfSupported<T>(T[] items, int count)
+    {
+        if (typeof(T) == typeof(string))
+            return (ImmutableSortedSet<T>?)(object?)CreateOrderedSetIfSupported((string[])(object)items, count);
+        if ((uint)count > (uint)items.Length) LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        return DefaultOrdering<T>.CallbackFree && CanLinkOrderedSet(items, count) && IsStrictlyAscending(items, count)
+            ? BclTrees.ImmutableSortedSet<T>.Build(items, count) : null;
+    }
+
+    /// <summary>Allows enums and non-generic comparable CoreLib values whose comparison cannot invoke user code.</summary>
+    /// <typeparam name="T">The closed element type.</typeparam>
+    private static class DefaultOrdering<T>
+    {
+        internal static readonly bool CallbackFree = typeof(T).IsEnum || typeof(T).IsValueType && !typeof(T).IsGenericType &&
+            typeof(T).Assembly == typeof(object).Assembly && typeof(IComparable<T>).IsAssignableFrom(typeof(T));
+    }
 
     /// <summary>Links a completed JSON string set in strictly ascending default comparer order.</summary>
     /// <param name="items">The staged strings.</param>

@@ -21,7 +21,7 @@ What is kept:
 | Binary `string[,]` | The default UTF-16 length reader (`LuminPackUtf16LengthOptions`) fills an existing matrix when both dimensions match and both lower bounds are zero. Other profiles and shapes allocate a matrix. Aliases see updates in row-major order. If a record is truncated or exceeds a string limit, only previously decoded slots have been updated. |
 | `List<T>` | Keeps its capacity and existing elements; grows when needed and clears removed references when it shrinks. |
 | `Dictionary<K,V>` | Keeps its comparer and reuses values by matching incoming keys; removed keys disappear after a successful read. |
-| `SortedList<string,T>` | Reuses a value when the incoming key at the same position is ordinally equal. |
+| `SortedList<K,V>` | Reuses eligible values at the same position when callback-free keys match. String keys use ordinal equality. |
 | Sequence interfaces (`IEnumerable<T>`, `ICollection<T>`, `IList<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`) | Reuse an exact `List<T>` or `T[]` behind them, for string, scalar and ordinary object elements. |
 | `IDictionary<K,V>`, `IReadOnlyDictionary<K,V>` | Reuse an exact `Dictionary<K,V>` behind them. |
 | `Memory<T>`, `ArraySegment<T>` | Reuse array-backed storage of the same length, keeping offset and count. |
@@ -30,6 +30,8 @@ What is kept:
 | Union | Only a case of the exact same type is reused; another tag constructs the new case. |
 | Version-tolerant objects | Reused, with missing members reset to `default`. |
 | Reference-tracked objects | Reused while preserving incoming shared references and cycles. |
+
+On supported modern targets, an exact binary dictionary with its default comparer can refill existing slots when its fixed-width key uses callback-free framework equality and the value formatter supports safe in-place reading. Matching keys retain the destination order. A failed read can expose the completed prefix. User-defined key behavior, custom comparers and unsupported value formatters use staged reconstruction. Empty destinations with callback-free keys can use the checked bulk rebuild for raw pairs.
 
 Derived, covariant and unknown collection implementations are replaced, not inspected. `SortedSet<T>` of reference objects is always rebuilt, because mutating an element that user code re-inserted could corrupt the tree.
 
@@ -55,7 +57,7 @@ The concrete and generic overloads accept a `string`, `ReadOnlySpan<char>`, `Rea
 
 Binary and JSON reads can reuse the current framework instance for a repeated canonical culture name on validated .NET 10 and 11 CoreCLR runtimes. Each thread retains one name of at most 85 characters and at most one read-only culture. Only an ASCII name confirmed in the framework's name cache is admitted. A weak reference to that cache detects `CultureInfo.ClearCachedData()`; a miss uses `CultureInfo.GetCultureInfo`.
 
-Unchanged strings keep their references after JSON decoding, including escaped text, in UTF-8 and UTF-16. Matching object, list, array and string graphs can be read without managed allocations after warm-up; text transcoding, changed strings, different shapes, deep grammar storage and user code may allocate. After parsing JSON into a concrete `ImmutableSortedSet<int>` or `ImmutableSortedSet<string>`, .NET 10 and later can link a balanced frozen tree directly from two or more strictly ascending elements. Strings must be non-null and use an ordinary current culture. Duplicate or unordered elements, derived cultures, other element types and unavailable runtime bindings use the existing builder.
+Unchanged strings keep their references after JSON decoding, including escaped text, in UTF-8 and UTF-16. Matching object, list, array and string graphs can be read without managed allocations after warm-up; text transcoding, changed strings, different shapes, deep grammar storage and user code may allocate. After parsing JSON into a concrete `ImmutableSortedSet<T>`, .NET 10 and later can link a balanced frozen tree from two or more strictly ascending elements. Enums and non-generic comparable CoreLib value types use their default ordering. Strings must be non-null and use an ordinary current culture. User comparisons, duplicates, unordered input and unavailable tree bindings use the builder.
 
 JSON `null` clears the supplied reference. Missing object members reset to `default` on an existing target. Fresh reads retain their constructor selection and existing missing-member behavior. Lists remove trailing elements, and dictionaries remove old keys after reading the incoming entries. Reuse is not transactional: nested objects and storage already visited can remain changed after a failure. Encoding, syntax validation and document-end checks still apply to the whole document.
 

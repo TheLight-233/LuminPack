@@ -11,14 +11,15 @@ public static partial class DictionaryEmitter
     internal static bool IsScalarSlotValue(ITypeSymbol value) =>
         value.SpecialType == SpecialType.System_String ||
         value.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T && value.IsUnmanagedType &&
-        CodeEmitterRegistry.KnownValueTypes.Contains(LuminPack.Code.Core.FormatterTypeName.Get(value)) && EmitterTypeTraits.CanUseUnmanagedSerialization(value);
+        (value.TypeKind == TypeKind.Enum || EmitterTypeTraits.IsKnownScalar(value)) && EmitterTypeTraits.FormatterIsRawStorage(value);
 
     /// <summary>Refills existing string or scalar values in place, continuing through the staged read when a key is missing.</summary>
     /// <param name="sb">The generated operation builder.</param>
-    /// <param name="keyType">The int key type.</param>
+    /// <param name="keyType">The callback-free fixed-width key type.</param>
     /// <param name="valueType">The string or scalar value type.</param>
     /// <param name="valueSymbol">The value contract.</param>
-    private static void AppendDictionaryScalarSlotRead(StringBuilder sb, string keyType, string valueType, ITypeSymbol valueSymbol)
+    /// <param name="rawPair">Whether the complete interleaved payload was already bounds checked.</param>
+    private static void AppendDictionaryScalarSlotRead(StringBuilder sb, string keyType, string valueType, ITypeSymbol valueSymbol, bool rawPair)
     {
         sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
@@ -28,11 +29,17 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         sb.AppendLine("                    var order = destination.GetEnumerator();");
-        sb.AppendLine("                    for (int i = 0; i < count; i++)");
+        if (rawPair)
+        {
+            AppendDenseScalarSlotPrefix(sb, keyType);
+            sb.AppendLine("                    if (matched == count) return;");
+            sb.AppendLine("                    if (matched > 0) seen = RecordScalarPrefix(destination, count, matched);");
+        }
+        sb.AppendLine("                    for (int i = " + (rawPair ? "matched" : "0") + "; i < count; i++)");
         sb.AppendLine("                    {");
         sb.AppendLine($"                        {keyType} key = default;");
         sb.AppendLine("                        reader.ReadValue(ref key);");
-        sb.AppendLine("                        if (seen is null && (!order.MoveNext() || order.Current.Key != key)) seen = RecordScalarPrefix(destination, count, i);");
+        sb.AppendLine("                        if (seen is null && (!order.MoveNext() || !global::System.Collections.Generic.EqualityComparer<" + keyType + ">.Default.Equals(order.Current.Key, key))) seen = RecordScalarPrefix(destination, count, i);");
         sb.AppendLine("                        if (seen is not null) seen[i] = key;");
         sb.AppendLine("                        ref var slot = ref global::System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrNullRef(destination, key);");
         sb.AppendLine("                        if (global::System.Runtime.CompilerServices.Unsafe.IsNullRef(ref slot))");
@@ -71,5 +78,31 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            }");
         AppendStagedDictionaryRead(sb, keyType, valueType, true, valueSymbol, true);
         sb.AppendLine("#endif");
+    }
+
+    /// <summary>Refills contiguous occupied slots until the first key that requires a lookup.</summary>
+    /// <param name="sb">The generated operation builder.</param>
+    /// <param name="keyType">The callback-free raw key type.</param>
+    private static void AppendDenseScalarSlotPrefix(StringBuilder sb, string keyType)
+    {
+        sb.AppendLine("                    int matched = 0;");
+        sb.AppendLine("                    if (seen is null && global::System.IntPtr.Size == 8)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        var view = LuminPackMarshal.GetDictionaryView(destination);");
+        sb.AppendLine("                        if (view._freeCount == 0 && view._count == count)");
+        sb.AppendLine("                        {");
+        sb.AppendLine("                            ref var first = ref LuminPackMarshal.GetNotNullArrayReference(view._entries!);");
+        sb.AppendLine("                            for (; matched < count; matched++)");
+        sb.AppendLine("                            {");
+        sb.AppendLine("                                ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, matched);");
+        sb.AppendLine("                                ref byte cursor = ref reader.GetCurrentSpanReference();");
+        sb.AppendLine($"                                int keyBytes = global::LuminPack.Core.LuminPackReader.Read(ref cursor, out {keyType} key);");
+        sb.AppendLine($"                                if (!global::System.Collections.Generic.EqualityComparer<{keyType}>.Default.Equals(key, entry.Key)) break;");
+        sb.AppendLine("                                reader.Advance(keyBytes);");
+        sb.AppendLine("                                int valueBytes = global::LuminPack.Core.LuminPackReader.Read(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref cursor, keyBytes), out entry.Value);");
+        sb.AppendLine("                                reader.Advance(valueBytes);");
+        sb.AppendLine("                            }");
+        sb.AppendLine("                        }");
+        sb.AppendLine("                    }");
     }
 }

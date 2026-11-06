@@ -89,14 +89,9 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
             statements.Add(SyntaxFactory.ParseStatement(local + ".CopyTo(ref " + source + ");"));
             body = SyntaxFactory.Block(statements);
         }
-        // Keep the bounded pair loop and its growth fallback out of the pooled byte-array entry.
-        bool sortedListRun = method.Identifier.ValueText == "RootWrite" &&
-            payload.StartsWith("global::System.Collections.Generic.SortedList<", System.StringComparison.Ordinal) &&
-            Own(body).OfType<InvocationExpressionSyntax>().Any(call =>
-                call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CompleteRun" });
         // ReadStrings already owns the element loop. Keep its localized reader out of the
         // public span entry so that entry can optimize its own state acquisition and release.
-        bool inlineRoot = !bulkStringRead && !sortedListRun && InlinedSize(body) <= InlineStatementLimit && !Enumerates(body);
+        bool inlineRoot = !bulkStringRead && InlinedSize(body) <= InlineStatementLimit && !Enumerates(body);
         var attributes = method.AttributeLists.Select(list => list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
             !attribute.Name.ToString().EndsWith("MethodImpl", System.StringComparison.Ordinal))))).Where(list => list.Attributes.Count != 0);
         return method.WithBody(body).WithAttributeLists(SyntaxFactory.List(attributes))

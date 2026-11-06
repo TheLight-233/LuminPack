@@ -105,7 +105,7 @@ public static class FrozenSetEmitter
         sb.AppendLine("                bool isFirst = true;");
         sb.AppendLine("                foreach (var item in value.Items.AsSpan())");
         sb.AppendLine("                {");
-        JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                    ");
+        JsonCollectionElementEmitter.Append(sb, "item", "                    ");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");

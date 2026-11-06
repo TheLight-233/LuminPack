@@ -63,18 +63,14 @@ public sealed class LuminLocalFieldData
     internal bool CanBuildSortedSet;
     /// <summary>Whether the referenced runtime can reconstruct an eligible mutable sorted set.</summary>
     internal bool CanRebuildSortedSet;
-    /// <summary>Whether both writer overloads for captured string pairs are available.</summary>
-    internal bool CanWriteTreeStringPairs;
     /// <summary>Whether contiguous string slots can use the writer's checked prefix operation.</summary>
     internal bool CanWriteStringPrefix;
+    /// <summary>Whether an ordered list can compare prior keys without invoking user code.</summary>
+    internal bool CanMatchSortedListKey;
     /// <summary>Whether a string-keyed sorted list can use the referenced runtime's ordered append helper.</summary>
     internal bool CanAppendSortedListOrdered;
     /// <summary>Whether the referenced runtime exposes a checked allocation-free sorted-list traversal.</summary>
     internal bool CanTraverseSortedList;
-    /// <summary>Whether a string-keyed sorted list can write complete raw-value pairs into a proven window.</summary>
-    internal bool CanWriteSortedListKeyRun;
-    /// <summary>Whether the referenced runtime provides isolated integer enumeration writes.</summary>
-    internal bool CanWriteJsonEnumerationElement;
     /// <summary>Whether the referenced FrozenSet exposes its public struct enumerator.</summary>
     internal bool CanEnumerateFrozenSet;
     /// <summary>Whether exact sequence storage can be selected without bypassing custom enumeration.</summary>
@@ -88,10 +84,6 @@ public sealed class LuminLocalFieldData
     /// <summary>Whether grouping elements can use the existing version-preserving sequence loops.</summary>
     internal bool CanGetGroupingStorage;
     internal bool CanWriteTypeName;
-    /// <summary>Whether the referenced runtime provides complete integer dictionary writes.</summary>
-    internal bool CanWriteJsonIntegerEntry;
-    /// <summary>Whether the runtime exposes complete string-containing entry reads.</summary>
-    internal bool CanReadJsonCompleteEntry;
     /// <summary>Whether the referenced runtime exposes complete time-zone JSON reading.</summary>
     internal bool CanReadJsonTimeZoneInfo;
     /// <summary>Stores the canonical local Union cursor slot selected for a dictionary operation, if any.</summary>
@@ -102,17 +94,17 @@ public sealed class LuminLocalFieldData
     internal int UnionCursorRecording;
     /// <summary>Stores the fixed Union cursor cases and their narrow tags in tag order, tested before the cursor slot.</summary>
     internal System.Collections.Generic.List<(int Id, string Type)> UnionCursorCases;
-    /// <summary>Stores the canonical proof that an int-keyed dictionary can refill existing leaf values in place.</summary>
+    /// <summary>Whether decoding and comparing the fixed-width key can avoid all user callbacks.</summary>
+    internal bool HasCallbackFreeDictionaryKey;
+    /// <summary>Whether existing leaf values support in-place dictionary reads.</summary>
     internal bool CanReuseDictionarySlots;
-    /// <summary>Whether an int-keyed dictionary with string or known scalar values may refill existing slots in place.</summary>
+    /// <summary>Whether a dictionary with callback-free keys and scalar values may refill existing slots.</summary>
     internal bool CanReuseDictionaryScalarSlots;
-    /// <summary>Whether a closed string-key dictionary can use the optional complete-staging runtime kernel.</summary>
-    internal bool CanReadStableStringKeys;
     /// <summary>Whether staged string-key reads can use the framework comparer's matching enumerated value.</summary>
     internal bool CanReuseEnumeratedStringKey;
     /// <summary>Whether the runtime supports default-profile reuse of a rank-two framework string array.</summary>
     internal bool CanReuseStringMatrix;
-    /// <summary>Stores the certified narrow tags and case types whose existing exact instances an int-keyed dictionary can refill in place.</summary>
+    /// <summary>Stores the certified narrow tags and case types whose existing exact instances a dictionary with callback-free keys can refill in place.</summary>
     internal System.Collections.Generic.List<(int Id, string Type)> UnionSlotCases;
     /// <summary>Stores the name.</summary>
     public string Name;

@@ -117,7 +117,7 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
-        DictionaryEmitter.AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ", fused: false, isolateInteger: true);
+        DictionaryEmitter.AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                    ");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -153,7 +153,7 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
         // The shared entry grammar reads the key/value pair array exactly as the Dictionary writer's pair array is written.
-        DictionaryEmitter.AppendJsonEntryRead(sb, keyType, valueType, completeEntry: fieldData.CanReadJsonCompleteEntry);
+        DictionaryEmitter.AppendJsonEntryRead(sb);
         sb.AppendLine("                dict.Add(key!, itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");

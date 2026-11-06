@@ -23,38 +23,17 @@ public static class SortedListEmitter
         // The list's own sorted key and value arrays are written in place; unrecognized storage copies through the public lists.
         sb.AppendLine("            if (count != 0 && global::LuminPack.Code.LuminPackCollectionAccess.TryGetSortedListStorage(value, out var storedKeys, out var storedValues))");
         sb.AppendLine("            {");
-        var arguments = (fieldData.TypeSymbol as Microsoft.CodeAnalysis.INamedTypeSymbol)?.TypeArguments;
-        bool strings = arguments is { Length: 2 } && arguments.Value[0].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String &&
-            arguments.Value[1].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
-        if (strings)
-        {
-            // String pairs keep the per-pair check and record order inside the writer's batched kernel.
-            sb.AppendLine("                writer.WriteStringPairs(new global::System.ReadOnlySpan<string?>(storedKeys, 0, count), new global::System.ReadOnlySpan<string?>(storedValues, 0, count));");
-        }
-        else
-        {
-            sb.AppendLine("                var keySpan = new global::System.ReadOnlySpan<" + keyType + ">(storedKeys, 0, count);");
-            sb.AppendLine("                var valueSpan = new global::System.ReadOnlySpan<" + valueType + ">(storedValues, 0, count);");
-            sb.AppendLine("                for (int i = 0; i < keySpan.Length; i++)");
-            sb.AppendLine("                {");
-            if (fieldData.CanWriteSortedListKeyRun)
-            {
-                sb.AppendLine("                    if (writer.UsesUtf16LengthRecords())");
-                sb.AppendLine("                    {");
-                sb.AppendLine("                        int written = WriteRun(ref writer.GetCurrentSpanReference(), writer.RecordRoom(), keySpan, valueSpan, ref i);");
-                sb.AppendLine("                        writer.CompleteRun(written);");
-                sb.AppendLine("                        if (i == keySpan.Length) break;");
-                sb.AppendLine("                    }");
-            }
-            sb.AppendLine("                    writer.CheckBuffer();");
-            sb.AppendLine("                    writer.WriteValue(keySpan[i]);");
-            sb.AppendLine("                    writer.WriteValue(valueSpan[i]);");
-            sb.AppendLine("                }");
-        }
+        sb.AppendLine("                var keySpan = new global::System.ReadOnlySpan<" + keyType + ">(storedKeys, 0, count);");
+        sb.AppendLine("                var valueSpan = new global::System.ReadOnlySpan<" + valueType + ">(storedValues, 0, count);");
+        sb.AppendLine("                for (int i = 0; i < keySpan.Length; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    writer.CheckBuffer();");
+        sb.AppendLine("                    writer.WriteValue(keySpan[i]);");
+        sb.AppendLine("                    writer.WriteValue(valueSpan[i]);");
+        sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            else if (count != 0) WriteFallback(ref writer, value, count);");
         sb.AppendLine("            writer.CheckBuffer();");
-        if (fieldData.CanWriteSortedListKeyRun) AppendKeyValueRun(sb, valueType);
         sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         sb.AppendLine("            static void WriteFallback(ref global::LuminPack.Core.LuminPackWriter writer, " + fieldData.TypeName + " value, int pairCount)");
         sb.AppendLine("            {");
@@ -65,49 +44,18 @@ public static class SortedListEmitter
         sb.AppendLine("                    values = global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Rent(pairCount);");
         sb.AppendLine("                    value.Keys.CopyTo(keys, 0);");
         sb.AppendLine("                    value.Values.CopyTo(values, 0);");
-        if (strings)
-        {
-            sb.AppendLine("                    writer.WriteStringPairs(new global::System.ReadOnlySpan<string?>(keys, 0, pairCount), new global::System.ReadOnlySpan<string?>(values, 0, pairCount));");
-        }
-        else
-        {
-            sb.AppendLine("                    for (int i = 0; i < pairCount; i++)");
-            sb.AppendLine("                    {");
-            sb.AppendLine("                        writer.CheckBuffer();");
-            sb.AppendLine("                        writer.WriteValue(keys[i]);");
-            sb.AppendLine("                        writer.WriteValue(values[i]);");
-            sb.AppendLine("                    }");
-        }
+        sb.AppendLine("                    for (int i = 0; i < pairCount; i++)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        writer.CheckBuffer();");
+        sb.AppendLine("                        writer.WriteValue(keys[i]);");
+        sb.AppendLine("                        writer.WriteValue(values[i]);");
+        sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
         sb.AppendLine("                    global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Return(keys, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + keyType + ">());");
         sb.AppendLine("                    if (values != null) global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Return(values, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + valueType + ">());");
         sb.AppendLine("                }");
-        sb.AppendLine("            }");
-    }
-
-    /// <summary>Writes string keys and raw values while each complete pair fits the original buffer threshold.</summary>
-    /// <param name="sb">The generated writer body.</param>
-    /// <param name="valueType">The value's proven raw storage type.</param>
-    private static void AppendKeyValueRun(StringBuilder sb, string valueType)
-    {
-        const string writer = "global::LuminPack.Core.LuminPackWriter";
-        const string intrinsics = "global::System.Runtime.CompilerServices.Unsafe";
-        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
-        sb.AppendLine("            static int WriteRun(ref byte start, int room, global::System.ReadOnlySpan<string> keys, global::System.ReadOnlySpan<" + valueType + "> values, ref int index)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                int written = 0;");
-        sb.AppendLine("                int i = index;");
-        sb.AppendLine("                for (; i < keys.Length; i++)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    string key = keys[i];");
-        sb.AppendLine("                    if (sizeof(int) + (long)(key?.Length ?? 0) * sizeof(char) + " + intrinsics + ".SizeOf<" + valueType + ">() > room - written) break;");
-        sb.AppendLine("                    written += " + writer + ".WriteReservedUtf16Record(ref " + intrinsics + ".Add(ref start, written), key);");
-        sb.AppendLine("                    written += " + writer + ".Write(ref " + intrinsics + ".Add(ref start, written), in values[i]);");
-        sb.AppendLine("                }");
-        sb.AppendLine("                index = i;");
-        sb.AppendLine("                return written;");
         sb.AppendLine("            }");
     }
 
@@ -124,9 +72,7 @@ public static class SortedListEmitter
         var key = (fieldData.TypeSymbol as Microsoft.CodeAnalysis.INamedTypeSymbol)?.TypeArguments[0];
         bool stringKey = key?.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
         // Framework scalar keys have no comparison callbacks and compare equal exactly when their prior value may be reused.
-        bool scalarKey = key is not null && (key.TypeKind == Microsoft.CodeAnalysis.TypeKind.Enum ||
-            key.SpecialType is >= Microsoft.CodeAnalysis.SpecialType.System_Boolean and <= Microsoft.CodeAnalysis.SpecialType.System_Double);
-        if ((stringKey || scalarKey) &&
+        if (fieldData.CanMatchSortedListKey &&
             (element?.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String || EmitterTypeTraits.UsesOrdinaryObjectHeader(element)))
             AppendMatchingPairRead(sb, keyType, stringKey, valueType, element);
         sb.AppendLine("            if (value is null && length > 1)");

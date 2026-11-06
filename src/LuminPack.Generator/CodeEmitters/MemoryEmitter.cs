@@ -138,11 +138,12 @@ public static class MemoryEmitter
         sb.AppendLine("            bool isFirst = true;");
         if (baseType == "global::System.Buffers.ReadOnlySequence")
         {
-            sb.AppendLine("            foreach (var memory in value)");
+            sb.AppendLine("            var position = value.Start;");
+            sb.AppendLine("            while (value.TryGet(ref position, out var memory))");
             sb.AppendLine("            {");
             sb.AppendLine("                foreach (var item in memory.Span)");
             sb.AppendLine("                {");
-            AppendJsonItemWrite(fieldData, sb, "                    ");
+            JsonCollectionElementEmitter.Append(sb, "item", "                    ");
             sb.AppendLine("                }");
             sb.AppendLine("            }");
         }
@@ -150,22 +151,22 @@ public static class MemoryEmitter
         {
             sb.AppendLine("            foreach (ref var item in value.Span)");
             sb.AppendLine("            {");
-            // Mutable memory captures the ref element after separator growth callbacks.
-            AppendJsonItemWrite(fieldData, sb, "                ", isolateInteger: false);
+            // Capture each ref element after separator growth callbacks.
+            JsonCollectionElementEmitter.Append(sb, "item", "                ");
             sb.AppendLine("            }");
         }
         else if (baseType == "global::System.ReadOnlyMemory")
         {
             sb.AppendLine("            foreach (var item in value.Span)");
             sb.AppendLine("            {");
-            AppendJsonItemWrite(fieldData, sb, "                ");
+            JsonCollectionElementEmitter.Append(sb, "item", "                ");
             sb.AppendLine("            }");
         }
         else
         {
             sb.AppendLine("            foreach (var item in value)");
             sb.AppendLine("            {");
-            AppendJsonItemWrite(fieldData, sb, "                ");
+            JsonCollectionElementEmitter.Append(sb, "item", "                ");
             sb.AppendLine("            }");
         }
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -218,16 +219,6 @@ public static class MemoryEmitter
         sb.AppendLine("            }");
         sb.AppendLine("            reader.ConsumeArrayEnd();");
         AppendArrayAssignment(sb, baseType, elementType);
-    }
-
-    /// <summary>Appends JSON writing statements for memory values.</summary>
-    /// <param name="fieldData">The element contract and referenced runtime capabilities.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="indent">The indentation level of the generated statements.</param>
-    /// <param name="isolateInteger">Whether the element was captured before separator callbacks.</param>
-    private static void AppendJsonItemWrite(LuminLocalFieldData fieldData, StringBuilder sb, string indent, bool isolateInteger = true)
-    {
-        JsonCollectionElementEmitter.Append(fieldData, sb, "item", indent, isolateInteger);
     }
 
     /// <summary>Appends binary size evaluation statements for memory values.</summary>

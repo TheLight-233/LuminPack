@@ -21,7 +21,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             GeneratorDriver driver = CreateEntryDriver(parse).RunGeneratorsAndUpdateCompilation(input, out var current, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
-            Require(EntryTrees(driver).Any(text => text.Contains(".WriteIntegerEntry", StringComparison.Ordinal)), "The complete-entry operation was not selected.");
+            Require(!EntryTrees(driver).Any(text => text.Contains(".WriteIntegerEntry", StringComparison.Ordinal) || text.Contains(".WriteEntryKey", StringComparison.Ordinal)), "Dictionary entry framing must be independent of its key/value combination.");
             string actual = ExecuteEntries(current);
             var older = input.ReplaceReference(runtime, missing);
             driver = driver.RunGeneratorsAndUpdateCompilation(older, out var previous, out diagnostics);

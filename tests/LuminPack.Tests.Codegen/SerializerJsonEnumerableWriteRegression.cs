@@ -20,7 +20,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
             GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
             driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
-            CheckIntegerSelection(output);
+            CheckElementFormatters(output);
             using var image = new MemoryStream(); var result = output.Emit(image);
             Require(result.Success, string.Join(Environment.NewLine, result.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
             Assembly.Load(image.ToArray()).GetType("SequenceEntry")!.GetMethod("Check")!.Invoke(null, null);
@@ -28,9 +28,9 @@ internal static partial class SerializerJsonEnumerableWriteRegression
         Console.WriteLine("Passed shared JSON sequence bytes, iterator failure state and concurrent controls in four profiles and four generation modes.");
     }
 
-    /// <summary>Checks canonical integer selection without bypassing other element contracts.</summary>
+    /// <summary>Checks that every queue uses the ordinary element formatter.</summary>
     /// <param name="output">The generated consumer compilation.</param>
-    private static void CheckIntegerSelection(Compilation output)
+    private static void CheckElementFormatters(Compilation output)
     {
         int selected = 0, excluded = 0;
         foreach (var tree in output.SyntaxTrees.Skip(1))
@@ -42,7 +42,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                 type.OriginalDefinition.ToDisplayString() != "System.Collections.Generic.Queue<T>") continue;
             bool integer = type.TypeArguments[0].SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64;
             bool usesEntry = method.ToString().Contains(".WriteEnumerationElement", StringComparison.Ordinal);
-            Require(integer == usesEntry, "Enumeration policy bypassed an element contract: " + type);
+            Require(!usesEntry, "Enumeration bypassed the ordinary element formatter: " + type);
             if (integer) selected++; else excluded++;
         }
         Require(selected >= 2 && excluded >= 4, "Enumeration policy selection was not exercised.");

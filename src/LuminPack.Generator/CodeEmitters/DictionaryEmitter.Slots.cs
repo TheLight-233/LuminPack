@@ -5,9 +5,9 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 
 public static partial class DictionaryEmitter
 {
-    /// <summary>Emits the approved modern int-keyed refill with staged construction on a missing or null slot.</summary>
+    /// <summary>Emits the approved modern fixed-key refill with staged construction on a missing or null slot.</summary>
     /// <param name="sb">The builder receiving the generated local operation.</param>
-    /// <param name="keyType">The canonical int key spelling.</param>
+    /// <param name="keyType">The callback-free fixed-width key type.</param>
     /// <param name="valueType">The proven leaf reference type spelling.</param>
     /// <param name="valueSymbol">The canonical value framing contract.</param>
     private static void AppendDictionarySlotRead(StringBuilder sb, string keyType, string valueType, ITypeSymbol valueSymbol)
@@ -36,7 +36,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                    }");
         sb.AppendLine("                    bool same = destination.Count == count;");
         sb.AppendLine("                    int position = 0;");
-        sb.AppendLine("                    if (same) foreach (var pair in destination) if (pair.Key != seen[position++]) { same = false; break; }");
+        sb.AppendLine("                    if (same) foreach (var pair in destination) if (!global::System.Collections.Generic.EqualityComparer<" + keyType + ">.Default.Equals(pair.Key, seen[position++])) { same = false; break; }");
         sb.AppendLine("                    if (!same)");
         sb.AppendLine("                    {");
         sb.AppendLine($"                        var keys = new global::System.Collections.Generic.HashSet<{keyType}>();");

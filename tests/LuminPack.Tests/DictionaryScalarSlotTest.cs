@@ -4,7 +4,7 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
-/// <summary>Checks in-place reuse of existing string and scalar values in int-keyed dictionaries against fresh reads.</summary>
+/// <summary>Checks in-place reuse of existing string and scalar values in dictionaries with fixed-width keys against fresh reads.</summary>
 public class DictionaryScalarSlotTest
 {
     /// <summary>Checks matching keys refill the existing dictionary, keep its order and retain equal string instances.</summary>
@@ -27,6 +27,32 @@ public class DictionaryScalarSlotTest
         LuminPackSerializer.Deserialize(numbers, ref existing);
         Assert.Equal(-1, existing[5]);
         Assert.Equal(long.MaxValue, existing[6]);
+    }
+
+    /// <summary>Retains occupied slot order for two raw scalars and uses framework equality for NaN keys.</summary>
+    [Fact]
+    public void ReorderedRawKeysKeepTheDestinationOrder()
+    {
+        var incoming = new Dictionary<double, long> { [6] = 40, [3] = 41, [double.NaN] = 42 };
+        var existing = new Dictionary<double, long> { [6] = 0, [double.NaN] = 0, [3] = 0 };
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(incoming), ref existing);
+        Assert.Equal(new[] { 6, double.NaN, 3 }, existing.Keys);
+        Assert.Equal(new long[] { 40, 42, 41 }, existing.Values);
+    }
+
+    /// <summary>A dense raw prefix publishes each valid value and still validates the next Boolean in untrusted mode.</summary>
+    [Fact]
+    public void UntrustedDenseRawValuesValidateBeforePublication()
+    {
+        var model = new CheckedSlotHolder { Flags = new() { [17] = true, [24] = true } };
+        byte[] input = LuminPackSerializer.Serialize(model);
+        input[^1] = 2;
+        var target = new CheckedSlotHolder { Flags = new() { [17] = false, [24] = false } };
+        var flags = target.Flags;
+        Assert.Throws<InvalidDataException>(() => LuminPackSerializer.Deserialize(input, ref target));
+        Assert.Same(flags, target.Flags);
+        Assert.True(flags[17]);
+        Assert.False(flags[24]);
     }
 
     /// <summary>Checks reordered, missing, stale and additional keys produce the content of a fresh read.</summary>
@@ -107,4 +133,12 @@ public partial class ScalarSlotHolder
     public Dictionary<int, string>? Names;
     /// <summary>The counts.</summary>
     public Dictionary<int, int>? Counts;
+}
+
+/// <summary>Exercises checked Boolean values in a dictionary with raw keys.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public partial class CheckedSlotHolder
+{
+    /// <summary>The flags to refill.</summary>
+    public Dictionary<long, bool> Flags = new();
 }

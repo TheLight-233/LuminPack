@@ -40,6 +40,7 @@ public class SequenceRawWriteTest
         var head = new Segment<string?>(storage.AsMemory(0, 4));
         var tail = head.Append(ReadOnlyMemory<string?>.Empty).Append(storage.AsMemory(4));
         var sequence = new ReadOnlySequence<string?>(head, 1, tail, 3);
+        Assert.Equal(LuminPackSerializer.SerializeJson<TOptions>(storage[1..^1]), LuminPackSerializer.SerializeJson<TOptions>(sequence));
         var matrix = new string?[,] { { storage[1], storage[2], storage[3] }, { storage[4], storage[5], storage[6] } };
         var records = storage[1..^1].SelectMany(text => LuminPackSerializer.Serialize<TOptions>(text)).ToArray();
         byte[] counted = BitConverter.GetBytes(6).Concat(records).ToArray();

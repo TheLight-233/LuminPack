@@ -19,6 +19,22 @@ public sealed class SortedReuseConstructionTest
     [Fact]
     public void OrderedJsonSetConstructionDeclinesIneligibleInput()
     {
+        long[] numbers = [-5, 0, 9];
+        Guid[] ids = [Guid.Empty, new Guid("00000001-0000-0000-0000-000000000000")];
+        var longSet = LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(numbers, numbers.Length);
+        var guidSet = LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(ids, ids.Length);
+        if (RuntimeFeature.IsDynamicCodeCompiled && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.X64 && Environment.Version.Major is 10 or 11)
+        {
+            Assert.NotNull(longSet);
+            Assert.NotNull(guidSet);
+        }
+        if (longSet is not null) Assert.Equal(numbers, longSet.ToArray());
+        if (guidSet is not null) Assert.Equal(ids, guidSet.ToArray());
+        SortedReuseComparedValue.Comparisons.Clear();
+        SortedReuseComparedValue[] observedValues = [new() { Number = 1 }, new() { Number = 2 }];
+        Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(observedValues, observedValues.Length));
+        Assert.Empty(SortedReuseComparedValue.Comparisons);
         string[] words = ["a", "b"];
         Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(words, 1));
         Assert.Null(LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported(new[] { "a", "a" }, 2));

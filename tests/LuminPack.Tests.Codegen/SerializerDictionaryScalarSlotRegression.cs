@@ -13,10 +13,10 @@ internal static partial class SerializerDictionaryScalarSlotRegression
         VerifyStableStringKeys(references);
         foreach (string mode in new[] { "Full", "Minimal" })
             Verify(references, mode, "int", "string", "\"a\"", "\"b\"", "\"\"", slots: true);
-        Verify(references, "Minimal", "int", "int", "11", "22", "0", slots: true, rebuilt: true);
-        Verify(references, "Minimal", "int", "System.Guid", "new System.Guid(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)", "System.Guid.NewGuid()", "default", slots: true, rebuilt: true);
+        Verify(references, "Minimal", "int", "int", "11", "22", "0", slots: true);
+        Verify(references, "Minimal", "int", "System.Guid", "new System.Guid(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)", "System.Guid.NewGuid()", "default", slots: true);
         Verify(references, "Minimal", "int", "System.Version", "new System.Version(1, 1)", "new System.Version(2, 2)", "new System.Version()", slots: false);
-        Verify(references, "Minimal", "long", "string", "\"a\"", "\"b\"", "\"\"", slots: false);
+        Verify(references, "Minimal", "long", "string", "\"a\"", "\"b\"", "\"\"", slots: true);
         Verify(references, "Minimal", "int", "string", "\"a\"", "\"b\"", "\"\"", slots: false, modern: false);
         Verify(references, "Minimal", "int", "string", "\"a\"", "\"b\"", "\"\"", slots: false, unity: true);
         Console.WriteLine("Passed string/scalar dictionary-slot eligibility, class-value/key exclusions, modern/Unity gates and retained ordering.");
@@ -33,9 +33,8 @@ internal static partial class SerializerDictionaryScalarSlotRegression
     /// <param name="slots">Whether the scalar slot path must be generated.</param>
     /// <param name="modern">Whether the consuming target declares modern .NET support.</param>
     /// <param name="unity">Whether Unity must keep the original staged mechanism.</param>
-    /// <param name="rebuilt">Whether raw pairs take the bucket rebuild, which refills in incoming order before any slot path.</param>
     private static void Verify(MetadataReference[] references, string mode, string key, string value, string first, string second, string existing,
-        bool slots, bool modern = true, bool unity = false, bool rebuilt = false)
+        bool slots, bool modern = true, bool unity = false)
     {
         string source = $$"""
             using System.Collections.Generic;
@@ -70,7 +69,7 @@ internal static partial class SerializerDictionaryScalarSlotRegression
         string generated = string.Join("\n", driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Select(result => result.SourceText.ToString()));
         // Source expansion renames local functions, so the refill is located by its stable statements.
         bool hasSlots = generated.Contains("order.MoveNext()", StringComparison.Ordinal) &&
-            generated.Contains("CollectionsMarshal.GetValueRefOrNullRef(destination, key)", StringComparison.Ordinal);
+            generated.Contains("CollectionsMarshal.GetValueRefOrNullRef(destination,", StringComparison.Ordinal);
         Require(hasSlots == slots, "Incorrect scalar dictionary-slot eligibility: " + key + " -> " + value + (unity ? " (Unity)" : modern ? "" : " (legacy)"));
         if (slots)
         {
@@ -81,8 +80,8 @@ internal static partial class SerializerDictionaryScalarSlotRegression
         var emitted = output.Emit(image);
         Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
         int order = (int)Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Run")!.Invoke(null, null)!;
-        // The in-place refill keeps the existing enumeration order; the staged path and the raw-pair bucket rebuild use incoming order.
-        Require(order == (slots && !rebuilt ? 1 : 2), "Scalar dictionary refill ordering does not match its selected mechanism.");
+        // Occupied eligible slots keep their enumeration order even for two raw scalars.
+        Require(order == (slots ? 1 : 2), "Scalar dictionary refill ordering does not match its selected mechanism.");
     }
 
     /// <summary>Reports an incorrect generated dictionary contract.</summary>

@@ -186,14 +186,10 @@ public static partial class LuminPackExtensionGenerator
             field.CanBuildSortedSet = EmitterTypeTraits.CanBuildSortedSet(sortedSet.TypeArguments[0], compilation);
             field.CanRebuildSortedSet = EmitterTypeTraits.CanRebuildSortedSet(sortedSet.TypeArguments[0], compilation);
         }
-        if (type is INamedTypeSymbol { Name: "SortedDictionary" or "ImmutableSortedDictionary", TypeArguments.Length: 2 } sortedPairs &&
-            sortedPairs.ContainingNamespace.ToDisplayString() is "System.Collections.Generic" or "System.Collections.Immutable" &&
-            sortedPairs.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String))
-            field.CanWriteTreeStringPairs = EmitterTypeTraits.HasStringPrefixWriter(compilation, pairs: true);
         if (type is IArrayTypeSymbol { IsSZArray: true, ElementType.SpecialType: SpecialType.System_String } ||
             type is INamedTypeSymbol { Name: "Queue" or "Stack", TypeArguments.Length: 1 } linear &&
             linear.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" && linear.TypeArguments[0].SpecialType == SpecialType.System_String)
-            field.CanWriteStringPrefix = EmitterTypeTraits.HasStringPrefixWriter(compilation, pairs: false);
+            field.CanWriteStringPrefix = EmitterTypeTraits.HasStringPrefixWriter(compilation);
         if (type is IArrayTypeSymbol { Rank: 2, ElementType.SpecialType: SpecialType.System_String })
             field.CanReuseStringMatrix = EmitterTypeTraits.HasStringMatrixReader(compilation);
         if (type is INamedTypeSymbol { MetadataName: "ImmutableHashSet`1" or "IImmutableSet`1", TypeArguments.Length: 1 } immutableHashSet &&
@@ -204,21 +200,18 @@ public static partial class LuminPackExtensionGenerator
                 .GetMembers("GetEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
                     method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 && method.ReturnType.IsValueType) == true;
         field.CanHintJsonCapacity = JsonCapacityEmitter.Available(compilation);
-        if (type is INamedTypeSymbol { TypeArguments.Length: > 0 } sequence)
+        if (type is INamedTypeSymbol { TypeArguments.Length: > 0 })
         {
-            field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, sequence.TypeArguments[0]);
             field.CanGetSequenceStorage = EmitterTypeTraits.HasSequenceStorage(compilation);
             field.CanAppendObservable = EmitterTypeTraits.HasObservableAppend(compilation);
         }
         if (type is INamedTypeSymbol { TypeArguments.Length: 2 } entry)
         {
-            field.CanReuseEnumeratedStringKey = entry.MetadataName is "Dictionary`2" or "IDictionary`2" or "IReadOnlyDictionary`2" &&
-                entry.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" &&
-                entry.TypeArguments[0].SpecialType == SpecialType.System_String &&
-                (entry.TypeArguments[1].SpecialType == SpecialType.System_String || EmitterTypeTraits.UsesOrdinaryObjectHeader(entry.TypeArguments[1])) &&
+            bool isDictionary = entry.MetadataName is "Dictionary`2" or "IDictionary`2" or "IReadOnlyDictionary`2" &&
+                entry.ContainingNamespace.ToDisplayString() == "System.Collections.Generic";
+            field.HasCallbackFreeDictionaryKey = isDictionary && EmitterTypeTraits.HasCallbackFreeFixedKey(entry.TypeArguments[0], compilation);
+            field.CanReuseEnumeratedStringKey = isDictionary && entry.TypeArguments[0].SpecialType == SpecialType.System_String &&
                 EmitterTypeTraits.HasEnumeratedStringKeyCheck(compilation);
-            field.CanWriteJsonIntegerEntry = EmitterTypeTraits.HasJsonIntegerEntryWriter(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
-            field.CanReadJsonCompleteEntry = EmitterTypeTraits.HasJsonCompleteEntryReader(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
         }
         if (type is INamedTypeSymbol { MetadataName: "Type" } runtimeType && runtimeType.ContainingNamespace.ToDisplayString() == "System")
             field.CanWriteTypeName = EmitterTypeTraits.HasTypeNameWriters(compilation);
@@ -230,15 +223,14 @@ public static partial class LuminPackExtensionGenerator
         if (type is INamedTypeSymbol { MetadataName: "IGrouping`2", TypeArguments.Length: 2 } group && group.ContainingNamespace.ToDisplayString() == "System.Linq")
         {
             field.CanGetGroupingStorage = EmitterTypeTraits.HasGroupingStorage(compilation);
-            field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, group.TypeArguments[1]);
         }
         if (type is INamedTypeSymbol { MetadataName: "SortedList`2", TypeArguments.Length: 2 } sortedList &&
             sortedList.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {
+            field.CanMatchSortedListKey = sortedList.TypeArguments[0].SpecialType == SpecialType.System_String ||
+                EmitterTypeTraits.HasCallbackFreeFixedKey(sortedList.TypeArguments[0], compilation);
             field.CanAppendSortedListOrdered = EmitterTypeTraits.CanAppendSortedListOrdered(sortedList.TypeArguments[0], compilation);
             field.CanTraverseSortedList = EmitterTypeTraits.HasSortedListTraversal(compilation);
-            field.CanWriteSortedListKeyRun = sortedList.TypeArguments[0].SpecialType == SpecialType.System_String &&
-                EmitterTypeTraits.FormatterIsRawStorage(sortedList.TypeArguments[1]) && EmitterTypeTraits.HasUtf16RecordWindow(compilation);
         }
         if (type is INamedTypeSymbol { MetadataName: "HashSet`1" or "ISet`1" or "IReadOnlySet`1", TypeArguments.Length: 1 } hashSet &&
             hashSet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
@@ -254,9 +246,6 @@ public static partial class LuminPackExtensionGenerator
             dictionary.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {
             var cursorPlan = FixedUnionCursorPlan.GetRoot(dictionary.TypeArguments[1], compilation, metadata);
-            field.CanReadStableStringKeys = metadata.IsNet8 && !metadata.IsForUnity &&
-                !metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", System.StringComparison.Ordinal)) &&
-                EmitterTypeTraits.CanReadStableStringKeys(dictionary.TypeArguments[0], dictionary.TypeArguments[1], compilation);
             field.UnionCursorSuffix = cursorPlan?.Suffix;
             field.UnionCursorCases = cursorPlan?.Ordered;
             if (cursorPlan != null)
@@ -265,13 +254,14 @@ public static partial class LuminPackExtensionGenerator
                 field.UnionCursorEncoding = declared.Encoding;
                 field.UnionCursorRecording = declared.Recording;
             }
-            field.CanReuseDictionarySlots = dictionary.TypeArguments[0].SpecialType == SpecialType.System_Int32 &&
+            bool canUseKeySlots = field.HasCallbackFreeDictionaryKey;
+            field.CanReuseDictionarySlots = canUseKeySlots &&
                 DictionarySlotReusePlan.CanReadExistingValue(dictionary.TypeArguments[1], compilation, metadata);
-            field.CanReuseDictionaryScalarSlots = dictionary.TypeArguments[0].SpecialType == SpecialType.System_Int32 && !field.CanReuseDictionarySlots &&
+            field.CanReuseDictionaryScalarSlots = canUseKeySlots && !field.CanReuseDictionarySlots &&
                 metadata.IsNet8 && !metadata.IsForUnity &&
                 !metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", System.StringComparison.Ordinal)) &&
                 LuminPack.SourceGenerator.CodeEmitters.DictionaryEmitter.IsScalarSlotValue(dictionary.TypeArguments[1]);
-            if (dictionary.TypeArguments[0].SpecialType == SpecialType.System_Int32 && !field.CanReuseDictionarySlots)
+            if (canUseKeySlots && !field.CanReuseDictionarySlots)
                 field.UnionSlotCases = DictionaryUnionSlotPlan.GetCases(dictionary.TypeArguments[1], compilation, metadata);
         }
         return field;

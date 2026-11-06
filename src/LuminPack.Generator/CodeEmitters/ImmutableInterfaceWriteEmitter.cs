@@ -25,7 +25,7 @@ internal static class ImmutableInterfaceWriteEmitter
             if (json && field.CanTraverseUncachedImmutableQueue && type == "global::System.Collections.Immutable.ImmutableQueue")
                 AppendQueueLoop(field, sb, "value", "            ");
             else
-                AppendLoop(field, sb, "value", "            ", json, dictionary, type is "global::System.Collections.Immutable.ImmutableArray" or "global::System.Collections.Immutable.ImmutableQueue" or "global::System.Collections.Immutable.ImmutableStack");
+                AppendLoop(sb, "value", "            ", json, dictionary);
             return;
         }
         string arguments = GetFirstGeneric(field.TypeName);
@@ -49,7 +49,7 @@ internal static class ImmutableInterfaceWriteEmitter
         {
             sb.AppendLine("            else");
             sb.AppendLine("            {");
-            AppendLoop(field, sb, "value", "                ", json, dictionary);
+            AppendLoop(sb, "value", "                ", json, dictionary);
             sb.AppendLine("            }");
         }
         for (int i = 0; i < implementations.Length; i++)
@@ -63,7 +63,7 @@ internal static class ImmutableInterfaceWriteEmitter
             else if (json && field.CanTraverseUncachedImmutableQueue && implementations[i] == "ImmutableQueue")
                 AppendQueueLoop(field, sb, "source", "                ");
             else
-                AppendLoop(field, sb, "source", "                ", json, dictionary, implementations[i] is "ImmutableArray" or "ImmutableQueue" or "ImmutableStack");
+                AppendLoop(sb, "source", "                ", json, dictionary);
             sb.AppendLine("            }");
         }
     }
@@ -82,22 +82,20 @@ internal static class ImmutableInterfaceWriteEmitter
     };
 
     /// <summary>Emits the established traversal, element framing and per-element capacity checks.</summary>
-    /// <param name="field">The collection contract and runtime capabilities.</param>
     /// <param name="sb">The generated body.</param>
     /// <param name="collection">The concrete or interface expression being enumerated.</param>
     /// <param name="indent">The enclosing statement indentation.</param>
     /// <param name="json">Whether the writer uses JSON framing.</param>
     /// <param name="dictionary">Whether the element exposes a key and value.</param>
-    /// <param name="isolateInteger">Whether this linear or staged loop benefits from isolating integer formatting.</param>
     /// <param name="declareFirst">Whether to start a delimiter state instead of continuing the preceding queue stack.</param>
-    private static void AppendLoop(LuminLocalFieldData field, StringBuilder sb, string collection, string indent, bool json, bool dictionary, bool isolateInteger = false, bool declareFirst = true)
+    private static void AppendLoop(StringBuilder sb, string collection, string indent, bool json, bool dictionary, bool declareFirst = true)
     {
         if (json && !dictionary && declareFirst) sb.AppendLine(indent + "bool isFirst = true;");
         sb.AppendLine(indent + "foreach (var item in " + collection + ")");
         sb.AppendLine(indent + "{");
         if (!json) sb.AppendLine(indent + "    writer.CheckBuffer();");
         if (json && dictionary)
-            DictionaryEmitter.AppendJsonDictionaryEntrySerialize(field, sb, "item.Key", "item.Value", indent + "    ", fused: false, isolateInteger: isolateInteger);
+            DictionaryEmitter.AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", indent + "    ");
         else if (dictionary)
         {
             sb.AppendLine(indent + "    var key = item.Key;");
@@ -106,7 +104,7 @@ internal static class ImmutableInterfaceWriteEmitter
             sb.AppendLine(indent + "    writer.WriteValue(in itemValue);");
         }
         else if (json)
-            JsonCollectionElementEmitter.Append(field, sb, "item", indent + "    ", isolateInteger);
+            JsonCollectionElementEmitter.Append(sb, "item", indent + "    ");
         else
         {
             sb.AppendLine(indent + "    var temp = item;");
@@ -126,16 +124,16 @@ internal static class ImmutableInterfaceWriteEmitter
         sb.AppendLine(indent + "bool isFirst = true;");
         sb.AppendLine(indent + "if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(" + collection + ", out var forwards, out var backwards, out bool reverse))");
         sb.AppendLine(indent + "{");
-        AppendLoop(field, sb, "forwards!", indent + "    ", true, false, true, false);
+        AppendLoop(sb, "forwards!", indent + "    ", true, false, declareFirst: false);
         sb.AppendLine(indent + "    if (reverse) WriteReversed(ref writer, backwards!, ref isFirst);");
         sb.AppendLine(indent + "    else");
         sb.AppendLine(indent + "    {");
-        AppendLoop(field, sb, "backwards!", indent + "        ", true, false, true, false);
+        AppendLoop(sb, "backwards!", indent + "        ", true, false, declareFirst: false);
         sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "}");
         sb.AppendLine(indent + "else");
         sb.AppendLine(indent + "{");
-        AppendLoop(field, sb, collection, indent + "    ", true, false, true, false);
+        AppendLoop(sb, collection, indent + "    ", true, false, declareFirst: false);
         sb.AppendLine(indent + "}");
         sb.AppendLine(indent + "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         sb.AppendLine(indent + "static void WriteReversed(ref global::LuminPack.Core.LuminPackJsonWriter writer, global::System.Collections.Immutable.ImmutableStack<" + type + "> stack, ref bool isFirst)");
@@ -143,7 +141,7 @@ internal static class ImmutableInterfaceWriteEmitter
         sb.AppendLine(indent + "    var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count);");
         sb.AppendLine(indent + "    try");
         sb.AppendLine(indent + "    {");
-        AppendLoop(field, sb, "new global::System.ReadOnlySpan<" + type + ">(items, 0, count)", indent + "        ", true, false, true, false);
+        AppendLoop(sb, "new global::System.ReadOnlySpan<" + type + ">(items, 0, count)", indent + "        ", true, false, declareFirst: false);
         sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "    finally { global::System.Buffers.ArrayPool<" + type + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + type + ">()); }");
         sb.AppendLine(indent + "}");
@@ -164,7 +162,7 @@ internal static class ImmutableInterfaceWriteEmitter
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         sb.AppendLine("                    global::LuminPack.Utility.LuminTreeStorage.CopyTo(source, new global::System.Span<" + item + ">(items, 0, count));");
-        AppendLoop(field, sb, "new global::System.ReadOnlySpan<" + item + ">(items, 0, count)", "                    ", json, dictionary, isolateInteger: true);
+        AppendLoop(sb, "new global::System.ReadOnlySpan<" + item + ">(items, 0, count)", "                    ", json, dictionary);
         sb.AppendLine("                }");
         sb.AppendLine("                finally { global::System.Buffers.ArrayPool<" + item + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + item + ">()); }");
     }

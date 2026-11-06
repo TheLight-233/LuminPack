@@ -451,8 +451,7 @@ public static class InterfaceGroupingEmitter
             TypeName = "global::System.Collections.Generic.IEnumerable<" + element + ">",
             TypeSymbol = ((INamedTypeSymbol)field.TypeSymbol).AllInterfaces.First(type =>
                 type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T),
-            CanGetSequenceStorage = true,
-            CanWriteJsonEnumerationElement = field.CanWriteJsonEnumerationElement
+            CanGetSequenceStorage = true
         };
         if (json) sb.AppendLine("            writer.WriteArrayStart();");
         SequenceInterfaceWriteEmitter.Append(sequence, sb, json, storageExpression:
@@ -721,6 +720,7 @@ internal static class InterfaceCollectionEmitterHelper
         {
             TypeName = dictionary,
             TypeSymbol = fieldData.TypeSymbol,
+            HasCallbackFreeDictionaryKey = fieldData.HasCallbackFreeDictionaryKey,
             CanReuseEnumeratedStringKey = fieldData.CanReuseEnumeratedStringKey,
             Name = fieldData.Name,
             DeclaringTypeName = fieldData.DeclaringTypeName,

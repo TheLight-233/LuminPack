@@ -25,31 +25,31 @@ internal static partial class SerializerDictionaryScalarSlotRegression
             var input = StableInput(mode + "StableStringKeys", source, parse, references);
             GeneratorDriver retained = StableDriver(parse);
             retained = retained.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
-            CheckStableOutput(output, diagnostics, retained, expected: true, execute: true);
+            CheckStableOutput(output, diagnostics, retained, execute: true);
             var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(source.Replace("using Element = System.Int64;", "using Element = UserScalar;"), parse, "Fixture.cs"));
             retained = retained.RunGeneratorsAndUpdateCompilation(changed, out output, out diagnostics);
-            CheckStableOutput(output, diagnostics, retained, expected: false, execute: false);
+            CheckStableOutput(output, diagnostics, retained, execute: false);
             Require(StableCapture(StableDriver(parse).RunGenerators(changed)) == StableCapture(retained), "Retained element exclusion differs from fresh output.");
             retained = retained.RunGeneratorsAndUpdateCompilation(input, out output, out diagnostics);
-            CheckStableOutput(output, diagnostics, retained, expected: true, execute: false);
+            CheckStableOutput(output, diagnostics, retained, execute: false);
             Require(StableCapture(StableDriver(parse).RunGenerators(input)) == StableCapture(retained), "Retained element restoration differs from fresh output.");
             var compatibility = input.ReplaceReference(original, withoutHelper);
             retained = retained.RunGeneratorsAndUpdateCompilation(compatibility, out output, out diagnostics);
-            CheckStableOutput(output, diagnostics, retained, expected: false, execute: true);
+            CheckStableOutput(output, diagnostics, retained, execute: true);
             Require(StableCapture(StableDriver(parse).RunGenerators(compatibility)) == StableCapture(retained), "Optional API removal differs from fresh output.");
             retained = retained.RunGeneratorsAndUpdateCompilation(input, out output, out diagnostics);
-            CheckStableOutput(output, diagnostics, retained, expected: true, execute: false);
+            CheckStableOutput(output, diagnostics, retained, execute: false);
             Require(StableCapture(StableDriver(parse).RunGenerators(input)) == StableCapture(retained), "Optional API restoration differs from fresh output.");
             foreach (string[] symbols in new[] { new[] { "NET5_0_OR_GREATER" }, new[] { "NET8_0_OR_GREATER", "UNITY_2022_3_OR_NEWER" } })
             {
                 var excludedParse = parse.WithPreprocessorSymbols(symbols);
                 var excluded = StableInput(mode + "ExcludedTarget" + symbols.Length, source, excludedParse, references);
                 var driver = StableDriver(excludedParse).RunGeneratorsAndUpdateCompilation(excluded, out output, out diagnostics);
-                CheckStableOutput(output, diagnostics, driver, expected: false, execute: false);
+                CheckStableOutput(output, diagnostics, driver, execute: false);
             }
             var safety = StableInput(mode + "StableInputBoundary", StableSafetyFixture.Replace("GenerationMode.MODE", "GenerationMode." + mode), parse, references);
             var safeDriver = StableDriver(parse).RunGeneratorsAndUpdateCompilation(safety, out output, out diagnostics);
-            CheckStableOutput(output, diagnostics, safeDriver, expected: true, execute: true);
+            CheckStableOutput(output, diagnostics, safeDriver, execute: true);
         }
         Console.WriteLine("Passed stable string-key refills: four tiers, profiles, fixed overrides, excluded targets/contracts, quotas, staged failure and retained/fresh capability invalidation.");
     }
@@ -80,25 +80,12 @@ internal static partial class SerializerDictionaryScalarSlotRegression
     /// <param name="output">The complete generated consumer compilation.</param>
     /// <param name="diagnostics">The generator diagnostics.</param>
     /// <param name="driver">The completed driver supplying operation syntax.</param>
-    /// <param name="expected">Whether the optional reusable kernel must be selected.</param>
     /// <param name="execute">Whether to run the complete consumer assertions.</param>
-    private static void CheckStableOutput(Compilation output, IEnumerable<Diagnostic> diagnostics, GeneratorDriver driver, bool expected, bool execute)
+    private static void CheckStableOutput(Compilation output, IEnumerable<Diagnostic> diagnostics, GeneratorDriver driver, bool execute)
     {
-        var errors = diagnostics.Concat(output.GetDiagnostics()).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
-        if (errors.Length != 0) throw new InvalidOperationException(string.Join("\n", errors.Select(error => error.ToString())));
-        var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).SelectMany(source => source.SyntaxTree.GetRoot()
-            .DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
-        int count = 0;
-        foreach (var method in methods)
-            foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call => call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "TryReadStableStringKeys" }))
-            {
-                if (method.Identifier.ValueText is not "RootRead") throw new InvalidOperationException("Fresh, JSON or writer operation gained stable-key mutation.");
-                var arguments = ((GenericNameSyntax)((MemberAccessExpressionSyntax)call.Expression).Name).TypeArgumentList.Arguments;
-                if (arguments.Count != 2 || !arguments[1].ToString().StartsWith("__LuminProfile", StringComparison.Ordinal) &&
-                    !arguments[1].ToString().Contains("LuminPackFixedOptions")) throw new InvalidOperationException("The selected complete profile was lost.");
-                count++;
-            }
-        if ((count != 0) != expected) throw new InvalidOperationException($"Optional kernel eligibility differs: {count} calls, expected={expected}.");
+        Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+        Require(!StableCapture(driver).Contains("TryReadStableStringKeys", StringComparison.Ordinal),
+            "The generator selected a staged reader by its key and value types.");
         using var pe = new MemoryStream();
         var result = output.Emit(pe);
         if (!result.Success) throw new InvalidOperationException(string.Join("\n", result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));

@@ -11,13 +11,6 @@ internal static class GeneratedExecutionPolicy
 {
     private const int InlineCallLimit = 16;
 
-    /// <summary>Keeps integer formatting outside an enumerator loop's native inlining budget.</summary>
-    /// <param name="element">The canonical element contract selected for public enumeration.</param>
-    /// <returns>Whether an isolated fused integer writer should serve the loop.</returns>
-    /// <remarks>Contiguous loops have a separate policy; strings and user formatters retain their original operation.</remarks>
-    internal static bool IsolateJsonIntegerEnumeration(ITypeSymbol element)
-        => element?.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64;
-
     /// <summary>Separates fresh Union element construction from heap-backed reusable element storage.</summary>
     /// <param name="element">The canonical element contract in the analyzed object graph.</param>
     /// <returns>Whether a fresh collection may read each Union into a local before publishing its result.</returns>

@@ -25,7 +25,7 @@ public static class ConcurrentBagEmitter
         sb.AppendLine("                var elements = new global::System.ReadOnlySpan<" + elementType + ">(snapshot, 0, count);");
         sb.AppendLine("                foreach (var item in elements)");
         sb.AppendLine("                {");
-        JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                    ");
+        JsonCollectionElementEmitter.Append(sb, "item", "                    ");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            finally { if (pooled) global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(snapshot, " + CollectionEmitterKit.ClearExpression(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType) + "); }");

@@ -39,7 +39,7 @@ public static partial class DictionaryEmitter
         AppendSkipNonArrayEntry(sb, "                        ");
         sb.AppendLine("                        " + keyType + " key = default!;");
         sb.AppendLine("                        " + valueType + " itemValue = default!;");
-        AppendJsonEntryRead(sb, keyType, valueType, target + ".TryGetValue(key, out itemValue);", fused: false,
+        AppendJsonEntryRead(sb, target + ".TryGetValue(key, out itemValue);",
             seedKey: keyType is "string" or "global::System.String" ? "key = count < oldCount ? entries[count].Key : default!;" : null);
         sb.AppendLine("                        entries[count++] = new " + pair + "(key, itemValue);");
         sb.AppendLine("                    }");

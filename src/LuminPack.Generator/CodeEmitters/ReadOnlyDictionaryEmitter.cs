@@ -88,7 +88,7 @@ public static class ReadOnlyDictionaryEmitter
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
-        DictionaryEmitter.AppendJsonEntryRead(sb, keyType, valueType, fused: false, completeEntry: fieldData.CanReadJsonCompleteEntry);
+        DictionaryEmitter.AppendJsonEntryRead(sb);
         sb.AppendLine("                dictionary.Add(key!, itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            value = new global::System.Collections.ObjectModel.ReadOnlyDictionary<" + keyType + ", " + valueType + ">(dictionary);");

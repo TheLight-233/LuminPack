@@ -273,7 +273,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
-        DictionaryEmitter.AppendJsonEntryRead(sb, keyType, valueType, fused: false, completeEntry: fieldData.CanReadJsonCompleteEntry);
+        DictionaryEmitter.AppendJsonEntryRead(sb);
         sb.AppendLine("                builder.Add(key!, itemValue);");
         sb.AppendLine("            } while (reader.Read());");
         sb.AppendLine("            value = builder.ToImmutable();");

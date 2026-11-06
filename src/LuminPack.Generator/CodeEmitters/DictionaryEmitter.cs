@@ -44,8 +44,7 @@ public static partial class DictionaryEmitter
         {
             sb.AppendLine("                foreach (var item in " + ConcurrentTraversalEmitter.Source(fieldData, "ConcurrentDictionary", "value") + ")");
             sb.AppendLine("                {");
-            AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ",
-                EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType));
+            AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                    ");
             sb.AppendLine("                }");
         }
         sb.AppendLine("            }");
@@ -60,8 +59,7 @@ public static partial class DictionaryEmitter
                 sb.AppendLine("            {");
                 sb.AppendLine("                foreach (var item in value)");
                 sb.AppendLine("                {");
-                AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ",
-                    EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType));
+                AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                    ");
                 sb.AppendLine("                }");
                 sb.AppendLine("            }");
             }
@@ -74,7 +72,6 @@ public static partial class DictionaryEmitter
     private static void AppendSortedListJsonWrite(LuminLocalFieldData field, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(field.TypeName), valueType = GetSecondGeneric(field.TypeName);
-        bool fused = EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType);
         sb.AppendLine("            if (value is null) { writer.WriteNull(); return; }");
         sb.AppendLine("            writer.WriteArrayStart();");
         sb.AppendLine("            if (value.Count > 0)");
@@ -86,7 +83,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                        global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
         // The enumerator captures the entire pair before user code serializes either component.
         sb.AppendLine("                        var item = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(keys[i], values[i]);");
-        AppendJsonDictionaryEntrySerialize(field, sb, "item.Key", "item.Value", "                        ", fused);
+        AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                        ");
         sb.AppendLine("                    }");
         sb.AppendLine("                    global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
         sb.AppendLine("                }");
@@ -98,7 +95,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
-        AppendJsonDictionaryEntrySerialize(field, sb, "item.Key", "item.Value", "                    ", fused);
+        AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                    ");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
     }
@@ -146,7 +143,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
-        AppendJsonEntryRead(sb, keyType, valueType, completeEntry: fieldData.CanReadJsonCompleteEntry);
+        AppendJsonEntryRead(sb);
         if (interfaceType)
         {
             sb.AppendLine("                dictionary.Add(key, itemValue);");
@@ -199,10 +196,6 @@ public static partial class DictionaryEmitter
         bool localUnionCursor = directRawKey && fieldData.UnionCursorSuffix != null;
         bool stringKey = dictionaryType?.TypeArguments.Length == 2 &&
                          dictionaryType.TypeArguments[0].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
-        bool stringValue = dictionaryType?.TypeArguments.Length == 2 &&
-                           dictionaryType.TypeArguments[1].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
-        bool stableStringHeaders = (stringKey || stringValue) &&
-                                   (stringKey || directRawKey) && (stringValue || directRawValue);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
@@ -247,12 +240,10 @@ public static partial class DictionaryEmitter
             sb.AppendLine();
             sb.AppendLine("                int version = dictionaryView._version;");
             if (localUnionCursor) sb.AppendLine("                int nextIndex = index;");
-            if (stableStringHeaders) sb.AppendLine("                int stringRecordLength = writer.StringRecordLength();");
             sb.AppendLine("                ref var entryRef = ref LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
             sb.AppendLine("                for (int i = 0; i < count; i++)");
             sb.AppendLine("                {");
-            bool boundedEntries = !localUnionCursor && stableStringHeaders;
-            if (!stringKey && !boundedEntries)
+            if (!stringKey)
                 sb.AppendLine(localUnionCursor ? "                    nextIndex = writer.CheckBuffer(nextIndex);" : "                    writer.CheckBuffer();");
             sb.AppendLine("                    ref var entry = ref entryRef;");
             if (localUnionCursor)
@@ -266,12 +257,10 @@ public static partial class DictionaryEmitter
                     sb.AppendLine($"                    else if (itemValue.GetType() == typeof({caseType})) nextIndex = global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref writer, global::System.Runtime.CompilerServices.Unsafe.As<{caseType}>(itemValue), nextIndex, (byte){id});");
                 sb.AppendLine($"                    else nextIndex = itemValue.__LuminPackUnionSerializeCursor_{fieldData.UnionCursorSuffix}(ref writer, nextIndex);");
             }
-            else if (boundedEntries)
-                AppendBoundedEntryWrite(sb, keyType, valueType, stringKey, stringValue);
             else
             {
-                AppendDenseBinaryElementWrite(sb, keyType, "Key", "key", directRawKey, stableStringHeaders && stringKey);
-                AppendDenseBinaryElementWrite(sb, valueType, "Value", "itemValue", directRawValue, stableStringHeaders && stringValue);
+                AppendDenseBinaryElementWrite(sb, keyType, "Key", "key", directRawKey);
+                AppendDenseBinaryElementWrite(sb, valueType, "Value", "itemValue", directRawValue);
             }
             sb.AppendLine("                    entryRef = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, 1);");
             sb.AppendLine("                }");
@@ -284,14 +273,13 @@ public static partial class DictionaryEmitter
             sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
             sb.AppendLine($"            static void WriteSparseDictionary(ref global::LuminPack.Core.LuminPackWriter writer, global::System.Collections.Generic.Dictionary<{keyType}, {valueType}> source)");
             sb.AppendLine("            {");
-            if (stableStringHeaders) sb.AppendLine("                int stringRecordLength = writer.StringRecordLength();");
             sb.AppendLine("                foreach (var item in source)");
             sb.AppendLine("                {");
             if (!stringKey) sb.AppendLine("                    writer.CheckBuffer();");
             sb.AppendLine("                    " + keyType + " key = item.Key;");
-            AppendBinaryElementWrite(sb, "key", "                    ", stableStringHeaders && stringKey);
+            sb.AppendLine("                    writer.WriteValue(in key);");
             sb.AppendLine("                    " + valueType + " itemValue = item.Value;");
-            AppendBinaryElementWrite(sb, "itemValue", "                    ", stableStringHeaders && stringValue);
+            sb.AppendLine("                    writer.WriteValue(in itemValue);");
             sb.AppendLine("                }");
             sb.AppendLine("                writer.CheckBuffer();");
             sb.AppendLine("            }");
@@ -381,9 +369,8 @@ public static partial class DictionaryEmitter
     /// <param name="member">The entry field name.</param>
     /// <param name="local">The evaluated formatter argument name.</param>
     /// <param name="raw">Whether the member's complete contract is unmanaged storage.</param>
-    /// <param name="cachedStringHeader">Whether the selected string framing is stable.</param>
     private static void AppendDenseBinaryElementWrite(StringBuilder sb, string type, string member, string local,
-        bool raw, bool cachedStringHeader)
+        bool raw)
     {
         const string indent = "                    ";
         if (raw)
@@ -396,77 +383,7 @@ public static partial class DictionaryEmitter
             return;
         }
         sb.AppendLine(indent + type + " " + local + " = entry." + member + ";");
-        AppendBinaryElementWrite(sb, local, indent, cachedStringHeader);
-    }
-
-    /// <summary>Writes one dense entry of raw and string members after a single room check.</summary>
-    /// <param name="sb">The generated source builder.</param>
-    /// <param name="keyType">The key type.</param>
-    /// <param name="valueType">The value type.</param>
-    /// <param name="stringKey">Whether the key is a string; otherwise it is raw storage.</param>
-    /// <param name="stringValue">Whether the value is a string; otherwise it is raw storage.</param>
-    /// <remarks>Under the UTF-16 length profile the entry's raw-form bound comes from one read of each string. When the room the
-    /// writer reports for an unchecked record covers it, the collection threshold cannot act and both members are stored into
-    /// that room; otherwise the buffer check and the member writes run in their original order. Other profiles keep that order.</remarks>
-    private static void AppendBoundedEntryWrite(StringBuilder sb, string keyType, string valueType, bool stringKey, bool stringValue)
-    {
-        const string indent = "                    ";
-        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
-        string Bound(bool text, string type, string local) => text
-            ? "global::LuminPack.Core.LuminPackWriter.Utf16RecordBound(" + local + ")"
-            : unsafeType + ".SizeOf<" + type + ">()";
-        string Raw(string type, string member, string at) =>
-            "global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref " + at + ", ref " + unsafeType + ".As<" + type + ", byte>(ref entry." + member + "), (uint)" + unsafeType + ".SizeOf<" + type + ">());";
-        if (stringKey) sb.AppendLine(indent + keyType + " key = entry.Key;");
-        if (stringValue) sb.AppendLine(indent + valueType + " itemValue = entry.Value;");
-        sb.AppendLine(indent + "if (writer.UsesUtf16LengthRecords() && writer.RecordRoom() >= (long)" + Bound(stringKey, keyType, "key") + " + " + Bound(stringValue, valueType, "itemValue") + ")");
-        sb.AppendLine(indent + "{");
-        sb.AppendLine(indent + "    ref byte destination = ref writer.GetCurrentSpanReference();");
-        if (stringKey)
-            sb.AppendLine(indent + "    int written = global::LuminPack.Core.LuminPackWriter.WriteReservedUtf16Record(ref destination, key);");
-        else
-        {
-            sb.AppendLine(indent + "    " + Raw(keyType, "Key", "destination"));
-            sb.AppendLine(indent + "    int written = " + unsafeType + ".SizeOf<" + keyType + ">();");
-        }
-        if (stringValue)
-            sb.AppendLine(indent + "    written += global::LuminPack.Core.LuminPackWriter.WriteReservedUtf16Record(ref " + unsafeType + ".Add(ref destination, written), itemValue);");
-        else
-        {
-            sb.AppendLine(indent + "    " + Raw(valueType, "Value", unsafeType + ".Add(ref destination, written)"));
-            sb.AppendLine(indent + "    written += " + unsafeType + ".SizeOf<" + valueType + ">();");
-        }
-        sb.AppendLine(indent + "    writer.CompleteRun(written);");
-        sb.AppendLine(indent + "}");
-        sb.AppendLine(indent + "else");
-        sb.AppendLine(indent + "{");
-        // The original order: the collection buffer check, then each member's own write.
-        var original = new StringBuilder();
-        if (!stringKey) original.AppendLine(indent + "writer.CheckBuffer();");
-        if (stringKey) AppendBinaryElementWrite(original, "key", indent, true);
-        else AppendDenseBinaryElementWrite(original, keyType, "Key", "key", true, false);
-        if (stringValue) AppendBinaryElementWrite(original, "itemValue", indent, true);
-        else AppendDenseBinaryElementWrite(original, valueType, "Value", "itemValue", true, false);
-        foreach (var line in original.ToString().Split(new[] { "\r\n", "\n" }, System.StringSplitOptions.None))
-            if (line.Length != 0) sb.AppendLine("    " + line);
-        sb.AppendLine(indent + "}");
-    }
-
-    /// <summary>Reuses the selected string formatter when a dictionary has no state-changing element operation.</summary>
-    /// <param name="sb">The generated source builder.</param>
-    /// <param name="value">The evaluated element local.</param>
-    /// <param name="indent">Statement indentation.</param>
-    /// <param name="cachedStringHeader">Whether string recording mode is stable throughout this loop.</param>
-    private static void AppendBinaryElementWrite(StringBuilder sb, string value, string indent, bool cachedStringHeader)
-    {
-        if (!cachedStringHeader)
-        {
-            sb.AppendLine(indent + "writer.WriteValue(in " + value + ");");
-            return;
-        }
-        sb.AppendLine(indent + "{");
-        StringEmitter.AppendSerializeCode(sb, value, "stringRecordLength", indent + "    ");
-        sb.AppendLine(indent + "}");
+        sb.AppendLine(indent + "writer.WriteValue(in " + local + ");");
     }
 
     /// <summary>Appends binary reading statements for dictionary values.</summary>
@@ -536,8 +453,8 @@ public static partial class DictionaryEmitter
             sb.AppendLine("            if ((uint)payloadLength > (uint)(inputLength - index))");
             sb.AppendLine("                global::LuminPack.Code.LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + payloadLength));");
         }
-        // Raw pairs rebuild the buckets in incoming order, ahead of the scalar slot refill (owner-approved 2026-10-27).
-        if (!freshValue && unmanagedPair)
+        // An empty target has no existing slot order to preserve. Only callback-free keys may rebuild buckets directly.
+        if (!freshValue && unmanagedPair && fieldData.HasCallbackFreeDictionaryKey)
             AppendRawDictionaryRefill(sb, keyType, valueType);
         if (!freshValue)
             AppendReusableDictionaryRead(sb, fieldData, keyType, valueType, unmanagedPair);
@@ -612,9 +529,6 @@ public static partial class DictionaryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        string keyType = GetFirstGeneric(fieldData.TypeName);
-        string valueType = GetSecondGeneric(fieldData.TypeName);
-        bool fused = EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType);
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -634,7 +548,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                        ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref arrayRef, dictIndex++);");
         sb.AppendLine("                        if (LuminPackMarshal.IsHashTableEntryActive(entry.HashCode, entry.Next))");
         sb.AppendLine("                        {");
-        AppendJsonDictionaryEntrySerialize(fieldData, sb, "entry.Key", "entry.Value", "                            ", fused);
+        AppendJsonDictionaryEntrySerialize(sb, "entry.Key", "entry.Value", "                            ");
         sb.AppendLine("                        }");
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
@@ -642,7 +556,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                {");
         sb.AppendLine("                    foreach (var entry in value)");
         sb.AppendLine("                    {");
-        AppendJsonDictionaryEntrySerialize(fieldData, sb, "entry.Key", "entry.Value", "                        ", fused);
+        AppendJsonDictionaryEntrySerialize(sb, "entry.Key", "entry.Value", "                        ");
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
@@ -650,46 +564,18 @@ public static partial class DictionaryEmitter
     }
 
     /// <summary>Appends JSON writing statements for dictionary values.</summary>
-    /// <param name="field">The dictionary contract and referenced runtime capabilities.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="keyExpression">The key expression used by this operation.</param>
-    /// <param name="valueExpression">The value expression used by this operation.</param>
-    /// <param name="indent">The indentation level of the generated statements.</param>
-    /// <param name="fused">Whether the scalar key and value use the fused entry writers.</param>
-    /// <param name="isolateInteger">Whether a linear or staged traversal benefits from a separate formatting budget.</param>
-    internal static void AppendJsonDictionaryEntrySerialize(
-        LuminLocalFieldData field, StringBuilder sb,
-        string keyExpression,
-        string valueExpression,
-        string indent,
-        bool fused, bool isolateInteger = false)
+    /// <param name="sb">The generated operation builder.</param>
+    /// <param name="keyExpression">The entry key expression.</param>
+    /// <param name="valueExpression">The entry value expression.</param>
+    /// <param name="indent">The indentation of the generated statements.</param>
+    internal static void AppendJsonDictionaryEntrySerialize(StringBuilder sb, string keyExpression, string valueExpression, string indent)
     {
-        string outer = indent;
-        bool completeEntry = !fused && isolateInteger && field.CanWriteJsonIntegerEntry;
-        if (completeEntry)
-        {
-            sb.AppendLine(indent + "if (writer.UsesUtf8Enumeration())");
-            sb.AppendLine(indent + "    writer.WriteIntegerEntry(" + keyExpression + ", " + valueExpression + ");");
-            sb.AppendLine(indent + "else");
-            sb.AppendLine(indent + "{");
-            indent += "    ";
-        }
-        if (fused)
-        {
-            // The pair array, its separators and both scalars use two capacity reservations instead of six.
-            sb.AppendLine(indent + "writer.WriteEntryKey(" + keyExpression + ");");
-            sb.AppendLine(indent + "writer.WriteEntryValue(" + valueExpression + ");");
-        }
-        else
-        {
-            sb.AppendLine(indent + "writer.WriteArrayStart();");
-            sb.AppendLine(indent + "var key = " + keyExpression + ";");
-            sb.AppendLine(indent + "writer.WriteValue(in key);");
-            sb.AppendLine(indent + "var itemValue = " + valueExpression + ";");
-            sb.AppendLine(indent + "writer.WriteValue(in itemValue);");
-            sb.AppendLine(indent + "writer.WriteArrayEnd();");
-        }
-        if (completeEntry) sb.AppendLine(outer + "}");
+        sb.AppendLine(indent + "writer.WriteArrayStart();");
+        sb.AppendLine(indent + "var key = " + keyExpression + ";");
+        sb.AppendLine(indent + "writer.WriteValue(in key);");
+        sb.AppendLine(indent + "var itemValue = " + valueExpression + ";");
+        sb.AppendLine(indent + "writer.WriteValue(in itemValue);");
+        sb.AppendLine(indent + "writer.WriteArrayEnd();");
     }
 
     /// <summary>Appends JSON reading statements for dictionary values.</summary>
@@ -722,7 +608,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
-        AppendJsonEntryRead(sb, keyType, valueType, completeEntry: fieldData.CanReadJsonCompleteEntry);
+        AppendJsonEntryRead(sb);
         sb.AppendLine("                value[key] = itemValue;");
         sb.AppendLine("            }");
     }
@@ -741,24 +627,11 @@ public static partial class DictionaryEmitter
 
     /// <summary>Appends the token reads of one dictionary entry array after its opening bracket.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="keyType">The generated key type name.</param>
-    /// <param name="valueType">The generated value type name.</param>
     /// <param name="seedValue">An optional statement that finds the existing value after reading its key.</param>
-    /// <param name="fused">Whether the original fused scalar entry path can be used.</param>
-    /// <param name="completeEntry">Whether a complete runtime operation can retain parsed scalar values on fallback.</param>
     /// <param name="seedKey">An optional statement supplying an existing string key for a present key token.</param>
-    /// <remarks>Scalar entries first try the fused trusted UTF-8 reader, which consumes nothing when it declines.</remarks>
-    internal static void AppendJsonEntryRead(StringBuilder sb, string keyType, string valueType, string seedValue = null, bool fused = true, string seedKey = null, bool completeEntry = false)
+    internal static void AppendJsonEntryRead(StringBuilder sb, string seedValue = null, string seedKey = null)
     {
-        string indent = "                ";
-        // Keep the try/fallback shape so unsupported profiles retain the established caller layout.
-        if (completeEntry || fused && EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType))
-        {
-            string operation = completeEntry ? "TryReadCompleteEntry" : "TryReadEntry";
-            sb.AppendLine(indent + "if (!reader." + operation + "(ref key, ref itemValue))");
-            sb.AppendLine(indent + "{");
-            indent += "    ";
-        }
+        const string indent = "                ";
         sb.AppendLine(indent + "if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine(indent + "{");
         if (seedKey != null) sb.AppendLine(indent + "    " + seedKey);
@@ -777,7 +650,5 @@ public static partial class DictionaryEmitter
         sb.AppendLine(indent + "        }");
         sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "}");
-        if (indent.Length > 16)
-            sb.AppendLine("                }");
     }
 }

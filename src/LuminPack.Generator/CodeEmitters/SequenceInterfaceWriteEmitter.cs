@@ -162,7 +162,7 @@ internal static class SequenceInterfaceWriteEmitter
         if (json) sb.AppendLine("                bool isFirst = true;");
         sb.AppendLine("                foreach (var item in " + source + ")");
         sb.AppendLine("                {");
-        if (json) JsonCollectionElementEmitter.Append(field, sb, "item", "                    ");
+        if (json) JsonCollectionElementEmitter.Append(sb, "item", "                    ");
         else
         {
             sb.AppendLine("                    writer.CheckBuffer();");
