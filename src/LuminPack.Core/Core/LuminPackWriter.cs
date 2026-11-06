@@ -2009,6 +2009,18 @@ namespace LuminPack.Core
         private static int WriteVarIntHeader(Span<byte> destination, int header)
         {
             uint value = unchecked((uint)header + 1);
+            if (value < 128)
+            {
+                destination[0] = (byte)value;
+                return 1;
+            }
+            if (BitConverter.IsLittleEndian && value < 16384 && destination.Length >= 2)
+            {
+                ushort packed = (ushort)((value & 127) | 128 | ((value >> 7) << 8));
+                LuminPackWriter.Write(ref MemoryMarshal.GetReference(destination), packed);
+                return 2;
+            }
+            // A short destination retains the original checked per-byte failure and written prefix.
             int offset = 0;
             while (value >= 128) { destination[offset++] = (byte)(value | 128); value >>= 7; }
             destination[offset++] = (byte)value;
