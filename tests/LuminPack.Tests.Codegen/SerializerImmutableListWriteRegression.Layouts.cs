@@ -10,10 +10,12 @@ internal static partial class SerializerImmutableListWriteRegression
         using var resource = typeof(SerializerImmutableListWriteRegression).Assembly.GetManifestResourceStream("TestSupport.CollectionViews.cs")!;
         using var reader = new StreamReader(resource);
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
-        string source = CSharpSyntaxTree.ParseText(reader.ReadToEnd(), parse).GetRoot().DescendantNodes()
-            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>().Single(type => type.Identifier.ValueText == "LuminPackCollectionAccess")
-            .ToFullString().Replace("LuminFieldLayout.Field<", "ProbeTrap.Field<", StringComparison.Ordinal);
-        source = "using System; using System.Collections.Generic; using System.Linq; using LuminPack.Code; namespace CollectionProbe;\n" + source + "\n" + """
+        var probes = CSharpSyntaxTree.ParseText(reader.ReadToEnd(), parse).GetRoot().DescendantNodes()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
+            .Where(type => type.Identifier.ValueText is "SortedListStorage" or "PriorityQueueStorage")
+            .Select(type => type.ToString().Replace("LuminFieldLayout.Field<", "ProbeTrap.Field<", StringComparison.Ordinal));
+        string source = "using System; using LuminPack.Code; namespace CollectionProbe; public static class LuminPackCollectionAccess {\n" +
+            string.Join("\n", probes) + "\n}\n" + """
             public static class ProbeTrap
             {
                 public static int Calls;
