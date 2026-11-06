@@ -1054,7 +1054,8 @@ namespace LuminPack.Core
             }
             finally
             {
-                if (rented is not null) System.Buffers.ArrayPool<char>.Shared.Return(rented);
+                if (rented is not null)
+                    System.Buffers.ArrayPool<char>.Shared.Return(rented);
             }
         }
 
@@ -1335,7 +1336,8 @@ namespace LuminPack.Core
             }
             finally
             {
-                if (rented is not null) ArrayPool<char>.Shared.Return(rented);
+                if (rented is not null)
+                    ArrayPool<char>.Shared.Return(rented);
             }
         }
 
@@ -1362,14 +1364,17 @@ namespace LuminPack.Core
                 bool success = System.Numerics.BigInteger.Abs(value).TryWriteBytes(MemoryMarshal.AsBytes(words), out _, isUnsigned: true);
                 System.Diagnostics.Debug.Assert(success);
                 if (!BitConverter.IsLittleEndian)
-                    for (int i = 0; i < count; i++) words[i] = System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(words[i]);
+                    for (int i = 0; i < count; i++)
+                        words[i] = System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(words[i]);
 
-                while (words[count - 1] == 0) count--;
+                while (words[count - 1] == 0)
+                    count--;
                 int end = text.Length;
                 if (count <= 2)
                 {
                     ulong magnitude = words[0];
-                    if (count == 2) magnitude |= (ulong)words[1] << 32;
+                    if (count == 2)
+                        magnitude |= (ulong)words[1] << 32;
                     end -= 20;
                     success = magnitude.TryFormat(text.Slice(end, 20), out _, "D20", System.Globalization.CultureInfo.InvariantCulture);
                     System.Diagnostics.Debug.Assert(success);
@@ -1393,7 +1398,8 @@ namespace LuminPack.Core
                         {
                             uint high = carry / decimalBase;
                             groups[used++] = carry - high * decimalBase;
-                            if (high != 0) groups[used++] = high;
+                            if (high != 0)
+                                groups[used++] = high;
                         }
                     }
                     ReadOnlySpan<byte> pairs = LuminPackJsonFloatFormatter.DigitPairs;
@@ -1413,13 +1419,16 @@ namespace LuminPack.Core
                         digits[0] = (char)('0' + group);
                     }
                 }
-                while (text[end] == '0') end++;
-                if (value.Sign < 0) text[--end] = '-';
+                while (text[end] == '0')
+                    end++;
+                if (value.Sign < 0)
+                    text[--end] = '-';
                 return end;
             }
             finally
             {
-                if (rented is not null) ArrayPool<uint>.Shared.Return(rented);
+                if (rented is not null)
+                    ArrayPool<uint>.Shared.Return(rented);
             }
         }
 #endif
@@ -2119,7 +2128,8 @@ namespace LuminPack.Core
             if (length == 2)
             {
                 ushort packed = (ushort)(Backslash | ((uint)escaped << 8));
-                if (!BitConverter.IsLittleEndian) packed = global::System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(packed);
+                if (!BitConverter.IsLittleEndian)
+                    packed = global::System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(packed);
                 Unsafe.WriteUnaligned(ref destination, packed);
             }
             else
@@ -2167,11 +2177,14 @@ namespace LuminPack.Core
         private bool TryWriteUtf16EscapePair(char value)
         {
             char escaped = value switch { '"' => '"', '\\' => '\\', '\n' => 'n', '\r' => 'r', '\t' => 't', _ => '\0' };
-            if (escaped == '\0' || Output is not null || !BitConverter.IsLittleEndian) return false;
+            if (escaped == '\0' || Output is not null || !BitConverter.IsLittleEndian)
+                return false;
 #if NET8_0_OR_GREATER
-            if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) < 4) return false;
+            if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) < 4)
+                return false;
 #else
-            if ((long)unchecked((nint)_end - (nint)Cursor) < 4) return false;
+            if ((long)unchecked((nint)_end - (nint)Cursor) < 4)
+                return false;
 #endif
             Unsafe.WriteUnaligned(ref Current, (uint)'\\' | ((uint)escaped << 16));
             Advance(4);
@@ -2323,7 +2336,8 @@ namespace LuminPack.Core
             }
             finally
             {
-                if (rented is not null) ArrayPool<char>.Shared.Return(rented);
+                if (rented is not null)
+                    ArrayPool<char>.Shared.Return(rented);
             }
         }
 
@@ -2548,7 +2562,8 @@ namespace LuminPack.Core
             }
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
                 return;
-            if (separate) WriteByteRaw<TOptions>(Comma);
+            if (separate)
+                WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
             Write<TOptions>(value);
         }
@@ -2574,7 +2589,8 @@ namespace LuminPack.Core
             }
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && TryWriteUtf16Element(value, separate))
                 return;
-            if (separate) WriteByteRaw<TOptions>(Comma);
+            if (separate)
+                WriteByteRaw<TOptions>(Comma);
             IsFirstElement = true;
             Write<TOptions>(value);
         }
@@ -2676,7 +2692,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryWriteUtf16Element(int value, bool separate)
         {
-            if (!HasEnumerationCapacity(24)) return false;
+            if (!HasEnumerationCapacity(24))
+                return false;
 
             int skip = separate ? 1 : 0;
             ref char output = ref Unsafe.As<byte, char>(ref Current);
@@ -2694,7 +2711,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryWriteUtf16Element(long value, bool separate)
         {
-            if (!HasEnumerationCapacity(42)) return false;
+            if (!HasEnumerationCapacity(42))
+                return false;
 
             int skip = separate ? 1 : 0;
             ref char output = ref Unsafe.As<byte, char>(ref Current);
@@ -2711,7 +2729,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryWriteUtf16EntryKey(int key)
         {
-            if (!HasEnumerationCapacity(28)) return false;
+            if (!HasEnumerationCapacity(28))
+                return false;
 
             int count = IsFirstElement ? 0 : 1;
             ref char output = ref Unsafe.As<byte, char>(ref Current);
@@ -2731,7 +2750,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryWriteUtf16EntryValue(int value)
         {
-            if (!HasEnumerationCapacity(26)) return false;
+            if (!HasEnumerationCapacity(26))
+                return false;
 
             int skip = IsFirstElement ? 0 : 1;
             ref char output = ref Unsafe.As<byte, char>(ref Current);
@@ -2749,7 +2769,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryWriteUtf16EntryValue(long value)
         {
-            if (!HasEnumerationCapacity(44)) return false;
+            if (!HasEnumerationCapacity(44))
+                return false;
 
             int skip = IsFirstElement ? 0 : 1;
             ref char output = ref Unsafe.As<byte, char>(ref Current);
@@ -3368,7 +3389,8 @@ namespace LuminPack.Core
 
             // Confirm that batching does not immediately enter a dense suffix before publishing any content.
             int firstRun = escapeIndex + 1;
-            while (firstRun < value.Length && NeedsJsonEscape(value[firstRun])) firstRun++;
+            while (firstRun < value.Length && NeedsJsonEscape(value[firstRun]))
+                firstRun++;
             var following = value.Slice(firstRun);
             int followingEscape = IndexOfJsonEscape(following);
             if (followingEscape >= 0 && following.Length - followingEscape >= 32 &&
@@ -3388,11 +3410,13 @@ namespace LuminPack.Core
                 }
 
                 int end = escapeIndex;
-                while (end < value.Length && NeedsJsonEscape(value[end]) && TryWriteUtf16EscapePair(value[end])) end++;
+                while (end < value.Length && NeedsJsonEscape(value[end]) && TryWriteUtf16EscapePair(value[end]))
+                    end++;
                 if (end < value.Length && NeedsJsonEscape(value[end]))
                 {
                     int start = end++;
-                    while (end < value.Length && NeedsJsonEscape(value[end])) end++;
+                    while (end < value.Length && NeedsJsonEscape(value[end]))
+                        end++;
                     WriteStringContentUtf16Slow<TOptions>(value.Slice(start, end - start));
                 }
                 value = value.Slice(end);
@@ -3419,7 +3443,8 @@ namespace LuminPack.Core
         private static bool HasUtf16LiteralRun(scoped ReadOnlySpan<char> value, int escapeIndex, int minimumLength = 32)
         {
             int start = escapeIndex + 1;
-            for (int skipped = 0; skipped < 4 && start < value.Length && NeedsJsonEscape(value[start]); skipped++) start++;
+            for (int skipped = 0; skipped < 4 && start < value.Length && NeedsJsonEscape(value[start]); skipped++)
+                start++;
             return value.Length - start >= minimumLength && IndexOfJsonEscape(value.Slice(start, minimumLength)) < 0;
         }
 #endif

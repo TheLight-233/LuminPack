@@ -21,7 +21,8 @@ internal sealed class BinaryWriterPublicationProjection : CSharpSyntaxRewriter
         _writers = new HashSet<string>(node.DescendantNodes().OfType<ParameterSyntax>()
             .Where(parameter => IsWriter(parameter.Type)).Select(parameter => parameter.Identifier.ValueText), StringComparer.Ordinal);
         foreach (var declaration in node.DescendantNodes().OfType<VariableDeclarationSyntax>().Where(declaration => IsWriter(declaration.Type)))
-            foreach (var variable in declaration.Variables) _writers.Add(variable.Identifier.ValueText);
+            foreach (var variable in declaration.Variables)
+                _writers.Add(variable.Identifier.ValueText);
         var result = base.VisitMethodDeclaration(node);
         _writers = previous;
         return result;

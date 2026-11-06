@@ -32,7 +32,8 @@ public static class PortableLayoutContract
         var output = new T[count + 2];
         Span<byte> source = MemoryMarshal.AsBytes(input.AsSpan()), target = MemoryMarshal.AsBytes(output.AsSpan());
         int size = source.Length / input.Length, wire = default(TLayout).WireSize;
-        for (int i = 0; i < source.Length; i++) source[i] = (byte)(i * 37 + 11);
+        for (int i = 0; i < source.Length; i++)
+            source[i] = (byte)(i * 37 + 11);
         target.Fill(0xA5);
         byte[] packed = new byte[count * wire + 6];
         packed.AsSpan().Fill(0xA5);
@@ -41,17 +42,23 @@ public static class PortableLayoutContract
         int done = LuminPortable<T, TLayout>.Pack(ref input[1], count, ref packed[3]);
         CheckPrefix(done, count, requireNative, eligible);
         for (int element = done; element < count; element++)
-            for (int i = 0; i < wire; i++) packed[3 + element * wire + i] = source[(element + 1) * size + offsets[i]];
+            for (int i = 0; i < wire; i++)
+                packed[3 + element * wire + i] = source[(element + 1) * size + offsets[i]];
         for (int element = 0; element < count; element++)
-            for (int i = 0; i < wire; i++) Require(packed[3 + element * wire + i] == source[(element + 1) * size + offsets[i]], "Portable packed field differs.");
-        for (int i = 0; i < 3; i++) Require(packed[i] == 0xA5 && packed[packed.Length - 1 - i] == 0xA5, "Portable pack canary changed.");
+            for (int i = 0; i < wire; i++)
+                Require(packed[3 + element * wire + i] == source[(element + 1) * size + offsets[i]], "Portable packed field differs.");
+        for (int i = 0; i < 3; i++)
+            Require(packed[i] == 0xA5 && packed[packed.Length - 1 - i] == 0xA5, "Portable pack canary changed.");
         done = LuminPortable<T, TLayout>.Unpack(ref packed[3], count, ref output[1]);
         CheckPrefix(done, count, requireNative, eligible);
         for (int element = done; element < count; element++)
-            for (int i = 0; i < wire; i++) target[(element + 1) * size + offsets[i]] = packed[3 + element * wire + i];
+            for (int i = 0; i < wire; i++)
+                target[(element + 1) * size + offsets[i]] = packed[3 + element * wire + i];
         for (int element = 0; element < count; element++)
-            for (int i = 0; i < wire; i++) Require(target[(element + 1) * size + offsets[i]] == source[(element + 1) * size + offsets[i]], "Portable unpacked field differs.");
-        for (int i = 0; i < size; i++) Require(target[i] == 0xA5 && target[target.Length - 1 - i] == 0xA5, "Portable unpack canary changed.");
+            for (int i = 0; i < wire; i++)
+                Require(target[(element + 1) * size + offsets[i]] == source[(element + 1) * size + offsets[i]], "Portable unpacked field differs.");
+        for (int i = 0; i < size; i++)
+            Require(target[i] == 0xA5 && target[target.Length - 1 - i] == 0xA5, "Portable unpack canary changed.");
         return 2;
     }
 
@@ -60,13 +67,16 @@ public static class PortableLayoutContract
     private static void CheckPrefix(int done, int count, bool requireNative, bool eligible)
     {
         Require(done >= 0 && done <= count, "Portable completion is outside the range.");
-        if (!eligible || !global::LuminPack.Code.LuminKernelPolicy.UseNativeLayout(count)) Require(done == 0, "Portable refusal policy changed.");
-        else if (requireNative) Require(done > 0, "Eligible portable batch did not enter native SIMD.");
+        if (!eligible || !global::LuminPack.Code.LuminKernelPolicy.UseNativeLayout(count))
+            Require(done == 0, "Portable refusal policy changed.");
+        else if (requireNative)
+            Require(done > 0, "Eligible portable batch did not enter native SIMD.");
     }
     /// <summary>Reports a differential contract failure.</summary><param name="condition">Required condition.</param><param name="message">Failure detail.</param>
     private static void Require(bool condition, string message)
     {
-        if (!condition) global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(message);
+        if (!condition)
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(message);
     }
     /// <summary>Represents padded small storage.</summary>
     [StructLayout(LayoutKind.Sequential, Size = 8)] private struct Small { }
@@ -78,7 +88,11 @@ public static class PortableLayoutContract
         /// <summary>Gets the packed width.</summary>
         public int WireSize => 5;
         /// <summary>Supplies exact storage offsets.</summary><param name="storageOffsets">Complete destination.</param>
-        public void Describe(Span<int> storageOffsets) { storageOffsets[0] = 0; for (int i = 1; i < 5; i++) storageOffsets[i] = i + 3; }
+        public void Describe(Span<int> storageOffsets)
+        {
+            storageOffsets[0] = 0;
+            for (int i = 1; i < 5; i++)
+                storageOffsets[i] = i + 3; }
     }
     /// <summary>Describes a seventeen-byte element spanning five storage runs.</summary>
     private struct WideLayout : ILuminPortableLayout
@@ -97,7 +111,10 @@ public static class PortableLayoutContract
         /// <summary>Gets the packed width.</summary>
         public int WireSize => 12;
         /// <summary>Supplies exact storage offsets.</summary><param name="storageOffsets">Complete destination.</param>
-        public void Describe(Span<int> storageOffsets) { for (int i = 0; i < 12; i++) storageOffsets[i] = i / 4 * 8 + i % 4; }
+        public void Describe(Span<int> storageOffsets)
+        {
+            for (int i = 0; i < 12; i++)
+                storageOffsets[i] = i / 4 * 8 + i % 4; }
     }
 }
 }

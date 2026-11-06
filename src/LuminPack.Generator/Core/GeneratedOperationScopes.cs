@@ -26,7 +26,8 @@ internal static class GeneratedOperationScopes
                 rewritten.ContainsDiagnostics || rewritten.ContainsDirectives ||
                 !PlainBrace(rewritten.OpenBraceToken) || !PlainBrace(rewritten.CloseBraceToken) ||
                 !PlainBrace(inner.OpenBraceToken) || !PlainBrace(inner.CloseBraceToken) ||
-                HasSensitiveStorage(inner)) return rewritten;
+                HasSensitiveStorage(inner))
+                return rewritten;
 
             // The inner block remains a block in the same statement position. No
             // declaration enters a sibling scope, and both boundaries execute together.

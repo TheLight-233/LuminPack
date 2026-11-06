@@ -56,10 +56,12 @@ internal sealed class TypeEmissionInput : IEquatable<TypeEmissionInput>
     /// the consumer compilation, which would analyze the type twice.</remarks>
     internal FrozenTypeEmission Evaluate(Func<INamedTypeSymbol, Compilation, MetaInfo, LuminPackGenerationTier, FrozenTypeEmission> build)
     {
-        if (_completed != null) return _completed;
+        if (_completed != null)
+            return _completed;
         lock (_gate)
         {
-            if (_evaluated != null) return _evaluated;
+            if (_evaluated != null)
+                return _evaluated;
             if (!_type.TryGetTarget(out var type) || !_compilation.TryGetTarget(out var compilation))
                 return LuminPackExceptionHelper.ThrowInvalidOperationException<FrozenTypeEmission>("Active type analysis inputs are unavailable.");
             return _evaluated = _cache.GetOrBuild(type, compilation, _metadata, _tier,

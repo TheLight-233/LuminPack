@@ -17,8 +17,12 @@ public static unsafe partial class LuminMaui
     {
         writer.EnsureAdditionalCapacity(value is null ? 1 : 17);
         writer.Write((byte)(value is null ? 0 : 1));
-        if (value is null) return;
-        writer.Write(value.Red); writer.Write(value.Green); writer.Write(value.Blue); writer.Write(value.Alpha);
+        if (value is null)
+            return;
+        writer.Write(value.Red);
+        writer.Write(value.Green);
+        writer.Write(value.Blue);
+        writer.Write(value.Alpha);
     }
 
     /// <summary>Parses a complete record before creating and publishing a color value.</summary>
@@ -28,11 +32,19 @@ public static unsafe partial class LuminMaui
         var pending = reader;
         byte marker = default;
         pending.Read(ref marker);
-        if (marker == 0) { value = null; reader = pending; return; }
-        if (marker != 1) LuminPackExceptionHelper.ThrowInvalidDataException("Invalid MAUI color marker.");
+        if (marker == 0)
+        {
+            value = null;
+            reader = pending;
+            return; }
+        if (marker != 1)
+            LuminPackExceptionHelper.ThrowInvalidDataException("Invalid MAUI color marker.");
         pending.EnsureReadable(pending.Position, 16);
         float red = default, green = default, blue = default, alpha = default;
-        pending.Read(ref red); pending.Read(ref green); pending.Read(ref blue); pending.Read(ref alpha);
+        pending.Read(ref red);
+        pending.Read(ref green);
+        pending.Read(ref blue);
+        pending.Read(ref alpha);
         MauiColor candidate = new(red, green, blue, alpha);
         value = candidate;
         reader = pending;

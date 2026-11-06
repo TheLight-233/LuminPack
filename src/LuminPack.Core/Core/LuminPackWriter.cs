@@ -49,10 +49,28 @@ namespace LuminPack.Core
 #endif
         /// <summary>Gets the complete retained storage window used for dynamic bounds and framing patches.</summary>
         /// <remarks>Only the writer replaces its storage, so the cached record limit always describes it.</remarks>
-        public Span<byte> Buffer {[MethodImpl(MethodImplOptions.AggressiveInlining)] readonly get => _buffer; internal set { _buffer = value; RefreshRecordLimit(); } }
+        public Span<byte> Buffer
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            readonly get => _buffer;
+            internal set
+            {
+                _buffer = value;
+                RefreshRecordLimit();
+            }
+        }
 
         /// <summary>Gets the cached owned-buffer growth threshold; fixed spans use the maximum value.</summary>
-        public uint BufferCheckLimit {[MethodImpl(MethodImplOptions.AggressiveInlining)] readonly get => _bufferCheckLimit; internal set { _bufferCheckLimit = value; RefreshRecordLimit(); } }
+        public uint BufferCheckLimit
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            readonly get => _bufferCheckLimit;
+            internal set
+            {
+                _bufferCheckLimit = value;
+                RefreshRecordLimit();
+            }
+        }
 
         /// <summary>Gets the optional growable output owner.</summary>
         public LuminBufferWriter? Owner {[MethodImpl(MethodImplOptions.AggressiveInlining)] readonly get; internal set; }
@@ -185,7 +203,8 @@ namespace LuminPack.Core
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (Options is null) Options = CreateReferenceState();
+                if (Options is null)
+                    Options = CreateReferenceState();
                 return Options;
             }
         }
@@ -399,7 +418,8 @@ namespace LuminPack.Core
         {
             int position = Position;
             Buffer = span;
-            if (Owner is null) BufferCheckLimit = uint.MaxValue;
+            if (Owner is null)
+                BufferCheckLimit = uint.MaxValue;
             Position = position;
         }
 
@@ -673,10 +693,13 @@ namespace LuminPack.Core
             // The original reservation, borrowed-source lifetime and completed-position growth ordering are retained;
             // growth goes through the static helpers, so the writer's address stays unexposed.
             bool fits = FitsRecord(length);
-            if (!fits) EnsureAdditionalCapacity(length);
+            if (!fits)
+                EnsureAdditionalCapacity(length);
             WritePayload(ref source, count, bytes);
-            if (fits) Advance(length);
-            else AdvanceSafe(length);
+            if (fits)
+                Advance(length);
+            else
+                AdvanceSafe(length);
         }
 
         /// <summary>Copies an already reserved contiguous record without repeating capacity or completion checks.</summary>
@@ -1120,13 +1143,16 @@ namespace LuminPack.Core
                     written = WriteUtf16RecordSlow(ref Current, _buffer.Length - Position, value);
                 }
 
-                if (value is null) Advance(written);
-                else AdvanceSafe(written);
+                if (value is null)
+                    Advance(written);
+                else
+                    AdvanceSafe(written);
                 return;
             }
 
             int length = WriteEncodedString<TOptions>(value, out bool completeRecord);
-            if (!completeRecord) length += StringRecordLength<TOptions>();
+            if (!completeRecord)
+                length += StringRecordLength<TOptions>();
             if (value is null)
                 Advance(length);
             else
@@ -1158,7 +1184,8 @@ namespace LuminPack.Core
                     uint limit = Math.Min((uint)_buffer.Length, BufferCheckLimit - 1);
                     uint position = (uint)Position;
                     Advance(WriteUtf16Run(ref Current, position < limit ? limit - position : 0, values, ref index));
-                    if (index >= values.Length) return;
+                    if (index >= values.Length)
+                        return;
                     Write<TOptions>(values[index++]);
                 }
             }
@@ -1527,7 +1554,10 @@ namespace LuminPack.Core
             /// <param name = "elements">The elements.</param>
             /// <param name = "isNull">Whether the collection was null.</param>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public RawRecord(ReadOnlySpan<T> elements, bool isNull) { Elements = elements; IsNull = isNull; }
+            public RawRecord(ReadOnlySpan<T> elements, bool isNull)
+            {
+                Elements = elements;
+                IsNull = isNull; }
 
             /// <summary>Gets the record's exact width.</summary>
             public int Bound {[MethodImpl(MethodImplOptions.AggressiveInlining)] get => SpanRecordBound<T>(IsNull, Elements.Length); }
@@ -1549,7 +1579,10 @@ namespace LuminPack.Core
             /// <param name = "dictionary">The dictionary.</param>
             /// <param name = "count">The captured count.</param>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public RawPairsRecord(Dictionary<TKey, TValue>? dictionary, int count) { Dictionary = dictionary; Count = count; }
+            public RawPairsRecord(Dictionary<TKey, TValue>? dictionary, int count)
+            {
+                Dictionary = dictionary;
+                Count = count; }
 
             /// <summary>Gets the record's exact width.</summary>
             public int Bound {[MethodImpl(MethodImplOptions.AggressiveInlining)] get => PairRecordBound<TKey, TValue>(Dictionary is null, Count); }
@@ -1764,7 +1797,8 @@ namespace LuminPack.Core
                     uint limit = Math.Min((uint)_buffer.Length, BufferCheckLimit - 1);
                     uint position = (uint)Position;
                     Advance(WriteUtf16PairRun(ref Current, position < limit ? limit - position : 0, keys, values, ref index));
-                    if (index >= keys.Length) return;
+                    if (index >= keys.Length)
+                        return;
                     CheckBuffer();
                     Write<TOptions>(keys[index]);
                     Write<TOptions>(values[index++]);
@@ -1845,14 +1879,16 @@ namespace LuminPack.Core
         {
             ref byte start = ref Current;
             int room = (int)PrefixRoom();
-            if (room == 0) return 0;
+            if (room == 0)
+                return 0;
             int written = 0;
             int i = 0;
             for (; i < pairs.Length; i++)
             {
                 var pair = pairs[i];
                 long chars = (long)(pair.Key?.Length ?? 0) + (pair.Value?.Length ?? 0);
-                if (2 * sizeof(int) + chars * sizeof(char) > (long)room - written) break;
+                if (2 * sizeof(int) + chars * sizeof(char) > (long)room - written)
+                    break;
                 written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Key);
                 written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Value);
             }
@@ -1881,7 +1917,8 @@ namespace LuminPack.Core
                 string? value = Unsafe.Add(ref firstValue, (nint)(uint)i);
                 // Two strings hold at most 2 * 0x3FFFFFDF characters, so the raw bound fits uint.
                 uint bound = 2 * sizeof(int) + ((key is null ? 0u : (uint)key.Length) + (value is null ? 0u : (uint)value.Length)) * sizeof(char);
-                if (bound > room - used) break;
+                if (bound > room - used)
+                    break;
                 used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), key);
                 used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), value);
             }
@@ -1924,7 +1961,8 @@ namespace LuminPack.Core
                 string? value = Unsafe.Add(ref first, (nint)(uint)i);
                 // A string holds at most 0x3FFFFFDF characters, so the raw bound fits uint.
                 uint bound = sizeof(int) + (value is null ? 0u : (uint)value.Length * sizeof(char));
-                if (bound > room - used) break;
+                if (bound > room - used)
+                    break;
                 used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), value);
             }
 
@@ -1953,7 +1991,8 @@ namespace LuminPack.Core
                     return (int)used + WriteGeneralUtf16Run(ref Unsafe.Add(ref current, (nint)used), room - used, values, ref index);
                 }
                 uint bound = sizeof(int) + (uint)value.Length * sizeof(char);
-                if (bound > room - used) break;
+                if (bound > room - used)
+                    break;
                 used += (uint)WriteMediumUtf16RunRecord(ref Unsafe.Add(ref current, (nint)used), value);
             }
 
@@ -2133,7 +2172,8 @@ namespace LuminPack.Core
         private int WriteVarIntStringBytes<TOptions>(string? value, bool capacityReserved) where TOptions : struct, ILuminPackOptions
         {
             int length = VarIntRecordLength<TOptions>(value, out int payload);
-            if (!capacityReserved && !FitsRecord(length)) EnsureAdditionalCapacity(length);
+            if (!capacityReserved && !FitsRecord(length))
+                EnsureAdditionalCapacity(length);
             WriteVarIntRecord<TOptions>(_buffer.Slice(Position, length), value, payload);
             return length;
         }
@@ -2183,7 +2223,10 @@ namespace LuminPack.Core
             }
             // A short destination retains the original checked per-byte failure and written prefix.
             int offset = 0;
-            while (value >= 128) { destination[offset++] = (byte)(value | 128); value >>= 7; }
+            while (value >= 128)
+            {
+                destination[offset++] = (byte)(value | 128);
+                value >>= 7; }
             destination[offset++] = (byte)value;
             return offset;
         }
@@ -2207,7 +2250,8 @@ namespace LuminPack.Core
         {
             bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
             payload = 0;
-            if (string.IsNullOrEmpty(value)) return utf8 ? 2 : 1;
+            if (string.IsNullOrEmpty(value))
+                return utf8 ? 2 : 1;
             payload = utf8 ? LuminPackMarshal.CalculateStringByteCount(value) : StringSerializer.Utf16RecordPayloadLength(value);
             int header = utf8 ? payload : payload == value.Length ? StringSerializer.Latin1Header(value.Length) : payload;
             return checked(payload + VarIntHeaderLength(header) + (utf8 ? VarIntHeaderLength(value.Length) : 0));
@@ -2227,20 +2271,25 @@ namespace LuminPack.Core
             {
                 int header = value is null ? -1 : 0;
                 int offset = WriteVarIntHeader(destination, header);
-                if (utf8) WriteVarIntHeader(destination.Slice(offset), header);
+                if (utf8)
+                    WriteVarIntHeader(destination.Slice(offset), header);
                 return;
             }
             bool latin1 = !utf8 && payload == value.Length;
             int prefix = WriteVarIntHeader(destination, latin1 ? StringSerializer.Latin1Header(value.Length) : payload);
-            if (utf8) prefix += WriteVarIntHeader(destination.Slice(prefix), value.Length);
+            if (utf8)
+                prefix += WriteVarIntHeader(destination.Slice(prefix), value.Length);
             ref byte target = ref MemoryMarshal.GetReference(destination.Slice(prefix));
             if (utf8)
             {
                 var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value, destination.Slice(prefix), out _, out int written, replaceInvalidSequences: false);
-                if (status != OperationStatus.Done || written != payload) LuminPackExceptionHelper.ThrowFailedEncoding(status);
+                if (status != OperationStatus.Done || written != payload)
+                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
-            else if (latin1) StringSerializer.TryNarrowLatin1(ref MemoryMarshal.GetReference(value.AsSpan()), ref target, value.Length);
-            else StringSerializer.SerializeUtf16(ref target, ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)payload);
+            else if (latin1)
+                StringSerializer.TryNarrowLatin1(ref MemoryMarshal.GetReference(value.AsSpan()), ref target, value.Length);
+            else
+                StringSerializer.SerializeUtf16(ref target, ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)payload);
         }
 
         #endregion
@@ -2622,7 +2671,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteVersionPrefix<TOptions>(scoped ReadOnlySpan<byte> prefix) where TOptions : struct, ILuminPackOptions
         {
-            if (prefix.Length < 4) LuminPackExceptionHelper.ThrowArgumentException("A version prefix must contain a complete header.", nameof(prefix));
+            if (prefix.Length < 4)
+                LuminPackExceptionHelper.ThrowArgumentException("A version prefix must contain a complete header.", nameof(prefix));
             EnsureAdditionalCapacity(prefix.Length);
             // The header with the stamped profile is one store, and the rest is copied in disjoint word stores. A
             // vectorized block copy writes overlapping halves, and a record's next wide load over those stores (for
@@ -2674,7 +2724,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ref byte StoreVersionPrefix<TOptions>(ref byte target, scoped ReadOnlySpan<byte> prefix) where TOptions : struct, ILuminPackOptions
         {
-            if (prefix.Length < 4) LuminPackExceptionHelper.ThrowArgumentException("A version prefix must contain a complete header.", nameof(prefix));
+            if (prefix.Length < 4)
+                LuminPackExceptionHelper.ThrowArgumentException("A version prefix must contain a complete header.", nameof(prefix));
             uint header = BinaryPrimitives.ReadUInt32LittleEndian(prefix);
             Unsafe.WriteUnaligned(ref target, (header & 0xFF00FFFFu) | (uint)BinaryProfile<TOptions>() << 16);
             CopyDisjoint(ref Unsafe.Add(ref target, 4), ref Unsafe.Add(ref MemoryMarshal.GetReference(prefix), 4), prefix.Length - 4);
@@ -2735,7 +2786,8 @@ namespace LuminPack.Core
                     Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, index), Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, index)));
             for (; index + sizeof(uint) <= length; index += sizeof(uint))
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, index), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, index)));
-            for (; index < length; index++) Unsafe.Add(ref target, index) = Unsafe.Add(ref source, index);
+            for (; index < length; index++)
+                Unsafe.Add(ref target, index) = Unsafe.Add(ref source, index);
         }
 
         /// <summary>Copies the complete cached name and type table at its dynamic framing boundary.</summary>

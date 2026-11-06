@@ -31,7 +31,8 @@ public static unsafe partial class UnityObjectContract
         Require(gradientTarget.mode == gradient.mode && gradientTarget.colorSpace == gradient.colorSpace, "Gradient metadata changed.");
         Check<RectOffset>(new RectOffset(-1, 2, 3, -4), new RectOffset(10, 11, 12, 13), &LuminUnity.Write, &LuminUnity.Read);
         CheckSize<RectOffset>(new RectOffset(-1, 2, 3, 4), &LuminUnity.Write, &LuminUnity.Size);
-        LuminUnity.Register(); LuminUnity.Register();
+        LuminUnity.Register();
+        LuminUnity.Register();
         CheckAllocationProfiles();
         Debug.Log("LUMINPACK_UNITY_OBJECTS_OK: curve/gradient/offset native round trips, reuse, all truncations, nulls, exact-length writes and count validation.");
     }
@@ -65,7 +66,11 @@ public static unsafe partial class UnityObjectContract
                 ReadOnlySpan<byte> window = new ReadOnlySpan<byte>(input, length);
                 var reader = new LuminPackReader(ref window);
                 bool rejected = false;
-                try { read(ref reader, ref current); } catch (Exception) { rejected = true; }
+                try
+                {
+                    read(ref reader, ref current); } catch (Exception)
+                {
+                    rejected = true; }
                 Require(rejected && reader.Position == 0 && ReferenceEquals(destination, current), "Short record published a native owner or cursor.");
                 Require(before.SequenceEqual(Encode(current, write)), "Short record mutated a native owner.");
             }
@@ -90,7 +95,11 @@ public static unsafe partial class UnityObjectContract
                     ReadOnlySpan<byte> window = new ReadOnlySpan<byte>(input, malformed.Length);
                     var reader = new LuminPackReader(ref window);
                     bool rejected = false;
-                    try { read(ref reader, ref current); } catch (Exception) { rejected = true; }
+                    try
+                    {
+                        read(ref reader, ref current); } catch (Exception)
+                    {
+                        rejected = true; }
                     Require(rejected && reader.Position == 0, "Forged key count was accepted or advanced the caller.");
                     Require(record.SequenceEqual(Encode(current, write)), "Forged count changed native state.");
                 }
@@ -120,7 +129,9 @@ public static unsafe partial class UnityObjectContract
             write(ref probe, value);
             length = probe.CurrentIndex;
         }
-        finally { LuminBufferWriterPool.Return(buffer); }
+        finally
+        {
+            LuminBufferWriterPool.Return(buffer); }
         byte[] output = Enumerable.Repeat((byte)0xA5, length + 8).ToArray();
         fixed (byte* data = output)
         {
@@ -135,6 +146,8 @@ public static unsafe partial class UnityObjectContract
 
     /// <summary>Reports a focused validation failure.</summary><param name="condition">Required condition.</param><param name="message">Detail.</param>
     private static void Require(bool condition, string message)
-    { if (!condition) LuminPackExceptionHelper.ThrowInvalidOperationException(message); }
+    {
+        if (!condition)
+            LuminPackExceptionHelper.ThrowInvalidOperationException(message); }
 }
 #endif

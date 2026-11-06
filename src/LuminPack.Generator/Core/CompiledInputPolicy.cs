@@ -37,19 +37,44 @@ internal sealed class CompiledInputPolicy
         foreach (var argument in attribute.NamedArguments)
         {
             if (argument.Key is not ("UntrustedData" or "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or
-                "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxDepth" or "MaxReadWork")) continue;
-            if (ReferenceEquals(next, this)) next = (CompiledInputPolicy)MemberwiseClone();
+                "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxDepth" or "MaxReadWork"))
+                continue;
+            if (ReferenceEquals(next, this))
+                next = (CompiledInputPolicy)MemberwiseClone();
             switch (argument.Key)
             {
-                case "UntrustedData": next.Enabled = (bool)argument.Value.Value; next.Explicit = next.Enabled; break;
-                case "MaxInputBytes": next.Input = (int)argument.Value.Value; next.Explicit = true; break;
-                case "MaxDecompressedBytes": next.Decompressed = (int)argument.Value.Value; break;
-                case "MaxAllocationBytes": next.Allocation = (long)argument.Value.Value; break;
-                case "MaxCollectionLength": next.Collection = (int)argument.Value.Value; next.Explicit = true; break;
-                case "MaxStringLength": next.String = (int)argument.Value.Value; next.Explicit = true; break;
-                case "MaxObjectCount": next.Objects = (int)argument.Value.Value; break;
-                case "MaxDepth": next.Depth = (int)argument.Value.Value; next.Explicit = true; break;
-                case "MaxReadWork": next.Work = (long)argument.Value.Value; break;
+                case "UntrustedData":
+                    next.Enabled = (bool)argument.Value.Value;
+                    next.Explicit = next.Enabled;
+                    break;
+                case "MaxInputBytes":
+                    next.Input = (int)argument.Value.Value;
+                    next.Explicit = true;
+                    break;
+                case "MaxDecompressedBytes":
+                    next.Decompressed = (int)argument.Value.Value;
+                    break;
+                case "MaxAllocationBytes":
+                    next.Allocation = (long)argument.Value.Value;
+                    break;
+                case "MaxCollectionLength":
+                    next.Collection = (int)argument.Value.Value;
+                    next.Explicit = true;
+                    break;
+                case "MaxStringLength":
+                    next.String = (int)argument.Value.Value;
+                    next.Explicit = true;
+                    break;
+                case "MaxObjectCount":
+                    next.Objects = (int)argument.Value.Value;
+                    break;
+                case "MaxDepth":
+                    next.Depth = (int)argument.Value.Value;
+                    next.Explicit = true;
+                    break;
+                case "MaxReadWork":
+                    next.Work = (long)argument.Value.Value;
+                    break;
             }
         }
         return next;

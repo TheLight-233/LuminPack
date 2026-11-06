@@ -31,6 +31,7 @@ internal readonly ref struct Utf8TextBuffer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Dispose()
     {
-        if (_rented is not null) ArrayPool<char>.Shared.Return(_rented);
+        if (_rented is not null)
+            ArrayPool<char>.Shared.Return(_rented);
     }
 }

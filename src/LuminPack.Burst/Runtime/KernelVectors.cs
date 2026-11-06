@@ -29,17 +29,23 @@ namespace LuminPack.Burst
         internal uint ExtractMostSignificantBits()
         {
 
-            if (X86.Sse2.IsSse2Supported) return (uint)X86.Sse2.movemask_epi8(Value);
-            v128 value = Value; byte* p = (byte*)&value; uint mask = 0;
-            for (int index = 0; index < 16; index++) mask |= (uint)(p[index] >> 7) << index;
+            if (X86.Sse2.IsSse2Supported)
+                return (uint)X86.Sse2.movemask_epi8(Value);
+            v128 value = Value;
+            byte* p = (byte*)&value;
+            uint mask = 0;
+            for (int index = 0; index < 16; index++)
+                mask |= (uint)(p[index] >> 7) << index;
             return mask;
         }
         /// <summary>Maps one vector XOR instruction.</summary><param name="left">First vector.</param><param name="right">Second vector.</param><returns>The XOR result.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<T> operator ^(Vector128<T> left, Vector128<T> right)
         {
-            if (X86.Sse2.IsSse2Supported) return new Vector128<T> { Value = X86.Sse2.xor_si128(left.Value, right.Value) };
-            if (Arm.Neon.IsNeonSupported) return new Vector128<T> { Value = Arm.Neon.veorq_u8(left.Value, right.Value) };
+            if (X86.Sse2.IsSse2Supported)
+                return new Vector128<T> { Value = X86.Sse2.xor_si128(left.Value, right.Value) };
+            if (Arm.Neon.IsNeonSupported)
+                return new Vector128<T> { Value = Arm.Neon.veorq_u8(left.Value, right.Value) };
             return new Vector128<T> { Value = new v128(left.Value.ULong0 ^ right.Value.ULong0, left.Value.ULong1 ^ right.Value.ULong1) };
         }
     }
@@ -56,8 +62,10 @@ namespace LuminPack.Burst
         {
             fixed (byte* p = &source)
             {
-                if (X86.Sse2.IsSse2Supported) return new Vector128<byte> { Value = X86.Sse2.loadu_si128(p + offset) };
-                if (Arm.Neon.IsNeonSupported) return new Vector128<byte> { Value = Arm.Neon.vld1q_u8(p + offset) };
+                if (X86.Sse2.IsSse2Supported)
+                    return new Vector128<byte> { Value = X86.Sse2.loadu_si128(p + offset) };
+                if (Arm.Neon.IsNeonSupported)
+                    return new Vector128<byte> { Value = Arm.Neon.vld1q_u8(p + offset) };
             }
             return new Vector128<byte> { Value = KernelMemory.ReadUnaligned<v128>(ref KernelMemory.Add(ref source, offset)) };
         }
@@ -70,8 +78,14 @@ namespace LuminPack.Burst
         {
             fixed (byte* p = &destination)
             {
-                if (X86.Sse2.IsSse2Supported) { X86.Sse2.storeu_si128(p + offset, value.Value); return; }
-                if (Arm.Neon.IsNeonSupported) { Arm.Neon.vst1q_u8(p + offset, value.Value); return; }
+                if (X86.Sse2.IsSse2Supported)
+                {
+                    X86.Sse2.storeu_si128(p + offset, value.Value);
+                    return; }
+                if (Arm.Neon.IsNeonSupported)
+                {
+                    Arm.Neon.vst1q_u8(p + offset, value.Value);
+                    return; }
             }
             KernelMemory.WriteUnaligned(ref KernelMemory.Add(ref destination, offset), value.Value);
         }
@@ -79,10 +93,13 @@ namespace LuminPack.Burst
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector128<byte> Equals(Vector128<byte> left, Vector128<byte> right)
         {
-            if (X86.Sse2.IsSse2Supported) return new Vector128<byte> { Value = X86.Sse2.cmpeq_epi8(left.Value, right.Value) };
-            if (Arm.Neon.IsNeonSupported) return new Vector128<byte> { Value = Arm.Neon.vceqq_u8(left.Value, right.Value) };
+            if (X86.Sse2.IsSse2Supported)
+                return new Vector128<byte> { Value = X86.Sse2.cmpeq_epi8(left.Value, right.Value) };
+            if (Arm.Neon.IsNeonSupported)
+                return new Vector128<byte> { Value = Arm.Neon.vceqq_u8(left.Value, right.Value) };
             v128 a = left.Value, b = right.Value, result = default;
-            for (int index = 0; index < 16; index++) ((byte*)&result)[index] = ((byte*)&a)[index] == ((byte*)&b)[index] ? (byte)255 : (byte)0;
+            for (int index = 0; index < 16; index++)
+                ((byte*)&result)[index] = ((byte*)&a)[index] == ((byte*)&b)[index] ? (byte)255 : (byte)0;
             return new Vector128<byte> { Value = result };
         }
     }
@@ -102,19 +119,26 @@ namespace LuminPack.Burst
         internal uint ExtractMostSignificantBits()
         {
 
-            if (X86.Avx2.IsAvx2Supported) return (uint)X86.Avx2.mm256_movemask_epi8(Value);
-            v256 value = Value; byte* p = (byte*)&value; uint mask = 0;
-            for (int index = 0; index < 32; index++) mask |= (uint)(p[index] >> 7) << index;
+            if (X86.Avx2.IsAvx2Supported)
+                return (uint)X86.Avx2.mm256_movemask_epi8(Value);
+            v256 value = Value;
+            byte* p = (byte*)&value;
+            uint mask = 0;
+            for (int index = 0; index < 32; index++)
+                mask |= (uint)(p[index] >> 7) << index;
             return mask;
         }
         /// <summary>Maps one vector XOR instruction.</summary><param name="left">First vector.</param><param name="right">Second vector.</param><returns>The XOR result.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector256<T> operator ^(Vector256<T> left, Vector256<T> right)
         {
-            if (X86.Avx2.IsAvx2Supported) return new Vector256<T> { Value = X86.Avx2.mm256_xor_si256(left.Value, right.Value) };
+            if (X86.Avx2.IsAvx2Supported)
+                return new Vector256<T> { Value = X86.Avx2.mm256_xor_si256(left.Value, right.Value) };
             v256 result = default;
-            result.ULong0 = left.Value.ULong0 ^ right.Value.ULong0; result.ULong1 = left.Value.ULong1 ^ right.Value.ULong1;
-            result.ULong2 = left.Value.ULong2 ^ right.Value.ULong2; result.ULong3 = left.Value.ULong3 ^ right.Value.ULong3;
+            result.ULong0 = left.Value.ULong0 ^ right.Value.ULong0;
+            result.ULong1 = left.Value.ULong1 ^ right.Value.ULong1;
+            result.ULong2 = left.Value.ULong2 ^ right.Value.ULong2;
+            result.ULong3 = left.Value.ULong3 ^ right.Value.ULong3;
             return new Vector256<T> { Value = result };
         }
     }
@@ -129,7 +153,10 @@ namespace LuminPack.Burst
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector256<byte> LoadUnsafe(ref byte source, nuint offset)
         {
-            if (X86.Avx2.IsAvx2Supported) { fixed (byte* p = &source) return new Vector256<byte> { Value = X86.Avx.mm256_loadu_si256(p + offset) }; }
+            if (X86.Avx2.IsAvx2Supported)
+            {
+                fixed (byte* p = &source)
+                    return new Vector256<byte> { Value = X86.Avx.mm256_loadu_si256(p + offset) }; }
             return new Vector256<byte> { Value = KernelMemory.ReadUnaligned<v256>(ref KernelMemory.Add(ref source, offset)) };
         }
         /// <summary>Stores a complete unaligned lane at the first output byte.</summary><param name="value">Vector.</param><param name="destination">Output.</param>
@@ -139,16 +166,22 @@ namespace LuminPack.Burst
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void StoreUnsafe(Vector256<byte> value, ref byte destination, nuint offset)
         {
-            if (X86.Avx2.IsAvx2Supported) { fixed (byte* p = &destination) X86.Avx.mm256_storeu_si256(p + offset, value.Value); return; }
+            if (X86.Avx2.IsAvx2Supported)
+            {
+                fixed (byte* p = &destination)
+                    X86.Avx.mm256_storeu_si256(p + offset, value.Value);
+                return; }
             KernelMemory.WriteUnaligned(ref KernelMemory.Add(ref destination, offset), value.Value);
         }
         /// <summary>Maps one lane byte comparison.</summary><param name="left">First vector.</param><param name="right">Second vector.</param><returns>The byte equality mask.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector256<byte> Equals(Vector256<byte> left, Vector256<byte> right)
         {
-            if (X86.Avx2.IsAvx2Supported) return new Vector256<byte> { Value = X86.Avx2.mm256_cmpeq_epi8(left.Value, right.Value) };
+            if (X86.Avx2.IsAvx2Supported)
+                return new Vector256<byte> { Value = X86.Avx2.mm256_cmpeq_epi8(left.Value, right.Value) };
             v256 a = left.Value, b = right.Value, result = default;
-            for (int index = 0; index < 32; index++) ((byte*)&result)[index] = ((byte*)&a)[index] == ((byte*)&b)[index] ? (byte)255 : (byte)0;
+            for (int index = 0; index < 32; index++)
+                ((byte*)&result)[index] = ((byte*)&a)[index] == ((byte*)&b)[index] ? (byte)255 : (byte)0;
             return new Vector256<byte> { Value = result };
         }
     }

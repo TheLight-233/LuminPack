@@ -14,7 +14,10 @@ namespace LuminPack.Burst
             if (BitConverter.IsLittleEndian && Vector256.IsHardwareAccelerated && source.Length > 32 && destination.Length >= source.Length && source[0] < 128)
             {
                 fixed (byte* input = source) fixed (char* output = destination)
-                    if (CoreTextAlgorithms.TryWidenAscii(ref *input, source.Length, ref *(ushort*)output)) { bytesRead = charsWritten = source.Length; return OperationStatus.Done; }
+                    if (CoreTextAlgorithms.TryWidenAscii(ref *input, source.Length, ref *(ushort*)output))
+                    {
+                        bytesRead = charsWritten = source.Length;
+                        return OperationStatus.Done; }
             }
             return CoreTextAlgorithms.DeserializeFromUtf8(source, destination, out bytesRead, out charsWritten, replaceInvalidSequences, isFinalBlock);
         }

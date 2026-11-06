@@ -26,7 +26,8 @@ internal static class BinaryEntryCursorAliases
     /// <returns>The operation with guarded aliases removed.</returns>
     private static BlockSyntax RewriteState(BlockSyntax body, string state)
     {
-        if (body == null) return body;
+        if (body == null)
+            return body;
         var declarations = body.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().Where(statement =>
             statement.Declaration.Type is RefTypeSyntax referenceType && referenceType.ReadOnlyKeyword.RawKind == 0 &&
             (referenceType.Type is PredefinedTypeSyntax type && type.Keyword.IsKind(SyntaxKind.IntKeyword) || referenceType.Type.IsVar) &&
@@ -38,7 +39,8 @@ internal static class BinaryEntryCursorAliases
                 Expression: IdentifierNameSyntax receiver,
                 Name.Identifier.ValueText: "GetCurrentSpanOffset"
             } && receiver.Identifier.ValueText == state && invocation.ArgumentList.Arguments.Count == 0).ToArray();
-        if (declarations.Length == 0) return body;
+        if (declarations.Length == 0)
+            return body;
         var nodes = body.DescendantNodes().ToArray();
         var names = nodes.Select(node => node switch
             {
@@ -53,7 +55,8 @@ internal static class BinaryEntryCursorAliases
         var rebound = new HashSet<string>(nodes.OfType<AssignmentExpressionSyntax>()
             .Where(assignment => assignment.Right is RefExpressionSyntax && assignment.Left is IdentifierNameSyntax)
             .Select(assignment => ((IdentifierNameSyntax)assignment.Left).Identifier.ValueText), StringComparer.Ordinal);
-        if (rebound.Contains(state)) return body;
+        if (rebound.Contains(state))
+            return body;
         var observedNames = new HashSet<string>(nodes.OfType<InvocationExpressionSyntax>()
             .Where(invocation => invocation.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" })
             .SelectMany(invocation => invocation.ArgumentList.Arguments)
@@ -65,7 +68,8 @@ internal static class BinaryEntryCursorAliases
             return statement.Declaration.Variables[0].Identifier.GetAnnotations(BinaryEntryInlining.ExpandedIdentityAnnotation).Any() &&
                 names[name] == 1 && !rebound.Contains(name) && !observedNames.Contains(name);
         }).ToArray();
-        if (removable.Length == 0) return body;
+        if (removable.Length == 0)
+            return body;
         var aliases = new HashSet<string>(removable.Select(statement => statement.Declaration.Variables[0].Identifier.ValueText), StringComparer.Ordinal);
         var withoutAliases = body.RemoveNodes(removable, SyntaxRemoveOptions.KeepExteriorTrivia);
         return (BlockSyntax)new AliasRewriter(aliases, state).Visit(withoutAliases);
@@ -80,7 +84,10 @@ internal static class BinaryEntryCursorAliases
         /// <summary>Stores the generated aliases proven unique in this operation.</summary>
         /// <param name="aliases">The alias identifiers eligible for substitution.</param>
         /// <param name="state">The original state parameter owning the cursor field.</param>
-        internal AliasRewriter(HashSet<string> aliases, string state) { _aliases = aliases; _state = state; }
+        internal AliasRewriter(HashSet<string> aliases, string state)
+        {
+            _aliases = aliases;
+            _state = state; }
 
         /// <summary>Reuses the original cursor address at each alias use.</summary>
         /// <param name="node">The generated identifier expression.</param>

@@ -40,16 +40,27 @@ internal sealed class StableTypeIdentity
     internal StableTypeIdentity(string kind, int reference, string metadataName, string simpleName, int arity, int rank, int mode,
         SpecialType special, NullableAnnotation nullable, StableTypeIdentity containing, IEnumerable<StableTypeIdentity> arguments, IEnumerable<string> tupleNames)
     {
-        _kind = kind; _reference = reference; _metadataName = metadataName; _simpleName = simpleName; _arity = arity;
-        _rank = rank; _mode = mode; _special = special; _nullable = nullable; _containing = containing;
-        _arguments = arguments.ToImmutableArray(); _tupleNames = tupleNames.ToImmutableArray();
+        _kind = kind;
+        _reference = reference;
+        _metadataName = metadataName;
+        _simpleName = simpleName;
+        _arity = arity;
+        _rank = rank;
+        _mode = mode;
+        _special = special;
+        _nullable = nullable;
+        _containing = containing;
+        _arguments = arguments.ToImmutableArray();
+        _tupleNames = tupleNames.ToImmutableArray();
         var key = new StringBuilder(kind).Append('|').Append(reference).Append('|').Append((int)special).Append('|').Append((int)nullable)
             .Append('|').Append(arity).Append('|').Append(rank).Append('|').Append(mode).Append('|');
         AppendPart(key, metadataName ?? string.Empty);
         AppendPart(key, containing?.Key ?? string.Empty);
-        foreach (var argument in _arguments) AppendPart(key, argument.Key);
+        foreach (var argument in _arguments)
+            AppendPart(key, argument.Key);
         key.Append('|');
-        foreach (var name in _tupleNames) AppendPart(key, name ?? string.Empty);
+        foreach (var name in _tupleNames)
+            AppendPart(key, name ?? string.Empty);
         Key = key.ToString();
     }
 
@@ -67,9 +78,15 @@ internal sealed class StableTypeIdentity
         ITypeSymbol result;
         switch (_kind)
         {
-            case "special": result = compilation.GetSpecialType(_special); break;
-            case "dynamic": result = compilation.DynamicType; break;
-            case "native": result = compilation.CreateNativeIntegerTypeSymbol(_special == SpecialType.System_IntPtr); break;
+            case "special":
+                result = compilation.GetSpecialType(_special);
+                break;
+            case "dynamic":
+                result = compilation.DynamicType;
+                break;
+            case "native":
+                result = compilation.CreateNativeIntegerTypeSymbol(_special == SpecialType.System_IntPtr);
+                break;
             case "array":
                 var element = resolver.Resolve(_arguments[0]);
                 result = element == null ? null : compilation.CreateArrayTypeSymbol(element, _rank, element.NullableAnnotation);
@@ -85,8 +102,10 @@ internal sealed class StableTypeIdentity
                 break;
             case "parameter":
                 var parameterOwner = resolver.Resolve(_containing) as INamedTypeSymbol;
-                if (parameterOwner == null) return null;
-                if (_mode == 0) result = _rank < parameterOwner.TypeParameters.Length ? parameterOwner.TypeParameters[_rank] : null;
+                if (parameterOwner == null)
+                    return null;
+                if (_mode == 0)
+                    result = _rank < parameterOwner.TypeParameters.Length ? parameterOwner.TypeParameters[_rank] : null;
                 else
                 {
                     var methodOwner = parameterOwner.GetMembers().OfType<IMethodSymbol>()
@@ -106,15 +125,18 @@ internal sealed class StableTypeIdentity
                     IAssemblySymbol assembly = _reference < 0 ? compilation.Assembly : resolver.Assemblies[_reference];
                     definition = assembly?.GetTypeByMetadataName(_metadataName);
                 }
-                if (definition == null) return null;
-                if (_mode == 2) result = definition.ConstructUnboundGenericType();
+                if (definition == null)
+                    return null;
+                if (_mode == 2)
+                    result = definition.ConstructUnboundGenericType();
                 else if (_mode == 1 && _arity != 0)
                 {
                     var arguments = _arguments.Select(resolver.Resolve).ToArray();
                     result = arguments.Any(type => type == null) ? null : definition.Construct(arguments.ToImmutableArray(),
                         arguments.Select(type => type.NullableAnnotation).ToImmutableArray());
                 }
-                else result = definition;
+                else
+                    result = definition;
                 break;
             default: return null;
         }
@@ -149,11 +171,13 @@ internal sealed class StableTypeIdentityFactory
     /// <returns>A stable type value, or null to require fresh semantic observation.</returns>
     internal StableTypeIdentity Create(ITypeSymbol type)
     {
-        if (type == null || type.TypeKind == TypeKind.Error || type is ITypeParameterSymbol && !_supportTypeParameters || type is IFunctionPointerTypeSymbol) return null;
+        if (type == null || type.TypeKind == TypeKind.Error || type is ITypeParameterSymbol && !_supportTypeParameters || type is IFunctionPointerTypeSymbol)
+            return null;
         // Files are bound in parallel; the lock is reentrant for the recursive construction below.
         lock (_known)
         {
-            if (_known.TryGetValue(type, out var existing)) return existing;
+            if (_known.TryGetValue(type, out var existing))
+                return existing;
             StableTypeIdentity result = CreateCore(type);
             _known[type] = result;
             return result;
@@ -173,11 +197,13 @@ internal sealed class StableTypeIdentityFactory
             var ownerType = (owner as INamedTypeSymbol ?? (owner as IMethodSymbol)?.ContainingType)?.OriginalDefinition;
             var containingIdentity = ownerType == null ? null : Create(ownerType);
             string methodIdentity = owner is IMethodSymbol method ? method.OriginalDefinition.GetDocumentationCommentId() : null;
-            if (containingIdentity == null || owner is not INamedTypeSymbol && methodIdentity == null) return null;
+            if (containingIdentity == null || owner is not INamedTypeSymbol && methodIdentity == null)
+                return null;
             return new StableTypeIdentity("parameter", -1, methodIdentity, null, 0, parameter.Ordinal, owner is IMethodSymbol ? 1 : 0,
                 SpecialType.None, type.NullableAnnotation, containingIdentity, empty, noNames);
         }
-        if (type.TypeKind == TypeKind.Dynamic) return new StableTypeIdentity("dynamic", -1, null, null, 0, 0, 0, SpecialType.None, type.NullableAnnotation, null, empty, noNames);
+        if (type.TypeKind == TypeKind.Dynamic)
+            return new StableTypeIdentity("dynamic", -1, null, null, 0, 0, 0, SpecialType.None, type.NullableAnnotation, null, empty, noNames);
         if (type is IArrayTypeSymbol array)
         {
             var element = Create(array.ElementType);
@@ -188,13 +214,16 @@ internal sealed class StableTypeIdentityFactory
             var target = Create(pointer.PointedAtType);
             return target == null ? null : new StableTypeIdentity("pointer", -1, null, null, 0, 0, 0, SpecialType.None, type.NullableAnnotation, null, new[] { target }, noNames);
         }
-        if (type is not INamedTypeSymbol named || named.IsAnonymousType) return null;
-        if (named.IsNativeIntegerType) return new StableTypeIdentity("native", -1, null, null, 0, 0, 0, type.SpecialType, type.NullableAnnotation, null, empty, noNames);
+        if (type is not INamedTypeSymbol named || named.IsAnonymousType)
+            return null;
+        if (named.IsNativeIntegerType)
+            return new StableTypeIdentity("native", -1, null, null, 0, 0, 0, type.SpecialType, type.NullableAnnotation, null, empty, noNames);
         // CreateTupleTypeSymbol requires at least two elements. Rebind shorter ValueTuple types by metadata name.
         if (named.IsTupleType && named.TupleElements.Length >= 2)
         {
             var elements = named.TupleElements.Select(field => Create(field.Type)).ToArray();
-            if (elements.Any(element => element == null)) return null;
+            if (elements.Any(element => element == null))
+                return null;
             var names = named.TupleElements.Select((field, index) => field.Name == "Item" + (index + 1) ? null : field.Name);
             return new StableTypeIdentity("tuple", -1, null, null, 0, 0, 0, SpecialType.None, type.NullableAnnotation, null, elements, names);
         }
@@ -204,12 +233,15 @@ internal sealed class StableTypeIdentityFactory
         var definition = named.OriginalDefinition;
         int reference = SymbolEqualityComparer.Default.Equals(definition.ContainingAssembly, _compilation.Assembly) ? -1 :
             Array.FindIndex(_assemblies, assembly => SymbolEqualityComparer.Default.Equals(assembly, definition.ContainingAssembly));
-        if (reference < 0 && !SymbolEqualityComparer.Default.Equals(definition.ContainingAssembly, _compilation.Assembly)) return null;
+        if (reference < 0 && !SymbolEqualityComparer.Default.Equals(definition.ContainingAssembly, _compilation.Assembly))
+            return null;
         int mode = named.IsUnboundGenericType ? 2 : named.IsDefinition ? 0 : 1;
         var arguments = mode == 1 ? named.TypeArguments.Select(Create).ToArray() : empty;
-        if (arguments.Any(argument => argument == null)) return null;
+        if (arguments.Any(argument => argument == null))
+            return null;
         var containing = mode == 1 && named.ContainingType != null ? Create(named.ContainingType) : null;
-        if (mode == 1 && named.ContainingType != null && containing == null) return null;
+        if (mode == 1 && named.ContainingType != null && containing == null)
+            return null;
         string metadata = MetadataName(definition);
         return new StableTypeIdentity("named", reference, metadata, named.Name, named.Arity, 0, mode, SpecialType.None,
             type.NullableAnnotation, containing, arguments, noNames);
@@ -220,7 +252,8 @@ internal sealed class StableTypeIdentityFactory
     /// <returns>The complete metadata name.</returns>
     private static string MetadataName(INamedTypeSymbol type)
     {
-        if (type.ContainingType != null) return MetadataName(type.ContainingType) + "+" + type.MetadataName;
+        if (type.ContainingType != null)
+            return MetadataName(type.ContainingType) + "+" + type.MetadataName;
         string space = type.ContainingNamespace == null || type.ContainingNamespace.IsGlobalNamespace ? string.Empty : type.ContainingNamespace.ToDisplayString();
         return string.IsNullOrEmpty(space) ? type.MetadataName : space + "." + type.MetadataName;
     }
@@ -249,7 +282,8 @@ internal sealed class CurrentTypeResolver
         // Files are bound in parallel; the lock is reentrant for nested identities and FindMethods.
         lock (_known)
         {
-            if (_known.TryGetValue(identity.Key, out var type)) return type;
+            if (_known.TryGetValue(identity.Key, out var type))
+                return type;
             type = identity.Resolve(this);
             _known[identity.Key] = type;
             return type;
@@ -266,7 +300,8 @@ internal sealed class CurrentTypeResolver
     /// <returns>The matching methods in declaration order.</returns>
     internal IMethodSymbol[] FindMethods(INamedTypeSymbol owner, string name, string declaration)
     {
-        lock (_known) return FindMethodsLocked(owner, name, declaration);
+        lock (_known)
+            return FindMethodsLocked(owner, name, declaration);
     }
 
     /// <summary>Indexes and reads one member group while the resolver lock is held.</summary>
@@ -276,7 +311,8 @@ internal sealed class CurrentTypeResolver
     /// <returns>The matching methods in declaration order.</returns>
     private IMethodSymbol[] FindMethodsLocked(INamedTypeSymbol owner, string name, string declaration)
     {
-        if (!_methods.TryGetValue(owner, out var names)) _methods.Add(owner, names = new Dictionary<string, Dictionary<string, IMethodSymbol[]>>(StringComparer.Ordinal));
+        if (!_methods.TryGetValue(owner, out var names))
+            _methods.Add(owner, names = new Dictionary<string, Dictionary<string, IMethodSymbol[]>>(StringComparer.Ordinal));
         if (!names.TryGetValue(name, out var declarations))
         {
             declarations = owner.GetMembers(name).OfType<IMethodSymbol>()

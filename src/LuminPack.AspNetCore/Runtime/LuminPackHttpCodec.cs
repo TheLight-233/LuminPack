@@ -26,7 +26,8 @@ public sealed class LuminPackHttpCodec<T>
     /// <param name="codec">The complete platform codec.</param>
     public LuminPackHttpCodec(LuminPackCodec<T> codec)
     {
-        if (codec is null) Errors.ThrowArgumentNullException(nameof(codec));
+        if (codec is null)
+            Errors.ThrowArgumentNullException(nameof(codec));
         _serialize = value => codec.Serialize(value);
         _deserialize = bytes => codec.Deserialize(bytes.Span);
         _isMalformedInput = IsCorePayloadError;

@@ -31,10 +31,12 @@ internal static class GeneratedSourceDocumentation
     internal static SyntaxNode CompleteRoot(SyntaxNode root)
     {
         var removed = root.DescendantTrivia().Where(trivia => IsDocumentation(trivia) && !KeepDocumentation(trivia)).ToArray();
-        if (removed.Length != 0) root = root.ReplaceTrivia(removed, static (_, _) => default);
+        if (removed.Length != 0)
+            root = root.ReplaceTrivia(removed, static (_, _) => default);
         var apis = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax)
             .OfType<BaseMethodDeclarationSyntax>().Where(IsUserApi).ToArray();
-        if (apis.Length == 0) return root;
+        if (apis.Length == 0)
+            return root;
         string source = root.ToFullString();
         var methods = new Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax>();
         foreach (var method in apis)
@@ -64,7 +66,8 @@ internal static class GeneratedSourceDocumentation
             foreach (var parameter in method.ParameterList.Parameters)
             {
                 string name = parameter.Identifier.ValueText;
-                if (parameters.Contains(name)) continue;
+                if (parameters.Contains(name))
+                    continue;
                 missing = true;
                 documentation.Append(indentation).Append("/// <param name=\"").Append(Escape(name)).Append("\">")
                     .Append(GetParameterDescription(parameter)).AppendLine("</param>");
@@ -77,7 +80,8 @@ internal static class GeneratedSourceDocumentation
                     foreach (var parameter in declaration.TypeParameterList.Parameters)
                     {
                         string name = parameter.Identifier.ValueText;
-                        if (typeParameters.Contains(name)) continue;
+                        if (typeParameters.Contains(name))
+                            continue;
                         missing = true;
                         documentation.Append(indentation).Append("/// <typeparam name=\"").Append(Escape(name))
                             .Append("\">The type represented by <c>").Append(Escape(name)).AppendLine("</c>.</typeparam>");
@@ -91,7 +95,8 @@ internal static class GeneratedSourceDocumentation
                     documentation.Append(indentation).AppendLine("/// <returns>The value produced by the generated operation.</returns>");
                 }
             }
-            if (!missing && existing.Length <= 1) continue;
+            if (!missing && existing.Length <= 1)
+                continue;
             var combined = new StringBuilder();
             foreach (var trivia in existing)
                 combined.AppendLine(trivia.ToFullString().TrimEnd());
@@ -113,9 +118,12 @@ internal static class GeneratedSourceDocumentation
     internal static bool IsUserApi(BaseMethodDeclarationSyntax method)
     {
         if (method is not MethodDeclarationSyntax declaration ||
-            method.Parent is not ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer", Parent: BaseNamespaceDeclarationSyntax }) return false;
-        if (method.Modifiers.Any(SyntaxKind.PublicKeyword)) return true;
-        if (!method.Modifiers.Any(SyntaxKind.InternalKeyword)) return false;
+            method.Parent is not ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer", Parent: BaseNamespaceDeclarationSyntax })
+            return false;
+        if (method.Modifiers.Any(SyntaxKind.PublicKeyword))
+            return true;
+        if (!method.Modifiers.Any(SyntaxKind.InternalKeyword))
+            return false;
         // Non-public payloads still expose convenience overloads to their consuming assembly.
         // Internal state forwarders and Union case entries are implementation details.
         string name = declaration.Identifier.ValueText;
@@ -130,8 +138,10 @@ internal static class GeneratedSourceDocumentation
     {
         for (var node = trivia.Token.Parent; node != null; node = node.Parent)
         {
-            if (node is LocalFunctionStatementSyntax) return false;
-            if (node is BaseMethodDeclarationSyntax method) return trivia.Span.End <= method.SpanStart && IsUserApi(method);
+            if (node is LocalFunctionStatementSyntax)
+                return false;
+            if (node is BaseMethodDeclarationSyntax method)
+                return trivia.Span.End <= method.SpanStart && IsUserApi(method);
             if (node is MemberDeclarationSyntax member)
                 return member is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer", Parent: BaseNamespaceDeclarationSyntax };
         }
@@ -178,15 +188,19 @@ internal static class GeneratedSourceDocumentation
         {
             if (IsDocumentation(trivia))
             {
-                if (!inserted) leading.AddRange(replacement);
+                if (!inserted)
+                    leading.AddRange(replacement);
                 inserted = true;
             }
-            else leading.Add(trivia);
+            else
+                leading.Add(trivia);
         }
-        if (!inserted) leading.AddRange(replacement);
+        if (!inserted)
+            leading.AddRange(replacement);
         while (leading.Count != 0 && leading[leading.Count - 1].IsKind(SyntaxKind.WhitespaceTrivia))
             leading.RemoveAt(leading.Count - 1);
-        if (indentation.Length != 0) leading.Add(SyntaxFactory.Whitespace(indentation));
+        if (indentation.Length != 0)
+            leading.Add(SyntaxFactory.Whitespace(indentation));
         return method.WithLeadingTrivia(leading);
     }
 
@@ -236,7 +250,9 @@ internal static class GeneratedSourceDocumentation
 
         /// <summary>Captures missing documentation for declarations in the current root.</summary>
         /// <param name="methods">Original methods and their replacements with complete XML trivia.</param>
-        internal DocumentationInserter(Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax> methods) { _methods = methods; }
+        internal DocumentationInserter(Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax> methods)
+        {
+            _methods = methods; }
 
         /// <summary>Changes declaration trivia without visiting or rewriting its body.</summary>
         /// <param name="node">The current declaration or structural container.</param>
@@ -258,17 +274,28 @@ internal static class GeneratedSourceDocumentation
         }
 
         string name = (method as MethodDeclarationSyntax)?.Identifier.ValueText ?? string.Empty;
-        if (name.Contains("CalculateOffset") || name.Contains("Sizeof")) return "Calculates the binary payload size for the supplied value.";
-        if (name.Contains("DeserializeJson") || name.Contains("ReadJson")) return "Reads the supplied value from its JSON representation.";
-        if (name.Contains("SerializeJson") || name.Contains("WriteJson")) return "Writes the supplied value in its JSON representation.";
-        if (name.Contains("Deserialize") || name.StartsWith("Read", StringComparison.Ordinal)) return "Reads the supplied value from its binary representation.";
-        if (name.Contains("Serialize") || name.StartsWith("Write", StringComparison.Ordinal)) return "Writes the supplied value in its binary representation.";
-        if (name.Contains("Register")) return "Registers or locates the formatter used by generated dispatch.";
-        if (name.Contains("Dispatch") || name.Contains("Union")) return "Resolves the generated dispatch for the requested union member.";
-        if (name.StartsWith("Get", StringComparison.Ordinal)) return "Obtains the value or reference required by the generated formatter.";
-        if (name.StartsWith("Set", StringComparison.Ordinal)) return "Updates the target member used by the generated formatter.";
-        if (name.Contains("Map")) return "Maps the configured source members to the destination members.";
-        if (name.Contains("Compress")) return "Processes the binary payload using the configured compression format.";
+        if (name.Contains("CalculateOffset") || name.Contains("Sizeof"))
+            return "Calculates the binary payload size for the supplied value.";
+        if (name.Contains("DeserializeJson") || name.Contains("ReadJson"))
+            return "Reads the supplied value from its JSON representation.";
+        if (name.Contains("SerializeJson") || name.Contains("WriteJson"))
+            return "Writes the supplied value in its JSON representation.";
+        if (name.Contains("Deserialize") || name.StartsWith("Read", StringComparison.Ordinal))
+            return "Reads the supplied value from its binary representation.";
+        if (name.Contains("Serialize") || name.StartsWith("Write", StringComparison.Ordinal))
+            return "Writes the supplied value in its binary representation.";
+        if (name.Contains("Register"))
+            return "Registers or locates the formatter used by generated dispatch.";
+        if (name.Contains("Dispatch") || name.Contains("Union"))
+            return "Resolves the generated dispatch for the requested union member.";
+        if (name.StartsWith("Get", StringComparison.Ordinal))
+            return "Obtains the value or reference required by the generated formatter.";
+        if (name.StartsWith("Set", StringComparison.Ordinal))
+            return "Updates the target member used by the generated formatter.";
+        if (name.Contains("Map"))
+            return "Maps the configured source members to the destination members.";
+        if (name.Contains("Compress"))
+            return "Processes the binary payload using the configured compression format.";
         return "Implements the generated serialization or mapping operation.";
     }
 
@@ -291,7 +318,8 @@ internal static class GeneratedSourceDocumentation
             "cancellationToken" => "The token used to cancel the asynchronous operation.",
             _ => "The " + name + " used by this generated operation."
         };
-        if (parameter.Modifiers.Any(SyntaxKind.OutKeyword)) description = "Receives the " + name + " produced by this operation.";
+        if (parameter.Modifiers.Any(SyntaxKind.OutKeyword))
+            description = "Receives the " + name + " produced by this operation.";
         return Escape(description);
     }
 

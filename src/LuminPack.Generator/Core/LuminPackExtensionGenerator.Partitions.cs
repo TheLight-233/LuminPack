@@ -94,7 +94,8 @@ public static partial class LuminPackExtensionGenerator
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        foreach (var part in DispatchFiles(compilation, metadata, cache)) files.Add(part);
+        foreach (var part in DispatchFiles(compilation, metadata, cache))
+            files.Add(part);
         files.Add(new FrozenGeneratedSource("LuminPack.FormatterBridges.g.cs", SerializerCoreProjection.Bridges(extension, metadata)));
         navigationTargets = rootTargets;
         return files.ToImmutable();
@@ -143,29 +144,39 @@ public static partial class LuminPackExtensionGenerator
         foreach (var declared in analysis.DeclaredTypes)
         {
             INamedTypeSymbol type = declared.Symbol;
-            if (!IsCustomGeneratorType(type) || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)) continue;
-            if (!selectedCustomTypes.Contains(type.OriginalDefinition)) continue;
+            if (!IsCustomGeneratorType(type) || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
+                continue;
+            if (!selectedCustomTypes.Contains(type.OriginalDefinition))
+                continue;
             foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
             {
-                if (method.Parameters.Length == 0 || method.DeclaringSyntaxReferences.Length == 0) continue;
+                if (method.Parameters.Length == 0 || method.DeclaringSyntaxReferences.Length == 0)
+                    continue;
                 string[] supportedCalls = method.Name switch
                 {
                     "Serialize" or "SerializeJson" => new[] { "Write", "WriteValue", "WriteValueWithCompress" },
                     "Deserialize" or "DeserializeJson" => new[] { "Read", "ReadValue", "ReadFreshValue" },
                     _ => Array.Empty<string>()
                 };
-                if (supportedCalls.Length == 0) continue;
+                if (supportedCalls.Length == 0)
+                    continue;
                 SyntaxNode syntax;
-                try { syntax = method.DeclaringSyntaxReferences[0].GetSyntax(); }
-                catch { continue; }
+                try
+                {
+                    syntax = method.DeclaringSyntaxReferences[0].GetSyntax(); }
+                catch
+                {
+                    continue; }
                 SemanticModel semantic = FileSemanticObservationCache.For(compilation).GetSemanticModel(syntax.SyntaxTree);
                 foreach (var invocation in syntax.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
                     if (invocation.Expression is not MemberAccessExpressionSyntax access ||
-                        !supportedCalls.Contains(access.Name.Identifier.ValueText, StringComparer.Ordinal)) continue;
+                        !supportedCalls.Contains(access.Name.Identifier.ValueText, StringComparer.Ordinal))
+                        continue;
                     string receiver = semantic.GetTypeInfo(access.Expression).Type?.ToDisplayString();
                     if (receiver is not ("LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or
-                        "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")) continue;
+                        "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader"))
+                        continue;
                     foreach (var argument in invocation.ArgumentList.Arguments)
                     {
                         var argumentType = semantic.GetTypeInfo(argument.Expression).Type;
@@ -186,16 +197,19 @@ public static partial class LuminPackExtensionGenerator
     /// <returns>The concrete formatter graph required by its generated state operation.</returns>
     private static IEnumerable<ITypeSymbol> ExpandCustomDependency(ITypeSymbol type, HashSet<ITypeSymbol> visited)
     {
-        if (type is null || !visited.Add(type)) yield break;
+        if (type is null || !visited.Add(type))
+            yield break;
         yield return type;
         if (type is IArrayTypeSymbol array)
         {
-            foreach (var child in ExpandCustomDependency(array.ElementType, visited)) yield return child;
+            foreach (var child in ExpandCustomDependency(array.ElementType, visited))
+                yield return child;
         }
         else if (type is INamedTypeSymbol named)
         {
             foreach (var argument in named.TypeArguments)
-                foreach (var child in ExpandCustomDependency(argument, visited)) yield return child;
+                foreach (var child in ExpandCustomDependency(argument, visited))
+                    yield return child;
         }
     }
 

@@ -24,7 +24,8 @@ internal static unsafe class Utf8Latin1Transcoder
             for (int index = 0; index < 8; index++)
             {
                 indices[count++] = (byte)(index * 2);
-                if ((mask & (1 << index)) != 0) indices[count++] = (byte)(index * 2 + 1);
+                if ((mask & (1 << index)) != 0)
+                    indices[count++] = (byte)(index * 2 + 1);
             }
             indices[..8].CopyTo(selected);
             indices.Slice(count - 8, 8).CopyTo(selected[8..]);
@@ -49,7 +50,8 @@ internal static unsafe class Utf8Latin1Transcoder
                 while (source.Length - charsRead >= 32 && destination.Length - bytesWritten >= 64)
                 {
                     var chars = Vector512.Load((ushort*)(start + charsRead));
-                    if (!Vector512.EqualsAll(chars & Vector512.Create((ushort)0xFF00), Vector512<ushort>.Zero)) break;
+                    if (!Vector512.EqualsAll(chars & Vector512.Create((ushort)0xFF00), Vector512<ushort>.Zero))
+                        break;
                     uint mask = (uint)Vector512.ExtractMostSignificantBits(chars << 8);
                     var ascii = Vector512.Equals(chars & Vector512.Create((ushort)0x80), Vector512<ushort>.Zero);
                     var pairs = Vector512.ConditionalSelect(ascii, chars,
@@ -67,7 +69,8 @@ internal static unsafe class Utf8Latin1Transcoder
                 while (source.Length - charsRead >= 16 && destination.Length - bytesWritten >= 32)
                 {
                     var chars = Vector256.Load((ushort*)(start + charsRead));
-                    if (!Vector256.EqualsAll(chars & Vector256.Create((ushort)0xFF00), Vector256<ushort>.Zero)) break;
+                    if (!Vector256.EqualsAll(chars & Vector256.Create((ushort)0xFF00), Vector256<ushort>.Zero))
+                        break;
                     uint mask = Vector256.ExtractMostSignificantBits(chars << 8);
                     var ascii = Vector256.Equals(chars & Vector256.Create((ushort)0x80), Vector256<ushort>.Zero);
                     var pairs = Vector256.ConditionalSelect(ascii, chars,
@@ -81,7 +84,8 @@ internal static unsafe class Utf8Latin1Transcoder
                 while (source.Length - charsRead >= 8 && destination.Length - bytesWritten >= 16)
                 {
                     var chars = Vector128.Load((ushort*)(start + charsRead));
-                    if (!Vector128.EqualsAll(chars & Vector128.Create((ushort)0xFF00), Vector128<ushort>.Zero)) break;
+                    if (!Vector128.EqualsAll(chars & Vector128.Create((ushort)0xFF00), Vector128<ushort>.Zero))
+                        break;
                     uint mask = Vector128.ExtractMostSignificantBits(chars << 8);
                     var ascii = Vector128.Equals(chars & Vector128.Create((ushort)0x80), Vector128<ushort>.Zero);
                     var pairs = Vector128.ConditionalSelect(ascii, chars,
@@ -92,11 +96,14 @@ internal static unsafe class Utf8Latin1Transcoder
             while (charsRead < source.Length)
             {
                 uint value = start[charsRead];
-                if (value > 255) break;
+                if (value > 255)
+                    break;
                 int length = value < 128 ? 1 : 2;
-                if (length > destination.Length - bytesWritten) break;
+                if (length > destination.Length - bytesWritten)
+                    break;
                 target[bytesWritten++] = (byte)(value < 128 ? value : 0xC0 | value >> 6);
-                if (length == 2) target[bytesWritten++] = (byte)(0x80 | value & 63);
+                if (length == 2)
+                    target[bytesWritten++] = (byte)(0x80 | value & 63);
                 charsRead++;
             }
         }

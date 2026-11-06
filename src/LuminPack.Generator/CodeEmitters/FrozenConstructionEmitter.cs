@@ -15,14 +15,16 @@ internal static class FrozenConstructionEmitter
     {
         var access = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminFrozenConstruction");
         var collection = compilation.GetTypeByMetadataName("System.Collections.Generic." + (family == "Set" ? "HashSet" : family) + "`" + arity);
-        if (access is null || access.DeclaredAccessibility != Accessibility.Public || !access.IsStatic || collection is null) return false;
+        if (access is null || access.DeclaredAccessibility != Accessibility.Public || !access.IsStatic || collection is null)
+            return false;
         bool Matches(IMethodSymbol method, bool rent)
         {
             if (!method.IsStatic || method.DeclaredAccessibility != Accessibility.Public || method.Arity != arity ||
                 method.ReturnsByRef || method.ReturnsByRefReadonly || method.TypeParameters.Any(parameter =>
                     !parameter.ConstraintTypes.IsEmpty || parameter.HasReferenceTypeConstraint || parameter.HasValueTypeConstraint ||
                     parameter.HasUnmanagedTypeConstraint || parameter.HasConstructorConstraint ||
-                    (parameter.HasNotNullConstraint && !(arity == 2 && parameter.Ordinal == 0)))) return false;
+                    (parameter.HasNotNullConstraint && !(arity == 2 && parameter.Ordinal == 0))))
+                return false;
             var builder = collection.Construct(method.TypeParameters.Cast<ITypeSymbol>().ToArray());
             return builder is not null && (rent
                 ? method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 && SymbolEqualityComparer.Default.Equals(method.ReturnType, builder)
@@ -40,7 +42,8 @@ internal static class FrozenConstructionEmitter
         var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminFrozenConstruction");
         var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
-        if (owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic || span is null || writer is null) return false;
+        if (owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic || span is null || writer is null)
+            return false;
         return owner.GetMembers("WritePairs").OfType<IMethodSymbol>().Any(method =>
             method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 2 && method.ReturnsVoid &&
             method.TypeParameters.All(parameter => parameter.HasUnmanagedTypeConstraint && parameter.ConstraintTypes.IsEmpty) &&

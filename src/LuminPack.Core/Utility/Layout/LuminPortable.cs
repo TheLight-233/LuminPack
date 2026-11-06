@@ -58,14 +58,17 @@ public static class LuminPortable<T, TLayout>
         /// <summary>Snapshots and validates the generated field-address description.</summary>
         static NativeLayout()
         {
-            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>() || Wire <= 0) return;
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>() || Wire <= 0)
+                return;
             var offsets = new int[Wire];
             default(TLayout).Describe(offsets);
             foreach (int offset in offsets)
-                if ((uint)offset >= (uint)Size) return;
+                if ((uint)offset >= (uint)Size)
+                    return;
             Storage = offsets;
             Packed = new int[Wire];
-            for (int index = 0; index < Wire; index++) Packed[index] = index;
+            for (int index = 0; index < Wire; index++)
+                Packed[index] = index;
             Valid = true;
             LuminLayoutPlan.CreatePortable(offsets, Size, Wire, out PackPlan, out UnpackPlan);
         }
@@ -99,8 +102,13 @@ public static class LuminPortable<T, TLayout>
             if ((uint)offset >= (uint)size)
                 return;
         LuminLayoutPlan.CreatePortable(offsets, size, wire, out var pack, out var unpack);
-        if (pack.Mode == 0) return;
-        Size = size; Wire = wire; Mode = pack.Mode; PerBlock = pack.PerBlock; Reserve = pack.Reserve;
+        if (pack.Mode == 0)
+            return;
+        Size = size;
+        Wire = wire;
+        Mode = pack.Mode;
+        PerBlock = pack.PerBlock;
+        Reserve = pack.Reserve;
         Pack0 = Vector128.Create(pack.Mask0Low, pack.Mask0High).AsByte();
         Pack1 = Vector128.Create(pack.Mask1Low, pack.Mask1High).AsByte();
         Pack2 = Vector128.Create(pack.Mask2Low, pack.Mask2High).AsByte();
@@ -110,7 +118,8 @@ public static class LuminPortable<T, TLayout>
         Unpack2 = Vector128.Create(unpack.Mask2Low, unpack.Mask2High).AsByte();
         Unpack3 = Vector128.Create(unpack.Mask3Low, unpack.Mask3High).AsByte();
         Span<int> packed = stackalloc int[wire];
-        for (int i = 0; i < wire; i++) packed[i] = i;
+        for (int i = 0; i < wire; i++)
+            packed[i] = i;
         GroupedPack = LuminGroupedLayout.Create(offsets, size, packed, wire);
         GroupedUnpack = LuminGroupedLayout.Create(packed, wire, offsets, size);
     }
@@ -223,7 +232,8 @@ public static class LuminPortable<T, TLayout>
             return done;
         }
 
-        var pack2 = Pack2; var pack3 = Pack3;
+        var pack2 = Pack2;
+        var pack3 = Pack3;
         for (; blocks != 0; blocks--)
         {
             var low = Vector128.LoadUnsafe(ref input);
@@ -268,7 +278,9 @@ public static class LuminPortable<T, TLayout>
             return done;
         }
 
-        var unpack1 = Unpack1; var unpack2 = Unpack2; var unpack3 = Unpack3;
+        var unpack1 = Unpack1;
+        var unpack2 = Unpack2;
+        var unpack3 = Unpack3;
         if (Wire <= 16)
         {
             for (; blocks != 0; blocks--)

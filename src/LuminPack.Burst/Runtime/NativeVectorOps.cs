@@ -16,21 +16,24 @@ internal static unsafe partial class NativeVectorOps
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static v256 Join256(v128 low, v128 high)
     {
-        if (X86.Avx2.IsAvx2Supported) return X86.Avx2.mm256_inserti128_si256(X86.Avx.mm256_castsi128_si256(low), high, 1);
+        if (X86.Avx2.IsAvx2Supported)
+            return X86.Avx2.mm256_inserti128_si256(X86.Avx.mm256_castsi128_si256(low), high, 1);
         return new v256(low, high);
     }
     /// <summary>Maps the original per-half byte shuffle.</summary><param name="value">Input.</param><param name="mask">Mask.</param><returns>The selected bytes.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static v256 Shuffle256(v256 value, v256 mask)
     {
-        if (X86.Avx2.IsAvx2Supported) return X86.Avx2.mm256_shuffle_epi8(value, mask);
+        if (X86.Avx2.IsAvx2Supported)
+            return X86.Avx2.mm256_shuffle_epi8(value, mask);
         return Avx2.Shuffle(new Vector256<byte> { Value = value }, new Vector256<byte> { Value = mask }).Value;
     }
     /// <summary>Combines native vector bits without wrapper parameter decomposition.</summary><param name="left">First.</param><param name="right">Second.</param><returns>The combined bits.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static v256 Or256(v256 left, v256 right)
     {
-        if (X86.Avx2.IsAvx2Supported) return X86.Avx2.mm256_or_si256(left, right);
+        if (X86.Avx2.IsAvx2Supported)
+            return X86.Avx2.mm256_or_si256(left, right);
         return new v256(left.ULong0 | right.ULong0, left.ULong1 | right.ULong1, left.ULong2 | right.ULong2, left.ULong3 | right.ULong3);
     }
 }

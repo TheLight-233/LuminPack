@@ -19,7 +19,10 @@ internal sealed class FrozenCustomRegistration
     /// <param name="diagnostics">Frozen validation and registration-suppression diagnostics.</param>
     /// <param name="registrationDiagnostics">Deferred suppression diagnostics, preserving the legacy all-validation-first order.</param>
     private FrozenCustomRegistration(string registration, ImmutableArray<FrozenDiagnostic> diagnostics, ImmutableArray<FrozenDiagnostic> registrationDiagnostics)
-    { Registration = registration; Diagnostics = diagnostics; RegistrationDiagnostics = registrationDiagnostics; }
+    {
+        Registration = registration;
+        Diagnostics = diagnostics;
+        RegistrationDiagnostics = registrationDiagnostics; }
 
     /// <summary>Runs unchanged custom method validation only for a dependency cache miss.</summary>
     /// <param name="type">The selected current custom formatter type.</param>
@@ -37,7 +40,8 @@ internal sealed class FrozenCustomRegistration
             if (!metadata.AllowUnsafe || metadata.RegisterMode == LuminPackRegisterMode.Disabled)
                 registrationDiagnostics = ImmutableArray.Create(FrozenDiagnostic.From(Diagnostic.Create(DiagnosticDescriptors.CustomRegistrationSkippedNoUnsafe,
                     type.Locations.FirstOrDefault() ?? Location.None, type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat))));
-            else registration = CustomFormatterRegistrationGenerator.GenerateRegistrationBlock(model.TypeName, model.RegisterTier);
+            else
+                registration = CustomFormatterRegistrationGenerator.GenerateRegistrationBlock(model.TypeName, model.RegisterTier);
         }
         return new FrozenCustomRegistration(registration, diagnostics.Select(FrozenDiagnostic.From).ToImmutableArray(), registrationDiagnostics);
     }

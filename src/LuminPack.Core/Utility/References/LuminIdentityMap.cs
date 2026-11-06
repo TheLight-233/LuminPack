@@ -37,12 +37,14 @@ internal sealed class LuminIdentityMap
                 exists = true;
                 return ref _values[index];
             }
-            if (current is null) break;
+            if (current is null)
+                break;
             index = (index + 1) & mask;
         }
         exists = false;
         // Keep the load factor at or below one half.
-        if (_count >= keys.Length >> 1) return ref AddAfterGrowth(key);
+        if (_count >= keys.Length >> 1)
+            return ref AddAfterGrowth(key);
         Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value = key;
         _count++;
         return ref _values[index];
@@ -54,7 +56,8 @@ internal sealed class LuminIdentityMap
     internal void TryAdd(object key, uint value)
     {
         ref uint slot = ref GetValueRefOrAddDefault(key, out bool exists);
-        if (!exists) slot = value;
+        if (!exists)
+            slot = value;
     }
 
     /// <summary>Checks whether an identity is registered.</summary>
@@ -68,22 +71,26 @@ internal sealed class LuminIdentityMap
         for (int index = Slot(key, mask);; index = (index + 1) & mask)
         {
             object? current = Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(keys), (nint)(uint)index).Value;
-            if (ReferenceEquals(current, key)) return true;
-            if (current is null) return false;
+            if (ReferenceEquals(current, key))
+                return true;
+            if (current is null)
+                return false;
         }
     }
 
     /// <summary>Removes every identity while keeping the capacity.</summary>
     internal void Clear()
     {
-        if (_count == 0) return;
+        if (_count == 0)
+            return;
         // A table grown by one large graph would make every later small operation clear it completely.
         if (_keys.Length > 4096 && _count <= _keys.Length >> 4)
         {
             _keys = new ReferenceSlot[MinCapacity];
             _values = new uint[MinCapacity];
         }
-        else Array.Clear(_keys, 0, _keys.Length);
+        else
+            Array.Clear(_keys, 0, _keys.Length);
         _count = 0;
     }
 
@@ -107,14 +114,17 @@ internal sealed class LuminIdentityMap
         int mask = _keys.Length - 1;
         for (int i = 0; i < keys.Length; i++)
         {
-            if (keys[i].Value is not { } existing) continue;
+            if (keys[i].Value is not { } existing)
+                continue;
             int index = Slot(existing, mask);
-            while (_keys[index].Value is not null) index = (index + 1) & mask;
+            while (_keys[index].Value is not null)
+                index = (index + 1) & mask;
             _keys[index].Value = existing;
             _values[index] = values[i];
         }
         int slot = Slot(key, mask);
-        while (_keys[slot].Value is not null) slot = (slot + 1) & mask;
+        while (_keys[slot].Value is not null)
+            slot = (slot + 1) & mask;
         _keys[slot].Value = key;
         _count++;
         return ref _values[slot];

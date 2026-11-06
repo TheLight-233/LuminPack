@@ -25,7 +25,8 @@ internal static class SetInterfaceWriteEmitter
         if (field.CanEnumerateFrozenSet)
         {
             sb.AppendLine("            else if (value is global::System.Collections.Frozen.FrozenSet<" + element + "> frozen)");
-            if (json) sb.AppendLine("                WriteFrozenElements(ref writer, frozen);");
+            if (json)
+                sb.AppendLine("                WriteFrozenElements(ref writer, frozen);");
             else
             {
                 sb.AppendLine("            {");

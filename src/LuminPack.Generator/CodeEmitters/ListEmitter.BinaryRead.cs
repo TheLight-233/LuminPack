@@ -43,7 +43,8 @@ public static partial class ListEmitter
     private static void GenerateDeserializeCodeCore(
         LuminLocalFieldData fieldData, StringBuilder sb, bool freshValue, bool useArrayDataIntrinsic = false)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: false, freshList: freshValue)) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: false, freshList: freshValue))
+            return;
         var elementType = GetFirstGeneric(fieldData.TypeName);
         bool elementClassificationKnown = EmitterTypeTraits.TryGetIsUnmanaged(
             EmitterTypeTraits.GetFirstTypeArgument(fieldData), out bool elementIsUnmanaged);
@@ -121,7 +122,8 @@ public static partial class ListEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: false)) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: false))
+            return;
         var elementType = GetFirstGeneric(fieldData.TypeName);
         bool elementClassificationKnown = EmitterTypeTraits.TryGetIsUnmanaged(
             EmitterTypeTraits.GetFirstTypeArgument(fieldData), out bool elementIsUnmanaged);

@@ -64,7 +64,8 @@ public sealed class LuminPackCodec<T>
         var reader = new LuminPackReader(ref source);
         T candidate = value;
         _read(ref reader, ref candidate);
-        if (reader.Position != source.Length) LuminPackExceptionHelper.ThrowInvalidDataException("Trailing bytes follow the platform record.");
+        if (reader.Position != source.Length)
+            LuminPackExceptionHelper.ThrowInvalidDataException("Trailing bytes follow the platform record.");
         value = candidate;
     }
 

@@ -79,15 +79,18 @@ public static partial class LuminPackMarshal
         {
             try
             {
-                if (Unsafe.SizeOf<Memory<int>>() != Unsafe.SizeOf<MemoryView>()) return false;
+                if (Unsafe.SizeOf<Memory<int>>() != Unsafe.SizeOf<MemoryView>())
+                    return false;
                 var items = new int[8];
                 var plain = new Memory<int>(items, 3, 4);
                 var view = Unsafe.As<Memory<int>, MemoryView>(ref plain);
-                if (!ReferenceEquals(view.Owner, items) || (view.Index & int.MaxValue) != 3 || view.Length != 4) return false;
+                if (!ReferenceEquals(view.Owner, items) || (view.Index & int.MaxValue) != 3 || view.Length != 4)
+                    return false;
 #if NET5_0_OR_GREATER
                 var pinned = MemoryMarshal.CreateFromPinnedArray(GC.AllocateArray<int>(8, pinned: true), 2, 5);
                 var pinnedView = Unsafe.As<Memory<int>, MemoryView>(ref pinned);
-                if ((pinnedView.Index & int.MaxValue) != 2 || pinnedView.Length != 5) return false;
+                if ((pinnedView.Index & int.MaxValue) != 2 || pinnedView.Length != 5)
+                    return false;
 #endif
                 var empty = default(Memory<int>);
                 return Unsafe.As<Memory<int>, MemoryView>(ref empty).Owner is null;
@@ -172,7 +175,8 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SetListSize<T>(List<T?>? list, int size)
     {
-        if (list is null) return;
+        if (list is null)
+            return;
 
 #if NET8_0_OR_GREATER
         if (list.Count == size)
@@ -278,7 +282,8 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SetStackSize<T>(Stack<T?>? stack, int size)
     {
-        if (stack is null) return;
+        if (stack is null)
+            return;
 
         ref T?[] items = ref StackArray(stack);
         if (items.Length < size)
@@ -366,7 +371,8 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SetQueueSize<T>(Queue<T?>? queue, int tail, int head, int size)
     {
-        if (queue is null) return;
+        if (queue is null)
+            return;
 
         ref T?[] items = ref QueueArray(queue);
 
@@ -403,7 +409,8 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static DictionaryView<TKey, TValue?> GetDictionaryView<TKey, TValue>(Dictionary<TKey, TValue?>? dict) where TKey : notnull
     {
-        if (!DictionaryView<TKey, TValue?>.Recognized) LuminCollectionLayouts.Require(LuminFieldLayout.Unavailable, "Dictionary<TKey, TValue>");
+        if (!DictionaryView<TKey, TValue?>.Recognized)
+            LuminCollectionLayouts.Require(LuminFieldLayout.Unavailable, "Dictionary<TKey, TValue>");
         return new DictionaryView<TKey, TValue?>(dict!);
     }
 
@@ -434,7 +441,8 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static HashSetView<T?> GetHashSetView<T>(HashSet<T?>? set)
     {
-        if (!HashSetView<T?>.Recognized) LuminCollectionLayouts.Require(LuminFieldLayout.Unavailable, "HashSet<T>");
+        if (!HashSetView<T?>.Recognized)
+            LuminCollectionLayouts.Require(LuminFieldLayout.Unavailable, "HashSet<T>");
         return new HashSetView<T?>(set!);
     }
 
@@ -498,7 +506,8 @@ public static partial class LuminPackMarshal
     public static void WriteDenseRawPairs<TKey, TValue>(ref global::LuminPack.Core.LuminPackWriter writer, Dictionary<TKey, TValue> dictionary, int count)
         where TKey : unmanaged where TValue : unmanaged
     {
-        if (count == 0) return;
+        if (count == 0)
+            return;
         CopyDenseRawPairs(ref writer.CurrentReference, dictionary, count);
         writer.Advance(count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>()));
     }
@@ -882,13 +891,16 @@ public static partial class LuminPackMarshal
         for (int index = 0; index < s.Length; index++)
         {
             char c = s[index];
-            if (c <= 0x7F) continue;
-            if (c <= 0x7FF) total += 1;
+            if (c <= 0x7F)
+                continue;
+            if (c <= 0x7FF)
+                total += 1;
             else
             {
                 total += 2;
                 // The low surrogate's first byte is already counted, so a valid pair needs no second update.
-                if (char.IsHighSurrogate(c) && index + 1 < s.Length && char.IsLowSurrogate(s[index + 1])) index++;
+                if (char.IsHighSurrogate(c) && index + 1 < s.Length && char.IsLowSurrogate(s[index + 1]))
+                    index++;
             }
         }
         return total;
@@ -943,14 +955,16 @@ public static partial class LuminPackMarshal
         while (input < inputLength && output < outputLength)
         {
             char ascii = Unsafe.Add(ref src, input);
-            if (ascii > 0x7F) break;
+            if (ascii > 0x7F)
+                break;
             Unsafe.Add(ref dst, output++) = (byte)ascii;
             input++;
         }
 
         while (input < inputLength)
         {
-            if (output >= outputLength) return -1;
+            if (output >= outputLength)
+                return -1;
             uint c = Unsafe.Add(ref src, input++);
             if (c <= 0x7F)
             {
@@ -959,7 +973,8 @@ public static partial class LuminPackMarshal
             }
             if (c <= 0x7FF)
             {
-                if (outputLength - output < 2) return -1;
+                if (outputLength - output < 2)
+                    return -1;
                 Unsafe.Add(ref dst, output) = (byte)(0xC0 | (c >> 6));
                 Unsafe.Add(ref dst, output + 1) = (byte)(0x80 | (c & 0x3F));
                 output += 2;
@@ -970,7 +985,8 @@ public static partial class LuminPackMarshal
                 if (input >= inputLength || outputLength - output < 4)
                     return WriteReplacementChar(ref dst, output, outputLength);
                 uint low = Unsafe.Add(ref src, input++);
-                if (!char.IsLowSurrogate((char)low)) return WriteReplacementChar(ref dst, output, outputLength);
+                if (!char.IsLowSurrogate((char)low))
+                    return WriteReplacementChar(ref dst, output, outputLength);
                 uint codePoint = ((c - 0xD800U) << 10) + (low - 0xDC00U) + 0x10000U;
                 Unsafe.Add(ref dst, output) = (byte)(0xF0 | (codePoint >> 18));
                 Unsafe.Add(ref dst, output + 1) = (byte)(0x80 | ((codePoint >> 12) & 0x3F));
@@ -979,7 +995,8 @@ public static partial class LuminPackMarshal
                 output += 4;
                 continue;
             }
-            if (outputLength - output < 3) return -1;
+            if (outputLength - output < 3)
+                return -1;
             Unsafe.Add(ref dst, output) = (byte)(0xE0 | (c >> 12));
             Unsafe.Add(ref dst, output + 1) = (byte)(0x80 | ((c >> 6) & 0x3F));
             Unsafe.Add(ref dst, output + 2) = (byte)(0x80 | (c & 0x3F));
@@ -996,7 +1013,8 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteReplacementChar(ref byte destination, nint offset, nint length)
     {
-        if (length - offset < 3) return -1;
+        if (length - offset < 3)
+            return -1;
         Unsafe.Add(ref destination, offset) = 0xEF;
         Unsafe.Add(ref destination, offset + 1) = 0xBF;
         Unsafe.Add(ref destination, offset + 2) = 0xBD;
@@ -1206,7 +1224,8 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint RoundUpToPowerOf2(uint value)
     {
-        if (value == 0) return 1;
+        if (value == 0)
+            return 1;
         value--;
         value |= value >> 1;
         value |= value >> 2;

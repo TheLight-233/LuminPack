@@ -28,12 +28,15 @@ internal static class PortableStructEmitter
                 if (last == marker[marker.Length - 1])
                 {
                     int index = marker.Length - 2;
-                    while (index >= 0 && builder[end - (marker.Length - 1) + index] == marker[index]) index--;
-                    if (index < 0) return true;
+                    while (index >= 0 && builder[end - (marker.Length - 1) + index] == marker[index])
+                        index--;
+                    if (index < 0)
+                        return true;
                 }
                 // Distances from the final character to its preceding occurrences in LocalPortable.
                 int skip = last switch { 'L' => 12, 'o' => 6, 'c' => 10, 'a' => 3, 'l' => 1, 'P' => 7, 'r' => 5, 't' => 4, 'b' => 2, _ => 13 };
-                if (length - end <= skip) return false;
+                if (length - end <= skip)
+                    return false;
                 end += skip;
             }
             return false;
@@ -46,8 +49,10 @@ internal static class PortableStructEmitter
             {
                 int count = Math.Min(window, length - start);
                 builder.CopyTo(start, buffer, 0, count);
-                if (new ReadOnlySpan<char>(buffer, 0, count).IndexOf(marker.AsSpan()) >= 0) return true;
-                if (length - start <= count) return false;
+                if (new ReadOnlySpan<char>(buffer, 0, count).IndexOf(marker.AsSpan()) >= 0)
+                    return true;
+                if (length - start <= count)
+                    return false;
                 start += count - (marker.Length - 1);
             }
         }
@@ -74,9 +79,11 @@ internal static class PortableStructEmitter
     /// <returns>Whether any expanded field is volatile.</returns>
     private static bool HasVolatile(PortableStructPlan plan)
     {
-        if (plan.Fields == null) return false;
+        if (plan.Fields == null)
+            return false;
         for (int index = 0; index < plan.Fields.Length; index++)
-            if (plan.Fields[index].IsVolatile || HasVolatile(plan.Children[index])) return true;
+            if (plan.Fields[index].IsVolatile || HasVolatile(plan.Children[index]))
+                return true;
         return false;
     }
 
@@ -85,29 +92,40 @@ internal static class PortableStructEmitter
     /// <param name="type">The operation type.</param>
     internal static void AppendViews(StringBuilder sb, ITypeSymbol type)
     {
-        if (!ContainsPortableViewMarker(sb)) return;
+        if (!ContainsPortableViewMarker(sb))
+            return;
         var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var emitted = new HashSet<string>();
         Visit(type);
         // Visit symbols once; unmanaged storage graphs cannot contain cycles.
         void Visit(ITypeSymbol current)
         {
-            if (current == null || !visited.Add(current)) return;
+            if (current == null || !visited.Add(current))
+                return;
             var plan = PortableStructPlan.TryCreate(current);
-            if (plan != null) { AppendView(plan); return; }
-            if (current is IArrayTypeSymbol array) Visit(array.ElementType);
-            if (current is not INamedTypeSymbol named) return;
-            foreach (var argument in named.TypeArguments) Visit(argument);
+            if (plan != null)
+            {
+                AppendView(plan);
+                return; }
+            if (current is IArrayTypeSymbol array)
+                Visit(array.ElementType);
+            if (current is not INamedTypeSymbol named)
+                return;
+            foreach (var argument in named.TypeArguments)
+                Visit(argument);
         }
         // Mirror the actual ABI, including Pack/Size and explicit offsets; only the wire is packed.
         void AppendView(PortableStructPlan plan)
         {
-            if (plan.Fields == null || !emitted.Add(ViewName(plan))) return;
+            if (plan.Fields == null || !emitted.Add(ViewName(plan)))
+                return;
             if (plan.Type is INamedTypeSymbol { IsTupleType: true })
             {
                 // A tagged tuple has no view of its own, but its payload helper still needs the layout models.
-                if (plan.Tagged && !HasVolatile(plan)) AppendLayout(plan);
-                foreach (var child in plan.Children) AppendView(child);
+                if (plan.Tagged && !HasVolatile(plan))
+                    AppendLayout(plan);
+                foreach (var child in plan.Children)
+                    AppendView(child);
                 return;
             }
             StorageLayoutInfo.Get((INamedTypeSymbol)plan.Type).AppendAttribute(sb, "        ");
@@ -116,12 +134,15 @@ internal static class PortableStructEmitter
             for (int index = 0; index < plan.Fields.Length; index++)
             {
                 int offset = plan.Fields[index].Offset;
-                if (offset >= 0) sb.AppendLine("            [global::System.Runtime.InteropServices.FieldOffset(" + offset + ")]");
+                if (offset >= 0)
+                    sb.AppendLine("            [global::System.Runtime.InteropServices.FieldOffset(" + offset + ")]");
                 sb.AppendLine("            internal " + (plan.Fields[index].IsVolatile ? "volatile " : "") + FormatterTypeName.Get(plan.Fields[index].Type) + " F" + index + ";");
             }
             sb.AppendLine("        }");
-            if (!HasVolatile(plan)) AppendLayout(plan);
-            foreach (var child in plan.Children) AppendView(child);
+            if (!HasVolatile(plan))
+                AppendLayout(plan);
+            foreach (var child in plan.Children)
+                AppendView(child);
         }
         // Offsets come from the running process's field addresses, so the description holds on every architecture and pack.
         void AppendLayout(PortableStructPlan plan)
@@ -139,7 +160,8 @@ internal static class PortableStructEmitter
             int identity = 0;
             Describe(plan, "__probe", type);
             sb.AppendLine("            }");
-            if (plan.Tagged) AppendModels(sb, plan);
+            if (plan.Tagged)
+                AppendModels(sb, plan);
             sb.AppendLine("        }");
             void Describe(PortableStructPlan current, string expression, string currentType)
             {
@@ -186,7 +208,8 @@ internal static class PortableStructEmitter
             int start = 0;
             for (int index = 1; index <= offsets.Length; index++)
             {
-                if (index < offsets.Length && offsets[index] == offsets[index - 1] + 1) continue;
+                if (index < offsets.Length && offsets[index] == offsets[index - 1] + 1)
+                    continue;
                 sb.AppendLine("                    for (int __i = 0; __i < " + (index - start) + "; __i++) storageOffsets[" + start + " + __i] = " + offsets[start] + " + __i;");
                 start = index;
             }
@@ -223,7 +246,8 @@ internal static class PortableStructEmitter
     /// <param name="index">The payload cursor expression, immediately before its optional tag.</param>
     internal static void AppendReadValidation(StringBuilder sb, PortableStructPlan plan, string count, string index)
     {
-        if (!plan.Tagged) return;
+        if (!plan.Tagged)
+            return;
         sb.AppendLine("            if (" + count + " != 0)");
         sb.AppendLine("            {");
         sb.AppendLine("                reader.EnsureCollectionPayload(" + index + ", 1);");
@@ -270,9 +294,11 @@ internal static class PortableStructEmitter
     /// <returns>Whether the portable element path was emitted.</returns>
     internal static bool TryAppendCollection(StringBuilder sb, ITypeSymbol element, bool list, bool write, string memoryType = null, bool freshList = false)
     {
-        if (memoryType != null && memoryType is not ("global::System.Memory" or "global::System.ReadOnlyMemory" or "global::System.ArraySegment")) return false;
+        if (memoryType != null && memoryType is not ("global::System.Memory" or "global::System.ReadOnlyMemory" or "global::System.ArraySegment"))
+            return false;
         var plan = PortableStructPlan.TryCreate(element);
-        if (plan == null) return false;
+        if (plan == null)
+            return false;
         string type = FormatterTypeName.Get(element);
         string state = write ? "writer" : "reader";
         sb.AppendLine("            ref int index = ref " + state + ".GetCurrentSpanOffset();");
@@ -332,8 +358,10 @@ internal static class PortableStructEmitter
             }
         }
         AppendPayload(sb, plan, type, "global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span)", "length", write);
-        if (write) sb.AppendLine("            writer.CheckBuffer();");
-        else if (memoryType != null) sb.AppendLine("            value = new " + memoryType + "<" + type + ">(__portableArray);");
+        if (write)
+            sb.AppendLine("            writer.CheckBuffer();");
+        else if (memoryType != null)
+            sb.AppendLine("            value = new " + memoryType + "<" + type + ">(__portableArray);");
         return true;
     }
 
@@ -456,7 +484,8 @@ internal static class PortableStructEmitter
                     ? "global::LuminPack.Core.LuminPackWriter.Write(ref " + address + ", " + expression + ");"
                     : isVolatile ? "global::LuminPack.Core.LuminPackReader.Read(ref " + address + ", out " + type + " " + offset + "Value);"
                     : "global::LuminPack.Core.LuminPackReader.Read(ref " + address + ", out " + expression + ");"));
-                if (isVolatile && !write) sb.AppendLine(indent + expression + " = " + offset + "Value;");
+                if (isVolatile && !write)
+                    sb.AppendLine(indent + expression + " = " + offset + "Value;");
             }
             position += current.WireSize;
         }

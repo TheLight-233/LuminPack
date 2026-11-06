@@ -72,7 +72,8 @@ public static class CultureInfoEmitter
             sb.AppendLine("            if (str is not null && reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String) reader.Read(ref str);");
             sb.AppendLine("            else str = reader.ReadString();");
         }
-        else sb.AppendLine("            var str = reader.ReadString();");
+        else
+            sb.AppendLine("            var str = reader.ReadString();");
         AppendResolution(fieldData, sb);
     }
 

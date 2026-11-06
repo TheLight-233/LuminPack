@@ -19,24 +19,29 @@ internal static class ReferencedTypeMetadata
     internal static Diagnostic[] ValidatePropertyStorage(INamedTypeSymbol type, Compilation compilation)
     {
         if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.DeclaringSyntaxReferences.Length != 0 ||
-            LuminPackExtensionGenerator.IsCustomGeneratorType(type)) return System.Array.Empty<Diagnostic>();
+            LuminPackExtensionGenerator.IsCustomGeneratorType(type))
+            return System.Array.Empty<Diagnostic>();
         List<Diagnostic> diagnostics = null;
         for (var current = type; current != null && current.SpecialType != SpecialType.System_Object; current = current.BaseType)
         {
             if (!current.ContainingAssembly.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() ==
-                    "System.Runtime.CompilerServices.ReferenceAssemblyAttribute")) continue;
+                    "System.Runtime.CompilerServices.ReferenceAssemblyAttribute"))
+                continue;
             var complete = Resolve(current, compilation);
             foreach (var property in complete.GetMembers().OfType<IPropertySymbol>())
             {
                 if (property.IsStatic || property.IsAbstract || property.IsExtern || property.IsIndexer ||
-                    complete.GetMembers("<" + property.Name + ">k__BackingField").OfType<IFieldSymbol>().Any()) continue;
+                    complete.GetMembers("<" + property.Name + ">k__BackingField").OfType<IFieldSymbol>().Any())
+                    continue;
                 if (property.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal) &&
-                    !TypeMetaChecker.TryCheckIncludeAttribute(property)) continue;
+                    !TypeMetaChecker.TryCheckIncludeAttribute(property))
+                    continue;
                 bool generated = property.GetMethod?.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() ==
                     "System.Runtime.CompilerServices.CompilerGeneratedAttribute") == true ||
                     property.SetMethod?.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() ==
                     "System.Runtime.CompilerServices.CompilerGeneratedAttribute") == true;
-                if (!generated) continue;
+                if (!generated)
+                    continue;
                 diagnostics ??= new List<Diagnostic>();
                 diagnostics.Add(Diagnostic.Create(DiagnosticDescriptors.IncompleteReferencedPropertyStorage,
                     type.Locations.FirstOrDefault(location => location.IsInSource) ?? Location.None,
@@ -53,7 +58,8 @@ internal static class ReferencedTypeMetadata
     internal static INamedTypeSymbol Resolve(INamedTypeSymbol type, Compilation compilation)
     {
         if (SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly) ||
-            compilation.Options.MetadataImportOptions == MetadataImportOptions.All) return type;
+            compilation.Options.MetadataImportOptions == MetadataImportOptions.All)
+            return type;
         return Contexts.GetValue(compilation, current => new Context((CSharpCompilation)current)).Resolve(type);
     }
 

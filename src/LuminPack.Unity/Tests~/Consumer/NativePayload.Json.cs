@@ -46,8 +46,12 @@ namespace LuminPack.Unity.ContractFixture
         /// <param name="operation">The concrete generated JSON call.</param>
         private static void RejectJson(Action operation)
         {
-            try { operation(); }
-            catch (NotSupportedException exception) when (exception.Message == "Unity native-owner JSON codecs are not configured.") { return; }
+            try
+            {
+                operation(); }
+            catch (NotSupportedException exception) when (exception.Message == "Unity native-owner JSON codecs are not configured.")
+            {
+                return; }
             LuminPackExceptionHelper.ThrowInvalidOperationException("Native-owner JSON did not reject its unsupported codec.");
         }
     }

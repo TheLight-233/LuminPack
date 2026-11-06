@@ -88,7 +88,8 @@ public static class TypeEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        if (data.CanWriteTypeName) sb.AppendLine("            writer.WriteTypeName(full);");
+        if (data.CanWriteTypeName)
+            sb.AppendLine("            writer.WriteTypeName(full);");
         else
         {
             sb.AppendLine("            var shortName = global::System.Text.RegularExpressions.Regex.Replace(full, @\", Version=\\d+.\\d+.\\d+.\\d+, Culture=[\\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})\", \"\");");

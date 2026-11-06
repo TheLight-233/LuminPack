@@ -19,7 +19,8 @@ internal static class DictionarySlotReusePlan
             type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsSealed: true, IsGenericType: false } named ||
             named.BaseType?.SpecialType != SpecialType.System_Object ||
             !SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly) ||
-            !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named)) return false;
+            !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
+            return false;
         var data = LuminPackSourceGenerator.GetSerializationMetadata(named, compilation, metadata);
         return !data.isUnion && data.generatorType is GeneratorType.Object or GeneratorType.VersionTolerant &&
             data.fields.Count != 0 && data.callBackMethods.Count == 0 &&

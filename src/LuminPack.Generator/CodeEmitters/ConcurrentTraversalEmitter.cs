@@ -16,10 +16,12 @@ internal static class ConcurrentTraversalEmitter
         if (element is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
             element = nullable.TypeArguments[0];
         if (!(element.SpecialType == SpecialType.System_String || EmitterTypeTraits.IsKnownScalar(element)) ||
-            !SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly)) return false;
+            !SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly))
+            return false;
         var stack = compilation.GetTypeByMetadataName("System.Collections.Concurrent.ConcurrentStack`1");
         var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
-        if (stack is null || owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic) return false;
+        if (stack is null || owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic)
+            return false;
         return owner.GetMembers("PublishConcurrentStack").OfType<IMethodSymbol>().Any(method => method.IsStatic &&
             method.DeclaredAccessibility == Accessibility.Public && method.Arity == 1 && method.ReturnsVoid && method.Parameters.Length == 4 &&
             method.Parameters.All(parameter => parameter.RefKind == RefKind.None) && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
@@ -39,7 +41,8 @@ internal static class ConcurrentTraversalEmitter
         var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
         var bag = compilation.GetTypeByMetadataName("System.Collections.Concurrent.ConcurrentBag`1");
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
-        if (owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic || bag is null || writer is null) return false;
+        if (owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic || bag is null || writer is null)
+            return false;
         return owner.GetMembers(raw ? "TryWriteConcurrentBagRaw" : "RentConcurrentBagSnapshot").OfType<IMethodSymbol>().Any(method =>
             method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == 1 &&
             !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
@@ -67,13 +70,16 @@ internal static class ConcurrentTraversalEmitter
         var traversal = owner?.GetTypeMembers(family + "Traversal", arity).SingleOrDefault();
         if (owner is null || owner.DeclaredAccessibility != Accessibility.Public || !owner.IsStatic || collection is null ||
             traversal is null || !traversal.IsValueType || traversal.IsRefLikeType || traversal.DeclaredAccessibility != Accessibility.Public ||
-            !traversal.AllInterfaces.Any(contract => SymbolEqualityComparer.Default.Equals(contract, compilation.GetTypeByMetadataName("System.IDisposable")))) return false;
+            !traversal.AllInterfaces.Any(contract => SymbolEqualityComparer.Default.Equals(contract, compilation.GetTypeByMetadataName("System.IDisposable"))))
+            return false;
         var pair = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
-        if (arity == 2 && pair is null) return false;
+        if (arity == 2 && pair is null)
+            return false;
         ITypeSymbol current = arity == 1 ? traversal.TypeParameters[0] : pair!.Construct(traversal.TypeParameters.Cast<ITypeSymbol>().ToArray());
         if (!traversal.GetMembers("MoveNext").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 && !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.IsEmpty && method.ReturnType.SpecialType == SpecialType.System_Boolean) ||
             !traversal.GetMembers("GetEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 && !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.IsEmpty && SymbolEqualityComparer.Default.Equals(method.ReturnType, traversal)) ||
-            !traversal.GetMembers("Current").OfType<IPropertySymbol>().Any(property => !property.IsStatic && !property.IsIndexer && !property.ReturnsByRef && !property.ReturnsByRefReadonly && property.GetMethod?.DeclaredAccessibility == Accessibility.Public && SymbolEqualityComparer.Default.Equals(property.Type, current))) return false;
+            !traversal.GetMembers("Current").OfType<IPropertySymbol>().Any(property => !property.IsStatic && !property.IsIndexer && !property.ReturnsByRef && !property.ReturnsByRefReadonly && property.GetMethod?.DeclaredAccessibility == Accessibility.Public && SymbolEqualityComparer.Default.Equals(property.Type, current)))
+            return false;
         return owner.GetMembers("Enumerate" + family).OfType<IMethodSymbol>().Any(method =>
             method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Arity == arity &&
             !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&

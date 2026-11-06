@@ -153,8 +153,10 @@ public static unsafe partial class LuminPackBurst
     internal static bool UseLayout(int count)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null) return false;
-        if (registration.Table.LayoutPlanned != null) return LuminKernelPolicy.UseNativeLayout(count);
+        if (registration is null)
+            return false;
+        if (registration.Table.LayoutPlanned != null)
+            return LuminKernelPolicy.UseNativeLayout(count);
         return registration.Table.Layout != null;
     }
 
@@ -167,7 +169,8 @@ public static unsafe partial class LuminPackBurst
     internal static bool TryCopy(ref byte destination, ref byte source, uint count)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.Copy == null || count == 0 || count > LuminKernelPolicy.ShortCopyLimit) return false;
+        if (registration is null || registration.Table.Copy == null || count == 0 || count > LuminKernelPolicy.ShortCopyLimit)
+            return false;
         fixed (byte* output = &destination)
         fixed (byte* input = &source)
             return registration.Table.Copy(output, input, count) != 0;
@@ -182,9 +185,14 @@ public static unsafe partial class LuminPackBurst
     {
         equal = false;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.Equal == null) return false;
-        if (left.Length != right.Length) return true;
-        if (left.IsEmpty) { equal = true; return true; }
+        if (registration is null || registration.Table.Equal == null)
+            return false;
+        if (left.Length != right.Length)
+            return true;
+        if (left.IsEmpty)
+        {
+            equal = true;
+            return true; }
         fixed (byte* a = left)
         fixed (byte* b = right)
             equal = registration.Table.Equal(a, b, (uint)left.Length) != 0;

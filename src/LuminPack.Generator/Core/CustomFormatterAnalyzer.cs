@@ -59,12 +59,15 @@ internal static class CustomFormatterAnalyzer
         foreach (ProjectTypeData declared in CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes)
         {
             INamedTypeSymbol type = declared.Symbol;
-            if (!HasPackableAttribute(type)) continue;
-            if (TypeMetaChecker.CheckGeneratorType(type) != GeneratorType.Custom) continue;
+            if (!HasPackableAttribute(type))
+                continue;
+            if (TypeMetaChecker.CheckGeneratorType(type) != GeneratorType.Custom)
+                continue;
 
             // Only types declared in this assembly get generated/registered here; Unity
             // references plug-in assemblies into every compilation and must not duplicate.
-            if (!SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)) continue;
+            if (!SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
+                continue;
 
             var model = Analyze(type);
             models.Add(model);
@@ -243,7 +246,8 @@ internal static class CustomFormatterAnalyzer
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool ParameterMatches(IParameterSymbol parameter, string expectedTypeName, RefKind expectedRefKind)
     {
-        if (parameter.RefKind != expectedRefKind) return false;
+        if (parameter.RefKind != expectedRefKind)
+            return false;
 
         string actual = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         return actual == expectedTypeName || actual == FullyQualifiedAlias(expectedTypeName);

@@ -180,7 +180,8 @@ namespace LuminPack.SourceGenerator
                     foreach (var attr in typeSymbol.GetAttributes()
                                  .Where(a => a.AttributeClass?.ToDisplayString() == LUMIN_UNION_ATTRIBUTE))
                     {
-                        if (attr.ConstructorArguments.Length < 2) continue;
+                        if (attr.ConstructorArguments.Length < 2)
+                            continue;
 
                         var id = (ushort)attr.ConstructorArguments[0].Value!;
                         var memberType = (INamedTypeSymbol)attr.ConstructorArguments[1].Value;
@@ -416,7 +417,8 @@ namespace LuminPack.SourceGenerator
             {
                 if (baseClassSymbol == null ||
                     baseClassSymbol.SpecialType == SpecialType.System_Object ||
-                    baseClassSymbol.SpecialType == SpecialType.System_ValueType) return;
+                    baseClassSymbol.SpecialType == SpecialType.System_ValueType)
+                    return;
 
                 baseClassSymbol = ReferencedTypeMetadata.Resolve(baseClassSymbol, _analysisState.Compilation);
 
@@ -499,7 +501,8 @@ namespace LuminPack.SourceGenerator
             // <param name="parent">The parent used by this operation.</param>
             static void ProcessMember(INamedTypeSymbol symbol, LuminDataInfo dataInfo, LuminDataInfo parent = null)
             {
-                if (symbol == null) return;
+                if (symbol == null)
+                    return;
 
                 var allMembers = GetOrderedStorageMembers(symbol);
 
@@ -510,9 +513,12 @@ namespace LuminPack.SourceGenerator
 
                     if (rawMember is IPropertySymbol member)
                     {
-                        if (member.IsStatic) continue;
-                        if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
-                        if (!IsAutoProperty(member)) continue;
+                        if (member.IsStatic)
+                            continue;
+                        if (TypeMetaChecker.TryCheckIgnoreAttribute(member))
+                            continue;
+                        if (!IsAutoProperty(member))
+                            continue;
                         if (parent != null &&
                             member.DeclaredAccessibility == Accessibility.Private &&
                             TypeMetaChecker.TryCheckIncludeAttribute(member))
@@ -529,7 +535,8 @@ namespace LuminPack.SourceGenerator
                             if (member.DeclaredAccessibility is
                                 Accessibility.Private or
                                 Accessibility.ProtectedAndInternal or
-                                Accessibility.Protected) continue;
+                                Accessibility.Protected)
+                                continue;
                         }
 
                         var field = new LuminDataField
@@ -590,8 +597,10 @@ namespace LuminPack.SourceGenerator
                     }
                     else if (rawMember is IFieldSymbol fieldMember)
                     {
-                        if (fieldMember.IsStatic) continue;
-                        if (TypeMetaChecker.TryCheckIgnoreAttribute(fieldMember)) continue;
+                        if (fieldMember.IsStatic)
+                            continue;
+                        if (TypeMetaChecker.TryCheckIgnoreAttribute(fieldMember))
+                            continue;
                         if (parent != null &&
                             fieldMember.DeclaredAccessibility == Accessibility.Private &&
                             TypeMetaChecker.TryCheckIncludeAttribute(fieldMember))
@@ -609,7 +618,8 @@ namespace LuminPack.SourceGenerator
                                 fieldMember.DeclaredAccessibility is
                                     Accessibility.Private or
                                     Accessibility.ProtectedAndInternal or
-                                    Accessibility.Protected) continue;
+                                    Accessibility.Protected)
+                                continue;
                         }
 
                         var field = new LuminDataField

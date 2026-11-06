@@ -29,19 +29,31 @@ public static class CodecContract
             var reader = new LuminPackReader(ref shortInput);
             T sentinel = value;
             bool rejected = false;
-            try { codec.Read(ref reader, ref sentinel); } catch { rejected = true; }
+            try
+            {
+                codec.Read(ref reader, ref sentinel); } catch
+            {
+                rejected = true; }
             Assert(rejected && reader.Position == 0 && bytes.AsSpan().SequenceEqual(codec.Serialize(sentinel)), name + ": partial input published state.");
             byte[] guarded = Enumerable.Repeat((byte)0xA5, bytes.Length + 8).ToArray();
             Span<byte> shortOutput = guarded.AsSpan(3, length);
             var writer = new LuminPackWriter(ref shortOutput);
             rejected = false;
-            try { codec.Write(ref writer, value); } catch { rejected = true; }
+            try
+            {
+                codec.Write(ref writer, value); } catch
+            {
+                rejected = true; }
             Assert(rejected && writer.Position == 0 && guarded.All(b => b == 0xA5), name + ": short output changed storage.");
         }
         byte[] trailing = bytes.Concat(new byte[] { 0xA5 }).ToArray();
         T retained = value;
         bool trailingRejected = false;
-        try { codec.Deserialize(trailing, ref retained); } catch { trailingRejected = true; }
+        try
+        {
+            codec.Deserialize(trailing, ref retained); } catch
+        {
+            trailingRejected = true; }
         Assert(trailingRejected && bytes.AsSpan().SequenceEqual(codec.Serialize(retained)), name + ": trailing input published state.");
         byte[] fullGuard = Enumerable.Repeat((byte)0xA5, bytes.Length + 8).ToArray();
         Span<byte> output = fullGuard.AsSpan(3, bytes.Length);
@@ -62,7 +74,11 @@ public static class CodecContract
         ReadOnlySpan<byte> input = invalid;
         var reader = new LuminPackReader(ref input);
         bool rejected = false;
-        try { codec.Read(ref reader, ref value); } catch { rejected = true; }
+        try
+        {
+            codec.Read(ref reader, ref value); } catch
+        {
+            rejected = true; }
         Assert(rejected && reader.Position == 0, name + ": accepted an invalid marker.");
     }
 
@@ -70,6 +86,7 @@ public static class CodecContract
     /// <param name="condition">The required condition.</param><param name="message">The failure context.</param>
     public static void Assert(bool condition, string message)
     {
-        if (!condition) LuminPackExceptionHelper.ThrowInvalidOperationException(message);
+        if (!condition)
+            LuminPackExceptionHelper.ThrowInvalidOperationException(message);
     }
 }

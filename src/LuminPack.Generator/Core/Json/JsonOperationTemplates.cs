@@ -26,10 +26,12 @@ internal static class JsonOperationTemplates
         var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetRoot();
         var container = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
-        if (container == null) return source;
+        if (container == null)
+            return source;
         var helper = container.Members.OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
-        if (helper == null) return source;
+        if (helper == null)
+            return source;
         // One generic helper is shared by every closed construction. CLR generic statics keep
         // each closed type's cache separate while the generated helper implementation is emitted once.
         string qualified = "global::LuminPack.Generated." + container.Identifier.ValueText + "." +
@@ -40,7 +42,8 @@ internal static class JsonOperationTemplates
             switch (member)
             {
                 case FieldDeclarationSyntax field:
-                    foreach (var variable in field.Declaration.Variables) members.Add(variable.Identifier.ValueText);
+                    foreach (var variable in field.Declaration.Variables)
+                        members.Add(variable.Identifier.ValueText);
                     break;
                 case PropertyDeclarationSyntax property:
                     members.Add(property.Identifier.ValueText);
@@ -61,7 +64,8 @@ internal static class JsonOperationTemplates
         }
         foreach (var method in helper.Members.OfType<MethodDeclarationSyntax>())
         {
-            if (method.Body == null || method.Identifier.ValueText is not ("WriteValue" or "ReadValue")) continue;
+            if (method.Body == null || method.Identifier.ValueText is not ("WriteValue" or "ReadValue"))
+                continue;
             containerMembers.Add(((MethodDeclarationSyntax)rewriter.Visit(method))
                 .WithTypeParameterList(helper.TypeParameterList).WithConstraintClauses(helper.ConstraintClauses));
         }

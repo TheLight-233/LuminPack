@@ -252,7 +252,8 @@ public static partial class LuminPackSerializerGenerator
     private static void AppendSerializeJsonBufferWriter(StringBuilder sb, string typeName = null)
     {
         sb.AppendLine("        /// <summary>Serializes a value as JSON bytes into an arbitrary byte buffer writer.</summary>");
-        if (typeName == null) sb.AppendLine("        /// <typeparam name=\"T\">The value type to serialize.</typeparam>");
+        if (typeName == null)
+            sb.AppendLine("        /// <typeparam name=\"T\">The value type to serialize.</typeparam>");
         sb.AppendLine("        /// <param name=\"value\">The value to serialize.</param>");
         sb.AppendLine("        /// <param name=\"bufferWriter\">The destination writer that receives the JSON bytes.</param>");
         sb.AppendLine("        /// <param name=\"option\">The configuration for this call, or <see langword=\"null\"/> for LuminPack defaults.</param>");

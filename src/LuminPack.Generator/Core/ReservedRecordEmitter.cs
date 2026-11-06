@@ -30,7 +30,8 @@ internal static class ReservedRecordEmitter
         for (int index = 0; index < fields.Count; index++)
         {
             int kind = LuminPackCodeGenerator.ReservedKind(fields[index]);
-            if (widths[index] is not int width || kind == 1 && width == 255 || kind != 1 && width != 255 || fields[index].IsVolatile) return false;
+            if (widths[index] is not int width || kind == 1 && width == 255 || kind != 1 && width != 255 || fields[index].IsVolatile)
+                return false;
         }
         sb.AppendLine(indent + "ref byte __cursor = ref writer.GetCurrentSpanReference();");
         bool headerPending = true;
@@ -38,19 +39,22 @@ internal static class ReservedRecordEmitter
         for (int index = 0; index <= fields.Count; index++)
         {
             int last = index;
-            while (last < fields.Count && LuminPackCodeGenerator.ReservedKind(fields[last]) is > 0 and < 6) last++;
+            while (last < fields.Count && LuminPackCodeGenerator.ReservedKind(fields[last]) is > 0 and < 6)
+                last++;
             // Members [index, last) form one reserved group; the header joins the first group even when it is empty.
             if (last > index || headerPending)
             {
                 sb.AppendLine(indent + "{");
                 var terms = new List<string>();
-                if (headerPending) terms.Add(headerBound);
+                if (headerPending)
+                    terms.Add(headerBound);
                 for (int member = index; member < last; member++)
                 {
                     var field = fields[member];
                     int kind = LuminPackCodeGenerator.ReservedKind(field);
                     string name = LuminPackCodeGenerator.RecordSnapshotName(field, member);
-                    if (kind == 1) terms.Add(LuminPackCodeGenerator.GetUnmanagedFieldSize(field));
+                    if (kind == 1)
+                        terms.Add(LuminPackCodeGenerator.GetUnmanagedFieldSize(field));
                     else if (kind == 2)
                     {
                         sb.AppendLine(indent + "    string " + name + " = " + access(field) + ";");
@@ -63,7 +67,8 @@ internal static class ReservedRecordEmitter
                     }
                 }
                 sb.AppendLine(indent + "    __cursor = ref writer.ReserveRecord(ref __cursor, checked(" + string.Join(" + ", terms) + "));");
-                if (headerPending) storeHeader(indent + "    ");
+                if (headerPending)
+                    storeHeader(indent + "    ");
                 headerPending = false;
                 for (int member = index; member < last; member++)
                 {
@@ -73,7 +78,8 @@ internal static class ReservedRecordEmitter
                     if (kind == 1)
                     {
                         int end = member;
-                        while (end + 1 < last && LuminPackCodeGenerator.ReservedKind(fields[end + 1]) == 1) end++;
+                        while (end + 1 < last && LuminPackCodeGenerator.ReservedKind(fields[end + 1]) == 1)
+                            end++;
                         LuminPackCodeGenerator.AppendReservedFixedGroup(sb, fields, member, end, access, indent + "    ");
                         member = end;
                         continue;
@@ -82,14 +88,18 @@ internal static class ReservedRecordEmitter
                     sb.AppendLine(indent + "    // Field: " + field.Name);
                     sb.AppendLine(indent + "    ref byte " + length + " = ref __cursor;");
                     sb.AppendLine(indent + "    __cursor = ref " + Memory + ".Add(ref __cursor, 4);");
-                    if (kind == 2) sb.AppendLine(indent + "    __cursor = ref writer.WriteReservedRecordString(ref __cursor, " + name + ");");
-                    else if (kind is 3 or 4) sb.AppendLine(indent + "    __cursor = ref " + WriterType + ".WriteReservedSpanRecord(ref __cursor, " + name + ");");
-                    else sb.AppendLine(indent + "    __cursor = ref " + WriterType + ".WriteReserved(ref __cursor, " + name + ");");
+                    if (kind == 2)
+                        sb.AppendLine(indent + "    __cursor = ref writer.WriteReservedRecordString(ref __cursor, " + name + ");");
+                    else if (kind is 3 or 4)
+                        sb.AppendLine(indent + "    __cursor = ref " + WriterType + ".WriteReservedSpanRecord(ref __cursor, " + name + ");");
+                    else
+                        sb.AppendLine(indent + "    __cursor = ref " + WriterType + ".WriteReserved(ref __cursor, " + name + ");");
                     sb.AppendLine(indent + "    " + Memory + ".WriteUnaligned(ref " + length + ", (int)" + Memory + ".ByteOffset(ref " + Memory + ".Add(ref " + length + ", 4), ref __cursor));");
                 }
                 sb.AppendLine(indent + "}");
             }
-            if (last >= fields.Count) break;
+            if (last >= fields.Count)
+                break;
             // An unbounded member publishes the cursor and keeps its reserved-length write.
             var open = fields[last];
             sb.AppendLine(indent + "writer.CommitRecords(ref __cursor);");
@@ -116,7 +126,8 @@ internal static class ReservedRecordEmitter
             for (; offset + width <= bytes.Length; offset += width)
             {
                 ulong word = 0;
-                for (int index = width - 1; index >= 0; index--) word = word << 8 | bytes[offset + index];
+                for (int index = width - 1; index >= 0; index--)
+                    word = word << 8 | bytes[offset + index];
                 yield return (offset, width, word);
             }
     }

@@ -45,7 +45,8 @@ internal sealed class FileSemanticObservationCache
             }
             _project = project;
             if (Projects.Count > 64)
-                foreach (var stale in Projects.Where(pair => !pair.Value.TryGetTarget(out _)).Select(pair => pair.Key).ToArray()) Projects.Remove(stale);
+                foreach (var stale in Projects.Where(pair => !pair.Value.TryGetTarget(out _)).Select(pair => pair.Key).ToArray())
+                    Projects.Remove(stale);
         }
     }
 
@@ -93,7 +94,8 @@ internal sealed class FileSemanticObservationCache
     {
         var trees = new HashSet<SyntaxTree>();
         var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-        foreach (var type in types) AddDependencies(type, trees, visited);
+        foreach (var type in types)
+            AddDependencies(type, trees, visited);
         return trees.ToArray();
     }
 
@@ -112,7 +114,8 @@ internal sealed class FileSemanticObservationCache
             if (rebound.All(type => type != null))
             {
                 Interlocked.Increment(ref IncrementalGenerationMetrics.SemanticFileCacheHits);
-                lock (_observedDependencies) _observedDependencies[tree] = entry.Dependencies;
+                lock (_observedDependencies)
+                    _observedDependencies[tree] = entry.Dependencies;
                 return new FileTypeObservations(rebound, entry.UsesLuminPack);
             }
         }
@@ -126,14 +129,17 @@ internal sealed class FileSemanticObservationCache
         bool usesLuminPack = false;
         void AddType(ITypeSymbol type)
         {
-            if (type == null) return;
+            if (type == null)
+                return;
             usesLuminPack |= isRelevant(type);
             AddDependencies(type, dependencies, seenDependencies);
-            if (type is not ITypeParameterSymbol && seenTypes.Add(type)) types.Add(type);
+            if (type is not ITypeParameterSymbol && seenTypes.Add(type))
+                types.Add(type);
         }
         foreach (var node in tree.GetRoot().DescendantNodesAndSelf())
         {
-            if (node is TypeSyntax syntax) AddType(model.GetTypeInfo(syntax).Type);
+            if (node is TypeSyntax syntax)
+                AddType(model.GetTypeInfo(syntax).Type);
             else if (node is ExpressionSyntax expression)
             {
                 var info = model.GetTypeInfo(expression);
@@ -148,25 +154,31 @@ internal sealed class FileSemanticObservationCache
                     // Namespace declarations are protected by the global declaration-name guard.
                     // Their declaring references include every namespace block in the project;
                     // treating those as member dependencies would invalidate every file per edit.
-                    if (target is INamespaceSymbol) continue;
-                    if (target is IAliasSymbol alias) AddDependencies(alias.Target as ITypeSymbol, dependencies, seenDependencies);
+                    if (target is INamespaceSymbol)
+                        continue;
+                    if (target is IAliasSymbol alias)
+                        AddDependencies(alias.Target as ITypeSymbol, dependencies, seenDependencies);
                     AddDependencies(target as ITypeSymbol ?? target.ContainingType, dependencies, seenDependencies);
-                    foreach (var declaration in target.DeclaringSyntaxReferences) dependencies.Add(declaration.SyntaxTree);
+                    foreach (var declaration in target.DeclaringSyntaxReferences)
+                        dependencies.Add(declaration.SyntaxTree);
                 }
             }
         }
         var observedDependencies = dependencies.ToArray();
-        lock (_observedDependencies) _observedDependencies[tree] = observedDependencies;
+        lock (_observedDependencies)
+            _observedDependencies[tree] = observedDependencies;
         var values = types.Select(_factory.Create).ToArray();
         if (values.All(value => value != null))
         {
             var frozen = new FileEntry(tree, values, observedDependencies, usesLuminPack);
-            lock (_project.Entries) _project.Entries[tree.FilePath] = frozen;
+            lock (_project.Entries)
+                _project.Entries[tree.FilePath] = frozen;
         }
         else
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.SemanticFileFallbacks);
-            lock (_project.Entries) _project.Entries.Remove(tree.FilePath);
+            lock (_project.Entries)
+                _project.Entries.Remove(tree.FilePath);
         }
         return new FileTypeObservations(types, usesLuminPack);
     }
@@ -177,20 +189,35 @@ internal sealed class FileSemanticObservationCache
     /// <param name="visited">Types already traversed for this file.</param>
     private void AddDependencies(ITypeSymbol root, ISet<SyntaxTree> trees, ISet<ITypeSymbol> visited)
     {
-        if (root == null || !visited.Add(root)) return;
-        if (root is IArrayTypeSymbol array) { AddDependencies(array.ElementType, trees, visited); return; }
-        if (root is IPointerTypeSymbol pointer) { AddDependencies(pointer.PointedAtType, trees, visited); return; }
+        if (root == null || !visited.Add(root))
+            return;
+        if (root is IArrayTypeSymbol array)
+        {
+            AddDependencies(array.ElementType, trees, visited);
+            return; }
+        if (root is IPointerTypeSymbol pointer)
+        {
+            AddDependencies(pointer.PointedAtType, trees, visited);
+            return; }
         if (root is ITypeParameterSymbol parameter)
         {
-            foreach (var constraint in parameter.ConstraintTypes) AddDependencies(constraint, trees, visited);
+            foreach (var constraint in parameter.ConstraintTypes)
+                AddDependencies(constraint, trees, visited);
             return;
         }
-        if (root is not INamedTypeSymbol named) return;
-        foreach (var argument in named.TypeArguments) AddDependencies(argument, trees, visited);
-        if (!SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition)) { AddDependencies(named.OriginalDefinition, trees, visited); return; }
-        if (named.DeclaringSyntaxReferences.Length == 0) return;
+        if (root is not INamedTypeSymbol named)
+            return;
+        foreach (var argument in named.TypeArguments)
+            AddDependencies(argument, trees, visited);
+        if (!SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition))
+        {
+            AddDependencies(named.OriginalDefinition, trees, visited);
+            return; }
+        if (named.DeclaringSyntaxReferences.Length == 0)
+            return;
         DependencyNode direct;
-        lock (_direct) _direct.TryGetValue(named, out direct);
+        lock (_direct)
+            _direct.TryGetValue(named, out direct);
         if (direct == null)
         {
             // Files are observed in parallel, so binding runs outside the lock; a concurrent duplicate computes the same
@@ -198,12 +225,16 @@ internal sealed class FileSemanticObservationCache
             direct = Direct(named);
             lock (_direct)
             {
-                if (_direct.TryGetValue(named, out var published)) direct = published;
-                else _direct.Add(named, direct);
+                if (_direct.TryGetValue(named, out var published))
+                    direct = published;
+                else
+                    _direct.Add(named, direct);
             }
         }
-        foreach (var tree in direct.Trees) trees.Add(tree);
-        foreach (var dependency in direct.Types) AddDependencies(dependency, trees, visited);
+        foreach (var tree in direct.Trees)
+            trees.Add(tree);
+        foreach (var dependency in direct.Types)
+            AddDependencies(dependency, trees, visited);
     }
 
     /// <summary>Collects direct source facts needed by method binding and type constraints.</summary>
@@ -212,21 +243,30 @@ internal sealed class FileSemanticObservationCache
     private DependencyNode Direct(INamedTypeSymbol type)
     {
         var types = new List<ITypeSymbol>();
-        void Add(ITypeSymbol value) { if (value != null) types.Add(value); }
+        void Add(ITypeSymbol value)
+        {
+            if (value != null)
+                types.Add(value); }
         void Constant(TypedConstant value)
         {
-            if (value.Kind == TypedConstantKind.Type) Add(value.Value as ITypeSymbol);
-            if (value.Kind == TypedConstantKind.Array && !value.IsNull) foreach (var element in value.Values) Constant(element);
+            if (value.Kind == TypedConstantKind.Type)
+                Add(value.Value as ITypeSymbol);
+            if (value.Kind == TypedConstantKind.Array && !value.IsNull)
+                foreach (var element in value.Values)
+                    Constant(element);
         }
         void Attributes(ISymbol symbol)
         {
             foreach (var attribute in symbol.GetAttributes())
             {
                 Add(attribute.AttributeClass);
-                foreach (var argument in attribute.ConstructorArguments) Constant(argument);
-                foreach (var argument in attribute.NamedArguments) Constant(argument.Value);
+                foreach (var argument in attribute.ConstructorArguments)
+                    Constant(argument);
+                foreach (var argument in attribute.NamedArguments)
+                    Constant(argument.Value);
                 var syntax = attribute.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
-                if (syntax?.ArgumentList == null) continue;
+                if (syntax?.ArgumentList == null)
+                    continue;
                 var model = GetSemanticModel(syntax.SyntaxTree);
                 foreach (var identifier in syntax.ArgumentList.DescendantNodes().OfType<IdentifierNameSyntax>())
                 {
@@ -235,22 +275,37 @@ internal sealed class FileSemanticObservationCache
                 }
             }
         }
-        Add(type.BaseType); Add(type.ContainingType);
-        foreach (var @interface in type.Interfaces) Add(@interface);
-        foreach (var parameter in type.TypeParameters) foreach (var constraint in parameter.ConstraintTypes) Add(constraint);
+        Add(type.BaseType);
+        Add(type.ContainingType);
+        foreach (var @interface in type.Interfaces)
+            Add(@interface);
+        foreach (var parameter in type.TypeParameters)
+            foreach (var constraint in parameter.ConstraintTypes)
+                Add(constraint);
         Attributes(type);
         foreach (var member in type.GetMembers())
         {
             Attributes(member);
             switch (member)
             {
-                case IFieldSymbol field: Add(field.Type); break;
-                case IPropertySymbol property: Add(property.Type); break;
-                case IEventSymbol @event: Add(@event.Type); break;
+                case IFieldSymbol field:
+                    Add(field.Type);
+                    break;
+                case IPropertySymbol property:
+                    Add(property.Type);
+                    break;
+                case IEventSymbol @event:
+                    Add(@event.Type);
+                    break;
                 case IMethodSymbol method:
                     Add(method.ReturnType);
-                    foreach (var parameter in method.Parameters) { Add(parameter.Type); Attributes(parameter); }
-                    foreach (var parameter in method.TypeParameters) foreach (var constraint in parameter.ConstraintTypes) Add(constraint);
+                    foreach (var parameter in method.Parameters)
+                    {
+                        Add(parameter.Type);
+                        Attributes(parameter); }
+                    foreach (var parameter in method.TypeParameters)
+                        foreach (var constraint in parameter.ConstraintTypes)
+                            Add(constraint);
                     break;
             }
         }
@@ -271,7 +326,11 @@ internal sealed class FileSemanticObservationCache
         /// <param name="dependencies">The source dependency identities.</param>
         /// <param name="usesLuminPack">Whether the legacy relevance predicate matched any observed type.</param>
         internal FileEntry(SyntaxTree tree, StableTypeIdentity[] types, SyntaxTree[] dependencies, bool usesLuminPack)
-        { Tree = tree; Types = types; Dependencies = dependencies; UsesLuminPack = usesLuminPack; }
+        {
+            Tree = tree;
+            Types = types;
+            Dependencies = dependencies;
+            UsesLuminPack = usesLuminPack; }
     }
 
     /// <summary>Owns the latest bounded per-file summaries for one project state.</summary>
@@ -292,7 +351,8 @@ internal sealed class FileSemanticObservationCache
         {
             _options = compilation.Options;
             _references = compilation.References.Select(reference => new WeakReference<MetadataReference>(reference)).ToArray();
-            _parseOptions = trees.Select(tree => tree.Options).ToArray(); _globalFacts = globalFacts;
+            _parseOptions = trees.Select(tree => tree.Options).ToArray();
+            _globalFacts = globalFacts;
             _projectKey = compilation.AssemblyName + "\n" + string.Join("\n", trees.Select(tree => tree.FilePath));
         }
 
@@ -302,9 +362,14 @@ internal sealed class FileSemanticObservationCache
         /// <returns>Whether the host can establish equivalent settings.</returns>
         private static bool SameOptions(CompilationOptions before, CompilationOptions after)
         {
-            if (ReferenceEquals(before, after)) return true;
-            try { return before.Equals(after); }
-            catch (NotImplementedException) { return false; }
+            if (ReferenceEquals(before, after))
+                return true;
+            try
+            {
+                return before.Equals(after); }
+            catch (NotImplementedException)
+            {
+                return false; }
         }
 
         /// <summary>Checks all immutable guard values without comparing cached file-entry contents.</summary>
@@ -337,14 +402,18 @@ internal sealed class FileSemanticObservationCache
         {
             var root = tree.GetCompilationUnitRoot();
             var text = new StringBuilder();
-            foreach (var import in root.Usings.Where(directive => directive.GlobalKeyword.RawKind != 0)) text.AppendLine(import.ToString());
-            foreach (var attribute in root.AttributeLists) text.AppendLine(attribute.ToString());
+            foreach (var import in root.Usings.Where(directive => directive.GlobalKeyword.RawKind != 0))
+                text.AppendLine(import.ToString());
+            foreach (var attribute in root.AttributeLists)
+                text.AppendLine(attribute.ToString());
             foreach (var declaration in root.DescendantNodes().Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax))
             {
                 foreach (var ancestor in declaration.Ancestors().Reverse())
                 {
-                    if (ancestor is BaseNamespaceDeclarationSyntax space) text.Append(space.Name).Append('.');
-                    if (ancestor is TypeDeclarationSyntax owner) text.Append(owner.Identifier.ValueText).Append('`').Append(owner.TypeParameterList?.Parameters.Count ?? 0).Append('+');
+                    if (ancestor is BaseNamespaceDeclarationSyntax space)
+                        text.Append(space.Name).Append('.');
+                    if (ancestor is TypeDeclarationSyntax owner)
+                        text.Append(owner.Identifier.ValueText).Append('`').Append(owner.TypeParameterList?.Parameters.Count ?? 0).Append('+');
                 }
                 if (declaration is BaseTypeDeclarationSyntax type)
                     text.Append(type.RawKind).Append(':').Append(type.Identifier.ValueText).Append('`').Append((type as TypeDeclarationSyntax)?.TypeParameterList?.Parameters.Count ?? 0).AppendLine();
@@ -366,7 +435,10 @@ internal sealed class FileSemanticObservationCache
         /// <summary>Captures current source trees and direct type relationships.</summary>
         /// <param name="trees">Declaring source trees.</param>
         /// <param name="types">Directly referenced types.</param>
-        internal DependencyNode(SyntaxTree[] trees, ITypeSymbol[] types) { Trees = trees; Types = types; }
+        internal DependencyNode(SyntaxTree[] trees, ITypeSymbol[] types)
+        {
+            Trees = trees;
+            Types = types; }
     }
 }
 
@@ -379,5 +451,8 @@ internal sealed class FileTypeObservations
     /// <summary>Creates the current-compilation observation result.</summary>
     /// <param name="types">The currently bound observed types.</param>
     /// <param name="usesLuminPack">Whether any observed type is relevant to LuminPack.</param>
-    internal FileTypeObservations(IReadOnlyList<ITypeSymbol> types, bool usesLuminPack) { Types = types; UsesLuminPack = usesLuminPack; }
+    internal FileTypeObservations(IReadOnlyList<ITypeSymbol> types, bool usesLuminPack)
+    {
+        Types = types;
+        UsesLuminPack = usesLuminPack; }
 }

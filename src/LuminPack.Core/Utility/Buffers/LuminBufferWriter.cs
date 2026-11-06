@@ -57,12 +57,14 @@ public static class LuminBufferWriterPool
     private static LuminBufferWriter RentSlow()
     {
         var previous = t_first;
-        if (previous is not null) previous._threadCached = false;
+        if (previous is not null)
+            previous._threadCached = false;
 
         LuminBufferWriter? writer = null;
 #if LUMINPACK_BUFFERWRITER_SECOND_TLS
         writer = t_second;
-        if (writer is not null) t_second = null;
+        if (writer is not null)
+            t_second = null;
 #endif
         writer ??= s_centralPool.TryTake() ?? new LuminBufferWriter(true);
         writer._threadCached = true;
@@ -86,7 +88,8 @@ public static class LuminBufferWriterPool
         if (writer._threadCached)
         {
             // The writer remains its thread's cached instance, so an oversized buffer is released rather than the writer.
-            if (writer.TotalLength >= MaxPooledBufferSize) writer.ReleaseStorage();
+            if (writer.TotalLength >= MaxPooledBufferSize)
+                writer.ReleaseStorage();
             // Release: the reset above is visible before another rent observes the cleared flag.
             Volatile.Write(ref writer._rented, false);
             return;
@@ -140,7 +143,8 @@ public static class LuminBufferWriterPool
         if (first is not null)
         {
             first._threadCached = false;
-            if (Volatile.Read(ref first._rented)) first = null;
+            if (Volatile.Read(ref first._rented))
+                first = null;
         }
 
 #if LUMINPACK_BUFFERWRITER_SECOND_TLS
@@ -498,7 +502,8 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     public byte[] ToArrayAndReset()
     {
         var length = CurrentIndex;
-        if (length == 0) return [];
+        if (length == 0)
+            return [];
 
         var result = AllocateUninitializedArray<byte>(length);
         GetSpan().CopyTo(result);
@@ -607,7 +612,8 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     public void WriteToAndReset(ref LuminPackWriter writer)
     {
         var length = CurrentIndex;
-        if (length == 0) return;
+        if (length == 0)
+            return;
 
         writer.EnsureAdditionalCapacity(length);
         CopyBlockUnaligned(ref writer.CurrentReference, ref Data, (uint)length);
@@ -623,7 +629,8 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     public async ValueTask WriteToAndResetAsync(Stream stream, CancellationToken cancellationToken)
     {
         var length = CurrentIndex;
-        if (length == 0) return;
+        if (length == 0)
+            return;
 
         await stream.WriteAsync(new ReadOnlyMemory<byte>(_buffer, _offset, length), cancellationToken).ConfigureAwait(false);
         ResetCore();
@@ -665,7 +672,8 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     /// <remarks>This does not return the instance to the pool. Use <see cref="ResetForReuse"/> to retain the capacity.</remarks>
     public void Reset()
     {
-        if (CurrentIndex != 0) ReleaseStorage();
+        if (CurrentIndex != 0)
+            ReleaseStorage();
         ResetForReuse();
     }
 
@@ -673,7 +681,8 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     /// <remarks>Pool-rented instances should normally be returned through <see cref="LuminBufferWriterPool.Return"/>.</remarks>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
         ResetForPool();
         ReleaseStorage();
@@ -701,9 +710,11 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         _capacity = 0;
         _threshold = 0;
 #if !NET8_0_OR_GREATER
-        if (_pin.IsAllocated) _pin.Free();
+        if (_pin.IsAllocated)
+            _pin.Free();
 #endif
-        if (buffer.Length != 0) ArrayPool<byte>.Shared.Return(buffer);
+        if (buffer.Length != 0)
+            ArrayPool<byte>.Shared.Return(buffer);
     }
 
     #endregion
@@ -732,7 +743,8 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     private void Grow(int capacity)
     {
         int current = _capacity;
-        if (capacity <= current) return;
+        if (capacity <= current)
+            return;
 
         var buffer = _buffer;
         if (capacity > buffer.Length - _offset)
@@ -742,7 +754,9 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
 #if !NET8_0_OR_GREATER
             // Pin before the offset is measured, so pointer cursors and the alignment stay valid until the array is returned.
             GCHandle pin;
-            try { pin = GCHandle.Alloc(next, GCHandleType.Pinned); }
+            try
+            {
+                pin = GCHandle.Alloc(next, GCHandleType.Pinned); }
             catch (Exception exception)
             {
                 ArrayPool<byte>.Shared.Return(next);
@@ -752,15 +766,19 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
 #endif
             ref byte start = ref GetNotNullArrayReference(next);
             int offset = (int)(-AddressOf(ref start) & (Alignment - 1));
-            if (next.Length - offset < capacity) offset = 0;
-            if (current != 0) CopyBlockUnaligned(ref Unsafe.Add(ref start, (nint)(uint)offset), ref Data, (uint)current);
+            if (next.Length - offset < capacity)
+                offset = 0;
+            if (current != 0)
+                CopyBlockUnaligned(ref Unsafe.Add(ref start, (nint)(uint)offset), ref Data, (uint)current);
             _buffer = next;
             _offset = offset;
 #if !NET8_0_OR_GREATER
-            if (_pin.IsAllocated) _pin.Free();
+            if (_pin.IsAllocated)
+                _pin.Free();
             _pin = pin;
 #endif
-            if (buffer.Length != 0) ArrayPool<byte>.Shared.Return(buffer);
+            if (buffer.Length != 0)
+                ArrayPool<byte>.Shared.Return(buffer);
         }
 
         MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Data, (nint)(uint)current), capacity - current).Clear();

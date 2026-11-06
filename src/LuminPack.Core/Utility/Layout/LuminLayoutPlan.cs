@@ -42,27 +42,39 @@ public readonly struct LuminLayoutPlan
     /// <param name="sourceStride">Input stride.</param><param name="destinationStride">Output stride.</param><param name="mode">Kernel mode.</param><param name="perBlock">Elements per block.</param><param name="reserve">Access reserve.</param><param name="inputVectors">Input vector count.</param><param name="outputVectors">Output vector count.</param><param name="masks">Four sixteen-byte masks.</param>
     private LuminLayoutPlan(int sourceStride, int destinationStride, int mode, int perBlock, int reserve, int inputVectors, int outputVectors, ReadOnlySpan<byte> masks)
     {
-        SourceStride = sourceStride; DestinationStride = destinationStride; Mode = mode; PerBlock = perBlock;
-        Reserve = reserve; InputVectors = inputVectors; OutputVectors = outputVectors;
-        Mask0Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks)); Mask0High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(8)));
-        Mask1Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(16))); Mask1High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(24)));
-        Mask2Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(32))); Mask2High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(40)));
-        Mask3Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(48))); Mask3High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(56)));
+        SourceStride = sourceStride;
+        DestinationStride = destinationStride;
+        Mode = mode;
+        PerBlock = perBlock;
+        Reserve = reserve;
+        InputVectors = inputVectors;
+        OutputVectors = outputVectors;
+        Mask0Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks));
+        Mask0High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(8)));
+        Mask1Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(16)));
+        Mask1High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(24)));
+        Mask2Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(32)));
+        Mask2High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(40)));
+        Mask3Low = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(48)));
+        Mask3High = LuminPackReader.Read<ulong>(ref MemoryMarshal.GetReference(masks.Slice(56)));
     }
     /// <summary>Builds Core's original bounded masks once for an immutable layout.</summary>
     /// <param name="source">Source offsets.</param><param name="sourceStride">Input stride.</param><param name="destination">Destination offsets.</param><param name="destinationStride">Output stride.</param><param name="segments">Established contiguous run count.</param>
     /// <returns>The established plan, or a zero-mode descriptor when ineligible.</returns>
     public static LuminLayoutPlan Create(ReadOnlySpan<int> source, int sourceStride, ReadOnlySpan<int> destination, int destinationStride, int segments)
     {
-        if (source.Length == 0 || source.Length != destination.Length || sourceStride > 32 || destinationStride > 32 || sourceStride <= 0 || destinationStride <= 0) return default;
+        if (source.Length == 0 || source.Length != destination.Length || sourceStride > 32 || destinationStride > 32 || sourceStride <= 0 || destinationStride <= 0)
+            return default;
         for (int index = 0; index < source.Length; index++)
-            if ((uint)source[index] >= (uint)sourceStride || (uint)destination[index] >= (uint)destinationStride) return default;
+            if ((uint)source[index] >= (uint)sourceStride || (uint)destination[index] >= (uint)destinationStride)
+                return default;
         Span<byte> masks = stackalloc byte[64];
         masks.Fill(0xFF);
         int mode, perBlock, inputVectors, outputVectors;
         if (sourceStride <= 16 && destinationStride <= 16)
         {
-            if (segments < 2) return default;
+            if (segments < 2)
+                return default;
             perBlock = Math.Min(16 / sourceStride, 16 / destinationStride);
             for (int element = 0; element < perBlock; element++)
                 for (int index = 0; index < source.Length; index++)
@@ -72,7 +84,8 @@ public readonly struct LuminLayoutPlan
         }
         else
         {
-            if (segments < 3) return default;
+            if (segments < 3)
+                return default;
             perBlock = 1;
             inputVectors = sourceStride > 16 ? 2 : 1;
             outputVectors = destinationStride > 16 ? 2 : 1;
@@ -94,11 +107,14 @@ public readonly struct LuminLayoutPlan
     internal static void CreatePortable(ReadOnlySpan<int> offsets, int size, int wire, out LuminLayoutPlan packPlan, out LuminLayoutPlan unpackPlan)
     {
         packPlan = unpackPlan = default;
-        if (wire <= 0 || size <= 0 || size > 32 || wire > 32 || offsets.Length != wire) return;
+        if (wire <= 0 || size <= 0 || size > 32 || wire > 32 || offsets.Length != wire)
+            return;
         foreach (int offset in offsets)
-            if ((uint)offset >= (uint)size) return;
+            if ((uint)offset >= (uint)size)
+                return;
         Span<byte> pack = stackalloc byte[64], unpack = stackalloc byte[64];
-        pack.Fill(0xFF); unpack.Fill(0xFF);
+        pack.Fill(0xFF);
+        unpack.Fill(0xFF);
         int mode, perBlock, reserve;
         if (size <= 16 && wire <= 16)
         {
@@ -116,8 +132,10 @@ public readonly struct LuminLayoutPlan
         {
             int runs = 1;
             for (int index = 1; index < wire; index++)
-                if (offsets[index] != offsets[index - 1] + 1) runs++;
-            if (runs < 4) return;
+                if (offsets[index] != offsets[index - 1] + 1)
+                    runs++;
+            if (runs < 4)
+                return;
             for (int index = 0; index < wire; index++)
             {
                 int offset = offsets[index];

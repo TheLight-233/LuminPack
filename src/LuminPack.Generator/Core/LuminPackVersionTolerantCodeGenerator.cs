@@ -54,7 +54,8 @@ public static class LuminPackVersionTolerantCodeGenerator
             var prefix = new byte[] { 251, 2, 0, (byte)data.fields.Count }.Concat(bytes).Concat(widths.Select(width => (byte)width.Value)).ToArray();
             sb.AppendLine("            internal static global::System.ReadOnlySpan<byte> Prefix => [" + string.Join(", ", prefix) + "];");
             ulong fingerprint = 14695981039346656037UL;
-            foreach (byte value in prefix.Skip(4)) fingerprint = (fingerprint ^ value) * 1099511628211UL;
+            foreach (byte value in prefix.Skip(4))
+                fingerprint = (fingerprint ^ value) * 1099511628211UL;
             sb.AppendLine("            internal const ulong Fingerprint = 0x" + fingerprint.ToString("X16", System.Globalization.CultureInfo.InvariantCulture) + "UL;");
             AppendShortState(sb, data.fields.Count, prefix.Length > 12 ? "true" : "false");
             AppendPrefixMatch(sb, prefix);
@@ -145,7 +146,8 @@ public static class LuminPackVersionTolerantCodeGenerator
             while (offset + width <= prefix.Length && (width == 8 || prefix.Length - offset < 2 * width))
             {
                 ulong word = 0;
-                for (int index = width - 1; index >= 0; index--) word = word << 8 | prefix[offset + index];
+                for (int index = width - 1; index >= 0; index--)
+                    word = word << 8 | prefix[offset + index];
                 string type = width == 8 ? "ulong" : width == 4 ? "uint" : width == 2 ? "ushort" : "byte";
                 string hex = word.ToString("X", System.Globalization.CultureInfo.InvariantCulture);
                 // The binary profile is stamped into the third header byte at run time.
@@ -212,16 +214,20 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine("                ref byte input = ref reader.PeekInput(" + prefix.Length + ", out bool available);");
         sb.AppendLine("                if (!available) return false;");
         var offsets = new List<int>();
-        for (int offset = 0; offset + 8 <= prefix.Length; offset += 8) offsets.Add(offset);
-        if (prefix.Length % 8 != 0) offsets.Add(prefix.Length - 8);
+        for (int offset = 0; offset + 8 <= prefix.Length; offset += 8)
+            offsets.Add(offset);
+        if (prefix.Length % 8 != 0)
+            offsets.Add(prefix.Length - 8);
         var terms = offsets.Select(offset =>
         {
             ulong word = 0;
-            for (int index = 7; index >= 0; index--) word = word << 8 | prefix[offset + index];
+            for (int index = 7; index >= 0; index--)
+                word = word << 8 | prefix[offset + index];
             string load = offset == 0 ? memory + ".ReadUnaligned<ulong>(ref input)" : memory + ".ReadUnaligned<ulong>(ref " + memory + ".Add(ref input, " + offset + "))";
             string expected = "0x" + word.ToString("X16", System.Globalization.CultureInfo.InvariantCulture) + "UL";
             // The binary profile is stamped into the third header byte at run time.
-            if (offset == 0) expected = "(" + expected + " | (ulong)global::LuminPack.Core.LuminPackWriter.BinaryProfile<TOptions>() << 16)";
+            if (offset == 0)
+                expected = "(" + expected + " | (ulong)global::LuminPack.Core.LuminPackWriter.BinaryProfile<TOptions>() << 16)";
             return "(" + load + " ^ " + expected + ")";
         });
         sb.AppendLine("                if ((" + string.Join(" | ", terms) + ") != 0) return false;");
@@ -291,7 +297,8 @@ public static class LuminPackVersionTolerantCodeGenerator
         var batch = new List<LuminDataField>();
         void Flush()
         {
-            if (batch.Count == 0) return;
+            if (batch.Count == 0)
+                return;
             foreach (var field in batch.Where(field => field.IsVolatile))
                 sb.AppendLine($"            var {field.Name}Snapshot = {Access(field)};");
             sb.AppendLine("            writer.Advance(writer.WriteUnmanaged(" + string.Join(", ", batch.Select(field => field.IsVolatile ? field.Name + "Snapshot" : Access(field))) + "));");
@@ -303,7 +310,8 @@ public static class LuminPackVersionTolerantCodeGenerator
             if (widths[i] is int width && width != 255)
             {
                 batch.Add(field);
-                if (batch.Count == MaxParametersPerCall) Flush();
+                if (batch.Count == MaxParametersPerCall)
+                    Flush();
                 continue;
             }
             Flush();
@@ -311,7 +319,8 @@ public static class LuminPackVersionTolerantCodeGenerator
             {
                 // A raw member whose width is known only at run time carries a length when it is 255 bytes or wider.
                 sb.AppendLine("            {");
-                if (field.IsVolatile) sb.AppendLine($"                var {field.Name}Snapshot = {Access(field)};");
+                if (field.IsVolatile)
+                    sb.AppendLine($"                var {field.Name}Snapshot = {Access(field)};");
                 sb.AppendLine($"                if (Unsafe.SizeOf<{field.TypeName}>() >= 255) writer.WriteVersionLength(Unsafe.SizeOf<{field.TypeName}>());");
                 sb.AppendLine($"                writer.Advance(writer.WriteUnmanaged({(field.IsVolatile ? field.Name + "Snapshot" : Access(field))}));");
                 sb.AppendLine("            }");
@@ -356,7 +365,8 @@ public static class LuminPackVersionTolerantCodeGenerator
                 sb.AppendLine(indent + "}");
                 sb.AppendLine(indent + "finally { reader.ExitVersionField(previousLength); }");
             }
-            else EmitterTypeTraits.AppendReusableElementRead(sb, field.TypeSymbol, field.Name + "Temp", indent, field.IsCompress);
+            else
+                EmitterTypeTraits.AppendReusableElementRead(sb, field.TypeSymbol, field.Name + "Temp", indent, field.IsCompress);
             sb.AppendLine(indent + "global::LuminPack.Core.LuminPackReader.ValidateVersionFieldEnd(reader.GetCurrentSpanIndex(), end);");
         }
         sb.AppendLine(indent.Substring(4) + "}");
@@ -404,7 +414,8 @@ public static class LuminPackVersionTolerantCodeGenerator
             var field = data.fields[i];
             // A run of raw members has no length prefixes in a matching record, so one checked advance covers the run.
             int last = i;
-            while (last + 1 < data.fields.Count && IsRawRunMember(data.fields[last + 1], widths[last + 1])) last++;
+            while (last + 1 < data.fields.Count && IsRawRunMember(data.fields[last + 1], widths[last + 1]))
+                last++;
             if (last > i && IsRawRunMember(field, widths[i]) &&
                 LuminPackCodeGenerator.TryGenerateCursorFixedGroup(sb, data.fields, i, last, member => member.Name + "Temp", "                ", write: false, allowBulkCopy: false))
             {

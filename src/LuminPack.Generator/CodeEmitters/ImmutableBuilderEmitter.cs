@@ -16,14 +16,16 @@ internal static class ImmutableBuilderEmitter
     {
         var access = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminImmutableBuilders");
         var collection = compilation.GetTypeByMetadataName("System.Collections.Immutable.Immutable" + family + "`" + arity);
-        if (access is null || access.DeclaredAccessibility != Accessibility.Public || collection is null) return false;
+        if (access is null || access.DeclaredAccessibility != Accessibility.Public || collection is null)
+            return false;
         bool Matches(IMethodSymbol method, bool rent)
         {
             if (!method.IsStatic || method.DeclaredAccessibility != Accessibility.Public || method.Arity != arity ||
                 method.ReturnsByRef || method.ReturnsByRefReadonly || method.TypeParameters.Any(parameter =>
                     !parameter.ConstraintTypes.IsEmpty || parameter.HasReferenceTypeConstraint || parameter.HasValueTypeConstraint ||
                     parameter.HasUnmanagedTypeConstraint || parameter.HasConstructorConstraint ||
-                    (parameter.HasNotNullConstraint && !(arity == 2 && parameter.Ordinal == 0)))) return false;
+                    (parameter.HasNotNullConstraint && !(arity == 2 && parameter.Ordinal == 0))))
+                return false;
             var builder = collection.Construct(method.TypeParameters.Cast<ITypeSymbol>().ToArray()).GetTypeMembers("Builder").SingleOrDefault();
             return builder is not null && (rent
                 ? method.Parameters.IsEmpty && SymbolEqualityComparer.Default.Equals(method.ReturnType, builder)
@@ -42,7 +44,10 @@ internal static class ImmutableBuilderEmitter
     internal static void Begin(StringBuilder sb, bool enabled, string family, string arguments, string indent)
     {
         sb.AppendLine(indent + "var builder = " + (enabled ? "global::LuminPack.Utility.LuminImmutableBuilders.Rent" + family : "global::System.Collections.Immutable.Immutable" + family + ".CreateBuilder") + "<" + arguments + ">();");
-        if (enabled) { sb.AppendLine(indent + "try"); sb.AppendLine(indent + "{"); }
+        if (enabled)
+        {
+            sb.AppendLine(indent + "try");
+            sb.AppendLine(indent + "{"); }
     }
 
     /// <summary>Returns the cleared builder after publication or any reader/comparer failure.</summary>
@@ -52,7 +57,8 @@ internal static class ImmutableBuilderEmitter
     /// <param name="indent">The enclosing indentation.</param>
     internal static void End(StringBuilder sb, bool enabled, string family, string indent)
     {
-        if (!enabled) return;
+        if (!enabled)
+            return;
         sb.AppendLine(indent + "}");
         sb.AppendLine(indent + "finally { global::LuminPack.Utility.LuminImmutableBuilders.Return" + family + "(builder); }");
     }

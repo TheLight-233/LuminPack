@@ -55,7 +55,8 @@ static unsafe void Check<T>(T value, delegate*<ref LuminPackWriter, in T, void> 
         Span<byte> output = new(data + 3, length);
         var writer = new LuminPackWriter(ref output);
         write(ref writer, value);
-        if (writer.Position != length) LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": record length changed between writes.");
+        if (writer.Position != length)
+            LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": record length changed between writes.");
         for (int prefix = 0; prefix < length; prefix++)
         {
             ReadOnlySpan<byte> shortened = new(data + 3, prefix);
@@ -63,7 +64,11 @@ static unsafe void Check<T>(T value, delegate*<ref LuminPackWriter, in T, void> 
             T sentinel = value;
             byte[] before = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref sentinel, 1)).ToArray();
             bool rejected = false;
-            try { read(ref reader, ref sentinel); } catch { rejected = true; }
+            try
+            {
+                read(ref reader, ref sentinel); } catch
+            {
+                rejected = true; }
             if (!rejected || reader.Position != 0 || !before.AsSpan().SequenceEqual(MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref sentinel, 1))))
                 LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": truncated input mutated state.");
         }
@@ -78,7 +83,8 @@ static unsafe void Check<T>(T value, delegate*<ref LuminPackWriter, in T, void> 
             var secondWriter = new LuminPackWriter(ref secondOutput);
             write(ref secondWriter, restored);
         }
-        if (!bytes.AsSpan(3, length).SequenceEqual(again)) LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": unstable field round trip.");
+        if (!bytes.AsSpan(3, length).SequenceEqual(again))
+            LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": unstable field round trip.");
         byte[] alias = new byte[3 + Math.Max(length, System.Runtime.CompilerServices.Unsafe.SizeOf<T>())];
         bytes.AsSpan(3, length).CopyTo(alias.AsSpan(3));
         fixed (byte* aliasedData = alias)
@@ -98,6 +104,7 @@ static unsafe void Check<T>(T value, delegate*<ref LuminPackWriter, in T, void> 
                 LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": aliased input or nonzero cursor changed the staged read.");
         }
     }
-    if (bytes.Take(3).Concat(bytes.Skip(3 + length)).Any(b => b != 0xA5)) LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": output canary changed.");
+    if (bytes.Take(3).Concat(bytes.Skip(3 + length)).Any(b => b != 0xA5))
+        LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": output canary changed.");
 }
 #endif

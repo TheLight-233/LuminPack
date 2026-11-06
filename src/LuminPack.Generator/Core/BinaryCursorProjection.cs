@@ -16,7 +16,10 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
     /// <summary>Selects direct managed references or compatibility pointer dereferences.</summary>
     /// <param name="pointer">Whether the target runtime exposes a native pointer cursor.</param>
     /// <param name="allowUnsafe">Whether the consumer permits direct pointer dereferencing.</param>
-    internal BinaryCursorProjection(bool pointer = false, bool allowUnsafe = true) { _pointer = pointer; _allowUnsafe = allowUnsafe; }
+    internal BinaryCursorProjection(bool pointer = false, bool allowUnsafe = true)
+    {
+        _pointer = pointer;
+        _allowUnsafe = allowUnsafe; }
 
     /// <summary>Reads the referenced runtime's actual cursor storage independently of consumer feature symbols.</summary>
     /// <param name="compilation">The consumer's selected runtime reference.</param>
@@ -31,7 +34,8 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
     /// <returns>The operation using the binary state's advancing cursor.</returns>
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
-        if (node.Body == null) return node;
+        if (node.Body == null)
+            return node;
         var states = new HashSet<string>(StringComparer.Ordinal);
         var readers = new HashSet<string>(StringComparer.Ordinal);
         var candidates = new List<LocalDeclarationStatementSyntax>();
@@ -40,20 +44,24 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
             if (descendant is ParameterSyntax parameter)
             {
                 string type = parameter.Type?.ToString();
-                if (IsBinary(type)) states.Add(parameter.Identifier.ValueText);
-                if (IsBinaryReader(type)) readers.Add(parameter.Identifier.ValueText);
+                if (IsBinary(type))
+                    states.Add(parameter.Identifier.ValueText);
+                if (IsBinaryReader(type))
+                    readers.Add(parameter.Identifier.ValueText);
             }
             else if (descendant is VariableDeclaratorSyntax variable)
             {
                 string type = (variable.Parent as VariableDeclarationSyntax)?.Type.ToString();
                 if (IsBinary(type) || variable.Initializer?.Value is ObjectCreationExpressionSyntax creation && IsBinary(creation.Type.ToString()))
                     states.Add(variable.Identifier.ValueText);
-                if (IsBinaryReader(type)) readers.Add(variable.Identifier.ValueText);
+                if (IsBinaryReader(type))
+                    readers.Add(variable.Identifier.ValueText);
             }
             else if (descendant is LocalDeclarationStatementSyntax { Declaration.Type: RefTypeSyntax } declaration)
                 candidates.Add(declaration);
         }
-        if (states.Count == 0) return node;
+        if (states.Count == 0)
+            return node;
         var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var declaration in candidates)
             if (declaration.Declaration.Type is RefTypeSyntax && declaration.Declaration.Variables.Count == 1 &&
@@ -99,7 +107,12 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
         /// <param name="aliases">Generated aliases and their owning receivers.</param>
         /// <param name="pointer">Whether direct storage uses a native pointer.</param>
         /// <param name="allowUnsafe">Whether generated source may dereference pointers.</param>
-        internal Positions(HashSet<string> states, Dictionary<string, string> aliases, bool pointer, bool allowUnsafe) { _states = states; _aliases = aliases; _pointer = pointer; _allowUnsafe = allowUnsafe; }
+        internal Positions(HashSet<string> states, Dictionary<string, string> aliases, bool pointer, bool allowUnsafe)
+        {
+            _states = states;
+            _aliases = aliases;
+            _pointer = pointer;
+            _allowUnsafe = allowUnsafe; }
 
         /// <summary>Removes obsolete byref declarations after replacing their uses.</summary>
         /// <param name="node">The generated declaration.</param>
@@ -188,7 +201,11 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
         /// <param name="readers">The binary Reader receivers.</param>
         /// <param name="pointer">Whether the cursor is a native pointer.</param>
         /// <param name="allowUnsafe">Whether generated source may use pointer arithmetic.</param>
-        internal Advances(HashSet<string> readers, bool pointer, bool allowUnsafe) { _readers = readers; _pointer = pointer; _allowUnsafe = allowUnsafe; }
+        internal Advances(HashSet<string> readers, bool pointer, bool allowUnsafe)
+        {
+            _readers = readers;
+            _pointer = pointer;
+            _allowUnsafe = allowUnsafe; }
 
         /// <summary>Retains the Reader's range check before lowering a fixed advance to cursor arithmetic.</summary>
         /// <param name="node">A generated statement.</param>
@@ -202,9 +219,11 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
                 return result;
             var count = call.ArgumentList.Arguments[0].Expression;
             // Only side-effect-free widths are lowered, so the cursor is still read after the width is known.
-            if (!IsPure(count)) return result;
+            if (!IsPure(count))
+                return result;
             string state = access.Expression.ToString();
-            if (_pointer) UsedPointer = true;
+            if (_pointer)
+                UsedPointer = true;
             var lowered = SyntaxFactory.ParseExpression(_pointer
                 ? state + ".Cursor += (uint)(__luminCount)"
                 : state + ".Cursor = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref " + state + ".Cursor, (nint)(uint)(__luminCount))");
@@ -258,7 +277,9 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
 
         /// <summary>Captures this operation's binary receiver identities.</summary>
         /// <param name="states">Binary states whose positions cannot escape by reference.</param>
-        internal Arguments(HashSet<string> states) { _states = states; }
+        internal Arguments(HashSet<string> states)
+        {
+            _states = states; }
 
         /// <summary>Introduces copied offsets only at old absolute-position implementation boundaries.</summary>
         /// <param name="node">The current generated statement block.</param>
@@ -276,7 +297,8 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
                         .OfType<ArgumentSyntax>().FirstOrDefault(argument => argument.RefKindKeyword.IsKind(SyntaxKind.RefKeyword) &&
                             argument.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Position" } position &&
                             _states.Contains(position.Expression.ToString()));
-                    if (reference == null) break;
+                    if (reference == null)
+                        break;
                     if (reference.Parent?.Parent is InvocationExpressionSyntax call && call.Expression is MemberAccessExpressionSyntax access)
                     {
                         string name = access.Name.Identifier.ValueText;

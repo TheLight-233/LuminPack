@@ -70,7 +70,15 @@ internal sealed class CompiledOptions
     /// <param name="declared">Whether a declaration explicitly owns this profile.</param>
     /// <param name="input">The separately selected external-input policy.</param>
     private CompiledOptions(int encoding, int recording, char format, byte precision, int depth, bool strict, bool declared = false, CompiledInputPolicy input = null)
-    { Encoding = encoding; Recording = recording; Format = format; Precision = precision; Depth = depth; Strict = strict; IsDeclared = declared; Input = input ?? CompiledInputPolicy.Default; }
+    {
+        Encoding = encoding;
+        Recording = recording;
+        Format = format;
+        Precision = precision;
+        Depth = depth;
+        Strict = strict;
+        IsDeclared = declared;
+        Input = input ?? CompiledInputPolicy.Default; }
 
     /// <summary>Resolves assembly, enclosing type and member declarations, inheriting only properties explicitly supplied.</summary>
     /// <param name="symbol">The type or member defining the serialized contract.</param>
@@ -81,15 +89,18 @@ internal sealed class CompiledOptions
     {
         var assembly = symbol?.ContainingAssembly ?? compilation.Assembly;
         if (symbol is IArrayTypeSymbol || symbol is INamedTypeSymbol builtin &&
-            builtin.ContainingNamespace.ToDisplayString().StartsWith("System", StringComparison.Ordinal)) assembly = compilation.Assembly;
+            builtin.ContainingNamespace.ToDisplayString().StartsWith("System", StringComparison.Ordinal))
+            assembly = compilation.Assembly;
         if (importedScope && symbol != null && !SymbolEqualityComparer.Default.Equals(assembly, compilation.Assembly) &&
             CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(symbol as ITypeSymbol ?? symbol.ContainingType))
             assembly = compilation.Assembly;
         var result = Default.Apply(assembly.GetAttributes());
         var scopes = new Stack<ISymbol>();
         for (var current = symbol; current != null && current is not IAssemblySymbol && current is not INamespaceSymbol; current = current.ContainingSymbol)
-            if (current is ITypeSymbol or IFieldSymbol or IPropertySymbol) scopes.Push(current);
-        while (scopes.Count != 0) result = result.Apply(scopes.Pop().GetAttributes());
+            if (current is ITypeSymbol or IFieldSymbol or IPropertySymbol)
+                scopes.Push(current);
+        while (scopes.Count != 0)
+            result = result.Apply(scopes.Pop().GetAttributes());
         return result;
     }
 
@@ -100,8 +111,10 @@ internal sealed class CompiledOptions
     internal static CompiledOptions ResolveMember(ISymbol member, CompiledOptions enclosing)
     {
         var scopes = new Stack<INamedTypeSymbol>();
-        for (var type = member.ContainingType; type != null; type = type.ContainingType) scopes.Push(type);
-        while (scopes.Count != 0) enclosing = enclosing.Apply(scopes.Pop().GetAttributes());
+        for (var type = member.ContainingType; type != null; type = type.ContainingType)
+            scopes.Push(type);
+        while (scopes.Count != 0)
+            enclosing = enclosing.Apply(scopes.Pop().GetAttributes());
         return enclosing.Apply(member.GetAttributes());
     }
 
@@ -117,7 +130,8 @@ internal sealed class CompiledOptions
                 if (argument.Key is "StringEncoding" or "StringRecording")
                 {
                     int value = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture);
-                    if (value < 0 || value > (argument.Key == "StringRecording" ? 2 : 1)) error = "the value must be one of the declared encoding or recording enum members.";
+                    if (value < 0 || value > (argument.Key == "StringRecording" ? 2 : 1))
+                        error = "the value must be one of the declared encoding or recording enum members.";
                 }
                 if (argument.Key == "StandardFormat")
                 {
@@ -152,12 +166,15 @@ internal sealed class CompiledOptions
     private CompiledOptions Apply(IEnumerable<AttributeData> attributes)
     {
         int encoding = Encoding, recording = Recording, depth = Depth;
-        char format = Format; byte precision = Precision; bool strict = Strict;
+        char format = Format;
+        byte precision = Precision;
+        bool strict = Strict;
         bool declared = IsDeclared;
         bool applied = false;
         foreach (var attribute in attributes)
         {
-            if (attribute.AttributeClass?.ToDisplayString() != AttributeName) continue;
+            if (attribute.AttributeClass?.ToDisplayString() != AttributeName)
+                continue;
             applied = true;
             // Storage, Union and untrusted-input contracts do not select a serialization profile.
             if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is not ("StructLayout" or "WideTag" or "SingleImplementation" or
@@ -167,10 +184,18 @@ internal sealed class CompiledOptions
             foreach (var argument in attribute.NamedArguments)
                 switch (argument.Key)
                 {
-                    case "StringEncoding": encoding = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture); break;
-                    case "StringRecording": recording = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture); break;
-                    case "MaxJsonDepth": depth = (int)argument.Value.Value; break;
-                    case "ValidateJsonSyntax": strict = (bool)argument.Value.Value; break;
+                    case "StringEncoding":
+                        encoding = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture);
+                        break;
+                    case "StringRecording":
+                        recording = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture);
+                        break;
+                    case "MaxJsonDepth":
+                        depth = (int)argument.Value.Value;
+                        break;
+                    case "ValidateJsonSyntax":
+                        strict = (bool)argument.Value.Value;
+                        break;
                     case "StandardFormat":
                         string text = argument.Value.Value as string;
                         if (!string.IsNullOrEmpty(text))
@@ -181,7 +206,8 @@ internal sealed class CompiledOptions
                         break;
                 }
         }
-        if (!applied) return this;
+        if (!applied)
+            return this;
         var input = Input.Apply(attributes);
         return encoding == Encoding && recording == Recording && format == Format && precision == Precision &&
             depth == Depth && strict == Strict && declared == IsDeclared && ReferenceEquals(input, Input)
@@ -193,7 +219,8 @@ internal sealed class CompiledOptions
     internal IEnumerable<KeyValuePair<string, string>> Declarations()
     {
         if (!ReferenceEquals(JsonInput, this))
-            foreach (var declaration in JsonInput.Declarations()) yield return declaration;
+            foreach (var declaration in JsonInput.Declarations())
+                yield return declaration;
         if (Format != 'G' || Precision != byte.MaxValue)
             yield return new KeyValuePair<string, string>(FormatIdentity, "namespace LuminPack.Generated {\n" +
                 "/// <summary>Provides a declaration-time standard-format constant.</summary>\npublic readonly struct " + FormatIdentity + " : global::LuminPack.Option.ILuminPackFormatOptions {\n" +

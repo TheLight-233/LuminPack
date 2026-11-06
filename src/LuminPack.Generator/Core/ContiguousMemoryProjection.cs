@@ -17,19 +17,24 @@ internal sealed class ContiguousMemoryProjection : CSharpSyntaxRewriter
         var call = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
         var access = call.Expression as MemberAccessExpressionSyntax;
         var method = access?.Name ?? call.Expression as SimpleNameSyntax;
-        if (method == null) return call;
+        if (method == null)
+            return call;
         string name = method.Identifier.ValueText;
         if (!(name.Contains("UnmanagedArray") || name.Contains("UnmanagedSpan")) ||
-            name.EndsWith("Record", StringComparison.Ordinal) || name == "WriteUnmanagedList") return call;
+            name.EndsWith("Record", StringComparison.Ordinal) || name == "WriteUnmanagedList")
+            return call;
         bool write = name.StartsWith("Write", StringComparison.Ordinal) || name.StartsWith("DangerousWrite", StringComparison.Ordinal);
         bool read = name.StartsWith("Read", StringComparison.Ordinal) || name.StartsWith("DangerousRead", StringComparison.Ordinal);
-        if (!write && !read) return call;
+        if (!write && !read)
+            return call;
         string receiver = access == null ? string.Empty : access.Expression + ".";
         var arguments = call.ArgumentList.Arguments;
         bool explicitPosition = arguments.Count >= 2 && arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword);
         string position = explicitPosition ? arguments[0].Expression.ToString() : receiver + "Position";
-        if (explicitPosition) arguments = arguments.RemoveAt(0);
-        if (arguments.Count == 0) return call;
+        if (explicitPosition)
+            arguments = arguments.RemoveAt(0);
+        if (arguments.Count == 0)
+            return call;
         var payload = arguments[0];
         arguments = arguments.RemoveAt(0);
         var output = arguments.LastOrDefault(argument => argument.RefKindKeyword.IsKind(SyntaxKind.OutKeyword));

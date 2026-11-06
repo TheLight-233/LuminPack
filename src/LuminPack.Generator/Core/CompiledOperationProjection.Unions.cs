@@ -34,12 +34,14 @@ internal sealed partial class CompiledOperationProjection
             slot = method.Body != null ? slot.WithBody((BlockSyntax)body) : slot.WithExpressionBody((ArrowExpressionClauseSyntax)body);
             members.Add(slot.NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
         }
-        if (method.Modifiers.Any(SyntaxKind.OverrideKeyword) || owner is not InterfaceDeclarationSyntax && !method.Modifiers.Any(SyntaxKind.VirtualKeyword)) return;
+        if (method.Modifiers.Any(SyntaxKind.OverrideKeyword) || owner is not InterfaceDeclarationSyntax && !method.Modifiers.Any(SyntaxKind.VirtualKeyword))
+            return;
         string rootName = root == null ? owner.Identifier.ValueText : FormatterTypeName.Get(root);
         var source = new System.Text.StringBuilder();
         string profileParameter = "__LuminProfile";
         while (owner.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().Any(type =>
-            type.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profileParameter) == true)) profileParameter += "_";
+            type.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profileParameter) == true))
+            profileParameter += "_";
         source.AppendLine("/// <summary>Selects the compiled wire profile through an ordinary virtual slot.</summary>");
         source.AppendLine("/// <typeparam name=\"" + profileParameter + "\">The stateless wire profile.</typeparam>");
         source.AppendLine("/// <param name=\"writer\">The existing operation state.</param>");
@@ -69,7 +71,8 @@ internal sealed partial class CompiledOperationProjection
         {
             string name = method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
             source.Append("if (default(").Append(profileParameter).Append(").StringEncoding == (global::LuminPack.Option.LuminPackStringEncoding)").Append(profile.Encoding);
-            if (!json) source.Append(" && default(").Append(profileParameter).Append(").StringRecording == (global::LuminPack.Option.LuminPackStringRecording)").Append(profile.Recording);
+            if (!json)
+                source.Append(" && default(").Append(profileParameter).Append(").StringRecording == (global::LuminPack.Option.LuminPackStringRecording)").Append(profile.Recording);
             source.Append(") ").AppendLine(tier?.Dispatch(name) ?? "{ value." + name + "(ref writer); return; }");
         }
         source.AppendLine("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(\"The compiled profile has an invalid string encoding or recording mode.\"); }");
@@ -86,7 +89,8 @@ internal sealed partial class CompiledOperationProjection
         if (writer == null || SymbolEqualityComparer.Default.Equals(writer.ContainingAssembly, _compilation.Assembly) ||
             writer.GetMembers("Cursor").OfType<IFieldSymbol>().Any(field => field.Type is IPointerTypeSymbol) ||
             _compilation.SyntaxTrees.Any(tree => tree.Options is CSharpParseOptions parse &&
-                parse.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal)))) return false;
+                parse.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal))))
+            return false;
         var names = profiles.Select(profile => profile.TypeName.Replace("global::", string.Empty)).Concat(new[] {
             "LuminPack.Option.LuminPackFixedOptions`1", "LuminPack.Option.LuminPackDefaultOptions", "LuminPack.Option.LuminPackDeclaredOptions" });
         return names.All(name => _compilation.GetTypeByMetadataName(name) is { } type &&

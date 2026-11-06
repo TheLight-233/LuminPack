@@ -58,7 +58,8 @@ namespace LuminPack.Cryptography
         public static unsafe void Block(uint* state, byte* output)
         {
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 1)) return;
+            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 1))
+                return;
 #endif
 #if NET8_0_OR_GREATER
             if (UseSse2)
@@ -80,7 +81,8 @@ namespace LuminPack.Cryptography
         public static unsafe void Block2(uint* state, byte* output)
         {
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 2)) return;
+            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 2))
+                return;
 #endif
 #if NET8_0_OR_GREATER
             if (UseAvx2)
@@ -107,7 +109,8 @@ namespace LuminPack.Cryptography
         public static unsafe void Block4(uint* state, byte* output)
         {
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 4)) return;
+            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 4))
+                return;
 #endif
 #if NET8_0_OR_GREATER
             if (UseAvx512)
@@ -150,10 +153,22 @@ namespace LuminPack.Cryptography
                 QuarterRound(ref x3, ref x4, ref x9, ref x14);
             }
 
-            x0 += state[0]; x1 += state[1]; x2 += state[2]; x3 += state[3];
-            x4 += state[4]; x5 += state[5]; x6 += state[6]; x7 += state[7];
-            x8 += state[8]; x9 += state[9]; x10 += state[10]; x11 += state[11];
-            x12 += state[12]; x13 += state[13]; x14 += state[14]; x15 += state[15];
+            x0 += state[0];
+            x1 += state[1];
+            x2 += state[2];
+            x3 += state[3];
+            x4 += state[4];
+            x5 += state[5];
+            x6 += state[6];
+            x7 += state[7];
+            x8 += state[8];
+            x9 += state[9];
+            x10 += state[10];
+            x11 += state[11];
+            x12 += state[12];
+            x13 += state[13];
+            x14 += state[14];
+            x15 += state[15];
 
             WriteUnaligned(ref output[0], x0);
             WriteUnaligned(ref output[4], x1);
@@ -431,7 +446,10 @@ namespace LuminPack.Cryptography
         /// <param name="blockCounter">Initial block counter.</param>
         public static unsafe void Initialize(uint* state, byte* key, int keyBytes, byte* nonce, int nonceBytes, uint blockCounter)
         {
-            state[0] = C0; state[1] = C1; state[2] = C2; state[3] = C3;
+            state[0] = C0;
+            state[1] = C1;
+            state[2] = C2;
+            state[3] = C3;
 
             if (keyBytes == KeyBytes256)
             {

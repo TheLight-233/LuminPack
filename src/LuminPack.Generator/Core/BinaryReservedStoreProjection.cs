@@ -69,9 +69,11 @@ internal sealed class BinaryReservedStoreProjection : CSharpSyntaxRewriter
         string direct = utility + ".WriteUnaligned<" + type + ">(ref " + target + ", " + value + "); " +
             target + " = ref " + utility + ".Add(ref " + target + ", " + utility + ".SizeOf<" + type + ">());";
         int width = Width(generic.TypeArgumentList.Arguments[0]);
-        if (width is > 0 and <= 4) return SyntaxFactory.ParseStatement("{ " + direct + " }").WithTriviaFrom(node);
+        if (width is > 0 and <= 4)
+            return SyntaxFactory.ParseStatement("{ " + direct + " }").WithTriviaFrom(node);
         string condition = utility + ".SizeOf<global::System.IntPtr>() == 8";
-        if (width == 0) condition += " || " + utility + ".SizeOf<" + type + ">() <= 4";
+        if (width == 0)
+            condition += " || " + utility + ".SizeOf<" + type + ">() <= 4";
         return SyntaxFactory.ParseStatement("if (" + condition + ") { " + direct + " } else { " + node.WithoutTrivia() + " }")
             .WithTriviaFrom(node);
     }

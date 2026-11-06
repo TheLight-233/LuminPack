@@ -10,7 +10,8 @@ internal static class JsonCapacityEmitter
     {
         var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader");
         var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
-        if (reader is null || options is null) return false;
+        if (reader is null || options is null)
+            return false;
         foreach (string name in new[] { "GetArrayLengthHint", "GetArrayCapacityHint", "GetEntryArrayCapacityHint" })
         for (int arity = 0; arity <= 1; arity++)
         {

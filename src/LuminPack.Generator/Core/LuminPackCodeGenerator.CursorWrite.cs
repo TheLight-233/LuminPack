@@ -36,7 +36,8 @@ public static partial class LuminPackCodeGenerator
                 string width = string.Join(" + ", fields.Select(GetUnmanagedFieldSize));
                 builder.AppendLine(indent + "if (checked(3 + " + width + ") > 4096) writer.EnsureAdditionalCapacity(checked(" + width + "));");
             }
-            if (!polymorphism) builder.AppendLine(indent + "writer.Write((byte)" + fields.Count + ");");
+            if (!polymorphism)
+                builder.AppendLine(indent + "writer.Write((byte)" + fields.Count + ");");
             for (int index = 0; index < fields.Count; index++)
                 index = AppendOriginalMembers(builder, fields, index, fields.Count - 1, Storage);
             return;
@@ -50,31 +51,38 @@ public static partial class LuminPackCodeGenerator
             int kind = ReservedKind(field);
             if (kind is 0 or 6)
             {
-                if (header) builder.AppendLine(indent + "__cursor = ref writer.WriteRecord(ref __cursor, (byte)" + fields.Count + ");");
+                if (header)
+                    builder.AppendLine(indent + "__cursor = ref writer.WriteRecord(ref __cursor, (byte)" + fields.Count + ");");
                 header = false;
                 if (kind == 6)
                 {
-                    if (!current) builder.AppendLine(indent + "__cursor = ref writer.GetCurrentSpanReference();");
+                    if (!current)
+                        builder.AppendLine(indent + "__cursor = ref writer.GetCurrentSpanReference();");
                     current = true;
                     using var entries = new CompiledOptionFieldScope(builder, field.Options);
                     AppendRecordEntries(builder, field, index, Storage, indent);
                     continue;
                 }
-                if (current) builder.AppendLine(indent + "writer.CommitRecords(ref __cursor);");
+                if (current)
+                    builder.AppendLine(indent + "writer.CommitRecords(ref __cursor);");
                 current = false;
                 index = AppendOriginalMembers(builder, fields, index, index, Storage);
                 continue;
             }
-            if (!current) builder.AppendLine(indent + "__cursor = ref writer.GetCurrentSpanReference();");
+            if (!current)
+                builder.AppendLine(indent + "__cursor = ref writer.GetCurrentSpanReference();");
             current = true;
             int last = index;
-            while (last + 1 < fields.Count && ReservedKind(fields[last + 1]) is int next && next is > 0 and < 6 && ScopeKey(fields[last + 1]) == ScopeKey(field)) last++;
+            while (last + 1 < fields.Count && ReservedKind(fields[last + 1]) is int next && next is > 0 and < 6 && ScopeKey(fields[last + 1]) == ScopeKey(field))
+                last++;
             AppendRecordGroup(builder, fields, index, last, header ? fields.Count : -1, Storage, indent);
             header = false;
             index = last;
         }
-        if (header) builder.AppendLine(indent + "__cursor = ref writer.WriteRecord(ref __cursor, (byte)" + fields.Count + ");");
-        if (current) builder.AppendLine(indent + "writer.CommitRecords(ref __cursor);");
+        if (header)
+            builder.AppendLine(indent + "__cursor = ref writer.WriteRecord(ref __cursor, (byte)" + fields.Count + ");");
+        if (current)
+            builder.AppendLine(indent + "writer.CommitRecords(ref __cursor);");
     }
 
     /// <summary>Identifies the compiled string profile a member's operations are specialized with.</summary>
@@ -102,21 +110,27 @@ public static partial class LuminPackCodeGenerator
             // A lone record checks itself.
             var field = fields[first];
             int kind = ReservedKind(field);
-            if (kind == 1) builder.AppendLine(indent + "__cursor = ref writer.WriteRecord(ref __cursor, " + Storage(field) + ");");
-            else if (kind == 2) builder.AppendLine(indent + "__cursor = ref writer.WriteRecordString(ref __cursor, " + Storage(field) + ");");
-            else if (kind is 3 or 4) builder.AppendLine(indent + "__cursor = ref writer.WriteRecordSpan(ref __cursor, " + Storage(field) + ");");
-            else builder.AppendLine(indent + "__cursor = ref writer.WriteRecordPairs(ref __cursor, " + Storage(field) + ");");
+            if (kind == 1)
+                builder.AppendLine(indent + "__cursor = ref writer.WriteRecord(ref __cursor, " + Storage(field) + ");");
+            else if (kind == 2)
+                builder.AppendLine(indent + "__cursor = ref writer.WriteRecordString(ref __cursor, " + Storage(field) + ");");
+            else if (kind is 3 or 4)
+                builder.AppendLine(indent + "__cursor = ref writer.WriteRecordSpan(ref __cursor, " + Storage(field) + ");");
+            else
+                builder.AppendLine(indent + "__cursor = ref writer.WriteRecordPairs(ref __cursor, " + Storage(field) + ");");
             return;
         }
         builder.AppendLine(indent + "{");
         var terms = new List<string>();
-        if (header >= 0) terms.Add("1");
+        if (header >= 0)
+            terms.Add("1");
         for (int index = first; index <= last; index++)
         {
             var field = fields[index];
             int kind = ReservedKind(field);
             string name = RecordSnapshotName(field, index);
-            if (kind == 1) terms.Add(GetUnmanagedFieldSize(field));
+            if (kind == 1)
+                terms.Add(GetUnmanagedFieldSize(field));
             else if (kind == 2)
             {
                 builder.AppendLine(indent + "    string " + name + " = " + Storage(field) + ";");
@@ -139,17 +153,22 @@ public static partial class LuminPackCodeGenerator
             var field = fields[index];
             int kind = ReservedKind(field);
             string name = RecordSnapshotName(field, index);
-            if (kind != 1) builder.AppendLine(indent + "    // Field: " + field.Name);
+            if (kind != 1)
+                builder.AppendLine(indent + "    // Field: " + field.Name);
             if (kind == 1)
             {
                 int end = index;
-                while (end + 1 <= last && ReservedKind(fields[end + 1]) == 1) end++;
+                while (end + 1 <= last && ReservedKind(fields[end + 1]) == 1)
+                    end++;
                 AppendReservedFixedGroup(builder, fields, index, end, Storage, indent + "    ");
                 index = end;
             }
-            else if (kind == 2) builder.AppendLine(indent + "    __cursor = ref writer.WriteReservedRecordString(ref __cursor, " + name + ");");
-            else if (kind is 3 or 4) builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReservedSpanRecord(ref __cursor, " + name + ");");
-            else builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved(ref __cursor, " + name + ");");
+            else if (kind == 2)
+                builder.AppendLine(indent + "    __cursor = ref writer.WriteReservedRecordString(ref __cursor, " + name + ");");
+            else if (kind is 3 or 4)
+                builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReservedSpanRecord(ref __cursor, " + name + ");");
+            else
+                builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved(ref __cursor, " + name + ");");
         }
         builder.AppendLine(indent + "}");
     }
@@ -242,7 +261,8 @@ public static partial class LuminPackCodeGenerator
         var original = new StringBuilder();
         AppendCursorField(original, field, "fallbackValue", "", 0);
         foreach (var line in original.ToString().Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
-            if (line.Length != 0) builder.AppendLine(indent + "    " + line.TrimStart());
+            if (line.Length != 0)
+                builder.AppendLine(indent + "    " + line.TrimStart());
         builder.AppendLine(indent + "}");
     }
 
@@ -261,7 +281,8 @@ public static partial class LuminPackCodeGenerator
             {
                 int last = index;
                 while (last + 1 <= limit && !field.IsVolatile &&
-                    !fields[last + 1].IsVolatile && !fields[last + 1].IsCompress && IsMergeableField(fields[last + 1])) last++;
+                    !fields[last + 1].IsVolatile && !fields[last + 1].IsCompress && IsMergeableField(fields[last + 1]))
+                    last++;
                 if (field.IsVolatile)
                 {
                     builder.AppendLine("            var volatileValue" + index + " = " + Storage(field) + ";");
@@ -283,18 +304,25 @@ public static partial class LuminPackCodeGenerator
     internal static int ReservedKind(LuminDataField field)
     {
         if (field.IsCompress || field.IsVolatile || field.TypeSymbol == null ||
-            PortableStructPlan.TryCreate(field.TypeSymbol) != null || PortableStructPlan.RequiresClosedDispatch(field.TypeSymbol)) return 0;
-        if (IsMergeableField(field)) return 1;
-        if (field.Type == LuminFiledType.String && field.TypeSymbol.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String) return 2;
-        if (field.TypeSymbol is Microsoft.CodeAnalysis.IArrayTypeSymbol { Rank: 1 } array && IsReservedElement(array.ElementType)) return 3;
+            PortableStructPlan.TryCreate(field.TypeSymbol) != null || PortableStructPlan.RequiresClosedDispatch(field.TypeSymbol))
+            return 0;
+        if (IsMergeableField(field))
+            return 1;
+        if (field.Type == LuminFiledType.String && field.TypeSymbol.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String)
+            return 2;
+        if (field.TypeSymbol is Microsoft.CodeAnalysis.IArrayTypeSymbol { Rank: 1 } array && IsReservedElement(array.ElementType))
+            return 3;
         if (field.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
-            list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && IsReservedElement(list.TypeArguments[0])) return 4;
+            list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && IsReservedElement(list.TypeArguments[0]))
+            return 4;
         if (field.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 2 } dictionary &&
             dictionary.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>")
         {
-            if (IsReservedElement(dictionary.TypeArguments[0]) && IsReservedElement(dictionary.TypeArguments[1])) return 5;
+            if (IsReservedElement(dictionary.TypeArguments[0]) && IsReservedElement(dictionary.TypeArguments[1]))
+                return 5;
             // Raw and string members bound each entry from one read, so the dictionary is an open record checked entry by entry.
-            if (IsEntryMember(dictionary.TypeArguments[0]) && IsEntryMember(dictionary.TypeArguments[1])) return 6;
+            if (IsEntryMember(dictionary.TypeArguments[0]) && IsEntryMember(dictionary.TypeArguments[1]))
+                return 6;
         }
         return 0;
     }
@@ -348,8 +376,10 @@ public static partial class LuminPackCodeGenerator
         builder.AppendLine(indent + "    for (int i = 0; i < count; i++)");
         builder.AppendLine(indent + "    {");
         builder.AppendLine(indent + "        ref var entry = ref " + unsafeType + ".Add(ref LuminPackMarshal.GetNotNullArrayReference(entries!), (nint)(uint)i);");
-        if (textKey) builder.AppendLine(indent + "        string key = entry.Key;");
-        if (textValue) builder.AppendLine(indent + "        string item = entry.Value;");
+        if (textKey)
+            builder.AppendLine(indent + "        string key = entry.Key;");
+        if (textValue)
+            builder.AppendLine(indent + "        string item = entry.Value;");
         builder.AppendLine(indent + "        if (at + " + Bound(textKey, keyType, "key") + " + " + Bound(textValue, valueType, "item") + " > room) return -1;");
         Store(textKey, keyType, "key", "entry.Key");
         Store(textValue, valueType, "item", "entry.Value");
@@ -425,11 +455,14 @@ public static partial class LuminPackCodeGenerator
                 // Adjacent public fixed members use the same proven group and fallback as root members.
                 int last = index;
                 if (Groupable(member))
-                    while (last + 1 < members.Count && Groupable(members[last + 1])) last++;
+                    while (last + 1 < members.Count && Groupable(members[last + 1]))
+                        last++;
                 if (TryGenerateCursorFixedGroup(builder, members, index, last, Storage, indent + "        ", write: true))
                     index = last;
-                else if (IsMergeableField(member)) builder.AppendLine(indent + "        global::LuminPack.Core.LuminPackWriter.Write(ref writer, " + Storage(member) + ");");
-                else AppendCursorField(builder, member, Storage(member), indent + "        ", depth + 1);
+                else if (IsMergeableField(member))
+                    builder.AppendLine(indent + "        global::LuminPack.Core.LuminPackWriter.Write(ref writer, " + Storage(member) + ");");
+                else
+                    AppendCursorField(builder, member, Storage(member), indent + "        ", depth + 1);
             }
             builder.AppendLine(indent + "    }");
             builder.AppendLine(indent + "}");

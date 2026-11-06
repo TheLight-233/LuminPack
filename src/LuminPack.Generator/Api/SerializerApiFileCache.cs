@@ -43,7 +43,8 @@ internal sealed class SerializerApiFileCache
     internal SerializerApiFileMethods Read(SyntaxTree tree, Func<SerializerApiFileMethods> bind)
     {
         Entry previous;
-        lock (_project.Entries) _project.Entries.TryGetValue(tree.FilePath, out previous);
+        lock (_project.Entries)
+            _project.Entries.TryGetValue(tree.FilePath, out previous);
         if (previous != null && ReferenceEquals(previous.Tree, tree) && ReferenceEquals(previous.Signatures, _signatures) &&
             previous.Dependencies.All(_input.ContainsSyntaxTree))
         {
@@ -63,11 +64,13 @@ internal sealed class SerializerApiFileCache
         if (dependencies != null && identities.All(identity => identity != null) && statePayloads.All(identity => identity != null))
         {
             var entry = new Entry(tree, _signatures, dependencies, identities, current.Conservative, statePayloads);
-            lock (_project.Entries) _project.Entries[tree.FilePath] = entry;
+            lock (_project.Entries)
+                _project.Entries[tree.FilePath] = entry;
         }
         else
         {
-            lock (_project.Entries) _project.Entries.Remove(tree.FilePath);
+            lock (_project.Entries)
+                _project.Entries.Remove(tree.FilePath);
         }
         return current;
     }
@@ -90,7 +93,13 @@ internal sealed class SerializerApiFileCache
         /// <param name="conservative">Whether unresolved serializer expressions require retention.</param>
         /// <param name="statePayloads">The payload identities observed at fluent binary state calls.</param>
         internal Entry(SyntaxTree tree, SyntaxTree signatures, SyntaxTree[] dependencies, StableMethodIdentity[] methods, bool conservative, StableTypeIdentity[] statePayloads)
-        { Tree = tree; Signatures = signatures; Dependencies = dependencies; Methods = methods; Conservative = conservative; StatePayloads = statePayloads; }
+        {
+            Tree = tree;
+            Signatures = signatures;
+            Dependencies = dependencies;
+            Methods = methods;
+            Conservative = conservative;
+            StatePayloads = statePayloads; }
     }
 
     /// <summary>Retains the most recent supported file observation under a weak project guard.</summary>
@@ -112,5 +121,8 @@ internal sealed class SerializerApiFileMethods
     /// <param name="conservative">Whether unknown serializer expressions were observed.</param>
     /// <param name="statePayloads">The types passed to complete Write and Read operations.</param>
     internal SerializerApiFileMethods(IMethodSymbol[] methods, bool conservative, ITypeSymbol[] statePayloads = null)
-    { Methods = methods; Conservative = conservative; StatePayloads = statePayloads ?? Array.Empty<ITypeSymbol>(); }
+    {
+        Methods = methods;
+        Conservative = conservative;
+        StatePayloads = statePayloads ?? Array.Empty<ITypeSymbol>(); }
 }

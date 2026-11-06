@@ -21,7 +21,10 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
     /// <summary>Captures the typed read projection and the graph's support decision.</summary>
     /// <param name="reads">The typed read instrumentation.</param>
     /// <param name="rejection">The first unsupported shape, or null when the graph is accepted.</param>
-    private SafeOperationProjection(SafeReadProjection reads, string rejection) { _reads = reads; _rejection = rejection; }
+    private SafeOperationProjection(SafeReadProjection reads, string rejection)
+    {
+        _reads = reads;
+        _rejection = rejection; }
 
     /// <summary>Adds checks to the binary reads of one type's templates.</summary>
     /// <param name="template">The normalized formatter template.</param><param name="type">The closed type.</param>
@@ -34,7 +37,8 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         var active = new ActiveOperationSyntax().Visit(template);
         var root = CSharpSyntaxTree.Create((CompilationUnitSyntax)active, metadata.ParseOptions).GetRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
-        if (container == null) return template;
+        if (container == null)
+            return template;
         var reads = new SafeReadProjection(type, compilation, metadata, input, compilation.AddSyntaxTrees(root.SyntaxTree).GetSemanticModel(root.SyntaxTree));
         // Input-selected shapes fail closed in both directions only under an explicit hostile-input declaration; the implicit
         // default keeps them working with checked reads.
@@ -48,11 +52,13 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
     /// <returns>The same operation with checked reads, or a fail-closed body.</returns>
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
-        if (node.Body == null || node.ParameterList.Parameters.Count != 2 || !BinaryOperationPlan.IsOperation(node.Identifier.ValueText)) return node;
+        if (node.Body == null || node.ParameterList.Parameters.Count != 2 || !BinaryOperationPlan.IsOperation(node.Identifier.ValueText))
+            return node;
         string stateType = node.ParameterList.Parameters[0].Type.ToString();
         bool json = stateType.Contains("Json"), read = stateType.Contains("Reader"), write = stateType.Contains("Writer");
         // Size evaluation reads no input.
-        if (!read && !write) return node;
+        if (!read && !write)
+            return node;
         if (_rejection != null)
             return node.WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{ " + Policy + ".RejectUnsupported(" +
                 SymbolDisplay.FormatLiteral(_rejection, true) + "); }"));

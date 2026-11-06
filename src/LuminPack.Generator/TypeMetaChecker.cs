@@ -356,14 +356,21 @@ public static class TypeMetaChecker
             foreach (string name in new[] { field.Name }.Concat(field.OldNames))
             {
                 string error = null;
-                if (string.IsNullOrEmpty(name)) error = "Serialized member names must not be null or empty.";
-                else if (!names.Add(name)) error = "Serialized member name '" + name + "' is ambiguous.";
+                if (string.IsNullOrEmpty(name))
+                    error = "Serialized member names must not be null or empty.";
+                else if (!names.Add(name))
+                    error = "Serialized member name '" + name + "' is ambiguous.";
                 else
                 {
-                    try { new System.Text.UTF8Encoding(false, true).GetByteCount(name); }
-                    catch (System.Text.EncoderFallbackException) { error = "Serialized member names must contain valid Unicode."; }
+                    try
+                    {
+                        new System.Text.UTF8Encoding(false, true).GetByteCount(name); }
+                    catch (System.Text.EncoderFallbackException)
+                    {
+                        error = "Serialized member names must contain valid Unicode."; }
                 }
-                if (error != null) _reportContext.Add(Diagnostic.Create(DiagnosticDescriptors.InvalidVersionMemberName, location, data.className, error));
+                if (error != null)
+                    _reportContext.Add(Diagnostic.Create(DiagnosticDescriptors.InvalidVersionMemberName, location, data.className, error));
             }
         }
     }
@@ -602,7 +609,8 @@ public static class TypeMetaChecker
     {
         if (symbol.IsReadOnly)
         {
-            if (TryCheckPackableObjectAttribute(symbol)) return false;
+            if (TryCheckPackableObjectAttribute(symbol))
+                return false;
 
             return true;
         }
@@ -618,7 +626,8 @@ public static class TypeMetaChecker
     {
         if (symbol.IsReadOnly && symbol.Type.TypeKind == TypeKind.Struct)
         {
-            if (TryCheckPackableObjectAttribute(symbol)) return false;
+            if (TryCheckPackableObjectAttribute(symbol))
+                return false;
 
             return true;
         }
@@ -634,7 +643,8 @@ public static class TypeMetaChecker
     {
         if (symbol.IsReadOnly && symbol.TypeKind == TypeKind.Struct)
         {
-            if (TryCheckPackableObjectAttribute(symbol)) return false;
+            if (TryCheckPackableObjectAttribute(symbol))
+                return false;
 
             return true;
         }
@@ -719,16 +729,20 @@ public static class TypeMetaChecker
                 {
                     case LUMIN_PACK_ONSERIALIZING:
                         if (TryCheckCallBackMethod(symbol, method))
-                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnSerializing, method.IsStatic)); break;
+                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnSerializing, method.IsStatic));
+                        break;
                     case LUMIN_PACK_ONSERIALIZED:
                         if (TryCheckCallBackMethod(symbol, method))
-                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnSerialized, method.IsStatic)); break;
+                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnSerialized, method.IsStatic));
+                        break;
                     case LUMIN_PACK_ONDESERIALIZING:
                         if (TryCheckCallBackMethod(symbol, method))
-                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnDeserializing, method.IsStatic)); break;
+                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnDeserializing, method.IsStatic));
+                        break;
                     case LUMIN_PACK_ONDESERIALIZED:
                         if (TryCheckCallBackMethod(symbol, method))
-                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnDeserialized, method.IsStatic)); break;
+                            dataInfo.callBackMethods.Add((method.Name, SerializeCallBackType.OnDeserialized, method.IsStatic));
+                        break;
                 }
             }
         }

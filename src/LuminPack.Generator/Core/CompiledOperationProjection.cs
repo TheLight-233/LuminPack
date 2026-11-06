@@ -21,7 +21,8 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
     /// <param name="fallback">The declaration profile for a facade or generic fallback.</param>
     internal CompiledOperationProjection(Compilation compilation, CompiledOptions fallback)
     {
-        _compilation = compilation; _default = fallback;
+        _compilation = compilation;
+        _default = fallback;
         _types = CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypesByName;
     }
 
@@ -53,7 +54,9 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
         {
             if (member is not MethodDeclarationSyntax method || method.ParameterList.Parameters.Count == 0 ||
                 method.Body == null && method.ExpressionBody == null)
-            { members.Add((MemberDeclarationSyntax)Visit(member)); continue; }
+            {
+                members.Add((MemberDeclarationSyntax)Visit(member));
+                continue; }
             string identifier = method.Identifier.ValueText;
             if (identifier == "Register" && method.TypeParameterList?.Parameters.Count == 1)
             {
@@ -62,13 +65,19 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
             }
             bool stateEntry = TryState(method.ParameterList.Parameters[0].Type?.ToString(), out bool writer);
             bool facade = !stateEntry && IsFacadeOperation(identifier);
-            if (!stateEntry && !facade) { members.Add((MemberDeclarationSyntax)Visit(member)); continue; }
+            if (!stateEntry && !facade)
+            {
+                members.Add((MemberDeclarationSyntax)Visit(member));
+                continue; }
             bool serializer = identifier.StartsWith("__InputRead_", StringComparison.Ordinal) || identifier is "SerializeJson" or "DeserializeJson" or "Serialize" or "Deserialize" or "Sizeof" or
                 "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress";
             bool slot = identifier.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ||
                 identifier.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) || identifier.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
             bool lookup = identifier == "TryReadOrderedJsonProperty";
-            if (!serializer && !slot && !lookup && !facade) { members.Add(method); continue; }
+            if (!serializer && !slot && !lookup && !facade)
+            {
+                members.Add(method);
+                continue; }
 
             if (slot)
             {

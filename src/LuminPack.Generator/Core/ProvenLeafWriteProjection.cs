@@ -21,7 +21,10 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
     /// <param name="metadata">Current language and target settings.</param>
     /// <param name="types">The canonical closed formatter symbols.</param>
     internal ProvenLeafWriteProjection(Compilation compilation, MetaInfo metadata, IReadOnlyDictionary<string, ITypeSymbol> types)
-    { _compilation = compilation; _metadata = metadata; _types = types; }
+    {
+        _compilation = compilation;
+        _metadata = metadata;
+        _types = types; }
 
     /// <summary>Selects a complete binary array writer with a canonical pure reference-element contract.</summary>
     /// <param name="node">An already localized generated method.</param>
@@ -32,15 +35,19 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
             _metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal)) ||
             node.Identifier.ValueText != "RootWrite" || node.Body == null || node.ParameterList.Parameters.Count != 2 ||
             !_types.TryGetValue(node.ParameterList.Parameters[1].Type.ToString().TrimEnd('?'), out var payload) ||
-            payload is not IArrayTypeSymbol { Rank: 1, ElementType: INamedTypeSymbol element } || !Eligible(element)) return node;
+            payload is not IArrayTypeSymbol { Rank: 1, ElementType: INamedTypeSymbol element } || !Eligible(element))
+            return node;
         var loops = node.Body.DescendantNodes().OfType<ForEachStatementSyntax>().ToArray();
         if (loops.Length != 1 || loops[0].Statement is not BlockSyntax original ||
-            loops[0].Type is not RefTypeSyntax) return node;
+            loops[0].Type is not RefTypeSyntax)
+            return node;
         var rewritten = RewriteElement(node, loops[0], original, loops[0].Identifier.ValueText, FormatterTypeName.Get(element), out var helper, out var profileGate);
-        if (rewritten == null) return node;
+        if (rewritten == null)
+            return node;
         string name = "WriteOriginalSequence";
         int suffix = 2;
-        while (node.DescendantTokens().Any(token => token.ValueText == name)) name = "WriteOriginalSequence" + suffix++;
+        while (node.DescendantTokens().Any(token => token.ValueText == name))
+            name = "WriteOriginalSequence" + suffix++;
         var fallback = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement(
             "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void " + name + "() {}");
         fallback = fallback.WithParameterList(node.ParameterList).WithBody((BlockSyntax)new ColdLabels(name).Visit(node.Body));
@@ -59,7 +66,8 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
         if (element is not { TypeKind: TypeKind.Class, IsSealed: true, IsGenericType: false } ||
             element.BaseType?.SpecialType != SpecialType.System_Object ||
             !SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, _compilation.Assembly) ||
-            !CompilationTypeAnalysisCache.GetOrCreate(_compilation).IsPackable(element)) return false;
+            !CompilationTypeAnalysisCache.GetOrCreate(_compilation).IsPackable(element))
+            return false;
         var data = LuminPackSourceGenerator.GetSerializationMetadata(element, _compilation, _metadata);
         return data.generatorType == GeneratorType.Object && !data.isUnion && data.callBackMethods.Count == 0 &&
             !data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) &&
@@ -89,25 +97,30 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
         var check = calls.Where(call => call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CheckBuffer" }).ToArray();
         if (reserve.Length != 1 || check.Length != 1 || reserve[0].ArgumentList.Arguments.Count != 2 ||
             check[0].ArgumentList.Arguments.Count != 0 || check[0].Parent is not ExpressionStatementSyntax checkStatement ||
-            reserve[0].Parent?.Parent is not AssignmentExpressionSyntax { Parent: ExpressionStatementSyntax reserveStatement }) return null;
+            reserve[0].Parent?.Parent is not AssignmentExpressionSyntax { Parent: ExpressionStatementSyntax reserveStatement })
+            return null;
         string state = ((MemberAccessExpressionSyntax)reserve[0].Expression).Expression.ToString();
-        if (((MemberAccessExpressionSyntax)check[0].Expression).Expression.ToString() != state) return null;
+        if (((MemberAccessExpressionSyntax)check[0].Expression).Expression.ToString() != state)
+            return null;
         string Name(string basis)
         {
             string name = basis;
             int suffix = 2;
-            while (method.DescendantTokens().Any(token => token.ValueText == name)) name = basis + suffix++;
+            while (method.DescendantTokens().Any(token => token.ValueText == name))
+                name = basis + suffix++;
             return name;
         }
         var declarations = original.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().ToArray();
         var alias = declarations.SingleOrDefault(declaration => declaration.Declaration.Type is RefTypeSyntax &&
             declaration.Declaration.Variables.Count == 1 && declaration.Declaration.Variables[0].Initializer?.Value is RefExpressionSyntax reference &&
             reference.Expression.ToString() == item);
-        if (alias == null) return null;
+        if (alias == null)
+            return null;
         string aliasName = alias.Declaration.Variables[0].Identifier.ValueText;
         var snapshot = declarations.SingleOrDefault(declaration => declaration.Declaration.Type is IdentifierNameSyntax { Identifier.ValueText: "var" } &&
             declaration.Declaration.Variables.Count == 1 && declaration.Declaration.Variables[0].Initializer?.Value.ToString() == aliasName);
-        if (snapshot == null) return null;
+        if (snapshot == null)
+            return null;
         string owner = snapshot.Declaration.Variables[0].Identifier.ValueText;
         var nulls = original.DescendantNodes().OfType<IfStatementSyntax>().Where(condition =>
             condition.Condition.ToString().Replace(" ", string.Empty) == owner + "isnull").ToArray();
@@ -119,32 +132,40 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
         if (nulls.Length != 1 || captures.Length == 0 || bounds.Length != captures.Length ||
             original.DescendantNodes().OfType<GotoStatementSyntax>().Count() != 1 ||
             original.DescendantNodes().OfType<LabeledStatementSyntax>().Count() != 1 ||
-            original.DescendantNodes().Any(node => node is LocalFunctionStatementSyntax or TryStatementSyntax or LockStatementSyntax)) return null;
+            original.DescendantNodes().Any(node => node is LocalFunctionStatementSyntax or TryStatementSyntax or LockStatementSyntax))
+            return null;
         var profiles = new List<string>();
         var boundReplacements = new Dictionary<InvocationExpressionSyntax, ExpressionSyntax>();
         foreach (var bound in bounds)
         {
             if (bound.Expression is not MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax receiver, Name: GenericNameSyntax generic } ||
-                receiver.Identifier.ValueText != state || generic.TypeArgumentList.Arguments.Count != 1 || bound.ArgumentList.Arguments.Count != 1) return null;
+                receiver.Identifier.ValueText != state || generic.TypeArgumentList.Arguments.Count != 1 || bound.ArgumentList.Arguments.Count != 1)
+                return null;
             string name = bound.ArgumentList.Arguments[0].Expression.ToString();
-            if (!captures.Any(capture => capture.Declaration.Variables[0].Identifier.ValueText == name)) return null;
+            if (!captures.Any(capture => capture.Declaration.Variables[0].Identifier.ValueText == name))
+                return null;
             profiles.Add(generic.TypeArgumentList.Arguments[0].ToString());
             boundReplacements.Add(bound, SyntaxFactory.ParseExpression("(4L + (" + name + " is null ? 0L : (long)" + name + ".Length * 2))"));
         }
         var allowedStateCalls = new HashSet<string>(StringComparer.Ordinal) { "CheckBuffer", "ReserveRecord", "RecordBound", "WriteReservedRecordString", "CommitRecords", "Write" };
         if (calls.Any(call => call.Expression is MemberAccessExpressionSyntax access && access.Expression.ToString() == state &&
-            !allowedStateCalls.Contains(access.Name.Identifier.ValueText))) return null;
+            !allowedStateCalls.Contains(access.Name.Identifier.ValueText)))
+            return null;
         foreach (var call in calls)
         {
-            if (call.Expression is not MemberAccessExpressionSyntax access) return null;
+            if (call.Expression is not MemberAccessExpressionSyntax access)
+                return null;
             string receiver = access.Expression.ToString(), name = access.Name.Identifier.ValueText;
             if (receiver == state)
             {
-                if (name == "Write" && !nulls[0].DescendantNodes().Contains(call)) return null;
+                if (name == "Write" && !nulls[0].DescendantNodes().Contains(call))
+                    return null;
                 continue;
             }
-            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" && name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add") continue;
-            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock") continue;
+            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" && name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add")
+                continue;
+            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock")
+                continue;
             return null;
         }
         string helperName = Name("WriteOriginalLeaf"), boundName = Name("__leafRecordBound");
@@ -155,7 +176,8 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
         ExpressionSyntax boundExpression = reserve[0].ArgumentList.Arguments[1].Expression.ReplaceNodes(bounds, (old, _) => boundReplacements[old]);
         boundExpression = (ExpressionSyntax)new WideBound().Visit(boundExpression);
         var removed = new HashSet<SyntaxNode> { checkStatement, alias, snapshot, nulls[0], reserveStatement };
-        foreach (var capture in captures) removed.Add(capture);
+        foreach (var capture in captures)
+            removed.Add(capture);
         var hot = (BlockSyntax)new HotElement(removed).Visit(original);
         profileGate = SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8 && " + string.Join(" && ", profiles.Distinct().Select(Profile)));
         var guard = (IfStatementSyntax)SyntaxFactory.ParseStatement("if (" + item + " is not null) { }");

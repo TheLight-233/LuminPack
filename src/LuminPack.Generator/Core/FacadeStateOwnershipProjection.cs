@@ -20,7 +20,8 @@ internal sealed class FacadeStateOwnershipProjection : CSharpSyntaxRewriter
         var previous = _leases;
         _leases = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var variable in node.DescendantNodes().OfType<VariableDeclaratorSyntax>())
-            if (GetCache(variable) is string cache) _leases[variable.Identifier.ValueText] = cache;
+            if (GetCache(variable) is string cache)
+                _leases[variable.Identifier.ValueText] = cache;
         var result = base.VisitMethodDeclaration(node);
         _leases = previous;
         return result;
@@ -33,7 +34,8 @@ internal sealed class FacadeStateOwnershipProjection : CSharpSyntaxRewriter
     /// receives an independent state, so the nested operation never shares the outer operation's reference tables.</remarks>
     public override SyntaxNode VisitVariableDeclarator(VariableDeclaratorSyntax node)
     {
-        if (GetCache(node) is not string cache) return base.VisitVariableDeclarator(node);
+        if (GetCache(node) is not string cache)
+            return base.VisitVariableDeclarator(node);
         string stateType = ((ObjectCreationExpressionSyntax)((AssignmentExpressionSyntax)node.Initializer.Value).Right).Type.ToString();
         return node.WithInitializer(node.Initializer.WithValue(SyntaxFactory.ParseExpression(stateType + ".Lease(ref " + cache + ")")));
     }

@@ -23,9 +23,11 @@ public sealed class LuminPackVersionField
     {
         Name = Encoding.UTF8.GetBytes(name);
         Aliases = new byte[aliases.Length][];
-        for (int i = 0; i < aliases.Length; i++) Aliases[i] = Encoding.UTF8.GetBytes(aliases[i]);
+        for (int i = 0; i < aliases.Length; i++)
+            Aliases[i] = Encoding.UTF8.GetBytes(aliases[i]);
         var contract = new StringBuilder(representation);
-        if (!IsDirectPrimitive(representation, type)) AppendType(contract, type);
+        if (!IsDirectPrimitive(representation, type))
+            AppendType(contract, type);
         Contract = Encoding.UTF8.GetBytes(contract.ToString());
         var prefix = new List<byte>(Name.Length + Contract.Length + 10);
         AppendLength(prefix, Name.Length);
@@ -40,7 +42,10 @@ public sealed class LuminPackVersionField
     /// <param name="length">The length to encode.</param>
     private static void AppendLength(List<byte> bytes, int length)
     {
-        while (length >= 128) { bytes.Add((byte)(length | 128)); length >>= 7; }
+        while (length >= 128)
+        {
+            bytes.Add((byte)(length | 128));
+            length >>= 7; }
         bytes.Add((byte)length);
     }
 
@@ -50,7 +55,8 @@ public sealed class LuminPackVersionField
     private static void AppendType(StringBuilder builder, Type type)
     {
         string? primitive = PrimitiveIdentity(type);
-        if (primitive != null) builder.Append('#').Append(primitive);
+        if (primitive != null)
+            builder.Append('#').Append(primitive);
         else if (type.IsArray)
         {
             AppendType(builder, type.GetElementType()!);
@@ -59,10 +65,14 @@ public sealed class LuminPackVersionField
         else if (type.IsGenericType)
         {
             builder.Append('@').Append(type.GetGenericTypeDefinition().FullName).Append('<');
-            foreach (var argument in type.GetGenericArguments()) { AppendType(builder, argument); builder.Append(';'); }
+            foreach (var argument in type.GetGenericArguments())
+            {
+                AppendType(builder, argument);
+                builder.Append(';'); }
             builder.Append('>');
         }
-        else builder.Append('@').Append(type.FullName);
+        else
+            builder.Append('@').Append(type.FullName);
     }
 
     /// <summary>Uses exact compact identities for common framework types without hashing user type names.</summary>
@@ -70,27 +80,48 @@ public sealed class LuminPackVersionField
     /// <returns>The compact identity, or null for a fully named type.</returns>
     private static string? PrimitiveIdentity(Type type)
     {
-        if (type == typeof(bool)) return "b";
-        if (type == typeof(byte)) return "u1";
-        if (type == typeof(sbyte)) return "i1";
-        if (type == typeof(short)) return "i2";
-        if (type == typeof(ushort)) return "u2";
-        if (type == typeof(int)) return "i4";
-        if (type == typeof(uint)) return "u4";
-        if (type == typeof(long)) return "i8";
-        if (type == typeof(ulong)) return "u8";
-        if (type == typeof(float)) return "f4";
-        if (type == typeof(double)) return "f8";
-        if (type == typeof(decimal)) return "d16";
-        if (type == typeof(char)) return "c2";
-        if (type == typeof(string)) return "s";
-        if (type == typeof(object)) return "o";
-        if (type == typeof(IntPtr)) return "ni";
-        if (type == typeof(UIntPtr)) return "nu";
-        if (type == typeof(Guid)) return "g";
-        if (type == typeof(DateTime)) return "dt";
-        if (type == typeof(TimeSpan)) return "ts";
-        if (type == typeof(DateTimeOffset)) return "dto";
+        if (type == typeof(bool))
+            return "b";
+        if (type == typeof(byte))
+            return "u1";
+        if (type == typeof(sbyte))
+            return "i1";
+        if (type == typeof(short))
+            return "i2";
+        if (type == typeof(ushort))
+            return "u2";
+        if (type == typeof(int))
+            return "i4";
+        if (type == typeof(uint))
+            return "u4";
+        if (type == typeof(long))
+            return "i8";
+        if (type == typeof(ulong))
+            return "u8";
+        if (type == typeof(float))
+            return "f4";
+        if (type == typeof(double))
+            return "f8";
+        if (type == typeof(decimal))
+            return "d16";
+        if (type == typeof(char))
+            return "c2";
+        if (type == typeof(string))
+            return "s";
+        if (type == typeof(object))
+            return "o";
+        if (type == typeof(IntPtr))
+            return "ni";
+        if (type == typeof(UIntPtr))
+            return "nu";
+        if (type == typeof(Guid))
+            return "g";
+        if (type == typeof(DateTime))
+            return "dt";
+        if (type == typeof(TimeSpan))
+            return "ts";
+        if (type == typeof(DateTimeOffset))
+            return "dto";
         return null;
     }
 
@@ -100,7 +131,8 @@ public sealed class LuminPackVersionField
     /// <returns>Whether a separate type identity would be redundant.</returns>
     private static bool IsDirectPrimitive(string representation, Type type)
     {
-        if (representation.Length != 1) return false;
+        if (representation.Length != 1)
+            return false;
         string? expected = (representation[0] & 31) switch
         {
             0 => "i4", 1 => "u4", 2 => "u1", 3 => "i1", 4 => "i2", 5 => "u2", 6 => "i8", 7 => "u8",
@@ -115,7 +147,8 @@ public sealed class LuminPackVersionField
     public static byte[] CreateMetadata(LuminPackVersionField[] fields)
     {
         int length = 0;
-        foreach (var field in fields) length = checked(length + field.Prefix.Length);
+        foreach (var field in fields)
+            length = checked(length + field.Prefix.Length);
         var result = new byte[length];
         int offset = 0;
         foreach (var field in fields)
@@ -164,7 +197,8 @@ public sealed class LuminPackVersionField
     public static ulong Fingerprint(ReadOnlySpan<byte> table)
     {
         ulong hash = 14695981039346656037UL;
-        foreach (byte value in table) hash = (hash ^ value) * 1099511628211UL;
+        foreach (byte value in table)
+            hash = (hash ^ value) * 1099511628211UL;
         return hash;
     }
 
@@ -175,9 +209,11 @@ public sealed class LuminPackVersionField
     /// <returns>The local member index, or minus one for an unknown member.</returns>
     internal static int Find(LuminPackVersionField[] fields, ReadOnlySpan<byte> name, int expected)
     {
-        if ((uint)expected < (uint)fields.Length && fields[expected].Matches(name)) return expected;
+        if ((uint)expected < (uint)fields.Length && fields[expected].Matches(name))
+            return expected;
         for (int i = 0; i < fields.Length; i++)
-            if (i != expected && fields[i].Matches(name)) return i;
+            if (i != expected && fields[i].Matches(name))
+                return i;
         return -1;
     }
 
@@ -186,8 +222,11 @@ public sealed class LuminPackVersionField
     /// <returns>Whether the name identifies this member.</returns>
     private bool Matches(ReadOnlySpan<byte> name)
     {
-        if (name.SequenceEqual(Name)) return true;
-        foreach (var alias in Aliases) if (name.SequenceEqual(alias)) return true;
+        if (name.SequenceEqual(Name))
+            return true;
+        foreach (var alias in Aliases)
+            if (name.SequenceEqual(alias))
+                return true;
         return false;
     }
 }

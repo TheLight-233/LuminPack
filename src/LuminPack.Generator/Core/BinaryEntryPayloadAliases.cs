@@ -23,7 +23,8 @@ internal static class BinaryEntryPayloadAliases
             local.Declaration.Variables[0].Identifier.HasAnnotations(BindingAnnotation) &&
             local.Declaration.Variables[0].Initializer?.Value is RefExpressionSyntax initializer &&
             StorageIdentifier(initializer.Expression)?.Identifier.HasAnnotations(BinaryEntryInlining.ExpandedIdentityAnnotation) == true).ToArray();
-        if (declarations.Length == 0) return body;
+        if (declarations.Length == 0)
+            return body;
         var nodes = body.DescendantNodes().ToArray();
         var names = nodes.Select(node => node switch
             {
@@ -53,18 +54,22 @@ internal static class BinaryEntryPayloadAliases
         foreach (var declaration in declarations)
         {
             var variable = declaration.Declaration.Variables[0];
-            if (variable.Initializer?.Value is not RefExpressionSyntax reference) continue;
+            if (variable.Initializer?.Value is not RefExpressionSyntax reference)
+                continue;
             var identifier = StorageIdentifier(reference.Expression);
-            if (identifier == null || !identifier.Identifier.HasAnnotations(BinaryEntryInlining.ExpandedIdentityAnnotation)) continue;
+            if (identifier == null || !identifier.Identifier.HasAnnotations(BinaryEntryInlining.ExpandedIdentityAnnotation))
+                continue;
             string alias = variable.Identifier.ValueText;
             string target = identifier.Identifier.ValueText;
             if (alias == target || !names.TryGetValue(target, out int bindings) || bindings != 1 || names[alias] != 1 ||
                 rebound.Contains(alias) || rebound.Contains(target) || observed.Contains(alias) || observed.Contains(target) ||
-                incomplete.Contains(alias)) continue;
+                incomplete.Contains(alias))
+                continue;
             replacements.Add(alias, reference.Expression);
             removable.Add(declaration);
         }
-        if (removable.Count == 0) return body;
+        if (removable.Count == 0)
+            return body;
         return (BlockSyntax)new StableBindings(replacements).Visit(body.RemoveNodes(removable, SyntaxRemoveOptions.KeepExteriorTrivia));
     }
 
@@ -105,10 +110,12 @@ internal static class BinaryEntryPayloadAliases
         {
             if (!node.Identifier.HasAnnotations(BinaryEntryInlining.ExpandedIdentityAnnotation) || !IsStorageUse(node))
                 return base.VisitIdentifierName(node);
-            if (!_bindings.TryGetValue(node.Identifier.ValueText, out var source)) return node;
+            if (!_bindings.TryGetValue(node.Identifier.ValueText, out var source))
+                return node;
             var result = (ExpressionSyntax)Visit(source);
             SyntaxNode target = node;
-            while (target.Parent is ParenthesizedExpressionSyntax) target = target.Parent;
+            while (target.Parent is ParenthesizedExpressionSyntax)
+                target = target.Parent;
             if (target.Parent is AssignmentExpressionSyntax assignment && assignment.Left == target ||
                 target.Parent is PrefixUnaryExpressionSyntax prefix && prefix.Kind() is SyntaxKind.PreIncrementExpression or SyntaxKind.PreDecrementExpression ||
                 target.Parent is PostfixUnaryExpressionSyntax postfix && postfix.Kind() is SyntaxKind.PostIncrementExpression or SyntaxKind.PostDecrementExpression or SyntaxKind.SuppressNullableWarningExpression)

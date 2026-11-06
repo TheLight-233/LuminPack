@@ -34,7 +34,12 @@ internal static class HttpContracts
 {
     internal static readonly LuminPackHttpCodec<WebPayload> Codec = new(
         static value => LuminPackSerializer.Serialize(value),
-        static bytes => { WebPayload? value = null; LuminPackSerializer.Deserialize(bytes.Span, ref value); return value!; });
+        static bytes =>
+        {
+            WebPayload? value = null;
+            LuminPackSerializer.Deserialize(bytes.Span, ref value);
+            return value!;
+        });
 
     /// <summary>Runs only this extension's transport and value contracts.</summary>
     /// <returns>A task completing after all HTTP contracts pass.</returns>
@@ -44,14 +49,22 @@ internal static class HttpContracts
         byte[] bytes = Codec.Serialize(source);
         var options = new WebHostBuilder().ConfigureServices(services =>
             services.AddControllers().AddApplicationPart(typeof(EchoController).Assembly)
-                .AddLuminPack(settings => { settings.MaximumBodyBytes = 512; settings.Add(Codec); }))
+                .AddLuminPack(settings =>
+                {
+                    settings.MaximumBodyBytes = 512;
+                    settings.Add(Codec);
+                }))
             .Configure(app =>
             {
                 // TestServer exposes application exceptions; this boundary mirrors HTTP status handling in the host.
                 app.Use(async (context, next) =>
                 {
-                    try { await next(); }
-                    catch (BadHttpRequestException error) { context.Response.StatusCode = error.StatusCode; }
+                    try
+                    {
+                        await next(); }
+                    catch (BadHttpRequestException error)
+                    {
+                        context.Response.StatusCode = error.StatusCode; }
                 });
                 app.UseRouting();
                 app.UseEndpoints(endpoints =>
@@ -86,28 +99,52 @@ internal static class HttpContracts
         var context = NewContext(new byte[513]);
         context.Request.ContentLength = null;
         bool rejected = false;
-        try { await context.Request.ReadLuminPackAsync(Codec, 512); }
-        catch (BadHttpRequestException error) when (error.StatusCode == 413) { rejected = true; }
+        try
+        {
+            await context.Request.ReadLuminPackAsync(Codec, 512); }
+        catch (BadHttpRequestException error) when (error.StatusCode == 413)
+        {
+            rejected = true; }
         CodecContract.Assert(rejected, "Unknown-length body bypassed the limit.");
         context = NewContext(bytes);
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
         context.RequestAborted = cancelled.Token;
         rejected = false;
-        try { await context.Request.ReadLuminPackAsync(Codec); } catch (OperationCanceledException) { rejected = true; }
+        try
+        {
+            await context.Request.ReadLuminPackAsync(Codec); } catch (OperationCanceledException)
+        {
+            rejected = true; }
         CodecContract.Assert(rejected, "Request cancellation was ignored.");
         var expected = new InvalidOperationException("Application callback sentinel.");
-        var callbackCodec = new LuminPackHttpCodec<WebPayload>(_ => bytes, _ => { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(expected); return default!; });
+        var callbackCodec = new LuminPackHttpCodec<WebPayload>(_ => bytes, _ =>
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(expected);
+            return default!;
+        });
         rejected = false;
-        try { await NewContext(bytes).Request.ReadLuminPackAsync(callbackCodec); }
-        catch (InvalidOperationException actual) { rejected = ReferenceEquals(actual, expected); }
+        try
+        {
+            await NewContext(bytes).Request.ReadLuminPackAsync(callbackCodec); }
+        catch (InvalidOperationException actual)
+        {
+            rejected = ReferenceEquals(actual, expected); }
         CodecContract.Assert(rejected, "Application exception was hidden or replaced.");
-        var writeFailure = new LuminPackHttpCodec<WebPayload>(_ => { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(expected); return Array.Empty<byte>(); }, _ => source);
+        var writeFailure = new LuminPackHttpCodec<WebPayload>(_ =>
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(expected);
+            return Array.Empty<byte>();
+        }, _ => source);
         var failedResponse = NewContext(bytes);
         failedResponse.Response.Body = new MemoryStream();
         rejected = false;
-        try { await LuminPackHttp.Result(source, writeFailure).ExecuteAsync(failedResponse); }
-        catch (InvalidOperationException actual) { rejected = ReferenceEquals(actual, expected); }
+        try
+        {
+            await LuminPackHttp.Result(source, writeFailure).ExecuteAsync(failedResponse); }
+        catch (InvalidOperationException actual)
+        {
+            rejected = ReferenceEquals(actual, expected); }
         CodecContract.Assert(rejected && failedResponse.Response.ContentLength is null && failedResponse.Response.Body.Length == 0,
             "A failing response serializer published output or hid the exception.");
         var retainedStream = NewContext(bytes);
@@ -116,7 +153,11 @@ internal static class HttpContracts
         foreach (int count in new[] { -1, int.MaxValue })
         {
             rejected = false;
-            try { LuminAspNetCore.StringValuesCodec.Deserialize(BitConverter.GetBytes(count)); } catch { rejected = true; }
+            try
+            {
+                LuminAspNetCore.StringValuesCodec.Deserialize(BitConverter.GetBytes(count)); } catch
+            {
+                rejected = true; }
             CodecContract.Assert(rejected, "Forged header count was accepted.");
         }
     }

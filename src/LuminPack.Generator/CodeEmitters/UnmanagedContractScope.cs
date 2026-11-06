@@ -46,7 +46,8 @@ internal sealed class UnmanagedContractScope : IDisposable
     /// <returns>The substituted type.</returns>
     private ITypeSymbol Substitute(ITypeSymbol type)
     {
-        if (_resolved.TryGetValue(type, out var resolved)) return resolved;
+        if (_resolved.TryGetValue(type, out var resolved))
+            return resolved;
         resolved = SubstituteCore(type);
         _resolved.Add(type, resolved);
         return resolved;
@@ -61,7 +62,8 @@ internal sealed class UnmanagedContractScope : IDisposable
             return _arguments.TryGetValue(ParameterKey(parameter), out var argument) ? argument : type;
         if (type is IArrayTypeSymbol array)
             return _compilation.CreateArrayTypeSymbol(Substitute(array.ElementType), array.Rank);
-        if (type is not INamedTypeSymbol named || !named.IsGenericType || named.IsUnboundGenericType) return type;
+        if (type is not INamedTypeSymbol named || !named.IsGenericType || named.IsUnboundGenericType)
+            return type;
         var definition = named.ConstructedFrom;
         if (named.ContainingType is { } containing)
         {

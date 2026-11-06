@@ -29,7 +29,8 @@ public static partial class LuminPackCollectionAccess
         }
         using var frozen = new FrozenBag<T>(bag);
         count = frozen.Count;
-        if (count == 0) return Array.Empty<T>();
+        if (count == 0)
+            return Array.Empty<T>();
         T[] result = ArrayPool<T>.Shared.Rent(count);
         try
         {
@@ -39,7 +40,8 @@ public static partial class LuminPackCollectionAccess
                 T[] items = LuminFieldLayout.Field<T[]>(queue, ConcurrentBagStorage<T>.Array);
                 int size = QueueCount<T>(queue), mask = LuminFieldLayout.Field<int>(queue, ConcurrentBagStorage<T>.Mask);
                 int head = LuminFieldLayout.Field<int>(queue, ConcurrentBagStorage<T>.HeadIndex);
-                for (int offset = size - 1; offset >= 0; offset--) result[index++] = items[unchecked(head + offset) & mask];
+                for (int offset = size - 1; offset >= 0; offset--)
+                    result[index++] = items[unchecked(head + offset) & mask];
             }
             pooled = true;
             return result;
@@ -60,7 +62,8 @@ public static partial class LuminPackCollectionAccess
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static bool TryWriteConcurrentBagRaw<T>(ref LuminPackWriter writer, ConcurrentBag<T> bag) where T : unmanaged
     {
-        if (!ConcurrentBagStorage<T>.Available) return false;
+        if (!ConcurrentBagStorage<T>.Available)
+            return false;
         using var frozen = new FrozenBag<T>(bag);
         int width = Unsafe.SizeOf<T>(), bytes = checked(frozen.Count * width);
         writer.EnsureAdditionalCapacity(checked(bytes + 4));
@@ -117,7 +120,8 @@ public static partial class LuminPackCollectionAccess
                 for (object? queue = Head; queue is not null; queue = LuminFieldLayout.Field<object?>(queue, ConcurrentBagStorage<T>.Next))
                 {
                     var spin = new SpinWait();
-                    while (Volatile.Read(ref LuminFieldLayout.Field<int>(queue, ConcurrentBagStorage<T>.Operation)) != 0) spin.SpinOnce();
+                    while (Volatile.Read(ref LuminFieldLayout.Field<int>(queue, ConcurrentBagStorage<T>.Operation)) != 0)
+                        spin.SpinOnce();
                     Count = checked(Count + QueueCount<T>(queue));
                 }
             }
@@ -131,11 +135,13 @@ public static partial class LuminPackCollectionAccess
         /// <summary>Releases every acquired local lock before the global lock, including partial freezes.</summary>
         public void Dispose()
         {
-            if (!_taken) return;
+            if (!_taken)
+                return;
             for (object? queue = Head; queue is not null; queue = LuminFieldLayout.Field<object?>(queue, ConcurrentBagStorage<T>.Next))
             {
                 ref bool frozen = ref LuminFieldLayout.Field<bool>(queue, ConcurrentBagStorage<T>.Frozen);
-                if (!frozen) continue;
+                if (!frozen)
+                    continue;
                 Volatile.Write(ref frozen, false);
                 Monitor.Exit(queue);
             }
@@ -159,11 +165,16 @@ public static partial class LuminPackCollectionAccess
                 Type bag = typeof(ConcurrentBag<T>);
                 var queue = LuminFieldLayout.Find(bag, "_workStealingQueues")?.FieldType;
                 var gate = LuminFieldLayout.Find(bag, "_locals")?.FieldType;
-                if (queue is null || queue.IsValueType || gate is null || !gate.IsGenericType || gate.GetGenericTypeDefinition() != typeof(ThreadLocal<>)) return;
-                if (LuminFieldLayout.Find(queue, "_nextQueue")?.FieldType != queue || LuminFieldLayout.Find(queue, "_array")?.FieldType != typeof(T[]) || LuminFieldLayout.Find(queue, "_frozen")?.FieldType != typeof(bool)) return;
-                foreach (string name in new[] { "_headIndex", "_mask", "_addTakeCount", "_stealCount" }) if (LuminFieldLayout.Find(queue, name)?.FieldType != typeof(int)) return;
+                if (queue is null || queue.IsValueType || gate is null || !gate.IsGenericType || gate.GetGenericTypeDefinition() != typeof(ThreadLocal<>))
+                    return;
+                if (LuminFieldLayout.Find(queue, "_nextQueue")?.FieldType != queue || LuminFieldLayout.Find(queue, "_array")?.FieldType != typeof(T[]) || LuminFieldLayout.Find(queue, "_frozen")?.FieldType != typeof(bool))
+                    return;
+                foreach (string name in new[] { "_headIndex", "_mask", "_addTakeCount", "_stealCount" })
+                    if (LuminFieldLayout.Find(queue, name)?.FieldType != typeof(int))
+                        return;
                 var operation = LuminFieldLayout.Find(queue, "_currentOp")?.FieldType;
-                if (operation != typeof(int) && (operation is null || !operation.IsEnum || Enum.GetUnderlyingType(operation) != typeof(int) || !Enum.IsDefined(operation, "None") || Convert.ToInt32(Enum.Parse(operation, "None")) != 0)) return;
+                if (operation != typeof(int) && (operation is null || !operation.IsEnum || Enum.GetUnderlyingType(operation) != typeof(int) || !Enum.IsDefined(operation, "None") || Convert.ToInt32(Enum.Parse(operation, "None")) != 0))
+                    return;
                 Gate = LuminFieldLayout.ObjectField(bag, "_locals");
                 Queues = LuminFieldLayout.ObjectField(bag, "_workStealingQueues");
                 Next = LuminFieldLayout.ObjectField(queue, "_nextQueue");

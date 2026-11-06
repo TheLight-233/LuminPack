@@ -15,7 +15,8 @@ public static unsafe partial class LuminWpf
     /// <param name="writer">The Core output cursor.</param><param name="value">The color without an external color context.</param>
     public static void Write(ref LuminPackWriter writer, in WpfColor value)
     {
-        if (value.ColorContext is not null) LuminPackExceptionHelper.ThrowNotSupportedException("Profile-backed WPF colors require an application color-profile contract.");
+        if (value.ColorContext is not null)
+            LuminPackExceptionHelper.ThrowNotSupportedException("Profile-backed WPF colors require an application color-profile contract.");
         writer.EnsureAdditionalCapacity(16);
         writer.Write(value.ScA);
         writer.Write(value.ScR);
@@ -30,7 +31,10 @@ public static unsafe partial class LuminWpf
         reader.EnsureReadable(reader.Position, 16);
         var pending = reader;
         float alpha = default, red = default, green = default, blue = default;
-        pending.Read(ref alpha); pending.Read(ref red); pending.Read(ref green); pending.Read(ref blue);
+        pending.Read(ref alpha);
+        pending.Read(ref red);
+        pending.Read(ref green);
+        pending.Read(ref blue);
         WpfColor candidate = WpfColor.FromScRgb(alpha, red, green, blue);
         value = candidate;
         reader = pending;

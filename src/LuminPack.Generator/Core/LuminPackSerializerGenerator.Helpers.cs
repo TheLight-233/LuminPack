@@ -46,7 +46,8 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            }");
         string padding = new string(' ', indent);
         foreach (string line in sb.ToString().Split(new[] { System.Environment.NewLine }, System.StringSplitOptions.None))
-            if (line.Length != 0) builder.Append(padding).AppendLine(line.Substring(12));
+            if (line.Length != 0)
+                builder.Append(padding).AppendLine(line.Substring(12));
     }
 
     /// <summary>Preserves the architecture-specific raw value load after sequence staging.</summary>

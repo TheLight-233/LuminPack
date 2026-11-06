@@ -20,10 +20,12 @@ public static unsafe partial class LuminPackBurst
         ReadOnlySpan<int> sourceOffsets, ReadOnlySpan<int> destinationOffsets, in global::LuminPack.Utility.LuminLayoutPlan plan = default)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || count <= 0) return 0;
+        if (registration is null || count <= 0)
+            return 0;
         if (registration.Table.LayoutPlanned != null)
         {
-            if (plan.Mode == 0 || !global::LuminPack.Code.LuminKernelPolicy.UseNativeLayout(count)) return 0;
+            if (plan.Mode == 0 || !global::LuminPack.Code.LuminKernelPolicy.UseNativeLayout(count))
+                return 0;
             int prefix;
             fixed (byte* input = &source)
             fixed (byte* output = &destination)
@@ -32,7 +34,8 @@ public static unsafe partial class LuminPackBurst
             ValidateCompleted(prefix, count);
             return prefix;
         }
-        if (registration.Table.Layout == null) return 0;
+        if (registration.Table.Layout == null)
+            return 0;
         if (sourceStride <= 0 || destinationStride <= 0 || sourceOffsets.Length != destinationOffsets.Length)
             return 0;
         for (int index = 0; index < sourceOffsets.Length; index++)
@@ -58,7 +61,8 @@ public static unsafe partial class LuminPackBurst
     {
         matched = 0;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.CountMatch == null || count <= 0) return false;
+        if (registration is null || registration.Table.CountMatch == null || count <= 0)
+            return false;
         uint completed;
         fixed (byte* a = &left)
         fixed (byte* b = &right)
@@ -76,7 +80,8 @@ public static unsafe partial class LuminPackBurst
     internal static bool TryCopyMatch(ref byte destination, int count, int distance)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.CopyMatch == null || count <= 0 || distance <= 0) return false;
+        if (registration is null || registration.Table.CopyMatch == null || count <= 0 || distance <= 0)
+            return false;
         fixed (byte* output = &destination)
             registration.Table.CopyMatch(output, (uint)count, (uint)distance);
         return true;
@@ -90,7 +95,8 @@ public static unsafe partial class LuminPackBurst
     internal static bool TryChaCha20(uint* state, byte* output, int blocks)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.ChaCha20 == null) return false;
+        if (registration is null || registration.Table.ChaCha20 == null)
+            return false;
         registration.Table.ChaCha20(state, output, blocks);
         return true;
     }
@@ -104,7 +110,8 @@ public static unsafe partial class LuminPackBurst
     internal static bool TryXor(byte* output, byte* input, byte* keyStream, int count)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.Xor == null || count <= 0) return false;
+        if (registration is null || registration.Table.Xor == null || count <= 0)
+            return false;
         registration.Table.Xor(output, input, keyStream, (uint)count);
         return true;
     }

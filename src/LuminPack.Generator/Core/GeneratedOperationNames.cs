@@ -35,13 +35,15 @@ internal static class GeneratedOperationNames
         /// <returns>The method with renamed locals, or its original syntax when no identity is eligible.</returns>
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
-            if (node.Body == null) return node;
+            if (node.Body == null)
+                return node;
             var marked = node.Body.GetAnnotatedTokens(RoleAnnotation).Where(IsLocalDeclaration)
                 .GroupBy(token => token.ValueText, StringComparer.Ordinal).Where(group => group.Count() == 1)
                 .Select(group => group.First()).Where(token => token.GetAnnotations(RoleAnnotation)
                     .Any(annotation => !string.IsNullOrEmpty(annotation.Data) &&
                         !annotation.Data.StartsWith("__lumin_", StringComparison.Ordinal))).ToArray();
-            if (marked.Length == 0) return node;
+            if (marked.Length == 0)
+                return node;
             var tokens = node.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).ToArray();
             var occurrences = tokens.GroupBy(token => token.ValueText, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
@@ -52,28 +54,35 @@ internal static class GeneratedOperationNames
                 .Select(identifier => identifier.Identifier.ValueText), StringComparer.Ordinal);
             var declarations = marked.Where(token => !observed.Contains(token.ValueText) &&
                 occurrences[token.ValueText].All(use => use.HasAnnotations(RoleAnnotation))).ToArray();
-            if (declarations.Length == 0) return node;
+            if (declarations.Length == 0)
+                return node;
             var eligible = new HashSet<string>(declarations.Select(token => token.ValueText), StringComparer.Ordinal);
             var reserved = new HashSet<string>(tokens.Where(token => !eligible.Contains(token.ValueText)).Select(token => token.ValueText), StringComparer.Ordinal);
             var replacements = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var declaration in declarations)
             {
                 string role = declaration.GetAnnotations(RoleAnnotation).Select(annotation => annotation.Data).FirstOrDefault();
-                if (string.IsNullOrEmpty(role) || role.StartsWith("__lumin_", StringComparison.Ordinal)) continue;
+                if (string.IsNullOrEmpty(role) || role.StartsWith("__lumin_", StringComparison.Ordinal))
+                    continue;
                 if (role.StartsWith("__lumin", StringComparison.Ordinal) && role.Length > 7)
                     role = char.ToLowerInvariant(role[7]) + role.Substring(8);
                 role = role.TrimStart('_');
                 bool localFunction = declaration.Parent is LocalFunctionStatementSyntax;
-                if (role.Length != 0) role = (localFunction ? char.ToUpperInvariant(role[0]) : char.ToLowerInvariant(role[0])) + role.Substring(1);
+                if (role.Length != 0)
+                    role = (localFunction ? char.ToUpperInvariant(role[0]) : char.ToLowerInvariant(role[0])) + role.Substring(1);
                 if (!SyntaxFacts.IsValidIdentifier(role) || SyntaxFacts.GetKeywordKind(role) != SyntaxKind.None ||
-                    SyntaxFacts.GetContextualKeywordKind(role) != SyntaxKind.None) role = localFunction ? "Local" : "local";
+                    SyntaxFacts.GetContextualKeywordKind(role) != SyntaxKind.None)
+                    role = localFunction ? "Local" : "local";
                 string name = role;
                 int suffix = declaration.Parent is LabeledStatementSyntax ? 0 : 2;
-                if (declaration.Parent is LabeledStatementSyntax) name += suffix++;
-                while (!reserved.Add(name)) name = role + suffix++;
+                if (declaration.Parent is LabeledStatementSyntax)
+                    name += suffix++;
+                while (!reserved.Add(name))
+                    name = role + suffix++;
                 replacements.Add(declaration.ValueText, name);
             }
-            if (replacements.Count == 0) return node;
+            if (replacements.Count == 0)
+                return node;
             return node.WithBody((BlockSyntax)new LocalNames(replacements).Visit(node.Body));
         }
 

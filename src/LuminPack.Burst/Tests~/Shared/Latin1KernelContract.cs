@@ -17,8 +17,12 @@ public static unsafe class Latin1KernelContract
         {
             char[] source = new char[length + 8], expanded = new char[length + 8];
             byte[] output = new byte[length + 8];
-            for (int i = 0; i < source.Length; i++) { source[i] = (char)random.Next(256); expanded[i] = '\uA5A5'; }
-            for (int i = 0; i < output.Length; i++) output[i] = 0xA5;
+            for (int i = 0; i < source.Length; i++)
+            {
+                source[i] = (char)random.Next(256);
+                expanded[i] = '\uA5A5'; }
+            for (int i = 0; i < output.Length; i++)
+                output[i] = 0xA5;
             fixed (char* p = source)
             fixed (char* q = expanded)
             fixed (byte* bytes = output)
@@ -27,7 +31,8 @@ public static unsafe class Latin1KernelContract
                 Require(check(text, length) == 1, "Representable text rejected.");
                 Require(narrow(text, bytes + alignment, length) == 1, "Latin1 narrowing failed.");
                 widen(bytes + alignment, (ushort*)(q + alignment), length);
-                for (int i = 0; i < length; i++) Require(output[i + alignment] == source[i + alignment] && expanded[i + alignment] == source[i + alignment], "Latin1 payload differs: length=" + length + " alignment=" + alignment + " index=" + i + " byte=" + output[i + alignment] + " char=" + (int)expanded[i + alignment] + " expected=" + (int)source[i + alignment]);
+                for (int i = 0; i < length; i++)
+                    Require(output[i + alignment] == source[i + alignment] && expanded[i + alignment] == source[i + alignment], "Latin1 payload differs: length=" + length + " alignment=" + alignment + " index=" + i + " byte=" + output[i + alignment] + " char=" + (int)expanded[i + alignment] + " expected=" + (int)source[i + alignment]);
                 Require(equal(bytes + alignment, text, length) == 1, "Equal Latin1 text rejected.");
                 for (int mismatch = 0; mismatch < length; mismatch++)
                 {
@@ -48,7 +53,8 @@ public static unsafe class Latin1KernelContract
                 }
             }
             for (int i = 0; i < output.Length; i++)
-                if (i < alignment || i >= alignment + length) Require(output[i] == 0xA5 && expanded[i] == '\uA5A5', "Latin1 canary changed.");
+                if (i < alignment || i >= alignment + length)
+                    Require(output[i] == 0xA5 && expanded[i] == '\uA5A5', "Latin1 canary changed.");
             cases++;
         }
         Require(check(null, 0) == 1 && narrow(null, null, 0) == 1 && equal(null, null, 0) == 1, "Empty Latin1 range failed.");
@@ -56,7 +62,10 @@ public static unsafe class Latin1KernelContract
         return cases;
     }
     /// <summary>Reports a precise native contract failure.</summary><param name="condition">Required condition.</param><param name="message">Failure.</param>
-    private static void Require(bool condition, string message) { if (!condition) LuminPackExceptionHelper.ThrowInvalidOperationException(message); }
+    private static void Require(bool condition, string message)
+    {
+        if (!condition)
+            LuminPackExceptionHelper.ThrowInvalidOperationException(message); }
 }
 }
 

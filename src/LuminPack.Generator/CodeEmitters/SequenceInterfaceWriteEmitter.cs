@@ -53,10 +53,17 @@ internal static class SequenceInterfaceWriteEmitter
         var types = new List<string>();
         if (IsInterface(name) && storageExpression == null)
         {
-            if (json) { types.Add("List"); types.Add("Array"); }
+            if (json)
+            {
+                types.Add("List");
+                types.Add("Array"); }
             if (name is "global::System.Collections.Generic.IEnumerable" or "global::System.Collections.Generic.IReadOnlyCollection")
-            { types.Add("Queue"); types.Add("Stack"); types.Add("LinkedList"); }
-            else if (name == "global::System.Collections.Generic.ICollection") types.Add("LinkedList");
+            {
+                types.Add("Queue");
+                types.Add("Stack");
+                types.Add("LinkedList"); }
+            else if (name == "global::System.Collections.Generic.ICollection")
+                types.Add("LinkedList");
         }
         string Concrete(string kind, string item) => kind == "Array" ? item + "[]" : "global::System.Collections.Generic." + kind + "<" + item + ">";
         for (int i = 0; i < types.Count; i++)
@@ -68,7 +75,8 @@ internal static class SequenceInterfaceWriteEmitter
             {
                 sb.AppendLine("                if (source.Count != 0) sequenceCount = WriteSequence" + i + "(ref writer, source);");
             }
-            else sb.AppendLine("                WriteSequence" + i + "(ref writer, source);");
+            else
+                sb.AppendLine("                WriteSequence" + i + "(ref writer, source);");
             sb.AppendLine("            }");
         }
         if (field.CanGetSequenceStorage)
@@ -85,22 +93,27 @@ internal static class SequenceInterfaceWriteEmitter
                 {
                     sb.AppendLine("                    if (source." + (kind == "List" ? "Count" : "Length") + " != 0) sequenceCount = WriteSequence" + kind + "(ref writer, source);");
                 }
-                else sb.AppendLine("                    " + (storageExpression != null ? "if (source." + (kind == "List" ? "Count" : "Length") + " != 0) " : "") + "WriteSequence" + kind + "(ref writer, source);");
+                else
+                    sb.AppendLine("                    " + (storageExpression != null ? "if (source." + (kind == "List" ? "Count" : "Length") + " != 0) " : "") + "WriteSequence" + kind + "(ref writer, source);");
                 sb.AppendLine("                }");
             }
             sb.AppendLine("            }");
         }
-        if (types.Count != 0 || field.CanGetSequenceStorage) sb.AppendLine("            else");
+        if (types.Count != 0 || field.CanGetSequenceStorage)
+            sb.AppendLine("            else");
         sb.AppendLine("            {");
-        if (counted) AppendCountedLoop(field, sb, "value", "sequenceCount");
-        else AppendLoop(field, sb, "value", json, fixedHeader);
+        if (counted)
+            AppendCountedLoop(field, sb, "value", "sequenceCount");
+        else
+            AppendLoop(field, sb, "value", json, fixedHeader);
         sb.AppendLine("            }");
         if (counted)
         {
             sb.AppendLine("            writer.EndCollection(sequenceStart, sequenceCount);");
             sb.AppendLine("            writer.CheckBuffer();");
         }
-        for (int i = 0; i < types.Count; i++) AppendFunction(field, sb, "WriteSequence" + i, Concrete(types[i], element), json, fixedHeader);
+        for (int i = 0; i < types.Count; i++)
+            AppendFunction(field, sb, "WriteSequence" + i, Concrete(types[i], element), json, fixedHeader);
         if (field.CanGetSequenceStorage)
         {
             AppendFunction(field, sb, "WriteSequenceList", Concrete("List", element), json, fixedHeader);
@@ -127,7 +140,8 @@ internal static class SequenceInterfaceWriteEmitter
             AppendCountedLoop(field, sb, "source", "count");
             sb.AppendLine("                return count;");
         }
-        else AppendLoop(field, sb, "source", json, fixedHeader);
+        else
+            AppendLoop(field, sb, "source", json, fixedHeader);
         sb.AppendLine("            }");
     }
 
@@ -142,7 +156,8 @@ internal static class SequenceInterfaceWriteEmitter
         string type = CodeEmitterRegistry.GetFirstGeneric(field.TypeName);
         sb.AppendLine("                foreach (var item in " + source + ")");
         sb.AppendLine("                {");
-        if (!CollectionEmitterKit.ChecksItself(element)) sb.AppendLine("                    writer.CheckBuffer();");
+        if (!CollectionEmitterKit.ChecksItself(element))
+            sb.AppendLine("                    writer.CheckBuffer();");
         sb.AppendLine("                    " + count + "++;");
         sb.AppendLine("                    var v = item;");
         sb.AppendLine("                    " + CollectionEmitterKit.ContiguousElementWrite(element, type, "v"));
@@ -159,10 +174,12 @@ internal static class SequenceInterfaceWriteEmitter
     {
         var element = EmitterTypeTraits.GetFirstTypeArgument(field);
         string type = CodeEmitterRegistry.GetFirstGeneric(field.TypeName);
-        if (json) sb.AppendLine("                bool isFirst = true;");
+        if (json)
+            sb.AppendLine("                bool isFirst = true;");
         sb.AppendLine("                foreach (var item in " + source + ")");
         sb.AppendLine("                {");
-        if (json) JsonCollectionElementEmitter.Append(sb, "item", "                    ");
+        if (json)
+            JsonCollectionElementEmitter.Append(sb, "item", "                    ");
         else
         {
             sb.AppendLine("                    writer.CheckBuffer();");

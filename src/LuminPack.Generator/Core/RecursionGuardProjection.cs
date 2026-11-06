@@ -21,10 +21,12 @@ internal static class RecursiveTypeAnalysis
     /// <remarks>The walk follows declared members only for types with a LuminPack declaration; framework containers contribute their type arguments.</remarks>
     internal static bool IsRecursive(ITypeSymbol type, Compilation compilation)
     {
-        if (type is null) return false;
+        if (type is null)
+            return false;
         var cache = Cache.GetValue(compilation, static _ => new ConcurrentDictionary<string, bool>(StringComparer.Ordinal));
         string key = FormatterTypeName.Get(type);
-        if (cache.TryGetValue(key, out bool known)) return known;
+        if (cache.TryGetValue(key, out bool known))
+            return known;
         var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         bool recursive = Successors(type).Any(next => Reaches(next, type, visited));
         cache[key] = recursive;
@@ -44,8 +46,10 @@ internal static class RecursiveTypeAnalysis
     /// <returns>Whether the target is reachable from the current type.</returns>
     private static bool Reaches(ITypeSymbol current, ITypeSymbol target, HashSet<ITypeSymbol> visited)
     {
-        if (SymbolEqualityComparer.Default.Equals(current, target)) return true;
-        if (!visited.Add(current)) return false;
+        if (SymbolEqualityComparer.Default.Equals(current, target))
+            return true;
+        if (!visited.Add(current))
+            return false;
         return Successors(current).Any(next => Reaches(next, target, visited));
     }
 
@@ -59,17 +63,23 @@ internal static class RecursiveTypeAnalysis
             yield return array.ElementType;
             yield break;
         }
-        if (type is not INamedTypeSymbol named) yield break;
-        foreach (var argument in named.TypeArguments) yield return argument;
-        if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) yield break;
+        if (type is not INamedTypeSymbol named)
+            yield break;
+        foreach (var argument in named.TypeArguments)
+            yield return argument;
+        if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+            yield break;
         // Only declarations that LuminPack analyzes expose members; framework types are opaque beyond their arguments.
-        if (!SourceGenerator.TypeMetaChecker.TryCheckPackableAttribute(named)) yield break;
+        if (!SourceGenerator.TypeMetaChecker.TryCheckPackableAttribute(named))
+            yield break;
         for (var level = named; level != null && level.SpecialType != SpecialType.System_Object && level.SpecialType != SpecialType.System_ValueType; level = level.BaseType)
         {
             foreach (var member in level.GetMembers())
             {
-                if (member is IFieldSymbol { IsStatic: false } field) yield return field.Type;
-                else if (member is IPropertySymbol { IsStatic: false, IsIndexer: false } property) yield return property.Type;
+                if (member is IFieldSymbol { IsStatic: false } field)
+                    yield return field.Type;
+                else if (member is IPropertySymbol { IsStatic: false, IsIndexer: false } property)
+                    yield return property.Type;
             }
         }
         foreach (var attribute in named.GetAttributes())
@@ -102,11 +112,14 @@ internal sealed class RecursionGuardProjection : CSharpSyntaxRewriter
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
         var result = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node)!;
-        if (result.Body is null || !Roots.Contains(result.Identifier.ValueText) || result.ParameterList.Parameters.Count != 2) return result;
+        if (result.Body is null || !Roots.Contains(result.Identifier.ValueText) || result.ParameterList.Parameters.Count != 2)
+            return result;
         // A forwarding wrapper has no body of its own; the operation it calls carries the guard.
-        if (result.Body.Statements.Count <= 1 && !result.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal)) return result;
+        if (result.Body.Statements.Count <= 1 && !result.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal))
+            return result;
         string payload = result.ParameterList.Parameters[1].Type?.ToString().TrimEnd('?') ?? string.Empty;
-        if (!_recursive(payload)) return result;
+        if (!_recursive(payload))
+            return result;
         var guard = SyntaxFactory.ParseStatement("global::LuminPack.Code.LuminPackExceptionHelper.EnsureSufficientStack();");
         var parameter = result.ParameterList.Parameters[0];
         string state = parameter.Type?.ToString().Replace("global::", string.Empty).Replace("LuminPack.Core.", string.Empty);

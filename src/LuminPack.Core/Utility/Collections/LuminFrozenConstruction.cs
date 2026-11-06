@@ -23,8 +23,10 @@ public static class LuminFrozenConstruction
     public static Dictionary<TKey, TValue> RentDictionary<TKey, TValue>(int capacity) where TKey : notnull
     {
         var value = Cache<Dictionary<TKey, TValue>>.Items.TryTake();
-        if (value is null) return new Dictionary<TKey, TValue>(capacity);
-        if (capacity != 0) value.EnsureCapacity(capacity);
+        if (value is null)
+            return new Dictionary<TKey, TValue>(capacity);
+        if (capacity != 0)
+            value.EnsureCapacity(capacity);
         return value;
     }
 
@@ -49,8 +51,10 @@ public static class LuminFrozenConstruction
     public static HashSet<T> RentSet<T>(int capacity)
     {
         var value = Cache<HashSet<T>>.Items.TryTake();
-        if (value is null) return new HashSet<T>(capacity);
-        if (capacity != 0) value.EnsureCapacity(capacity);
+        if (value is null)
+            return new HashSet<T>(capacity);
+        if (capacity != 0)
+            value.EnsureCapacity(capacity);
         return value;
     }
 
@@ -103,8 +107,10 @@ public static class LuminFrozenConstruction
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteScalar<T>(ref byte destination, ref T source) where T : unmanaged
     {
-        if (IntPtr.Size == 8 || Unsafe.SizeOf<T>() <= 4) Unsafe.WriteUnaligned(ref destination, source);
-        else LuminPackMarshal.CopyBlockUnaligned(ref destination, ref Unsafe.As<T, byte>(ref source), (uint)Unsafe.SizeOf<T>());
+        if (IntPtr.Size == 8 || Unsafe.SizeOf<T>() <= 4)
+            Unsafe.WriteUnaligned(ref destination, source);
+        else
+            LuminPackMarshal.CopyBlockUnaligned(ref destination, ref Unsafe.As<T, byte>(ref source), (uint)Unsafe.SizeOf<T>());
     }
 
     /// <summary>Bounds retained builder count globally without creating a separate array pool.</summary>

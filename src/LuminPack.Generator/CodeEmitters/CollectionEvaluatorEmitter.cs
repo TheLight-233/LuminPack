@@ -103,7 +103,8 @@ public static class CollectionEvaluatorEmitter
             return;
         }
         if (rawElements && family != "global::System.Collections.Generic.IEnumerable" &&
-            AppendContiguousPayloadSize(fieldData, sb, "value.Count", allowTag: family == "global::System.Collections.Generic.List")) return;
+            AppendContiguousPayloadSize(fieldData, sb, "value.Count", allowTag: family == "global::System.Collections.Generic.List"))
+            return;
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                " + elementType + " current = item;");
@@ -120,7 +121,8 @@ public static class CollectionEvaluatorEmitter
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            evaluator += sizeof(int);");
         sb.AppendLine("            if (value.IsDefault) return;");
-        if (AppendContiguousPayloadSize(fieldData, sb, "value.Length")) return;
+        if (AppendContiguousPayloadSize(fieldData, sb, "value.Length"))
+            return;
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                " + elementType + " current = item;");
@@ -173,7 +175,8 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            evaluator += sizeof(int) * 4;");
-        if (AppendContiguousPayloadSize(fieldData, sb, "value.Count")) return;
+        if (AppendContiguousPayloadSize(fieldData, sb, "value.Count"))
+            return;
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                " + elementType + " current = item;");
@@ -198,8 +201,10 @@ public static class CollectionEvaluatorEmitter
             sb.AppendLine("            evaluator += checked(" + PortableStructEmitter.PayloadSize(portable, count) + ");");
             return true;
         }
-        if (PortableStructPlan.TryCreate(element) != null) return false;
-        if (!CollectionEmitterKit.IsRaw(element, elementType)) return false;
+        if (PortableStructPlan.TryCreate(element) != null)
+            return false;
+        if (!CollectionEmitterKit.IsRaw(element, elementType))
+            return false;
         sb.AppendLine("            evaluator += checked(" + count + " * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + elementType + ">());");
         return true;
     }

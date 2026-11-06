@@ -29,7 +29,8 @@ namespace LuminPack.Burst
             var decode = BurstCompiler.CompileFunctionPointer<Utf8DecodeFunction>(DecodeRoot);
             var textEqual = BurstCompiler.CompileFunctionPointer<Utf8EqualFunction>(TextEqualRoot);
             var ascii = BurstCompiler.CompileFunctionPointer<AsciiEncodeFunction>(AsciiRoot);
-            if (!equal.IsCreated || !encode.IsCreated || !decode.IsCreated || !textEqual.IsCreated || !ascii.IsCreated) return false;
+            if (!equal.IsCreated || !encode.IsCreated || !decode.IsCreated || !textEqual.IsCreated || !ascii.IsCreated)
+                return false;
             table.Equal = (delegate* unmanaged[Cdecl]<byte*, byte*, uint, int>)(void*)equal.Value;
             table.Utf8Encode = (delegate* unmanaged[Cdecl]<char*, int, byte*, int, int*, int*, uint, int>)(void*)encode.Value;
             table.Utf8Decode = (delegate* unmanaged[Cdecl]<byte*, int, char*, int, int*, int*, uint, int>)(void*)decode.Value;

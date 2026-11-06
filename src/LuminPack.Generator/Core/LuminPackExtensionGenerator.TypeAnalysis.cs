@@ -152,14 +152,21 @@ public static partial class LuminPackExtensionGenerator
         foreach (GenericParameterConstraint constraint in data.GenericConstraints)
         {
             List<string> parts = new List<string>();
-            if (constraint.IsUnmanaged) parts.Add("unmanaged");
-            if (constraint.IsClass) parts.Add("class");
-            if (constraint.IsStruct) parts.Add("struct");
-            if (constraint.IsNotNull) parts.Add("notnull");
+            if (constraint.IsUnmanaged)
+                parts.Add("unmanaged");
+            if (constraint.IsClass)
+                parts.Add("class");
+            if (constraint.IsStruct)
+                parts.Add("struct");
+            if (constraint.IsNotNull)
+                parts.Add("notnull");
             parts.AddRange(constraint.Constraints);
-            if (constraint.HasNewConstructor) parts.Add("new()");
-            if (constraint.HasDefault) parts.Add("default");
-            if (parts.Count > 0) sb.AppendLine("            where " + constraint.ParameterName + " : " + string.Join(", ", parts));
+            if (constraint.HasNewConstructor)
+                parts.Add("new()");
+            if (constraint.HasDefault)
+                parts.Add("default");
+            if (parts.Count > 0)
+                sb.AppendLine("            where " + constraint.ParameterName + " : " + string.Join(", ", parts));
         }
     }
 

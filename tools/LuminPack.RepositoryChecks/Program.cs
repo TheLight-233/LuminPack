@@ -68,6 +68,8 @@ internal static class RepositoryStandards
                         CheckDocumentation(method, relative, failures);
                     }
 
+                    if (relative.StartsWith("src" + Path.DirectorySeparatorChar, StringComparison.Ordinal) && !IsProjectedSource(relative))
+                        CheckSourceStyle(syntax, relative, failures);
                     if (relative.StartsWith("src" + Path.DirectorySeparatorChar, StringComparison.Ordinal) && Path.GetFileName(file) != "LuminPackExceptionHelper.cs")
                     {
                         foreach (var token in syntax.DescendantTokens().Where(token => token.IsKind(SyntaxKind.ThrowKeyword)))
@@ -83,6 +85,58 @@ internal static class RepositoryStandards
         Console.WriteLine($"Checked {methods} method declarations in {files} C# files across .NET Standard, modern .NET, and Unity branches; {failures.Count} violation(s).");
         return failures.Count == 0 ? 0 : 1;
     }
+
+    /// <summary>Rejects reserved identifiers and statements or members that share a line.</summary>
+    /// <param name="syntax">The parsed source for one symbol configuration.</param>
+    /// <param name="file">The repository-relative diagnostic path.</param>
+    /// <param name="failures">The collection receiving standards violations.</param>
+    private static void CheckSourceStyle(SyntaxNode syntax, string file, ISet<string> failures)
+    {
+        static int Line(SyntaxNodeOrToken item, bool end) => end
+            ? item.GetLocation()!.GetLineSpan().EndLinePosition.Line
+            : item.GetLocation()!.GetLineSpan().StartLinePosition.Line;
+
+        // The C# specification reserves identifiers containing two consecutive underscores for the implementation.
+        foreach (var token in syntax.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken) && token.ValueText.Contains("__", StringComparison.Ordinal)))
+        {
+            if (token.ValueText is not ("__PInvoke" or "__pMTa_native" or "__pMTb_native"))
+                failures.Add($"{file}:{Line(token, false) + 1}: Identifier {token.ValueText} contains a reserved double underscore.");
+        }
+
+        // ChaCha20 and Poly1305 keep their rounds on one line each, matching how the published algorithms are written.
+        bool rounds = Path.GetFileName(file) is "ChaCha20.cs" or "Poly1305.cs";
+        foreach (var node in syntax.DescendantNodes())
+        {
+            StatementSyntax? embedded = node switch
+            {
+                IfStatementSyntax statement => statement.Statement,
+                ElseClauseSyntax { Statement: not IfStatementSyntax } clause => clause.Statement,
+                ForStatementSyntax statement => statement.Statement,
+                CommonForEachStatementSyntax statement => statement.Statement,
+                WhileStatementSyntax statement => statement.Statement,
+                _ => null
+            };
+            if (embedded is not (null or BlockSyntax or EmptyStatementSyntax) && Line(embedded.GetFirstToken().GetPreviousToken(), false) == Line(embedded, false))
+                failures.Add($"{file}:{Line(embedded, false) + 1}: Put the embedded statement on its own line.");
+
+            SyntaxList<StatementSyntax> statements = node switch
+            {
+                BlockSyntax block when !rounds => block.Statements,
+                SwitchSectionSyntax section => section.Statements,
+                _ => default
+            };
+            for (int i = 1; i < statements.Count; i++)
+            {
+                if (Line(statements[i - 1], true) == Line(statements[i], false))
+                    failures.Add($"{file}:{Line(statements[i], false) + 1}: Put one statement on each line.");
+            }
+        }
+    }
+
+    /// <summary>Recognizes checked-in files whose text belongs to a generator rather than to their maintainers.</summary>
+    /// <param name="file">The repository-relative path.</param>
+    /// <returns>Whether the file is generated output.</returns>
+    private static bool IsProjectedSource(string file) => file.EndsWith(".g.cs", StringComparison.Ordinal);
 
     /// <summary>Checks XML syntax and documentation coverage for one active method declaration.</summary>
     /// <param name="method">The declaration to inspect.</param>

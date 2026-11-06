@@ -31,7 +31,8 @@ namespace LuminPack.Burst
             var narrow = BurstCompiler.CompileFunctionPointer<NarrowLatin1Function>(Latin1NarrowRoot);
             var widen = BurstCompiler.CompileFunctionPointer<WidenLatin1Function>(Latin1WidenRoot);
             var equal = BurstCompiler.CompileFunctionPointer<Latin1EqualFunction>(Latin1EqualRoot);
-            if (!check.IsCreated || !narrow.IsCreated || !widen.IsCreated || !equal.IsCreated) return false;
+            if (!check.IsCreated || !narrow.IsCreated || !widen.IsCreated || !equal.IsCreated)
+                return false;
             table.IsLatin1 = (delegate* unmanaged[Cdecl]<char*, int, int>)(void*)check.Value;
             table.NarrowLatin1 = (delegate* unmanaged[Cdecl]<char*, byte*, int, int>)(void*)narrow.Value;
             table.WidenLatin1 = (delegate* unmanaged[Cdecl]<byte*, char*, int, void>)(void*)widen.Value;

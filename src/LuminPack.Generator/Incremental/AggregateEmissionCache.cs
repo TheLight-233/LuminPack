@@ -72,8 +72,10 @@ internal sealed class AggregateEmissionCache
     /// <param name="result">Successfully completed aggregate output.</param>
     internal void Complete(AggregateEmissionInput input, FrozenAggregateResult result)
     {
-        if (input.Dependencies?.Key == null) return;
-        lock (_gate) _previous = new Entry(input.Dependencies, input.Trees, input.Version, result);
+        if (input.Dependencies?.Key == null)
+            return;
+        lock (_gate)
+            _previous = new Entry(input.Dependencies, input.Trees, input.Version, result);
     }
 
     /// <summary>Encodes complete ordered semantic projections, declining unsupported type shapes.</summary>
@@ -88,18 +90,24 @@ internal sealed class AggregateEmissionCache
     {
         var factory = new StableTypeIdentityFactory(compilation);
         var key = new StringBuilder().Append(usesLuminPack).Append('|');
-        if (!AppendTypes(key, factory, analysis.FormatterTypes)) return null;
+        if (!AppendTypes(key, factory, analysis.FormatterTypes))
+            return null;
         foreach (var type in analysis.FormatterTypes)
         {
             var owner = analysis.GetOwner(type);
-            if (owner == null) key.Append("0:");
-            else if (!AppendTypes(key, factory, new[] { owner })) return null;
+            if (owner == null)
+                key.Append("0:");
+            else if (!AppendTypes(key, factory, new[] { owner }))
+                return null;
         }
-        if (!AppendTypes(key, factory, custom)) return null;
+        if (!AppendTypes(key, factory, custom))
+            return null;
         key.Append(reachability == null).Append('|');
         if (reachability != null && (!AppendTypes(key, factory, reachability.EmittedTypes) ||
-            !AppendTypes(key, factory, reachability.ReachableNoOwnerTypes))) return null;
-        if (reachability?.ApiUsage != null) key.Append(reachability.ApiUsage.Key);
+            !AppendTypes(key, factory, reachability.ReachableNoOwnerTypes)))
+            return null;
+        if (reachability?.ApiUsage != null)
+            key.Append(reachability.ApiUsage.Key);
         return key.ToString();
     }
 
@@ -113,7 +121,8 @@ internal sealed class AggregateEmissionCache
         foreach (var type in types)
         {
             var identity = factory.Create(type);
-            if (identity == null) return false;
+            if (identity == null)
+                return false;
             key.Append(identity.Key.Length).Append(':').Append(identity.Key);
         }
         key.Append('|');
@@ -134,7 +143,11 @@ internal sealed class AggregateEmissionCache
         /// <param name="version">The immutable prepared version identity.</param>
         /// <param name="result">Exact completed output.</param>
         internal Entry(Guard dependencies, SyntaxTree[] trees, object version, FrozenAggregateResult result)
-        { Dependencies = dependencies; Trees = trees; Version = version; Result = result; }
+        {
+            Dependencies = dependencies;
+            Trees = trees;
+            Version = version;
+            Result = result; }
     }
 
     /// <summary>Compares aggregate semantic projections without retaining compilation or symbols.</summary>

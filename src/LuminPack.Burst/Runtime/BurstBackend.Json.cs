@@ -28,7 +28,8 @@ namespace LuminPack.Burst
         {
             var utf8 = BurstCompiler.CompileFunctionPointer<JsonUtf8Function>(Json8Root);
             var utf16 = BurstCompiler.CompileFunctionPointer<JsonUtf16Function>(Json16Root);
-            if (!utf8.IsCreated || !utf16.IsCreated) return false;
+            if (!utf8.IsCreated || !utf16.IsCreated)
+                return false;
             table.JsonArrayHintUtf8 = (delegate* unmanaged[Cdecl]<byte*, int, uint, int>)(void*)utf8.Value;
             table.JsonArrayHintUtf16 = (delegate* unmanaged[Cdecl]<char*, int, uint, int>)(void*)utf16.Value;
             return true;

@@ -43,16 +43,20 @@ namespace LuminPack.Core
                     if (value < 100UL)
                         return value < 10UL ? 1 : 2;
 
-                    if (value < 1_000UL) return 3;
-                    if (value < 10_000UL) return 4;
+                    if (value < 1_000UL)
+                        return 3;
+                    if (value < 10_000UL)
+                        return 4;
                     return 5;
                 }
 
                 if (value < 10_000_000UL)
                     return value < 1_000_000UL ? 6 : 7;
 
-                if (value < 100_000_000UL) return 8;
-                if (value < 1_000_000_000UL) return 9;
+                if (value < 100_000_000UL)
+                    return 8;
+                if (value < 1_000_000_000UL)
+                    return 9;
                 return 10;
             }
 
@@ -61,8 +65,10 @@ namespace LuminPack.Core
                 if (value < 1_000_000_000_000UL)
                     return value < 100_000_000_000UL ? 11 : 12;
 
-                if (value < 10_000_000_000_000UL) return 13;
-                if (value < 100_000_000_000_000UL) return 14;
+                if (value < 10_000_000_000_000UL)
+                    return 13;
+                if (value < 100_000_000_000_000UL)
+                    return 14;
                 return 15;
             }
 

@@ -66,19 +66,24 @@ internal sealed class TypeEmissionCache
         var lookup = Lookup(type, compilation, metadata, tier, outputVariant);
         if (lookup.Previous != null)
         {
-            if (serializerFragment == true) Interlocked.Increment(ref IncrementalGenerationMetrics.SerializerFragmentCacheHits);
-            else if (serializerFragment == false) Interlocked.Increment(ref IncrementalGenerationMetrics.PackableCacheHits);
+            if (serializerFragment == true)
+                Interlocked.Increment(ref IncrementalGenerationMetrics.SerializerFragmentCacheHits);
+            else if (serializerFragment == false)
+                Interlocked.Increment(ref IncrementalGenerationMetrics.PackableCacheHits);
             return (T)lookup.Previous.Emission;
         }
-        if (serializerFragment == true) Interlocked.Increment(ref IncrementalGenerationMetrics.SerializerFragmentBuilds);
-        else if (serializerFragment == false) Interlocked.Increment(ref IncrementalGenerationMetrics.PackableModelBuilds);
+        if (serializerFragment == true)
+            Interlocked.Increment(ref IncrementalGenerationMetrics.SerializerFragmentBuilds);
+        else if (serializerFragment == false)
+            Interlocked.Increment(ref IncrementalGenerationMetrics.PackableModelBuilds);
         var emission = build();
         var dependencies = lookup.Facts.Dependencies(type, compilation, lookup.Union, out bool dependsOnUnion);
         var entry = new Entry(lookup.Facts.ProjectGuard, metadata, tier, lookup.DependencyGuard, dependencies, emission, version ?? new object(),
             dependsOnUnion ? lookup.Facts.UnionUniverse : null);
         lock (_gate)
         {
-            if (_latestProjectIdentity == lookup.Facts.Identity) _entries[lookup.Name] = entry;
+            if (_latestProjectIdentity == lookup.Facts.Identity)
+                _entries[lookup.Name] = entry;
         }
         return emission;
     }
@@ -98,7 +103,8 @@ internal sealed class TypeEmissionCache
         bool union = type.IsAbstract || type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() is
             LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or "System.Runtime.CompilerServices.UnionAttribute");
         string dependencyGuard = owned + (union ? "\nunion:" + facts.UnionUniverse : string.Empty);
-        if (outputVariant != null) dependencyGuard += "\noutput-variant:" + outputVariant;
+        if (outputVariant != null)
+            dependencyGuard += "\noutput-variant:" + outputVariant;
         if (tier == LuminPackGenerationTier.Minimal)
             dependencyGuard += "\nminimal-emitted:" + ReachabilityAnalysisCache.GetOrCreate(compilation, tier).ShouldEmitPackable(type);
         lock (_gate)
@@ -135,7 +141,11 @@ internal sealed class TypeEmissionCache
         /// <param name="previous">A valid completed entry, when available.</param>
         internal CacheLookup(CompilationFacts facts, string name, string dependencyGuard, bool union, Entry previous)
         {
-            Facts = facts; Name = name; DependencyGuard = dependencyGuard; Union = union; Previous = previous;
+            Facts = facts;
+            Name = name;
+            DependencyGuard = dependencyGuard;
+            Union = union;
+            Previous = previous;
         }
     }
 
@@ -183,7 +193,8 @@ internal sealed class TypeEmissionCache
         internal bool Matches(Compilation compilation, CompilationFacts facts, MetaInfo metadata, LuminPackGenerationTier tier, string dependencyGuard)
         {
             if (!facts.MatchesProject(_projectGuard) || !MetaInfoValueComparer.Instance.Equals(_metadata, metadata) ||
-                _tier != tier || _dependencyGuard != dependencyGuard || _unionUniverse != null && _unionUniverse != facts.UnionUniverse) return false;
+                _tier != tier || _dependencyGuard != dependencyGuard || _unionUniverse != null && _unionUniverse != facts.UnionUniverse)
+                return false;
             return _trees.All(compilation.ContainsSyntaxTree);
         }
     }
@@ -206,7 +217,8 @@ internal sealed class TypeEmissionCache
         /// <returns>Whether all settings and global lookup facts are still equivalent.</returns>
         internal bool MatchesProject(object previous)
         {
-            if (ReferenceEquals(previous, ProjectGuard)) return true;
+            if (ReferenceEquals(previous, ProjectGuard))
+                return true;
             lock (_priorGuards)
             {
                 if (!_priorGuards.TryGetValue(previous, out bool equal))
@@ -226,10 +238,13 @@ internal sealed class TypeEmissionCache
             {
                 identity.Append(tree.FilePath.Length).Append(':').Append(tree.FilePath).Append('\n');
                 var root = tree.GetCompilationUnitRoot();
-                foreach (var import in root.Usings.Where(directive => directive.GlobalKeyword.RawKind != 0)) identity.Append(import.ToString()).Append('\n');
-                foreach (var attribute in root.AttributeLists) identity.Append(attribute.ToString()).Append('\n');
+                foreach (var import in root.Usings.Where(directive => directive.GlobalKeyword.RawKind != 0))
+                    identity.Append(import.ToString()).Append('\n');
+                foreach (var attribute in root.AttributeLists)
+                    identity.Append(attribute.ToString()).Append('\n');
             }
-            foreach (var attribute in compilation.Assembly.GetAttributes()) identity.Append(attribute.ToString()).Append('\n');
+            foreach (var attribute in compilation.Assembly.GetAttributes())
+                identity.Append(attribute.ToString()).Append('\n');
             foreach (var declaration in analysis.DeclaredTypes)
                 identity.Append(declaration.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append('\n');
             Identity = identity.ToString();
@@ -238,9 +253,11 @@ internal sealed class TypeEmissionCache
             foreach (var type in analysis.FormatterTypes)
             {
                 var owner = analysis.GetOwner(type);
-                if (owner == null) continue;
+                if (owner == null)
+                    continue;
                 string name = owner.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                if (!ownership.TryGetValue(name, out var owned)) ownership.Add(name, owned = new List<string>());
+                if (!ownership.TryGetValue(name, out var owned))
+                    ownership.Add(name, owned = new List<string>());
                 owned.Add(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
             }
             Ownership = ownership.ToDictionary(pair => pair.Key, pair => string.Join("\n", pair.Value.OrderBy(value => value, StringComparer.Ordinal)), StringComparer.Ordinal);
@@ -260,8 +277,10 @@ internal sealed class TypeEmissionCache
         {
             var closures = union ? _unionClosures : _closures;
             DependencyClosure closure;
-            lock (closures) closures.TryGetValue(root, out closure);
-            if (closure != null) Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
+            lock (closures)
+                closures.TryGetValue(root, out closure);
+            if (closure != null)
+                Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
             else
             {
                 // Fragments are built in parallel, so the walk runs outside the lock; it is deterministic, and a concurrent
@@ -274,7 +293,8 @@ internal sealed class TypeEmissionCache
                         closures.Add(root, closure = new DependencyClosure(trees, nestedUnion));
                         Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyBuilds);
                     }
-                    else Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
+                    else
+                        Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
                 }
             }
             dependsOnUnion = closure.DependsOnUnion;
@@ -301,24 +321,39 @@ internal sealed class TypeEmissionCache
                     bool related = candidate.AllInterfaces.Any(@interface => SymbolEqualityComparer.Default.Equals(@interface.OriginalDefinition, root.OriginalDefinition));
                     for (var parent = candidate.BaseType; parent != null && !related; parent = parent.BaseType)
                         related = SymbolEqualityComparer.Default.Equals(parent.OriginalDefinition, root.OriginalDefinition);
-                    if (related) pending.Push(candidate);
+                    if (related)
+                        pending.Push(candidate);
                 }
             }
             while (pending.Count != 0)
             {
                 var type = pending.Pop();
-                if (!visited.Add(type)) continue;
-                if (type is IArrayTypeSymbol array) { pending.Push(array.ElementType); continue; }
-                if (type is IPointerTypeSymbol pointer) { pending.Push(pointer.PointedAtType); continue; }
+                if (!visited.Add(type))
+                    continue;
+                if (type is IArrayTypeSymbol array)
+                {
+                    pending.Push(array.ElementType);
+                    continue; }
+                if (type is IPointerTypeSymbol pointer)
+                {
+                    pending.Push(pointer.PointedAtType);
+                    continue; }
                 if (type is ITypeParameterSymbol parameter)
                 {
-                    foreach (var constraint in parameter.ConstraintTypes) pending.Push(constraint);
+                    foreach (var constraint in parameter.ConstraintTypes)
+                        pending.Push(constraint);
                     continue;
                 }
-                if (type is not INamedTypeSymbol named) continue;
-                foreach (var argument in named.TypeArguments) pending.Push(argument);
-                if (!SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition)) { pending.Push(named.OriginalDefinition); continue; }
-                if (named.DeclaringSyntaxReferences.Length == 0) continue;
+                if (type is not INamedTypeSymbol named)
+                    continue;
+                foreach (var argument in named.TypeArguments)
+                    pending.Push(argument);
+                if (!SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition))
+                {
+                    pending.Push(named.OriginalDefinition);
+                    continue; }
+                if (named.DeclaringSyntaxReferences.Length == 0)
+                    continue;
                 // Collection templates and enclosing class bodies now also select the
                 // fixed cursor protocol from their nested Union's complete case graph.
                 if (named.IsAbstract)
@@ -329,22 +364,27 @@ internal sealed class TypeEmissionCache
                         bool related = candidate.AllInterfaces.Any(@interface => SymbolEqualityComparer.Default.Equals(@interface.OriginalDefinition, named));
                         for (var parent = candidate.BaseType; parent != null && !related; parent = parent.BaseType)
                             related = SymbolEqualityComparer.Default.Equals(parent.OriginalDefinition, named);
-                        if (related) pending.Push(candidate);
+                        if (related)
+                            pending.Push(candidate);
                     }
                 }
                 DirectDependencies direct;
-                lock (_direct) _direct.TryGetValue(named, out direct);
+                lock (_direct)
+                    _direct.TryGetValue(named, out direct);
                 if (direct == null)
                 {
                     direct = GetDirectDependencies(named, compilation);
                     lock (_direct)
                     {
-                        if (_direct.TryGetValue(named, out var published)) direct = published;
-                        else _direct.Add(named, direct);
+                        if (_direct.TryGetValue(named, out var published))
+                            direct = published;
+                        else
+                            _direct.Add(named, direct);
                     }
                 }
                 trees.UnionWith(direct.Trees);
-                foreach (var dependency in direct.Types) pending.Push(dependency);
+                foreach (var dependency in direct.Types)
+                    pending.Push(dependency);
             }
             return trees.ToArray();
         }
@@ -356,21 +396,30 @@ internal sealed class TypeEmissionCache
         private static DirectDependencies GetDirectDependencies(INamedTypeSymbol type, Compilation compilation)
         {
             var types = new List<ITypeSymbol>();
-            void Add(ITypeSymbol value) { if (value != null) types.Add(value); }
+            void Add(ITypeSymbol value)
+            {
+                if (value != null)
+                    types.Add(value); }
             void AddConstant(TypedConstant constant)
             {
-                if (constant.Kind == TypedConstantKind.Type) Add(constant.Value as ITypeSymbol);
-                if (constant.Kind == TypedConstantKind.Array && !constant.IsNull) foreach (var value in constant.Values) AddConstant(value);
+                if (constant.Kind == TypedConstantKind.Type)
+                    Add(constant.Value as ITypeSymbol);
+                if (constant.Kind == TypedConstantKind.Array && !constant.IsNull)
+                    foreach (var value in constant.Values)
+                        AddConstant(value);
             }
             void Attributes(ISymbol symbol)
             {
                 foreach (var attribute in symbol.GetAttributes())
                 {
                     Add(attribute.AttributeClass);
-                    foreach (var argument in attribute.ConstructorArguments) AddConstant(argument);
-                    foreach (var argument in attribute.NamedArguments) AddConstant(argument.Value);
+                    foreach (var argument in attribute.ConstructorArguments)
+                        AddConstant(argument);
+                    foreach (var argument in attribute.NamedArguments)
+                        AddConstant(argument.Value);
                     var syntax = attribute.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
-                    if (syntax?.ArgumentList == null) continue;
+                    if (syntax?.ArgumentList == null)
+                        continue;
                     var model = FileSemanticObservationCache.For(compilation).GetSemanticModel(syntax.SyntaxTree);
                     foreach (var identifier in syntax.ArgumentList.DescendantNodes().OfType<IdentifierNameSyntax>())
                     {
@@ -381,21 +430,35 @@ internal sealed class TypeEmissionCache
             }
             Add(type.BaseType);
             Add(type.ContainingType);
-            foreach (var @interface in type.Interfaces) Add(@interface);
-            foreach (var parameter in type.TypeParameters) foreach (var constraint in parameter.ConstraintTypes) Add(constraint);
+            foreach (var @interface in type.Interfaces)
+                Add(@interface);
+            foreach (var parameter in type.TypeParameters)
+                foreach (var constraint in parameter.ConstraintTypes)
+                    Add(constraint);
             Attributes(type);
             foreach (var member in type.GetMembers())
             {
                 Attributes(member);
                 switch (member)
                 {
-                    case IFieldSymbol field: Add(field.Type); break;
-                    case IPropertySymbol property: Add(property.Type); break;
-                    case IEventSymbol @event: Add(@event.Type); break;
+                    case IFieldSymbol field:
+                        Add(field.Type);
+                        break;
+                    case IPropertySymbol property:
+                        Add(property.Type);
+                        break;
+                    case IEventSymbol @event:
+                        Add(@event.Type);
+                        break;
                     case IMethodSymbol method:
                         Add(method.ReturnType);
-                        foreach (var parameter in method.Parameters) { Add(parameter.Type); Attributes(parameter); }
-                        foreach (var parameter in method.TypeParameters) foreach (var constraint in parameter.ConstraintTypes) Add(constraint);
+                        foreach (var parameter in method.Parameters)
+                        {
+                            Add(parameter.Type);
+                            Attributes(parameter); }
+                        foreach (var parameter in method.TypeParameters)
+                            foreach (var constraint in parameter.ConstraintTypes)
+                                Add(constraint);
                         break;
                 }
             }
@@ -413,7 +476,9 @@ internal sealed class TypeEmissionCache
         /// <param name="trees">All declaring source identities read by the traversal.</param>
         /// <param name="dependsOnUnion">Whether candidate membership affects the root.</param>
         internal DependencyClosure(SyntaxTree[] trees, bool dependsOnUnion)
-        { Trees = trees; DependsOnUnion = dependsOnUnion; }
+        {
+            Trees = trees;
+            DependsOnUnion = dependsOnUnion; }
     }
 
     /// <summary>Stores short-lived semantic adjacency only inside the current-compilation context.</summary>
@@ -425,6 +490,9 @@ internal sealed class TypeEmissionCache
         /// <summary>Captures one source type's declaring trees and direct type relationships.</summary>
         /// <param name="trees">The declaring trees.</param>
         /// <param name="types">The directly referenced types.</param>
-        internal DirectDependencies(SyntaxTree[] trees, ITypeSymbol[] types) { Trees = trees; Types = types; }
+        internal DirectDependencies(SyntaxTree[] trees, ITypeSymbol[] types)
+        {
+            Trees = trees;
+            Types = types; }
     }
 }

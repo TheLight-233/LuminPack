@@ -13,7 +13,8 @@ internal static class ImmutableStringSetEmitter
     internal static bool TryGenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb, bool sorted)
     {
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
-        if (element?.SpecialType != SpecialType.System_String) return false;
+        if (element?.SpecialType != SpecialType.System_String)
+            return false;
         string family = sorted ? "ImmutableSortedSet" : "ImmutableHashSet";
         string factory = !sorted && fieldData.CanBuildFrameworkImmutableHashSet ? "CreateFrameworkImmutableHashSet" : "Create" + family;
         string comparer = sorted ? "Comparer" : "EqualityComparer";
@@ -56,7 +57,8 @@ internal static class ImmutableStringSetEmitter
         sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         sb.AppendLine("            static string CandidateFirst(global::System.Collections.Immutable." + family + "<string> candidate)");
         sb.AppendLine("            {");
-        if (sorted) sb.AppendLine("                return candidate.Min!;");
+        if (sorted)
+            sb.AppendLine("                return candidate.Min!;");
         else
         {
             sb.AppendLine("                using var entries = candidate.GetEnumerator();");

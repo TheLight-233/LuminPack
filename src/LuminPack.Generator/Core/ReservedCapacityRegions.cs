@@ -18,7 +18,8 @@ internal sealed class ReservedCapacityRegions : CSharpSyntaxRewriter
     public override SyntaxNode VisitIfStatement(IfStatementSyntax node)
     {
         if (_reserved != 0 && node.Condition is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } &&
-            IsWriter(access) && access.Name.Identifier.ValueText == "TryEnsureCapacity") return Visit(node.Statement);
+            IsWriter(access) && access.Name.Identifier.ValueText == "TryEnsureCapacity")
+            return Visit(node.Statement);
         return base.VisitIfStatement(node);
     }
 
@@ -31,9 +32,11 @@ internal sealed class ReservedCapacityRegions : CSharpSyntaxRewriter
             return Visit(node.Statements.Last());
         int previousMaximum = _guaranteedMaxBytes;
         var guarantee = node.GetAnnotations(BinaryCollectionCapacity.GuaranteedAnnotation).SingleOrDefault();
-        if (guarantee != null) _guaranteedMaxBytes = int.Parse(guarantee.Data, System.Globalization.CultureInfo.InvariantCulture);
+        if (guarantee != null)
+            _guaranteedMaxBytes = int.Parse(guarantee.Data, System.Globalization.CultureInfo.InvariantCulture);
         bool reserved = node.HasAnnotations(BinaryCollectionCapacity.ReservedAnnotation);
-        if (reserved) _reserved++;
+        if (reserved)
+            _reserved++;
         var rewritten = (BlockSyntax)base.VisitBlock(node);
         if (_guaranteedMaxBytes > 0)
         {
@@ -41,7 +44,8 @@ internal sealed class ReservedCapacityRegions : CSharpSyntaxRewriter
             foreach (var statement in rewritten.Statements)
             {
                 statements.Add(statement);
-                if (statement is not LocalDeclarationStatementSyntax declaration) continue;
+                if (statement is not LocalDeclarationStatementSyntax declaration)
+                    continue;
                 foreach (var variable in declaration.Declaration.Variables)
                     if (variable.Initializer?.Value is ObjectCreationExpressionSyntax creation &&
                         creation.HasAnnotations(BinaryCollectionCapacity.WriterConstructionAnnotation))
@@ -49,7 +53,8 @@ internal sealed class ReservedCapacityRegions : CSharpSyntaxRewriter
             }
             rewritten = rewritten.WithStatements(SyntaxFactory.List(statements));
         }
-        if (reserved) _reserved--;
+        if (reserved)
+            _reserved--;
         _guaranteedMaxBytes = previousMaximum;
         return rewritten;
     }
@@ -67,7 +72,8 @@ internal sealed class ReservedCapacityRegions : CSharpSyntaxRewriter
         if (_reserved != 0 && node.Expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } call && IsWriter(access))
         {
             string name = access.Name.Identifier.ValueText;
-            if (name is "EnsureAdditionalCapacity" or "EnsureCollectionCapacity" or "CheckBuffer" or "CompleteReservedRecord") return SyntaxFactory.EmptyStatement().WithTriviaFrom(node);
+            if (name is "EnsureAdditionalCapacity" or "EnsureCollectionCapacity" or "CheckBuffer" or "CompleteReservedRecord")
+                return SyntaxFactory.EmptyStatement().WithTriviaFrom(node);
             if (name == "FlushCurrentIndex")
                 return SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
                     SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, access.Expression, SyntaxFactory.IdentifierName("CurrentIndex")),
@@ -87,12 +93,16 @@ internal sealed class ReservedCapacityRegions : CSharpSyntaxRewriter
             if (name == "WriteStringRecord" && node.ArgumentList.Arguments.Count == 1)
                 node = node.WithArgumentList(node.ArgumentList.AddArguments(SyntaxFactory.Argument(
                     SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression))));
-            if (name == "CheckBuffer" && node.ArgumentList.Arguments.Count == 1) return Visit(node.ArgumentList.Arguments[0].Expression);
-            if (name == "WriteString") node = node.WithExpression(access.WithName(access.Name is GenericNameSyntax generic
+            if (name == "CheckBuffer" && node.ArgumentList.Arguments.Count == 1)
+                return Visit(node.ArgumentList.Arguments[0].Expression);
+            if (name == "WriteString")
+                node = node.WithExpression(access.WithName(access.Name is GenericNameSyntax generic
                 ? generic.WithIdentifier(SyntaxFactory.Identifier("WriteReservedString")) : SyntaxFactory.IdentifierName("WriteReservedString")));
-            if (name == "WriteNullStringHeader") node = node.WithExpression(access.WithName(access.Name is GenericNameSyntax nullProfile
+            if (name == "WriteNullStringHeader")
+                node = node.WithExpression(access.WithName(access.Name is GenericNameSyntax nullProfile
                 ? nullProfile.WithIdentifier(SyntaxFactory.Identifier("WriteReservedNullStringHeader")) : SyntaxFactory.IdentifierName("WriteReservedNullStringHeader")));
-            if (name == "AdvanceSafe") node = node.WithExpression(access.WithName(SyntaxFactory.IdentifierName("Advance")));
+            if (name == "AdvanceSafe")
+                node = node.WithExpression(access.WithName(SyntaxFactory.IdentifierName("Advance")));
         }
         return base.VisitInvocationExpression(node);
     }

@@ -232,8 +232,10 @@ internal static class ReachabilityAnalysisCache
         }
 
         var seeds = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-        if (apiUsage != null) seeds.UnionWith(apiUsage.Roots);
-        if (apiUsage?.RequiresConservativeRoots == true) seeds.UnionWith(analysis.FormatterTypes);
+        if (apiUsage != null)
+            seeds.UnionWith(apiUsage.Roots);
+        if (apiUsage?.RequiresConservativeRoots == true)
+            seeds.UnionWith(analysis.FormatterTypes);
         var pending = new Queue<TypeParamSlot>();
         var visited = new HashSet<TypeParamSlot>();
 
@@ -336,7 +338,8 @@ internal static class ReachabilityAnalysisCache
                 {
                     int previousCount = finalCandidates.Count;
                     ExpandType(compilation, dependency, finalCandidates, analysis);
-                    if (finalCandidates.Count != previousCount) changed = true;
+                    if (finalCandidates.Count != previousCount)
+                        changed = true;
                 }
 
                 foreach (ITypeSymbol ownedType in analysis.FormatterTypes)
@@ -450,14 +453,17 @@ internal static class ReachabilityAnalysisCache
         var seeds = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var pending = new Queue<TypeParamSlot>();
         var visited = new HashSet<TypeParamSlot>();
-        foreach (var payload in payloads) CollectPayload(compilation, payload, seeds, pending);
+        foreach (var payload in payloads)
+            CollectPayload(compilation, payload, seeds, pending);
         while (pending.Count != 0)
         {
             var slot = pending.Dequeue();
-            if (!visited.Add(slot)) continue;
+            if (!visited.Add(slot))
+                continue;
             foreach (var method in invocations)
             {
-                if (method == null || !slot.Matches(method)) continue;
+                if (method == null || !slot.Matches(method))
+                    continue;
                 CollectPayload(compilation, Substitute(compilation, slot.PayloadType, BuildMap(slot, method)), seeds, pending);
             }
         }
@@ -636,7 +642,8 @@ internal static class ReachabilityAnalysisCache
     {
         if (!member.IsGenericType || member.Arity != root.TypeArguments.Length ||
             LuminPackExtensionGenerator.ContainsTypeParameter(root) ||
-            !member.IsUnboundGenericType && !LuminPackExtensionGenerator.ContainsTypeParameter(member)) return member;
+            !member.IsUnboundGenericType && !LuminPackExtensionGenerator.ContainsTypeParameter(member))
+            return member;
         var definition = member.OriginalDefinition;
         for (int index = 0; index < definition.TypeParameters.Length; index++)
         {
@@ -645,14 +652,17 @@ internal static class ReachabilityAnalysisCache
             if (parameter.HasValueTypeConstraint && (!argument.IsValueType || argument.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) ||
                 parameter.HasReferenceTypeConstraint && !argument.IsReferenceType || parameter.HasUnmanagedTypeConstraint && !argument.IsUnmanagedType ||
                 parameter.HasConstructorConstraint && argument is INamedTypeSymbol named && !argument.IsValueType &&
-                (named.IsAbstract || !named.InstanceConstructors.Any(constructor => constructor.Parameters.Length == 0 && constructor.DeclaredAccessibility == Accessibility.Public))) return null;
+                (named.IsAbstract || !named.InstanceConstructors.Any(constructor => constructor.Parameters.Length == 0 && constructor.DeclaredAccessibility == Accessibility.Public)))
+                return null;
         }
         var construction = definition.Construct(root.TypeArguments.ToArray());
         var substitutions = new Dictionary<ITypeParameterSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
-        for (int index = 0; index < definition.TypeParameters.Length; index++) substitutions.Add(definition.TypeParameters[index], root.TypeArguments[index]);
+        for (int index = 0; index < definition.TypeParameters.Length; index++)
+            substitutions.Add(definition.TypeParameters[index], root.TypeArguments[index]);
         for (int index = 0; index < definition.TypeParameters.Length; index++)
             foreach (var constraint in definition.TypeParameters[index].ConstraintTypes)
-                if (!compilation.ClassifyCommonConversion(root.TypeArguments[index], Substitute(compilation, constraint, substitutions)).IsImplicit) return null;
+                if (!compilation.ClassifyCommonConversion(root.TypeArguments[index], Substitute(compilation, constraint, substitutions)).IsImplicit)
+                    return null;
         return construction;
     }
 
@@ -853,7 +863,8 @@ internal static class ReachabilityAnalysisCache
             {
                 continue;
             }
-            if (external) memberType = ReferencedTypeMetadata.ToCurrent(memberType, compilation);
+            if (external)
+                memberType = ReferencedTypeMetadata.ToCurrent(memberType, compilation);
 
             // A member whose type still contains this packable's own type parameters cannot be
             // expanded to a concrete formatter here; the closed construction is reached through the

@@ -48,13 +48,15 @@ public ref struct LuminPackEvaluator
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int GetStringLength(scoped ref string? value)
-    { return GetStringLength<LuminPackDefaultOptions>(ref value); }
+    {
+        return GetStringLength<LuminPackDefaultOptions>(ref value); }
 
     /// <summary>Returns the size of the string header used by the current recording mode.</summary>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int StringRecordLength()
-    { return StringRecordLength<LuminPackDefaultOptions>(); }
+    {
+        return StringRecordLength<LuminPackDefaultOptions>(); }
 
     /// <summary>Calculates the serialized size contribution of string utf8.</summary>
     /// <param name="value">The value consumed or produced by this operation.</param>

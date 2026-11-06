@@ -42,7 +42,8 @@ internal sealed class SequentialFixedProjection : CSharpSyntaxRewriter
                         access.Expression.ToString() is "global::LuminPack.Core.LuminPackWriter" or "global::LuminPack.Core.LuminPackReader" &&
                         access.Name.Identifier.ValueText is "Write" or "Read" && candidate.ArgumentList.Arguments.Count > 2 &&
                         candidate.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword));
-                if (call == null) break;
+                if (call == null)
+                    break;
                 var selected = (MemberAccessExpressionSyntax)call.Expression;
                 string identity = "__fixed" + _next++;
                 string reference = identity + "Reference", length = identity + "Length";
@@ -68,7 +69,8 @@ internal sealed class SequentialFixedProjection : CSharpSyntaxRewriter
                 }
                 statement = statement.ReplaceNode(call, SyntaxFactory.IdentifierName(length));
             }
-            if (statement != null) statements.Add(statement);
+            if (statement != null)
+                statements.Add(statement);
         }
         return SyntaxFactory.List(statements);
     }

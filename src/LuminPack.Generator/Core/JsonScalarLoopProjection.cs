@@ -23,13 +23,15 @@ internal sealed class JsonScalarLoopProjection : CSharpSyntaxRewriter
                 call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax state, Name: GenericNameSyntax name } &&
                 state.Identifier.ValueText == reader && name.Identifier.ValueText == "Read" && name.TypeArgumentList.Arguments.Count == 2 &&
                 IsFloatingPoint(name.TypeArgumentList.Arguments[0])).ToArray();
-        if (!GeneratedExecutionPolicy.IsolateJsonScalarLoops(node.Body, calls.Length)) return node;
+        if (!GeneratedExecutionPolicy.IsolateJsonScalarLoops(node.Body, calls.Length))
+            return node;
         var names = new HashSet<string>(node.DescendantTokens().Select(token => token.ValueText));
         var replacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
         var helpers = new List<StatementSyntax>();
         string Unique(string proposed)
         {
-            while (!names.Add(proposed)) proposed += "_";
+            while (!names.Add(proposed))
+                proposed += "_";
             return proposed;
         }
         foreach (var group in calls.GroupBy(call => ((MemberAccessExpressionSyntax)call.Expression).Name.ToString()))

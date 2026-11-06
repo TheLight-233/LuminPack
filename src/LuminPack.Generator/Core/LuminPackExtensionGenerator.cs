@@ -50,7 +50,8 @@ public static partial class LuminPackExtensionGenerator
         foreach (string directive in roots.SelectMany(root => root.Usings).Select(directive => directive.ToString()).Distinct(StringComparer.Ordinal))
             builder.AppendLine(directive);
         foreach (var root in roots)
-            foreach (var member in root.Members) builder.AppendLine(member.ToFullString());
+            foreach (var member in root.Members)
+                builder.AppendLine(member.ToFullString());
         return builder.ToString();
     }
 
@@ -227,7 +228,8 @@ public static partial class LuminPackExtensionGenerator
             LuminPackCodeGenerator.GenerateCalculateOffsetCode(data, sb);
         else if (versionWidths != null && versionWidths.All(width => width is int value && value != 255))
         {
-            if (!data.isValueType) sb.AppendLine("            if (value is null) { evaluator += 1; return; }");
+            if (!data.isValueType)
+                sb.AppendLine("            if (value is null) { evaluator += 1; return; }");
             sb.AppendLine("            evaluator += " + data.VersionSchemaType + ".Prefix.Length + " + versionWidths.Sum(width => width.Value) + ";");
         }
         else

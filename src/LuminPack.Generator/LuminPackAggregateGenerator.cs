@@ -53,7 +53,8 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
             .Select((pair, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (pair.Completed != null) return pair.Completed;
+                if (pair.Completed != null)
+                    return pair.Completed;
                 System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.AggregateBuilds);
                 var spc = new AggregateResultBuilder();
                 var compilation = pair.GetCompilation();
@@ -79,15 +80,19 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                         cancellationToken.ThrowIfCancellationRequested();
                         var type = declared.Symbol;
                         if (!LuminPackExtensionGenerator.IsCustomGeneratorType(type) ||
-                            !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)) continue;
+                            !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
+                            continue;
                         var contribution = customRegistration.GetOrBuild(type, compilation, meta,
                             () => FrozenCustomRegistration.Build(type, meta),
                             () => System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.CustomRegistrationCacheHits));
-                        foreach (var diagnostic in contribution.Diagnostics) spc.AddDiagnostic(diagnostic);
+                        foreach (var diagnostic in contribution.Diagnostics)
+                            spc.AddDiagnostic(diagnostic);
                         registrationDiagnostics.AddRange(contribution.RegistrationDiagnostics);
-                        if (!string.IsNullOrEmpty(contribution.Registration)) customBlocks.Add(contribution.Registration);
+                        if (!string.IsNullOrEmpty(contribution.Registration))
+                            customBlocks.Add(contribution.Registration);
                     }
-                    foreach (var diagnostic in registrationDiagnostics) spc.AddDiagnostic(diagnostic);
+                    foreach (var diagnostic in registrationDiagnostics)
+                        spc.AddDiagnostic(diagnostic);
                     if (customBlocks.Count != 0)
                     {
                         bool isUnity = TypeMetaChecker.IsUnityProject(compilation);
@@ -113,22 +118,28 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
 
                     var optionProfiles = new System.Collections.Generic.Dictionary<string, CompiledOptions>(StringComparer.Ordinal);
                     var assemblyProfile = CompiledOptions.Resolve(null, compilation);
-                    if (!assemblyProfile.IsDefault) optionProfiles[assemblyProfile.Identity] = assemblyProfile;
-                    foreach (var diagnostic in CompiledOptions.Validate(compilation.Assembly)) spc.ReportDiagnostic(diagnostic);
+                    if (!assemblyProfile.IsDefault)
+                        optionProfiles[assemblyProfile.Identity] = assemblyProfile;
+                    foreach (var diagnostic in CompiledOptions.Validate(compilation.Assembly))
+                        spc.ReportDiagnostic(diagnostic);
                     foreach (var type in CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypes.Concat(
                         CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes.Select(declaration => (ITypeSymbol)declaration.Symbol)).Distinct<ITypeSymbol>(SymbolEqualityComparer.Default))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         if (type is INamedTypeSymbol portable && !CodeEmitters.PortableStructPlan.IsSupported(portable))
                             spc.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedPortableStorage, type.Locations.FirstOrDefault(), type.ToDisplayString()));
-                        foreach (var diagnostic in CompiledOptions.Validate(type)) spc.ReportDiagnostic(diagnostic);
+                        foreach (var diagnostic in CompiledOptions.Validate(type))
+                            spc.ReportDiagnostic(diagnostic);
                         var profile = CompiledOptions.Resolve(type, compilation);
-                        if (!profile.IsDefault) optionProfiles[profile.Identity] = profile;
+                        if (!profile.IsDefault)
+                            optionProfiles[profile.Identity] = profile;
                         foreach (var member in type.GetMembers().Where(member => member is IFieldSymbol or IPropertySymbol))
                         {
-                            foreach (var diagnostic in CompiledOptions.Validate(member)) spc.ReportDiagnostic(diagnostic);
+                            foreach (var diagnostic in CompiledOptions.Validate(member))
+                                spc.ReportDiagnostic(diagnostic);
                             profile = CompiledOptions.Resolve(member, compilation);
-                            if (!profile.IsDefault) optionProfiles[profile.Identity] = profile;
+                            if (!profile.IsDefault)
+                                optionProfiles[profile.Identity] = profile;
                         }
                     }
                     var optionDeclarations = optionProfiles.Values.SelectMany(profile => profile.Declarations()).GroupBy(pair => pair.Key, StringComparer.Ordinal)

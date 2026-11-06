@@ -453,11 +453,14 @@ public static class InterfaceGroupingEmitter
                 type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T),
             CanGetSequenceStorage = true
         };
-        if (json) sb.AppendLine("            writer.WriteArrayStart();");
+        if (json)
+            sb.AppendLine("            writer.WriteArrayStart();");
         SequenceInterfaceWriteEmitter.Append(sequence, sb, json, storageExpression:
             "global::LuminPack.Code.LuminPackCollectionAccess.GetGroupingStorage(value)");
-        if (json) sb.AppendLine("            writer.WriteArrayEnd();");
-        if (json) sb.AppendLine("            }");
+        if (json)
+            sb.AppendLine("            writer.WriteArrayEnd();");
+        if (json)
+            sb.AppendLine("            }");
     }
 
     /// <summary>Appends JSON reading statements for interface grouping values.</summary>
@@ -606,7 +609,8 @@ internal static class InterfaceCollectionEmitterHelper
     {
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
         if (element?.SpecialType != SpecialType.System_String && !EmitterTypeTraits.UsesOrdinaryObjectHeader(element) &&
-            !EmitterTypeTraits.IsKnownScalar(element)) return;
+            !EmitterTypeTraits.IsKnownScalar(element))
+            return;
         string elementType = GetFirstGeneric(fieldData.TypeName);
         string exact = RuntimeName(element, elementType);
         string list = "global::System.Collections.Generic.List<" + elementType + ">";
@@ -631,8 +635,10 @@ internal static class InterfaceCollectionEmitterHelper
                 TypeName = concrete, TypeSymbol = fieldData.TypeSymbol, Name = fieldData.Name,
                 DeclaringTypeName = fieldData.DeclaringTypeName, IsValue = false
             };
-            if (isList) ListEmitter.GenerateDeserializeCode(field, sb);
-            else ArrayEmitter.GenerateDeserializeCode(field, sb);
+            if (isList)
+                ListEmitter.GenerateDeserializeCode(field, sb);
+            else
+                ArrayEmitter.GenerateDeserializeCode(field, sb);
             sb.AppendLine("            }");
         }
     }
@@ -656,7 +662,8 @@ internal static class InterfaceCollectionEmitterHelper
             var raw = new StringBuilder();
             DictionaryEmitter.AppendRawPair(raw, "item.Key", "item.Value", valueType, "", write: true);
             foreach (var line in raw.ToString().Split('\n'))
-                if (line.Trim().Length != 0) entry.Add(line.Trim());
+                if (line.Trim().Length != 0)
+                    entry.Add(line.Trim());
         }
         else
         {

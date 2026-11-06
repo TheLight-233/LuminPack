@@ -20,7 +20,8 @@ public static partial class StringSerializer
         out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock)
     {
         global::LuminPack.Internal.Utf8Latin1Transcoder.EncodePrefix(source, destination, out charsRead, out bytesWritten);
-        if (charsRead == source.Length) return OperationStatus.Done;
+        if (charsRead == source.Length)
+            return OperationStatus.Done;
         var status = Utf8.FromUtf16(source[charsRead..], destination[bytesWritten..], out int tailChars, out int tailBytes,
             replaceInvalidSequences, isFinalBlock);
         charsRead += tailChars;

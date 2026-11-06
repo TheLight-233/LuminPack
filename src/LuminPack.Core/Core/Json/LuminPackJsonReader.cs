@@ -514,7 +514,8 @@ namespace LuminPack.Core
                     }
                     kinds = next;
                 }
-                else Array.Resize(ref kinds, size);
+                else
+                    Array.Resize(ref kinds, size);
                 DeepContainerKinds = kinds;
             }
 
@@ -824,7 +825,8 @@ namespace LuminPack.Core
                 {
                     ref byte current = ref Unsafe.Add(ref first, count);
                     byte value = current;
-                    if (!IsJsonWhitespace(value)) break;
+                    if (!IsJsonWhitespace(value))
+                        break;
                     if (count >= 32)
                     {
                         count += CountWhitespaceTail(Buffer.Slice(Position + count));
@@ -839,7 +841,8 @@ namespace LuminPack.Core
                 {
                     ref byte current = ref Unsafe.Add(ref first, count);
                     char value = Unsafe.ReadUnaligned<char>(ref current);
-                    if (!IsJsonWhitespace(value)) break;
+                    if (!IsJsonWhitespace(value))
+                        break;
                     if (count >= 64)
                     {
                         count += CountWhitespaceTail(MemoryMarshal.Cast<byte, char>(Buffer.Slice(Position + count))) * 2;
@@ -852,7 +855,8 @@ namespace LuminPack.Core
                         count += 2;
                 }
             }
-            if (count != 0) Advance(count);
+            if (count != 0)
+                Advance(count);
 #else
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
             {
@@ -903,8 +907,10 @@ namespace LuminPack.Core
         private static int CountWhitespaceTail(ReadOnlySpan<byte> tail)
         {
             int spaces = tail.IndexOfAnyExcept((byte)' ');
-            if (spaces < 0) return tail.Length;
-            if (!IsJsonWhitespace(tail[spaces])) return spaces;
+            if (spaces < 0)
+                return tail.Length;
+            if (!IsJsonWhitespace(tail[spaces]))
+                return spaces;
             int other = tail.Slice(spaces).IndexOfAnyExcept(" \t\r\n"u8);
             return other < 0 ? tail.Length : spaces + other;
         }
@@ -916,8 +922,10 @@ namespace LuminPack.Core
         private static int CountWhitespaceTail(ReadOnlySpan<char> tail)
         {
             int spaces = tail.IndexOfAnyExcept(' ');
-            if (spaces < 0) return tail.Length;
-            if (!IsJsonWhitespace(tail[spaces])) return spaces;
+            if (spaces < 0)
+                return tail.Length;
+            if (!IsJsonWhitespace(tail[spaces]))
+                return spaces;
             int other = tail.Slice(spaces).IndexOfAnyExcept(" \t\r\n".AsSpan());
             return other < 0 ? tail.Length : spaces + other;
         }
@@ -1828,7 +1836,8 @@ namespace LuminPack.Core
             SkipWhitespace<TOptions>();
             if (!TryReadEntryScalar<TOptions, TKey>(out TKey parsedKey))
             {
-                if (typeof(TKey) == typeof(int)) Position = start;
+                if (typeof(TKey) == typeof(int))
+                    Position = start;
                 CurrentTokenType = JsonTokenType.ArrayStart;
                 ReadEntryTokens<TOptions, TKey, TValue>(ref key, ref value);
                 return true;
@@ -1845,7 +1854,8 @@ namespace LuminPack.Core
             int valueStart = typeof(TValue) == typeof(int) ? Position : 0;
             if (!TryReadEntryScalar<TOptions, TValue>(out TValue parsedValue))
             {
-                if (typeof(TValue) == typeof(int)) Position = valueStart;
+                if (typeof(TValue) == typeof(int))
+                    Position = valueStart;
                 key = parsedKey;
                 FinishEntryAfterKey<TOptions, TValue>(ref value);
                 return true;
@@ -3284,7 +3294,8 @@ namespace LuminPack.Core
             }
             finally
             {
-                if (rented is not null) ArrayPool<char>.Shared.Return(rented);
+                if (rented is not null)
+                    ArrayPool<char>.Shared.Return(rented);
             }
         }
 
@@ -3299,21 +3310,27 @@ namespace LuminPack.Core
             if (text.Length > 20_000)
                 goto Fallback;
             int start = 0, end = text.Length;
-            while (end != 0 && text[end - 1] == '\0') end--;
-            while (start < end && (text[start] == ' ' || (uint)(text[start] - '\t') <= 4)) start++;
-            while (end > start && (text[end - 1] == ' ' || (uint)(text[end - 1] - '\t') <= 4)) end--;
+            while (end != 0 && text[end - 1] == '\0')
+                end--;
+            while (start < end && (text[start] == ' ' || (uint)(text[start] - '\t') <= 4))
+                start++;
+            while (end > start && (text[end - 1] == ' ' || (uint)(text[end - 1] - '\t') <= 4))
+                end--;
             bool negative = start < end && text[start] == '-';
-            if (start < end && (negative || text[start] == '+')) start++;
+            if (start < end && (negative || text[start] == '+'))
+                start++;
             if (start == end)
                 goto Fallback;
             for (int i = start; i < end; i++)
                 if ((uint)(text[i] - '0') > 9)
                     goto Fallback;
-            while (start < end && text[start] == '0') start++;
+            while (start < end && text[start] == '0')
+                start++;
             if (end - start <= 18)
             {
                 long small = 0;
-                for (int i = start; i < end; i++) small = small * 10 + text[i] - '0';
+                for (int i = start; i < end; i++)
+                    small = small * 10 + text[i] - '0';
                 return new System.Numerics.BigInteger(negative ? -small : small);
             }
             int capacity = (end - start + 8) / 9;
@@ -3338,17 +3355,20 @@ namespace LuminPack.Core
                         words[i] = (uint)expanded;
                         carry = expanded >> 32;
                     }
-                    if (carry != 0) words[used++] = (uint)carry;
+                    if (carry != 0)
+                        words[used++] = (uint)carry;
                 }
                 words = words.Slice(0, used);
                 if (!BitConverter.IsLittleEndian)
-                    for (int i = 0; i < used; i++) words[i] = System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(words[i]);
+                    for (int i = 0; i < used; i++)
+                        words[i] = System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(words[i]);
                 var magnitude = new System.Numerics.BigInteger(MemoryMarshal.AsBytes(words), isUnsigned: true);
                 return negative ? -magnitude : magnitude;
             }
             finally
             {
-                if (rented is not null) ArrayPool<uint>.Shared.Return(rented);
+                if (rented is not null)
+                    ArrayPool<uint>.Shared.Return(rented);
             }
         Fallback:
             return System.Numerics.BigInteger.Parse(text, provider: System.Globalization.CultureInfo.InvariantCulture);
@@ -3425,7 +3445,8 @@ namespace LuminPack.Core
         private Version? ReadVersionValue<TOptions>() where TOptions : struct, ILuminPackOptions
         {
 #if NET10_0_OR_GREATER
-            if (CurrentTokenType == JsonTokenType.String) goto SelectedString;
+            if (CurrentTokenType == JsonTokenType.String)
+                goto SelectedString;
 #endif
             if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
                 LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
@@ -3479,7 +3500,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void ReadStringBuilder<TOptions>(ref StringBuilder? value) where TOptions : struct, ILuminPackOptions
         {
-            if (CurrentTokenType == JsonTokenType.String) goto SelectedString;
+            if (CurrentTokenType == JsonTokenType.String)
+                goto SelectedString;
             if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
                 LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
             if (CurrentTokenType == JsonTokenType.Null)
@@ -3753,7 +3775,8 @@ namespace LuminPack.Core
                     {
                         var remaining = source.Slice(sourceIndex);
                         int runLength = remaining.IndexOfAny(NumberCharLookup.StringSpecialBytes);
-                        if (runLength < 0) runLength = remaining.Length;
+                        if (runLength < 0)
+                            runLength = remaining.Length;
                         // Public scratch can alias the input, so keep overlap-safe copying.
                         remaining.Slice(0, runLength).CopyTo(destination.Slice(destinationIndex));
                         sourceIndex += runLength;
@@ -3862,7 +3885,8 @@ namespace LuminPack.Core
                     {
                         var remaining = source.Slice(sourceIndex);
                         int runLength = remaining.IndexOfAny(NumberCharLookup.StringSpecialChars);
-                        if (runLength < 0) runLength = remaining.Length;
+                        if (runLength < 0)
+                            runLength = remaining.Length;
                         // Public scratch can alias the input, so keep overlap-safe copying.
                         remaining.Slice(0, runLength).CopyTo(destination.Slice(destinationIndex));
                         sourceIndex += runLength;
@@ -4006,7 +4030,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool CanParseShortFloatingPointUtf8(ReadOnlySpan<byte> span)
         {
-            if ((uint)(span.Length - 1) >= 19u) return false;
+            if ((uint)(span.Length - 1) >= 19u)
+                return false;
             int exponent = span.IndexOfAny((byte)'e', (byte)'E');
             return span[exponent < 0 ? span.Length - 1 : exponent - 1] != (byte)'0';
         }
@@ -4036,12 +4061,14 @@ namespace LuminPack.Core
             try
             {
                 // Numeric scanning has already validated the complete ASCII token.
-                for (int i = 0; i < span.Length; i++) chars[i] = (char)span[i];
+                for (int i = 0; i < span.Length; i++)
+                    chars[i] = (char)span[i];
                 return FallbackParseFloatUtf16(chars.Slice(0, span.Length));
             }
             finally
             {
-                if (rented != null) ArrayPool<char>.Shared.Return(rented);
+                if (rented != null)
+                    ArrayPool<char>.Shared.Return(rented);
             }
 #endif
         }
@@ -4082,12 +4109,14 @@ namespace LuminPack.Core
             Span<char> chars = span.Length <= 256 ? stackalloc char[span.Length] : (rented = ArrayPool<char>.Shared.Rent(span.Length));
             try
             {
-                for (int i = 0; i < span.Length; i++) chars[i] = (char)span[i];
+                for (int i = 0; i < span.Length; i++)
+                    chars[i] = (char)span[i];
                 return FallbackParseDoubleUtf16(chars.Slice(0, span.Length));
             }
             finally
             {
-                if (rented != null) ArrayPool<char>.Shared.Return(rented);
+                if (rented != null)
+                    ArrayPool<char>.Shared.Return(rented);
             }
 #endif
         }
@@ -4521,7 +4550,8 @@ namespace LuminPack.Core
             }
             finally
             {
-                if (scan.DeepContainerKinds is not null) ArrayPool<byte>.Shared.Return(scan.DeepContainerKinds);
+                if (scan.DeepContainerKinds is not null)
+                    ArrayPool<byte>.Shared.Return(scan.DeepContainerKinds);
             }
         }
 

@@ -40,7 +40,8 @@ public static unsafe partial class StringSerializer
     internal static bool IsLatin1(string value)
     {
 #if NETSTANDARD2_1
-        if (LuminPackBurst.TryIsLatin1(value.AsSpan(), out bool latin1)) return latin1;
+        if (LuminPackBurst.TryIsLatin1(value.AsSpan(), out bool latin1))
+            return latin1;
 #endif
         int length = value.Length;
         return IsLatin1Range(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value.AsSpan())), length);
@@ -53,7 +54,8 @@ public static unsafe partial class StringSerializer
     internal static bool IsLatin1(ReadOnlySpan<char> value)
     {
 #if NETSTANDARD2_1
-        if (LuminPackBurst.TryIsLatin1(value, out bool latin1)) return latin1;
+        if (LuminPackBurst.TryIsLatin1(value, out bool latin1))
+            return latin1;
 #endif
         return IsLatin1Range(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value)), value.Length);
     }
@@ -220,13 +222,15 @@ public static unsafe partial class StringSerializer
             if (length == 1)
             {
                 ushort first = chars;
-                if (first > 0xFF) return 0;
+                if (first > 0xFF)
+                    return 0;
                 destination = (byte)first;
             }
             else
             {
                 uint pair = LuminPackReader.Read<uint>(ref Unsafe.As<ushort, byte>(ref chars));
-                if ((pair & 0xFF00FF00U) != 0) return 0;
+                if ((pair & 0xFF00FF00U) != 0)
+                    return 0;
                 LuminPackWriter.Write(ref destination, (ushort)(pair | (pair >> 8)));
             }
             return Latin1Header(length);
@@ -305,7 +309,8 @@ public static unsafe partial class StringSerializer
     internal static bool TryNarrowLatin1(ref char source, ref byte destination, int length)
     {
 #if NETSTANDARD2_1
-        if (LuminPackBurst.TryNarrowLatin1(ref source, ref destination, length, out bool narrowed)) return narrowed;
+        if (LuminPackBurst.TryNarrowLatin1(ref source, ref destination, length, out bool narrowed))
+            return narrowed;
 #endif
 #if NET8_0_OR_GREATER
         if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8)
@@ -691,7 +696,8 @@ public static unsafe partial class StringSerializer
         fixed (char* destination = result)
         {
 #if NETSTANDARD2_1
-            if (LuminPackBurst.TryWidenLatin1(ref payload, ref *destination, length)) return result;
+            if (LuminPackBurst.TryWidenLatin1(ref payload, ref *destination, length))
+                return result;
 #endif
             WidenLatin1(ref payload, ref Unsafe.As<char, ushort>(ref *destination), length);
         }
@@ -836,7 +842,8 @@ public static unsafe partial class StringSerializer
     internal static bool MatchesLatin1(ref byte source, string text)
     {
 #if NETSTANDARD2_1
-        if (LuminPackBurst.TryLatin1Equal(ref source, text.AsSpan(), out bool equal)) return equal;
+        if (LuminPackBurst.TryLatin1Equal(ref source, text.AsSpan(), out bool equal))
+            return equal;
 #endif
         int length = text.Length;
         ref ushort chars = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text.AsSpan()));

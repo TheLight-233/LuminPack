@@ -231,7 +231,8 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
             }
 
             chunk = (chunk + 1) & _chunkMask;
-            if (chunk == chunkIndex) break;
+            if (chunk == chunkIndex)
+                break;
         }
 
         value = default;
@@ -282,7 +283,8 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
             }
 
             chunk = (chunk + 1) & _chunkMask;
-            if (chunk == chunkIndex) break;
+            if (chunk == chunkIndex)
+                break;
         }
 
         return ref Unsafe.NullRef<TValue>();
@@ -361,7 +363,8 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
             }
 
             chunk = (chunk + 1) & _chunkMask;
-            if (chunk == startChunk) break;
+            if (chunk == startChunk)
+                break;
         }
 
         Resize();
@@ -449,7 +452,8 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
             }
 
             chunk = (chunk + 1) & _chunkMask;
-            if (chunk == chunkIndex) break;
+            if (chunk == chunkIndex)
+                break;
         }
 
         return false;

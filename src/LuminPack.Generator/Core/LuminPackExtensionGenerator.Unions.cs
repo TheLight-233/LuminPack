@@ -116,9 +116,12 @@ public static partial class LuminPackExtensionGenerator
         for (var current = type; current != null && current.SpecialType != SpecialType.System_Object; current = current.BaseType)
             foreach (var member in current.GetMembers())
             {
-                if (member.IsStatic || member.IsImplicitlyDeclared) continue;
-                if (member is IFieldSymbol field && !field.Type.IsUnmanagedType) return true;
-                if (member is IPropertySymbol { IsIndexer: false } property && !property.Type.IsUnmanagedType) return true;
+                if (member.IsStatic || member.IsImplicitlyDeclared)
+                    continue;
+                if (member is IFieldSymbol field && !field.Type.IsUnmanagedType)
+                    return true;
+                if (member is IPropertySymbol { IsIndexer: false } property && !property.Type.IsUnmanagedType)
+                    return true;
             }
         return false;
     }

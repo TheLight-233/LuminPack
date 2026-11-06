@@ -320,7 +320,8 @@ namespace LuminPack.Code
             // The stack grows downward: a frame at or above an address the runtime already accepted on this thread has at least
             // as much room, so only frames deeper than every accepted one consult the runtime.
             byte probe = 0;
-            if ((nuint)Unsafe.AsPointer(ref probe) < ~s_acceptedStackFloorComplement) EnsureSufficientStackSlow();
+            if ((nuint)Unsafe.AsPointer(ref probe) < ~s_acceptedStackFloorComplement)
+                EnsureSufficientStackSlow();
         }
 
         /// <summary>The complement of the lowest stack address on this thread at which the runtime reported sufficient stack.</summary>
@@ -332,7 +333,8 @@ namespace LuminPack.Code
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static unsafe void EnsureSufficientStackSlow()
         {
-            if (!RuntimeHelpers.TryEnsureSufficientExecutionStack()) ThrowNestingTooDeep();
+            if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
+                ThrowNestingTooDeep();
             byte probe = 0;
             s_acceptedStackFloorComplement = ~(nuint)Unsafe.AsPointer(ref probe);
         }

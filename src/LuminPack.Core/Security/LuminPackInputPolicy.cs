@@ -29,7 +29,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckInput(long bytes, int maximum)
     {
-        if ((ulong)bytes > (uint)maximum) Fail("encoded input");
+        if ((ulong)bytes > (uint)maximum)
+            Fail("encoded input");
     }
 
     /// <summary>Bounds JSON characters before scanning or renting transcoding storage.</summary>
@@ -39,11 +40,14 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckCharacters(ReadOnlySpan<char> input, int encoding, int maximum)
     {
-        if (maximum == int.MaxValue) return;
+        if (maximum == int.MaxValue)
+            return;
         // A UTF-8 encoding needs at most three bytes per UTF-16 code unit; the exact count is needed only near the limit.
         long units = input.Length;
-        if (encoding == 1) CheckInput(units * 2, maximum);
-        else if (units * 3 > maximum) CheckInput(System.Text.Encoding.UTF8.GetByteCount(input), maximum);
+        if (encoding == 1)
+            CheckInput(units * 2, maximum);
+        else if (units * 3 > maximum)
+            CheckInput(System.Text.Encoding.UTF8.GetByteCount(input), maximum);
     }
 
     /// <summary>Reads at most one byte beyond a selected input cap before rejecting an oversized stream.</summary>
@@ -64,7 +68,8 @@ public static class LuminPackInputPolicy
             {
                 int request = (int)Math.Min(block, (long)maximum - total + 1);
                 int read = await input.ReadAsync(buffer, 0, request, cancellationToken).ConfigureAwait(false);
-                if (read == 0) return;
+                if (read == 0)
+                    return;
                 CheckInput((long)total + read, maximum);
                 await output.WriteAsync(buffer, 0, read, cancellationToken).ConfigureAwait(false);
                 total += read;
@@ -84,7 +89,8 @@ public static class LuminPackInputPolicy
     public static byte ReadMarker(ref LuminPackReader reader, byte members)
     {
         byte marker = reader.Read<byte>();
-        if (marker != members && marker != LuminPackCode.NullObject) InvalidMarker(marker);
+        if (marker != members && marker != LuminPackCode.NullObject)
+            InvalidMarker(marker);
         return marker;
     }
 
@@ -99,7 +105,8 @@ public static class LuminPackInputPolicy
         // The member count falls through; null and rejection take the branch.
         if (marker != members)
         {
-            if (marker != LuminPackCode.NullObject) InvalidMarker(marker);
+            if (marker != LuminPackCode.NullObject)
+                InvalidMarker(marker);
             return true;
         }
         return false;
@@ -112,7 +119,8 @@ public static class LuminPackInputPolicy
     public static void ReadStructMarker(ref LuminPackReader reader, byte members)
     {
         byte marker = reader.Read<byte>();
-        if (marker != members) InvalidMarker(marker);
+        if (marker != members)
+            InvalidMarker(marker);
     }
 
     /// <summary>Reads a collection count, rejecting counts above the frozen limit before any allocation.</summary>
@@ -124,7 +132,8 @@ public static class LuminPackInputPolicy
     public static int ReadLength(ref LuminPackReader reader, int minimumElementSize, int maximum)
     {
         int count = reader.ReadLength(minimumElementSize);
-        if (count > maximum) Fail("collection length");
+        if (count > maximum)
+            Fail("collection length");
         return count;
     }
 
@@ -136,7 +145,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckLength<T>(T[]? values, int maximum)
     {
-        if (values is not null && values.Length > maximum) Fail("collection length");
+        if (values is not null && values.Length > maximum)
+            Fail("collection length");
     }
 
     /// <summary>Checks a list decoded by a runtime read kernel against the frozen collection limit.</summary>
@@ -147,7 +157,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckLength<T>(System.Collections.Generic.List<T>? values, int maximum)
     {
-        if (values is not null && values.Count > maximum) Fail("collection length");
+        if (values is not null && values.Count > maximum)
+            Fail("collection length");
     }
 
     /// <summary>Reads a collection head with the frozen collection limit.</summary>
@@ -173,7 +184,8 @@ public static class LuminPackInputPolicy
     public static bool PeekCollectionHeader(ref LuminPackReader reader, out int length, int minimumElementSize, int maximum)
     {
         bool present = reader.PeekCollectionHeader(out length, minimumElementSize);
-        if (length > maximum) Fail("collection length");
+        if (length > maximum)
+            Fail("collection length");
         return present;
     }
 
@@ -188,7 +200,8 @@ public static class LuminPackInputPolicy
     {
         // Every record's characters are bounded by its consumed bytes, so the decoder cannot allocate beyond the input.
         string? value = reader.Read<TOptions>(current);
-        if (value is not null && value.Length > maximum) Fail("string length");
+        if (value is not null && value.Length > maximum)
+            Fail("string length");
         return value;
     }
 
@@ -212,7 +225,8 @@ public static class LuminPackInputPolicy
         {
             string? current = strings[index];
             string? decoded = ReadString<TOptions>(ref reader, current, maximum);
-            if (!ReferenceEquals(current, decoded)) strings[index] = decoded;
+            if (!ReferenceEquals(current, decoded))
+                strings[index] = decoded;
         }
     }
 
@@ -223,7 +237,8 @@ public static class LuminPackInputPolicy
     public static bool ReadBoolean(ref byte source)
     {
         byte value = source;
-        if (value > 1) InvalidBoolean();
+        if (value > 1)
+            InvalidBoolean();
         // The checked storage is already canonical.
         return Unsafe.As<byte, bool>(ref value);
     }
@@ -246,7 +261,8 @@ public static class LuminPackInputPolicy
     public static bool ReadBoolean(ref LuminPackReader reader)
     {
         byte value = reader.Read<byte>();
-        if (value > 1) InvalidBoolean();
+        if (value > 1)
+            InvalidBoolean();
         return Unsafe.As<byte, bool>(ref value);
     }
 
@@ -255,7 +271,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckBoolean(in bool value)
     {
-        if (Unsafe.As<bool, byte>(ref Unsafe.AsRef(in value)) > 1) InvalidBoolean();
+        if (Unsafe.As<bool, byte>(ref Unsafe.AsRef(in value)) > 1)
+            InvalidBoolean();
     }
 
     /// <summary>Checks Boolean elements copied in bulk from input storage.</summary>
@@ -263,7 +280,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckBooleans(ReadOnlySpan<bool> values)
     {
-        if (!AreCanonicalBooleans(MemoryMarshal.AsBytes(values))) InvalidBoolean();
+        if (!AreCanonicalBooleans(MemoryMarshal.AsBytes(values)))
+            InvalidBoolean();
     }
 
     /// <summary>Checks a Boolean array copied in bulk from input storage.</summary>
@@ -271,19 +289,22 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckBooleans(bool[]? values)
     {
-        if (values is not null) CheckBooleans(new ReadOnlySpan<bool>(values));
+        if (values is not null)
+            CheckBooleans(new ReadOnlySpan<bool>(values));
     }
 
     /// <summary>Checks a Boolean list copied in bulk from input storage.</summary>
     /// <param name="values">The copied list, or null.</param>
     public static void CheckBooleans(System.Collections.Generic.List<bool>? values)
     {
-        if (values is null) return;
+        if (values is null)
+            return;
 #if NET8_0_OR_GREATER
         CheckBooleans(CollectionsMarshal.AsSpan(values));
 #else
 
-        foreach (bool value in values) CheckBoolean(value);
+        foreach (bool value in values)
+            CheckBoolean(value);
 #endif
     }
 
@@ -293,7 +314,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void EnterDepth(ref LuminPackReader reader, int maximum)
     {
-        if (++reader.InputDepth > maximum) Fail("nesting depth");
+        if (++reader.InputDepth > maximum)
+            Fail("nesting depth");
     }
 
     /// <summary>Leaves one recursive value after it completed successfully.</summary>
@@ -314,7 +336,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ReadOnlySpan<byte> CheckCompressedCount(ReadOnlySpan<byte> input, int maximum)
     {
-        if (input.Length >= sizeof(int) && Unsafe.ReadUnaligned<int>(ref MemoryMarshal.GetReference(input)) > maximum) Fail("collection");
+        if (input.Length >= sizeof(int) && Unsafe.ReadUnaligned<int>(ref MemoryMarshal.GetReference(input)) > maximum)
+            Fail("collection");
         return input;
     }
 
@@ -325,7 +348,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static T ReadReference<T>(object value)
     {
-        if (value is T typed) return typed;
+        if (value is T typed)
+            return typed;
         InvalidReference();
         return default!;
     }
@@ -348,7 +372,8 @@ public static class LuminPackInputPolicy
         {
             var any = Vector512<byte>.Zero;
             nuint last = (nuint)(uint)(length - 64);
-            for (nuint index = 0; index < last; index += 64) any |= Vector512.LoadUnsafe(ref first, index);
+            for (nuint index = 0; index < last; index += 64)
+                any |= Vector512.LoadUnsafe(ref first, index);
             any |= Vector512.LoadUnsafe(ref first, last);
             return Vector512.EqualsAll(any & Vector512.Create((byte)0xFE), Vector512<byte>.Zero);
         }
@@ -356,7 +381,8 @@ public static class LuminPackInputPolicy
         {
             var any = Vector256<byte>.Zero;
             nuint last = (nuint)(uint)(length - 32);
-            for (nuint index = 0; index < last; index += 32) any |= Vector256.LoadUnsafe(ref first, index);
+            for (nuint index = 0; index < last; index += 32)
+                any |= Vector256.LoadUnsafe(ref first, index);
             any |= Vector256.LoadUnsafe(ref first, last);
             return Vector256.EqualsAll(any & Vector256.Create((byte)0xFE), Vector256<byte>.Zero);
         }
@@ -364,7 +390,8 @@ public static class LuminPackInputPolicy
         {
             var any = Vector128<byte>.Zero;
             nuint last = (nuint)(uint)(length - 16);
-            for (nuint index = 0; index < last; index += 16) any |= Vector128.LoadUnsafe(ref first, index);
+            for (nuint index = 0; index < last; index += 16)
+                any |= Vector128.LoadUnsafe(ref first, index);
             any |= Vector128.LoadUnsafe(ref first, last);
             return Vector128.EqualsAll(any & Vector128.Create((byte)0xFE), Vector128<byte>.Zero);
         }
@@ -372,14 +399,16 @@ public static class LuminPackInputPolicy
         if (length >= 8)
         {
             ulong any = 0;
-            for (int index = 0; index < length - 8; index += 8) any |= BinaryPrimitives.ReadUInt64LittleEndian(bytes.Slice(index, 8));
+            for (int index = 0; index < length - 8; index += 8)
+                any |= BinaryPrimitives.ReadUInt64LittleEndian(bytes.Slice(index, 8));
             any |= BinaryPrimitives.ReadUInt64LittleEndian(bytes.Slice(length - 8, 8));
             return (any & 0xFEFEFEFEFEFEFEFEUL) == 0;
         }
         if (length >= 4)
             return ((BinaryPrimitives.ReadUInt32LittleEndian(bytes) | BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(length - 4, 4))) & 0xFEFEFEFEu) == 0;
         int bits = 0;
-        for (int index = 0; index < length; index++) bits |= Unsafe.Add(ref first, index);
+        for (int index = 0; index < length; index++)
+            bits |= Unsafe.Add(ref first, index);
         return (bits & 0xFE) == 0;
     }
 
@@ -390,7 +419,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void ReadBatch(ref LuminPackReader reader, ref byte destination, int byteCount, int window, ulong mask)
     {
-        if (!reader.ReadCanonicalBatch(ref destination, byteCount, window, mask)) InvalidBoolean();
+        if (!reader.ReadCanonicalBatch(ref destination, byteCount, window, mask))
+            InvalidBoolean();
     }
 
     /// <summary>Reads a fixed field batch whose Boolean input bytes lie in one four-byte window.</summary>
@@ -400,7 +430,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void ReadBatch(ref LuminPackReader reader, ref byte destination, int byteCount, int window, uint mask)
     {
-        if (!reader.ReadCanonicalBatch(ref destination, byteCount, window, mask)) InvalidBoolean();
+        if (!reader.ReadCanonicalBatch(ref destination, byteCount, window, mask))
+            InvalidBoolean();
     }
 
     /// <summary>Reads a Boolean array whose copy validates every element in the same pass.</summary>
@@ -409,7 +440,8 @@ public static class LuminPackInputPolicy
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void ReadBooleans(ref LuminPackReader reader, ref bool[]? value)
     {
-        if (!reader.ReadCanonicalBooleans(ref value)) InvalidBoolean();
+        if (!reader.ReadCanonicalBooleans(ref value))
+            InvalidBoolean();
     }
 
     /// <summary>Copies Boolean storage and reports whether every byte is zero or one.</summary>

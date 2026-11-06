@@ -71,9 +71,11 @@ public static class LuminFieldLayout
     {
         try
         {
-            if (owner is null || owner.IsValueType || owner.IsAbstract || owner.ContainsGenericParameters) return Unavailable;
+            if (owner is null || owner.IsValueType || owner.IsAbstract || owner.ContainsGenericParameters)
+                return Unavailable;
             var field = Find(owner, name);
-            if (field is null) return Unavailable;
+            if (field is null)
+                return Unavailable;
             object instance = CreateProbeObject(owner);
             return Locate(field, instance, ref Data(instance), sentinel);
         }
@@ -95,9 +97,11 @@ public static class LuminFieldLayout
     {
         try
         {
-            if (owner is null || !owner.IsValueType || owner.ContainsGenericParameters) return Unavailable;
+            if (owner is null || !owner.IsValueType || owner.ContainsGenericParameters)
+                return Unavailable;
             var field = Find(owner, name);
-            if (field is null) return Unavailable;
+            if (field is null)
+                return Unavailable;
             // A boxed struct stores the struct's bytes as its instance data.
             object box = RuntimeHelpers.GetUninitializedObject(owner);
             return Locate(field, box, ref Data(box), sentinel);
@@ -115,9 +119,12 @@ public static class LuminFieldLayout
     {
         try
         {
-            if (element is null || element.ContainsGenericParameters) return Unavailable;
-            if (!element.IsValueType) return IntPtr.Size;
-            if (!TryFill(element, null, out object? value)) return Unavailable;
+            if (element is null || element.ContainsGenericParameters)
+                return Unavailable;
+            if (!element.IsValueType)
+                return IntPtr.Size;
+            if (!TryFill(element, null, out object? value))
+                return Unavailable;
             var array = Array.CreateInstance(element, 2);
             array.SetValue(value, 1);
             // Every single-dimensional array stores its elements after the same header, so a byte view finds element zero.
@@ -142,7 +149,8 @@ public static class LuminFieldLayout
         for (var type = owner; type is not null; type = type.BaseType)
         {
             var field = type.GetField(name, InstanceFields);
-            if (field is not null) return field;
+            if (field is not null)
+                return field;
         }
         return null;
     }
@@ -153,8 +161,12 @@ public static class LuminFieldLayout
     /// <returns>The field type, or null.</returns>
     public static Type? FieldType(Type? owner, string name)
     {
-        try { return Find(owner, name)?.FieldType; }
-        catch { return null; }
+        try
+        {
+            return Find(owner, name)?.FieldType; }
+        catch
+        {
+            return null; }
     }
 
     /// <summary>Stores a field with nonzero bytes in a zeroed instance and measures its position.</summary>
@@ -169,13 +181,16 @@ public static class LuminFieldLayout
         if (!type.IsValueType)
         {
             object? reference = sentinel ?? CreateReference(type);
-            if (reference is null) return Unavailable;
+            if (reference is null)
+                return Unavailable;
             field.SetValue(instance, reference);
             // References are pointer aligned and every slot before the field is null.
             for (int offset = 0; ; offset += IntPtr.Size)
-                if (Unsafe.As<byte, nint>(ref Unsafe.Add(ref data, unchecked((nint)(uint)(offset)))) != 0) return offset;
+                if (Unsafe.As<byte, nint>(ref Unsafe.Add(ref data, unchecked((nint)(uint)(offset)))) != 0)
+                    return offset;
         }
-        if (!TryFill(type, sentinel, out object? value)) return Unavailable;
+        if (!TryFill(type, sentinel, out object? value))
+            return Unavailable;
         field.SetValue(instance, value);
         return FirstNonZero(ref data) - FirstNonZero(ref Data(value!));
     }
@@ -186,7 +201,8 @@ public static class LuminFieldLayout
     private static int FirstNonZero(ref byte data)
     {
         for (int offset = 0; ; offset++)
-            if (Unsafe.Add(ref data, unchecked((nint)(uint)(offset))) != 0) return offset;
+            if (Unsafe.Add(ref data, unchecked((nint)(uint)(offset))) != 0)
+                return offset;
     }
 
     /// <summary>Creates a boxed value of a type whose fields have nonzero bytes.</summary>
@@ -201,10 +217,12 @@ public static class LuminFieldLayout
     private static bool TryFill(Type type, object? sentinel, out object? value)
     {
         value = null;
-        if (!BitConverter.IsLittleEndian) return false;
+        if (!BitConverter.IsLittleEndian)
+            return false;
         if (type.IsEnum)
         {
-            if (!TryFill(Enum.GetUnderlyingType(type), null, out var underlying)) return false;
+            if (!TryFill(Enum.GetUnderlyingType(type), null, out var underlying))
+                return false;
             value = Enum.ToObject(type, underlying!);
             return true;
         }
@@ -228,7 +246,8 @@ public static class LuminFieldLayout
             };
             return value is not null;
         }
-        if (!type.IsValueType) return false;
+        if (!type.IsValueType)
+            return false;
         object box = RuntimeHelpers.GetUninitializedObject(type);
         bool filled = false;
         foreach (var field in type.GetFields(InstanceFields))
@@ -236,7 +255,8 @@ public static class LuminFieldLayout
             object? member;
             if (field.FieldType.IsValueType)
             {
-                if (!TryFill(field.FieldType, null, out member)) continue;
+                if (!TryFill(field.FieldType, null, out member))
+                    continue;
             }
             else if ((member = (sentinel is not null && field.FieldType.IsInstanceOfType(sentinel) ? sentinel : CreateReference(field.FieldType))) is null)
                 continue;
@@ -252,14 +272,20 @@ public static class LuminFieldLayout
     /// <returns>The result.</returns>
     private static object? CreateReference(Type type)
     {
-        if (type == typeof(string)) return "\u5A5A";
-        if (type == typeof(object)) return new object();
-        if (type.IsArray) return type.GetArrayRank() == 1 ? Array.CreateInstance(type.GetElementType()!, 0) : null;
-        if (type.ContainsGenericParameters || typeof(Delegate).IsAssignableFrom(type)) return null;
-        if (!type.IsInterface && !type.IsAbstract) return CreateProbeObject(type);
+        if (type == typeof(string))
+            return "\u5A5A";
+        if (type == typeof(object))
+            return new object();
+        if (type.IsArray)
+            return type.GetArrayRank() == 1 ? Array.CreateInstance(type.GetElementType()!, 0) : null;
+        if (type.ContainsGenericParameters || typeof(Delegate).IsAssignableFrom(type))
+            return null;
+        if (!type.IsInterface && !type.IsAbstract)
+            return CreateProbeObject(type);
         // Comparer and list fields of the probed collections are declared as interfaces; a framework instance stands in.
         foreach (var candidate in s_interfaceSentinels)
-            if (type.IsInstanceOfType(candidate)) return candidate;
+            if (type.IsInstanceOfType(candidate))
+                return candidate;
         return null;
     }
 

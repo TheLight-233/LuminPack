@@ -47,7 +47,8 @@ public static class LuminPackCircleReferenceCodeGenerator
         {
             var table = new byte[layout.SlotCount + 1];
             table[0] = (byte)layout.SlotCount;
-            foreach (var (field, width) in pairs) table[field.Order + 1] = (byte)width!.Value;
+            foreach (var (field, width) in pairs)
+                table[field.Order + 1] = (byte)width!.Value;
             layout.Table = table;
         }
         return layout;
@@ -144,7 +145,8 @@ public static class LuminPackCircleReferenceCodeGenerator
     {
         sb.AppendLine($"            writer.WriteObjectHeader({layout.SlotCount});");
         var slots = new string[layout.SlotCount];
-        for (int order = 0; order < layout.SlotCount; order++) slots[order] = "(byte)0";
+        for (int order = 0; order < layout.SlotCount; order++)
+            slots[order] = "(byte)0";
         for (int index = 0; index < layout.Fields.Count; index++)
             slots[layout.Fields[index].Order] = layout.Widths[index] is int width ? "(byte)" + width : RuntimeWidth(layout.Fields[index]);
         for (int start = 0; start < slots.Length; start += MaxParametersPerCall)
@@ -154,7 +156,8 @@ public static class LuminPackCircleReferenceCodeGenerator
         var batch = new List<LuminDataField>();
         void Flush()
         {
-            if (batch.Count == 0) return;
+            if (batch.Count == 0)
+                return;
             foreach (var field in batch.Where(field => field.IsVolatile))
                 sb.AppendLine($"            var {field.Name}Snapshot = {Access(field)};");
             sb.AppendLine("            writer.Advance(writer.WriteUnmanaged(" + string.Join(", ", batch.Select(field => field.IsVolatile ? field.Name + "Snapshot" : Access(field))) + "));");
@@ -166,7 +169,8 @@ public static class LuminPackCircleReferenceCodeGenerator
             if (layout.Widths[index] is int width && width != 255)
             {
                 batch.Add(field);
-                if (batch.Count == MaxParametersPerCall) Flush();
+                if (batch.Count == MaxParametersPerCall)
+                    Flush();
                 continue;
             }
             Flush();
@@ -174,7 +178,8 @@ public static class LuminPackCircleReferenceCodeGenerator
             {
                 // A raw member whose width is known only at run time carries its width when it is 255 bytes or wider.
                 sb.AppendLine("            {");
-                if (field.IsVolatile) sb.AppendLine($"                var {field.Name}Snapshot = {Access(field)};");
+                if (field.IsVolatile)
+                    sb.AppendLine($"                var {field.Name}Snapshot = {Access(field)};");
                 sb.AppendLine($"                if (Unsafe.SizeOf<{field.TypeName}>() >= 255) writer.WriteVersionLength(Unsafe.SizeOf<{field.TypeName}>());");
                 sb.AppendLine($"                writer.Advance(writer.WriteUnmanaged({(field.IsVolatile ? field.Name + "Snapshot" : Access(field))}));");
                 sb.AppendLine("            }");
@@ -285,7 +290,8 @@ public static class LuminPackCircleReferenceCodeGenerator
         }
 
 
-        if (!data.isValueType) sb.AppendLine("            }");
+        if (!data.isValueType)
+            sb.AppendLine("            }");
         // Register the object reference before reading nested members.
         sb.AppendLine($"            reader.OptionState.AddObjectReference(id, value!);");
         sb.AppendLine();
@@ -461,7 +467,8 @@ public static class LuminPackCircleReferenceCodeGenerator
             if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
             {
                 int last = index;
-                while (last + 1 < layout.Fields.Count && IsRawRun(last + 1)) last++;
+                while (last + 1 < layout.Fields.Count && IsRawRun(last + 1))
+                    last++;
                 if (IsRawRun(index) &&
                     LuminPackCodeGenerator.TryGenerateCursorFixedGroup(sb, layout.Fields, index, last, Storage, indent, write: false, allowBulkCopy: true))
                 {

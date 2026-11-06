@@ -17,7 +17,8 @@ public static partial class LuminPackCodeGenerator
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsPureValueTypeStruct(LuminDataField field)
     {
-        if (field.TypeSymbol?.IsUnmanagedType == true && !EmitterTypeTraits.CanUseUnmanagedSerialization(field.TypeSymbol)) return false;
+        if (field.TypeSymbol?.IsUnmanagedType == true && !EmitterTypeTraits.CanUseUnmanagedSerialization(field.TypeSymbol))
+            return false;
         if (field.Type != LuminFiledType.Struct)
         {
             return false;
@@ -102,10 +103,12 @@ public static partial class LuminPackCodeGenerator
     internal static bool TryGenerateCursorFixedGroup(StringBuilder builder, List<LuminDataField> fields,
         int first, int last, Func<LuminDataField, string> storage, string indent, bool write, bool allowBulkCopy = true)
     {
-        if (last <= first) return false;
+        if (last <= first)
+            return false;
         for (int index = first; index <= last; index++)
             if (fields[index].IsVolatile || fields[index].IsCompress ||
-                !IsMergeableField(fields[index])) return false;
+                !IsMergeableField(fields[index]))
+                return false;
         if (!allowBulkCopy && !write)
         {
             string readWidth = GetUnmanagedFieldSize(fields[first]);
@@ -171,7 +174,8 @@ public static partial class LuminPackCodeGenerator
         string store = "Unsafe.WriteUnaligned(ref " + location + ", " + storage + ");";
         if (field.TypeSymbol?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
             SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
-            SpecialType.System_UInt32 or SpecialType.System_Single) return store;
+            SpecialType.System_UInt32 or SpecialType.System_Single)
+            return store;
         return "if (Unsafe.SizeOf<global::System.IntPtr>() == 8 || Unsafe.SizeOf<" + type + ">() <= 4) " + store +
             " else global::LuminPack.Core.LuminPackWriter.Write(ref " + location + ", in " + storage + ");";
     }
@@ -189,7 +193,8 @@ public static partial class LuminPackCodeGenerator
         string load = storage + " = Unsafe.ReadUnaligned<" + type + ">(ref " + location + ");";
         if (field.TypeSymbol?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
             SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
-            SpecialType.System_UInt32 or SpecialType.System_Single) return load;
+            SpecialType.System_UInt32 or SpecialType.System_Single)
+            return load;
         return "if (Unsafe.SizeOf<global::System.IntPtr>() == 8 || Unsafe.SizeOf<" + type + ">() <= 4) " + load + " " +
             "else global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<" + type + ", byte>(ref " + storage + "), ref " + location + ", (uint)Unsafe.SizeOf<" + type + ">());";
     }
@@ -206,7 +211,8 @@ public static partial class LuminPackCodeGenerator
     /// <returns>A constant sum or the unchanged ordered runtime expression.</returns>
     private static string AddUnmanagedFieldSize(string offset, string size)
     {
-        if (offset == "0") return size;
+        if (offset == "0")
+            return size;
         if (int.TryParse(offset, out int total) && int.TryParse(size, out int length) &&
             total >= 0 && length >= 0 && total <= int.MaxValue - length)
             return (total + length).ToString(System.Globalization.CultureInfo.InvariantCulture);

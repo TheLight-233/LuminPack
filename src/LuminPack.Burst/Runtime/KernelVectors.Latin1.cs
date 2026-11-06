@@ -52,7 +52,11 @@ namespace LuminPack.Burst
     {
         /// <summary>Places a scalar in the low bytes without reading beyond its storage.</summary><typeparam name="T">Scalar type.</typeparam><param name="value">Scalar.</param><returns>The vector with defined low lane.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static Vector128<T> CreateScalarUnsafe<T>(T value) where T : unmanaged { v128 result = default; *(T*)&result = value; return new Vector128<T> { Value = result }; }
+        internal static Vector128<T> CreateScalarUnsafe<T>(T value) where T : unmanaged
+        {
+            v128 result = default;
+            *(T*)&result = value;
+            return new Vector128<T> { Value = result }; }
     }
 }
 #endif

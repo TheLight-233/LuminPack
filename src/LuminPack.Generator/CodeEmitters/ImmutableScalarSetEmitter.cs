@@ -14,7 +14,8 @@ internal static class ImmutableScalarSetEmitter
     internal static bool TryGenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb, bool sorted)
     {
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
-        if (!EmitterTypeTraits.IsKnownScalar(element)) return false;
+        if (!EmitterTypeTraits.IsKnownScalar(element))
+            return false;
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         string family = sorted ? "ImmutableSortedSet" : "ImmutableHashSet";
         string factory = !sorted && fieldData.CanBuildFrameworkImmutableHashSet ? "CreateFrameworkImmutableHashSet" : "Create" + family;

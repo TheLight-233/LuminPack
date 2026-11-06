@@ -35,10 +35,13 @@ internal static class SafeContract
     private static string Visit(ITypeSymbol type, Compilation compilation, MetaInfo metadata, HashSet<ITypeSymbol> seen)
     {
         // A type parameter is checked through the closed type argument that replaces it.
-        if (type == null || type is ITypeParameterSymbol || !seen.Add(type)) return null;
+        if (type == null || type is ITypeParameterSymbol || !seen.Add(type))
+            return null;
         string name = FormatterTypeName.Get(type);
-        if (type is IArrayTypeSymbol array) return Visit(array.ElementType, compilation, metadata, seen);
-        if (type is not INamedTypeSymbol named) return "The untrusted-input option does not accept this type: " + name;
+        if (type is IArrayTypeSymbol array)
+            return Visit(array.ElementType, compilation, metadata, seen);
+        if (type is not INamedTypeSymbol named)
+            return "The untrusted-input option does not accept this type: " + name;
         // Types chosen by the input are never accepted.
         string space = named.ContainingNamespace?.ToDisplayString() ?? "";
         if (named.SpecialType == SpecialType.System_Object || named.TypeKind == TypeKind.Delegate || name == "global::System.Type" ||
@@ -46,22 +49,26 @@ internal static class SafeContract
             named.TypeKind == TypeKind.Interface && named.TypeArguments.Length == 0 && (space == "System" || space.StartsWith("System.", StringComparison.Ordinal)))
             return "The untrusted-input option does not accept this type: " + name;
         foreach (var argument in named.TypeArguments)
-            if (Visit(argument, compilation, metadata, seen) is string rejection) return rejection;
+            if (Visit(argument, compilation, metadata, seen) is string rejection)
+                return rejection;
         // Framework values, raw unmanaged storage and registered formatters use the library's or the application's own code.
         if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct or TypeKind.Interface) || !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
             return null;
         // Generic members are analyzed on the definition; their arguments were checked above.
         var data = LuminPackSourceGenerator.GetSerializationMetadata(named.IsGenericType ? named.OriginalDefinition : named, compilation, metadata);
         // Custom formats are user code, which stays trusted like a manually registered formatter.
-        if (data.generatorType is not (GeneratorType.Object or GeneratorType.VersionTolerant or GeneratorType.CircleReference)) return null;
+        if (data.generatorType is not (GeneratorType.Object or GeneratorType.VersionTolerant or GeneratorType.CircleReference))
+            return null;
         if (data.isUnion)
         {
             foreach (var member in data.UnionMembers)
-                if (Visit(member.Type, compilation, metadata, seen) is string rejection) return rejection;
+                if (Visit(member.Type, compilation, metadata, seen) is string rejection)
+                    return rejection;
             return null;
         }
         foreach (var field in data.fields)
-            if (Visit(field.TypeSymbol, compilation, metadata, seen) is string rejection) return rejection;
+            if (Visit(field.TypeSymbol, compilation, metadata, seen) is string rejection)
+                return rejection;
         return null;
     }
 }

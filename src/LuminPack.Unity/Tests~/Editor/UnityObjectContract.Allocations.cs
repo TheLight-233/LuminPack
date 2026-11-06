@@ -17,7 +17,8 @@ public static unsafe partial class UnityObjectContract
         foreach (int count in new[] { 0, 1, 2, 16, 17, 257 })
         {
             var keys = new Keyframe[count];
-            for (int index = 0; index < count; index++) keys[index] = new Keyframe(index, index * 0.25f, -2, 3, 0.125f, 0.875f);
+            for (int index = 0; index < count; index++)
+                keys[index] = new Keyframe(index, index * 0.25f, -2, 3, 0.125f, 0.875f);
             CheckAllocation<AnimationCurve>(new AnimationCurve(keys), new AnimationCurve(),
                 &LuminUnity.Write, &LuminUnity.Read, &LuminUnity.Size, &CreateCurve, count, true);
         }
@@ -117,12 +118,14 @@ public static unsafe partial class UnityObjectContract
             }
             long freshAllocations = FinishAllocation(ref recording);
             recording = StartAllocation();
-            for (int iteration = 0; iteration < 128; iteration++) GC.KeepAlive(create());
+            for (int iteration = 0; iteration < 128; iteration++)
+                GC.KeepAlive(create());
             long constructionAllocations = FinishAllocation(ref recording);
             Debug.Log("LUMINPACK_UNITY_ALLOCATION_EVENTS: " + typeof(T).Name + "," + count + ",write=" + writeAllocations / 128.0 + ",reuse=" + reuseAllocations / 128.0 + ",fresh=" + freshAllocations / 128.0 + ",construction=" + constructionAllocations / 128.0 + ",size=" + sizeAllocations / 128.0);
 #if UNITY_6000_2_OR_NEWER
             // Shared-pool trimming can occur during result construction; only stack paths promise independent zero scratch allocation.
-            if (count <= 16) Require(writeAllocations == 0 && reuseAllocations == 0 && freshAllocations == constructionAllocations, "Stack-backed native-owner operations allocated discarded scratch.");
+            if (count <= 16)
+                Require(writeAllocations == 0 && reuseAllocations == 0 && freshAllocations == constructionAllocations, "Stack-backed native-owner operations allocated discarded scratch.");
             Require(sizeAllocations == 0, "Native-owner sizing allocated key snapshots.");
 #else
             if (sizeWithoutScratch) Require(sizeAllocations == 0 && (count > 16 || writeAllocations == 0), "Stack-backed native-owner writing or sizing allocated a discardable snapshot.");
@@ -150,7 +153,9 @@ public static unsafe partial class UnityObjectContract
             Require(!recorder.WrappedAround, "The allocation recorder overflowed.");
             return recorder.Count;
         }
-        finally { recorder.Dispose(); }
+        finally
+        {
+            recorder.Dispose(); }
     }
 
     /// <summary>Creates the required managed curve wrapper.</summary><returns>A fresh native curve owner.</returns>

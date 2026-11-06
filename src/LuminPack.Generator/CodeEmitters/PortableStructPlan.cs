@@ -90,7 +90,8 @@ internal sealed class PortableStructPlan
     /// <remarks>An explicit struct setting, including false, overrides the assembly; the assembly applies only to unmanaged structs.</remarks>
     internal static bool IsOptedIn(INamedTypeSymbol type)
     {
-        if (type.TypeKind != TypeKind.Struct) return false;
+        if (type.TypeKind != TypeKind.Struct)
+            return false;
         int? declared = ReadStructLayout(type.GetAttributes());
         return declared.HasValue ? declared.Value == 1 : type.IsUnmanagedType && LayoutStrategy(type) == 1;
     }
@@ -129,13 +130,16 @@ internal sealed class PortableStructPlan
     /// <returns>Whether every field has a supported fixed representation.</returns>
     private static bool IsSupportedStorage(ITypeSymbol type, HashSet<ITypeSymbol> visited)
     {
-        if (!visited.Add(type) || ScalarSize(type) != 0 || OpaqueLeaf(type) != null) return true;
-        if (type is ITypeParameterSymbol parameter) return parameter.HasUnmanagedTypeConstraint;
+        if (!visited.Add(type) || ScalarSize(type) != 0 || OpaqueLeaf(type) != null)
+            return true;
+        if (type is ITypeParameterSymbol parameter)
+            return parameter.HasUnmanagedTypeConstraint;
         if (type is not INamedTypeSymbol { IsUnmanagedType: true, TypeKind: TypeKind.Struct } named ||
             named.SpecialType is SpecialType.System_IntPtr or SpecialType.System_UIntPtr ||
             IsRuntimeSizedVector(named) ||
             LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(named) ||
-            named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.InlineArrayAttribute")) return false;
+            named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.InlineArrayAttribute"))
+            return false;
         var fields = PlanFields(named, true);
         return fields != null && fields.All(field => IsSupportedStorage(field.Type, visited));
     }
@@ -160,11 +164,15 @@ internal sealed class PortableStructPlan
     /// <returns>A packed plan when raw storage is not portable; otherwise null.</returns>
     internal static PortableStructPlan TryCreate(ITypeSymbol type)
     {
-        if (type == null) return null;
+        if (type == null)
+            return null;
         type = UnmanagedContractScope.Resolve(type);
-        if (type is not INamedTypeSymbol named) return null;
-        if (!IsOptedIn(named)) return TryCreateTagged(named) is { FormatterOwned: true } tagged ? tagged : null;
-        if (TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object) return null;
+        if (type is not INamedTypeSymbol named)
+            return null;
+        if (!IsOptedIn(named))
+            return TryCreateTagged(named) is { FormatterOwned: true } tagged ? tagged : null;
+        if (TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object)
+            return null;
         var plan = Analyze(named, strict: true);
         return plan?.HasPadding == true ? plan : null;
     }
@@ -188,7 +196,8 @@ internal sealed class PortableStructPlan
     /// one-byte layout tag followed by native storage; single values use the packed field-wise representation of an opted-in struct.</remarks>
     private static PortableStructPlan TryCreateTagged(INamedTypeSymbol named)
     {
-        if (named.TypeKind != TypeKind.Struct || named.SpecialType != SpecialType.None || !named.IsUnmanagedType) return null;
+        if (named.TypeKind != TypeKind.Struct || named.SpecialType != SpecialType.None || !named.IsUnmanagedType)
+            return null;
         var entry = TaggedCache.GetValue(named, static key => new TaggedEntry { Plan = CreateTagged((INamedTypeSymbol)key) });
         return entry.Plan;
     }
@@ -198,14 +207,19 @@ internal sealed class PortableStructPlan
     /// <returns>The tagged plan, or null.</returns>
     private static PortableStructPlan CreateTagged(INamedTypeSymbol named)
     {
-        if (LayoutStrategy(named) != 0) return null;
-        if (ScalarSize(named) != 0 || ContainsTypeParameter(named) || OpaqueLeaf(named) != null) return null;
+        if (LayoutStrategy(named) != 0)
+            return null;
+        if (ScalarSize(named) != 0 || ContainsTypeParameter(named) || OpaqueLeaf(named) != null)
+            return null;
         if (LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(named) ||
-            TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object) return null;
+            TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object)
+            return null;
         var plan = Analyze(named, strict: true);
-        if (plan?.Fields == null || plan.WireSize <= 0 || HasVolatile(plan)) return null;
+        if (plan?.Fields == null || plan.WireSize <= 0 || HasVolatile(plan))
+            return null;
         plan.Models = BuildModels(plan);
-        if (plan.Models.Length < 2) return null;
+        if (plan.Models.Length < 2)
+            return null;
         plan.Tagged = true;
         plan.FormatterOwned = IsValueTuple(named) || named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T ||
             named.OriginalDefinition.MetadataName == "KeyValuePair`2" && named.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" ||
@@ -218,9 +232,11 @@ internal sealed class PortableStructPlan
     /// <returns>Whether any expanded field is volatile.</returns>
     private static bool HasVolatile(PortableStructPlan plan)
     {
-        if (plan.Fields == null) return false;
+        if (plan.Fields == null)
+            return false;
         for (int index = 0; index < plan.Fields.Length; index++)
-            if (plan.Fields[index].IsVolatile || HasVolatile(plan.Children[index])) return true;
+            if (plan.Fields[index].IsVolatile || HasVolatile(plan.Children[index]))
+                return true;
         return false;
     }
 
@@ -242,7 +258,10 @@ internal sealed class PortableStructPlan
     private static StorageModel[] BuildModels(PortableStructPlan plan)
     {
         var kinds = new List<(bool Is64, bool Auto)> { (true, false), (false, false) };
-        if (HasAutomatic(plan)) { kinds.Add((true, true)); kinds.Add((false, true)); }
+        if (HasAutomatic(plan))
+        {
+            kinds.Add((true, true));
+            kinds.Add((false, true)); }
         var models = new List<StorageModel>();
         foreach (var (is64, auto) in kinds)
         {
@@ -263,12 +282,14 @@ internal sealed class PortableStructPlan
         if (plan.Fields == null)
         {
             var bytes = new int[plan.WireSize];
-            for (int index = 0; index < bytes.Length; index++) bytes[index] = index;
+            for (int index = 0; index < bytes.Length; index++)
+                bytes[index] = index;
             return (plan.WireSize, is64 ? plan.Alignment64 : plan.Alignment32, bytes);
         }
         int count = plan.Children.Length;
         var places = new (int Size, int Alignment, int[] Offsets)[count];
-        for (int index = 0; index < count; index++) places[index] = Place(plan.Children[index], is64, auto);
+        for (int index = 0; index < count; index++)
+            places[index] = Place(plan.Children[index], is64, auto);
         int pack = plan.Pack == 0 ? 8 : plan.Pack;
         var order = Enumerable.Range(0, count).ToList();
         if (auto && plan.Kind == 3)
@@ -288,7 +309,8 @@ internal sealed class PortableStructPlan
         var data = new int[plan.WireSize];
         int next = 0;
         for (int index = 0; index < count; index++)
-            foreach (int byteOffset in places[index].Offsets) data[next++] = offsets[index] + byteOffset;
+            foreach (int byteOffset in places[index].Offsets)
+                data[next++] = offsets[index] + byteOffset;
         return (size, alignment, data);
     }
 
@@ -297,7 +319,8 @@ internal sealed class PortableStructPlan
     /// <returns>Whether its portable width still depends on an undetermined unmanaged argument.</returns>
     internal static bool RequiresClosedDispatch(ITypeSymbol type)
     {
-        if (type == null) return false;
+        if (type == null)
+            return false;
         type = UnmanagedContractScope.Resolve(type);
         return type is INamedTypeSymbol { IsGenericType: true } named &&
             IsOptedIn(named) &&
@@ -322,11 +345,14 @@ internal sealed class PortableStructPlan
             named.SpecialType is SpecialType.System_IntPtr or SpecialType.System_UIntPtr ||
             IsRuntimeSizedVector(named) ||
             named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() ==
-                "System.Runtime.CompilerServices.InlineArrayAttribute")) return null;
+                "System.Runtime.CompilerServices.InlineArrayAttribute"))
+            return null;
         var fields = PlanFields(named, strict);
-        if (fields == null) return null;
+        if (fields == null)
+            return null;
         var children = fields.Select(field => Analyze(field.Type, strict)).ToArray();
-        if (children.Any(child => child == null)) return null;
+        if (children.Any(child => child == null))
+            return null;
         var plan = new PortableStructPlan { Type = type, Fields = fields, Children = children,
             WireSize = children.Sum(child => child.WireSize), HasPadding = named.IsTupleType || children.Any(child => child.HasPadding) ||
                 named.ContainingNamespace.ToDisplayString().StartsWith("System.Runtime.Intrinsics", StringComparison.Ordinal) };
@@ -367,8 +393,10 @@ internal sealed class PortableStructPlan
         // C# project reference assemblies retain value-type fields, including private ones needed for layout.
         if (IsReferenceAssembly(named.ContainingAssembly) && !IsValueTuple(named) &&
             !TypeMetaChecker.TryCheckPackableAttribute(named) &&
-            (named.ContainingAssembly.Name.StartsWith("System.", StringComparison.Ordinal) || named.ContainingAssembly.Name is "mscorlib" or "netstandard")) return null;
-        if (fields.Any(field => field.IsFixedSizeBuffer || field.Type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer)) return null;
+            (named.ContainingAssembly.Name.StartsWith("System.", StringComparison.Ordinal) || named.ContainingAssembly.Name is "mscorlib" or "netstandard"))
+            return null;
+        if (fields.Any(field => field.IsFixedSizeBuffer || field.Type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer))
+            return null;
         return fields.Select(field => new PortableField { Type = field.Type, Name = field.Name, IsVolatile = field.IsVolatile, Offset = StorageLayoutInfo.FieldOffset(field) }).ToArray();
     }
 
@@ -384,7 +412,8 @@ internal sealed class PortableStructPlan
     /// <remarks>Each entry is an unpadded block of data bytes that is identical on every runtime; only its alignment inside a containing struct varies.</remarks>
     private static (int Size, int Alignment64, int Alignment32)? OpaqueLeaf(ITypeSymbol type)
     {
-        if (type is not INamedTypeSymbol { TypeKind: TypeKind.Struct } named) return null;
+        if (type is not INamedTypeSymbol { TypeKind: TypeKind.Struct } named)
+            return null;
         return named.ToDisplayString() switch
         {
             "System.DateTime" or "System.TimeSpan" or "System.TimeOnly" => (8, 8, 4),
@@ -424,7 +453,10 @@ internal sealed class PortableStructPlan
             if (kind == 2)
             {
                 offset = Fields[index].Offset;
-                if (offset < 0) { HasPadding = true; offset = end; }
+                if (offset < 0)
+                {
+                    HasPadding = true;
+                    offset = end; }
             }
             HasPadding |= offset != packedEnd;
             end = Math.Max(end, offset + (is64Bit ? child.Size64 : child.Size32));
@@ -438,7 +470,8 @@ internal sealed class PortableStructPlan
     /// <returns>The scalar byte width, or zero for an aggregate.</returns>
     private static int ScalarSize(ITypeSymbol type)
     {
-        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration) return ScalarSize(enumeration.EnumUnderlyingType);
+        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
+            return ScalarSize(enumeration.EnumUnderlyingType);
         return type.SpecialType switch
         {
             SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,

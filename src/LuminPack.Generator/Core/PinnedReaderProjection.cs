@@ -64,7 +64,8 @@ internal sealed class PinnedReaderProjection : CSharpSyntaxRewriter
             if (block.Statements[index] is not LocalDeclarationStatementSyntax declaration || declaration.Declaration.Variables.Count != 1 ||
                 declaration.Declaration.Variables[0].Initializer?.Value is not ObjectCreationExpressionSyntax creation ||
                 creation.Type.ToString().Replace("global::", string.Empty).Replace("LuminPack.Core.", string.Empty) is not ("LuminPackReader" or "LuminPackJsonReader") ||
-                creation.ArgumentList.Arguments.Count == 0 || !creation.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword)) continue;
+                creation.ArgumentList.Arguments.Count == 0 || !creation.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
+                continue;
             string input = creation.ArgumentList.Arguments[0].Expression.ToString();
             string identity = "__luminPinnedInput" + _next++;
             StatementSyntax lifetime;

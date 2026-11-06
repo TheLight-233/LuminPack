@@ -45,9 +45,11 @@ internal static class BinaryExtensionProjection
             string name = write ? "Write" : "Read";
             string payload = method.ParameterList.Parameters[1].Type.ToString();
             var payloadParameters = method.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText).ToArray() ?? Array.Empty<string>();
-            if (payloadParameters.Contains(payload)) continue;
+            if (payloadParameters.Contains(payload))
+                continue;
             string profileName = "TOptions";
-            while (payloadParameters.Contains(profileName)) profileName += "_";
+            while (payloadParameters.Contains(profileName))
+                profileName += "_";
             string passing = write ? "in" : "ref";
             bool rootOwnsCursor = !json && (payload.StartsWith("global::System.", StringComparison.Ordinal) || payload.Contains("[")) &&
                 method.DescendantNodes().Any(node => node is ForStatementSyntax or ForEachStatementSyntax or ForEachVariableStatementSyntax or WhileStatementSyntax or DoStatementSyntax);
@@ -56,14 +58,16 @@ internal static class BinaryExtensionProjection
             {
                 // A concrete raw construction must outrank an open generic formatter,
                 // whose unknown arguments may require a different contract or dispatch.
-                if (scalar && !profile && (payloadParameters.Length != 0 || !payload.Contains("<"))) continue;
+                if (scalar && !profile && (payloadParameters.Length != 0 || !payload.Contains("<")))
+                    continue;
                 var source = new StringBuilder();
                 source.AppendLine("/// <summary>Executes the complete closed binary operation for this value.</summary>");
                 source.AppendLine("/// <param name=\"state\">The advancing binary state.</param>");
                 source.AppendLine("/// <param name=\"value\">The value storage participating in the operation.</param>");
                 foreach (string parameter in payloadParameters)
                     source.AppendLine("/// <typeparam name=\"" + parameter + "\">The declared payload type argument.</typeparam>");
-                if (profile) source.AppendLine("/// <typeparam name=\"" + profileName + "\">The stateless binary profile.</typeparam>");
+                if (profile)
+                    source.AppendLine("/// <typeparam name=\"" + profileName + "\">The stateless binary profile.</typeparam>");
                 source.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
                 var arguments = profile ? payloadParameters.Concat(new[] { profileName }).ToArray() : payloadParameters;
                 string typeArguments = arguments.Length == 0 ? string.Empty : "<" + string.Join(", ", arguments) + ">";
@@ -72,7 +76,8 @@ internal static class BinaryExtensionProjection
                     .Append(" ").Append(string.Join(" ", method.ConstraintClauses.Select(clause => clause.ToString())))
                     .Append(profile ? " where " + profileName + " : struct, global::LuminPack.Option.ILuminPackOptions" : string.Empty);
                 string call = "global::LuminPack.LuminPackSerializer." + method.Identifier.ValueText + typeArguments;
-                if (scalar) call = "global::LuminPack.Core.LuminPack" + (write ? "Writer.Write" : "Reader.Read");
+                if (scalar)
+                    call = "global::LuminPack.Core.LuminPack" + (write ? "Writer.Write" : "Reader.Read");
                 // A closed payload whose operation only forwards to its root calls that root, bound within the payload's container.
                 string direct = scalar || payloadParameters.Length != 0 ? null : RootCall(method, profile ? profileName : null);
                 if (compound)
@@ -88,7 +93,8 @@ internal static class BinaryExtensionProjection
                         .Append(selected).Append(">()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value.\"); ")
                         .Append(direct ?? call + "(ref state, ref value)").Append("; state.CompleteValue(); }");
                 }
-                else source.Append(" => ").Append(direct ?? call + "(ref state, " + passing + " value)").AppendLine(";");
+                else
+                    source.Append(" => ").Append(direct ?? call + "(ref state, " + passing + " value)").AppendLine(";");
                 string owner = Owner(container, payload);
                 if (!groups.TryGetValue(owner, out var members))
                 {
@@ -115,13 +121,16 @@ internal static class BinaryExtensionProjection
         var parameters = method.ParameterList.Parameters;
         if (method.Body == null || method.Body.Statements.Count != 1 || method.Body.Statements[0] is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax root } ||
             root.Expression is not SimpleNameSyntax name || !name.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal) ||
-            root.ArgumentList.Arguments.Count != 2) return null;
+            root.ArgumentList.Arguments.Count != 2)
+            return null;
         var arguments = new List<string>();
         foreach (var argument in root.ArgumentList.Arguments)
         {
-            if (argument.Expression is not IdentifierNameSyntax identifier) return null;
+            if (argument.Expression is not IdentifierNameSyntax identifier)
+                return null;
             int index = parameters.IndexOf(parameter => parameter.Identifier.ValueText == identifier.Identifier.ValueText);
-            if (index < 0) return null;
+            if (index < 0)
+                return null;
             string kind = argument.RefKindKeyword.IsKind(SyntaxKind.None) ? string.Empty : argument.RefKindKeyword.ValueText + " ";
             arguments.Add(kind + (index == 0 ? "state" : "value"));
         }
@@ -129,7 +138,8 @@ internal static class BinaryExtensionProjection
         if (profile != null)
         {
             if (name is not GenericNameSyntax generic || generic.TypeArgumentList.Arguments.Count == 0 ||
-                !generic.TypeArgumentList.Arguments.Last().ToString().StartsWith("global::LuminPack.Option.", StringComparison.Ordinal)) return null;
+                !generic.TypeArgumentList.Arguments.Last().ToString().StartsWith("global::LuminPack.Option.", StringComparison.Ordinal))
+                return null;
             target = generic.WithTypeArgumentList(generic.TypeArgumentList.WithArguments(generic.TypeArgumentList.Arguments.Replace(
                 generic.TypeArgumentList.Arguments.Last(), SyntaxFactory.IdentifierName(profile))));
         }
@@ -146,7 +156,8 @@ internal static class BinaryExtensionProjection
         /// <returns>The same operation calling closed Write and Read extensions.</returns>
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
-            if (node.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("Binary_", StringComparison.Ordinal)) return node;
+            if (node.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("Binary_", StringComparison.Ordinal))
+                return node;
             var previous = _states;
             _states = new HashSet<string>(node.DescendantNodesAndSelf().OfType<ParameterSyntax>().Where(parameter =>
                 parameter.Type?.ToString().Replace("global::", string.Empty).Replace("LuminPack.Core.", string.Empty) is "LuminPackWriter" or "LuminPackReader" or
@@ -155,8 +166,12 @@ internal static class BinaryExtensionProjection
                 if (variable.Initializer?.Value is ObjectCreationExpressionSyntax creation &&
                     creation.Type.ToString().Replace("global::", string.Empty).Replace("LuminPack.Core.", string.Empty) is "LuminPackWriter" or "LuminPackReader" or "LuminPackJsonWriter" or "LuminPackJsonReader")
                     _states.Add(variable.Identifier.ValueText);
-            try { return base.VisitMethodDeclaration(node); }
-            finally { _states = previous; }
+            try
+            {
+                return base.VisitMethodDeclaration(node); }
+            finally
+            {
+                _states = previous; }
         }
 
         /// <summary>Turns concrete state calls into their typed advancing operations.</summary>
@@ -165,7 +180,8 @@ internal static class BinaryExtensionProjection
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var rewritten = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            if (_states == null || rewritten.Expression is not MemberAccessExpressionSyntax access) return rewritten;
+            if (_states == null || rewritten.Expression is not MemberAccessExpressionSyntax access)
+                return rewritten;
             string name = access.Name.Identifier.ValueText;
             if (_states.Contains(access.Expression.ToString()) && name is "WriteStringRecord" or "ReadStringRecord")
             {
@@ -182,16 +198,20 @@ internal static class BinaryExtensionProjection
                 return rewritten.WithExpression(access.WithName(access.Name is GenericNameSyntax generic ? generic.WithIdentifier(SyntaxFactory.Identifier(target)) : SyntaxFactory.IdentifierName(target)));
             }
             if (name is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson") || !access.Expression.ToString().Contains("LuminPackSerializer") ||
-                rewritten.ArgumentList.Arguments.Count != 2 || access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: > 1 }) return rewritten;
+                rewritten.ArgumentList.Arguments.Count != 2 || access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: > 1 })
+                return rewritten;
             if (access.Name is GenericNameSyntax selectedProfile)
             {
                 string profile = selectedProfile.TypeArgumentList.Arguments.Last().ToString();
                 if (!profile.StartsWith("__LuminProfile", StringComparison.Ordinal) &&
-                    !profile.StartsWith("global::LuminPack.Option.", StringComparison.Ordinal)) return rewritten;
+                    !profile.StartsWith("global::LuminPack.Option.", StringComparison.Ordinal))
+                    return rewritten;
             }
             var state = rewritten.ArgumentList.Arguments[0];
-            if (!_states.Contains(state.Expression.ToString())) return rewritten;
-            if (node.HasAnnotations("LuminPack.StorageContract")) return rewritten;
+            if (!_states.Contains(state.Expression.ToString()))
+                return rewritten;
+            if (node.HasAnnotations("LuminPack.StorageContract"))
+                return rewritten;
             string operation = name.StartsWith("Serialize", StringComparison.Ordinal) ? "Write" : "Read";
             SimpleNameSyntax selected = access.Name is GenericNameSyntax options ? options.WithIdentifier(SyntaxFactory.Identifier(operation)) : SyntaxFactory.IdentifierName(operation);
             return rewritten.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, state.Expression, selected))

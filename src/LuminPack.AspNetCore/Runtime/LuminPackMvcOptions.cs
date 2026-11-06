@@ -18,8 +18,10 @@ public sealed class LuminPackMvcOptions
     /// <param name="codec">The complete record operations.</param><returns>This configuration.</returns>
     public LuminPackMvcOptions Add<T>(LuminPackHttpCodec<T> codec)
     {
-        if (codec is null) Errors.ThrowArgumentNullException(nameof(codec));
-        if (!Codecs.TryAdd(typeof(T), new BodyCodec<T>(codec))) Errors.ThrowArgumentException("The MVC body type already has a LuminPack codec.", nameof(codec));
+        if (codec is null)
+            Errors.ThrowArgumentNullException(nameof(codec));
+        if (!Codecs.TryAdd(typeof(T), new BodyCodec<T>(codec)))
+            Errors.ThrowArgumentException("The MVC body type already has a LuminPack codec.", nameof(codec));
         return this;
     }
 
@@ -61,11 +63,14 @@ public static class LuminPackMvcExtensions
     /// <returns>The same MVC builder.</returns>
     public static IMvcBuilder AddLuminPack(this IMvcBuilder builder, Action<LuminPackMvcOptions> configure)
     {
-        if (builder is null) Errors.ThrowArgumentNullException(nameof(builder));
-        if (configure is null) Errors.ThrowArgumentNullException(nameof(configure));
+        if (builder is null)
+            Errors.ThrowArgumentNullException(nameof(builder));
+        if (configure is null)
+            Errors.ThrowArgumentNullException(nameof(configure));
         var settings = new LuminPackMvcOptions();
         configure(settings);
-        if (settings.MaximumBodyBytes <= 0) Errors.ThrowArgumentOutOfRangeException(nameof(settings.MaximumBodyBytes));
+        if (settings.MaximumBodyBytes <= 0)
+            Errors.ThrowArgumentOutOfRangeException(nameof(settings.MaximumBodyBytes));
         var codecs = new Dictionary<Type, LuminPackMvcOptions.IBodyCodec>(settings.Codecs);
         int maximumBodyBytes = settings.MaximumBodyBytes;
         builder.Services.Configure<MvcOptions>(options =>
@@ -100,7 +105,9 @@ internal sealed class LuminPackInputFormatter : InputFormatter
     {
         using var body = await LuminPackHttp.ReadBodyAsync(context.HttpContext.Request, _maximumBodyBytes, context.HttpContext.RequestAborted).ConfigureAwait(false);
         var codec = _codecs[context.ModelType];
-        try { return await InputFormatterResult.SuccessAsync(codec.Read(body.Memory)).ConfigureAwait(false); }
+        try
+        {
+            return await InputFormatterResult.SuccessAsync(codec.Read(body.Memory)).ConfigureAwait(false); }
         catch (Exception error) when (codec.IsMalformed(error))
         {
             context.ModelState.TryAddModelError(context.ModelName, "Invalid LuminPack request body.");
@@ -128,7 +135,8 @@ internal sealed class LuminPackOutputFormatter : OutputFormatter
     public override async Task WriteResponseBodyAsync(OutputFormatterWriteContext context)
     {
         Type type = context.ObjectType ?? context.Object?.GetType() ?? Errors.ThrowInvalidOperationException<Type>("A declared MVC body type is required.");
-        if (!_codecs.TryGetValue(type, out var codec)) Errors.ThrowInvalidOperationException("The MVC body type is not registered.");
+        if (!_codecs.TryGetValue(type, out var codec))
+            Errors.ThrowInvalidOperationException("The MVC body type is not registered.");
         context.HttpContext.RequestAborted.ThrowIfCancellationRequested();
         byte[] body = codec!.Write(context.Object);
         context.HttpContext.Response.ContentLength = body.Length;

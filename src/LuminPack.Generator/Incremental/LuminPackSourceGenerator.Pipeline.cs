@@ -73,8 +73,10 @@ public sealed partial class LuminPackSourceGenerator
             Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
             try
             {
-                if (!string.IsNullOrEmpty(value.Extension)) output.AddSource(value.HintName + ".Extension.g.cs", value.Extension);
-                if (!string.IsNullOrEmpty(value.Union)) output.AddSource(value.HintName + ".UnionDispatch.g.cs", value.Union);
+                if (!string.IsNullOrEmpty(value.Extension))
+                    output.AddSource(value.HintName + ".Extension.g.cs", value.Extension);
+                if (!string.IsNullOrEmpty(value.Union))
+                    output.AddSource(value.HintName + ".UnionDispatch.g.cs", value.Union);
             }
             catch (Exception exception)
             {
@@ -87,7 +89,8 @@ public sealed partial class LuminPackSourceGenerator
         context.RegisterSourceOutput(diagnostics, static (output, values) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.PackableDiagnosticCallbacks);
-            foreach (var diagnostic in values) output.ReportDiagnostic(diagnostic.MaterializeSource());
+            foreach (var diagnostic in values)
+                output.ReportDiagnostic(diagnostic.MaterializeSource());
         });
 
         var layoutGroups = emissions.Select(static (value, _) => value.Layouts).WithTrackingName("LuminPack.Incremental.LayoutProjection");
@@ -118,7 +121,8 @@ public sealed partial class LuminPackSourceGenerator
         var data = CreateLuminDataInfo(symbol, compilation, metadata);
         var diagnostics = new List<Diagnostic>(data.Diagnostics);
         string name = data.classFullName ?? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        if (name.StartsWith("global::", StringComparison.Ordinal)) name = name.Substring(8);
+        if (name.StartsWith("global::", StringComparison.Ordinal))
+            name = name.Substring(8);
         name = name.Replace("<", "_").Replace('>', '_');
         string className = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
         var emptyLayouts = new FrozenLayoutGroup(className, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null);
@@ -138,12 +142,15 @@ public sealed partial class LuminPackSourceGenerator
             extension = SerializerCoreProjection.Project(extension, compilation, metadata, operations);
             union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata,
                 emittedTypes?.EmittedTypes) : string.Empty;
-            if (!string.IsNullOrEmpty(union)) union = SerializerCoreProjection.RewriteCalls(union, compilation, metadata);
+            if (!string.IsNullOrEmpty(union))
+                union = SerializerCoreProjection.RewriteCalls(union, compilation, metadata);
             if (!string.IsNullOrEmpty(extension))
             {
-                if (!string.IsNullOrEmpty(union)) union = GeneratedSourceDocumentation.Complete(union, metadata.ParseOptions);
+                if (!string.IsNullOrEmpty(union))
+                    union = GeneratedSourceDocumentation.Complete(union, metadata.ParseOptions);
             }
-            else union = string.Empty;
+            else
+                union = string.Empty;
         }
         catch (Exception exception)
         {
@@ -193,7 +200,8 @@ public sealed partial class LuminPackSourceGenerator
                 return result.Freeze();
             }
             foreach (var fragment in group.Fragments)
-                if (emitted.Add(fragment.Key)) selected.Add((group, fragment));
+                if (emitted.Add(fragment.Key))
+                    selected.Add((group, fragment));
         }
         foreach (var item in selected.OrderBy(item => item.Fragment.Key, StringComparer.Ordinal))
         {

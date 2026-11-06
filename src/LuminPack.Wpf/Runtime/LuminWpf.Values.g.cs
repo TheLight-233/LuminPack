@@ -150,7 +150,8 @@ public static unsafe partial class LuminWpf
         var pending = reader;
         byte empty = default;
         pending.Read(ref empty);
-        if (empty > 1) LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
+        if (empty > 1)
+            LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
         double fieldWidth = default;
         pending.Read(ref fieldWidth);
         double fieldHeight = default;
@@ -183,7 +184,8 @@ public static unsafe partial class LuminWpf
         var pending = reader;
         byte empty = default;
         pending.Read(ref empty);
-        if (empty > 1) LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
+        if (empty > 1)
+            LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
         double fieldX = default;
         pending.Read(ref fieldX);
         double fieldY = default;
@@ -411,7 +413,8 @@ public static unsafe partial class LuminWpf
         var pending = reader;
         byte empty = default;
         pending.Read(ref empty);
-        if (empty > 1) LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
+        if (empty > 1)
+            LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
         double fieldX = default;
         pending.Read(ref fieldX);
         double fieldY = default;
@@ -448,7 +451,8 @@ public static unsafe partial class LuminWpf
         var pending = reader;
         byte empty = default;
         pending.Read(ref empty);
-        if (empty > 1) LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
+        if (empty > 1)
+            LuminPackExceptionHelper.ThrowInvalidDataException("Invalid platform empty marker.");
         double fieldX = default;
         pending.Read(ref fieldX);
         double fieldY = default;

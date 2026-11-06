@@ -317,7 +317,10 @@ public sealed class LuminSortedListSource<TKey, TValue> : IDictionary<TKey, TVal
     /// <param name="key">The key.</param>
     /// <param name="value">Never assigned.</param>
     /// <returns>Never returns.</returns>
-    public bool TryGetValue(TKey key, out TValue value) { value = default!; return LuminPackExceptionHelper.ThrowNotSupportedException<bool>(); }
+    public bool TryGetValue(TKey key, out TValue value)
+    {
+        value = default!;
+        return LuminPackExceptionHelper.ThrowNotSupportedException<bool>(); }
 
     /// <summary>Enumerates the pairs in storage order.</summary>
     /// <returns>The pair enumerator.</returns>
@@ -341,7 +344,8 @@ public static partial class LuminPackCollectionAccess
     public static List<T>? GetUnderlyingIList<T>(
         Collection<T>? value, ref int depth)
     {
-        if (depth >= MaxDepth) return null;
+        if (depth >= MaxDepth)
+            return null;
 
         var view = LuminPackMarshal.As<Collection<T>, CollectionIListView<T>>(ref value);
         return Resolve(view.items, ref depth);
@@ -355,7 +359,8 @@ public static partial class LuminPackCollectionAccess
     public static List<T>? GetUnderlyingIList<T>(
         ReadOnlyCollection<T>? value, ref int depth)
     {
-        if (depth >= MaxDepth) return null;
+        if (depth >= MaxDepth)
+            return null;
 
         var view = LuminPackMarshal.As<ReadOnlyCollection<T>, ReadOnlyCollectionIListView<T>>(ref value);
         return Resolve(view.items, ref depth);
@@ -369,7 +374,8 @@ public static partial class LuminPackCollectionAccess
     public static List<T>? GetUnderlyingIList<T>(
         ObservableCollection<T>? value, ref int depth)
     {
-        if (depth >= MaxDepth) return null;
+        if (depth >= MaxDepth)
+            return null;
 
         var view = LuminPackMarshal.As<ObservableCollection<T>, ObservableCollectionIListView<T>>(ref value);
         return Resolve(view.items, ref depth);
@@ -383,7 +389,8 @@ public static partial class LuminPackCollectionAccess
     public static List<T>? GetUnderlyingIList<T>(
         ReadOnlyObservableCollection<T>? value, ref int depth)
     {
-        if (depth >= MaxDepth) return null;
+        if (depth >= MaxDepth)
+            return null;
 
         var observable = LuminPackMarshal.As<ReadOnlyObservableCollection<T>, ReadOnlyObservableCollectionView<T>>(ref value);
         var view = LuminPackMarshal.As<ObservableCollection<T>, ObservableCollectionIListView<T>>(ref observable.items);
@@ -427,7 +434,8 @@ public static partial class LuminPackCollectionAccess
         keys = default;
         values = default;
         version = 0;
-        if (!SortedListAppendStorage.Available || !TryGetSortedListStorage(list, out var keyArray, out var valueArray)) return false;
+        if (!SortedListAppendStorage.Available || !TryGetSortedListStorage(list, out var keyArray, out var valueArray))
+            return false;
         int count = list.Count;
         keys = new global::System.ReadOnlySpan<TKey>(keyArray, 0, count);
         values = new global::System.ReadOnlySpan<TValue>(valueArray, 0, count);
@@ -463,15 +471,18 @@ public static partial class LuminPackCollectionAccess
     {
         forwards = null;
         backwards = null;
-        if (!ImmutableQueueStorage.Available) return false;
+        if (!ImmutableQueueStorage.Available)
+            return false;
         var front = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.Forwards);
         var reversed = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.BackwardsReversed);
-        if (front is null) return false;
+        if (front is null)
+            return false;
         if (reversed is null)
         {
             // The reversal is created on first enumeration; an empty back stack needs none.
             var back = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.Backwards);
-            if (back is null || !back.IsEmpty) return false;
+            if (back is null || !back.IsEmpty)
+                return false;
             reversed = back;
         }
         forwards = front;
@@ -516,7 +527,8 @@ public static partial class LuminPackCollectionAccess
             try
             {
                 var front = ImmutableQueue<int>.Empty.Enqueue(1);
-                if (!Matches(front, "1")) return false;
+                if (!Matches(front, "1"))
+                    return false;
                 var queue = front.Enqueue(2).Enqueue(3);
                 foreach (int _ in queue) { }
                 return Matches(queue, "123") && Matches(queue.Dequeue(), "23");
@@ -533,10 +545,13 @@ public static partial class LuminPackCollectionAccess
         /// <returns>Whether the walk produced exactly the digits.</returns>
         private static bool Matches(ImmutableQueue<int> queue, string expected)
         {
-            if (!TryGetImmutableQueueStacksUnchecked(queue, out var forwards, out var backwards)) return false;
+            if (!TryGetImmutableQueueStacksUnchecked(queue, out var forwards, out var backwards))
+                return false;
             var text = new global::System.Text.StringBuilder();
-            foreach (int item in forwards!) text.Append(item);
-            foreach (int item in backwards!) text.Append(item);
+            foreach (int item in forwards!)
+                text.Append(item);
+            foreach (int item in backwards!)
+                text.Append(item);
             return text.ToString() == expected && string.Concat(queue) == expected;
         }
 
@@ -553,7 +568,8 @@ public static partial class LuminPackCollectionAccess
             if (backwards is null)
             {
                 var back = LuminFieldLayout.Field<ImmutableStack<int>?>(queue, Backwards);
-                if (back is { IsEmpty: true }) backwards = back;
+                if (back is { IsEmpty: true })
+                    backwards = back;
             }
             return forwards is not null && backwards is not null;
         }
@@ -589,8 +605,10 @@ public static partial class LuminPackCollectionAccess
         int count = list.Count;
         var keys = LuminFieldLayout.Field<TKey[]>(list, LuminCollectionLayouts.SortedListKeys);
         var values = LuminFieldLayout.Field<TValue[]>(list, LuminCollectionLayouts.SortedListValues);
-        if ((uint)count >= (uint)keys.Length || (uint)count >= (uint)values.Length) return false;
-        if (count != 0 && Comparer<TKey>.Default.Compare(keys[count - 1], key) >= 0) return false;
+        if ((uint)count >= (uint)keys.Length || (uint)count >= (uint)values.Length)
+            return false;
+        if (count != 0 && Comparer<TKey>.Default.Compare(keys[count - 1], key) >= 0)
+            return false;
         keys[count] = key;
         values[count] = value;
         LuminFieldLayout.Field<int>(list, LuminCollectionLayouts.SortedListSize) = count + 1;
@@ -611,15 +629,19 @@ public static partial class LuminPackCollectionAccess
         {
             try
             {
-                if (Version != LuminFieldLayout.ObjectField(typeof(SortedList<string, object>), "version")) return false;
+                if (Version != LuminFieldLayout.ObjectField(typeof(SortedList<string, object>), "version"))
+                    return false;
                 var list = new SortedList<int, string>();
                 int version = LuminFieldLayout.Field<int>(list, Version);
                 list.Add(1, "a");
-                if (LuminFieldLayout.Field<int>(list, Version) != unchecked(version + 1)) return false;
+                if (LuminFieldLayout.Field<int>(list, Version) != unchecked(version + 1))
+                    return false;
                 list.Clear();
                 return LuminFieldLayout.Field<int>(list, Version) == unchecked(version + 2);
             }
-            catch { return false; }
+            catch
+            {
+                return false; }
         }
     }
 
@@ -638,9 +660,11 @@ public static partial class LuminPackCollectionAccess
             !ReferenceEquals(list.Comparer, Comparer<TKey>.Default))
             return false;
         var comparer = Comparer<TKey>.Default;
-        if (keys[0] is null) return false;
+        if (keys[0] is null)
+            return false;
         for (int i = 1; i < count; i++)
-            if (keys[i] is null || comparer.Compare(keys[i - 1], keys[i]) >= 0) return false;
+            if (keys[i] is null || comparer.Compare(keys[i - 1], keys[i]) >= 0)
+                return false;
         global::System.Array.Copy(keys, LuminFieldLayout.Field<TKey[]>(list, LuminCollectionLayouts.SortedListKeys), count);
         global::System.Array.Copy(values, LuminFieldLayout.Field<TValue[]>(list, LuminCollectionLayouts.SortedListValues), count);
         LuminFieldLayout.Field<int>(list, LuminCollectionLayouts.SortedListSize) = count;
@@ -687,7 +711,8 @@ public static partial class LuminPackCollectionAccess
     {
         nodes = default;
         version = 0;
-        if (!PriorityQueueTraversal.Available || !TryGetPriorityQueueNodes(queue, out var storage, out int count)) return false;
+        if (!PriorityQueueTraversal.Available || !TryGetPriorityQueueNodes(queue, out var storage, out int count))
+            return false;
         nodes = new global::System.ReadOnlySpan<(TElement, TPriority)>(storage, 0, count);
         version = LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion);
         return true;
@@ -715,8 +740,12 @@ public static partial class LuminPackCollectionAccess
         /// <returns>Whether the located version tracks the public queue operations.</returns>
         private static bool Check()
         {
-            try { return LuminCollectionLayouts.PriorityQueueVersion >= 0 && Check<int, int>() && Check<object, object>(); }
-            catch { return false; }
+            try
+            {
+                return LuminCollectionLayouts.PriorityQueueVersion >= 0 && Check<int, int>() && Check<object, object>(); }
+            catch
+            {
+                return false; }
         }
 
         /// <summary>Checks version changes and stable capacity queries on one queue instantiation.</summary>
@@ -729,12 +758,15 @@ public static partial class LuminPackCollectionAccess
             ref int version = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion);
             int before = version;
             queue.Enqueue(default!, default!);
-            if (version == before) return false;
+            if (version == before)
+                return false;
             before = version;
             queue.EnsureCapacity(0);
-            if (version != before) return false;
+            if (version != before)
+                return false;
             queue.Dequeue();
-            if (version == before) return false;
+            if (version == before)
+                return false;
             before = version;
             queue.Clear();
             return version != before;
@@ -752,7 +784,8 @@ public static partial class LuminPackCollectionAccess
         {
             try
             {
-                if ((LuminCollectionLayouts.PriorityQueueNodes | LuminCollectionLayouts.PriorityQueueSize) < 0) return false;
+                if ((LuminCollectionLayouts.PriorityQueueNodes | LuminCollectionLayouts.PriorityQueueSize) < 0)
+                    return false;
                 var queue = new PriorityQueue<string, int>();
                 queue.Enqueue("c", 3);
                 queue.Enqueue("a", 1);
@@ -760,7 +793,8 @@ public static partial class LuminPackCollectionAccess
                 var nodes = LuminFieldLayout.Field<(string, int)[]>(queue, LuminCollectionLayouts.PriorityQueueNodes);
                 int index = 0;
                 foreach (var item in queue.UnorderedItems)
-                    if (nodes[index++] != item) return false;
+                    if (nodes[index++] != item)
+                        return false;
                 return index == 3 && LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueSize) == 3;
             }
             catch
@@ -782,12 +816,14 @@ public static partial class LuminPackCollectionAccess
         {
             try
             {
-                if ((LuminCollectionLayouts.SortedListKeys | LuminCollectionLayouts.SortedListValues | LuminCollectionLayouts.SortedListSize) < 0) return false;
+                if ((LuminCollectionLayouts.SortedListKeys | LuminCollectionLayouts.SortedListValues | LuminCollectionLayouts.SortedListSize) < 0)
+                    return false;
                 var list = new SortedList<int, string> { [3] = "c", [1] = "a", [2] = "b" };
                 var keys = LuminFieldLayout.Field<int[]>(list, LuminCollectionLayouts.SortedListKeys);
                 var values = LuminFieldLayout.Field<string[]>(list, LuminCollectionLayouts.SortedListValues);
                 if (keys.Length < 3 || keys[0] != 1 || keys[2] != 3 || values[0] != "a" || values[2] != "c" ||
-                    LuminFieldLayout.Field<int>(list, LuminCollectionLayouts.SortedListSize) != 3) return false;
+                    LuminFieldLayout.Field<int>(list, LuminCollectionLayouts.SortedListSize) != 3)
+                    return false;
                 var filled = new SortedList<int, string>(4);
                 global::System.Array.Copy(new[] { 1, 5, 9 }, LuminFieldLayout.Field<int[]>(filled, LuminCollectionLayouts.SortedListKeys), 3);
                 global::System.Array.Copy(new[] { "x", "y", "z" }, LuminFieldLayout.Field<string[]>(filled, LuminCollectionLayouts.SortedListValues), 3);
@@ -811,10 +847,12 @@ public static partial class LuminPackCollectionAccess
     /// node and list fields, producing the circular list <c>AddLast</c> produces; any other list appends item by item.</remarks>
     public static void FillLinkedList<T>(LinkedList<T> list, T[] items, int count)
     {
-        if (count == 0) return;
+        if (count == 0)
+            return;
         if (!LinkedListLinking.Available || list.Count != 0 || list.GetType() != typeof(LinkedList<T>))
         {
-            for (int i = 0; i < count; i++) list.AddLast(items[i]);
+            for (int i = 0; i < count; i++)
+                list.AddLast(items[i]);
             return;
         }
         Link(list, items, count);
@@ -917,7 +955,8 @@ public static partial class LuminPackCollectionAccess
     /// <returns>The innermost list, or null when the storage is another list type or nested too deeply.</returns>
     private static List<T>? Resolve<T>(IList<T>? items, ref int depth)
     {
-        if (items is null) return null;
+        if (items is null)
+            return null;
         if (items.GetType() == typeof(List<T>))
             return Unsafe.As<List<T>>(items);
         switch (items)

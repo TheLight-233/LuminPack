@@ -42,7 +42,8 @@ namespace LuminPack.Unity.ContractFixture
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Generated native object fields changed.");
             var retained = restored.Curve;
             LuminPackSerializer.Deserialize(bytes, ref restored);
-            if (!ReferenceEquals(retained, restored.Curve)) LuminPackExceptionHelper.ThrowInvalidOperationException("Generated native owner reuse failed.");
+            if (!ReferenceEquals(retained, restored.Curve))
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Generated native owner reuse failed.");
             Debug.Log("LUMINPACK_UNITY_GENERATOR_OK: native owners, arrays, lists and reuse.");
         }
     }

@@ -50,7 +50,8 @@ internal static class ParallelWork
     /// because this assembly targets netstandard2.0; a runtime without it has no DATAS.</remarks>
     private static bool UsesDynamicServerHeaps()
     {
-        if (!GCSettings.IsServerGC) return false;
+        if (!GCSettings.IsServerGC)
+            return false;
         try
         {
             var read = typeof(GC).GetMethod("GetConfigurationVariables", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);

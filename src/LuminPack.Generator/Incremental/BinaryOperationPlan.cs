@@ -56,10 +56,12 @@ internal sealed class BinaryOperationPlanCache
             {
                 var configuration = _configurations.FirstOrDefault(value => value.Input == (input?.Identity ?? "") &&
                     MetaInfoValueComparer.Instance.Equals(value.Metadata, metadata));
-                if (configuration == null) _configurations.Add(configuration = new Configuration(metadata, input?.Identity ?? ""));
+                if (configuration == null)
+                    _configurations.Add(configuration = new Configuration(metadata, input?.Identity ?? ""));
                 if (!configuration.Plans.TryGetValue(type, out slot))
                     configuration.Plans.Add(type, slot = new PlanSlot());
-                if (slot.Completed != null && slot.Completed.TryGetTarget(out var completed)) return completed;
+                if (slot.Completed != null && slot.Completed.TryGetTarget(out var completed))
+                    return completed;
                 if (slot.Pending == null)
                 {
                     var settings = configuration.Metadata;
@@ -71,12 +73,15 @@ internal sealed class BinaryOperationPlanCache
             // Semantic construction can enter other compilation-local caches. Keep their
             // work outside the dictionary publication lock.
             BinaryOperationPlan plan;
-            try { plan = pending.Value; }
+            try
+            {
+                plan = pending.Value; }
             finally
             {
                 if (!pending.IsValueCreated)
                     lock (_gate)
-                        if (ReferenceEquals(slot.Pending, pending)) slot.Pending = null;
+                        if (ReferenceEquals(slot.Pending, pending))
+                            slot.Pending = null;
             }
             lock (_gate)
             {
@@ -137,7 +142,13 @@ internal sealed class BinaryOperationPlan
     /// <param name="guaranteedMaxBytes">The explicit complete-record guarantee, or zero when absent.</param>
     /// <param name="options">The declaration's immutable compiled option profile.</param>
     private BinaryOperationPlan(string typeName, ImmutableDictionary<string, BinaryOperation> operations, ImmutableArray<MemberDeclarationSyntax> layouts, string templateSource = null, int guaranteedMaxBytes = 0, CompiledOptions options = null)
-    { TypeName = typeName; Operations = operations; Layouts = layouts; TemplateSource = templateSource; GuaranteedMaxBytes = guaranteedMaxBytes; Options = options ?? CompiledOptions.Default; }
+    {
+        TypeName = typeName;
+        Operations = operations;
+        Layouts = layouts;
+        TemplateSource = templateSource;
+        GuaranteedMaxBytes = guaranteedMaxBytes;
+        Options = options ?? CompiledOptions.Default; }
 
     /// <summary>Analyzes only one type's templates; the temporary semantic model never enters the cached result.</summary>
     /// <param name="type">The current operation type.</param>
@@ -176,7 +187,8 @@ internal sealed class BinaryOperationPlan
                 typeArguments[current.TypeParameters[index].Name] = FormatterTypeName.Get(current.TypeArguments[index]);
         var container = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(declaration => declaration.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
-        if (container == null) return new BinaryOperationPlan(name, empty, ImmutableArray<MemberDeclarationSyntax>.Empty);
+        if (container == null)
+            return new BinaryOperationPlan(name, empty, ImmutableArray<MemberDeclarationSyntax>.Empty);
 
         var layouts = container.Members.Where(declaration => declaration switch
         {
@@ -201,17 +213,20 @@ internal sealed class BinaryOperationPlan
             // A base mirror emitted in two different generic roots can carry different
             // substituted constraints. Keep each operation plan's complete layout family
             // independent rather than reusing the first same-spelled declaration.
-            if (symbol != null) layoutNames[symbol] = Prefix + "layout_" + layoutOwner + "_" + symbol.Name;
+            if (symbol != null)
+                layoutNames[symbol] = Prefix + "layout_" + layoutOwner + "_" + symbol.Name;
         }
         var operations = ImmutableDictionary.CreateBuilder<string, BinaryOperation>(StringComparer.Ordinal);
         foreach (var method in container.Members.OfType<MethodDeclarationSyntax>().Where(method => IsOperation(method.Identifier.ValueText)))
         {
             var parameters = method.ParameterList.Parameters;
-            if (method.Body == null || parameters.Count != 2) continue;
+            if (method.Body == null || parameters.Count != 2)
+                continue;
             var symbol = model.GetDeclaredSymbol(method);
             string stateType = symbol?.Parameters[0].Type.ToDisplayString();
             if (stateType is not ("LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackEvaluator" or
-                "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")) continue;
+                "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader"))
+                continue;
             string operationName = method.Identifier.ValueText + (stateType.Contains("Json") ? ":json" : string.Empty);
             var localMethods = new Dictionary<IMethodSymbol, string>(SymbolEqualityComparer.Default);
             foreach (var local in method.Body.DescendantNodes().OfType<LocalFunctionStatementSyntax>())
@@ -268,7 +283,11 @@ internal sealed class BinaryOperation
     /// <param name="cursorLocals">Compiler-bound integer cursor identities, or null when none exist; no symbols are retained.</param>
     private BinaryOperation(BlockSyntax body, ImmutableArray<BinaryOperationParameter> parameters, ImmutableDictionary<string, BinaryOperationCall> calls,
         ImmutableHashSet<string> cursorLocals)
-    { Body = body; Parameters = parameters; Calls = calls; CursorLocals = cursorLocals; }
+    {
+        Body = body;
+        Parameters = parameters;
+        Calls = calls;
+        CursorLocals = cursorLocals; }
 
     /// <summary>Resolves local identities and nested argument types before discarding all semantic objects.</summary>
     /// <param name="model">The temporary template semantic model.</param>
@@ -293,9 +312,11 @@ internal sealed class BinaryOperation
         }
         foreach (var node in body.DescendantNodes())
         {
-            if (node is not (VariableDeclaratorSyntax or ForEachStatementSyntax or SingleVariableDesignationSyntax or CatchDeclarationSyntax or ParameterSyntax or LabeledStatementSyntax or LocalFunctionStatementSyntax)) continue;
+            if (node is not (VariableDeclaratorSyntax or ForEachStatementSyntax or SingleVariableDesignationSyntax or CatchDeclarationSyntax or ParameterSyntax or LabeledStatementSyntax or LocalFunctionStatementSyntax))
+                continue;
             var symbol = model.GetDeclaredSymbol(node);
-            if (symbol != null && !names.ContainsKey(symbol)) names.Add(symbol, BinaryOperationPlan.Prefix + "v" + names.Count);
+            if (symbol != null && !names.ContainsKey(symbol))
+                names.Add(symbol, BinaryOperationPlan.Prefix + "v" + names.Count);
             if (symbol is ILocalSymbol { Type.SpecialType: SpecialType.System_Int32, RefKind: RefKind.None } &&
                 node is VariableDeclaratorSyntax { Initializer.Value: InvocationExpressionSyntax { ArgumentList.Arguments.Count: 0,
                     Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "GetCurrentSpanIndex" } } })
@@ -322,7 +343,11 @@ internal sealed class BinaryOperationParameter
     /// <param name="refKind">Its original passing convention.</param>
     /// <param name="originalName">Its original role name, retained only for final local presentation.</param>
     internal BinaryOperationParameter(string name, string type, RefKind refKind, string originalName)
-    { Name = name; Type = type; RefKind = refKind; OriginalName = originalName; }
+    {
+        Name = name;
+        Type = type;
+        RefKind = refKind;
+        OriginalName = originalName; }
 }
 
 /// <summary>Identifies a nested operation independently of the compilation that discovered it.</summary>
@@ -343,7 +368,13 @@ internal sealed class BinaryOperationCall
     /// <param name="aliases">Arguments that can preserve reference aliases rather than requiring temporaries.</param>
     /// <param name="optionProfile">A member's statically bound option profile, if present.</param>
     internal BinaryOperationCall(string typeName, string operation, bool reduced, bool local, IEnumerable<bool> aliases, string optionProfile = null)
-    { TypeName = typeName; Operation = operation; Reduced = reduced; Local = local; Aliases = aliases.ToImmutableArray(); OptionProfile = optionProfile; }
+    {
+        TypeName = typeName;
+        Operation = operation;
+        Reduced = reduced;
+        Local = local;
+        Aliases = aliases.ToImmutableArray();
+        OptionProfile = optionProfile; }
 }
 
 /// <summary>Projects compiler-bound templates to pure syntax before any entry-point expansion occurs.</summary>
@@ -373,7 +404,13 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         Dictionary<ISymbol, string> names, Dictionary<IMethodSymbol, string> locals, bool scopeTemporaries = false,
         Dictionary<string, string> typeArguments = null, bool capacityWriter = false)
     {
-        _model = model; _layouts = layouts; _names = names; _locals = locals; _scopeTemporaries = scopeTemporaries; _typeArguments = typeArguments ?? new Dictionary<string, string>(); _capacityWriter = capacityWriter;
+        _model = model;
+        _layouts = layouts;
+        _names = names;
+        _locals = locals;
+        _scopeTemporaries = scopeTemporaries;
+        _typeArguments = typeArguments ?? new Dictionary<string, string>();
+        _capacityWriter = capacityWriter;
         // Only formals, declared locals, layouts and substituted type parameters are renamed, so any other spelling can
         // skip its semantic lookup.
         _renamed = new HashSet<string>(names.Keys.Select(symbol => symbol.Name).Concat(layouts.Keys.Select(symbol => symbol.Name)).Concat(_typeArguments.Keys), StringComparer.Ordinal);
@@ -409,7 +446,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     /// <returns>The renamed statement, with a typed call annotation when applicable.</returns>
     public override SyntaxNode VisitExpressionStatement(ExpressionStatementSyntax node)
     {
-        if (node.Expression is not InvocationExpressionSyntax call) return base.VisitExpressionStatement(node);
+        if (node.Expression is not InvocationExpressionSyntax call)
+            return base.VisitExpressionStatement(node);
         BinaryOperationCall slot = null;
         // Only local helper matching uses this invocation symbol. Formatter slots use the
         // receiver and payload types below, even when the invocation itself cannot bind.
@@ -437,7 +475,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
                         BinaryEntryInlining.PayloadAnnotation, ClosedOperationTypes.Name(type, _typeArguments))));
                 }
                 var aliases = call.ArgumentList.Arguments.Select(item => CanAlias(item.Expression)).ToList();
-                if (reduced) aliases.Insert(0, true);
+                if (reduced)
+                    aliases.Insert(0, true);
                 string state = reduced ? receiver : _model.GetTypeInfo(call.ArgumentList.Arguments[0].Expression).Type?.ToDisplayString();
                 string optionProfile = argument is InvocationExpressionSyntax marker && IsOptionMarker(marker)
                     ? ((GenericNameSyntax)((MemberAccessExpressionSyntax)marker.Expression).Name).TypeArgumentList.Arguments[0].ToString() : null;
@@ -446,7 +485,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
             }
         }
         var result = base.VisitExpressionStatement(node);
-        if (slot == null) return result;
+        if (slot == null)
+            return result;
         string id = node.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
         Calls.Add(id, slot);
         return result.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryOperationPlan.CallAnnotation, id));
@@ -474,12 +514,14 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     /// <returns>The same statements, with zero-length lifetime seeds before original span initialization.</returns>
     public override SyntaxNode VisitBlock(BlockSyntax node)
     {
-        if (!_scopeTemporaries || (int)((CSharpParseOptions)_model.SyntaxTree.Options).LanguageVersion >= 1100) return base.VisitBlock(node);
+        if (!_scopeTemporaries || (int)((CSharpParseOptions)_model.SyntaxTree.Options).LanguageVersion >= 1100)
+            return base.VisitBlock(node);
         var statements = new List<StatementSyntax>();
         foreach (var statement in node.Statements)
         {
             var visited = Visit(statement) as StatementSyntax;
-            if (visited == null) continue;
+            if (visited == null)
+                continue;
             if (statement is LocalDeclarationStatementSyntax { Declaration.Variables.Count: 1 } original &&
                 original.Declaration.Type is not RefTypeSyntax && original.Declaration.Variables[0].Initializer != null &&
                 !original.Declaration.Variables[0].Initializer.Value.DescendantNodesAndSelf().Any(expression =>
@@ -503,7 +545,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
                 statements.Add(SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
                     SyntaxFactory.IdentifierName(variable.Identifier), variable.Initializer.Value)));
             }
-            else statements.Add(visited);
+            else
+                statements.Add(visited);
         }
         return node.WithStatements(SyntaxFactory.List(statements));
     }
@@ -517,7 +560,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         var parse = (CSharpParseOptions)_model.SyntaxTree.Options;
         if (!_scopeTemporaries || (int)parse.LanguageVersion < 1100 || node.Declaration.Type is RefTypeSyntax ||
             node.Modifiers.Any(token => token.IsKind(SyntaxKind.ScopedKeyword)) ||
-            !node.Declaration.Variables.Any(variable => _model.GetDeclaredSymbol(variable) is ILocalSymbol { Type.IsRefLikeType: true })) return result;
+            !node.Declaration.Variables.Any(variable => _model.GetDeclaredSymbol(variable) is ILocalSymbol { Type.IsRefLikeType: true }))
+            return result;
         var type = ((ILocalSymbol)_model.GetDeclaredSymbol(node.Declaration.Variables[0])).Type;
         return result.WithDeclaration(result.Declaration.WithType(SyntaxFactory.ParseTypeName(ClosedOperationTypes.Name(type, _typeArguments))))
             .WithModifiers(result.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.ScopedKeyword)));
@@ -528,7 +572,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     /// <returns>The direct field expression or the unchanged invocation.</returns>
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if (IsOptionMarker(node)) return Visit(node.ArgumentList.Arguments[0].Expression);
+        if (IsOptionMarker(node))
+            return Visit(node.ArgumentList.Arguments[0].Expression);
         if (node.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" } && _model.GetConstantValue(node) is { HasValue: true, Value: string constant })
             return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(constant)).WithTriviaFrom(node);
         if (_model.GetSymbolInfo(node).Symbol is IMethodSymbol { ReturnsByRef: true } method &&
@@ -575,12 +620,14 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     /// <returns>The stable template identifier.</returns>
     public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
     {
-        if (node.Identifier.Text == "var" || !_renamed.Contains(node.Identifier.ValueText)) return base.VisitIdentifierName(node);
+        if (node.Identifier.Text == "var" || !_renamed.Contains(node.Identifier.ValueText))
+            return base.VisitIdentifierName(node);
         var symbol = _model.GetSymbolInfo(node).Symbol;
         if (symbol is ITypeParameterSymbol parameter && _typeArguments.TryGetValue(parameter.Name, out string argument))
             return SyntaxFactory.ParseTypeName(argument).WithTriviaFrom(node);
         string name = Replacement(symbol);
-        if (name == null) return base.VisitIdentifierName(node);
+        if (name == null)
+            return base.VisitIdentifierName(node);
         var token = BinaryOperationPlan.Identity(name, node.Identifier);
         var state = symbol is IParameterSymbol parameterState ? parameterState.Type : (symbol as ILocalSymbol)?.Type;
         string stateName = state?.ToDisplayString();
@@ -638,9 +685,12 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     /// <returns>A stable replacement name, or null when no relocation is required.</returns>
     private string Replacement(ISymbol symbol)
     {
-        if (symbol == null) return null;
-        if (_names.TryGetValue(symbol, out string local)) return local;
-        if (_layouts.TryGetValue(symbol, out string layout)) return layout;
+        if (symbol == null)
+            return null;
+        if (_names.TryGetValue(symbol, out string local))
+            return local;
+        if (_layouts.TryGetValue(symbol, out string layout))
+            return layout;
         return symbol is INamedTypeSymbol named && _layouts.TryGetValue(named.OriginalDefinition, out layout) ? layout : null;
     }
 
@@ -649,10 +699,14 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     /// <returns>Whether expansion must preserve a reference alias rather than copy the value.</returns>
     private bool CanAlias(ExpressionSyntax expression)
     {
-        if (expression is InvocationExpressionSyntax marker && IsOptionMarker(marker)) return CanAlias(marker.ArgumentList.Arguments[0].Expression);
-        if (expression is PostfixUnaryExpressionSyntax suppressed && suppressed.IsKind(SyntaxKind.SuppressNullableWarningExpression)) return CanAlias(suppressed.Operand);
-        if (expression is ParenthesizedExpressionSyntax parenthesized) return CanAlias(parenthesized.Expression);
-        if (expression is ElementAccessExpressionSyntax or ThisExpressionSyntax) return true;
+        if (expression is InvocationExpressionSyntax marker && IsOptionMarker(marker))
+            return CanAlias(marker.ArgumentList.Arguments[0].Expression);
+        if (expression is PostfixUnaryExpressionSyntax suppressed && suppressed.IsKind(SyntaxKind.SuppressNullableWarningExpression))
+            return CanAlias(suppressed.Operand);
+        if (expression is ParenthesizedExpressionSyntax parenthesized)
+            return CanAlias(parenthesized.Expression);
+        if (expression is ElementAccessExpressionSyntax or ThisExpressionSyntax)
+            return true;
         return _model.GetSymbolInfo(expression).Symbol is ILocalSymbol or IParameterSymbol or IFieldSymbol or
             IMethodSymbol { ReturnsByRef: true } or IPropertySymbol { ReturnsByRef: true };
     }
@@ -676,7 +730,13 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         /// <param name="typeArguments">Closed arguments for the containing generic operation.</param>
         internal AccessorSubstitution(SemanticModel model, Dictionary<ISymbol, string> layouts, IParameterSymbol parameter, ExpressionSyntax argument,
             string localPrefix = null, Dictionary<string, string> typeArguments = null)
-        { _model = model; _layouts = layouts; _parameter = parameter; _argument = argument; _localPrefix = localPrefix; _typeArguments = typeArguments; }
+        {
+            _model = model;
+            _layouts = layouts;
+            _parameter = parameter;
+            _argument = argument;
+            _localPrefix = localPrefix;
+            _typeArguments = typeArguments; }
 
         /// <summary>Substitutes the field owner and relocates the private mirror type.</summary>
         /// <param name="node">The original accessor identifier.</param>
@@ -684,10 +744,12 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
         {
             var symbol = _model.GetSymbolInfo(node).Symbol;
-            if (SymbolEqualityComparer.Default.Equals(symbol, _parameter)) return _argument.WithTriviaFrom(node);
+            if (SymbolEqualityComparer.Default.Equals(symbol, _parameter))
+                return _argument.WithTriviaFrom(node);
             if (symbol is ITypeParameterSymbol parameter && _typeArguments != null && _typeArguments.TryGetValue(parameter.Name, out string argument))
                 return SyntaxFactory.ParseTypeName(argument).WithTriviaFrom(node);
-            if (_localPrefix != null && symbol is ILocalSymbol) return node.WithIdentifier(BinaryOperationPlan.Identity(_localPrefix + symbol.Name, node.Identifier));
+            if (_localPrefix != null && symbol is ILocalSymbol)
+                return node.WithIdentifier(BinaryOperationPlan.Identity(_localPrefix + symbol.Name, node.Identifier));
             return symbol != null && _layouts.TryGetValue(symbol, out string name)
                 ? node.WithIdentifier(BinaryOperationPlan.Identity(name, node.Identifier)) : base.VisitIdentifierName(node);
         }

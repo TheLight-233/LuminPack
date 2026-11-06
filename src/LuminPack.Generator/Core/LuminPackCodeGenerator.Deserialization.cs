@@ -73,10 +73,12 @@ public static partial class LuminPackCodeGenerator
                 string Storage(LuminDataField member) => (CanDeserializeDirectlyIntoConstructedObject(member) ? "instance." : "local.") + member.Identifier;
                 int last = index;
                 if (!field.IsCompress && IsMergeableField(field))
-                    while (last + 1 < data.fields.Count && !data.fields[last + 1].IsCompress && IsMergeableField(data.fields[last + 1])) last++;
+                    while (last + 1 < data.fields.Count && !data.fields[last + 1].IsCompress && IsMergeableField(data.fields[last + 1]))
+                        last++;
                 if (TryGenerateCursorFixedGroup(sb, data.fields, index, last, Storage, "            ", write: false, allowBulkCopy: !polymorphism))
                     index = last;
-                else AppendCursorFieldRead(sb, field, Storage(field), "            ", 0, fresh: false, allowBulkCopy: !polymorphism, guardNestedReads);
+                else
+                    AppendCursorFieldRead(sb, field, Storage(field), "            ", 0, fresh: false, allowBulkCopy: !polymorphism, guardNestedReads);
             }
             foreach (var callback in data.callBackMethods.Where(item => item.Item2 == SerializeCallBackType.OnDeserialized))
                 sb.AppendLine(callback.Item3 ? "            " + concreteTypeName + "." + callback.Item1 + "();" : "            value?." + callback.Item1 + "();");
@@ -106,7 +108,8 @@ public static partial class LuminPackCodeGenerator
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
-        if (!polymorphism && data.isValueType) sb.AppendLine("            reader.Advance(1);");
+        if (!polymorphism && data.isValueType)
+            sb.AppendLine("            reader.Advance(1);");
         if (!data.isValueType || HasReusableMembers(data.fields))
         {
             AppendExistingObjectRead(sb, data, concreteTypeName, polymorphism, guardNestedReads);

@@ -35,7 +35,8 @@ internal static class CollectionEmitterKit
             sb.AppendLine("            foreach (ref var item in " + span + ")");
             sb.AppendLine("            {");
         }
-        if (checkBuffer) sb.AppendLine("                writer.CheckBuffer();");
+        if (checkBuffer)
+            sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(in " + item + ");");
         sb.AppendLine("            }");
     }
@@ -58,7 +59,8 @@ internal static class CollectionEmitterKit
     /// <returns>Whether a scalar-written element block can use the raw reader.</returns>
     internal static bool IsRawScalar(ITypeSymbol element, string elementType)
     {
-        if (!IsRaw(element, elementType)) return false;
+        if (!IsRaw(element, elementType))
+            return false;
         // A proven unmanaged element is raw only when its own formatter is a plain storage copy: Nullable, KeyValuePair and
         // specialized-mode structs are framed by their formatter. An unclassifiable element reached IsRaw as a known scalar.
         if (element is not null && EmitterTypeTraits.TryGetIsUnmanaged(element, out bool unmanaged) && unmanaged)
@@ -107,7 +109,8 @@ internal static class CollectionEmitterKit
             var raw = new StringBuilder();
             EmitterTypeTraits.AppendRawCollectionWrite(raw, element, elementType, "__items", "__items.Length");
             foreach (var line in raw.ToString().Split('\n'))
-                if (line.Trim().Length != 0) sb.AppendLine(indent + "    " + line.Trim());
+                if (line.Trim().Length != 0)
+                    sb.AppendLine(indent + "    " + line.Trim());
         }
         else if (PortableStructPlan.TryCreateContiguous(element) is { } portable)
         {
@@ -130,7 +133,8 @@ internal static class CollectionEmitterKit
             sb.AppendLine(indent + "    writer.Write(__items.Length);");
             sb.AppendLine(indent + "    for (int __i = 0; __i < __items.Length; __i++)");
             sb.AppendLine(indent + "    {");
-            if (!ChecksItself(element)) sb.AppendLine(indent + "        writer.CheckBuffer();");
+            if (!ChecksItself(element))
+                sb.AppendLine(indent + "        writer.CheckBuffer();");
             sb.AppendLine(indent + "        writer.WriteValue(in __items[__i]!);");
             sb.AppendLine(indent + "    }");
             sb.AppendLine(indent + "    writer.CheckBuffer();");
@@ -191,11 +195,14 @@ internal static class CollectionEmitterKit
         }
         sb.AppendLine(loopIndent + "    foreach (" + item + " in " + source + ")");
         sb.AppendLine(loopIndent + "    {");
-        if (!ChecksItself(element)) sb.AppendLine(loopIndent + "        writer.CheckBuffer();");
+        if (!ChecksItself(element))
+            sb.AppendLine(loopIndent + "        writer.CheckBuffer();");
         sb.AppendLine(loopIndent + "        __count++;");
-        foreach (var line in body) sb.AppendLine(loopIndent + "        " + line);
+        foreach (var line in body)
+            sb.AppendLine(loopIndent + "        " + line);
         sb.AppendLine(loopIndent + "    }");
-        if (skipKnownEmpty) sb.AppendLine(indent + "    }");
+        if (skipKnownEmpty)
+            sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "    writer.EndCollection(__countPosition, __count);");
         sb.AppendLine(indent + "    writer.CheckBuffer();");
         sb.AppendLine(indent + "}");
@@ -227,9 +234,11 @@ internal static class CollectionEmitterKit
             }
             sb.AppendLine(indent + "        foreach (var item in " + stack + ")");
             sb.AppendLine(indent + "        {");
-            if (!ChecksItself(element)) sb.AppendLine(indent + "            writer.CheckBuffer();");
+            if (!ChecksItself(element))
+                sb.AppendLine(indent + "            writer.CheckBuffer();");
             sb.AppendLine(indent + "            __count++;");
-            foreach (var line in body) sb.AppendLine(indent + "            " + line);
+            foreach (var line in body)
+                sb.AppendLine(indent + "            " + line);
             sb.AppendLine(indent + "        }");
         }
         sb.AppendLine(indent + "        writer.EndCollection(__countPosition, __count);");
@@ -248,8 +257,10 @@ internal static class CollectionEmitterKit
             sb.AppendLine(indent + "        {");
             sb.AppendLine(indent + "            foreach (var item in new global::System.ReadOnlySpan<" + type + ">(items, 0, count))");
             sb.AppendLine(indent + "            {");
-            if (!ChecksItself(element)) sb.AppendLine(indent + "                writer.CheckBuffer();");
-            foreach (string line in body) sb.AppendLine(indent + "                " + line);
+            if (!ChecksItself(element))
+                sb.AppendLine(indent + "                writer.CheckBuffer();");
+            foreach (string line in body)
+                sb.AppendLine(indent + "                " + line);
             sb.AppendLine(indent + "            }");
             sb.AppendLine(indent + "            return count;");
             sb.AppendLine(indent + "        }");
@@ -291,9 +302,11 @@ internal static class CollectionEmitterKit
     {
         if (collection is IArrayTypeSymbol array)
             return PortableStructPlan.TryCreateContiguous(array.ElementType) is { WireSize: 0 } ? ", 0" : "";
-        if (collection is not INamedTypeSymbol named || named.TypeArguments.Length == 0) return "";
+        if (collection is not INamedTypeSymbol named || named.TypeArguments.Length == 0)
+            return "";
         foreach (var element in named.TypeArguments)
-            if (PortableStructPlan.TryCreateContiguous(element) is not { WireSize: 0 }) return "";
+            if (PortableStructPlan.TryCreateContiguous(element) is not { WireSize: 0 })
+                return "";
         return ", 0";
     }
 
@@ -379,11 +392,13 @@ internal static class CollectionEmitterKit
             sb.AppendLine(indent + "        }");
             sb.AppendLine(indent + "        catch (global::System.Exception __error)");
             sb.AppendLine(indent + "        {");
-            foreach (var line in onReadFailure) sb.AppendLine(indent + "            " + line);
+            foreach (var line in onReadFailure)
+                sb.AppendLine(indent + "            " + line);
             sb.AppendLine(indent + "            global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(__error);");
             sb.AppendLine(indent + "        }");
         }
-        foreach (var line in consume) sb.AppendLine(indent + "        " + line);
+        foreach (var line in consume)
+            sb.AppendLine(indent + "        " + line);
         sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "    finally");
         sb.AppendLine(indent + "    {");
@@ -398,8 +413,10 @@ internal static class CollectionEmitterKit
     /// <returns>A constant when the element classification is known; otherwise a runtime test.</returns>
     internal static string ClearExpression(ITypeSymbol element, string elementType)
     {
-        if (element?.IsUnmanagedType == true) return "false";
-        if (element?.IsReferenceType == true) return "true";
+        if (element?.IsUnmanagedType == true)
+            return "false";
+        if (element?.IsReferenceType == true)
+            return "true";
         return "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">()";
     }
 }

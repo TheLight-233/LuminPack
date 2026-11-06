@@ -239,7 +239,8 @@ public static partial class DictionaryEmitter
             sb.AppendLine("                }");
             sb.AppendLine();
             sb.AppendLine("                int version = dictionaryView._version;");
-            if (localUnionCursor) sb.AppendLine("                int nextIndex = index;");
+            if (localUnionCursor)
+                sb.AppendLine("                int nextIndex = index;");
             sb.AppendLine("                ref var entryRef = ref LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
             sb.AppendLine("                for (int i = 0; i < count; i++)");
             sb.AppendLine("                {");
@@ -264,7 +265,8 @@ public static partial class DictionaryEmitter
             }
             sb.AppendLine("                    entryRef = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, 1);");
             sb.AppendLine("                }");
-            if (localUnionCursor) sb.AppendLine("                writer.CurrentIndex = nextIndex;");
+            if (localUnionCursor)
+                sb.AppendLine("                writer.CurrentIndex = nextIndex;");
             sb.AppendLine("                if (dictionaryView._version != version || dictionaryView._count != count || dictionaryView._freeCount != 0)");
             sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();");
             sb.AppendLine("            }");
@@ -275,7 +277,8 @@ public static partial class DictionaryEmitter
             sb.AppendLine("            {");
             sb.AppendLine("                foreach (var item in source)");
             sb.AppendLine("                {");
-            if (!stringKey) sb.AppendLine("                    writer.CheckBuffer();");
+            if (!stringKey)
+                sb.AppendLine("                    writer.CheckBuffer();");
             sb.AppendLine("                    " + keyType + " key = item.Key;");
             sb.AppendLine("                    writer.WriteValue(in key);");
             sb.AppendLine("                    " + valueType + " itemValue = item.Value;");
@@ -634,11 +637,13 @@ public static partial class DictionaryEmitter
         const string indent = "                ";
         sb.AppendLine(indent + "if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine(indent + "{");
-        if (seedKey != null) sb.AppendLine(indent + "    " + seedKey);
+        if (seedKey != null)
+            sb.AppendLine(indent + "    " + seedKey);
         sb.AppendLine(indent + "    reader.ReadValue(ref key);");
         sb.AppendLine(indent + "    if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine(indent + "    {");
-        if (seedValue != null) sb.AppendLine(indent + "        " + seedValue);
+        if (seedValue != null)
+            sb.AppendLine(indent + "        " + seedValue);
         sb.AppendLine(indent + "        reader.ReadValue(ref itemValue);");
         // A missing value has already consumed the entry end. Drain only after an actual value.
         // Nested values may also finish on ArrayEnd, so token state alone cannot identify this boundary.

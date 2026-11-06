@@ -35,9 +35,12 @@ internal static class RootContainerProjection
         var containers = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var serializer in serializers)
             foreach (var method in serializer.Members.OfType<MethodDeclarationSyntax>())
-                if (IsRoot(method)) containers[PayloadKey(method)] = string.Empty;
-        if (containers.Count == 0) return root;
-        foreach (string payload in containers.Keys.ToArray()) containers[payload] = ContainerPrefix + Hash(payload);
+                if (IsRoot(method))
+                    containers[PayloadKey(method)] = string.Empty;
+        if (containers.Count == 0)
+            return root;
+        foreach (string payload in containers.Keys.ToArray())
+            containers[payload] = ContainerPrefix + Hash(payload);
 
         // Every root call must name a payload whose roots move; otherwise the contribution keeps its original form.
         var calls = new Dictionary<InvocationExpressionSyntax, string>();
@@ -49,7 +52,8 @@ internal static class RootContainerProjection
                 MemberAccessExpressionSyntax { Expression: var owner, Name: var member } when owner.ToString() == Serializer => member,
                 _ => null
             };
-            if (name == null || !Roots.Contains(name.Identifier.ValueText)) continue;
+            if (name == null || !Roots.Contains(name.Identifier.ValueText))
+                continue;
             // A local function may forward to another payload's root, so the nearest declaration names the payload.
             var caller = call.Ancestors().FirstOrDefault(node => node is LocalFunctionStatementSyntax or BaseMethodDeclarationSyntax);
             var parameters = caller switch { LocalFunctionStatementSyntax local => local.ParameterList, MethodDeclarationSyntax method => method.ParameterList, _ => null };
@@ -85,7 +89,10 @@ internal static class RootContainerProjection
         var positions = new List<(int Index, string Container)>();
         foreach (var member in serializer.Members)
         {
-            if (member is not MethodDeclarationSyntax method || !IsRoot(method)) { members.Add(member); continue; }
+            if (member is not MethodDeclarationSyntax method || !IsRoot(method))
+            {
+                members.Add(member);
+                continue; }
             string container = containers[PayloadKey(method)];
             if (!groups.TryGetValue(container, out var group))
             {

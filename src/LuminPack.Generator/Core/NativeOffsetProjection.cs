@@ -20,10 +20,12 @@ internal sealed class NativeOffsetProjection : CSharpSyntaxRewriter
         var previous = _nativeOffsets;
         _nativeOffsets = new HashSet<string>(previous, StringComparer.Ordinal);
         foreach (var parameter in node.DescendantNodes().OfType<ParameterSyntax>())
-            if (IsNativeType(parameter.Type)) _nativeOffsets.Add(parameter.Identifier.ValueText);
+            if (IsNativeType(parameter.Type))
+                _nativeOffsets.Add(parameter.Identifier.ValueText);
         foreach (var declaration in node.DescendantNodes().OfType<VariableDeclarationSyntax>())
             if (IsNativeType(declaration.Type))
-                foreach (var variable in declaration.Variables) _nativeOffsets.Add(variable.Identifier.ValueText);
+                foreach (var variable in declaration.Variables)
+                    _nativeOffsets.Add(variable.Identifier.ValueText);
         var result = base.VisitMethodDeclaration(node);
         _nativeOffsets = previous;
         return result;
@@ -37,12 +39,14 @@ internal sealed class NativeOffsetProjection : CSharpSyntaxRewriter
         var call = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
         if (call.Expression is not MemberAccessExpressionSyntax member ||
             !member.Expression.ToString().EndsWith("Unsafe", StringComparison.Ordinal) ||
-            member.Name.Identifier.ValueText != "Add" || call.ArgumentList.Arguments.Count != 2) return call;
+            member.Name.Identifier.ValueText != "Add" || call.ArgumentList.Arguments.Count != 2)
+            return call;
         var offset = call.ArgumentList.Arguments[1];
         var expression = offset.Expression;
         string value = expression.ToString();
         if (expression is LiteralExpressionSyntax or SizeOfExpressionSyntax or PrefixUnaryExpressionSyntax or CheckedExpressionSyntax ||
-            !expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any()) return call;
+            !expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any())
+            return call;
         string replacement = IsNative(expression) ? "unchecked(" + value + ")" : "unchecked((nint)(uint)(" + value + "))";
         return call.WithArgumentList(call.ArgumentList.WithArguments(call.ArgumentList.Arguments.Replace(offset,
             offset.WithExpression(SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(expression)))));

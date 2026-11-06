@@ -51,7 +51,8 @@ internal static class EmitterTypeTraits
         var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
         var queue = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableQueue`1");
         var stack = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableStack`1");
-        if (access is null || queue is null || stack is null) return false;
+        if (access is null || queue is null || stack is null)
+            return false;
         var methods = access.GetMembers().OfType<IMethodSymbol>().Where(method => method.IsStatic && method.Arity == 1 &&
             method.DeclaredAccessibility == Accessibility.Public && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
             !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasValueTypeConstraint &&
@@ -78,7 +79,8 @@ internal static class EmitterTypeTraits
             !SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly))
             return false;
         var set = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableHashSet`1");
-        if (set is null) return false;
+        if (set is null)
+            return false;
         var methods = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage")?
             .GetMembers("CreateFrameworkImmutableHashSet").OfType<IMethodSymbol>().Where(method => method.IsStatic && method.Arity == 1 &&
                 method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 &&
@@ -184,9 +186,12 @@ internal static class EmitterTypeTraits
     /// </remarks>
     internal static bool FormatterIsRawStorage(ITypeSymbol type)
     {
-        if (!CanUseUnmanagedSerialization(type) || RequiresExplicitStateContract(type)) return false;
-        if (type is not INamedTypeSymbol named) return true;
-        if (named.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>") return false;
+        if (!CanUseUnmanagedSerialization(type) || RequiresExplicitStateContract(type))
+            return false;
+        if (type is not INamedTypeSymbol named)
+            return true;
+        if (named.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
+            return false;
         return TypeMetaChecker.CheckGeneratorType(named) == GeneratorType.Object &&
             !named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() is
                 LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or "System.Runtime.CompilerServices.UnionAttribute");
@@ -297,11 +302,15 @@ internal static class EmitterTypeTraits
     /// whose members are all known scalars or strings.</returns>
     internal static bool IsDirectRecord(ITypeSymbol type)
     {
-        if (type is IArrayTypeSymbol { Rank: 1 } array) return IsKnownScalar(array.ElementType);
-        if (type is not INamedTypeSymbol named) return false;
-        if (named.SpecialType == SpecialType.System_String) return true;
+        if (type is IArrayTypeSymbol { Rank: 1 } array)
+            return IsKnownScalar(array.ElementType);
+        if (type is not INamedTypeSymbol named)
+            return false;
+        if (named.SpecialType == SpecialType.System_String)
+            return true;
         if (named.SpecialType == SpecialType.None && named.ToDisplayString() is "System.Version" or "System.Numerics.BigInteger" or
-                "System.Uri" or "System.Globalization.CultureInfo" or "System.Text.StringBuilder" or "System.Collections.BitArray") return true;
+                "System.Uri" or "System.Globalization.CultureInfo" or "System.Text.StringBuilder" or "System.Collections.BitArray")
+            return true;
         string definition = named.OriginalDefinition.ToDisplayString();
         if (named.TypeArguments.Length == 1 && definition is "System.Collections.Generic.List<T>" or "System.Collections.Generic.HashSet<T>" or
                 "System.Collections.Generic.Stack<T>" or "System.Collections.Generic.Queue<T>" or "System.Collections.Generic.LinkedList<T>" or
@@ -354,7 +363,8 @@ internal static class EmitterTypeTraits
     /// <returns>Whether generation may select the one-/two-byte dense hash-set writer.</returns>
     internal static bool CanGroupSmallHashSetWrites(ITypeSymbol element, Compilation compilation)
     {
-        if (!IsKnownScalar(element)) return false;
+        if (!IsKnownScalar(element))
+            return false;
         bool small = element.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
             SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Char ||
             element.MetadataName == "Half" && element.ContainingNamespace.ToDisplayString() == "System";
@@ -391,7 +401,8 @@ internal static class EmitterTypeTraits
     /// <remarks>The runtime admits only destinations using the default comparer, so user comparers keep Clear/Add.</remarks>
     internal static bool CanRebuildSortedSet(ITypeSymbol element, Compilation compilation)
     {
-        if (element is null) return false;
+        if (element is null)
+            return false;
         var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
         bool Common(IMethodSymbol method) => method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public &&
             method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
@@ -411,7 +422,8 @@ internal static class EmitterTypeTraits
     /// <returns>Whether generated reads may bypass a certified append's binary search.</returns>
     internal static bool CanAppendSortedListOrdered(ITypeSymbol key, Compilation compilation)
     {
-        if (key?.SpecialType != SpecialType.System_String) return false;
+        if (key?.SpecialType != SpecialType.System_String)
+            return false;
         var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
         bool Common(IMethodSymbol method) => method.IsStatic && method.Arity == 2 && method.DeclaredAccessibility == Accessibility.Public &&
             method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
@@ -463,7 +475,8 @@ internal static class EmitterTypeTraits
             bool Signature(IMethodSymbol method) => !method.IsStatic && method.ReturnsVoid && method.DeclaredAccessibility == Accessibility.Public &&
                 method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_String;
             if (methods == null || !methods.Any(method => method.Arity == 0 && Signature(method)) ||
-                !methods.Any(method => method.Arity == 1 && Signature(method))) return false;
+                !methods.Any(method => method.Arity == 1 && Signature(method)))
+                return false;
         }
         return true;
     }
@@ -488,7 +501,8 @@ internal static class EmitterTypeTraits
         var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminPackLookup`2");
         var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
         var grouping = compilation.GetTypeByMetadataName("System.Linq.IGrouping`2");
-        if (owner == null || dictionary == null || grouping == null) return false;
+        if (owner == null || dictionary == null || grouping == null)
+            return false;
         var closed = dictionary.Construct(owner.TypeParameters[0], grouping.Construct(owner.TypeParameters[0], owner.TypeParameters[1]));
         var enumerator = closed.GetTypeMembers("Enumerator").SingleOrDefault();
         return owner.GetMembers("GetEntryEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
@@ -550,7 +564,8 @@ internal static class EmitterTypeTraits
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
         var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
         var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
-        if (writer == null || options == null || span == null) return false;
+        if (writer == null || options == null || span == null)
+            return false;
         var text = compilation.GetSpecialType(SpecialType.System_String);
         var input = span.Construct(text);
         var overloads = writer.GetMembers("WriteStringPrefix").OfType<IMethodSymbol>().Where(method =>
@@ -572,7 +587,8 @@ internal static class EmitterTypeTraits
         var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
         var text = compilation.GetSpecialType(SpecialType.System_String);
         var span = compilation.GetTypeByMetadataName("System.Span`1")?.Construct(text);
-        if (reader == null || options == null || span == null) return false;
+        if (reader == null || options == null || span == null)
+            return false;
         var matrix = compilation.CreateArrayTypeSymbol(text, 2);
         bool BothProfiles(string name, System.Func<IMethodSymbol, bool> signature)
         {
@@ -646,7 +662,8 @@ internal static class EmitterTypeTraits
         for (var current = named; current is not null && current.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
              current = current.BaseType)
         {
-            if (!current.Locations.Any(location => location.IsInSource)) return false;
+            if (!current.Locations.Any(location => location.IsInSource))
+                return false;
             foreach (var attribute in current.GetAttributes())
                 if (attribute.AttributeClass?.ToDisplayString() is LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or
                     "System.Runtime.CompilerServices.UnionAttribute" or "LuminPack.Attribute.LuminPackCompressAttribute" or
@@ -661,16 +678,22 @@ internal static class EmitterTypeTraits
                 return false;
             foreach (var member in current.GetMembers())
             {
-                if (member.IsStatic) continue;
+                if (member.IsStatic)
+                    continue;
                 ITypeSymbol memberType;
                 switch (member)
                 {
-                    case IFieldSymbol field: memberType = field.Type; break;
-                    case IPropertySymbol property: memberType = property.Type; break;
+                    case IFieldSymbol field:
+                        memberType = field.Type;
+                        break;
+                    case IPropertySymbol property:
+                        memberType = property.Type;
+                        break;
                     case IEventSymbol: return false;
                     default: continue;
                 }
-                if (!IsFixedWidthPrimitive(memberType)) return false;
+                if (!IsFixedWidthPrimitive(memberType))
+                    return false;
             }
         }
         return true;
@@ -681,7 +704,8 @@ internal static class EmitterTypeTraits
     /// <returns>Whether the member is always written as its fixed-width raw value.</returns>
     private static bool IsFixedWidthPrimitive(ITypeSymbol type)
     {
-        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration) type = enumeration.EnumUnderlyingType;
+        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
+            type = enumeration.EnumUnderlyingType;
         return type?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Char or SpecialType.System_SByte or SpecialType.System_Byte or
             SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32 or
             SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Single or SpecialType.System_Double;
@@ -724,7 +748,8 @@ internal static class EmitterTypeTraits
     /// <returns>Whether raw copying preserves every nested formatter boundary.</returns>
     internal static bool CanUseUnmanagedSerialization(ITypeSymbol type)
     {
-        if (type?.IsUnmanagedType != true) return false;
+        if (type?.IsUnmanagedType != true)
+            return false;
         var storage = UnmanagedContractScope.Resolve(type);
         return !ContainsUndeterminedTypeParameter(storage) &&
             PortableStructPlan.TryCreate(storage) == null &&
@@ -737,8 +762,10 @@ internal static class EmitterTypeTraits
     /// <returns>Whether the storage contains a custom formatter contract.</returns>
     private static bool ContainsCustomFormatter(ITypeSymbol type, HashSet<ITypeSymbol> visited)
     {
-        if (!visited.Add(type)) return false;
-        if (LuminPackExtensionGenerator.IsCustomGeneratorType(type)) return true;
+        if (!visited.Add(type))
+            return false;
+        if (LuminPackExtensionGenerator.IsCustomGeneratorType(type))
+            return true;
         return type is INamedTypeSymbol { TypeKind: TypeKind.Struct } named &&
             (named.TypeArguments.Any(argument => ContainsCustomFormatter(argument, visited)) ||
              named.GetMembers().OfType<IFieldSymbol>().Any(field => !field.IsStatic && ContainsCustomFormatter(field.Type, visited)));
@@ -772,7 +799,8 @@ internal static class EmitterTypeTraits
     public static string GetArrayPoolClearExpression(LuminLocalFieldData fieldData, string elementType)
     {
         var element = GetFirstTypeArgument(fieldData);
-        if (element?.IsUnmanagedType == true) return "false";
+        if (element?.IsUnmanagedType == true)
+            return "false";
         if (TryGetIsUnmanaged(GetFirstTypeArgument(fieldData), out bool isUnmanaged))
         {
             return isUnmanaged ? "false" : "true";
@@ -809,13 +837,17 @@ internal static class EmitterTypeTraits
     internal static bool TryGetBoundedMaxBytes(ITypeSymbol type, out int maxBytes)
     {
         maxBytes = 0;
-        if (type is null) return false;
+        if (type is null)
+            return false;
 
         foreach (AttributeData attribute in type.GetAttributes())
         {
-            if (attribute.AttributeClass?.ToDisplayString() != BoundedAttributeName) continue;
-            if (attribute.ConstructorArguments.Length != 1) return false;
-            if (attribute.ConstructorArguments[0].Value is not int declared || declared <= 0) return false;
+            if (attribute.AttributeClass?.ToDisplayString() != BoundedAttributeName)
+                continue;
+            if (attribute.ConstructorArguments.Length != 1)
+                return false;
+            if (attribute.ConstructorArguments[0].Value is not int declared || declared <= 0)
+                return false;
             maxBytes = declared;
             return true;
         }
@@ -835,7 +867,8 @@ internal static class EmitterTypeTraits
     internal static bool TryGetElementUpperBound(ITypeSymbol type, out string boundExpression)
     {
         boundExpression = null;
-        if (type is null) return false;
+        if (type is null)
+            return false;
 
         var portable = PortableStructPlan.TryCreate(type);
         if (portable != null)
@@ -859,8 +892,10 @@ internal static class EmitterTypeTraits
 
         if (type is INamedTypeSymbol named && named.GetAttributes().Any(attribute =>
             attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE) &&
-            TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object) return false;
-        if (type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.UnionAttribute")) return false;
+            TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object)
+            return false;
+        if (type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.UnionAttribute"))
+            return false;
         if (TryGetIsUnmanaged(type, out bool isUnmanaged) && isUnmanaged)
         {
             boundExpression = "global::System.Runtime.CompilerServices.Unsafe.SizeOf<" +

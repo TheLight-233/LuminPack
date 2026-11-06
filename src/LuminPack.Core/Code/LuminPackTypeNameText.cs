@@ -36,10 +36,12 @@ internal static class LuminPackTypeNameText
         while (offset < source.Length)
         {
             int match = source.Slice(offset).IndexOf(", Version=".AsSpan());
-            if (match < 0) break;
+            if (match < 0)
+                break;
             start = offset + match;
             int version = start + 10;
-            if (TryVersion(source, version, out end)) return true;
+            if (TryVersion(source, version, out end))
+                return true;
             offset = start + 1;
         }
         start = end = 0;
@@ -54,17 +56,20 @@ internal static class LuminPackTypeNameText
     private static bool TryVersion(ReadOnlySpan<char> source, int offset, out int end)
     {
         end = 0;
-        if (offset >= source.Length || !char.IsDigit(source[offset])) return false;
+        if (offset >= source.Length || !char.IsDigit(source[offset]))
+            return false;
         // Even bits retain digit runs; odd bits require a digit after a wildcard.
         // Parallel states preserve greedy-regex acceptance when the wildcard is itself a digit.
         int states = 1;
         for (int index = offset + 1; index < source.Length; index++)
         {
             char value = source[index];
-            if ((states & 64) != 0 && value == ',' && TrySuffix(source, index, out end)) return true;
+            if ((states & 64) != 0 && value == ',' && TrySuffix(source, index, out end))
+                return true;
             states = (char.IsDigit(value) ? (states & 85) | ((states & 42) << 1) : 0) |
                 (value != '\n' ? (states & 21) << 1 : 0);
-            if (states == 0) return false;
+            if (states == 0)
+                return false;
         }
         return false;
     }
@@ -77,16 +82,24 @@ internal static class LuminPackTypeNameText
     private static bool TrySuffix(ReadOnlySpan<char> source, int offset, out int end)
     {
         end = 0;
-        if (!source.Slice(offset).StartsWith(", Culture=".AsSpan())) return false;
+        if (!source.Slice(offset).StartsWith(", Culture=".AsSpan()))
+            return false;
         int first = offset += 10;
-        while (offset < source.Length && IsCultureCharacter(source[offset])) offset++;
-        if (first == offset || !source.Slice(offset).StartsWith(", PublicKeyToken=".AsSpan())) return false;
+        while (offset < source.Length && IsCultureCharacter(source[offset]))
+            offset++;
+        if (first == offset || !source.Slice(offset).StartsWith(", PublicKeyToken=".AsSpan()))
+            return false;
         offset += 17;
         var token = source.Slice(offset);
-        if (token.StartsWith("null".AsSpan())) { end = offset + 4; return true; }
-        if (token.Length < 16) return false;
+        if (token.StartsWith("null".AsSpan()))
+        {
+            end = offset + 4;
+            return true; }
+        if (token.Length < 16)
+            return false;
         for (int i = 0; i < 16; i++)
-            if ((uint)(token[i] - '0') > 9 && (uint)(token[i] - 'a') > 5) return false;
+            if ((uint)(token[i] - '0') > 9 && (uint)(token[i] - 'a') > 5)
+                return false;
         end = offset + 16;
         return true;
     }
@@ -96,7 +109,8 @@ internal static class LuminPackTypeNameText
     /// <returns>Whether the character belongs to the culture run.</returns>
     private static bool IsCultureCharacter(char value)
     {
-        if (value <= 127) return (uint)(value - '0') <= 9 || ((uint)value | 32) - 'a' <= 25 || value is '_' or '-';
+        if (value <= 127)
+            return (uint)(value - '0') <= 9 || ((uint)value | 32) - 'a' <= 25 || value is '_' or '-';
         var category = char.GetUnicodeCategory(value);
         return category is UnicodeCategory.UppercaseLetter or UnicodeCategory.LowercaseLetter or UnicodeCategory.TitlecaseLetter or
             UnicodeCategory.ModifierLetter or UnicodeCategory.OtherLetter or UnicodeCategory.NonSpacingMark or

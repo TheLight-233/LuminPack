@@ -29,8 +29,10 @@ public static class ImmutableHashSetEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (ImmutableStringSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: false)) return;
-        if (ImmutableScalarSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: false)) return;
+        if (ImmutableStringSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: false))
+            return;
+        if (ImmutableScalarSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: false))
+            return;
         var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();

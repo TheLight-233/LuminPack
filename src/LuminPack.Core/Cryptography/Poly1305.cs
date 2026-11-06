@@ -121,22 +121,44 @@ namespace LuminPack.Cryptography
 
             // Full carry.
             uint c;
-            c = _h4 >> 26; _h4 &= 0x3ffffff; _h0 += c * 5;
-            c = _h0 >> 26; _h0 &= 0x3ffffff; _h1 += c;
-            c = _h1 >> 26; _h1 &= 0x3ffffff; _h2 += c;
-            c = _h2 >> 26; _h2 &= 0x3ffffff; _h3 += c;
-            c = _h3 >> 26; _h3 &= 0x3ffffff; _h4 += c;
+            c = _h4 >> 26;
+            _h4 &= 0x3ffffff;
+            _h0 += c * 5;
+            c = _h0 >> 26;
+            _h0 &= 0x3ffffff;
+            _h1 += c;
+            c = _h1 >> 26;
+            _h1 &= 0x3ffffff;
+            _h2 += c;
+            c = _h2 >> 26;
+            _h2 &= 0x3ffffff;
+            _h3 += c;
+            c = _h3 >> 26;
+            _h3 &= 0x3ffffff;
+            _h4 += c;
 
             // Compute h + -p (i.e. h - (2^130-5)).
-            uint g0 = _h0 + 5; c = g0 >> 26; g0 &= 0x3ffffff;
-            uint g1 = _h1 + c; c = g1 >> 26; g1 &= 0x3ffffff;
-            uint g2 = _h2 + c; c = g2 >> 26; g2 &= 0x3ffffff;
-            uint g3 = _h3 + c; c = g3 >> 26; g3 &= 0x3ffffff;
+            uint g0 = _h0 + 5;
+            c = g0 >> 26;
+            g0 &= 0x3ffffff;
+            uint g1 = _h1 + c;
+            c = g1 >> 26;
+            g1 &= 0x3ffffff;
+            uint g2 = _h2 + c;
+            c = g2 >> 26;
+            g2 &= 0x3ffffff;
+            uint g3 = _h3 + c;
+            c = g3 >> 26;
+            g3 &= 0x3ffffff;
             uint g4 = _h4 + c - (1u << 26);
 
             // Constant-time select: pick (h + -p) if it is < p, otherwise keep h.
             uint mask = (uint)((g4 >> 31) - 1); // 0 if g4 negative (h < p), 0xFFFFFFFF otherwise
-            g0 &= mask; g1 &= mask; g2 &= mask; g3 &= mask; g4 &= mask;
+            g0 &= mask;
+            g1 &= mask;
+            g2 &= mask;
+            g3 &= mask;
+            g4 &= mask;
             mask = ~mask;
             _h0 = (_h0 & mask) | g0;
             _h1 = (_h1 & mask) | g1;
@@ -232,7 +254,11 @@ namespace LuminPack.Cryptography
             uint t3 = (Load32(ref m[9]) >> 6) & 0x3ffffff;
             uint t4 = (Load32(ref m[12]) >> 8) & 0x3ffffff;
 
-            _h0 += t0; _h1 += t1; _h2 += t2; _h3 += t3; _h4 += t4;
+            _h0 += t0;
+            _h1 += t1;
+            _h2 += t2;
+            _h3 += t3;
+            _h4 += t4;
             _h4 += hibit;
 
             // acc = acc * r (mod 2^130 - 5), using r*5 accumulated terms for the reduction.
@@ -243,15 +269,26 @@ namespace LuminPack.Cryptography
             ulong d4 = (ulong)_h0 * _r4 + (ulong)_h1 * _r3 + (ulong)_h2 * _r2 + (ulong)_h3 * _r1 + (ulong)_h4 * _r0;
 
             ulong cy;
-            cy = d0 >> 26; _h0 = (uint)(d0 & 0x3ffffff); d1 += cy;
-            cy = d1 >> 26; _h1 = (uint)(d1 & 0x3ffffff); d2 += cy;
-            cy = d2 >> 26; _h2 = (uint)(d2 & 0x3ffffff); d3 += cy;
-            cy = d3 >> 26; _h3 = (uint)(d3 & 0x3ffffff); d4 += cy;
-            cy = d4 >> 26; _h4 = (uint)(d4 & 0x3ffffff);
+            cy = d0 >> 26;
+            _h0 = (uint)(d0 & 0x3ffffff);
+            d1 += cy;
+            cy = d1 >> 26;
+            _h1 = (uint)(d1 & 0x3ffffff);
+            d2 += cy;
+            cy = d2 >> 26;
+            _h2 = (uint)(d2 & 0x3ffffff);
+            d3 += cy;
+            cy = d3 >> 26;
+            _h3 = (uint)(d3 & 0x3ffffff);
+            d4 += cy;
+            cy = d4 >> 26;
+            _h4 = (uint)(d4 & 0x3ffffff);
 
             // Final reduction: the carry out of bit 130 is worth 5 at bit 0.
             _h0 += (uint)(cy * 5);
-            cy = _h0 >> 26; _h0 &= 0x3ffffff; _h1 += (uint)cy;
+            cy = _h0 >> 26;
+            _h0 &= 0x3ffffff;
+            _h1 += (uint)cy;
         }
     }
 }

@@ -18,12 +18,17 @@ public static partial class LuminPackCollectionAccess
     public static bool TryWriteBitArrayPayload(ref LuminPackWriter writer, BitArray value)
     {
         int length = value.Length;
-        if (length == 0) { writer.Write<byte>(ReadOnlySpan<byte>.Empty, 0); return true; }
-        if (!BitPayloadStorage.Available) return false;
+        if (length == 0)
+        {
+            writer.Write<byte>(ReadOnlySpan<byte>.Empty, 0);
+            return true; }
+        if (!BitPayloadStorage.Available)
+            return false;
         Span<byte> bytes = BitPayloadStorage.Bytes(value);
         int payload = (int)(((long)length + 31) >> 5) * 4;
         // Retained excess capacity keeps the framework CopyTo path and its exception behavior.
-        if (bytes.Length != payload) return false;
+        if (bytes.Length != payload)
+            return false;
         int extra = length & 31;
         int tail = extra != 0 && BitPayloadStorage.MaskTail
             ? MemoryMarshal.Read<int>(bytes.Slice(payload - 4)) & (int)((1u << extra) - 1) : 0;
@@ -44,10 +49,12 @@ public static partial class LuminPackCollectionAccess
     {
         value = null;
         storage = default;
-        if (length <= 0 || length > int.MaxValue - 31 || !BitPayloadStorage.Available) return false;
+        if (length <= 0 || length > int.MaxValue - 31 || !BitPayloadStorage.Available)
+            return false;
         var result = new BitArray((length + 31) & ~31);
         storage = BitPayloadStorage.Bytes(result);
-        if (storage.Length != ((length + 31) >> 5) * 4) return false;
+        if (storage.Length != ((length + 31) >> 5) * 4)
+            return false;
         value = result;
         return true;
     }
@@ -64,7 +71,8 @@ public static partial class LuminPackCollectionAccess
         internal static Span<byte> Bytes(BitArray value)
         {
             object array = LuminFieldLayout.Field<object>(value, LuminCollectionLayouts.BitArrayArray);
-            if (array is int[] words) return MemoryMarshal.AsBytes(words.AsSpan());
+            if (array is int[] words)
+                return MemoryMarshal.AsBytes(words.AsSpan());
             return array is byte[] bytes ? bytes.AsSpan() : default;
         }
 
@@ -74,29 +82,35 @@ public static partial class LuminPackCollectionAccess
         {
             try
             {
-                if (LuminCollectionLayouts.BitArrayArray < 0) return false;
+                if (LuminCollectionLayouts.BitArrayArray < 0)
+                    return false;
                 const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
                 var field = typeof(BitArray).GetField("_array", flags) ?? typeof(BitArray).GetField("m_array", flags);
-                if (field is null || field.FieldType != typeof(int[]) && field.FieldType != typeof(byte[])) return false;
+                if (field is null || field.FieldType != typeof(int[]) && field.FieldType != typeof(byte[]))
+                    return false;
                 bool? masksTail = null;
                 foreach (int length in new[] { 1, 7, 8, 31, 32, 33, 65, 257 })
                 {
                     int rounded = (length + 31) & ~31;
                     var value = new BitArray(rounded);
                     Span<byte> bytes = Bytes(value);
-                    if (bytes.Length != rounded / 8) return false;
+                    if (bytes.Length != rounded / 8)
+                        return false;
                     bytes.Fill(0xA5);
                     for (int bit = 0; bit < rounded; bit++)
-                        if (value[bit] != ((0xA5 & (1 << (bit & 7))) != 0)) return false;
+                        if (value[bit] != ((0xA5 & (1 << (bit & 7))) != 0))
+                            return false;
                     value.Length = length;
                     var expected = new BitArray(new int[(length + 31) >> 5]);
-                    for (int bit = 0; bit < rounded; bit++) expected[bit] = (0xA5 & (1 << (bit & 7))) != 0;
+                    for (int bit = 0; bit < rounded; bit++)
+                        expected[bit] = (0xA5 & (1 << (bit & 7))) != 0;
                     expected.Length = length;
                     var actualWords = new int[(length + 31) >> 5];
                     var expectedWords = new int[actualWords.Length];
                     value.CopyTo(actualWords, 0);
                     expected.CopyTo(expectedWords, 0);
-                    if (!actualWords.AsSpan().SequenceEqual(expectedWords)) return false;
+                    if (!actualWords.AsSpan().SequenceEqual(expectedWords))
+                        return false;
                     bytes = Bytes(value);
                     bytes.Fill(0xFF);
                     value.CopyTo(actualWords, 0);
@@ -104,14 +118,17 @@ public static partial class LuminPackCollectionAccess
                     if (extra != 0)
                     {
                         bool masked = actualWords[actualWords.Length - 1] == (int)((1u << extra) - 1);
-                        if (!masked && actualWords[actualWords.Length - 1] != -1 || masksTail.HasValue && masksTail.Value != masked) return false;
+                        if (!masked && actualWords[actualWords.Length - 1] != -1 || masksTail.HasValue && masksTail.Value != masked)
+                            return false;
                         masksTail = masked;
                     }
                 }
                 MaskTail = masksTail == true;
                 return true;
             }
-            catch { return false; }
+            catch
+            {
+                return false; }
         }
     }
 }

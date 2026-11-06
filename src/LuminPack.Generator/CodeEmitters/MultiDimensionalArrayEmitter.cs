@@ -44,7 +44,8 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        if (portable != null) sb.AppendLine("                writer.EnsureAdditionalCapacity(1);");
+        if (portable != null)
+            sb.AppendLine("                writer.EnsureAdditionalCapacity(1);");
         sb.AppendLine("                writer.WriteNullObjectHeader(ref index);");
         sb.AppendLine("                writer.Advance(1);");
         sb.AppendLine("                return;");
@@ -101,7 +102,8 @@ public static class MultiDimensionalArrayEmitter
         string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         var portable = PortableStructPlan.TryCreate(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol));
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
-        if (portable != null) sb.AppendLine("            reader.EnsureCollectionPayload(index, 1);");
+        if (portable != null)
+            sb.AppendLine("            reader.EnsureCollectionPayload(index, 1);");
         sb.AppendLine("            if (!reader.TryReadObjectHead(ref index))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");
@@ -147,11 +149,13 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("                global::LuminPack.Code.LuminPackExceptionHelper.ThrowMultiDimensionalArrayLengthMismatch();");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        if (portable != null) sb.AppendLine("            reader.EnsureCollectionPayload(index, checked(" + PortableStructEmitter.PayloadMinimum(portable, "length") + "));");
+        if (portable != null)
+            sb.AppendLine("            reader.EnsureCollectionPayload(index, checked(" + PortableStructEmitter.PayloadMinimum(portable, "length") + "));");
         // Raw elements are copied as one block, so the complete variable-length payload is validated before the allocation.
         else if (HasRawElements(fieldData, elementType))
             sb.AppendLine("            reader.EnsureCollectionPayload(index, checked(length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + elementType + ">()));");
-        if (portable != null) PortableStructEmitter.AppendReadValidation(sb, portable, "length", "index");
+        if (portable != null)
+            PortableStructEmitter.AppendReadValidation(sb, portable, "length", "index");
         if (fieldData.CanReuseStringMatrix)
         {
             sb.AppendLine("            if (reader.TryGetStringMatrixSlots(value, dimension0, dimension1, out var slots))");
@@ -208,11 +212,13 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            writer.WriteObjectStart();");
         sb.AppendLine("            writer.WritePropertyName(\"Lengths\");");
         sb.AppendLine("            writer.WriteArrayStart();");
-        for (int i = 0; i < rank; i++) sb.AppendLine("            writer.WriteInt(value.GetLength(" + i + "));");
+        for (int i = 0; i < rank; i++)
+            sb.AppendLine("            writer.WriteInt(value.GetLength(" + i + "));");
         sb.AppendLine("            writer.WriteArrayEnd();");
         sb.AppendLine("            writer.WritePropertyName(\"LowerBounds\");");
         sb.AppendLine("            writer.WriteArrayStart();");
-        for (int i = 0; i < rank; i++) sb.AppendLine("            writer.WriteInt(value.GetLowerBound(" + i + "));");
+        for (int i = 0; i < rank; i++)
+            sb.AppendLine("            writer.WriteInt(value.GetLowerBound(" + i + "));");
         sb.AppendLine("            writer.WriteArrayEnd();");
         sb.AppendLine("            writer.WritePropertyName(\"Values\");");
         sb.AppendLine("            writer.WriteArrayStart();");
@@ -353,10 +359,12 @@ public static class MultiDimensionalArrayEmitter
     internal static int GetRank(string typeName)
     {
         int open = ArrayEmitter.OuterRankStart(typeName);
-        if (open < 0) return 0;
+        if (open < 0)
+            return 0;
         int rank = 1;
         for (int i = open + 1; typeName[i] != ']'; i++)
-            if (typeName[i] == ',') rank++;
+            if (typeName[i] == ',')
+                rank++;
         return rank;
     }
 
@@ -372,7 +380,8 @@ public static class MultiDimensionalArrayEmitter
         var sb = new StringBuilder();
         for (int i = 0; i < rank; i++)
         {
-            if (i != 0) sb.Append(", ");
+            if (i != 0)
+                sb.Append(", ");
             sb.Append("out int dimension").Append(i);
         }
         return sb.ToString();
@@ -386,7 +395,8 @@ public static class MultiDimensionalArrayEmitter
         var sb = new StringBuilder();
         for (int i = 0; i < rank; i++)
         {
-            if (i != 0) sb.Append(", ");
+            if (i != 0)
+                sb.Append(", ");
             sb.Append(prefix).Append(i);
         }
         return sb.ToString();

@@ -29,20 +29,25 @@ internal sealed class DirectStorageProjection : CSharpSyntaxRewriter
         var block = (BlockSyntax)base.VisitBlock(node);
         foreach (var declaration in block.Statements.OfType<LocalDeclarationStatementSyntax>().ToArray())
         {
-            if (declaration.Declaration.Variables.Count != 1) continue;
+            if (declaration.Declaration.Variables.Count != 1)
+                continue;
             var variable = declaration.Declaration.Variables[0];
             ExpressionSyntax initializer = variable.Initializer?.Value;
-            if (initializer is RefExpressionSyntax reference) initializer = reference.Expression;
+            if (initializer is RefExpressionSyntax reference)
+                initializer = reference.Expression;
             if (initializer is not InvocationExpressionSyntax call || call.Expression is not MemberAccessExpressionSyntax
                 { Name: GenericNameSyntax { Identifier.ValueText: "As", TypeArgumentList.Arguments.Count: 2 } method } access ||
                 !access.Expression.ToString().EndsWith("LuminPackMarshal", StringComparison.Ordinal) || call.ArgumentList.Arguments.Count != 1 ||
-                !_types.TryGetValue(method.TypeArgumentList.Arguments[0].ToString(), out var type)) continue;
+                !_types.TryGetValue(method.TypeArgumentList.Arguments[0].ToString(), out var type))
+                continue;
             string name = variable.Identifier.ValueText;
-            if (block.DescendantNodes().OfType<VariableDeclaratorSyntax>().Count(item => item.Identifier.ValueText == name) != 1) continue;
+            if (block.DescendantNodes().OfType<VariableDeclaratorSyntax>().Count(item => item.Identifier.ValueText == name) != 1)
+                continue;
             var uses = block.DescendantNodes().OfType<IdentifierNameSyntax>().Where(identifier => identifier.Identifier.ValueText == name &&
                 !(identifier.Parent is MemberAccessExpressionSyntax member && member.Name == identifier)).ToArray();
             if (uses.Any(use => use.Parent is not MemberAccessExpressionSyntax member || member.Expression != use ||
-                    !AccessibleField(type, member.Name.Identifier.ValueText))) continue;
+                    !AccessibleField(type, member.Name.Identifier.ValueText)))
+                continue;
             ExpressionSyntax source = call.ArgumentList.Arguments[0].Expression;
             if (source is InvocationExpressionSyntax unwrap && unwrap.Expression is MemberAccessExpressionSyntax
                 { Name.Identifier.ValueText: "AsRef" } && unwrap.ArgumentList.Arguments.Count == 1)
@@ -64,7 +69,8 @@ internal sealed class DirectStorageProjection : CSharpSyntaxRewriter
         for (var current = type as INamedTypeSymbol; current != null; current = current.BaseType)
         {
             var members = current.GetMembers(name);
-            if (members.Length == 0) continue;
+            if (members.Length == 0)
+                continue;
             return members.Length == 1 && members[0] is IFieldSymbol { IsStatic: false, IsReadOnly: false } field &&
                 _compilation.IsSymbolAccessibleWithin(field, _compilation.Assembly);
         }

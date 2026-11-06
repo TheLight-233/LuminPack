@@ -26,7 +26,8 @@ internal sealed class SemanticContributionCache<T>
         string name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         lock (_gate)
         {
-            if (!FileSemanticObservationCache.SameProjectGuard(_latestGuard, observations.ProjectGuard)) _entries.Clear();
+            if (!FileSemanticObservationCache.SameProjectGuard(_latestGuard, observations.ProjectGuard))
+                _entries.Clear();
             _latestGuard = observations.ProjectGuard;
             if (_entries.TryGetValue(name, out var previous) && MetaInfoValueComparer.Instance.Equals(previous.Metadata, metadata) &&
                 previous.Dependencies.All(compilation.ContainsSyntaxTree))
@@ -54,6 +55,10 @@ internal sealed class SemanticContributionCache<T>
         /// <param name="metadata">The copied generation settings.</param>
         /// <param name="dependencies">The source dependency closure.</param>
         /// <param name="value">The symbol-free immutable value.</param>
-        internal Entry(MetaInfo metadata, SyntaxTree[] dependencies, T value) { Metadata = metadata; Dependencies = dependencies; Value = value; }
+        internal Entry(MetaInfo metadata, SyntaxTree[] dependencies, T value)
+        {
+            Metadata = metadata;
+            Dependencies = dependencies;
+            Value = value; }
     }
 }

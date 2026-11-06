@@ -57,7 +57,8 @@ internal sealed class PartitionedSourceCache
         using var hash = SHA256.Create();
         var bytes = hash.ComputeHash(Encoding.UTF8.GetBytes(identity));
         var name = new StringBuilder(prefix).Append('.');
-        foreach (byte value in bytes) name.Append(value.ToString("x2", CultureInfo.InvariantCulture));
+        foreach (byte value in bytes)
+            name.Append(value.ToString("x2", CultureInfo.InvariantCulture));
         return name.Append(".g.cs").ToString();
     }
 
@@ -77,6 +78,11 @@ internal sealed class PartitionedSourceCache
         /// <param name="source">The completed generated file.</param>
         /// <param name="settings">Additional immutable rendering settings.</param>
         internal Entry(string header, string body, string footer, FrozenGeneratedSource source, object settings)
-        { Header = header; Body = body; Footer = footer; Source = source; Settings = settings; }
+        {
+            Header = header;
+            Body = body;
+            Footer = footer;
+            Source = source;
+            Settings = settings; }
     }
 }

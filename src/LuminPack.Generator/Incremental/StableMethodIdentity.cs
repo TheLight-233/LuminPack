@@ -26,12 +26,19 @@ internal sealed class StableMethodIdentity
     internal StableMethodIdentity(StableTypeIdentity containing, string name, string declaration,
         IEnumerable<StableTypeIdentity> arguments, StableTypeIdentity receiver)
     {
-        _containing = containing; _name = name; _declaration = declaration;
-        _arguments = arguments.ToImmutableArray(); _receiver = receiver;
+        _containing = containing;
+        _name = name;
+        _declaration = declaration;
+        _arguments = arguments.ToImmutableArray();
+        _receiver = receiver;
         var key = new StringBuilder();
         void Part(string value) => key.Append(value.Length).Append(':').Append(value);
-        Part(containing.Key); Part(name); Part(declaration); Part(receiver?.Key ?? string.Empty);
-        foreach (var argument in _arguments) Part(argument.Key);
+        Part(containing.Key);
+        Part(name);
+        Part(declaration);
+        Part(receiver?.Key ?? string.Empty);
+        foreach (var argument in _arguments)
+            Part(argument.Key);
         Key = key.ToString();
     }
 
@@ -41,20 +48,24 @@ internal sealed class StableMethodIdentity
     internal IMethodSymbol Resolve(CurrentTypeResolver types)
     {
         var owner = types.Resolve(_containing) as INamedTypeSymbol;
-        if (owner == null) return null;
+        if (owner == null)
+            return null;
         var matches = types.FindMethods(owner, _name, _declaration);
-        if (matches.Length != 1) return null;
+        if (matches.Length != 1)
+            return null;
         IMethodSymbol result = matches[0];
         if (_arguments.Length != 0)
         {
             var arguments = _arguments.Select(types.Resolve).ToImmutableArray();
-            if (arguments.Any(type => type == null) || arguments.Length != result.Arity) return null;
+            if (arguments.Any(type => type == null) || arguments.Length != result.Arity)
+                return null;
             result = result.Construct(arguments, arguments.Select(type => type.NullableAnnotation).ToImmutableArray());
         }
         if (_receiver != null)
         {
             var receiver = types.Resolve(_receiver);
-            if (receiver == null) return null;
+            if (receiver == null)
+                return null;
             result = result.ReduceExtensionMethod(receiver);
         }
         return result;
@@ -82,8 +93,10 @@ internal sealed class StableMethodIdentityFactory
     /// <remarks>Files are bound in parallel; the memo and its owned helpers are guarded by this factory's lock.</remarks>
     internal StableMethodIdentity Create(IMethodSymbol method)
     {
-        if (method == null) return null;
-        lock (_known) return CreateLocked(method);
+        if (method == null)
+            return null;
+        lock (_known)
+            return CreateLocked(method);
     }
 
     /// <summary>Creates or recalls an identity while the memo lock is held.</summary>
@@ -91,14 +104,17 @@ internal sealed class StableMethodIdentityFactory
     /// <returns>A verified identity or null.</returns>
     private StableMethodIdentity CreateLocked(IMethodSymbol method)
     {
-        if (_known.TryGetValue(method, out var known)) return known;
+        if (_known.TryGetValue(method, out var known))
+            return known;
         var staticForm = method.ReducedFrom == null ? method : method.GetConstructedReducedFrom();
         string declaration = staticForm?.OriginalDefinition.GetDocumentationCommentId();
         var owner = staticForm?.ContainingType == null ? null : _types.Create(staticForm.ContainingType);
-        if (owner == null || declaration == null) return Remember(null);
+        if (owner == null || declaration == null)
+            return Remember(null);
         var arguments = staticForm.IsGenericMethod ? staticForm.TypeArguments.Select(_types.Create).ToArray() : Array.Empty<StableTypeIdentity>();
         var receiver = method.ReducedFrom == null ? null : _types.Create(method.ReceiverType);
-        if (arguments.Any(argument => argument == null) || method.ReducedFrom != null && receiver == null) return Remember(null);
+        if (arguments.Any(argument => argument == null) || method.ReducedFrom != null && receiver == null)
+            return Remember(null);
         var identity = new StableMethodIdentity(owner, staticForm.Name, declaration, arguments, receiver);
         var reconstructed = identity.Resolve(_verification);
         if (reconstructed == null || !SymbolEqualityComparer.IncludeNullability.Equals(method, reconstructed) ||
@@ -106,7 +122,10 @@ internal sealed class StableMethodIdentityFactory
             return Remember(null);
         return Remember(identity);
 
-        StableMethodIdentity Remember(StableMethodIdentity value) { _known[method] = value; return value; }
+        StableMethodIdentity Remember(StableMethodIdentity value)
+        {
+            _known[method] = value;
+            return value; }
     }
 }
 
@@ -127,7 +146,8 @@ internal sealed class CurrentMethodResolver
     {
         lock (_known)
         {
-            if (_known.TryGetValue(identity.Key, out var method)) return method;
+            if (_known.TryGetValue(identity.Key, out var method))
+                return method;
             method = identity.Resolve(_types);
             _known[identity.Key] = method;
             return method;

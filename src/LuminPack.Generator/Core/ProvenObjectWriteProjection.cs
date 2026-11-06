@@ -22,7 +22,10 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
     /// <param name="metadata">The consumer's target and language settings.</param>
     /// <param name="types">The canonical formatter symbols.</param>
     internal ProvenObjectWriteProjection(Compilation compilation, MetaInfo metadata, IReadOnlyDictionary<string, ITypeSymbol> types)
-    { _compilation = compilation; _metadata = metadata; _types = types; }
+    {
+        _compilation = compilation;
+        _metadata = metadata;
+        _types = types; }
 
     /// <summary>Selects a complete original object or Union-payload writer without changing its dispatch.</summary>
     /// <param name="node">The localized operation.</param>
@@ -34,7 +37,8 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
             node.Identifier.ValueText is not ("RootWrite" or "RootWriteUnion") || node.Body == null ||
             node.ParameterList.Parameters.Count != 2 ||
             !_types.TryGetValue(node.ParameterList.Parameters[1].Type.ToString().TrimEnd('?'), out var payload) ||
-            payload is not INamedTypeSymbol element || !Eligible(element)) return node;
+            payload is not INamedTypeSymbol element || !Eligible(element))
+            return node;
         return Rewrite(node) ?? node;
     }
 
@@ -43,7 +47,8 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
     /// <returns>Whether its original direct field captures are pure.</returns>
     private bool Eligible(INamedTypeSymbol element)
     {
-        if (_eligibility.TryGetValue(element, out bool eligible)) return eligible;
+        if (_eligibility.TryGetValue(element, out bool eligible))
+            return eligible;
         return _eligibility[element] = CheckEligibility(element);
     }
 
@@ -54,14 +59,16 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
     {
         if (element is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } ||
             !SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, _compilation.Assembly) ||
-            !CompilationTypeAnalysisCache.GetOrCreate(_compilation).IsPackable(element)) return false;
+            !CompilationTypeAnalysisCache.GetOrCreate(_compilation).IsPackable(element))
+            return false;
         for (var current = element; current != null && current.SpecialType != SpecialType.System_Object; current = current.BaseType)
         {
             if (current.IsGenericType || !SymbolEqualityComparer.Default.Equals(current.ContainingAssembly, _compilation.Assembly) ||
                 current.GetMembers().OfType<IMethodSymbol>().Any(method => method.GetAttributes().Any(attribute =>
                     attribute.AttributeClass?.ContainingNamespace.ToDisplayString() == "LuminPack.Attribute" &&
                     attribute.AttributeClass.Name is "LuminPackOnSerializingAttribute" or "LuminPackOnSerializedAttribute" or
-                        "LuminPackOnDeserializingAttribute" or "LuminPackOnDeserializedAttribute"))) return false;
+                        "LuminPackOnDeserializingAttribute" or "LuminPackOnDeserializedAttribute")))
+                return false;
         }
         var data = LuminPackSourceGenerator.GetSerializationMetadata(element, _compilation, _metadata);
         return data.generatorType == GeneratorType.Object && !data.isUnion && data.callBackMethods.Count == 0 &&
@@ -81,68 +88,83 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
         var body = method.Body;
         if (body.DescendantNodes().Any(node => node is LocalFunctionStatementSyntax or TryStatementSyntax or LockStatementSyntax or
             ForStatementSyntax or CommonForEachStatementSyntax or WhileStatementSyntax or DoStatementSyntax or
-            GotoStatementSyntax or LabeledStatementSyntax or AwaitExpressionSyntax)) return null;
+            GotoStatementSyntax or LabeledStatementSyntax or AwaitExpressionSyntax))
+            return null;
         string state = method.ParameterList.Parameters[0].Identifier.ValueText;
         string input = method.ParameterList.Parameters[1].Identifier.ValueText;
         var calls = body.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
         var reserves = calls.Where(call => call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ReserveRecord" }).ToArray();
         if (reserves.Length != 1 || reserves[0].ArgumentList.Arguments.Count != 2 ||
             reserves[0].Expression is not MemberAccessExpressionSyntax reserveAccess || reserveAccess.Expression.ToString() != state ||
-            reserves[0].Parent?.Parent is not AssignmentExpressionSyntax { Parent: ExpressionStatementSyntax reserveStatement }) return null;
+            reserves[0].Parent?.Parent is not AssignmentExpressionSyntax { Parent: ExpressionStatementSyntax reserveStatement })
+            return null;
         var declarations = body.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().ToArray();
         var snapshot = declarations.SingleOrDefault(declaration => declaration.Declaration.Type is IdentifierNameSyntax { Identifier.ValueText: "var" } &&
             declaration.Declaration.Variables.Count == 1 && declaration.Declaration.Variables[0].Initializer?.Value.ToString() == input);
-        if (snapshot == null) return null;
+        if (snapshot == null)
+            return null;
         string owner = snapshot.Declaration.Variables[0].Identifier.ValueText;
         var nulls = body.DescendantNodes().OfType<IfStatementSyntax>().Where(condition =>
             condition.Condition.ToString().Replace(" ", string.Empty) == owner + "isnull").ToArray();
         if (nulls.Length != (method.Identifier.ValueText == "RootWrite" ? 1 : 0) ||
-            body.DescendantNodes().OfType<ReturnStatementSyntax>().Count() != nulls.Length) return null;
+            body.DescendantNodes().OfType<ReturnStatementSyntax>().Count() != nulls.Length)
+            return null;
         var captures = declarations.Where(declaration => declaration.Declaration.Type is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.StringKeyword } &&
             declaration.Declaration.Variables.Count == 1 && declaration.Declaration.Variables[0].Initializer?.Value is MemberAccessExpressionSyntax member &&
             member.Expression.ToString() == owner).ToArray();
         var bounds = reserves[0].ArgumentList.Arguments[1].Expression.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>()
             .Where(call => call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "RecordBound" }).ToArray();
         if (captures.Length == 0 || bounds.Length != captures.Length ||
-            calls.Count(call => call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CommitRecords" }) != 1) return null;
+            calls.Count(call => call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CommitRecords" }) != 1)
+            return null;
         var profiles = new List<string>();
         var replacements = new Dictionary<InvocationExpressionSyntax, ExpressionSyntax>();
         foreach (var bound in bounds)
         {
             if (bound.Expression is not MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax receiver, Name: GenericNameSyntax generic } ||
-                receiver.Identifier.ValueText != state || generic.TypeArgumentList.Arguments.Count != 1 || bound.ArgumentList.Arguments.Count != 1) return null;
+                receiver.Identifier.ValueText != state || generic.TypeArgumentList.Arguments.Count != 1 || bound.ArgumentList.Arguments.Count != 1)
+                return null;
             string name = bound.ArgumentList.Arguments[0].Expression.ToString();
-            if (!captures.Any(capture => capture.Declaration.Variables[0].Identifier.ValueText == name)) return null;
+            if (!captures.Any(capture => capture.Declaration.Variables[0].Identifier.ValueText == name))
+                return null;
             profiles.Add(generic.TypeArgumentList.Arguments[0].ToString());
             replacements.Add(bound, SyntaxFactory.ParseExpression("(4L + (" + name + " is null ? 0L : (long)" + name + ".Length * 2))"));
         }
         foreach (var call in calls)
         {
-            if (call.Expression is not MemberAccessExpressionSyntax access) return null;
+            if (call.Expression is not MemberAccessExpressionSyntax access)
+                return null;
             string receiver = access.Expression.ToString(), name = access.Name.Identifier.ValueText;
             if (receiver == state)
             {
-                if (name is "ReserveRecord" or "RecordBound" or "WriteReservedRecordString" or "CommitRecords") continue;
-                if (name == "Write" && nulls.Any(branch => branch.DescendantNodes().Contains(call))) continue;
+                if (name is "ReserveRecord" or "RecordBound" or "WriteReservedRecordString" or "CommitRecords")
+                    continue;
+                if (name == "Write" && nulls.Any(branch => branch.DescendantNodes().Contains(call)))
+                    continue;
                 return null;
             }
-            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" && name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add") continue;
-            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock") continue;
+            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" && name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add")
+                continue;
+            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock")
+                continue;
             return null;
         }
         string Name(string basis)
         {
             string name = basis;
             int suffix = 2;
-            while (method.DescendantTokens().Any(token => token.ValueText == name)) name = basis + suffix++;
+            while (method.DescendantTokens().Any(token => token.ValueText == name))
+                name = basis + suffix++;
             return name;
         }
         string helperName = Name("WriteOriginalObject"), boundName = Name("__objectRecordBound");
         var boundExpression = reserves[0].ArgumentList.Arguments[1].Expression.ReplaceNodes(bounds, (old, _) => replacements[old]);
         boundExpression = (ExpressionSyntax)new WideBound().Visit(boundExpression);
         var removed = new HashSet<SyntaxNode> { snapshot, reserveStatement };
-        foreach (var capture in captures) removed.Add(capture);
-        foreach (var branch in nulls) removed.Add(branch);
+        foreach (var capture in captures)
+            removed.Add(capture);
+        foreach (var branch in nulls)
+            removed.Add(branch);
         var hot = ((BlockSyntax)new ProvenBody(removed).Visit(body)).AddStatements(SyntaxFactory.ReturnStatement());
         string Profile(string profile) => "(typeof(" + profile + ") == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) || " +
             "typeof(" + profile + ") == typeof(global::LuminPack.Option.LuminPackDefaultOptions) || " +

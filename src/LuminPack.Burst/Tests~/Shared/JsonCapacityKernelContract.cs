@@ -42,9 +42,12 @@ namespace LuminPack.Burst.Tests
             byte[] chars = new byte[wideSource.Length + 8];
             for (int alignment = 0; alignment < 4; alignment++)
             {
-                for (int i = 0; i < bytes.Length; i++) bytes[i] = 0xA5;
-                for (int i = 0; i < chars.Length; i++) chars[i] = 0xA5;
-                source.CopyTo(bytes, alignment); wideSource.CopyTo(chars, alignment);
+                for (int i = 0; i < bytes.Length; i++)
+                    bytes[i] = 0xA5;
+                for (int i = 0; i < chars.Length; i++)
+                    chars[i] = 0xA5;
+                source.CopyTo(bytes, alignment);
+                wideSource.CopyTo(chars, alignment);
                 fixed (byte* p = bytes) fixed (byte* q = chars)
                 {
                     if (utf8(p + alignment, source.Length, flags) != expected ||

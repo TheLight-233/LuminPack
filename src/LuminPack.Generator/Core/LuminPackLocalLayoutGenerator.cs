@@ -40,7 +40,8 @@ public static class LuminPackLocalLayoutGenerator
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         public bool TryRegister(string key)
         {
-            if (!_emitted.Add(key)) return false;
+            if (!_emitted.Add(key))
+                return false;
             Registered?.Invoke(key);
             return true;
         }
@@ -660,12 +661,18 @@ public static class LuminPackLocalLayoutGenerator
             }
 
             var parts = new List<string>();
-            if (constraint.IsUnmanaged) parts.Add("unmanaged");
-            if (constraint.IsClass) parts.Add("class");
-            if (constraint.IsStruct) parts.Add("struct");
-            if (constraint.IsNotNull) parts.Add("notnull");
-            if (constraint.HasNewConstructor) parts.Add("new()");
-            if (constraint.HasDefault) parts.Add("default");
+            if (constraint.IsUnmanaged)
+                parts.Add("unmanaged");
+            if (constraint.IsClass)
+                parts.Add("class");
+            if (constraint.IsStruct)
+                parts.Add("struct");
+            if (constraint.IsNotNull)
+                parts.Add("notnull");
+            if (constraint.HasNewConstructor)
+                parts.Add("new()");
+            if (constraint.HasDefault)
+                parts.Add("default");
             parts.AddRange(constraint.Constraints);
 
             sb.Append("            where ");

@@ -9,8 +9,14 @@ public static class UnityObjectBatch
     /// <summary>Executes native-owner tests and exits with a diagnostic status.</summary>
     public static void Run()
     {
-        try { UnityObjectContract.RunAll(); EditorApplication.Exit(0); }
-        catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
+        try
+        {
+            UnityObjectContract.RunAll();
+            EditorApplication.Exit(0); }
+        catch (Exception error)
+        {
+            Debug.LogException(error);
+            EditorApplication.Exit(1); }
     }
 }
 #endif

@@ -97,7 +97,8 @@ public static class TupleEmitter
         sb.AppendLine("            writer.WriteArrayStart();");
         for (int i = 1; i <= count; i++)
         {
-            if (i > 1) sb.AppendLine("            writer.WriteByteRaw((byte)',');");
+            if (i > 1)
+                sb.AppendLine("            writer.WriteByteRaw((byte)',');");
             sb.AppendLine("            writer.SetFirstElement(true);");
             sb.AppendLine("            var item" + i + " = value." + (i == 8 ? "Rest" : "Item" + i) + ";");
             sb.AppendLine("            writer.WriteValue(in item" + i + ");");
@@ -139,7 +140,8 @@ public static class TupleEmitter
         var sb = new StringBuilder();
         for (int i = 0; i < count; i++)
         {
-            if (i > 0) sb.Append(", ");
+            if (i > 0)
+                sb.Append(", ");
             sb.Append("item").Append(i);
         }
         return sb.ToString();

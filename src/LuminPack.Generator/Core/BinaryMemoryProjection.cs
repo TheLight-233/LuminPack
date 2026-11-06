@@ -17,11 +17,13 @@ internal sealed class BinaryMemoryProjection : CSharpSyntaxRewriter
         var rewritten = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
         var access = rewritten.Expression as MemberAccessExpressionSyntax;
         var selected = access?.Name ?? rewritten.Expression as SimpleNameSyntax;
-        if (selected == null) return rewritten;
+        if (selected == null)
+            return rewritten;
         string name = selected.Identifier.ValueText;
         bool write = name is "WriteUnmanaged" or "WriteUnmanagedWithoutSizeReturn" or "DangerousWriteUnmanaged" or "DangerousWriteUnmanagedWithoutSizeReturn";
         bool read = name is "ReadUnmanaged" or "ReadUnmanagedWithoutSizeReturn" or "DangerousReadUnmanaged" or "DangerousReadUnmanagedWithoutSizeReturn";
-        if (!write && !read) return rewritten;
+        if (!write && !read)
+            return rewritten;
         string receiver = access == null ? string.Empty : access.Expression + ".";
         if (read && rewritten.ArgumentList.Arguments.Count == 0)
             return rewritten.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
@@ -36,7 +38,8 @@ internal sealed class BinaryMemoryProjection : CSharpSyntaxRewriter
             reference = receiver + "GetSpanReference(" + arguments[0].Expression + ")";
             arguments = arguments.RemoveAt(0);
         }
-        else reference = receiver + "GetCurrentSpanReference()";
+        else
+            reference = receiver + "GetCurrentSpanReference()";
         arguments = arguments.Insert(0, SyntaxFactory.Argument(SyntaxFactory.ParseExpression(reference)).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword)));
         return rewritten.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                 SyntaxFactory.ParseExpression("global::LuminPack.Core.LuminPack" + (write ? "Writer" : "Reader")), Rename(selected, write ? "Write" : "Read")))

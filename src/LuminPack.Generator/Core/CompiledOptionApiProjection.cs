@@ -65,7 +65,8 @@ internal sealed class CompiledOptionApiProjection : CSharpSyntaxRewriter
     public override SyntaxNode VisitExpressionStatement(ExpressionStatementSyntax node)
     {
         if (node.Expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } &&
-            access.Name.Identifier.ValueText == "Init") return null;
+            access.Name.Identifier.ValueText == "Init")
+            return null;
         return base.VisitExpressionStatement(node);
     }
 

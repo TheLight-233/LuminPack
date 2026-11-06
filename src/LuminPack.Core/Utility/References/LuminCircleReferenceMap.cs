@@ -81,7 +81,8 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
     /// <param name="valueComparer">The value comparer used by this operation.</param>
     public LuminCircleReferenceMap(int capacity, IEqualityComparer<TKey> keyComparer = null, IEqualityComparer<TValue> valueComparer = null)
     {
-        if (capacity < 0) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
+        if (capacity < 0)
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
         _keyComparer = keyComparer ?? EqualityComparer<TKey>.Default;
         _valueComparer = valueComparer ?? EqualityComparer<TValue>.Default;
         _capacity = CalculateCapacity(capacity);
@@ -101,7 +102,8 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
     /// <param name="source">The input data to process.</param>
     public LuminCircleReferenceMap(in LuminCircleReferenceMap<TKey, TValue> source)
     {
-        if (source == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
+        if (source == null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
 
         _keyComparer = source._keyComparer;
         _valueComparer = source._valueComparer;
@@ -133,7 +135,8 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateCapacity(int capacity)
     {
-        if (capacity < MIN_CAPACITY) return MIN_CAPACITY;
+        if (capacity < MIN_CAPACITY)
+            return MIN_CAPACITY;
         capacity--;
         capacity |= capacity >> 1;
         capacity |= capacity >> 2;
@@ -176,7 +179,8 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
         if (!entry1.IsOccupied)
         {
             ref Entry other = ref _table2[(hashCode >> 8) & _capacityMask];
-            if (other.IsOccupied && other.HashCode == hashCode && _keyComparer.Equals(other.Key, key)) return false;
+            if (other.IsOccupied && other.HashCode == hashCode && _keyComparer.Equals(other.Key, key))
+                return false;
             entry1.HashCode = (uint)hashCode;
             entry1.Key = key;
             entry1.Value = value;
@@ -204,7 +208,8 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
             return false;
 
         bool res = CuckooInsert(hashCode, key, value);
-        if (res) _version++;
+        if (res)
+            _version++;
         return res;
     }
 
@@ -443,7 +448,8 @@ public sealed class LuminCircleReferenceMap<TKey, TValue> : IDisposable, IEnumer
     public void Clear()
     {
         // Operation cleanup inlines only the empty check; the table clearing stays out of every entry's cleanup block.
-        if (_count > 0) ClearEntries();
+        if (_count > 0)
+            ClearEntries();
     }
 
     /// <summary>Clears both tables of a nonempty map.</summary>

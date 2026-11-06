@@ -15,8 +15,10 @@ public static unsafe class KernelContract
         for (int alignment = 0; alignment < 4; alignment++)
         {
             byte[] input = new byte[length + 64], output = new byte[length + 64], key = new byte[length + 64];
-            random.NextBytes(input); random.NextBytes(key);
-            for (int i = 0; i < output.Length; i++) output[i] = 0xA5;
+            random.NextBytes(input);
+            random.NextBytes(key);
+            for (int i = 0; i < output.Length; i++)
+                output[i] = 0xA5;
             fixed (byte* a = input)
             fixed (byte* b = output)
             fixed (byte* k = key)
@@ -31,10 +33,12 @@ public static unsafe class KernelContract
                     b[alignment + 3 + mismatch] ^= 1;
                 }
                 xor(b + alignment + 3, b + alignment + 3, k + alignment, (uint)length);
-                for (int i = 0; i < length; i++) Require(b[alignment + 3 + i] == (byte)(a[alignment + i] ^ k[alignment + i]), "In-place XOR differs.");
+                for (int i = 0; i < length; i++)
+                    Require(b[alignment + 3 + i] == (byte)(a[alignment + i] ^ k[alignment + i]), "In-place XOR differs.");
             }
             for (int i = 0; i < output.Length; i++)
-                if (i < alignment + 3 || i >= alignment + 3 + length) Require(output[i] == 0xA5, "Output canary changed.");
+                if (i < alignment + 3 || i >= alignment + 3 + length)
+                    Require(output[i] == 0xA5, "Output canary changed.");
         }
 
         for (int period = 1; period <= 80; period++)
@@ -43,8 +47,10 @@ public static unsafe class KernelContract
             byte[] output = new byte[period + count + 13];
             random.NextBytes(output);
             byte[] expected = (byte[])output.Clone();
-            for (int i = 0; i < count; i++) expected[period + i] = expected[i];
-            fixed (byte* p = output) expand(p + period, (uint)count, (uint)period);
+            for (int i = 0; i < count; i++)
+                expected[period + i] = expected[i];
+            fixed (byte* p = output)
+                expand(p + period, (uint)count, (uint)period);
             Require(output.AsSpan().SequenceEqual(expected), "Periodic expansion or tail differs.");
         }
 
@@ -58,6 +64,7 @@ public static unsafe class KernelContract
     /// <param name="condition">The required condition.</param><param name="message">The failure detail.</param>
     private static void Require(bool condition, string message)
     {
-        if (!condition) LuminPackExceptionHelper.ThrowInvalidOperationException(message);
+        if (!condition)
+            LuminPackExceptionHelper.ThrowInvalidOperationException(message);
     }
 }

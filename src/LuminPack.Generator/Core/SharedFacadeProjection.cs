@@ -30,7 +30,8 @@ internal sealed class SharedFacadeProjection
     /// <returns>Private common support, or an empty string when sharing cannot reduce duplication.</returns>
     internal string Apply(List<KeyValuePair<string, string>> blocks, HashSet<string> eligible, MetaInfo metadata)
     {
-        if (eligible.Count < 2) return string.Empty;
+        if (eligible.Count < 2)
+            return string.Empty;
         lock (_gate)
         {
             // Each changed block is parsed independently, so analysis runs in parallel; grouping below keeps the canonical order.
@@ -38,12 +39,14 @@ internal sealed class SharedFacadeProjection
             var analyzed = new Contribution[pending.Length];
             ParallelWork.For(pending.Length, index => analyzed[index] = Analyze(pending[index].Key, pending[index].Value, metadata));
             for (int index = 0; index < pending.Length; index++)
-                if (!_contributions.TryGetValue(pending[index].Value, out _)) _contributions.Add(pending[index].Value, analyzed[index]);
+                if (!_contributions.TryGetValue(pending[index].Value, out _))
+                    _contributions.Add(pending[index].Value, analyzed[index]);
             var contributions = new Dictionary<string, Contribution>(StringComparer.Ordinal);
             var groups = new Dictionary<string, List<Candidate>>(StringComparer.Ordinal);
             foreach (var block in blocks)
             {
-                if (!eligible.Contains(block.Key)) continue;
+                if (!eligible.Contains(block.Key))
+                    continue;
                 if (!_contributions.TryGetValue(block.Value, out var contribution))
                 {
                     contribution = Analyze(block.Key, block.Value, metadata);
@@ -52,12 +55,14 @@ internal sealed class SharedFacadeProjection
                 contributions.Add(block.Key, contribution);
                 foreach (var candidate in contribution.Candidates)
                 {
-                    if (!groups.TryGetValue(candidate.Key, out var group)) groups.Add(candidate.Key, group = new List<Candidate>());
+                    if (!groups.TryGetValue(candidate.Key, out var group))
+                        groups.Add(candidate.Key, group = new List<Candidate>());
                     group.Add(candidate);
                 }
             }
             var shared = groups.Where(pair => pair.Value.Count > 1).OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
-            if (shared.Length == 0) return string.Empty;
+            if (shared.Length == 0)
+                return string.Empty;
             var keys = shared.Select(pair => pair.Key).ToArray();
             var selected = new HashSet<string>(keys, StringComparer.Ordinal);
             for (int index = 0; index < blocks.Count; index++)
@@ -66,9 +71,11 @@ internal sealed class SharedFacadeProjection
                 if (contributions.TryGetValue(block.Key, out var contribution))
                     blocks[index] = new KeyValuePair<string, string>(block.Key, contribution.Render(block.Value, selected));
             }
-            if (_support != null && _supportScoped == metadata.IsNet8 && _supportKeys.SequenceEqual(keys)) return _support;
+            if (_support != null && _supportScoped == metadata.IsNet8 && _supportKeys.SequenceEqual(keys))
+                return _support;
             var support = new StringBuilder(BuildOperations(metadata.IsNet8));
-            foreach (var group in shared) support.AppendLine(group.Value[0].Helper);
+            foreach (var group in shared)
+                support.AppendLine(group.Value[0].Helper);
             _supportKeys = keys;
             _supportScoped = metadata.IsNet8;
             return _support = support.ToString();
@@ -92,10 +99,12 @@ internal sealed class SharedFacadeProjection
             if (method.Body == null || method.TypeParameterList?.Parameters.Count != 1 ||
                 method.ParameterList.Parameters.All(parameter => parameter.Identifier.ValueText != "value" || parameter.Type?.ToString() != type) ||
                 !IsConvenience(method.Identifier.ValueText) ||
-                method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator") continue;
+                method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator")
+                continue;
             // These exact roots and their private fallback need the concrete interface overload, not an erased payload.
             if (method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call => call.Expression is SimpleNameSyntax name &&
-                    name.Identifier.ValueText is "RootWriteExactInterface" or "SerializeInterfaceSlow")) continue;
+                    name.Identifier.ValueText is "RootWriteExactInterface" or "SerializeInterfaceSlow"))
+                continue;
             string profile = method.TypeParameterList.Parameters[0].Identifier.ValueText;
             var normalizer = new NormalizeBody(type, profile, stateCalls);
             var body = (BlockSyntax)normalizer.Visit(method.Body);
@@ -163,11 +172,13 @@ internal sealed class SharedFacadeProjection
             int digit = character <= '9' ? character - '0' : (character | 32) - 'a' + 10;
             value = (value << 4) | digit;
             bits += 4;
-            if (bits < 5) continue;
+            if (bits < 5)
+                continue;
             bits -= 5;
             result[index++] = alphabet[(value >> bits) & 31];
         }
-        if (bits != 0) result[index] = alphabet[(value << (5 - bits)) & 31];
+        if (bits != 0)
+            result[index] = alphabet[(value << (5 - bits)) & 31];
         return new string(result);
     }
 
@@ -231,13 +242,15 @@ internal sealed class SharedFacadeProjection
                 (operation.StartsWith("Deserialize", StringComparison.Ordinal) ? "Reader" : "Writer");
             string modifier = operation is "Serialize" or "SerializeJson" ? "in" : "ref";
             string scope = scoped ? "scoped " : "";
-            if (profile != null) text.AppendLine("[MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            if (profile != null)
+                text.AppendLine("[MethodImpl(MethodImplOptions.AggressiveInlining)]");
             text.Append(profile == null ? "" : "public ").Append("void ").Append(adapter).Append('(').Append(scope)
                 .Append("ref global::LuminPack.Core.").Append(state).Append(" state, ").Append(scope).Append(modifier).Append(' ').Append(type).Append(" value)");
             bool fallback = false;
             if (profile != null && !stateCalls.TryGetValue(operation, out fallback))
                 text.Append(" => ").Append(global::LuminPack.Code.Core.LuminPackExtensionGenerator.UnsupportedWidth.TrimEnd(';'));
-            else if (profile != null) text.Append(" => global::LuminPack.LuminPackSerializer.").Append(operation).Append('<')
+            else if (profile != null)
+                text.Append(" => global::LuminPack.LuminPackSerializer.").Append(operation).Append('<')
                 .Append(fallback ? type + ", " : "").Append(profile).Append(">(ref state, ").Append(modifier).Append(" value)");
             text.AppendLine(";");
         }
@@ -255,7 +268,10 @@ internal sealed class SharedFacadeProjection
         /// <param name="profile">The original profile parameter.</param>
         /// <param name="stateCalls">Collects the exact original dispatch choice for the concrete adapter.</param>
         internal NormalizeBody(string type, string profile, IDictionary<string, bool> stateCalls)
-        { _type = type; _profile = profile; _stateCalls = stateCalls; }
+        {
+            _type = type;
+            _profile = profile;
+            _stateCalls = stateCalls; }
 
         /// <summary>Renames the template's generated profile parameter.</summary>
         /// <param name="node">An identifier in a generated body.</param>
@@ -295,14 +311,16 @@ internal sealed class SharedFacadeProjection
                 generic.TypeArgumentList.Arguments.Last().ToString() != _profile ||
                 generic.TypeArgumentList.Arguments.Count == 2 && generic.TypeArgumentList.Arguments[0].ToString() != _type ||
                 node.ArgumentList.Arguments.Count != 2 || !node.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ||
-                node.ArgumentList.Arguments[1].Expression is not IdentifierNameSyntax value) return result;
+                node.ArgumentList.Arguments[1].Expression is not IdentifierNameSyntax value)
+                return result;
             string operation = access.Name.Identifier.ValueText;
             string state = operation == "Sizeof" ? "evaluator" : operation is "Serialize" or "SerializeJson" ? "writer" : "reader";
             string receiver = node.ArgumentList.Arguments[0].Expression.ToString();
             bool original = receiver == state && value.Identifier.ValueText == "value";
             bool directRecord = operation == "Sizeof" && receiver == "directEvaluator" && value.Identifier.ValueText == "directValue" ||
                 operation == "Serialize" && receiver == "fallbackWriter" && value.Identifier.ValueText == "value";
-            if (!(original || directRecord) || operation is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof")) return result;
+            if (!(original || directRecord) || operation is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof"))
+                return result;
             _stateCalls[operation] = generic.TypeArgumentList.Arguments.Count == 2;
             string adapter = operation == "Sizeof" ? "Size" : operation.Replace("Deserialize", "Read").Replace("Serialize", "Write");
             return result.WithExpression(SyntaxFactory.ParseExpression("default(" + Adapter + ")." + adapter).WithTriviaFrom(result.Expression));
@@ -325,7 +343,12 @@ internal sealed class SharedFacadeProjection
         /// <param name="wrapper">The thin concrete wrapper with its original signature.</param>
         /// <param name="helper">The private generic implementation.</param>
         internal Candidate(string key, int start, int length, string wrapper, string helper)
-        { Key = key; Start = start; Length = length; Wrapper = wrapper; Helper = helper; }
+        {
+            Key = key;
+            Start = start;
+            Length = length;
+            Wrapper = wrapper;
+            Helper = helper; }
     }
 
     /// <summary>Caches only normalized text and offsets for a single frozen facade contribution.</summary>
@@ -339,7 +362,10 @@ internal sealed class SharedFacadeProjection
         /// <summary>Retains completed sharing candidates and the concrete adapter source.</summary>
         /// <param name="candidates">Value-only method replacements.</param>
         /// <param name="adapter">The stateless concrete state adapter.</param>
-        internal Contribution(Candidate[] candidates, string adapter) { Candidates = candidates; _adapter = adapter; }
+        internal Contribution(Candidate[] candidates, string adapter)
+        {
+            Candidates = candidates;
+            _adapter = adapter; }
 
         /// <summary>Rewrites only methods whose normalized bodies actually repeat in this compilation.</summary>
         /// <param name="source">The original frozen concrete contribution.</param>
@@ -348,11 +374,14 @@ internal sealed class SharedFacadeProjection
         internal string Render(string source, HashSet<string> selected)
         {
             var methods = Candidates.Where(candidate => selected.Contains(candidate.Key)).ToArray();
-            if (methods.Length == 0) return source;
+            if (methods.Length == 0)
+                return source;
             string selection = string.Join(",", methods.Select(method => method.Start.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-            if (_rendered != null && _selection == selection) return _rendered;
+            if (_rendered != null && _selection == selection)
+                return _rendered;
             var result = new StringBuilder(source);
-            foreach (var method in methods.OrderByDescending(candidate => candidate.Start)) result.Remove(method.Start, method.Length).Insert(method.Start, method.Wrapper);
+            foreach (var method in methods.OrderByDescending(candidate => candidate.Start))
+                result.Remove(method.Start, method.Length).Insert(method.Start, method.Wrapper);
             _selection = selection;
             return _rendered = result.AppendLine().AppendLine(_adapter).ToString();
         }

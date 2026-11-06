@@ -30,8 +30,10 @@ public static class ImmutableSortedSetEmitter
     /// <remarks>Builds the set from the complete element block: strictly ascending elements link the tree in one pass, other input uses the sorted construction.</remarks>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (ImmutableStringSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: true)) return;
-        if (ImmutableScalarSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: true)) return;
+        if (ImmutableStringSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: true))
+            return;
+        if (ImmutableScalarSetEmitter.TryGenerateDeserializeCode(fieldData, sb, sorted: true))
+            return;
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
         string elementType = GetFirstGeneric(fieldData.TypeName);
         CollectionEmitterKit.AppendReadLength(sb, element, elementType, "value = null;", "            ", scalarElements: true);

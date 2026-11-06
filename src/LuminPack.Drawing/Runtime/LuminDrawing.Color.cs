@@ -16,8 +16,17 @@ public static unsafe partial class LuminDrawing
     public static void Write(ref LuminPackWriter writer, in DrawingColor value)
     {
         // Each branch reserves its exact record width before the first byte, so a short destination fails unchanged.
-        if (value.IsEmpty) { writer.EnsureAdditionalCapacity(1); writer.Write((byte)0); return; }
-        if (value.IsKnownColor) { writer.EnsureAdditionalCapacity(5); writer.Write((byte)1); writer.Write((int)value.ToKnownColor()); return; }
+        if (value.IsEmpty)
+        {
+            writer.EnsureAdditionalCapacity(1);
+            writer.Write((byte)0);
+            return; }
+        if (value.IsKnownColor)
+        {
+            writer.EnsureAdditionalCapacity(5);
+            writer.Write((byte)1);
+            writer.Write((int)value.ToKnownColor());
+            return; }
         if (value.IsNamedColor)
         {
             string? name = value.Name;
@@ -43,14 +52,16 @@ public static unsafe partial class LuminDrawing
         {
             int known = default;
             pending.Read(ref known);
-            if (!Enum.IsDefined((System.Drawing.KnownColor)known)) LuminPackExceptionHelper.ThrowInvalidDataException("Invalid known drawing color.");
+            if (!Enum.IsDefined((System.Drawing.KnownColor)known))
+                LuminPackExceptionHelper.ThrowInvalidDataException("Invalid known drawing color.");
             candidate = DrawingColor.FromKnownColor((System.Drawing.KnownColor)known);
         }
         else if (kind == 2)
         {
             string? name = null;
             pending.Read(ref name);
-            if (name is null) LuminPackExceptionHelper.ThrowInvalidDataException("A named drawing color requires its name.");
+            if (name is null)
+                LuminPackExceptionHelper.ThrowInvalidDataException("A named drawing color requires its name.");
             candidate = DrawingColor.FromName(name!);
         }
         else if (kind == 3)
@@ -59,7 +70,8 @@ public static unsafe partial class LuminDrawing
             pending.Read(ref argb);
             candidate = DrawingColor.FromArgb(argb);
         }
-        else if (kind != 0) LuminPackExceptionHelper.ThrowInvalidDataException("Invalid drawing color marker.");
+        else if (kind != 0)
+            LuminPackExceptionHelper.ThrowInvalidDataException("Invalid drawing color marker.");
         value = candidate;
         reader = pending;
     }

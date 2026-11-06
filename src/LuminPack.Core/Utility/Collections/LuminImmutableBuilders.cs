@@ -26,7 +26,8 @@ public static class LuminImmutableBuilders
     public static void ReturnHashSet<T>(ImmutableHashSet<T>.Builder builder)
     {
         builder.Clear();
-        if (!ReferenceEquals(builder.KeyComparer, EqualityComparer<T>.Default)) builder.KeyComparer = EqualityComparer<T>.Default;
+        if (!ReferenceEquals(builder.KeyComparer, EqualityComparer<T>.Default))
+            builder.KeyComparer = EqualityComparer<T>.Default;
         Cache<ImmutableHashSet<T>.Builder>.Store(builder);
     }
 
@@ -44,7 +45,8 @@ public static class LuminImmutableBuilders
     public static void ReturnSortedSet<T>(ImmutableSortedSet<T>.Builder builder)
     {
         builder.Clear();
-        if (!ReferenceEquals(builder.KeyComparer, Comparer<T>.Default)) builder.KeyComparer = Comparer<T>.Default;
+        if (!ReferenceEquals(builder.KeyComparer, Comparer<T>.Default))
+            builder.KeyComparer = Comparer<T>.Default;
         Cache<ImmutableSortedSet<T>.Builder>.Store(builder);
     }
 
@@ -81,8 +83,10 @@ public static class LuminImmutableBuilders
     public static void ReturnDictionary<TKey, TValue>(ImmutableDictionary<TKey, TValue>.Builder builder) where TKey : notnull
     {
         builder.Clear();
-        if (!ReferenceEquals(builder.KeyComparer, EqualityComparer<TKey>.Default)) builder.KeyComparer = EqualityComparer<TKey>.Default;
-        if (!ReferenceEquals(builder.ValueComparer, EqualityComparer<TValue>.Default)) builder.ValueComparer = EqualityComparer<TValue>.Default;
+        if (!ReferenceEquals(builder.KeyComparer, EqualityComparer<TKey>.Default))
+            builder.KeyComparer = EqualityComparer<TKey>.Default;
+        if (!ReferenceEquals(builder.ValueComparer, EqualityComparer<TValue>.Default))
+            builder.ValueComparer = EqualityComparer<TValue>.Default;
         Cache<ImmutableDictionary<TKey, TValue>.Builder>.Store(builder);
     }
 
@@ -102,8 +106,10 @@ public static class LuminImmutableBuilders
     public static void ReturnSortedDictionary<TKey, TValue>(ImmutableSortedDictionary<TKey, TValue>.Builder builder) where TKey : notnull
     {
         builder.Clear();
-        if (!ReferenceEquals(builder.KeyComparer, Comparer<TKey>.Default)) builder.KeyComparer = Comparer<TKey>.Default;
-        if (!ReferenceEquals(builder.ValueComparer, EqualityComparer<TValue>.Default)) builder.ValueComparer = EqualityComparer<TValue>.Default;
+        if (!ReferenceEquals(builder.KeyComparer, Comparer<TKey>.Default))
+            builder.KeyComparer = Comparer<TKey>.Default;
+        if (!ReferenceEquals(builder.ValueComparer, EqualityComparer<TValue>.Default))
+            builder.ValueComparer = EqualityComparer<TValue>.Default;
         Cache<ImmutableSortedDictionary<TKey, TValue>.Builder>.Store(builder);
     }
 
@@ -120,7 +126,8 @@ public static class LuminImmutableBuilders
         internal static TBuilder? Take()
         {
             var item = t_item;
-            if (item is null) return s_overflow.TryTake();
+            if (item is null)
+                return s_overflow.TryTake();
             t_item = null;
             return item;
         }
@@ -130,8 +137,10 @@ public static class LuminImmutableBuilders
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void Store(TBuilder item)
         {
-            if (t_item is null) t_item = item;
-            else s_overflow.TryStore(item);
+            if (t_item is null)
+                t_item = item;
+            else
+                s_overflow.TryStore(item);
         }
     }
 }

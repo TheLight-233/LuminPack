@@ -22,10 +22,12 @@ internal sealed class BinaryLiteralWriteProjection : CSharpSyntaxRewriter
         var previous = _writers;
         _writers = new HashSet<string>(StringComparer.Ordinal);
         foreach (var parameter in node.DescendantNodes().OfType<ParameterSyntax>())
-            if (IsWriter(parameter.Type)) _writers.Add(parameter.Identifier.ValueText);
+            if (IsWriter(parameter.Type))
+                _writers.Add(parameter.Identifier.ValueText);
         foreach (var declaration in node.DescendantNodes().OfType<VariableDeclarationSyntax>())
             if (IsWriter(declaration.Type))
-                foreach (var variable in declaration.Variables) _writers.Add(variable.Identifier.ValueText);
+                foreach (var variable in declaration.Variables)
+                    _writers.Add(variable.Identifier.ValueText);
         var result = base.VisitMethodDeclaration(node);
         _writers = previous;
         return result;
@@ -62,7 +64,8 @@ internal sealed class BinaryLiteralWriteProjection : CSharpSyntaxRewriter
         else if (arguments.Count == 1 && operation.Identifier.ValueText is "WriteObjectHeader" or "WriteUnionHeader" &&
             arguments[0].Expression is LiteralExpressionSyntax)
             value = SyntaxFactory.ParseExpression("unchecked((byte)(" + arguments[0].Expression + "))");
-        else return base.VisitExpressionStatement(node);
+        else
+            return base.VisitExpressionStatement(node);
         var destination = SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
             receiver, SyntaxFactory.IdentifierName("Cursor"));
         var store = width == 1 ? SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(

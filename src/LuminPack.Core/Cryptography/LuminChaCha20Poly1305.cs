@@ -347,7 +347,8 @@ namespace LuminPack.Cryptography
         private static unsafe void XorKeystream(byte* dst, byte* src, byte* key, int length)
         {
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryXor(dst, src, key, length)) return;
+            if (global::LuminPack.Core.LuminPackBurst.TryXor(dst, src, key, length))
+                return;
 #endif
             int i = 0;
 #if NET8_0_OR_GREATER

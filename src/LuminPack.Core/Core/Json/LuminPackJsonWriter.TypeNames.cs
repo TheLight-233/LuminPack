@@ -28,7 +28,10 @@ public unsafe ref partial struct LuminPackJsonWriter
     [MethodImpl(MethodImplOptions.NoInlining)]
     public void WriteTypeName<TOptions>(string fullName) where TOptions : struct, ILuminPackOptions
     {
-        if (!LuminPackTypeNameText.FindRemoval(fullName.AsSpan(), out int start, out int end)) { Write<TOptions>(fullName); return; }
+        if (!LuminPackTypeNameText.FindRemoval(fullName.AsSpan(), out int start, out int end))
+        {
+            Write<TOptions>(fullName);
+            return; }
         char[]? rented = null;
         Span<char> scratch = fullName.Length <= 512 ? stackalloc char[fullName.Length] : (rented = ArrayPool<char>.Shared.Rent(fullName.Length));
         try
@@ -36,6 +39,9 @@ public unsafe ref partial struct LuminPackJsonWriter
             int length = LuminPackTypeNameText.Compact(fullName.AsSpan(), scratch, start, end);
             WriteStringSnapshot<TOptions>(scratch.Slice(0, length));
         }
-        finally { if (rented is not null) ArrayPool<char>.Shared.Return(rented); }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<char>.Shared.Return(rented); }
     }
 }

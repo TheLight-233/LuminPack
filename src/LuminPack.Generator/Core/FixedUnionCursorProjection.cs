@@ -93,7 +93,9 @@ internal static class FixedUnionCursorProjection
 
         /// <summary>Captures the actual generated state parameter.</summary>
         /// <param name="writer">The selected Writer parameter identity.</param>
-        internal AdvancingBody(string writer) { Writer = writer; }
+        internal AdvancingBody(string writer)
+        {
+            Writer = writer; }
 
         /// <summary>Addresses the current fixed payload byte through its unpublished local index.</summary>
         /// <param name="node">A direct cursor reference.</param>
@@ -109,7 +111,8 @@ internal static class FixedUnionCursorProjection
         public override SyntaxNode VisitExpressionStatement(ExpressionStatementSyntax node)
         {
             if (node.Expression is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } call ||
-                access.Expression.ToString() != Writer) return base.VisitExpressionStatement(node);
+                access.Expression.ToString() != Writer)
+                return base.VisitExpressionStatement(node);
             string name = access.Name.Identifier.ValueText;
             var arguments = call.ArgumentList.Arguments;
             if (name == "EnsureAdditionalCapacity" && arguments.Count == 1)
@@ -117,13 +120,15 @@ internal static class FixedUnionCursorProjection
                     Visit(arguments[0].Expression) + "); }").WithTriviaFrom(node);
             if (name == "Advance" && arguments.Count == 1)
                 return SyntaxFactory.ParseStatement("__fixedUnionIndex += " + Visit(arguments[0].Expression) + ";").WithTriviaFrom(node);
-            if (name != "Write") return base.VisitExpressionStatement(node);
+            if (name != "Write")
+                return base.VisitExpressionStatement(node);
             string destination = Writer + ".GetSpanReference(__fixedUnionIndex)";
             if (arguments.Count == 2 && arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
                 return SyntaxFactory.ParseStatement("{ global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref " + destination +
                     ", ref " + Visit(arguments[0].Expression) + ", (uint)(" + Visit(arguments[1].Expression) + ")); __fixedUnionIndex += " +
                     Visit(arguments[1].Expression) + "; }").WithTriviaFrom(node);
-            if (arguments.Count != 1) return base.VisitExpressionStatement(node);
+            if (arguments.Count != 1)
+                return base.VisitExpressionStatement(node);
             return SyntaxFactory.ParseStatement("__fixedUnionIndex += global::LuminPack.Core.LuminPackWriter." + access.Name +
                 "(ref " + destination + ", " + Visit(arguments[0]) + ");").WithTriviaFrom(node);
         }

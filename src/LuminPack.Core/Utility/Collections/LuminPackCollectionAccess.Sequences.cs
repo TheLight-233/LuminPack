@@ -21,15 +21,23 @@ public static partial class LuminPackCollectionAccess
         for (int depth = 0; depth <= MaxDepth && current is not null; depth++)
         {
             var type = current.GetType();
-            if (type == typeof(List<T>) || type == typeof(T[])) return current;
-            if (depth == MaxDepth) return null;
+            if (type == typeof(List<T>) || type == typeof(T[]))
+                return current;
+            if (depth == MaxDepth)
+                return null;
             int offset;
-            if (type == typeof(Collection<T>)) offset = LuminCollectionLayouts.CollectionItems;
-            else if (type == typeof(ObservableCollection<T>)) offset = LuminCollectionLayouts.ObservableCollectionItems;
-            else if (type == typeof(ReadOnlyCollection<T>)) offset = LuminCollectionLayouts.ReadOnlyCollectionList;
-            else if (type == typeof(ReadOnlyObservableCollection<T>)) offset = LuminCollectionLayouts.ReadOnlyObservableCollectionList;
-            else return null;
-            if (offset < 0) return null;
+            if (type == typeof(Collection<T>))
+                offset = LuminCollectionLayouts.CollectionItems;
+            else if (type == typeof(ObservableCollection<T>))
+                offset = LuminCollectionLayouts.ObservableCollectionItems;
+            else if (type == typeof(ReadOnlyCollection<T>))
+                offset = LuminCollectionLayouts.ReadOnlyCollectionList;
+            else if (type == typeof(ReadOnlyObservableCollection<T>))
+                offset = LuminCollectionLayouts.ReadOnlyObservableCollectionList;
+            else
+                return null;
+            if (offset < 0)
+                return null;
             current = LuminFieldLayout.Field<IList<T>?>(current, offset);
         }
         return null;
@@ -88,15 +96,21 @@ public static partial class LuminPackCollectionAccess
                 int second = LuminFieldLayout.ObjectField(typeof(ObservableCollection<object>), name, marker);
                 return first >= 0 && first == second ? first : LuminFieldLayout.Unavailable;
             }
-            catch { return LuminFieldLayout.Unavailable; }
+            catch
+            {
+                return LuminFieldLayout.Unavailable; }
         }
 
         /// <summary>Verifies empty and subscribed slots through the actual public events.</summary>
         /// <returns>Whether each located slot contains exactly its public subscription.</returns>
         private static bool Check()
         {
-            try { return Check<int>() && Check<object>(); }
-            catch { return false; }
+            try
+            {
+                return Check<int>() && Check<object>(); }
+            catch
+            {
+                return false; }
         }
 
         /// <summary>Checks one closed observable layout without modifying user collections.</summary>
@@ -106,7 +120,8 @@ public static partial class LuminPackCollectionAccess
         {
             var collection = new ObservableCollection<T>();
             if (LuminFieldLayout.Field<object?>(collection, CollectionChanged) is not null ||
-                LuminFieldLayout.Field<object?>(collection, PropertyChanged) is not null) return false;
+                LuminFieldLayout.Field<object?>(collection, PropertyChanged) is not null)
+                return false;
             NotifyCollectionChangedEventHandler changed = OnCollectionChanged;
             PropertyChangedEventHandler property = OnPropertyChanged;
             collection.CollectionChanged += changed;

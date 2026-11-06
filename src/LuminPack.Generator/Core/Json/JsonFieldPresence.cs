@@ -22,17 +22,20 @@ internal sealed class JsonFieldPresence
         _locals = new string[_packed ? (fields.Length + 31) / 32 : fields.Length];
         var identifiers = new HashSet<string>(data.GenericParameters.Select(name => name.TrimStart('@')), StringComparer.Ordinal);
         for (var owner = data.TypeSymbol; owner != null; owner = owner.ContainingType)
-            foreach (var parameter in owner.TypeParameters) identifiers.Add(parameter.Name);
+            foreach (var parameter in owner.TypeParameters)
+                identifiers.Add(parameter.Name);
         foreach (var field in data.fields)
         {
             identifiers.Add(field.Name);
             identifiers.Add(field.Name + "Temp");
         }
-        for (int i = 0; i < fields.Length; i++) _positions.Add(fields[i], i);
+        for (int i = 0; i < fields.Length; i++)
+            _positions.Add(fields[i], i);
         for (int i = 0; i < _locals.Length; i++)
         {
             string name = _packed ? "seenFields" + i : fields[i].Name + "Seen";
-            while (!identifiers.Add(name)) name += "_";
+            while (!identifiers.Add(name))
+                name += "_";
             _locals[i] = name;
         }
     }
@@ -52,7 +55,8 @@ internal sealed class JsonFieldPresence
     /// <param name="indent">The assignment indentation.</param>
     internal void AppendMark(StringBuilder builder, LuminDataField field, string indent)
     {
-        if (!_positions.TryGetValue(field, out int position)) return;
+        if (!_positions.TryGetValue(field, out int position))
+            return;
         builder.AppendLine(indent + (_packed
             ? _locals[position / 32] + " |= " + Mask(position) + ";"
             : _locals[position] + " = true;"));

@@ -39,7 +39,8 @@ internal sealed class LazyForwardingTargets
     /// <returns>The recognized targets, possibly none.</returns>
     internal static LazyForwardingTargets Read(string source, string payload)
     {
-        if (string.IsNullOrEmpty(source) || source.IndexOf(RootContainerProjection.ContainerPrefix, StringComparison.Ordinal) < 0) return Empty;
+        if (string.IsNullOrEmpty(source) || source.IndexOf(RootContainerProjection.ContainerPrefix, StringComparison.Ordinal) < 0)
+            return Empty;
         return Cache.GetValue(source, text => Parse(text, payload));
     }
 
@@ -50,7 +51,8 @@ internal sealed class LazyForwardingTargets
     internal static void Capture(string source, string payload, SyntaxNode root)
     {
         if (source.IndexOf(RootContainerProjection.ContainerPrefix, StringComparison.Ordinal) < 0 ||
-            source.IndexOf("#if", StringComparison.Ordinal) >= 0 || source.IndexOf("#elif", StringComparison.Ordinal) >= 0) return;
+            source.IndexOf("#if", StringComparison.Ordinal) >= 0 || source.IndexOf("#elif", StringComparison.Ordinal) >= 0)
+            return;
         Cache.GetValue(source, _ => ReadRoot(root, payload));
     }
 
@@ -117,7 +119,8 @@ internal sealed class LazyForwardingTargets
     /// <returns>The call statement, or null when the forwarder was not recognized.</returns>
     internal string Call(string operation, string profile, string state, string value)
     {
-        if (!_targets.TryGetValue(operation + (profile == null ? string.Empty : "<>"), out var target)) return null;
+        if (!_targets.TryGetValue(operation + (profile == null ? string.Empty : "<>"), out var target))
+            return null;
         return target.Call.Replace("{profile}", profile) + "(ref " + state + ", " + target.Passing + value + ");";
     }
 
@@ -139,6 +142,10 @@ internal sealed class LazyForwardingTargets
         /// <param name="call">The qualified root, with <c>{profile}</c> marking the forwarder's profile argument.</param>
         /// <param name="passing">The payload argument's passing keyword and trailing space, or empty for by-value.</param>
         /// <param name="documentation">The fully qualified method name without profile arguments.</param>
-        internal Target(string call, string passing, string documentation) { Call = call; Passing = passing; Documentation = documentation; }
+        internal Target(string call, string passing, string documentation)
+        {
+            Call = call;
+            Passing = passing;
+            Documentation = documentation; }
     }
 }

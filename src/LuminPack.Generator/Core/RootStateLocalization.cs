@@ -46,7 +46,14 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
     /// <param name="shared">Whether this body is an inlined helper operating on its caller's localized state.</param>
     private RootStateLocalization(string source, string local, string complete, string type, Dictionary<string, LocalFunctionStatementSyntax> helpers,
         HashSet<string> used, bool shared)
-    { _source = source; _local = local; _complete = complete; _type = type; _helpers = helpers; _used = used; _shared = shared; }
+    {
+        _source = source;
+        _local = local;
+        _complete = complete;
+        _type = type;
+        _helpers = helpers;
+        _used = used;
+        _shared = shared; }
 
     /// <summary>Localizes binary cursor state around outlined operations; JSON retains pooled token scratch in its original state.</summary>
     /// <param name="method">The complete root before localization.</param>
@@ -57,14 +64,17 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
         string type = state.Type.ToString();
         string payload = method.ParameterList.Parameters[1].Type.ToString();
         bool collection = payload.StartsWith("global::System.", System.StringComparison.Ordinal) || payload.Contains("[");
-        if (type.Contains("Json") || !collection || method.Body == null) return method;
+        if (type.Contains("Json") || !collection || method.Body == null)
+            return method;
         bool bulkStringRead = method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
             call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ReadStrings" } access &&
             access.Expression.ToString() == state.Identifier.ValueText);
-        if (!bulkStringRead && !method.Body.DescendantNodes().Any(IsLoop)) return method;
+        if (!bulkStringRead && !method.Body.DescendantNodes().Any(IsLoop))
+            return method;
         string Unique(string name)
         {
-            while (method.Body.DescendantTokens().Any(token => token.ValueText == name)) name += "_";
+            while (method.Body.DescendantTokens().Any(token => token.ValueText == name))
+                name += "_";
             return name;
         }
         string source = state.Identifier.ValueText;
@@ -85,7 +95,8 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
             };
             if (rewrite._fallback != null)
                 statements.Insert(1, SyntaxFactory.ParseStatement(type + " " + rewrite._fallback + " = default;"));
-            if (rewrite._returns) statements.Add(SyntaxFactory.LabeledStatement(complete, SyntaxFactory.EmptyStatement()));
+            if (rewrite._returns)
+                statements.Add(SyntaxFactory.LabeledStatement(complete, SyntaxFactory.EmptyStatement()));
             statements.Add(SyntaxFactory.ParseStatement(local + ".CopyTo(ref " + source + ");"));
             body = SyntaxFactory.Block(statements);
         }
@@ -159,7 +170,8 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
     private static bool InLoop(SyntaxNode node, SyntaxNode scope)
     {
         for (var current = node.Parent; current != null && current != scope; current = current.Parent)
-            if (IsLoop(current)) return true;
+            if (IsLoop(current))
+                return true;
         return false;
     }
 
@@ -182,13 +194,17 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
         var result = Escape.None;
         foreach (var node in Own(scope).OfType<IdentifierNameSyntax>())
         {
-            if (!IsStateReference(node, name)) continue;
+            if (!IsStateReference(node, name))
+                continue;
             bool loop = repeated || InLoop(node, scope);
             if (node.Parent is ArgumentSyntax argument)
             {
-                if (argument.RefKindKeyword.IsKind(SyntaxKind.None)) continue;
-                if (argument.Parent?.Parent is not InvocationExpressionSyntax call) return Escape.Hot;
-                if (call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CopyTo" }) continue;
+                if (argument.RefKindKeyword.IsKind(SyntaxKind.None))
+                    continue;
+                if (argument.Parent?.Parent is not InvocationExpressionSyntax call)
+                    return Escape.Hot;
+                if (call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CopyTo" })
+                    continue;
                 string callee = call.Expression is SimpleNameSyntax simple ? simple.Identifier.ValueText : null;
                 int position = ((ArgumentListSyntax)argument.Parent).Arguments.IndexOf(argument);
                 if (callee != null && helpers.TryGetValue(callee, out var helper) && IsInlined(helper) &&
@@ -196,12 +212,15 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
                 {
                     var nested = Classify(helper.Body, helper.ParameterList.Parameters[position].Identifier.ValueText, loop, helpers, visiting);
                     visiting.Remove(callee);
-                    if (nested > result) result = nested;
+                    if (nested > result)
+                        result = nested;
                     continue;
                 }
                 var escape = loop || !Isolatable(call) ? Escape.Hot : Escape.Cold;
-                if (escape > result) result = escape;
-                if (result == Escape.Hot) return result;
+                if (escape > result)
+                    result = escape;
+                if (result == Escape.Hot)
+                    return result;
                 continue;
             }
             if (node.Parent is RefExpressionSyntax || node.Parent is PrefixUnaryExpressionSyntax { RawKind: (int)SyntaxKind.AddressOfExpression })
@@ -234,11 +253,13 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
         var helperRewriter = new RootStateLocalization(source, source, null, type, helpers, used, true);
         return body.ReplaceNodes(loops.Cast<SyntaxNode>().Concat(Own(body).OfType<LocalFunctionStatementSyntax>()), (original, _) =>
         {
-            if (original is LocalFunctionStatementSyntax function) return helperRewriter.VisitLocalFunctionStatement(function);
+            if (original is LocalFunctionStatementSyntax function)
+                return helperRewriter.VisitLocalFunctionStatement(function);
             var loop = (StatementSyntax)original;
             string Unique(string name)
             {
-                while (!used.Add(name)) name += "_";
+                while (!used.Add(name))
+                    name += "_";
                 return name;
             }
             var references = Own(loop).OfType<IdentifierNameSyntax>().Where(node => IsStateReference(node, source)).ToList();
@@ -286,7 +307,8 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
     /// <returns>A jump to successful completion outside the original body scope.</returns>
     public override SyntaxNode VisitReturnStatement(ReturnStatementSyntax node)
     {
-        if (_shared) return base.VisitReturnStatement(node);
+        if (_shared)
+            return base.VisitReturnStatement(node);
         _returns = true;
         return SyntaxFactory.GotoStatement(SyntaxKind.GotoStatement, SyntaxFactory.IdentifierName(_complete)).WithTriviaFrom(node);
     }
@@ -299,10 +321,12 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
         var result = (ExpressionStatementSyntax)base.VisitExpressionStatement(node);
         var call = result.Expression as InvocationExpressionSyntax ?? (result.Expression as AssignmentExpressionSyntax)?.Right as InvocationExpressionSyntax;
         if (call == null || call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CopyTo" } ||
-            call.Expression is SimpleNameSyntax name && _helpers.TryGetValue(name.Identifier.ValueText, out var helper) && IsInlined(helper)) return result;
+            call.Expression is SimpleNameSyntax name && _helpers.TryGetValue(name.Identifier.ValueText, out var helper) && IsInlined(helper))
+            return result;
         var first = call.ArgumentList.Arguments.FirstOrDefault(argument => !argument.RefKindKeyword.IsKind(SyntaxKind.None) &&
             argument.Expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == _local);
-        if (first == null) return result;
+        if (first == null)
+            return result;
         // A void or integer local helper without other byref arguments cannot return a state alias.
         // Sequential calls therefore share one temporary while retaining both publication copies.
         bool reusable = !_shared && call.Expression is SimpleNameSyntax callee &&
@@ -312,13 +336,17 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
         string isolated = reusable ? _fallback : null;
         if (isolated == null)
         {
-            do { isolated = _local + "Fallback" + _next++; } while (!_used.Add(isolated));
-            if (reusable) _fallback = isolated;
+            do
+            {
+                isolated = _local + "Fallback" + _next++; } while (!_used.Add(isolated));
+            if (reusable)
+                _fallback = isolated;
         }
         var replaced = call.WithArgumentList(call.ArgumentList.WithArguments(call.ArgumentList.Arguments.Replace(first,
             first.WithExpression(SyntaxFactory.IdentifierName(isolated)))));
         var statements = new List<StatementSyntax>();
-        if (!reusable) statements.Add(SyntaxFactory.ParseStatement(_type + " " + isolated + " = default;"));
+        if (!reusable)
+            statements.Add(SyntaxFactory.ParseStatement(_type + " " + isolated + " = default;"));
         statements.Add(SyntaxFactory.ParseStatement(_local + ".CopyTo(ref " + isolated + ");"));
         statements.Add(result.ReplaceNode(call, replaced));
         statements.Add(SyntaxFactory.ParseStatement(isolated + ".CopyTo(ref " + _local + ");"));
@@ -330,7 +358,8 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
     /// <returns>The rewritten helper.</returns>
     public override SyntaxNode VisitLocalFunctionStatement(LocalFunctionStatementSyntax node)
     {
-        if (node.Body == null || node.ParameterList.Parameters.Count < 2 || !node.ParameterList.Parameters[0].Type.ToString().Contains("LuminPack")) return node;
+        if (node.Body == null || node.ParameterList.Parameters.Count < 2 || !node.ParameterList.Parameters[0].Type.ToString().Contains("LuminPack"))
+            return node;
         if (!_shared && IsInlined(node) && _helpers.ContainsKey(node.Identifier.ValueText))
         {
             // After inlining, the helper's state parameter is the caller's promoted local; copying it again would only add moves.
@@ -338,7 +367,8 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
                 null, _type, _helpers, _used, true);
             return node.WithBody((BlockSyntax)shared.VisitBlock(node.Body));
         }
-        if (node.ReturnType.ToString() != "void") return node;
+        if (node.ReturnType.ToString() != "void")
+            return node;
         var method = SyntaxFactory.MethodDeclaration(node.ReturnType, node.Identifier).WithParameterList(node.ParameterList)
             .WithTypeParameterList(node.TypeParameterList).WithConstraintClauses(node.ConstraintClauses).WithAttributeLists(node.AttributeLists).WithBody(node.Body);
         var localized = Apply(method);

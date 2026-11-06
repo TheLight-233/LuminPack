@@ -15,15 +15,18 @@ public static class ArrayEmitter
     internal static int OuterRankStart(string typeName)
     {
         int end = typeName.Length - 1;
-        while (end >= 0 && char.IsWhiteSpace(typeName[end])) end--;
+        while (end >= 0 && char.IsWhiteSpace(typeName[end]))
+            end--;
         int outer = -1;
         while (end >= 0 && typeName[end] == ']')
         {
             int open = typeName.LastIndexOf('[', end);
-            if (open < 0) return -1;
+            if (open < 0)
+                return -1;
             outer = open;
             end = open - 1;
-            while (end >= 0 && char.IsWhiteSpace(typeName[end])) end--;
+            while (end >= 0 && char.IsWhiteSpace(typeName[end]))
+                end--;
         }
         return outer;
     }
@@ -33,7 +36,8 @@ public static class ArrayEmitter
     /// <returns>The C# element type.</returns>
     internal static string GetArrayElementTypeName(string typeName)
     {
-        if (typeName is null) global::LuminPack.SourceGenerator.LuminPackExceptionHelper.ThrowArgumentNullException("input");
+        if (typeName is null)
+            global::LuminPack.SourceGenerator.LuminPackExceptionHelper.ThrowArgumentNullException("input");
         int open = OuterRankStart(typeName);
         return open < 0 ? typeName : typeName.Remove(open, typeName.IndexOf(']', open) - open + 1).TrimEnd();
     }
@@ -43,7 +47,8 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true)) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true))
+            return;
         string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
@@ -102,7 +107,8 @@ public static class ArrayEmitter
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
         bool stringElements = (fieldData.TypeSymbol as Microsoft.CodeAnalysis.IArrayTypeSymbol)?.ElementType.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
-        if (fieldData.CanWriteStringPrefix) sb.AppendLine("            var items = value.AsSpan();");
+        if (fieldData.CanWriteStringPrefix)
+            sb.AppendLine("            var items = value.AsSpan();");
         CollectionEmitterKit.AppendSegmentWrite(sb, fieldData.CanWriteStringPrefix ? "items" : "value.AsSpan()", fieldData.CanWriteStringPrefix, checkBuffer: !stringElements);
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -112,7 +118,8 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false))
+            return;
         if (global::LuminPack.Code.Core.GeneratedExecutionPolicy.UseFreshUnionLoop(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol)))
             sb.AppendLine("            if (value is null) { reader.ReadFreshValue(ref value!); return; }");
         string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
@@ -197,7 +204,8 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false))
+            return;
         string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
@@ -340,7 +348,8 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true)) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true))
+            return;
         string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
@@ -416,7 +425,8 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false))
+            return;
         string baseTypeName = GetArrayElementTypeName(fieldData.TypeName);
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);

@@ -42,7 +42,8 @@ internal static class ImmutableInterfaceWriteEmitter
             string concrete = "global::System.Collections.Immutable." + implementations[i] + "<" + arguments + ">";
             string runtime = "global::System.Collections.Immutable." + implementations[i] + "<" + runtimeArguments + ">";
             string cast = implementations[i] == "ImmutableArray" ? "(" + concrete + ")value" : "global::System.Runtime.CompilerServices.Unsafe.As<" + concrete + ">(value)";
-            if (!direct) sb.AppendLine("            " + (i == 0 ? "if" : "else if") + " (value.GetType() == typeof(" + runtime + "))");
+            if (!direct)
+                sb.AppendLine("            " + (i == 0 ? "if" : "else if") + " (value.GetType() == typeof(" + runtime + "))");
             sb.AppendLine("                WriteKnownElements" + i + "(ref writer, " + (direct ? "value" : cast) + ");");
         }
         if (!direct)
@@ -90,10 +91,12 @@ internal static class ImmutableInterfaceWriteEmitter
     /// <param name="declareFirst">Whether to start a delimiter state instead of continuing the preceding queue stack.</param>
     private static void AppendLoop(StringBuilder sb, string collection, string indent, bool json, bool dictionary, bool declareFirst = true)
     {
-        if (json && !dictionary && declareFirst) sb.AppendLine(indent + "bool isFirst = true;");
+        if (json && !dictionary && declareFirst)
+            sb.AppendLine(indent + "bool isFirst = true;");
         sb.AppendLine(indent + "foreach (var item in " + collection + ")");
         sb.AppendLine(indent + "{");
-        if (!json) sb.AppendLine(indent + "    writer.CheckBuffer();");
+        if (!json)
+            sb.AppendLine(indent + "    writer.CheckBuffer();");
         if (json && dictionary)
             DictionaryEmitter.AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", indent + "    ");
         else if (dictionary)

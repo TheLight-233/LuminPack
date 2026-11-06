@@ -72,7 +72,8 @@ public abstract class LuminFrozenMap<TKey, TValue> :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref readonly TValue GetValueRefOrNullRef(TKey key)
     {
-        if (key == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(key));
+        if (key == null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(key));
         return ref GetValueRefOrNullRefCore(key);
     }
 
@@ -136,7 +137,8 @@ public abstract class LuminFrozenMap<TKey, TValue> :
     /// <param name="arrayIndex">The array index used by this operation.</param>
     public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
     {
-        if (array == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(array));
+        if (array == null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(array));
         TKey[] keys = KeysCore;
         TValue[] values = ValuesCore;
         for (int i = 0; i < keys.Length; i++)
@@ -447,7 +449,8 @@ public static class LuminFrozenMap
         this IEnumerable<KeyValuePair<TKey, TValue>> source,
         IEqualityComparer<TKey> comparer = null)
     {
-        if (source == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
+        if (source == null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
 
         comparer = comparer ?? EqualityComparer<TKey>.Default;
 
@@ -487,9 +490,12 @@ public static class LuminFrozenMap
         Func<TSource, TValue> valueSelector,
         IEqualityComparer<TKey> comparer = null)
     {
-        if (source == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
-        if (keySelector == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(keySelector));
-        if (valueSelector == null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(valueSelector));
+        if (source == null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(source));
+        if (keySelector == null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(keySelector));
+        if (valueSelector == null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(valueSelector));
 
         var dict = new Dictionary<TKey, TValue>(comparer ?? EqualityComparer<TKey>.Default);
         foreach (var item in source)

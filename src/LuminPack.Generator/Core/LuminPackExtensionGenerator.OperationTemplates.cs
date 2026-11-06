@@ -33,7 +33,8 @@ public static partial class LuminPackExtensionGenerator
             name = FormatterTypeName.Get(named.OriginalDefinition);
             // Invalid models keep their original formatter boundary because their helper is absent.
             projectJsonHelper = !data.isUnion && !data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-            if (data.isUnion && data.isValueType) LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, body);
+            if (data.isUnion && data.isValueType)
+                LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, body);
             GenerateRootBinaryExtensions(body, data, name, metadata, SupportsFixedVersionPrefix(data, compilation),
                 guardNestedReads || CompiledOptions.Resolve(type, compilation).Input.Enabled);
             GenerateRootJsonExtensions(body, data, name, metadata);

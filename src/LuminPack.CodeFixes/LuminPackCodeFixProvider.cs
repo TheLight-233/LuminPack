@@ -31,14 +31,17 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
         context.CancellationToken.ThrowIfCancellationRequested();
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
         var model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
-        if (root == null || model == null) return;
+        if (root == null || model == null)
+            return;
         foreach (var diagnostic in context.Diagnostics)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree) continue;
+            if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree)
+                continue;
             var node = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true)
                 .FirstAncestorOrSelf<MemberDeclarationSyntax>();
-            if (node == null) continue;
+            if (node == null)
+                continue;
             var solution = context.Document.Project.Solution;
             string? title = null;
 
@@ -49,15 +52,18 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
                 case "LuminPack035":
                     var location = diagnostic.Id == "LuminPack002" ? diagnostic.AdditionalLocations.FirstOrDefault() : diagnostic.Location;
                     var targetDocument = location?.SourceTree == null ? null : solution.GetDocument(location.SourceTree);
-                    if (targetDocument == null) break;
+                    if (targetDocument == null)
+                        break;
                     var targetRoot = await targetDocument.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
                     var targetModel = await targetDocument.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
                     var target = targetRoot?.FindNode(location!.SourceSpan).FirstAncestorOrSelf<TypeDeclarationSyntax>();
                     if (target == null || targetModel?.GetDeclaredSymbol(target, context.CancellationToken) is not INamedTypeSymbol type ||
-                        type.IsStatic || type.IsRefLikeType) break;
+                        type.IsStatic || type.IsRefLikeType)
+                        break;
                     bool annotate = diagnostic.Id != "LuminPack035";
                     if (annotate && type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() ==
-                        CodeFixSyntax.AttributeNamespace + "LuminPackableAttribute")) break;
+                        CodeFixSyntax.AttributeNamespace + "LuminPackableAttribute"))
+                        break;
                     title = annotate ? "Add [LuminPackable] and partial declarations" : "Make type and containing types partial";
                     solution = await CodeFixSyntax.RewriteAsync(solution, CodeFixSyntax.TypeDeclarations(type, context.CancellationToken),
                         (original, rewritten) =>
@@ -74,7 +80,8 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
 
                 case "LuminPack005":
                 case "LuminPack103":
-                    if (node is not MethodDeclarationSyntax inaccessibleMethod) break;
+                    if (node is not MethodDeclarationSyntax inaccessibleMethod)
+                        break;
                     title = "Make method internal";
                     solution = await CodeFixSyntax.RewriteAsync(solution,
                         CodeFixSyntax.MethodDeclarations(inaccessibleMethod, model, context.CancellationToken),
@@ -84,7 +91,8 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
 
                 case "LuminPack028":
                 case "LuminPack029":
-                    if (node is not TypeDeclarationSyntax nested || model.GetDeclaredSymbol(nested, context.CancellationToken) is not INamedTypeSymbol nestedType) break;
+                    if (node is not TypeDeclarationSyntax nested || model.GetDeclaredSymbol(nested, context.CancellationToken) is not INamedTypeSymbol nestedType)
+                        break;
                     title = "Make nested type internal";
                     solution = await CodeFixSyntax.RewriteAsync(solution,
                         nestedType.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax(context.CancellationToken)),
@@ -96,14 +104,16 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
                 case "LuminPack101":
                     if (node is not MethodDeclarationSyntax method || method.Modifiers.Any(SyntaxKind.StaticKeyword) ||
                         method.Modifiers.Any(token => token.IsKind(SyntaxKind.AbstractKeyword) || token.IsKind(SyntaxKind.VirtualKeyword) ||
-                            token.IsKind(SyntaxKind.OverrideKeyword)) || method.ExplicitInterfaceSpecifier != null) break;
+                            token.IsKind(SyntaxKind.OverrideKeyword)) || method.ExplicitInterfaceSpecifier != null)
+                        break;
                     title = "Make method static";
                     solution = await CodeFixSyntax.RewriteAsync(solution,
                         CodeFixSyntax.MethodDeclarations(method, model, context.CancellationToken),
                         (_, rewritten) =>
                         {
                             var declaration = (MethodDeclarationSyntax)rewritten;
-                            if (declaration.Modifiers.Any(SyntaxKind.StaticKeyword)) return declaration;
+                            if (declaration.Modifiers.Any(SyntaxKind.StaticKeyword))
+                                return declaration;
                             return declaration.WithoutLeadingTrivia().AddModifiers(SyntaxFactory.Token(SyntaxKind.StaticKeyword))
                                 .WithLeadingTrivia(declaration.GetLeadingTrivia()).WithAdditionalAnnotations(Formatter.Annotation);
                         }, context.CancellationToken).ConfigureAwait(false);
@@ -111,7 +121,8 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
 
                 case "LuminPack008":
                 case "LuminPack009":
-                    if (node is not ClassDeclarationSyntax union || model.GetDeclaredSymbol(union, context.CancellationToken) is not INamedTypeSymbol unionType) break;
+                    if (node is not ClassDeclarationSyntax union || model.GetDeclaredSymbol(union, context.CancellationToken) is not INamedTypeSymbol unionType)
+                        break;
                     title = "Make union root abstract";
                     solution = await CodeFixSyntax.RewriteAsync(solution,
                         unionType.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax(context.CancellationToken)),
@@ -119,7 +130,8 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
                         {
                             var declaration = (ClassDeclarationSyntax)rewritten;
                             var modifiers = SyntaxFactory.TokenList(declaration.WithoutLeadingTrivia().Modifiers.Where(token => !token.IsKind(SyntaxKind.SealedKeyword)));
-                            if (!modifiers.Any(SyntaxKind.AbstractKeyword)) modifiers = modifiers.Add(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
+                            if (!modifiers.Any(SyntaxKind.AbstractKeyword))
+                                modifiers = modifiers.Add(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
                             return declaration.WithModifiers(modifiers).WithLeadingTrivia(declaration.GetLeadingTrivia())
                                 .WithAdditionalAnnotations(Formatter.Annotation);
                         }, context.CancellationToken).ConfigureAwait(false);
@@ -137,7 +149,8 @@ public sealed class LuminPackCodeFixProvider : CodeFixProvider
                     };
                     var attributes = node.AttributeLists.SelectMany(list => list.Attributes)
                         .Where(attribute => CodeFixSyntax.IsAttribute(attribute, model, names)).ToArray();
-                    if (attributes.Length == 0) break;
+                    if (attributes.Length == 0)
+                        break;
                     title = "Remove invalid LuminPack attributes";
                     solution = solution.WithDocumentSyntaxRoot(context.Document.Id,
                         root.ReplaceNode(node, CodeFixSyntax.RemoveAttributes(node, attributes)));

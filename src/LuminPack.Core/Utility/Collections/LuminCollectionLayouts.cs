@@ -158,7 +158,8 @@ public static class LuminCollectionLayouts
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void Require(int offset, string family)
     {
-        if (offset < 0) ThrowUnsupported(family);
+        if (offset < 0)
+            ThrowUnsupported(family);
     }
 
     /// <summary>Performs the throw unsupported step.</summary>
@@ -184,24 +185,30 @@ public static class LuminCollectionLayouts
             foreach (string name in fields[i].TrimStart('?').Split('|'))
             {
                 int a = ObjectField(first, name), b = ObjectField(second, name);
-                if (a < 0 && b < 0) continue;
+                if (a < 0 && b < 0)
+                    continue;
                 found = a == b ? a : int.MinValue;
                 break;
             }
-            if (found == int.MinValue || found < 0 && !optional) consistent = false;
-            if (found >= 0) anyProbed = true;
+            if (found == int.MinValue || found < 0 && !optional)
+                consistent = false;
+            if (found >= 0)
+                anyProbed = true;
             probed[i] = found < 0 ? Unavailable : found;
         }
-        if (anyProbed && consistent) return probed;
+        if (anyProbed && consistent)
+            return probed;
         if (!anyProbed)
         {
             // No metadata: the compiled views of the expected layout remain in effect.
             var result = new int[fields.Length];
-            for (int i = 0; i < result.Length; i++) result[i] = i < compiled.Length ? compiled[i] : Unavailable;
+            for (int i = 0; i < result.Length; i++)
+                result[i] = i < compiled.Length ? compiled[i] : Unavailable;
             return result;
         }
         var unavailable = new int[fields.Length];
-        for (int i = 0; i < unavailable.Length; i++) unavailable[i] = Unavailable;
+        for (int i = 0; i < unavailable.Length; i++)
+            unavailable[i] = Unavailable;
         return unavailable;
     }
 
@@ -211,7 +218,8 @@ public static class LuminCollectionLayouts
     private static int[] Unknown(int count)
     {
         var result = new int[count];
-        for (int i = 0; i < count; i++) result[i] = Unavailable;
+        for (int i = 0; i < count; i++)
+            result[i] = Unavailable;
         return result;
     }
 
@@ -423,15 +431,19 @@ internal static class LuminEntryLayout<TEntry> where TEntry : struct
     /// <returns>False only when the probe succeeded and contradicts the compiled view.</returns>
     internal static bool Matches(Type? entry, params (string Names, int Compiled)[] fields)
     {
-        if (entry is null) return true;
+        if (entry is null)
+            return true;
         int stride = ArrayStride(entry);
-        if (stride >= 0 && stride != Unsafe.SizeOf<TEntry>()) return false;
+        if (stride >= 0 && stride != Unsafe.SizeOf<TEntry>())
+            return false;
         foreach (var (names, compiled) in fields)
             foreach (string name in names.Split('|'))
             {
                 int offset = ValueField(entry, name);
-                if (offset < 0) continue;
-                if (offset != compiled) return false;
+                if (offset < 0)
+                    continue;
+                if (offset != compiled)
+                    return false;
                 break;
             }
         return true;

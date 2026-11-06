@@ -53,9 +53,12 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                ReadExistingDictionary(ref reader, value, length);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        if (field.CanReuseDictionarySlots) AppendDictionarySlotRead(sb, keyType, valueType, valueSymbol);
-        if (field.UnionSlotCases != null) AppendDictionaryUnionSlotRead(sb, keyType, valueType, valueSymbol, field.UnionSlotCases);
-        if (field.CanReuseDictionaryScalarSlots) AppendDictionaryScalarSlotRead(sb, keyType, valueType, valueSymbol, rawPair);
+        if (field.CanReuseDictionarySlots)
+            AppendDictionarySlotRead(sb, keyType, valueType, valueSymbol);
+        if (field.UnionSlotCases != null)
+            AppendDictionaryUnionSlotRead(sb, keyType, valueType, valueSymbol, field.UnionSlotCases);
+        if (field.CanReuseDictionaryScalarSlots)
+            AppendDictionaryScalarSlotRead(sb, keyType, valueType, valueSymbol, rawPair);
         AppendStagedDictionaryRead(sb, keyType, valueType, nonNullableValueKey, valueSymbol, false, rawPair, field.CanReuseEnumeratedStringKey,
             rawPair && field.HasCallbackFreeDictionaryKey && IsScalarSlotValue(valueSymbol));
     }
@@ -146,7 +149,8 @@ public static partial class DictionaryEmitter
             sb.AppendLine($"                        {valueType} item = default!;");
             sb.AppendLine("                        int keyBytes = global::LuminPack.Core.LuminPackReader.Read(ref reader.GetCurrentSpanReference(), out key);");
             sb.AppendLine("                        reader.Advance(keyBytes);");
-            if (observeRawLookup) sb.AppendLine("                        if (observeLookup) destination.TryGetValue(key, out _);");
+            if (observeRawLookup)
+                sb.AppendLine("                        if (observeLookup) destination.TryGetValue(key, out _);");
             sb.AppendLine("                        int valueBytes = global::LuminPack.Core.LuminPackReader.Read(ref reader.GetCurrentSpanReference(), out item);");
             sb.AppendLine("                        reader.Advance(valueBytes);");
             sb.AppendLine($"                        items[i] = new {pair}(key, item);");
@@ -166,7 +170,8 @@ public static partial class DictionaryEmitter
             sb.AppendLine("                        if (i == parsed) key = seen[i];");
             sb.AppendLine("                        else reader.ReadValue(ref key!);");
         }
-        else sb.AppendLine("                        reader.ReadValue(ref key!);");
+        else
+            sb.AppendLine("                        reader.ReadValue(ref key!);");
         string lookup = (nonNullableValueKey ? "" : "key is { } && ") + "destination.TryGetValue(key, out var existing) ? existing : default!";
         // Only a callback-free key read can still use the pair observed by MoveNext. Value callbacks run after selection.
         if (enumeratedStringKey)

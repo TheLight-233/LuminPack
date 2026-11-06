@@ -31,18 +31,23 @@ internal sealed class SafeReadProjection
     /// <param name="model">The temporary original-template semantic model.</param>
     internal SafeReadProjection(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledInputPolicy input, SemanticModel model)
     {
-        _type = type; _options = CompiledOptions.Resolve(type, compilation); _input = input; _model = model;
+        _type = type;
+        _options = CompiledOptions.Resolve(type, compilation);
+        _input = input;
+        _model = model;
         if (type is INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Struct } named &&
             CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
         {
             var data = LuminPackSourceGenerator.GetSerializationMetadata(named, compilation, metadata);
-            if (named.IsReferenceType && !data.isUnion && data.generatorType == LuminPack.Code.GeneratorType.Object) _members = data.fields.Count;
+            if (named.IsReferenceType && !data.isUnion && data.generatorType == LuminPack.Code.GeneratorType.Object)
+                _members = data.fields.Count;
             // Without a declared depth limit, recursion keeps only its stack guard.
             _recursive = input.Depth != int.MaxValue && RecursiveTypeAnalysis.IsRecursive(type, compilation);
         }
         var element = type is IArrayTypeSymbol { Rank: 1 } array ? array.ElementType :
             type is INamedTypeSymbol { TypeArguments.Length: 1 } list && list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" ? list.TypeArguments[0] : null;
-        if (element?.SpecialType == SpecialType.System_Boolean) _booleans = Policy + ".CheckBooleans(";
+        if (element?.SpecialType == SpecialType.System_Boolean)
+            _booleans = Policy + ".CheckBooleans(";
     }
 
     /// <summary>Finds untrusted declarations through serialized members, closing recursive paths once.</summary>
@@ -54,12 +59,18 @@ internal sealed class SafeReadProjection
         var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         bool Visit(ITypeSymbol current)
         {
-            if (current == null || !seen.Add(current)) return false;
-            if (CompiledOptions.Resolve(current, compilation).Input.Enabled) return true;
-            if (current is IArrayTypeSymbol array) return Visit(array.ElementType);
-            if (current is not INamedTypeSymbol named) return false;
-            if (named.TypeArguments.Any(Visit)) return true;
-            if (!CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named)) return false;
+            if (current == null || !seen.Add(current))
+                return false;
+            if (CompiledOptions.Resolve(current, compilation).Input.Enabled)
+                return true;
+            if (current is IArrayTypeSymbol array)
+                return Visit(array.ElementType);
+            if (current is not INamedTypeSymbol named)
+                return false;
+            if (named.TypeArguments.Any(Visit))
+                return true;
+            if (!CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
+                return false;
             return LuminPackSourceGenerator.GetSerializationMetadata(named, compilation, metadata).fields.Any(field => Visit(field.TypeSymbol));
         }
         return Visit(type);
@@ -74,9 +85,12 @@ internal sealed class SafeReadProjection
         string value = method.ParameterList.Parameters[1].Identifier.Text;
         var body = (BlockSyntax)new Calls(this, state).Visit(method.Body);
         var exit = new List<string>();
-        if (_booleans != null) exit.Add(_booleans + value + ");");
-        if (_recursive) exit.Add(Policy + ".ExitDepth(ref " + state + ");");
-        if (exit.Count == 0) return body;
+        if (_booleans != null)
+            exit.Add(_booleans + value + ");");
+        if (_recursive)
+            exit.Add(Policy + ".ExitDepth(ref " + state + ");");
+        if (exit.Count == 0)
+            return body;
         // A null record is not a nested value: depth is entered after the object template's null test.
         int start = _recursive ? body.Statements.IndexOf(statement => statement.ToString().Contains(".ReadNullMarker(")) + 1 : 0;
         var completion = new CompletedReturns(string.Join(" ", exit));
@@ -117,7 +131,10 @@ internal sealed class SafeReadProjection
 
         /// <summary>Captures the original reader parameter.</summary>
         /// <param name="owner">The projection holding the type facts.</param><param name="state">Reader parameter.</param>
-        internal Calls(SafeReadProjection owner, string state) { _owner = owner; _state = state; }
+        internal Calls(SafeReadProjection owner, string state)
+        {
+            _owner = owner;
+            _state = state; }
 
         /// <summary>Checks Boolean fields copied by a fixed field batch.</summary>
         /// <param name="node">An original statement block.</param><returns>The block with checked batches.</returns>
@@ -138,15 +155,20 @@ internal sealed class SafeReadProjection
                 var declaration = node.Statements.Take(index).OfType<LocalDeclarationStatementSyntax>().Select(local => local.Declaration.Variables[0])
                     .LastOrDefault(variable => variable.Identifier.ValueText == storage.Identifier.ValueText);
                 foreach (var cast in (declaration?.Initializer?.Value.DescendantNodesAndSelf() ?? Enumerable.Empty<SyntaxNode>()).OfType<InvocationExpressionSyntax>())
-                    if (BooleanStorage(cast) is string field) { booleans.Add(field); offsets.Add(0); }
+                    if (BooleanStorage(cast) is string field)
+                    {
+                        booleans.Add(field);
+                        offsets.Add(0); }
                 foreach (var proof in batch.Condition.DescendantNodesAndSelf().OfType<BinaryExpressionSyntax>().Where(proof => proof.IsKind(SyntaxKind.EqualsExpression)))
                 {
                     var cast = proof.Left.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>().Select(BooleanStorage).FirstOrDefault(field => field != null);
-                    if (cast == null) continue;
+                    if (cast == null)
+                        continue;
                     booleans.Add(cast);
                     offsets.Add(int.TryParse(new string(proof.Right.ToString().Where(char.IsDigit).ToArray()), NumberStyles.None, CultureInfo.InvariantCulture, out int value) ? value : -1);
                 }
-                if (booleans.Count == 0) continue;
+                if (booleans.Count == 0)
+                    continue;
                 string windowed = null;
                 if (int.TryParse(copy.ArgumentList.Arguments[1].Expression.ToString(), NumberStyles.None, CultureInfo.InvariantCulture, out int length) && offsets.All(value => value >= 0 && value < length))
                 {
@@ -163,11 +185,13 @@ internal sealed class SafeReadProjection
                 (checks ??= new Dictionary<IfStatementSyntax, (List<string> Fields, string Batch)>()).Add(batch, (booleans, windowed));
             }
             var result = (BlockSyntax)base.VisitBlock(node);
-            if (checks == null) return result;
+            if (checks == null)
+                return result;
             var statements = result.Statements.ToList();
             for (int index = 0; index < node.Statements.Count; index++)
             {
-                if (node.Statements[index] is not IfStatementSyntax original || !checks.TryGetValue(original, out var batch)) continue;
+                if (node.Statements[index] is not IfStatementSyntax original || !checks.TryGetValue(original, out var batch))
+                    continue;
                 var rewritten = (IfStatementSyntax)statements[index];
                 statements[index] = batch.Batch != null ? rewritten.WithStatement(SyntaxFactory.ParseStatement(batch.Batch)) :
                     rewritten.WithStatement(SyntaxFactory.Block(new[] { rewritten.Statement }.Concat(batch.Fields.Select(field =>
@@ -181,7 +205,8 @@ internal sealed class SafeReadProjection
         private string BooleanStorage(InvocationExpressionSyntax node)
         {
             if (node.Expression is not MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: "As", TypeArgumentList.Arguments.Count: 2 } } ||
-                node.ArgumentList.Arguments.Count != 1 || !node.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword)) return null;
+                node.ArgumentList.Arguments.Count != 1 || !node.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
+                return null;
             return _owner._model.GetSymbolInfo(node).Symbol is IMethodSymbol { TypeArguments.Length: 2 } method &&
                 method.TypeArguments[0].SpecialType == SpecialType.System_Boolean && method.TypeArguments[1].SpecialType == SpecialType.System_Byte
                 ? node.ArgumentList.Arguments[0].Expression.ToString() : null;
@@ -192,7 +217,8 @@ internal sealed class SafeReadProjection
         public override SyntaxNode VisitCastExpression(CastExpressionSyntax node)
         {
             var result = (CastExpressionSyntax)base.VisitCastExpression(node);
-            if (node.Expression is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "GetObjectReference" } }) return result;
+            if (node.Expression is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "GetObjectReference" } })
+                return result;
             return SyntaxFactory.ParseExpression(Policy + ".ReadReference<" + result.Type + ">(" + result.Expression + ")").WithTriviaFrom(node);
         }
 
@@ -256,9 +282,11 @@ internal sealed class SafeReadProjection
             }
             if (node.Expression is not MemberAccessExpressionSyntax access || name is "ReadUnaligned" or "TryReadStableStringKeys" ||
                 !strings && name is "ReadStrings" or "ReadStringRecord" ||
-                !collections && name is "ReadLength" or "TryReadCollectionHead" or "PeekCollectionHeader") return result;
+                !collections && name is "ReadLength" or "TryReadCollectionHead" or "PeekCollectionHeader")
+                return result;
             string readerName = access.Expression.ToString();
-            if (readerName != _state && model.GetTypeInfo(access.Expression).Type?.ToDisplayString() != "LuminPack.Core.LuminPackReader") return result;
+            if (readerName != _state && model.GetTypeInfo(access.Expression).Type?.ToDisplayString() != "LuminPack.Core.LuminPackReader")
+                return result;
             string args = string.Join(", ", arguments);
             string profile = access.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count > 0 ? generic.TypeArgumentList.Arguments.Last().ToString() : _owner._options.TypeName;
             bool profileCall = access.Name is GenericNameSyntax profileName && profileName.TypeArgumentList.Arguments.Last().ToString().IndexOf("Options", StringComparison.Ordinal) >= 0;
@@ -266,7 +294,8 @@ internal sealed class SafeReadProjection
             string call = null;
             if (name == "ReadStrings" && result.ArgumentList.Arguments.Count == 1)
                 call = "ReadStrings<" + profile + ">(ref " + readerName + ", " + args + ", " + text + ")";
-            else if (name == "ReadLength") call = "ReadLength(ref " + readerName + ", " + (args.Length == 0 ? "1" : args) + ", " + collection + ")";
+            else if (name == "ReadLength")
+                call = "ReadLength(ref " + readerName + ", " + (args.Length == 0 ? "1" : args) + ", " + collection + ")";
             else if (name is "TryReadCollectionHead" or "PeekCollectionHeader")
                 call = name + "(ref " + readerName + ", " + args + (result.ArgumentList.Arguments.Count == 1 ? ", 1" : "") + ", " + collection + ")";
             else if ((name == "ReadStringRecord" || name == "Read") && result.ArgumentList.Arguments.Count == 1 &&
@@ -279,7 +308,8 @@ internal sealed class SafeReadProjection
             else if (name == "Read" && access.Name is GenericNameSyntax scalar && scalar.TypeArgumentList.Arguments.Count == 1 && args.Length == 0)
             {
                 string type = scalar.TypeArgumentList.Arguments[0].ToString();
-                if (type is "bool" or "global::System.Boolean" or "System.Boolean") call = "ReadBoolean(ref " + readerName + ")";
+                if (type is "bool" or "global::System.Boolean" or "System.Boolean")
+                    call = "ReadBoolean(ref " + readerName + ")";
                 else if (type == "byte" && _owner._members >= 0 && !_markerSeen)
                 {
                     // The object template reads its member marker first.

@@ -23,13 +23,15 @@ public static unsafe partial class LuminPackBurst
         consumed = written = 0;
         status = OperationStatus.Done;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.Utf8Encode == null) return false;
+        if (registration is null || registration.Table.Utf8Encode == null)
+            return false;
         uint flags = (replaceInvalid ? 1u : 0u) | (finalBlock ? 2u : 0u);
         int read = 0, produced = 0, result;
         fixed (char* input = source)
         fixed (byte* output = destination)
             result = registration.Table.Utf8Encode(input, source.Length, output, destination.Length, &read, &produced, flags);
-        if (!ValidateTextResult(result, read, produced, source.Length, destination.Length, out status)) return false;
+        if (!ValidateTextResult(result, read, produced, source.Length, destination.Length, out status))
+            return false;
         consumed = read;
         written = produced;
         return true;
@@ -50,13 +52,15 @@ public static unsafe partial class LuminPackBurst
         consumed = written = 0;
         status = OperationStatus.Done;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.Utf8Decode == null) return false;
+        if (registration is null || registration.Table.Utf8Decode == null)
+            return false;
         uint flags = (replaceInvalid ? 1u : 0u) | (finalBlock ? 2u : 0u);
         int read = 0, produced = 0, result;
         fixed (byte* input = source)
         fixed (char* output = destination)
             result = registration.Table.Utf8Decode(input, source.Length, output, destination.Length, &read, &produced, flags);
-        if (!ValidateTextResult(result, read, produced, source.Length, destination.Length, out status)) return false;
+        if (!ValidateTextResult(result, read, produced, source.Length, destination.Length, out status))
+            return false;
         consumed = read;
         written = produced;
         return true;
@@ -75,7 +79,8 @@ public static unsafe partial class LuminPackBurst
         status = OperationStatus.Done;
         ValidateCompleted(read, sourceLength);
         ValidateCompleted(written, destinationLength);
-        if (result == -1 && read == 0 && written == 0) return false;
+        if (result == -1 && read == 0 && written == 0)
+            return false;
         if ((uint)result > (uint)OperationStatus.InvalidData)
             LuminPackExceptionHelper.ThrowInvalidOperationException("A LuminPackBurst codec returned an invalid status.");
         if (result == (int)OperationStatus.Done && read != sourceLength)
@@ -93,7 +98,8 @@ public static unsafe partial class LuminPackBurst
     {
         equal = false;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.Utf8Equal == null) return false;
+        if (registration is null || registration.Table.Utf8Equal == null)
+            return false;
         fixed (byte* input = source)
         fixed (char* text = candidate)
             equal = registration.Table.Utf8Equal(input, source.Length, text, candidate.Length) != 0;
@@ -108,7 +114,8 @@ public static unsafe partial class LuminPackBurst
     internal static bool TryAsciiEncode(ReadOnlySpan<char> source, Span<byte> destination, bool escapeJson)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.AsciiEncode == null || destination.Length < source.Length) return false;
+        if (registration is null || registration.Table.AsciiEncode == null || destination.Length < source.Length)
+            return false;
         fixed (char* input = source)
         fixed (byte* output = destination)
             return registration.Table.AsciiEncode(input, source.Length, output, escapeJson ? 1u : 0u) != 0;

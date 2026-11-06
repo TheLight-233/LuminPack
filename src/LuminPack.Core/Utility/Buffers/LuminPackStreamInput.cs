@@ -31,7 +31,8 @@ public struct LuminPackStreamInput : IDisposable
     /// <remarks>At most one byte beyond the limit is read before the input is rejected, and the storage is returned on any failure.</remarks>
     public static async ValueTask<LuminPackStreamInput> ReadAsync(Stream stream, int maximum, CancellationToken cancellationToken)
     {
-        if (stream is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(stream));
+        if (stream is null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(stream));
         long ceiling = (long)maximum + 1;
         long capacity = InitialCapacity;
         // A seekable stream reports what remains, so the first rental usually holds the whole payload.
@@ -39,7 +40,8 @@ public struct LuminPackStreamInput : IDisposable
         {
             capacity = Math.Max(1, stream.Length - stream.Position);
             // Keep room for the existing EOF read when the payload exactly fills a pool bucket.
-            if (capacity < MaxArrayLength) capacity++;
+            if (capacity < MaxArrayLength)
+                capacity++;
         }
         byte[] array = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Min(capacity, ceiling), MaxArrayLength));
         int length = 0;
@@ -49,7 +51,8 @@ public struct LuminPackStreamInput : IDisposable
             {
                 if (length == array.Length)
                 {
-                    if (length >= MaxArrayLength) global::LuminPack.Security.LuminPackInputPolicy.CheckInput((long)length + 1, MaxArrayLength);
+                    if (length >= MaxArrayLength)
+                        global::LuminPack.Security.LuminPackInputPolicy.CheckInput((long)length + 1, MaxArrayLength);
                     byte[] grown = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Min((long)length * 2, ceiling), MaxArrayLength));
                     Buffer.BlockCopy(array, 0, grown, 0, length);
                     ArrayPool<byte>.Shared.Return(array);
@@ -57,7 +60,8 @@ public struct LuminPackStreamInput : IDisposable
                 }
                 int request = (int)Math.Min(array.Length - length, ceiling - length);
                 int read = await stream.ReadAsync(array.AsMemory(length, request), cancellationToken).ConfigureAwait(false);
-                if (read == 0) break;
+                if (read == 0)
+                    break;
                 length += read;
                 global::LuminPack.Security.LuminPackInputPolicy.CheckInput(length, maximum);
             }
@@ -76,7 +80,8 @@ public struct LuminPackStreamInput : IDisposable
         var array = _array;
         _array = null;
         _length = 0;
-        if (array is not null) ArrayPool<byte>.Shared.Return(array);
+        if (array is not null)
+            ArrayPool<byte>.Shared.Return(array);
     }
 
     /// <summary>The largest byte array the runtime allocates.</summary>

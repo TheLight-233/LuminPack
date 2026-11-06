@@ -77,7 +77,8 @@ internal sealed class SerializerApiUsageAnalysis
             _conservative |= file.Conservative;
             invocations.AddRange(file.Methods);
             payloads.AddRange(file.StatePayloads);
-            foreach (var method in file.Methods) Observe(method, signatures, kinds, payloads);
+            foreach (var method in file.Methods)
+                Observe(method, signatures, kinds, payloads);
         }
 
         SerializerApiFileMethods BindFile(SyntaxTree tree)
@@ -110,7 +111,8 @@ internal sealed class SerializerApiUsageAnalysis
                 if (original != null && original.ContainingType?.ToDisplayString() != SerializerName)
                 {
                     var identity = methodIdentities.Create(original);
-                    if (identity != null) selected = methods.Resolve(identity);
+                    if (identity != null)
+                        selected = methods.Resolve(identity);
                 }
                 if (selected == null)
                 {
@@ -126,19 +128,23 @@ internal sealed class SerializerApiUsageAnalysis
                         conservative = true;
                     }
                 }
-                if (selected != null) bound.Add(selected);
+                if (selected != null)
+                    bound.Add(selected);
             }
 
             // Method groups are callable roots too. Let contextual delegate conversion select the overload.
             foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
             {
                 ExpressionSyntax expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access : name;
-                if (expression.Parent is InvocationExpressionSyntax invocation && invocation.Expression == expression) continue;
-                if (expression.Parent is MemberAccessExpressionSyntax parent && parent.Expression == expression) continue;
+                if (expression.Parent is InvocationExpressionSyntax invocation && invocation.Expression == expression)
+                    continue;
+                if (expression.Parent is MemberAccessExpressionSyntax parent && parent.Expression == expression)
+                    continue;
                 if (!IsApiName(name.Identifier.ValueText) && (!genericMethods.Contains(name.Identifier.ValueText) ||
                     expression.Parent is not (EqualsValueClauseSyntax or ArgumentSyntax or AssignmentExpressionSyntax or
                     ArrowExpressionClauseSyntax or ReturnStatementSyntax or ParenthesizedExpressionSyntax or PrefixUnaryExpressionSyntax or
-                    ConditionalExpressionSyntax or SwitchExpressionArmSyntax or InitializerExpressionSyntax or CastExpressionSyntax))) continue;
+                    ConditionalExpressionSyntax or SwitchExpressionArmSyntax or InitializerExpressionSyntax or CastExpressionSyntax)))
+                    continue;
                 model ??= bindingCompilation.GetSemanticModel(tree);
                 var info = model.GetSymbolInfo(expression);
                 if (info.Symbol is IMethodSymbol method)
@@ -156,11 +162,14 @@ internal sealed class SerializerApiUsageAnalysis
         var roots = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         foreach (var payload in ReachabilityAnalysisCache.ExpandApiPayloads(bindingCompilation, payloads, invocations))
         {
-            if (LuminPackExtensionGenerator.ContainsTypeParameter(payload)) continue;
+            if (LuminPackExtensionGenerator.ContainsTypeParameter(payload))
+                continue;
             var identity = identities.Create(payload);
             var root = identity == null ? null : resolver.Resolve(identity);
-            if (root != null) roots.Add(root);
-            else _conservative = true;
+            if (root != null)
+                roots.Add(root);
+            else
+                _conservative = true;
         }
         Roots = roots.ToArray();
         var key = new StringBuilder().Append(_conservative).Append('|');
@@ -196,15 +205,18 @@ internal sealed class SerializerApiUsageAnalysis
     /// <param name="payloads">The current compilation's payload roots.</param>
     private void Observe(IMethodSymbol method, SyntaxTree? signatures, Dictionary<int, SerializerApiKind> kinds, List<ITypeSymbol> payloads)
     {
-        if (method.ContainingType?.ToDisplayString() != SerializerName) return;
+        if (method.ContainingType?.ToDisplayString() != SerializerName)
+            return;
         var payload = method.Parameters.FirstOrDefault(parameter => parameter.Name == "value")?.Type
             ?? (method.IsGenericMethod && method.TypeArguments.Length != 0 ? method.TypeArguments[0] : null);
-        if (payload == null) return;
+        if (payload == null)
+            return;
         payloads.Add(payload);
         var declaration = method.DeclaringSyntaxReferences.FirstOrDefault(reference => reference.SyntaxTree == signatures);
         // Only concrete profile variants have a concrete signature identity. Generic
         // value-returning reads have no `value` parameter and must remain fallback roots.
-        if (method.IsGenericMethod && (declaration == null || !kinds.ContainsKey(declaration.Span.Start))) return;
+        if (method.IsGenericMethod && (declaration == null || !kinds.ContainsKey(declaration.Span.Start)))
+            return;
         var apis = declaration != null && kinds.TryGetValue(declaration.Span.Start, out var kind) ? kind : Family(method.Name);
         string name = FormatterTypeName.Get(payload);
         _apis.TryGetValue(name, out var previous);
@@ -218,8 +230,10 @@ internal sealed class SerializerApiUsageAnalysis
     private static bool IsSerializerExpression(ExpressionSyntax expression, SemanticModel model)
     {
         var info = model.GetSymbolInfo(expression);
-        if (info.Symbol is IMethodSymbol method && method.ContainingType?.ToDisplayString() == SerializerName) return true;
-        if (info.CandidateSymbols.OfType<IMethodSymbol>().Any(candidate => candidate.ContainingType?.ToDisplayString() == SerializerName)) return true;
+        if (info.Symbol is IMethodSymbol method && method.ContainingType?.ToDisplayString() == SerializerName)
+            return true;
+        if (info.CandidateSymbols.OfType<IMethodSymbol>().Any(candidate => candidate.ContainingType?.ToDisplayString() == SerializerName))
+            return true;
         if (expression is MemberAccessExpressionSyntax access)
         {
             var receiver = model.GetSymbolInfo(access.Expression).Symbol;

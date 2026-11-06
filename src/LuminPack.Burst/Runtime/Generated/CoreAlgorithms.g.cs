@@ -61,7 +61,7 @@ internal static void CopyShortBlock(ref byte destination, ref byte source, uint 
     Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<Vector128<byte>>(ref source));
     Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(count - 16)), Unsafe.ReadUnaligned<Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(count - 16))));
 }
-// Core source SHA256: Utility/Compression/LuminCompressor.cs F2050B13F50A439BA407B82DDC89C2CE5267960E0819FA1CCED138869FC70FD1
+// Core source SHA256: Utility/Compression/LuminCompressor.cs EC904D37329F17406EB27C201507F44AC929307A975BA58A7F17663E8CA85878
 /// <summary>Copies match to the supplied destination.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
@@ -351,7 +351,7 @@ internal static int TrailingZeroBytes(ulong v)
 {
     return BitOperations.TrailingZeroCount(v) >> 3;
 }
-// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs 41658DF795C050AE676F3E73C7E78AACCA8F300DE12B54D26063926EAF7F71FB
+// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs 66B1619F7F591DC6DD15AC92084E061D6F148EA1156E4E44B3DECCBA06DF2BC0
 /// <summary>
 /// XORs <paramref name = "length"/> bytes of keystream <paramref name = "key"/> into
 /// <paramref name = "src"/>, writing the result to <paramref name = "dst"/>. Uses the widest

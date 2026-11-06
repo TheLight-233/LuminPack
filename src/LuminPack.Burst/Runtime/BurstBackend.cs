@@ -61,18 +61,22 @@ namespace LuminPack.Burst
 #if UNITY_WEBGL
                 return false;
 #else
-                if (sizeof(void*) != 8 || !BurstCompiler.IsEnabled || LuminPackBurst.IsRegistered) return false;
+                if (sizeof(void*) != 8 || !BurstCompiler.IsEnabled || LuminPackBurst.IsRegistered)
+                    return false;
                 if (!_compiled)
                 {
                     var probe = BurstCompiler.CompileFunctionPointer<CapabilityFunction>(CapabilityRoot);
-                    if (!probe.IsCreated) return false;
+                    if (!probe.IsCreated)
+                        return false;
                     int available = probe.Invoke();
-                    if (available == 0) return false;
+                    if (available == 0)
+                        return false;
                     var copy = BurstCompiler.CompileFunctionPointer<CopyFunction>(CopyRoot);
                     var match = BurstCompiler.CompileFunctionPointer<CountMatchFunction>(MatchRoot);
                     var xor = BurstCompiler.CompileFunctionPointer<XorFunction>(XorRoot);
                     var expand = BurstCompiler.CompileFunctionPointer<CopyMatchFunction>(ExpandRoot);
-                    if (!copy.IsCreated || !match.IsCreated || !xor.IsCreated || !expand.IsCreated) return false;
+                    if (!copy.IsCreated || !match.IsCreated || !xor.IsCreated || !expand.IsCreated)
+                        return false;
                     _table = new LuminPackBurst.KernelTable
                     {
                         Version = LuminPackBurst.AbiVersion,
@@ -81,10 +85,14 @@ namespace LuminPack.Burst
                         Xor = (delegate* unmanaged[Cdecl]<byte*, byte*, byte*, uint, void>)(void*)xor.Value,
                         CopyMatch = (delegate* unmanaged[Cdecl]<byte*, uint, uint, void>)(void*)expand.Value
                     };
-                    if (!CompileTextKernels(ref _table)) return false;
-                    if (!CompileLayoutAndCrypto(ref _table)) return false;
-                    if (!CompileLatin1Kernels(ref _table)) return false;
-                    if (!CompileJsonKernels(ref _table)) return false;
+                    if (!CompileTextKernels(ref _table))
+                        return false;
+                    if (!CompileLayoutAndCrypto(ref _table))
+                        return false;
+                    if (!CompileLatin1Kernels(ref _table))
+                        return false;
+                    if (!CompileJsonKernels(ref _table))
+                        return false;
                     Capabilities = available;
                     _compiled = true;
                 }

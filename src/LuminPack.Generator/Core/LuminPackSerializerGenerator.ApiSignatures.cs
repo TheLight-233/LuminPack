@@ -93,13 +93,15 @@ public static partial class LuminPackSerializerGenerator
             AppendGenericFallbacks(shared, metadata, managedInput: false);
             AppendCompressDecompress(shared);
             foreach (string signature in ReadSignatures(shared.ToString(), metadata))
-                foreach (string variant in ProfileSignatures(signature, metadata)) source.AppendLine(variant);
+                foreach (string variant in ProfileSignatures(signature, metadata))
+                    source.AppendLine(variant);
             source.Append("} }");
             var tree = CSharpSyntaxTree.ParseText(source.ToString(), metadata.ParseOptions,
                 path: "LuminPack.ApiSignatures.analysis.cs");
             var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
             kinds = new Dictionary<int, SerializerApiKind>();
-            for (int index = 0; index < orderedKinds.Count; index++) kinds.Add(methods[index].SpanStart, orderedKinds[index]);
+            for (int index = 0; index < orderedKinds.Count; index++)
+                kinds.Add(methods[index].SpanStart, orderedKinds[index]);
             return tree;
         }
         finally
@@ -140,9 +142,11 @@ public static partial class LuminPackSerializerGenerator
         string state = method?.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString();
         if (state == null || !(state.EndsWith("LuminPackWriter", StringComparison.Ordinal) || state.EndsWith("LuminPackReader", StringComparison.Ordinal) ||
             state.EndsWith("LuminPackEvaluator", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonWriter", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonReader", StringComparison.Ordinal) ||
-            method.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync" or "Register")) yield break;
+            method.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync" or "Register"))
+            yield break;
         string profile = "__LuminProfile";
-        while (method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profile) == true) profile += "_";
+        while (method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profile) == true)
+            profile += "_";
         var parameters = (method.TypeParameterList?.Parameters ?? default).Add(SyntaxFactory.TypeParameter(profile));
         method = method.WithTypeParameterList(SyntaxFactory.TypeParameterList(parameters)).AddConstraintClauses(
             SyntaxFactory.TypeParameterConstraintClause(profile).AddConstraints(SyntaxFactory.ClassOrStructConstraint(SyntaxKind.StructConstraint),

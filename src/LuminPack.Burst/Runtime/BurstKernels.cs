@@ -16,9 +16,12 @@ namespace LuminPack.Burst
         public static int Capabilities()
         {
             int value = 0;
-            if (X86.Sse2.IsSse2Supported) value |= 1;
-            if (X86.Avx2.IsAvx2Supported) value |= 2;
-            if (Arm.Neon.IsNeonSupported) value |= 4;
+            if (X86.Sse2.IsSse2Supported)
+                value |= 1;
+            if (X86.Avx2.IsAvx2Supported)
+                value |= 2;
+            if (Arm.Neon.IsNeonSupported)
+                value |= 4;
             return value;
         }
 
@@ -30,7 +33,8 @@ namespace LuminPack.Burst
         public static int Copy(byte* destination, byte* source, uint count)
         {
             if (!global::LuminPack.Code.LuminKernelPolicy.UseShortCopy(KernelMemory.Is64Bit, Vector128.IsHardwareAccelerated,
-                Vector256.IsHardwareAccelerated, Vector512.IsHardwareAccelerated, count)) return 0;
+                Vector256.IsHardwareAccelerated, Vector512.IsHardwareAccelerated, count))
+                return 0;
             CoreAlgorithms.CopyShortBlock(ref *destination, ref *source, count);
             return 1;
         }
@@ -59,7 +63,8 @@ namespace LuminPack.Burst
         [MonoPInvokeCallback(typeof(BurstBackend.CopyMatchFunction))]
         public static void CopyMatch(byte* destination, uint count, uint distance)
         {
-            if (count == 0) return;
+            if (count == 0)
+                return;
             CoreAlgorithms.CopyMatch(ref *destination, ref *(destination - distance), (int)count, (int)distance);
         }
     }

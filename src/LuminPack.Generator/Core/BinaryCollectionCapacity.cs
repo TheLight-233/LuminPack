@@ -46,12 +46,14 @@ internal static class BinaryCollectionCapacity
                 LocalFunctionStatementSyntax local => local.ParameterList.Parameters,
                 _ => default
             };
-            if (parameters.Count < 2) return rewritten;
+            if (parameters.Count < 2)
+                return rewritten;
             var payload = parameters[1];
             var payloadSymbol = model.GetDeclaredSymbol(payload) as IParameterSymbol;
             source = scope.DescendantNodes(node => node == scope || node is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax))
                 .OfType<IdentifierNameSyntax>().FirstOrDefault(name => SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(name).Symbol, payloadSymbol));
-            if (source == null) return rewritten;
+            if (source == null)
+                return rewritten;
             collection = payloadSymbol?.Type;
             // A view traversal behind a set or dictionary interface walks the exact collection its view was taken from.
             if (ViewSource(original, model) is { } narrowed)
@@ -60,24 +62,33 @@ internal static class BinaryCollectionCapacity
                 collection = model.GetTypeInfo(narrowed).Type;
             }
         }
-        if (!TryGetCollection(collection, out var elements, out string countMember, out _)) return rewritten;
+        if (!TryGetCollection(collection, out var elements, out string countMember, out _))
+            return rewritten;
         var bounds = new List<string>();
         bool strings = false;
         foreach (var element in elements)
         {
-            if (element.SpecialType == SpecialType.System_String) { strings = true; bounds.Add(null); }
-            else if (EmitterTypeTraits.TryGetElementUpperBound(element, out string bound)) bounds.Add(bound);
-            else return rewritten;
+            if (element.SpecialType == SpecialType.System_String)
+            {
+                strings = true;
+                bounds.Add(null); }
+            else if (EmitterTypeTraits.TryGetElementUpperBound(element, out string bound))
+                bounds.Add(bound);
+            else
+                return rewritten;
         }
         // Complete string operations reserve their own records during the only traversal.
         // A length prescan doubles dictionary work and cannot safely predict callback mutations.
-        if (strings) return rewritten;
+        if (strings)
+            return rewritten;
         var calls = original.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
             call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "writer" } }).ToArray();
         // Do not touch raw bulk loops, evaluator loops, or traversal-only loops.
         if (!calls.Any(call => ((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.ValueText is
-            "WriteValue" or "WriteValueWithCompress" or "WriteString" or "CheckBuffer")) return rewritten;
-        if (original.DescendantNodes().Any(node => node is ForStatementSyntax or ForEachStatementSyntax or WhileStatementSyntax)) return rewritten;
+            "WriteValue" or "WriteValueWithCompress" or "WriteString" or "CheckBuffer"))
+            return rewritten;
+        if (original.DescendantNodes().Any(node => node is ForStatementSyntax or ForEachStatementSyntax or WhileStatementSyntax))
+            return rewritten;
 
         string writer = rewrite(((MemberAccessExpressionSyntax)calls[0].Expression).Expression).ToString();
         string prefix = BinaryOperationPlan.Prefix + "capacity" + identity + "_";
@@ -87,7 +98,8 @@ internal static class BinaryCollectionCapacity
         if (scope is LocalFunctionStatementSyntax && original is ForStatementSyntax)
         {
             var parameterLimit = HelperCount(original, scope, model);
-            if (parameterLimit == null) return rewritten;
+            if (parameterLimit == null)
+                return rewritten;
             // A staged helper receives the count captured before copying or invoking element code.
             countExpression = rewrite(parameterLimit).ToString();
         }
@@ -96,7 +108,8 @@ internal static class BinaryCollectionCapacity
             // The heap accessor captures the finite node range; do not substitute a later queue Count.
             if (original is not ForStatementSyntax { Condition: BinaryExpressionSyntax condition } ||
                 !condition.IsKind(SyntaxKind.LessThanExpression) || condition.Right is not IdentifierNameSyntax limit ||
-                model.GetSymbolInfo(limit).Symbol is not ILocalSymbol { Type.SpecialType: SpecialType.System_Int32 }) return rewritten;
+                model.GetSymbolInfo(limit).Symbol is not ILocalSymbol { Type.SpecialType: SpecialType.System_Int32 })
+                return rewritten;
             countExpression = rewrite(limit).ToString();
         }
         else
@@ -105,9 +118,11 @@ internal static class BinaryCollectionCapacity
             {
                 var captured = block.Statements.OfType<LocalDeclarationStatementSyntax>().SelectMany(statement => statement.Declaration.Variables)
                     .LastOrDefault(variable => variable.Span.End < original.SpanStart && variable.Initializer?.Value.ToString() == source + "." + countMember);
-                if (captured == null) continue;
+                if (captured == null)
+                    continue;
                 string name = localName(model.GetDeclaredSymbol(captured));
-                if (name != null) countExpression = name;
+                if (name != null)
+                    countExpression = name;
                 break;
             }
         }
@@ -142,7 +157,8 @@ internal static class BinaryCollectionCapacity
             loop.Declaration.Variables[0].Initializer is not { Value: var initial } ||
             model.GetConstantValue(initial) is not { HasValue: true, Value: 0 } ||
             model.GetSymbolInfo(limit).Symbol is not IParameterSymbol { Type.SpecialType: SpecialType.System_Int32 } parameter ||
-            !SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, model.GetDeclaredSymbol(scope))) return null;
+            !SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, model.GetDeclaredSymbol(scope)))
+            return null;
         // The template body may read the index but must not alter the finite iteration range.
         var flow = model.AnalyzeDataFlow(loop.Statement);
         return flow.Succeeded && !flow.WrittenInside.Contains(indexSymbol, SymbolEqualityComparer.Default) &&
@@ -155,7 +171,8 @@ internal static class BinaryCollectionCapacity
     /// <returns>The view's source variable declared before the loop in the same block, or null.</returns>
     private static IdentifierNameSyntax ViewSource(StatementSyntax loop, SemanticModel model)
     {
-        if (loop.Parent is not BlockSyntax block) return null;
+        if (loop.Parent is not BlockSyntax block)
+            return null;
         var view = block.Statements.TakeWhile(statement => statement != loop).SelectMany(statement => statement.DescendantNodes().OfType<InvocationExpressionSyntax>())
             .LastOrDefault(call => call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var name } &&
                 name.StartsWith("Get", StringComparison.Ordinal) && name.EndsWith("View", StringComparison.Ordinal) &&
@@ -172,17 +189,31 @@ internal static class BinaryCollectionCapacity
     /// <returns>Whether the traversal has a supported finite count contract.</returns>
     private static bool TryGetCollection(ITypeSymbol collection, out ITypeSymbol[] elements, out string countMember, out bool repeatable)
     {
-        elements = Array.Empty<ITypeSymbol>(); countMember = "Count"; repeatable = false;
+        elements = Array.Empty<ITypeSymbol>();
+        countMember = "Count";
+        repeatable = false;
         if (collection is IArrayTypeSymbol array)
-        { elements = new[] { array.ElementType }; countMember = "Length"; repeatable = true; return true; }
-        if (collection is not INamedTypeSymbol named) return false;
+        {
+            elements = new[] { array.ElementType };
+            countMember = "Length";
+            repeatable = true;
+            return true; }
+        if (collection is not INamedTypeSymbol named)
+            return false;
         string space = named.ContainingNamespace.ToDisplayString();
         if (space == "System" && named.Name is "Span" or "ReadOnlySpan" && named.TypeArguments.Length == 1)
-        { elements = named.TypeArguments.ToArray(); countMember = "Length"; repeatable = true; return true; }
-        if (!space.StartsWith("System.Collections.", StringComparison.Ordinal)) return false;
-        if (named.TypeKind == TypeKind.Interface) return false;
+        {
+            elements = named.TypeArguments.ToArray();
+            countMember = "Length";
+            repeatable = true;
+            return true; }
+        if (!space.StartsWith("System.Collections.", StringComparison.Ordinal))
+            return false;
+        if (named.TypeKind == TypeKind.Interface)
+            return false;
         // Concurrent enumerations may change between Count, prescan and traversal; retain their checked paths.
-        if (space == "System.Collections.Concurrent") return false;
+        if (space == "System.Collections.Concurrent")
+            return false;
         // The fallback enumerator exposes the queue's finite Count through its framework-owned view.
         if (named.Name == "UnorderedItemsCollection" && named.ContainingType is { Name: "PriorityQueue", TypeArguments.Length: 2 } priorityQueue)
             named = priorityQueue;
@@ -191,12 +222,17 @@ internal static class BinaryCollectionCapacity
         bool sequence = named.Name is "List" or "HashSet" or "SortedSet" or "Queue" or "Stack" or "LinkedList" or
             "ImmutableArray" or "ImmutableList" or "ImmutableHashSet" or "ImmutableSortedSet" or "ImmutableQueue" or "ImmutableStack" or
             "FrozenSet" or "ICollection" or "IList" or "IReadOnlyCollection" or "IReadOnlyList" or "ISet" or "IImmutableList" or "IImmutableSet";
-        if (dictionary && named.TypeArguments.Length == 2) elements = named.TypeArguments.ToArray();
-        else if (sequence && named.TypeArguments.Length == 1) elements = named.TypeArguments.ToArray();
-        else return false;
-        if (named.Name != "ImmutableArray" && !named.GetMembers("Count").Any() && !named.AllInterfaces.Any(iface => iface.GetMembers("Count").Any())) return false;
+        if (dictionary && named.TypeArguments.Length == 2)
+            elements = named.TypeArguments.ToArray();
+        else if (sequence && named.TypeArguments.Length == 1)
+            elements = named.TypeArguments.ToArray();
+        else
+            return false;
+        if (named.Name != "ImmutableArray" && !named.GetMembers("Count").Any() && !named.AllInterfaces.Any(iface => iface.GetMembers("Count").Any()))
+            return false;
         repeatable = named.TypeKind != TypeKind.Interface && named.Name is not ("LinkedList" or "SortedSet" or "SortedDictionary" or "SortedList" or "PriorityQueue");
-        if (named.Name == "ImmutableArray") countMember = "Length";
+        if (named.Name == "ImmutableArray")
+            countMember = "Length";
         return true;
     }
 
@@ -212,11 +248,15 @@ internal static class BinaryCollectionCapacity
         /// <returns>The unchanged or explicitly compiler-marked token.</returns>
         public override SyntaxToken VisitToken(SyntaxToken token)
         {
-            if (!token.IsKind(SyntaxKind.IdentifierToken)) return base.VisitToken(token);
+            if (!token.IsKind(SyntaxKind.IdentifierToken))
+                return base.VisitToken(token);
             if (token.Parent is IdentifierNameSyntax name && name.Parent is MemberAccessExpressionSyntax access && access.Name == name ||
-                token.Parent?.Parent is QualifiedNameSyntax or AliasQualifiedNameSyntax) return base.VisitToken(token);
-            if (token.HasAnnotations(BinaryOperationPlan.NameAnnotation)) return base.VisitToken(token);
-            if (token.ValueText == "writer") return BinaryOperationPlan.Identity(_writer, token).WithAdditionalAnnotations(new SyntaxAnnotation(WriterAnnotation));
+                token.Parent?.Parent is QualifiedNameSyntax or AliasQualifiedNameSyntax)
+                return base.VisitToken(token);
+            if (token.HasAnnotations(BinaryOperationPlan.NameAnnotation))
+                return base.VisitToken(token);
+            if (token.ValueText == "writer")
+                return BinaryOperationPlan.Identity(_writer, token).WithAdditionalAnnotations(new SyntaxAnnotation(WriterAnnotation));
             return token.ValueText.StartsWith(BinaryOperationPlan.Prefix, StringComparison.Ordinal) ? BinaryOperationPlan.Identity(token.ValueText, token) : base.VisitToken(token);
         }
     }

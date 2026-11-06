@@ -29,7 +29,8 @@ internal sealed class SerializerFacadeCache
     {
         lock (_gate)
         {
-            if (_common != null && _commonProfile == profile && MetaInfoValueComparer.Instance.Equals(_commonSettings, metadata)) return _common;
+            if (_common != null && _commonProfile == profile && MetaInfoValueComparer.Instance.Equals(_commonSettings, metadata))
+                return _common;
             string source = build();
             _commonSettings = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8,
                 metadata.IsNet9_OR_GREATER, metadata.AllowUnsafe, metadata.RegisterMode) { IsForUnity = metadata.IsForUnity };
@@ -47,10 +48,12 @@ internal sealed class SerializerFacadeCache
     {
         lock (_gate)
         {
-            if (_result != null && _header == header && _tail == tail && _blocks.SequenceEqual(blocks)) return _result;
+            if (_result != null && _header == header && _tail == tail && _blocks.SequenceEqual(blocks))
+                return _result;
             var builder = new StringBuilder(header.Length + tail.Length + blocks.Sum(block => block.Length));
             builder.Append(header);
-            foreach (var block in blocks) builder.Append(block);
+            foreach (var block in blocks)
+                builder.Append(block);
             builder.Append(tail);
             _header = header;
             _tail = tail;

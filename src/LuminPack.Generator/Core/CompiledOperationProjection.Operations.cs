@@ -22,17 +22,22 @@ internal sealed partial class CompiledOperationProjection
     {
         string identifier = method.Identifier.ValueText;
         bool json = facade ? identifier.Contains("Json") : method.ParameterList.Parameters[0].Type.ToString().Contains("Json");
-        if (facade) writer = identifier.StartsWith("Serialize", StringComparison.Ordinal);
+        if (facade)
+            writer = identifier.StartsWith("Serialize", StringComparison.Ordinal);
         string stateType = facade ? "LuminPack.Core.LuminPack" + (identifier == "Sizeof" ? "Evaluator" : json ? writer ? "JsonWriter" : "JsonReader" : writer ? "Writer" : "Reader") : method.ParameterList.Parameters[0].Type.ToString();
         string stateName = facade ? identifier == "Sizeof" ? "evaluator" : writer ? "writer" : "reader" : method.ParameterList.Parameters[0].Identifier.ValueText;
         string profile = "__LuminProfile";
         var identifiers = new HashSet<string>(method.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).Select(token => token.ValueText), StringComparer.Ordinal);
         foreach (var ancestor in method.Ancestors().OfType<TypeDeclarationSyntax>())
-            if (ancestor.TypeParameterList != null) foreach (var parameter in ancestor.TypeParameterList.Parameters) identifiers.Add(parameter.Identifier.ValueText);
-        while (identifiers.Contains(profile)) profile += "_";
+            if (ancestor.TypeParameterList != null)
+                foreach (var parameter in ancestor.TypeParameterList.Parameters)
+                    identifiers.Add(parameter.Identifier.ValueText);
+        while (identifiers.Contains(profile))
+            profile += "_";
         bool payloadGeneric = method.TypeParameterList != null && method.ParameterList.Parameters.Count > 1 &&
             method.ParameterList.Parameters[1].Type is IdentifierNameSyntax payload && method.TypeParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == payload.Identifier.ValueText);
-        if (facade) payloadGeneric = method.TypeParameterList != null;
+        if (facade)
+            payloadGeneric = method.TypeParameterList != null;
         bool dispatch = owner.Identifier.ValueText == "FormatterDispatch";
         CompiledOptions declaration = _default;
         if (method.ParameterList.Parameters.Count == 2 && _types.TryGetValue(method.ParameterList.Parameters[1].Type.ToString().TrimEnd('?'), out var type))
@@ -75,7 +80,8 @@ internal sealed partial class CompiledOperationProjection
                 ? SyntaxFactory.ExpressionStatement(fixedCall) : SyntaxFactory.ReturnStatement(fixedCall);
             generic = generic.WithBody(SyntaxFactory.Block(statement)).WithExpressionBody(null).WithSemicolonToken(default);
         }
-        else generic = method.Body != null ? generic.WithBody((BlockSyntax)body) : generic.WithExpressionBody((ArrowExpressionClauseSyntax)body);
+        else
+            generic = method.Body != null ? generic.WithBody((BlockSyntax)body) : generic.WithExpressionBody((ArrowExpressionClauseSyntax)body);
         generic = generic.WithLeadingTrivia(generic.GetLeadingTrivia().AddRange(SyntaxFactory.ParseLeadingTrivia(
             "/// <typeparam name=\"" + profile + "\">The stateless profile for this serialization operation.</typeparam>\n")));
         members.Add(generic.NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));

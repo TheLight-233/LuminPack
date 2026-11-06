@@ -29,7 +29,8 @@ public static partial class LuminPackCollectionAccess
         catch (ArgumentException) when (HasDuplicateKey(pairs, count))
         {
             var dictionary = new ConcurrentDictionary<TKey, TValue>(Environment.ProcessorCount, Math.Max(count, 1));
-            for (int i = 0; i < count; i++) dictionary.TryAdd(pairs[i].Key, pairs[i].Value);
+            for (int i = 0; i < count; i++)
+                dictionary.TryAdd(pairs[i].Key, pairs[i].Value);
             return dictionary;
         }
     }
@@ -44,7 +45,8 @@ public static partial class LuminPackCollectionAccess
     {
         var keys = new HashSet<TKey>();
         for (int i = 0; i < count; i++)
-            if (pairs[i].Key is not null && !keys.Add(pairs[i].Key)) return true;
+            if (pairs[i].Key is not null && !keys.Add(pairs[i].Key))
+                return true;
         return false;
     }
 
@@ -66,23 +68,27 @@ public static partial class LuminPackCollectionAccess
         {
             if (!RuntimeFeature.IsDynamicCodeCompiled || RuntimeInformation.ProcessArchitecture != Architecture.X64 ||
                 Environment.Version.Major is not (10 or 11) ||
-                ConcurrentBucketStorage<TKey, TValue>.Node is null) return;
+                ConcurrentBucketStorage<TKey, TValue>.Node is null)
+                return;
             try
             {
                 var mapType = typeof(ConcurrentDictionary<TKey, TValue>);
                 var tableType = LuminFieldLayout.Find(mapType, "_tables")?.FieldType;
                 if (LuminFieldLayout.Find(tableType, "_countPerLock")?.FieldType != typeof(int[]) ||
                     LuminFieldLayout.Find(tableType, "_comparer")?.FieldType != typeof(IEqualityComparer<TKey>) ||
-                    LuminFieldLayout.Find(mapType, "_budget")?.FieldType != typeof(int)) return;
+                    LuminFieldLayout.Find(mapType, "_budget")?.FieldType != typeof(int))
+                    return;
                 Counts = LuminFieldLayout.ObjectField(tableType, "_countPerLock");
                 Comparer = LuminFieldLayout.ObjectField(tableType, "_comparer", EqualityComparer<TKey>.Default);
                 Budget = LuminFieldLayout.ObjectField(mapType, "_budget");
-                if ((Counts | Comparer | Budget) < 0) return;
+                if ((Counts | Comparer | Budget) < 0)
+                    return;
                 var map = new ConcurrentDictionary<TKey, TValue>(1, 37);
                 var tables = LuminFieldLayout.Field<object>(map, ConcurrentBucketStorage<TKey, TValue>.Tables);
                 var buckets = Buckets(tables);
                 // Supply the hash and use an empty bucket. The framework never hashes or compares the probe's default key.
-                if (!Insert(map, tables, default!, -1, default!, false, false, out _) || map.Count != 1) return;
+                if (!Insert(map, tables, default!, -1, default!, false, false, out _) || map.Count != 1)
+                    return;
                 object? inserted = buckets[(int)(uint.MaxValue % (uint)buckets.Length)];
                 Available = inserted?.GetType() == NewNode(default!, default!, -1, null).GetType() &&
                     LuminFieldLayout.Field<int[]>(tables, Counts)[0] == 1 && LuminFieldLayout.Field<int>(map, Budget) == buckets.Length &&
@@ -120,11 +126,13 @@ public static partial class LuminPackCollectionAccess
                 {
                     ref readonly var pair = ref pairs[i++];
                     TKey key = pair.Key;
-                    if (key is null) LuminPackExceptionHelper.ThrowArgumentNullException("key");
+                    if (key is null)
+                        LuminPackExceptionHelper.ThrowArgumentNullException("key");
                     // The table owns the actual comparer, including the framework's internal string comparer.
                     int hash = comparer is null ? key.GetHashCode() : comparer.GetHashCode(key);
                     uint bucket = (uint)hash;
-                    if (bucket >= (uint)buckets.Length) bucket = LuminPackMarshal.FastMod(bucket, (uint)buckets.Length, bucketMultiplier);
+                    if (bucket >= (uint)buckets.Length)
+                        bucket = LuminPackMarshal.FastMod(bucket, (uint)buckets.Length, bucketMultiplier);
                     ref object? slot = ref buckets[(int)bucket];
                     ref int stripe = ref counts[LuminPackMarshal.FastMod(bucket, (uint)counts.Length, stripeMultiplier)];
                     if (slot is null && stripe < budget)
@@ -136,7 +144,8 @@ public static partial class LuminPackCollectionAccess
                     // Pass the hash already obtained from the key. The BCL handles equality, rehashing and growth.
                     if (!Insert(map, tables, key, hash, pair.Value, false, false, out _))
                         LuminPackExceptionHelper.ThrowArgumentException(DuplicateKeyMessage(null));
-                    if (!ReferenceEquals(tables, LuminFieldLayout.Field<object>(map, ConcurrentBucketStorage<TKey, TValue>.Tables))) break;
+                    if (!ReferenceEquals(tables, LuminFieldLayout.Field<object>(map, ConcurrentBucketStorage<TKey, TValue>.Tables)))
+                        break;
                     budget = LuminFieldLayout.Field<int>(map, Budget);
                 }
             }

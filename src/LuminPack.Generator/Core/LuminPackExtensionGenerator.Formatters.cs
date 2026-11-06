@@ -35,7 +35,8 @@ public static partial class LuminPackExtensionGenerator
             : reachability.EmittedTypes;
         // Usage analysis can emit container types the compilation scan never listed; projections must
         // still bind them so typed operations expand and declare their storage views.
-        if (reachability is not null) analysis.IndexReachableTypes(types.Where(static type => !ContainsTypeParameter(type)));
+        if (reachability is not null)
+            analysis.IndexReachableTypes(types.Where(static type => !ContainsTypeParameter(type)));
 
         // Full mode walks every distinct symbol, so distinct symbols that canonicalize to the
         // same formatter name (native ints nint/IntPtr, nuint/UIntPtr, ValueTuple vs the
@@ -72,14 +73,16 @@ public static partial class LuminPackExtensionGenerator
             return true;
         }
 
-        if (CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type)) return true;
+        if (CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type))
+            return true;
 
         if (type is INamedTypeSymbol named && HasPackableAttribute(named))
         {
             return SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly);
         }
 
-        if (PortableStructPlan.IsImplicitFormatterType(type)) return !json;
+        if (PortableStructPlan.IsImplicitFormatterType(type))
+            return !json;
 
         var formatter = CodeEmitterRegistry.GetEmitter(FormatterTypeName.Get(type));
         return json
@@ -93,14 +96,16 @@ public static partial class LuminPackExtensionGenerator
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     internal static bool CanRegisterCalculateFormatter(ITypeSymbol type, Compilation compilation)
     {
-        if (IsCustomGeneratorType(type)) return false;
+        if (IsCustomGeneratorType(type))
+            return false;
         if (type.TypeKind == TypeKind.Enum ||
             type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
         {
             return true;
         }
 
-        if (CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type)) return true;
+        if (CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type))
+            return true;
 
         if (type is INamedTypeSymbol named && HasPackableAttribute(named))
         {
@@ -164,7 +169,8 @@ public static partial class LuminPackExtensionGenerator
             return true;
         }
 
-        if (PortableStructPlan.IsImplicitFormatterType(named)) return true;
+        if (PortableStructPlan.IsImplicitFormatterType(named))
+            return true;
 
         var formatter = CodeEmitterRegistry.GetEmitter(FormatterTypeName.Get(type));
         bool registered = formatter.Write is not null || formatter.Read is not null ||

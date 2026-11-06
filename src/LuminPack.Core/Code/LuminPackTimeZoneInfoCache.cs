@@ -32,7 +32,10 @@ public static unsafe class LuminPackTimeZoneInfoCache
         /// <summary>Pairs a successfully parsed zone with its complete snapshot.</summary>
         /// <param name="text">The complete validated text.</param>
         /// <param name="value">The immutable parsed zone.</param>
-        internal Entry(string text, TimeZoneInfo value) { Text = text; Value = value; }
+        internal Entry(string text, TimeZoneInfo value)
+        {
+            Text = text;
+            Value = value; }
     }
 
     /// <summary>Gets the complete snapshot text while retaining writer keys weakly.</summary>
@@ -48,7 +51,8 @@ public static unsafe class LuminPackTimeZoneInfoCache
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static string GetOtherText(TimeZoneInfo value)
     {
-        if (Texts.TryGetValue(value, out var text)) return text;
+        if (Texts.TryGetValue(value, out var text))
+            return text;
         int hash = RuntimeHelpers.GetHashCode(value);
         ref int fingerprint = ref WriterAdmissionFingerprints[hash & 63];
         if (Volatile.Read(ref fingerprint) != hash)
@@ -77,7 +81,10 @@ public static unsafe class LuminPackTimeZoneInfoCache
     public static void WriteTimeZoneText<TOptions>(this ref LuminPackWriter writer, string? text, bool capacityReserved = false)
         where TOptions : struct, ILuminPackOptions
     {
-        if (text is null) { writer.WriteNullObjectHeader(); return; }
+        if (text is null)
+        {
+            writer.WriteNullObjectHeader();
+            return; }
         writer.WriteObjectHeader(0);
         writer.Write<TOptions>(text, capacityReserved);
     }
@@ -90,7 +97,8 @@ public static unsafe class LuminPackTimeZoneInfoCache
     public static Entry? GetTimeZoneCandidate<TOptions>(this ref LuminPackReader reader)
         where TOptions : struct, ILuminPackOptions
     {
-        if (default(TOptions).StringRecording != LuminPackStringRecording.Length) return null;
+        if (default(TOptions).StringRecording != LuminPackStringRecording.Length)
+            return null;
         int available = reader.Buffer.Length - reader.Position;
 #if NET8_0_OR_GREATER
         ref byte cursor = ref reader.Cursor;
@@ -116,7 +124,8 @@ public static unsafe class LuminPackTimeZoneInfoCache
     {
         value = null;
         if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF16 ||
-            default(TOptions).StringRecording != LuminPackStringRecording.Length || candidate is null) return false;
+            default(TOptions).StringRecording != LuminPackStringRecording.Length || candidate is null)
+            return false;
         reader.EnsureReadable(reader.Position, sizeof(int));
 #if NET8_0_OR_GREATER
         ref byte cursor = ref reader.Cursor;
@@ -128,7 +137,8 @@ public static unsafe class LuminPackTimeZoneInfoCache
         // Snapshots are written through the string kernel, so ASCII text arrives in the compact Latin-1 form.
         bool latin1 = length > 0 && header == StringSerializer.Latin1Header(length);
         int bytes = latin1 ? length : length * sizeof(char);
-        if (!latin1 && header != bytes) return false;
+        if (!latin1 && header != bytes)
+            return false;
         reader.EnsureReadable(reader.Position, bytes + sizeof(int));
         ref byte source = ref Unsafe.Add(ref cursor, sizeof(int));
         if (!Matches(ref source, bytes, latin1, candidate.Text))
@@ -136,7 +146,8 @@ public static unsafe class LuminPackTimeZoneInfoCache
             int slot = Slot(length);
             var first = Volatile.Read(ref Entries[slot]);
             var other = ReferenceEquals(first, candidate) ? Volatile.Read(ref Entries[slot + 1]) : first;
-            if (other is null || other.Text.Length != length || !Matches(ref source, bytes, latin1, other.Text)) return false;
+            if (other is null || other.Text.Length != length || !Matches(ref source, bytes, latin1, other.Text))
+                return false;
             candidate = other;
         }
         reader.Advance(bytes + sizeof(int));
@@ -161,10 +172,12 @@ public static unsafe class LuminPackTimeZoneInfoCache
     public static TimeZoneInfo Parse(string text, Entry? candidate = null)
     {
         var cached = candidate ?? Find(text.Length);
-        if (cached is not null && string.Equals(cached.Text, text, StringComparison.Ordinal)) return cached.Value;
+        if (cached is not null && string.Equals(cached.Text, text, StringComparison.Ordinal))
+            return cached.Value;
         int slot = Slot(text.Length);
         var second = Volatile.Read(ref Entries[slot + 1]);
-        if (second is not null && string.Equals(second.Text, text, StringComparison.Ordinal)) return second.Value;
+        if (second is not null && string.Equals(second.Text, text, StringComparison.Ordinal))
+            return second.Value;
         return ParseSlow(text);
     }
 
@@ -175,9 +188,11 @@ public static unsafe class LuminPackTimeZoneInfoCache
     internal static TimeZoneInfo ParseSnapshot(ReadOnlySpan<char> text)
     {
         var cached = Find(text.Length);
-        if (cached is not null && text.SequenceEqual(cached.Text.AsSpan())) return cached.Value;
+        if (cached is not null && text.SequenceEqual(cached.Text.AsSpan()))
+            return cached.Value;
         var second = Volatile.Read(ref Entries[Slot(text.Length) + 1]);
-        if (second is not null && text.SequenceEqual(second.Text.AsSpan())) return second.Value;
+        if (second is not null && text.SequenceEqual(second.Text.AsSpan()))
+            return second.Value;
         return ParseSlow(new string(text));
     }
 
@@ -212,7 +227,8 @@ public static unsafe class LuminPackTimeZoneInfoCache
     {
         int slot = Slot(length);
         var first = Volatile.Read(ref Entries[slot]);
-        if (first is not null && first.Text.Length == length) return first;
+        if (first is not null && first.Text.Length == length)
+            return first;
         var second = Volatile.Read(ref Entries[slot + 1]);
         return second is not null && second.Text.Length == length ? second : null;
     }

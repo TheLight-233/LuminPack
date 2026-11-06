@@ -26,18 +26,21 @@ namespace LuminPack.Unity
                     value.GetKeys(keys);
                 }
 #else
-                for (int index = 0; index < count; index++) keys[index] = value[index];
+                for (int index = 0; index < count; index++)
+                    keys[index] = value[index];
 #endif
                 writer.EnsureAdditionalCapacity(checked(13 + count * 32));
                 writer.WriteObjectHeader(3);
                 writer.Write((int)value.preWrapMode);
                 writer.Write((int)value.postWrapMode);
                 writer.WriteCollectionHeader(count);
-                foreach (Keyframe key in keys) Write(ref writer, key);
+                foreach (Keyframe key in keys)
+                    Write(ref writer, key);
             }
             finally
             {
-                if (rented is not null) ArrayPool<Keyframe>.Shared.Return(rented);
+                if (rented is not null)
+                    ArrayPool<Keyframe>.Shared.Return(rented);
             }
         }
 
@@ -64,14 +67,18 @@ namespace LuminPack.Unity
                 writer.Write((int)value.mode);
                 writer.Write((int)value.colorSpace);
                 writer.WriteCollectionHeader(colorCount);
-                foreach (GradientColorKey key in colors) Write(ref writer, key);
+                foreach (GradientColorKey key in colors)
+                    Write(ref writer, key);
                 writer.WriteCollectionHeader(alphaCount);
-                foreach (GradientAlphaKey key in alphas) Write(ref writer, key);
+                foreach (GradientAlphaKey key in alphas)
+                    Write(ref writer, key);
             }
             finally
             {
-                if (rentedAlphas is not null) ArrayPool<GradientAlphaKey>.Shared.Return(rentedAlphas);
-                if (rentedColors is not null) ArrayPool<GradientColorKey>.Shared.Return(rentedColors);
+                if (rentedAlphas is not null)
+                    ArrayPool<GradientAlphaKey>.Shared.Return(rentedAlphas);
+                if (rentedColors is not null)
+                    ArrayPool<GradientColorKey>.Shared.Return(rentedColors);
             }
         }
 
@@ -88,7 +95,8 @@ namespace LuminPack.Unity
             Span<Keyframe> keys = count <= 16 ? stackalloc Keyframe[count] : (rented = ArrayPool<Keyframe>.Shared.Rent(count)).AsSpan(0, count);
             try
             {
-                for (int index = 0; index < count; index++) Read(ref cursor, ref keys[index]);
+                for (int index = 0; index < count; index++)
+                    Read(ref cursor, ref keys[index]);
                 AnimationCurve result = value ?? new AnimationCurve();
                 result.SetKeys(keys);
                 result.preWrapMode = (WrapMode)pre;
@@ -97,7 +105,8 @@ namespace LuminPack.Unity
             }
             finally
             {
-                if (rented is not null) ArrayPool<Keyframe>.Shared.Return(rented);
+                if (rented is not null)
+                    ArrayPool<Keyframe>.Shared.Return(rented);
             }
         }
 
@@ -117,9 +126,12 @@ namespace LuminPack.Unity
             {
                 Span<GradientColorKey> colors = colorCount <= 16 ? stackalloc GradientColorKey[colorCount] : (rentedColors = ArrayPool<GradientColorKey>.Shared.Rent(colorCount)).AsSpan(0, colorCount);
                 Span<GradientAlphaKey> alphas = alphaCount <= 16 ? stackalloc GradientAlphaKey[alphaCount] : (rentedAlphas = ArrayPool<GradientAlphaKey>.Shared.Rent(alphaCount)).AsSpan(0, alphaCount);
-                for (int index = 0; index < colorCount; index++) Read(ref cursor, ref colors[index]);
-                if (cursor.Read<int>() != alphaCount) LuminPackExceptionHelper.ThrowInvalidOperationException("Gradient input changed during deserialization.");
-                for (int index = 0; index < alphaCount; index++) Read(ref cursor, ref alphas[index]);
+                for (int index = 0; index < colorCount; index++)
+                    Read(ref cursor, ref colors[index]);
+                if (cursor.Read<int>() != alphaCount)
+                    LuminPackExceptionHelper.ThrowInvalidOperationException("Gradient input changed during deserialization.");
+                for (int index = 0; index < alphaCount; index++)
+                    Read(ref cursor, ref alphas[index]);
                 Gradient result = value ?? new Gradient();
                 result.SetKeys(colors, alphas);
                 result.mode = (GradientMode)mode;
@@ -128,8 +140,10 @@ namespace LuminPack.Unity
             }
             finally
             {
-                if (rentedAlphas is not null) ArrayPool<GradientAlphaKey>.Shared.Return(rentedAlphas);
-                if (rentedColors is not null) ArrayPool<GradientColorKey>.Shared.Return(rentedColors);
+                if (rentedAlphas is not null)
+                    ArrayPool<GradientAlphaKey>.Shared.Return(rentedAlphas);
+                if (rentedColors is not null)
+                    ArrayPool<GradientColorKey>.Shared.Return(rentedColors);
             }
         }
 #endif

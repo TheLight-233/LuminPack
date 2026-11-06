@@ -24,7 +24,8 @@ namespace LuminPack.Burst
             var layout = BurstCompiler.CompileFunctionPointer<LayoutFunction>(LayoutRoot);
             var cipher = BurstCompiler.CompileFunctionPointer<ChaCha20Function>(ChaChaRoot);
             var planned = BurstCompiler.CompileFunctionPointer<LayoutPlannedFunction>(PlannedRoot);
-            if (!layout.IsCreated || !cipher.IsCreated || !planned.IsCreated) return false;
+            if (!layout.IsCreated || !cipher.IsCreated || !planned.IsCreated)
+                return false;
             table.Layout = (delegate* unmanaged[Cdecl]<byte*, byte*, int, int, int, int*, int*, int, int>)(void*)layout.Value;
             table.ChaCha20 = (delegate* unmanaged[Cdecl]<uint*, byte*, int, void>)(void*)cipher.Value;
             table.LayoutPlanned = (delegate* unmanaged[Cdecl]<byte*, byte*, int, global::LuminPack.Utility.LuminLayoutPlan*, int>)(void*)planned.Value;
@@ -38,7 +39,8 @@ namespace LuminPack.Burst
         [MonoPInvokeCallback(typeof(BurstBackend.LayoutPlannedFunction))]
         public static int LayoutPlanned(byte* input, byte* output, int count, global::LuminPack.Utility.LuminLayoutPlan* descriptor)
         {
-            if (!global::LuminPack.Code.LuminKernelPolicy.UseNativeLayout(count) || !(Ssse3.IsSupported || AdvSimd.Arm64.IsSupported)) return 0;
+            if (!global::LuminPack.Code.LuminKernelPolicy.UseNativeLayout(count) || !(Ssse3.IsSupported || AdvSimd.Arm64.IsSupported))
+                return 0;
             CoreLayout plan = default;
             plan.Initialize(in *descriptor);
             return plan.Prefix(ref *input, ref *output, count);
@@ -48,7 +50,8 @@ namespace LuminPack.Burst
         [MonoPInvokeCallback(typeof(BurstBackend.LayoutFunction))]
         public static int Layout(byte* input, byte* output, int count, int sourceStride, int destinationStride, int* sourceOffsets, int* destinationOffsets, int offsetCount)
         {
-            if (count <= 0 || offsetCount <= 0) return 0;
+            if (count <= 0 || offsetCount <= 0)
+                return 0;
             CoreLayout plan = default;
             plan.Initialize(new ReadOnlySpan<int>(sourceOffsets, offsetCount), sourceStride, new ReadOnlySpan<int>(destinationOffsets, offsetCount), destinationStride, true);
             return plan.Prefix(ref *input, ref *output, count);
@@ -60,9 +63,12 @@ namespace LuminPack.Burst
         {
             uint* copy = stackalloc uint[16];
             KernelMemory.CopyBlockUnaligned(ref *(byte*)copy, ref *(byte*)state, 64);
-            if (blocks == 1) CoreChaCha20.Block(copy, output);
-            else if (blocks == 2) CoreChaCha20.Block2(copy, output);
-            else if (blocks == 4) CoreChaCha20.Block4(copy, output);
+            if (blocks == 1)
+                CoreChaCha20.Block(copy, output);
+            else if (blocks == 2)
+                CoreChaCha20.Block2(copy, output);
+            else if (blocks == 4)
+                CoreChaCha20.Block4(copy, output);
         }
     }
 }

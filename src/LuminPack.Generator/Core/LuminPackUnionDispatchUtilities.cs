@@ -14,7 +14,8 @@ internal static class LuminPackUnionDispatchUtilities
     /// <returns>Whether both generated slots can be called from this assembly.</returns>
     internal static bool CanUseReferencedDispatch(INamedTypeSymbol type, Compilation compilation)
     {
-        if (IsCurrentCompilation(type, compilation)) return false;
+        if (IsCurrentCompilation(type, compilation))
+            return false;
         var suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type.OriginalDefinition);
         foreach (var operation in new[] { "Serialize", "SerializeJson" })
         {

@@ -52,7 +52,8 @@ namespace LuminPack.Unity
             delegate*<ref LuminPackReader, ref T, void> read)
         {
             nint key = LuminPackMarshal.GetMethodTable(typeof(T));
-            if (LuminPackFormatterRegistry.TryGetValue(in key, out _)) return;
+            if (LuminPackFormatterRegistry.TryGetValue(in key, out _))
+                return;
             LuminPackFormatterRegistry.Register(typeof(T), (nint)write, (nint)read);
         }
     }

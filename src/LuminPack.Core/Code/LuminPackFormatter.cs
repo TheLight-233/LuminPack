@@ -52,9 +52,12 @@ public static class LuminPackFormatterRegistry
         [System.Runtime.InteropServices.Optional] nint writeValueJson,
         [System.Runtime.InteropServices.Optional] nint readValueJson)
     {
-        if (type is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
-        if (writeValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
-        if (readValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
+        if (type is null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
+        if (writeValue == 0)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
+        if (readValue == 0)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
 
         var entry = new LuminPackFormatter
         {
@@ -97,15 +100,19 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
         [System.Runtime.InteropServices.Optional] nint writeValueJson,
         [System.Runtime.InteropServices.Optional] nint readValueJson)
     {
-        if (type is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
-        if (writeValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
-        if (readValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
+        if (type is null)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
+        if (writeValue == 0)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
+        if (readValue == 0)
+            LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
         var entry = new LuminPackFormatter { WriteValue = writeValue, ReadValue = readValue, WriteValueJson = writeValueJson,
             ReadValueJson = readValueJson };
         nint key = LuminPackMarshal.GetMethodTable(type);
         // Resolve the closed profile before publishing its immutable entry.
         var entries = s_entries;
-        if (!entries.TryAdd(key, entry)) LuminPackExceptionHelper.ThrowArgumentException("A formatter for this type and compiled profile is already registered.");
+        if (!entries.TryAdd(key, entry))
+            LuminPackExceptionHelper.ThrowArgumentException("A formatter for this type and compiled profile is already registered.");
         Interlocked.Increment(ref LuminPackCompiledFormatterTables.Revision);
     }
 
@@ -116,7 +123,8 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
     public static bool TryGetValue(in nint methodTable, out LuminPackFormatter entry)
     {
         var entries = s_entries;
-        if (entries.TryGetValue(methodTable, out entry)) return true;
+        if (entries.TryGetValue(methodTable, out entry))
+            return true;
         return LuminPackFormatterRegistry.TryGetValue(methodTable, out entry);
     }
 
@@ -128,7 +136,8 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
     public static bool TryGetJsonValue(in nint methodTable, out LuminPackFormatter entry)
     {
         var entries = s_entries;
-        if (entries.TryGetValue(methodTable, out entry)) return true;
+        if (entries.TryGetValue(methodTable, out entry))
+            return true;
         entry = default;
         return default(TOptions).StringEncoding == default(LuminPackDefaultOptions).StringEncoding && LuminPackFormatterRegistry.TryGetValue(methodTable, out entry);
     }
@@ -167,7 +176,13 @@ internal static class LuminPackCompiledFormatterTables
         /// <param name="depth">The JSON depth bound.</param>
         /// <param name="strict">The JSON grammar policy.</param>
         internal Profile(LuminPackStringEncoding encoding, LuminPackStringRecording recording, System.Buffers.StandardFormat format, int depth, bool strict)
-        { _encoding = encoding; _recording = recording; _format = format.Symbol; _precision = format.Precision; _depth = depth; _strict = strict; }
+        {
+            _encoding = encoding;
+            _recording = recording;
+            _format = format.Symbol;
+            _precision = format.Precision;
+            _depth = depth;
+            _strict = strict; }
 
         /// <summary>Compares every option constant used by a closed formatter.</summary>
         /// <param name="other">The other complete profile.</param>
@@ -231,10 +246,13 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
         {
             long revision = Volatile.Read(ref LuminPackCompiledFormatterTables.Revision);
             bool found = json ? TryGetJsonValue(in Cache<T>.Key, out entry) : TryGetValue(in Cache<T>.Key, out entry);
-            if (revision != Volatile.Read(ref LuminPackCompiledFormatterTables.Revision)) continue;
+            if (revision != Volatile.Read(ref LuminPackCompiledFormatterTables.Revision))
+                continue;
             var snapshot = new Snapshot(revision, found, entry);
-            if (json) Volatile.Write(ref Cache<T>.Json, snapshot);
-            else Volatile.Write(ref Cache<T>.Binary, snapshot);
+            if (json)
+                Volatile.Write(ref Cache<T>.Json, snapshot);
+            else
+                Volatile.Write(ref Cache<T>.Binary, snapshot);
             return found;
         }
     }
@@ -260,6 +278,9 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
         /// <param name="found">Whether the lookup succeeded.</param>
         /// <param name="entry">The complete immutable value copied from the concurrent map.</param>
         internal Snapshot(long revision, bool found, LuminPackFormatter entry)
-        { Revision = revision; Found = found; Entry = entry; }
+        {
+            Revision = revision;
+            Found = found;
+            Entry = entry; }
     }
 }

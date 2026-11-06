@@ -56,7 +56,8 @@ internal sealed class UnionDispatchTierPlan
     internal static UnionDispatchTierPlan Get(INamedTypeSymbol root, Compilation compilation)
     {
         if (root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
-            !LuminPackUnionDispatchUtilities.CanGeneratePartial(root, compilation)) return VirtualPlan;
+            !LuminPackUnionDispatchUtilities.CanGeneratePartial(root, compilation))
+            return VirtualPlan;
         return Cache.GetValue(compilation, _ => new ConcurrentDictionary<INamedTypeSymbol, UnionDispatchTierPlan>(SymbolEqualityComparer.Default))
             .GetOrAdd(root.OriginalDefinition, current => Build(current, compilation));
     }
@@ -69,7 +70,8 @@ internal sealed class UnionDispatchTierPlan
     {
         var metadata = CreateMetadata(compilation);
         var data = LuminPackSourceGenerator.GetSerializationMetadata(root, compilation, metadata);
-        if (!data.isUnion || !data.CanGenerateUnionDispatch || data.UnionMembers.Count is 0 or > MaximumGuardedCases) return VirtualPlan;
+        if (!data.isUnion || !data.CanGenerateUnionDispatch || data.UnionMembers.Count is 0 or > MaximumGuardedCases)
+            return VirtualPlan;
         var types = new List<INamedTypeSymbol>();
         foreach (var member in data.UnionMembers.OrderBy(member => member.Id))
         {
@@ -77,7 +79,8 @@ internal sealed class UnionDispatchTierPlan
             if (member.Type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } type ||
                 !LuminPackUnionDispatchCodeGenerator.IsFastPathMember(data, member) ||
                 !LuminPackUnionDispatchUtilities.CanGeneratePartial(type, compilation) ||
-                types.Contains(type, SymbolEqualityComparer.Default)) return VirtualPlan;
+                types.Contains(type, SymbolEqualityComparer.Default))
+                return VirtualPlan;
             types.Add(type);
         }
         var cases = types.Select(type => (type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), type.IsSealed)).ToList();
@@ -110,11 +113,14 @@ internal sealed class UnionDispatchTierPlan
     private static bool IsClosed(INamedTypeSymbol root, Compilation compilation)
     {
         if (TypeMetaChecker.HasUnionOption(root, "SingleImplementation") || root.GetAttributes().Any(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackSingleImplementationAttribute")) return true;
+                attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackSingleImplementationAttribute"))
+            return true;
         if (compilation.Assembly.GetAttributes().Any(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.InternalsVisibleToAttribute")) return false;
+                attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.InternalsVisibleToAttribute"))
+            return false;
         for (var current = root; current != null; current = current.ContainingType)
-            if (current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal)) return true;
+            if (current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal))
+                return true;
         // An externally visible root stays closed only when no constructor is accessible from another assembly.
         return root.InstanceConstructors.All(constructor =>
             constructor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal));
@@ -129,9 +135,11 @@ internal sealed class UnionDispatchTierPlan
     {
         foreach (var symbol in compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type))
         {
-            if (symbol is not INamedTypeSymbol type || SymbolEqualityComparer.Default.Equals(type, only)) continue;
+            if (symbol is not INamedTypeSymbol type || SymbolEqualityComparer.Default.Equals(type, only))
+                continue;
             for (var parent = type.BaseType; parent != null; parent = parent.BaseType)
-                if (SymbolEqualityComparer.Default.Equals(parent.OriginalDefinition, root)) return false;
+                if (SymbolEqualityComparer.Default.Equals(parent.OriginalDefinition, root))
+                    return false;
         }
         return true;
     }

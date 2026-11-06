@@ -41,7 +41,8 @@ internal static class BinaryEntryCursorLocals
             bool binaryReader = node.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString()
                 .EndsWith("LuminPackReader", StringComparison.Ordinal) == true;
             var rewritten = (SwitchStatementSyntax)base.VisitSwitchStatement(node);
-            if (!binaryReader) return rewritten;
+            if (!binaryReader)
+                return rewritten;
             var candidates = new List<LocalDeclarationStatementSyntax>();
             foreach (var section in rewritten.Sections)
             {
@@ -54,13 +55,17 @@ internal static class BinaryEntryCursorLocals
                         variable.Initializer?.Value is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 0,
                             Expression: MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "reader" }, Name.Identifier.ValueText: "GetCurrentSpanIndex" } })
                     .ToArray();
-                if (cursors.Length == 1) candidates.Add(cursors[0]);
+                if (cursors.Length == 1)
+                    candidates.Add(cursors[0]);
             }
-            if (candidates.Count < 2) return rewritten;
+            if (candidates.Count < 2)
+                return rewritten;
             _names ??= new HashSet<string>(_root.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken) &&
                 token.ValueText.StartsWith("__luminSwitchCursor", StringComparison.Ordinal)).Select(token => token.ValueText), StringComparer.Ordinal);
             string name;
-            do { name = "__luminSwitchCursor" + _next++; } while (!_names.Add(name));
+            do
+            {
+                name = "__luminSwitchCursor" + _next++; } while (!_names.Add(name));
             var replacements = candidates.ToDictionary(local => local.Declaration.Variables[0].Identifier.ValueText, _ => name, StringComparer.Ordinal);
             var body = (SwitchStatementSyntax)new CursorNames(replacements).Visit(rewritten);
             return SyntaxFactory.Block(SyntaxFactory.ParseStatement("int " + name + ";"), body).WithTriviaFrom(node);

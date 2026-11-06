@@ -37,8 +37,10 @@ internal sealed class CustomFormatterModel
     {
         get
         {
-            if (Serialize is null || Deserialize is null) return 0;
-            if (SerializeJson is not null && DeserializeJson is not null) return 2;
+            if (Serialize is null || Deserialize is null)
+                return 0;
+            if (SerializeJson is not null && DeserializeJson is not null)
+                return 2;
             return 1;
         }
     }

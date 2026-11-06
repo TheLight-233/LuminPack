@@ -16,17 +16,22 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
     /// <summary>Captures one concrete profile or the generated generic type selector.</summary>
     /// <param name="options">The concrete declaration policy.</param>
     /// <param name="generic">Whether the facade fragment owns generic roots.</param>
-    internal SafeFacadeProjection(CompiledOptions options, bool generic) { _options = options; _generic = generic; }
+    internal SafeFacadeProjection(CompiledOptions options, bool generic)
+    {
+        _options = options;
+        _generic = generic; }
 
     /// <summary>Finds explicit input policy declarations without changing disabled facade fragments.</summary>
     /// <param name="compilation">The complete consumer compilation.</param>
     /// <returns>Whether a policy can affect this compilation's generic input facades.</returns>
     internal static bool HasPolicies(Compilation compilation)
     {
-        if (CompiledOptions.Resolve(null, compilation).Input.Enabled) return true;
+        if (CompiledOptions.Resolve(null, compilation).Input.Enabled)
+            return true;
         foreach (var tree in compilation.SyntaxTrees)
         foreach (var declaration in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>().Where(d => d.AttributeLists.Count != 0))
-            if (CompiledOptions.Resolve(compilation.GetSemanticModel(tree).GetDeclaredSymbol(declaration), compilation).Input.Enabled) return true;
+            if (CompiledOptions.Resolve(compilation.GetSemanticModel(tree).GetDeclaredSymbol(declaration), compilation).Input.Enabled)
+                return true;
         return false;
     }
 
@@ -40,7 +45,8 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
     /// <returns>The same method with bounded input ingestion.</returns>
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
-        if (node.Body == null || !node.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal) || !_generic && !_options.Input.Enabled) return node;
+        if (node.Body == null || !node.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal) || !_generic && !_options.Input.Enabled)
+            return node;
         string previous = _limit;
         _limit = _generic && node.TypeParameterList?.Parameters.Any(p => p.Identifier.ValueText == "T") == true ?
             "global::LuminPack.LuminPackSerializer.FormatterDispatch.__LuminPackInputLimit<T>()" : Limit(_options).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -63,7 +69,8 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
         var rewritten = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
         if (!_generic && node.Identifier.ValueText.StartsWith("DeserializeJson", StringComparison.Ordinal) && !ReferenceEquals(_options.JsonInput, _options))
             rewritten = (MethodDeclarationSyntax)new JsonProfile(_options.TypeName, _options.JsonInput.TypeName).Visit(rewritten);
-        if (guard.Length != 0) rewritten = rewritten.WithBody(rewritten.Body.WithStatements(rewritten.Body.Statements.InsertRange(0, SyntaxFactory.ParseStatement("{" + guard + "}") is BlockSyntax block ? block.Statements : default)));
+        if (guard.Length != 0)
+            rewritten = rewritten.WithBody(rewritten.Body.WithStatements(rewritten.Body.Statements.InsertRange(0, SyntaxFactory.ParseStatement("{" + guard + "}") is BlockSyntax block ? block.Statements : default)));
         _limit = previous;
         return rewritten;
     }
@@ -73,7 +80,10 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
     {
         private readonly string _declared, _strict;
         /// <summary>Captures both profile spellings.</summary><param name="declared">The binary profile.</param><param name="strict">The JSON profile.</param>
-        internal JsonProfile(string declared, string strict) { _declared = declared; _strict = strict; }
+        internal JsonProfile(string declared, string strict)
+        {
+            _declared = declared;
+            _strict = strict; }
         /// <summary>Replaces the declared profile argument.</summary><param name="node">A type argument list.</param><returns>The selected list.</returns>
         public override SyntaxNode VisitTypeArgumentList(TypeArgumentListSyntax node)
             => node.WithArguments(SyntaxFactory.SeparatedList(node.Arguments.Select(argument =>

@@ -23,12 +23,20 @@ internal sealed class JsonValueProjection : CSharpSyntaxRewriter
     /// <returns>The operation using canonical value calls.</returns>
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
-        var writers = _writers; var readers = _readers;
+        var writers = _writers;
+        var readers = _readers;
         States(node, out var currentWriters, out var currentReaders);
-        if (currentWriters.Count == 0 && currentReaders.Count == 0) return node;
-        _writers = currentWriters; _readers = currentReaders;
-        try { return base.VisitMethodDeclaration(node); }
-        finally { _writers = writers; _readers = readers; }
+        if (currentWriters.Count == 0 && currentReaders.Count == 0)
+            return node;
+        _writers = currentWriters;
+        _readers = currentReaders;
+        try
+        {
+            return base.VisitMethodDeclaration(node); }
+        finally
+        {
+            _writers = writers;
+            _readers = readers; }
     }
 
     /// <summary>Recognizes declared JSON states without matching ordinary user member names.</summary>
@@ -52,9 +60,12 @@ internal sealed class JsonValueProjection : CSharpSyntaxRewriter
                 type = creation.Type.ToString();
                 name = variable.Identifier.ValueText;
             }
-            else continue;
-            if (type?.EndsWith("LuminPackJsonWriter") == true) writers.Add(name);
-            if (type?.EndsWith("LuminPackJsonReader") == true) readers.Add(name);
+            else
+                continue;
+            if (type?.EndsWith("LuminPackJsonWriter") == true)
+                writers.Add(name);
+            if (type?.EndsWith("LuminPackJsonReader") == true)
+                readers.Add(name);
         }
     }
 
@@ -64,14 +75,16 @@ internal sealed class JsonValueProjection : CSharpSyntaxRewriter
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-        if (result.Expression is not MemberAccessExpressionSyntax access) return result;
+        if (result.Expression is not MemberAccessExpressionSyntax access)
+            return result;
         string name = access.Name.Identifier.ValueText, receiver = access.Expression.ToString();
         if (_writers?.Contains(receiver) == true && name == "Write")
             return result.WithArgumentList(result.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(result.ArgumentList.Arguments.Select(argument =>
                 argument.RefKindKeyword.IsKind(SyntaxKind.InKeyword) ? argument.WithRefKindKeyword(default) : argument))));
         if (_writers?.Contains(receiver) == true && Writes.Contains(name))
             return result.WithExpression(access.WithName(access.Name is GenericNameSyntax generic ? generic.WithIdentifier(SyntaxFactory.Identifier("Write")) : SyntaxFactory.IdentifierName("Write")));
-        if (_readers?.Contains(receiver) != true || !Reads.TryGetValue(name, out string type) || result.ArgumentList.Arguments.Count != 0) return result;
+        if (_readers?.Contains(receiver) != true || !Reads.TryGetValue(name, out string type) || result.ArgumentList.Arguments.Count != 0)
+            return result;
         string profile = access.Name is GenericNameSyntax selected ? selected.TypeArgumentList.Arguments.ToString() : "global::LuminPack.Option.LuminPackDefaultOptions";
         return result.WithExpression(access.WithName(SyntaxFactory.GenericName(SyntaxFactory.Identifier("Read"), SyntaxFactory.TypeArgumentList(
             SyntaxFactory.SeparatedList(new[] { SyntaxFactory.ParseTypeName(type), SyntaxFactory.ParseTypeName(profile) })))));

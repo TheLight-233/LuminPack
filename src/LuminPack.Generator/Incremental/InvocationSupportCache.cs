@@ -26,7 +26,8 @@ internal sealed class InvocationSupportCache
     {
         lock (_parts)
         {
-            if (!_parts.TryGetValue(name, out var cache)) _parts.Add(name, cache = new InvocationSupportCache());
+            if (!_parts.TryGetValue(name, out var cache))
+                _parts.Add(name, cache = new InvocationSupportCache());
             return cache;
         }
     }
@@ -52,7 +53,8 @@ internal sealed class InvocationSupportCache
         }
         Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationSupportBuilds);
         string source = build();
-        if (key == null) return source;
+        if (key == null)
+            return source;
         var dependencies = observations.CaptureDependencies(bodyTypes);
         var frozenMetadata = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8, metadata.IsNet9_OR_GREATER,
             metadata.AllowUnsafe, metadata.RegisterMode) { IsForUnity = metadata.IsForUnity };

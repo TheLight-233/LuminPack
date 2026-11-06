@@ -15,15 +15,18 @@ internal static class RootInliningPolicy
     {
         if (method.Body == null || !method.ParameterList.Parameters[0].Type.ToString().Contains("LuminPackJsonWriter") ||
             method.AttributeLists.SelectMany(list => list.Attributes).Any(attribute =>
-                attribute.Name.ToString().EndsWith("MethodImpl", System.StringComparison.Ordinal))) return method;
+                attribute.Name.ToString().EndsWith("MethodImpl", System.StringComparison.Ordinal)))
+            return method;
 
-        if (!method.Body.Statements.OfType<LocalFunctionStatementSyntax>().Any(Outlined)) return method;
+        if (!method.Body.Statements.OfType<LocalFunctionStatementSyntax>().Any(Outlined))
+            return method;
         int statements = 0, variables = 0, calls = 0;
         foreach (var node in method.Body.DescendantNodes(node => node is not LocalFunctionStatementSyntax helper || !Outlined(helper)))
         {
             if (node is StatementSyntax && ++statements > 24 || node is VariableDeclaratorSyntax && ++variables > 6 ||
                 node is InvocationExpressionSyntax && ++calls > 16 ||
-                node is ForStatementSyntax or CommonForEachStatementSyntax or WhileStatementSyntax or DoStatementSyntax or AnonymousFunctionExpressionSyntax) return method;
+                node is ForStatementSyntax or CommonForEachStatementSyntax or WhileStatementSyntax or DoStatementSyntax or AnonymousFunctionExpressionSyntax)
+                return method;
         }
 
         return method.AddAttributeLists(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(

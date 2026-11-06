@@ -85,7 +85,8 @@ public static partial class LuminPackCodeGenerator
     /// <param name="spaces">The statement indentation.</param>
     private static void AppendReusableNestedCommit(StringBuilder sb, LuminDataField field, string target, string parent, string suffix, string spaces)
     {
-        if (field.Type == LuminFiledType.Class) sb.AppendLine(spaces + "if (" + target + " is null)");
+        if (field.Type == LuminFiledType.Class)
+            sb.AppendLine(spaces + "if (" + target + " is null)");
         sb.AppendLine(spaces + "{");
         string arguments = field.SelectedConstructor == null ? "" : string.Join(", ", field.SelectedConstructor.Parameters.Select(parameter =>
             field.ClassFields.Any(member => member.Name == parameter.MatchingFieldName) ? parent + field.Name + parameter.MatchingFieldName + "Temp" + suffix + "!" : "default!"));
@@ -96,7 +97,8 @@ public static partial class LuminPackCodeGenerator
             sb.AppendLine(spaces + "ref var " + rented + " = ref " + allocation + ";");
             sb.AppendLine(spaces + target + " = " + rented + ";");
         }
-        else sb.AppendLine(spaces + target + " = " + allocation + ";");
+        else
+            sb.AppendLine(spaces + target + " = " + allocation + ";");
         sb.AppendLine(spaces + "}");
         foreach (var member in field.ClassFields)
             sb.AppendLine(spaces + NestedStorage(field, member, target) + " = " + parent + field.Name + member.Name + "Temp" + suffix + "!;");

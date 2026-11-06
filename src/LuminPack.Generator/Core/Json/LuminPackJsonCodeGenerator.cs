@@ -26,7 +26,8 @@ public static class LuminPackJsonCodeGenerator
     /// <returns>The unchanged name hash.</returns>
     private unsafe static ulong ComputeUtf8BytesHash(byte[] bytes)
     {
-        fixed (byte* input = bytes) return ComputeXxHash3(input, bytes.Length);
+        fixed (byte* input = bytes)
+            return ComputeXxHash3(input, bytes.Length);
     }
 
     /// <summary>Retains name facts only for one metadata emission, never across compilations.</summary>
@@ -44,7 +45,14 @@ public static class LuminPackJsonCodeGenerator
         /// <param name="utf8Hash">Its complete hash.</param><param name="utf16Hash">The code-unit hash.</param>
         /// <param name="alias">Whether the cache lives in the original old-name container.</param>
         internal JsonNameFact(string name, string suffix, int index, byte[] bytes, ulong utf8Hash, ulong utf16Hash, bool alias = false)
-        { Name = name; Suffix = suffix; Index = index; Utf8Bytes = bytes; Utf8Hash = utf8Hash; Utf16Hash = utf16Hash; Alias = alias; }
+        {
+            Name = name;
+            Suffix = suffix;
+            Index = index;
+            Utf8Bytes = bytes;
+            Utf8Hash = utf8Hash;
+            Utf16Hash = utf16Hash;
+            Alias = alias; }
     }
 
     /// <summary>Performs the compute utf16 hash step for the current operation.</summary>
@@ -150,21 +158,24 @@ public static class LuminPackJsonCodeGenerator
             sb.Append("        internal static readonly byte[] _utf8_").Append(field.Name).Append(" = new byte[] { ");
             for (int part = 0; part < bytes.Length; part++)
             {
-                if (part != 0) sb.Append(", ");
+                if (part != 0)
+                    sb.Append(", ");
                 sb.Append("(byte)").Append(bytes[part]);
             }
             sb.AppendLine(" };");
             sb.Append("        internal static readonly char[] _utf16_").Append(field.Name).Append(" = new char[] { ");
             for (int part = 0; part < field.Name.Length; part++)
             {
-                if (part != 0) sb.Append(", ");
+                if (part != 0)
+                    sb.Append(", ");
                 sb.Append((char)39).Append(EscapeChar(field.Name[part])).Append((char)39);
             }
             sb.AppendLine(" };");
             sb.Append("        internal const ulong _utf8Hash_").Append(field.Name).Append(" = ").Append(hash8).AppendLine("UL;");
             sb.Append("        internal const ulong _utf16Hash_").Append(field.Name).Append(" = ").Append(hash16).AppendLine("UL;");
         }
-        if (aliases != 0) sb.AppendLine("        internal static class __LuminPackOldNames {");
+        if (aliases != 0)
+            sb.AppendLine("        internal static class __LuminPackOldNames {");
         for (int index = 0; index < data.fields.Count; index++)
         {
             for (int alias = 0; alias < data.fields[index].OldNames.Length; alias++)
@@ -176,20 +187,23 @@ public static class LuminPackJsonCodeGenerator
                 sb.Append("        internal static readonly byte[] _utf8_").Append(suffix).Append(" = new byte[] { ");
                 for (int part = 0; part < bytes.Length; part++)
                 {
-                    if (part != 0) sb.Append(", ");
+                    if (part != 0)
+                        sb.Append(", ");
                     sb.Append("(byte)").Append(bytes[part]);
                 }
                 sb.AppendLine(" };");
                 sb.Append("        internal static readonly char[] _utf16_").Append(suffix).Append(" = new char[] { ");
                 for (int part = 0; part < name.Length; part++)
                 {
-                    if (part != 0) sb.Append(", ");
+                    if (part != 0)
+                        sb.Append(", ");
                     sb.Append("(char)").Append((int)name[part]);
                 }
                 sb.AppendLine(" };");
             }
         }
-        if (aliases != 0) sb.AppendLine("        }");
+        if (aliases != 0)
+            sb.AppendLine("        }");
         if (data.generatorType == GeneratorType.CircleReference && !data.isValueType)
         {
             foreach (string name in new[] { "$id", "$ref" })
@@ -220,11 +234,14 @@ public static class LuminPackJsonCodeGenerator
 
         var identifiers = new HashSet<string>(data.GenericParameters.Select(name => name.TrimStart('@')), System.StringComparer.Ordinal);
         for (var owner = data.TypeSymbol; owner != null; owner = owner.ContainingType)
-            foreach (var parameter in owner.TypeParameters) identifiers.Add(parameter.Name);
+            foreach (var parameter in owner.TypeParameters)
+                identifiers.Add(parameter.Name);
         string utf8Local = "__luminOrderedNameUtf8";
-        while (!identifiers.Add(utf8Local)) utf8Local += "_";
+        while (!identifiers.Add(utf8Local))
+            utf8Local += "_";
         string utf16Local = "__luminOrderedNameUtf16";
-        while (!identifiers.Add(utf16Local)) utf16Local += "_";
+        while (!identifiers.Add(utf16Local))
+            utf16Local += "_";
 
         sb.AppendLine("            byte[] " + utf8Local + ";");
         sb.AppendLine("            char[] " + utf16Local + ";");
@@ -308,11 +325,15 @@ public static class LuminPackJsonCodeGenerator
                 word |= (uint)value << (8 * i);
             }
             sb.Append(" && ");
-            if (width > 1) sb.Append("global::System.Runtime.CompilerServices.Unsafe.ReadUnaligned<").Append(width == 4 ? "uint" : "ushort").Append(">(ref ");
-            if (offset != 0) sb.Append("global::System.Runtime.CompilerServices.Unsafe.Add(ref ");
+            if (width > 1)
+                sb.Append("global::System.Runtime.CompilerServices.Unsafe.ReadUnaligned<").Append(width == 4 ? "uint" : "ushort").Append(">(ref ");
+            if (offset != 0)
+                sb.Append("global::System.Runtime.CompilerServices.Unsafe.Add(ref ");
             sb.Append("global::System.Runtime.CompilerServices.Unsafe.As<").Append(element).Append(", byte>(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(name))");
-            if (offset != 0) sb.Append(", ").Append(offset).Append(')');
-            if (width > 1) sb.Append(')');
+            if (offset != 0)
+                sb.Append(", ").Append(offset).Append(')');
+            if (width > 1)
+                sb.Append(')');
             sb.Append(" == ").Append(word).Append('u');
             offset += width;
         }

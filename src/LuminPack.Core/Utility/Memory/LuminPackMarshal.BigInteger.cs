@@ -20,7 +20,8 @@ public static partial class LuminPackMarshal
         if (source.Length > 4 && source[source.Length - 1] == byte.MaxValue &&
             ((source.Length & 3) == 1 || source[source.Length - 2] >= 128))
             value = ReadNegativeBigInteger(source);
-        else value = new BigInteger(source);
+        else
+            value = new BigInteger(source);
     }
 
     /// <summary>Normalizes negative sign extension before constructing the final magnitude.</summary>
@@ -33,18 +34,22 @@ public static partial class LuminPackMarshal
         int length = source.Length;
         // Span construction can accept magnitudes beyond the bit-operation limits enforced by negation or shifts.
         // Preserve that constructor's behavior near the signed bit-count limit, including its allocation failures.
-        if (length >= int.MaxValue / 8 - 32) return new BigInteger(source);
-        while (length > 1 && source[length - 1] == byte.MaxValue && source[length - 2] >= 128) length--;
+        if (length >= int.MaxValue / 8 - 32)
+            return new BigInteger(source);
+        while (length > 1 && source[length - 1] == byte.MaxValue && source[length - 2] >= 128)
+            length--;
         source = source.Slice(0, length);
         if (length <= 8)
         {
             long value = -1;
-            for (int index = length - 1; index >= 0; index--) value = (value << 8) | source[index];
+            for (int index = length - 1; index >= 0; index--)
+                value = (value << 8) | source[index];
             return new BigInteger(value);
         }
         // Only a separate full sign byte can leave a zero high limb after complementing a canonical negative payload.
         // Four-byte boundaries also cover runtimes with wider limbs, without depending on BigInteger's private layout.
-        if ((length & 3) != 1 || source[length - 1] != byte.MaxValue) return new BigInteger(source);
+        if ((length & 3) != 1 || source[length - 1] != byte.MaxValue)
+            return new BigInteger(source);
         if (length > 256 && length <= int.MaxValue / 8 && source[0] == 0 && IsZeroBigIntegerMagnitude(source.Slice(0, length - 1)))
             return -(BigInteger.One << ((length - 1) * 8));
 
@@ -59,9 +64,11 @@ public static partial class LuminPackMarshal
             for (; index < length - 1; index += 4)
             {
                 uint original = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, index));
-                if (!BitConverter.IsLittleEndian) original = BinaryPrimitives.ReverseEndianness(original);
+                if (!BitConverter.IsLittleEndian)
+                    original = BinaryPrimitives.ReverseEndianness(original);
                 uint result = unchecked(0u - original);
-                if (!BitConverter.IsLittleEndian) result = BinaryPrimitives.ReverseEndianness(result);
+                if (!BitConverter.IsLittleEndian)
+                    result = BinaryPrimitives.ReverseEndianness(result);
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, index), result);
                 if (original != 0)
                 {
@@ -84,7 +91,8 @@ public static partial class LuminPackMarshal
         }
         finally
         {
-            if (rented is not null) ArrayPool<byte>.Shared.Return(rented);
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented);
         }
     }
 
@@ -104,10 +112,12 @@ public static partial class LuminPackMarshal
                 low |= Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, index));
                 high |= Unsafe.ReadUnaligned<Vector<byte>>(ref Unsafe.Add(ref input, index + Vector<byte>.Count));
             }
-            if (!Vector.EqualsAll(low | high, Vector<byte>.Zero)) return false;
+            if (!Vector.EqualsAll(low | high, Vector<byte>.Zero))
+                return false;
         }
         for (; index < source.Length; index += 4)
-            if (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, index)) != 0) return false;
+            if (Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, index)) != 0)
+                return false;
         return true;
     }
 

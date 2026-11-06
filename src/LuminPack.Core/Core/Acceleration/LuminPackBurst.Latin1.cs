@@ -13,8 +13,12 @@ public static unsafe partial class LuminPackBurst
     {
         latin1 = false;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.IsLatin1 == null) return false;
-        if (source.IsEmpty) { latin1 = true; return true; }
+        if (registration is null || registration.Table.IsLatin1 == null)
+            return false;
+        if (source.IsEmpty)
+        {
+            latin1 = true;
+            return true; }
         fixed (char* input = source)
             latin1 = registration.Table.IsLatin1(input, source.Length) != 0;
         return true;
@@ -28,8 +32,12 @@ public static unsafe partial class LuminPackBurst
     {
         narrowed = false;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.NarrowLatin1 == null) return false;
-        if (length == 0) { narrowed = true; return true; }
+        if (registration is null || registration.Table.NarrowLatin1 == null)
+            return false;
+        if (length == 0)
+        {
+            narrowed = true;
+            return true; }
         fixed (char* input = &source)
         fixed (byte* output = &destination)
             narrowed = registration.Table.NarrowLatin1(input, output, length) != 0;
@@ -42,8 +50,10 @@ public static unsafe partial class LuminPackBurst
     internal static bool TryWidenLatin1(ref byte source, ref char destination, int length)
     {
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.WidenLatin1 == null) return false;
-        if (length == 0) return true;
+        if (registration is null || registration.Table.WidenLatin1 == null)
+            return false;
+        if (length == 0)
+            return true;
         fixed (byte* input = &source)
         fixed (char* output = &destination)
             registration.Table.WidenLatin1(input, output, length);
@@ -57,8 +67,12 @@ public static unsafe partial class LuminPackBurst
     {
         equal = false;
         var registration = Volatile.Read(ref _registration);
-        if (registration is null || registration.Table.Latin1Equal == null) return false;
-        if (candidate.IsEmpty) { equal = true; return true; }
+        if (registration is null || registration.Table.Latin1Equal == null)
+            return false;
+        if (candidate.IsEmpty)
+        {
+            equal = true;
+            return true; }
         fixed (byte* input = &source)
         fixed (char* text = candidate)
             equal = registration.Table.Latin1Equal(input, text, candidate.Length) != 0;

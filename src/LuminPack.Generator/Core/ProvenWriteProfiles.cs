@@ -20,7 +20,8 @@ internal static class ProvenWriteProfiles
     private static bool Check(Compilation compilation)
     {
         var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
-        if (writer == null || SymbolEqualityComparer.Default.Equals(writer.ContainingAssembly, compilation.Assembly)) return false;
+        if (writer == null || SymbolEqualityComparer.Default.Equals(writer.ContainingAssembly, compilation.Assembly))
+            return false;
         return new[] { "LuminPack.Option.LuminPackUtf16LengthOptions", "LuminPack.Option.LuminPackDefaultOptions",
                 "LuminPack.Option.LuminPackFixedOptions`1" }
             .All(name => compilation.GetTypeByMetadataName(name) is { } profile &&

@@ -43,7 +43,8 @@ public static class ReadOnlyCollectionEmitter
         sb.AppendLine();
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine();
-        if (fieldData.CanGetSequenceStorage) SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: false, fixedHeader: true);
+        if (fieldData.CanGetSequenceStorage)
+            SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: false, fixedHeader: true);
         else
         {
             sb.AppendLine("                foreach (var item in value)");

@@ -43,7 +43,10 @@ internal sealed class BinaryEntryInlining
     /// <param name="cache">Dependency-guarded immutable operation plans.</param>
     internal BinaryEntryInlining(ITypeSymbol root, Compilation compilation, MetaInfo metadata, BinaryOperationPlanCache cache)
     {
-        _root = root; _compilation = compilation; _metadata = metadata; _cache = cache;
+        _root = root;
+        _compilation = compilation;
+        _metadata = metadata;
+        _cache = cache;
         var input = CompiledOptions.Resolve(root, compilation).Input;
         _streaming = input.Enabled;
         _rootInput = input.Enabled ? input : null;
@@ -61,7 +64,8 @@ internal sealed class BinaryEntryInlining
         string state = operation == "CalculateOffset" ? "evaluator" : operation.StartsWith("Read", StringComparison.Ordinal) ? "reader" : "writer";
         var expanded = Expand(GetPlan(_root), operation, new ExpressionSyntax[] { SyntaxFactory.IdentifierName(state), SyntaxFactory.IdentifierName("value") },
             new[] { true, true }, new HashSet<string>(StringComparer.Ordinal), root: true);
-        if (expanded == null) return null;
+        if (expanded == null)
+            return null;
         if (operation.StartsWith("Read", StringComparison.Ordinal) && !operation.EndsWith(":json", StringComparison.Ordinal))
             expanded = BinaryEntryPayloadAliases.Rewrite(expanded);
         expanded = (BlockSyntax)new ReservedCapacityRegions().Visit(expanded);
@@ -93,7 +97,8 @@ internal sealed class BinaryEntryInlining
     private string InputReader(BinaryOperationPlan plan, string operationName)
     {
         string key = plan.TypeName + "|" + operationName;
-        if (_inputReaders.TryGetValue(key, out string existing)) return existing;
+        if (_inputReaders.TryGetValue(key, out string existing))
+            return existing;
         string name = "__InputRead_" + _layoutPrefix.Substring(14, 16) + "_" + _inputReaders.Count;
         _inputReaders.Add(key, name);
         string selected = operationName;
@@ -122,10 +127,12 @@ internal sealed class BinaryEntryInlining
         bool outlineNestedUserWrite = false)
     {
         string key = plan.TypeName + "|" + operationName;
-        if (stack.Contains(key) || !plan.Operations.TryGetValue(operationName, out var operation)) return null;
+        if (stack.Contains(key) || !plan.Operations.TryGetValue(operationName, out var operation))
+            return null;
         // Raw primitive arrays and lists keep their runtime kernel; the expansion site checks its count and domain.
         if (!root && (_streaming || _inputExpansionDepth > 0) && operationName == "ReadValue" && CheckedRawElement(plan.TypeName) != null &&
-            CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null) return null;
+            CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null)
+            return null;
         // Untrusted binary reads expand nested reads whose checks differ from their own entries; writes and JSON keep the trusted reuse decisions.
         bool expanded = (_streaming || _inputExpansionDepth > 0) && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackReader" &&
             !IsRawScalar(plan.TypeName) && !OwnsActiveChecks(plan, operation);
@@ -134,14 +141,16 @@ internal sealed class BinaryEntryInlining
         bool binaryWrite = operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter" && !IsRawScalar(plan.TypeName);
         if (!expanded && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
             !binaryWrite && _reservedExpansionDepth == 0 && !operationName.Contains(":local:") &&
-            CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null)) return null;
+            CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null))
+            return null;
         // A nested user-type write would copy its complete record body into every element site. Where the
         // containing plan writes another value beside each element, that body pushes the root past the JIT's
         // inline budget, so the writer's small reserve/store/publish helpers become real calls for every field.
         // Keep that write on its generated type entry, which writes the same bytes from one compact call.
         if (outlineNestedUserWrite && !root && operationName == "WriteValue" &&
             !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) &&
-            operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter") return null;
+            operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter")
+            return null;
         if (arguments.Count != operation.Parameters.Length)
             return LuminPackExceptionHelper.ThrowInvalidOperationException<BlockSyntax>("Inline operation parameter mismatch: " + key);
         var requiredSupport = new HashSet<string>(operation.Body.DescendantTokens().Where(token => token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any())
@@ -151,7 +160,10 @@ internal sealed class BinaryEntryInlining
         {
             var layout = pendingSupport[index];
             string name = SupportName(layout);
-            if (!requiredSupport.Contains(name)) { index++; continue; }
+            if (!requiredSupport.Contains(name))
+            {
+                index++;
+                continue; }
             string identity = layout switch
             {
                 TypeDeclarationSyntax type => type.Identifier.ValueText + "`" + (type.TypeParameterList?.Parameters.Count ?? 0),
@@ -159,7 +171,8 @@ internal sealed class BinaryEntryInlining
                 FieldDeclarationSyntax field => field.Declaration.Variables[0].Identifier.ValueText,
                 _ => LuminPackExceptionHelper.ThrowInvalidOperationException<string>("Unsupported binary operation support declaration.")
             };
-            if (!_layouts.ContainsKey(identity)) _layouts.Add(identity, (MemberDeclarationSyntax)new InstanceNames(string.Empty, _layoutPrefix).Visit(layout));
+            if (!_layouts.ContainsKey(identity))
+                _layouts.Add(identity, (MemberDeclarationSyntax)new InstanceNames(string.Empty, _layoutPrefix).Visit(layout));
             foreach (var token in layout.DescendantTokens().Where(token => token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any()))
                 requiredSupport.Add(token.ValueText);
             pendingSupport.RemoveAt(index);
@@ -179,7 +192,8 @@ internal sealed class BinaryEntryInlining
                 rootBindings.Add(parameter.Name, arguments[index]);
                 continue;
             }
-            if (index == 0 && IsCoreState(parameter)) continue;
+            if (index == 0 && IsCoreState(parameter))
+                continue;
             string name = prefix + parameter.Name.Substring(BinaryOperationPlan.Prefix.Length);
             string argument = arguments[index].WithoutTrivia().ToString();
             string declaration = parameter.RefKind switch
@@ -216,13 +230,24 @@ internal sealed class BinaryEntryInlining
             template = template.WithStatements(template.Statements.RemoveAt(0));
         }
         BlockSyntax body;
-        if (guaranteed) _reservedExpansionDepth++;
+        if (guaranteed)
+            _reservedExpansionDepth++;
         // Only binary reads carry input checks; writes and JSON keep their ordinary reuse decisions.
         bool inputBoundary = plan.Options.Input.Enabled && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackReader";
         var previousInput = _activeInput;
-        if (inputBoundary && _inputExpansionDepth++ == 0) _activeInput = plan.Options.Input;
-        try { body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0], rootBindings).Visit(template); }
-        finally { if (guaranteed) _reservedExpansionDepth--; if (inputBoundary) { _inputExpansionDepth--; _activeInput = previousInput; } }
+        if (inputBoundary && _inputExpansionDepth++ == 0)
+            _activeInput = plan.Options.Input;
+        try
+        {
+            body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0], rootBindings).Visit(template); }
+        finally
+        {
+            if (guaranteed)
+                _reservedExpansionDepth--;
+            if (inputBoundary)
+            {
+                _inputExpansionDepth--;
+                _activeInput = previousInput; } }
         // An element record inlined into a sequence entry already owns one compact loop body, so its raw
         // collection fields take the exact inline stores; outlined keyed entries keep the shared call.
         if (!root && !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal))
@@ -240,7 +265,8 @@ internal sealed class BinaryEntryInlining
             statements.Add(body.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.ReservedAnnotation),
                 new SyntaxAnnotation(BinaryCollectionCapacity.GuaranteedAnnotation, plan.GuaranteedMaxBytes.ToString(System.Globalization.CultureInfo.InvariantCulture))));
         }
-        else statements.AddRange(body.Statements);
+        else
+            statements.AddRange(body.Statements);
         if (body.DescendantNodes().OfType<GotoStatementSyntax>().Any(jump => jump.Expression is IdentifierNameSyntax target && target.Identifier.ValueText == exit))
             statements.Add(SyntaxFactory.LabeledStatement(SyntaxFactory.Identifier(exit).WithAdditionalAnnotations(
                 new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, "end")), SyntaxFactory.EmptyStatement()));
@@ -326,7 +352,8 @@ internal sealed class BinaryEntryInlining
     /// <returns>The current type symbol.</returns>
     private ITypeSymbol Resolve(string name)
     {
-        if (_types.TryGetValue(name, out var type)) return type;
+        if (_types.TryGetValue(name, out var type))
+            return type;
         var tree = _compilation.SyntaxTrees.FirstOrDefault();
         type = tree == null ? null : _compilation.GetSemanticModel(tree).GetSpeculativeTypeInfo(0,
             SyntaxFactory.ParseTypeName(name), SpeculativeBindingOption.BindAsTypeOrNamespace).Type;
@@ -348,7 +375,10 @@ internal sealed class BinaryEntryInlining
         /// <param name="layoutPrefix">The stable root-specific private mirror prefix.</param>
         /// <param name="cursorLocals">Only integer cursor identities requiring later lifetime normalization.</param>
         internal InstanceNames(string prefix, string layoutPrefix, System.Collections.Immutable.ImmutableHashSet<string> cursorLocals = null)
-        { _prefix = prefix; _layoutPrefix = layoutPrefix; _cursorLocals = cursorLocals; }
+        {
+            _prefix = prefix;
+            _layoutPrefix = layoutPrefix;
+            _cursorLocals = cursorLocals; }
 
         /// <summary>Renames only compiler-created template identities.</summary>
         /// <param name="token">The template token.</param>
@@ -356,7 +386,8 @@ internal sealed class BinaryEntryInlining
         public override SyntaxToken VisitToken(SyntaxToken token)
         {
             string name = token.ValueText;
-            if (!token.IsKind(SyntaxKind.IdentifierToken) || !token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any()) return base.VisitToken(token);
+            if (!token.IsKind(SyntaxKind.IdentifierToken) || !token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any())
+                return base.VisitToken(token);
             string replacement = name.StartsWith(BinaryOperationPlan.Prefix + "layout_", StringComparison.Ordinal)
                 ? _layoutPrefix + name.Substring((BinaryOperationPlan.Prefix + "layout_").Length)
                 : _prefix + name.Substring(BinaryOperationPlan.Prefix.Length);
@@ -364,7 +395,8 @@ internal sealed class BinaryEntryInlining
             if (!name.StartsWith(BinaryOperationPlan.Prefix + "layout_", StringComparison.Ordinal))
             {
                 string role = token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Select(annotation => annotation.Data).FirstOrDefault();
-                if (!string.IsNullOrEmpty(role)) renamed = renamed.WithAdditionalAnnotations(new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, role));
+                if (!string.IsNullOrEmpty(role))
+                    renamed = renamed.WithAdditionalAnnotations(new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, role));
             }
             if (token.HasAnnotations(BinaryCollectionCapacity.WriterAnnotation))
                 renamed = renamed.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.WriterAnnotation));
@@ -396,7 +428,14 @@ internal sealed class BinaryEntryInlining
         internal OperationExpansion(BinaryEntryInlining owner, BinaryOperationPlan plan, BinaryOperation operation, string prefix, string exit, HashSet<string> stack,
             ExpressionSyntax state, IReadOnlyDictionary<string, ExpressionSyntax> rootBindings = null)
             : base(prefix, owner._layoutPrefix, operation.CursorLocals)
-        { _owner = owner; _plan = plan; _operation = operation; _exit = exit; _stack = stack; _state = state; _rootBindings = rootBindings; }
+        {
+            _owner = owner;
+            _plan = plan;
+            _operation = operation;
+            _exit = exit;
+            _stack = stack;
+            _state = state;
+            _rootBindings = rootBindings; }
 
         /// <summary>Uses the caller's writer or reader directly without narrowing its ref-escape scope through a local alias.</summary>
         /// <param name="node">A template identifier.</param>
@@ -419,11 +458,13 @@ internal sealed class BinaryEntryInlining
         public override SyntaxNode VisitExpressionStatement(ExpressionStatementSyntax node)
         {
             var annotation = node.GetAnnotations(BinaryOperationPlan.CallAnnotation).SingleOrDefault();
-            if (annotation == null) return base.VisitExpressionStatement(node);
+            if (annotation == null)
+                return base.VisitExpressionStatement(node);
             var call = (InvocationExpressionSyntax)node.Expression;
             var slot = _operation.Calls[annotation.Data];
             var arguments = call.ArgumentList.Arguments.Select(argument => (ExpressionSyntax)Visit(argument.Expression)).ToList();
-            if (slot.Reduced) arguments.Insert(0, (ExpressionSyntax)Visit(((MemberAccessExpressionSyntax)call.Expression).Expression));
+            if (slot.Reduced)
+                arguments.Insert(0, (ExpressionSyntax)Visit(((MemberAccessExpressionSyntax)call.Expression).Expression));
             var plan = slot.Local ? _plan : _owner.GetPlan(_owner.Resolve(slot.TypeName));
             // In an untrusted graph, a user record's nested user record keeps its own checked helper, so each body
             // stays within the JIT's inlining budget; collection elements keep their inlined loop body.
@@ -438,7 +479,8 @@ internal sealed class BinaryEntryInlining
                 !(plan.Operations.TryGetValue(slot.Operation, out var sameChecks) && _owner.OwnsActiveChecks(plan, sameChecks));
             var expanded = outline ? null : _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
                 OutlinesNestedUserWrites(_plan.TypeName));
-            if (expanded != null) return expanded.WithTriviaFrom(node);
+            if (expanded != null)
+                return expanded.WithTriviaFrom(node);
             if (checkedRead && slot.Operation == "ReadValue" && CheckedRawElement(plan.TypeName) is string element && arguments.Count == 2)
             {
                 var input = _owner.ActiveInput;
@@ -451,7 +493,8 @@ internal sealed class BinaryEntryInlining
                 else
                 {
                     kernel = kernel.WithExpression(kernel.Expression.WithAdditionalAnnotations(new SyntaxAnnotation(PayloadAnnotation, slot.TypeName)));
-                    if (slot.OptionProfile != null) kernel = kernel.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, slot.OptionProfile));
+                    if (slot.OptionProfile != null)
+                        kernel = kernel.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, slot.OptionProfile));
                 }
                 var checks = new List<StatementSyntax> { kernel };
                 // An unbounded limit needs no statement: the kernel already bounds the count by the input.
@@ -480,7 +523,8 @@ internal sealed class BinaryEntryInlining
         /// <returns>A formatter-local jump, or an unchanged nested-function return.</returns>
         public override SyntaxNode VisitReturnStatement(ReturnStatementSyntax node)
         {
-            if (_exit == null || node.Ancestors().Any(parent => parent is LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax)) return base.VisitReturnStatement(node);
+            if (_exit == null || node.Ancestors().Any(parent => parent is LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax))
+                return base.VisitReturnStatement(node);
             if (node.Expression != null)
                 return LuminPackExceptionHelper.ThrowInvalidOperationException<SyntaxNode>("A void binary operation returned a value.");
             return SyntaxFactory.GotoStatement(SyntaxKind.GotoStatement, SyntaxFactory.IdentifierName(SyntaxFactory.Identifier(_exit)
@@ -501,7 +545,8 @@ internal sealed class BinaryEntryInlining
             if (visited.ArgumentList.Arguments.Count != 2 ||
                 visited.Expression is not MemberAccessExpressionSyntax { Name.Identifier.ValueText: "WriteReservedSpanRecord" } access ||
                 access.Expression.ToString() is not ("global::LuminPack.Core.LuminPackWriter" or "LuminPackWriter") ||
-                visited.ArgumentList.Arguments[1].Expression is not IdentifierNameSyntax record) return visited;
+                visited.ArgumentList.Arguments[1].Expression is not IdentifierNameSyntax record)
+                return visited;
             string cursor = visited.ArgumentList.Arguments[0].Expression.ToString();
             string name = record.Identifier.ValueText;
             return SyntaxFactory.ParseExpression("global::LuminPack.Core.LuminPackWriter.WriteReservedSpanInline(ref " + cursor + ", " +

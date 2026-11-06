@@ -9,11 +9,14 @@ string output = Path.Combine(repository, "src/LuminPack.Burst/Runtime/Generated/
 bool verify = args.Contains("--verify", StringComparer.Ordinal);
 string coreRoot = Path.Combine(repository, "src/LuminPack.Core");
 int sourceArgument = Array.IndexOf(args, "--core-source-root");
-if (sourceArgument >= 0) coreRoot = Path.GetFullPath(args[sourceArgument + 1]);
+if (sourceArgument >= 0)
+    coreRoot = Path.GetFullPath(args[sourceArgument + 1]);
 bool textOnly = args.Contains("--text-only", StringComparer.Ordinal);
 bool textMatches = CoreTextProjection.Generate(coreRoot, Path.GetDirectoryName(output)!, verify);
-if (!textMatches) return 1;
-if (textOnly) return textMatches ? 0 : 1;
+if (!textMatches)
+    return 1;
+if (textOnly)
+    return textMatches ? 0 : 1;
 var inputs = new (string File, string[] Methods)[]
 {
     ("Utility/Memory/Simd/LuminPackMarshal.Copy.cs", ["CopyScalarBlock", "CopyShortBlock"]),
@@ -50,7 +53,8 @@ if (verify)
     return textMatches ? 0 : 1;
 }
 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-if (!File.Exists(output) || File.ReadAllText(output) != generated) File.WriteAllText(output, generated, new UTF8Encoding(false));
+if (!File.Exists(output) || File.ReadAllText(output) != generated)
+    File.WriteAllText(output, generated, new UTF8Encoding(false));
 Console.WriteLine("Projected Core copy, compression and XOR methods; Burst contains no separately maintained algorithms.");
 return 0;
 

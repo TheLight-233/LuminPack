@@ -33,7 +33,8 @@ internal static class CoreTextProjection
         foreach (var field in modern.DescendantNodes().OfType<FieldDeclarationSyntax>().Where(f => f.Declaration.Variables.Any(v => v.Identifier.ValueText == "Skip" || v.Identifier.ValueText.StartsWith("Bmp", StringComparison.Ordinal))))
             output.AppendLine(Rewrite(field));
         AppendOrigin(output, coreRoot, "Utility/Text/StringSerializer.Latin1.cs");
-        foreach (var method in Read(coreRoot, "Utility/Text/StringSerializer.Latin1.cs", Modern).DescendantNodes().OfType<MethodDeclarationSyntax>()) AppendMethod(output, method);
+        foreach (var method in Read(coreRoot, "Utility/Text/StringSerializer.Latin1.cs", Modern).DescendantNodes().OfType<MethodDeclarationSyntax>())
+            AppendMethod(output, method);
         output.AppendLine("    }");
         output.AppendLine("    internal static unsafe class CoreTextFallback\n    {");
         // Project Core's bounded replacement/final-block loop; complete-capacity dispatch stays in the Core host.
@@ -49,19 +50,27 @@ internal static class CoreTextProjection
             var syntax = Read(coreRoot, item.Item1, Modern);
             AppendOrigin(output, coreRoot, item.Item1);
             output.AppendLine("    internal static unsafe class " + item.Item2 + "\n    {");
-            if (item.Item2 == "CoreLatinUtf8") { if (!AppendLatinMasks(output, syntax)) return false; }
-            else foreach (var field in syntax.DescendantNodes().OfType<FieldDeclarationSyntax>()) output.AppendLine(Rewrite(field));
+            if (item.Item2 == "CoreLatinUtf8")
+            {
+                if (!AppendLatinMasks(output, syntax))
+                    return false; }
+            else
+                foreach (var field in syntax.DescendantNodes().OfType<FieldDeclarationSyntax>())
+                    output.AppendLine(Rewrite(field));
             foreach (var method in syntax.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => item.Item3.Contains(m.Identifier.ValueText) && m.Identifier.ValueText != "CreateShuffleMasks"))
             {
                 if (item.Item2 == "CoreLatinUtf8")
                 {
                     var mapped = method.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
                     string native = Rewrite(mapped);
-                    if (method.Identifier.ValueText == "EncodePrefix") native = new NativeLatin1Primitives().Visit(SyntaxFactory.ParseMemberDeclaration(native))!.NormalizeWhitespace().ToFullString();
-                    else native = native.Replace("Vector128<byte> packed", "global::Unity.Burst.Intrinsics.v128 packed", StringComparison.Ordinal).Replace("packed.AsUInt64().GetElement(0)", "packed.ULong0", StringComparison.Ordinal).Replace("packed.AsUInt64().GetElement(1)", "packed.ULong1", StringComparison.Ordinal);
+                    if (method.Identifier.ValueText == "EncodePrefix")
+                        native = new NativeLatin1Primitives().Visit(SyntaxFactory.ParseMemberDeclaration(native))!.NormalizeWhitespace().ToFullString();
+                    else
+                        native = native.Replace("Vector128<byte> packed", "global::Unity.Burst.Intrinsics.v128 packed", StringComparison.Ordinal).Replace("packed.AsUInt64().GetElement(0)", "packed.ULong0", StringComparison.Ordinal).Replace("packed.AsUInt64().GetElement(1)", "packed.ULong1", StringComparison.Ordinal);
                     output.AppendLine(native);
                 }
-                else AppendMethod(output, method);
+                else
+                    AppendMethod(output, method);
             }
             output.AppendLine("    }");
         }
@@ -69,7 +78,8 @@ internal static class CoreTextProjection
         output.AppendLine("internal static unsafe class CoreJsonCapacity");
         output.AppendLine("{");
         var capacityNames = new HashSet<string> { "ScanHintByte", "ScanHintChar", "RemoveEscapedQuotes", "ExactZero64", "ExactZero32", "PackByte64", "PackChar64", "PackByte32", "PackChar32", "CountHintBits", "HintTrailingZero", "FindHintByte", "FindHintChar" };
-        foreach (var method in Read(coreRoot, "Core/Json/LuminPackJsonReader.Capacity.cs", Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => capacityNames.Contains(m.Identifier.ValueText))) AppendMethod(output, method);
+        foreach (var method in Read(coreRoot, "Core/Json/LuminPackJsonReader.Capacity.cs", Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => capacityNames.Contains(m.Identifier.ValueText)))
+            AppendMethod(output, method);
         output.AppendLine("}");
         AppendCrypto(output, coreRoot);
         AppendLayout(output, coreRoot);
@@ -85,11 +95,13 @@ internal static class CoreTextProjection
         if (verify)
         {
             bool matches = File.Exists(path) && File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal) == content;
-            if (!matches) Console.Error.WriteLine("The Burst text projection is stale; regenerate it from the current Core source.");
+            if (!matches)
+                Console.Error.WriteLine("The Burst text projection is stale; regenerate it from the current Core source.");
             return matches;
         }
         Directory.CreateDirectory(directory);
-        if (!File.Exists(path) || File.ReadAllText(path) != content) File.WriteAllText(path, content, new UTF8Encoding(false));
+        if (!File.Exists(path) || File.ReadAllText(path) != content)
+            File.WriteAllText(path, content, new UTF8Encoding(false));
         return true;
     }
 
@@ -128,12 +140,19 @@ internal static class CoreTextProjection
         var compilation = CSharpCompilation.Create("CoreMaskProjection", [CSharpSyntaxTree.ParseText(source, Modern)], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);
-        if (!result.Success) { Console.Error.WriteLine("Core mask projection failed: " + string.Join("\n", result.Diagnostics)); return false; }
+        if (!result.Success)
+        {
+            Console.Error.WriteLine("Core mask projection failed: " + string.Join("\n", result.Diagnostics));
+            return false; }
         stream.Position = 0;
         var context = new AssemblyLoadContext("Core mask projection", isCollectible: true);
         byte[] bytes;
-        try { bytes = (byte[])context.LoadFromStream(stream).GetType("MaskFactory")!.GetMethod("Flatten")!.Invoke(null, null)!; }
-        finally { context.Unload(); }
+        try
+        {
+            bytes = (byte[])context.LoadFromStream(stream).GetType("MaskFactory")!.GetMethod("Flatten")!.Invoke(null, null)!; }
+        finally
+        {
+            context.Unload(); }
         output.AppendLine("private static readonly ulong[] ShuffleMaskWords = new ulong[] {");
         for (int offset = 0; offset < bytes.Length; offset += 8)
             output.Append("0x").Append(BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(offset, 8)).ToString("X16")).Append("UL,");
@@ -154,7 +173,8 @@ internal static class CoreTextProjection
         foreach (var method in syntax.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             string name = method.Identifier.ValueText;
-            if (name is "Initialize" or "LoadKeyStore" or "BlockAvx512x4" || method.ReturnType.ToString().Contains("Vector512", StringComparison.Ordinal) || method.ParameterList.ToString().Contains("Vector512", StringComparison.Ordinal)) continue;
+            if (name is "Initialize" or "LoadKeyStore" or "BlockAvx512x4" || method.ReturnType.ToString().Contains("Vector512", StringComparison.Ordinal) || method.ParameterList.ToString().Contains("Vector512", StringComparison.Ordinal))
+                continue;
             AppendMethod(output, method);
         }
         output.AppendLine("}");
@@ -256,8 +276,10 @@ internal static class CoreTextProjection
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
         {
             int before = _width;
-            if (node.Condition.ToString() == "Avx2.IsSupported") _width = 256;
-            if (node.Condition.ToString() == "Ssse3.IsSupported") _width = 128;
+            if (node.Condition.ToString() == "Avx2.IsSupported")
+                _width = 256;
+            if (node.Condition.ToString() == "Ssse3.IsSupported")
+                _width = 128;
             var result = base.VisitIfStatement(node);
             _width = before;
             return result;
@@ -272,10 +294,13 @@ internal static class CoreTextProjection
         /// <inheritdoc/>
         public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
         {
-            if (node.Expression is not MemberAccessExpressionSyntax access) return base.VisitInvocationExpression(node);
+            if (node.Expression is not MemberAccessExpressionSyntax access)
+                return base.VisitInvocationExpression(node);
             string owner = access.Expression.ToString(), name = access.Name.Identifier.ValueText;
-            if (name == "AsByte") return Visit(access.Expression);
-            if (name is "GetLower" or "GetUpper") return SyntaxFactory.ParseExpression(Visit(access.Expression) + (name == "GetLower" ? ".Lo128" : ".Hi128"));
+            if (name == "AsByte")
+                return Visit(access.Expression);
+            if (name is "GetLower" or "GetUpper")
+                return SyntaxFactory.ParseExpression(Visit(access.Expression) + (name == "GetLower" ? ".Lo128" : ".Hi128"));
             string? primitive = owner is "Vector128" or "Vector256" ? name switch
             {
                 "Load" => "Load" + _width,
@@ -287,15 +312,18 @@ internal static class CoreTextProjection
                 "ConditionalSelect" => "Select" + _width,
                 _ => null
             } : owner is "Avx2" or "Ssse3" && name == "Shuffle" ? "Shuffle" + _width : null;
-            if (primitive is null) return base.VisitInvocationExpression(node);
+            if (primitive is null)
+                return base.VisitInvocationExpression(node);
             return node.WithExpression(SyntaxFactory.ParseExpression("NativeVectorOps." + primitive)).WithArgumentList((ArgumentListSyntax)Visit(node.ArgumentList)!);
         }
         /// <inheritdoc/>
         public override SyntaxNode? VisitBinaryExpression(BinaryExpressionSyntax node)
         {
-            if (!node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any(n => n.Identifier.ValueText == "chars")) return base.VisitBinaryExpression(node);
+            if (!node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any(n => n.Identifier.ValueText == "chars"))
+                return base.VisitBinaryExpression(node);
             string? primitive = node.Kind() switch { SyntaxKind.BitwiseAndExpression => "And", SyntaxKind.BitwiseOrExpression => "Or", SyntaxKind.LeftShiftExpression => "Left16_", SyntaxKind.RightShiftExpression => "Right16_", _ => null };
-            if (primitive is null) return base.VisitBinaryExpression(node);
+            if (primitive is null)
+                return base.VisitBinaryExpression(node);
             return SyntaxFactory.ParseExpression("NativeVectorOps." + primitive + _width + "(" + Visit(node.Left) + ", " + Visit(node.Right) + ")");
         }
     }
@@ -336,7 +364,8 @@ internal static class CoreTextProjection
         /// <inheritdoc/>
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
         {
-            if (node.Condition.ToString().Contains("Avx512", StringComparison.Ordinal)) return node.Else is null ? SyntaxFactory.EmptyStatement() : Visit(node.Else.Statement);
+            if (node.Condition.ToString().Contains("Avx512", StringComparison.Ordinal))
+                return node.Else is null ? SyntaxFactory.EmptyStatement() : Visit(node.Else.Statement);
             return base.VisitIfStatement(node);
         }
 

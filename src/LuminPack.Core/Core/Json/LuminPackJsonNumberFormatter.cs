@@ -343,7 +343,8 @@ namespace LuminPack.Core
                 {
                     if (value < 1_000UL)
                     {
-                        if (value < 100UL) return value < 10UL ? 1 : 2;
+                        if (value < 100UL)
+                            return value < 10UL ? 1 : 2;
                         return 3;
                     }
                     return value < 10_000UL ? 4 : 5;

@@ -41,7 +41,8 @@ public static partial class LuminTreeStorage
             return;
         }
         int position = 0;
-        foreach (var item in set) destination[position++] = item;
+        foreach (var item in set)
+            destination[position++] = item;
     }
 
     /// <summary>Copies a sorted dictionary's pairs in key order.</summary>
@@ -66,7 +67,8 @@ public static partial class LuminTreeStorage
             return;
         }
         int position = 0;
-        foreach (var pair in dictionary) destination[position++] = pair;
+        foreach (var pair in dictionary)
+            destination[position++] = pair;
     }
 
     /// <summary>Copies an immutable sorted set's items in order.</summary>
@@ -83,7 +85,8 @@ public static partial class LuminTreeStorage
             return;
         }
         int position = 0;
-        foreach (var item in set) destination[position++] = item;
+        foreach (var item in set)
+            destination[position++] = item;
     }
 
     /// <summary>Copies an immutable sorted dictionary's pairs in key order.</summary>
@@ -101,7 +104,8 @@ public static partial class LuminTreeStorage
             return;
         }
         int position = 0;
-        foreach (var pair in dictionary) destination[position++] = pair;
+        foreach (var pair in dictionary)
+            destination[position++] = pair;
     }
 
     /// <summary>Copies an immutable hash set's items in its enumeration order.</summary>
@@ -118,7 +122,8 @@ public static partial class LuminTreeStorage
             return;
         }
         int position = 0;
-        foreach (var item in set) destination[position++] = item;
+        foreach (var item in set)
+            destination[position++] = item;
     }
 
     /// <summary>Copies an immutable dictionary's pairs in its enumeration order.</summary>
@@ -136,7 +141,8 @@ public static partial class LuminTreeStorage
             return;
         }
         int position = 0;
-        foreach (var pair in dictionary) destination[position++] = pair;
+        foreach (var pair in dictionary)
+            destination[position++] = pair;
     }
 
     /// <summary>Writes a sorted set of raw elements as the count followed by the elements in order.</summary>
@@ -159,7 +165,9 @@ public static partial class LuminTreeStorage
             CopyTo(set, pooled.AsSpan(0, count));
             writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
         }
-        finally { System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
+        finally
+        {
+            System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
     }
 
     /// <summary>Writes an immutable sorted set of raw elements as the count followed by the elements in order.</summary>
@@ -182,7 +190,9 @@ public static partial class LuminTreeStorage
             CopyTo(set, pooled.AsSpan(0, count));
             writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
         }
-        finally { System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
+        finally
+        {
+            System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
     }
 
     /// <summary>Writes an immutable hash set of raw elements as the count followed by the elements in enumeration order.</summary>
@@ -205,7 +215,9 @@ public static partial class LuminTreeStorage
             CopyTo(set, pooled.AsSpan(0, count));
             writer.Write<T>(new ReadOnlySpan<T>(pooled, 0, count), count);
         }
-        finally { System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
+        finally
+        {
+            System.Buffers.ArrayPool<T>.Shared.Return(pooled); }
     }
 
     /// <summary>Reserves a raw record and writes its count, exposing the element block as typed storage.</summary>
@@ -246,11 +258,14 @@ public static partial class LuminTreeStorage
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static SortedSet<T> CreateSortedSet<T>(T[] items, int count)
     {
-        if ((uint)count > (uint)items.Length) LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
-        if (count == 0) return new SortedSet<T>();
+        if ((uint)count > (uint)items.Length)
+            LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        if (count == 0)
+            return new SortedSet<T>();
 #if NET8_0_OR_GREATER
         // Native publication retains the public construction rather than rooting a new dynamic node allocator.
-        if (!RuntimeFeature.IsDynamicCodeSupported) return new SortedSet<T>(new ArraySegment<T>(items, 0, count));
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+            return new SortedSet<T>(new ArraySegment<T>(items, 0, count));
 #endif
         if (SortedSetLayout<T>.Available && (count == 1 || IsStrictlyAscending(items, count)))
         {
@@ -272,7 +287,8 @@ public static partial class LuminTreeStorage
     public static bool CanRebuildSortedSet<T>(SortedSet<T> set)
     {
 #if NET8_0_OR_GREATER
-        if (!RuntimeFeature.IsDynamicCodeSupported) return false;
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+            return false;
 #endif
         return set.GetType() == typeof(SortedSet<T>) && ReferenceEquals(set.Comparer, Comparer<T>.Default) &&
             (typeof(T) != typeof(string) || System.Globalization.CultureInfo.CurrentCulture.GetType() == typeof(System.Globalization.CultureInfo)) && SortedSetLayout<T>.Available;
@@ -287,10 +303,14 @@ public static partial class LuminTreeStorage
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static bool TryRebuildSortedSet<T>(SortedSet<T> set, T[] items, int count)
     {
-        if ((uint)count > (uint)items.Length) LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
-        if (set.Count != 0 || !CanRebuildSortedSet(set)) return false;
-        if (count == 0) return true;
-        if (count > 1 && !IsStrictlyAscending(items, count)) return false;
+        if ((uint)count > (uint)items.Length)
+            LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        if (set.Count != 0 || !CanRebuildSortedSet(set))
+            return false;
+        if (count == 0)
+            return true;
+        if (count > 1 && !IsStrictlyAscending(items, count))
+            return false;
         var offsets = SortedSetLayout<T>.Nodes;
         object? root = BuildRedBlack(in offsets, items, count);
         Field<object?>(set, SortedSetLayout<T>.Root) = root;
@@ -308,7 +328,8 @@ public static partial class LuminTreeStorage
     /// construction, which sorts and removes duplicates.</remarks>
     public static ImmutableSortedSet<T> CreateImmutableSortedSet<T>(T[] items, int count)
     {
-        if (count == 1 && items is { Length: > 0 }) return ImmutableSortedSet.Create<T>(items[0]);
+        if (count == 1 && items is { Length: > 0 })
+            return ImmutableSortedSet.Create<T>(items[0]);
 #if NET10_0_OR_GREATER
         if (count > 1 && BclTrees.ImmutableSortedSet<T>.Available && IsStrictlyAscending(items, count))
             return BclTrees.ImmutableSortedSet<T>.Build(items, count);
@@ -341,7 +362,8 @@ public static partial class LuminTreeStorage
     {
         if (typeof(T) == typeof(string))
             return (ImmutableSortedSet<T>?)(object?)CreateOrderedSetIfSupported((string[])(object)items, count);
-        if ((uint)count > (uint)items.Length) LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        if ((uint)count > (uint)items.Length)
+            LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
         return DefaultOrdering<T>.CallbackFree && CanLinkOrderedSet(items, count) && IsStrictlyAscending(items, count)
             ? BclTrees.ImmutableSortedSet<T>.Build(items, count) : null;
     }
@@ -360,12 +382,15 @@ public static partial class LuminTreeStorage
     /// <returns>The completed set, or null to continue with the ordinary builder.</returns>
     public static ImmutableSortedSet<string>? CreateOrderedSetIfSupported(string[] items, int count)
     {
-        if (!CanLinkOrderedSet(items, count) || items[0] is null) return null;
+        if (!CanLinkOrderedSet(items, count) || items[0] is null)
+            return null;
         var culture = System.Globalization.CultureInfo.CurrentCulture;
-        if (culture.GetType() != typeof(System.Globalization.CultureInfo)) return null;
+        if (culture.GetType() != typeof(System.Globalization.CultureInfo))
+            return null;
         var comparison = culture.CompareInfo;
         for (int i = 1; i < count; i++)
-            if (comparison.Compare(items[i - 1], items[i]) >= 0) return null;
+            if (comparison.Compare(items[i - 1], items[i]) >= 0)
+                return null;
         return ReferenceEquals(culture, System.Globalization.CultureInfo.CurrentCulture)
             ? BclTrees.ImmutableSortedSet<string>.Build(items, count) : null;
     }
@@ -377,7 +402,8 @@ public static partial class LuminTreeStorage
     /// <returns>Whether the buffer can use the framework node constructor.</returns>
     private static bool CanLinkOrderedSet<T>(T[] items, int count)
     {
-        if ((uint)count > (uint)items.Length) LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        if ((uint)count > (uint)items.Length)
+            LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
         return count > 1 && ImmutableSortedSetLayout<T>.Available && BclTrees.ImmutableSortedSet<T>.Available;
     }
 #endif
@@ -408,7 +434,8 @@ public static partial class LuminTreeStorage
     /// <returns>The root of the linked subtree.</returns>
     private static object LinkItems<T>(object empty, in NodeOffsets offsets, T[] items, int start, int end)
     {
-        if (start > end) return empty;
+        if (start > end)
+            return empty;
         int middle = start + ((end - start) >> 1);
         object node = offsets.New();
         Field<T>(node, offsets.Key) = items[middle];
@@ -429,12 +456,14 @@ public static partial class LuminTreeStorage
         {
             var strings = (string[])(object)items;
             for (int i = 1; i < count; i++)
-                if (string.Compare(strings[i - 1], strings[i], StringComparison.CurrentCulture) >= 0) return false;
+                if (string.Compare(strings[i - 1], strings[i], StringComparison.CurrentCulture) >= 0)
+                    return false;
             return true;
         }
         var comparer = Comparer<T>.Default;
         for (int i = 1; i < count; i++)
-            if (comparer.Compare(items[i - 1], items[i]) >= 0) return false;
+            if (comparer.Compare(items[i - 1], items[i]) >= 0)
+                return false;
         return true;
     }
 
@@ -453,10 +482,13 @@ public static partial class LuminTreeStorage
         var builder = LuminImmutableBuilders.RentSortedDictionary<TKey, TValue>();
         try
         {
-            for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
+            for (int i = 0; i < count; i++)
+                builder.Add(pairs[i].Key, pairs[i].Value);
             return builder.ToImmutable();
         }
-        finally { LuminImmutableBuilders.ReturnSortedDictionary(builder); }
+        finally
+        {
+            LuminImmutableBuilders.ReturnSortedDictionary(builder); }
     }
 
     /// <summary>Fills a new, empty sorted dictionary with the default comparer from pairs.</summary>
@@ -475,7 +507,8 @@ public static partial class LuminTreeStorage
             LinkSortedDictionary(dictionary, pairs, count);
             return;
         }
-        for (int i = 0; i < count; i++) dictionary.Add(pairs[i].Key, pairs[i].Value);
+        for (int i = 0; i < count; i++)
+            dictionary.Add(pairs[i].Key, pairs[i].Value);
     }
 
     /// <summary>Builds an immutable hash set with the default comparer from items.</summary>
@@ -487,7 +520,8 @@ public static partial class LuminTreeStorage
     /// duplicates, add the items through the builder.</remarks>
     public static ImmutableHashSet<T> CreateImmutableHashSet<T>(T[] items, int count)
     {
-        if (count == 1) return ImmutableHashSet.Create<T>(items[0]);
+        if (count == 1)
+            return ImmutableHashSet.Create<T>(items[0]);
         if (count > 1 && ImmutableHashSetLayout<T>.Available)
         {
             var keys = System.Buffers.ArrayPool<long>.Shared.Rent(count);
@@ -501,15 +535,20 @@ public static partial class LuminTreeStorage
                     return result;
                 }
             }
-            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
+            finally
+            {
+                System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
         var builder = LuminImmutableBuilders.RentHashSet<T>();
         try
         {
-            for (int i = 0; i < count; i++) builder.Add(items[i]);
+            for (int i = 0; i < count; i++)
+                builder.Add(items[i]);
             return builder.ToImmutable();
         }
-        finally { LuminImmutableBuilders.ReturnHashSet(builder); }
+        finally
+        {
+            LuminImmutableBuilders.ReturnHashSet(builder); }
     }
 
     /// <summary>Builds an immutable dictionary with the default comparers from pairs.</summary>
@@ -522,7 +561,8 @@ public static partial class LuminTreeStorage
     /// duplicate keys, add the pairs through the builder, which throws for duplicates as before.</remarks>
     public static ImmutableDictionary<TKey, TValue> CreateImmutableDictionary<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count) where TKey : notnull
     {
-        if (count == 1) return ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
+        if (count == 1)
+            return ImmutableDictionary<TKey, TValue>.Empty.Add(pairs[0].Key, pairs[0].Value);
         if (count > 1 && ImmutableDictionaryLayout<TKey, TValue>.Available)
         {
             var keys = System.Buffers.ArrayPool<long>.Shared.Rent(count);
@@ -537,15 +577,20 @@ public static partial class LuminTreeStorage
                     return result;
                 }
             }
-            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
+            finally
+            {
+                System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
         var builder = LuminImmutableBuilders.RentDictionary<TKey, TValue>();
         try
         {
-            for (int i = 0; i < count; i++) builder.Add(pairs[i].Key, pairs[i].Value);
+            for (int i = 0; i < count; i++)
+                builder.Add(pairs[i].Key, pairs[i].Value);
             return builder.ToImmutable();
         }
-        finally { LuminImmutableBuilders.ReturnDictionary(builder); }
+        finally
+        {
+            LuminImmutableBuilders.ReturnDictionary(builder); }
     }
 
     // Each walk keeps its offsets in locals: a store through the destination could otherwise alias the offsets and force reloads.
@@ -562,7 +607,8 @@ public static partial class LuminTreeStorage
         while (node is not null)
         {
             object? child = Field<object?>(node, left);
-            if (child is not null) WalkRedBlack(child, in offsets, destination, ref index);
+            if (child is not null)
+                WalkRedBlack(child, in offsets, destination, ref index);
             destination[index++] = Field<T>(node, key);
             node = Field<object?>(node, right);
         }
@@ -582,7 +628,8 @@ public static partial class LuminTreeStorage
         while (node is not null)
         {
             object? child = Field<object?>(node, left);
-            if (child is not null) index = WalkRedBlackValue(child, in offsets, ref destination, length, index);
+            if (child is not null)
+                index = WalkRedBlackValue(child, in offsets, ref destination, length, index);
             MemoryMarshal.CreateSpan(ref destination, length)[index++] = Field<T>(node, key);
             node = Field<object?>(node, right);
         }
@@ -601,7 +648,8 @@ public static partial class LuminTreeStorage
         object? child;
         while ((child = Field<object?>(node, left)) is not null)
         {
-            if (Field<object?>(child, left) is not null) WalkAvl(child, in offsets, destination, ref index);
+            if (Field<object?>(child, left) is not null)
+                WalkAvl(child, in offsets, destination, ref index);
             destination[index++] = Field<T>(node, key);
             node = Field<object>(node, right);
         }
@@ -620,7 +668,8 @@ public static partial class LuminTreeStorage
         object? child;
         while ((child = Field<object?>(node, left)) is not null)
         {
-            if (Field<object?>(child, left) is not null) WalkPairs(child, in offsets, destination, ref index);
+            if (Field<object?>(child, left) is not null)
+                WalkPairs(child, in offsets, destination, ref index);
             destination[index++] = new KeyValuePair<TKey, TValue>(Field<TKey>(node, key), Field<TValue>(node, value));
             node = Field<object>(node, right);
         }
@@ -697,18 +746,21 @@ public static partial class LuminTreeStorage
     /// <returns>Whether the condition holds.</returns>
     private static bool IsStrictlyAscending<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count)
     {
-        if (pairs[0].Key is null) return false;
+        if (pairs[0].Key is null)
+            return false;
         if (typeof(TKey) == typeof(string))
         {
             var entries = (KeyValuePair<string, TValue>[])(object)pairs;
             // A later null key cannot follow an earlier key in strictly ascending string order.
             for (int i = 1; i < count; i++)
-                if (string.Compare(entries[i - 1].Key, entries[i].Key, StringComparison.CurrentCulture) >= 0) return false;
+                if (string.Compare(entries[i - 1].Key, entries[i].Key, StringComparison.CurrentCulture) >= 0)
+                    return false;
             return true;
         }
         var comparer = Comparer<TKey>.Default;
         for (int i = 1; i < count; i++)
-            if (pairs[i].Key is null || comparer.Compare(pairs[i - 1].Key, pairs[i].Key) >= 0) return false;
+            if (pairs[i].Key is null || comparer.Compare(pairs[i - 1].Key, pairs[i].Key) >= 0)
+                return false;
         return true;
     }
 
@@ -749,7 +801,8 @@ public static partial class LuminTreeStorage
     /// <returns>The root of the linked subtree.</returns>
     private static object LinkPairs<TKey, TValue>(object empty, in NodeOffsets offsets, KeyValuePair<TKey, TValue>[] pairs, int start, int end)
     {
-        if (start > end) return empty;
+        if (start > end)
+            return empty;
         int middle = start + ((end - start) >> 1);
         object node = offsets.New();
         Field<TKey>(node, offsets.Key) = pairs[middle].Key;
@@ -795,7 +848,8 @@ public static partial class LuminTreeStorage
     /// <returns>The root of the linked subtree.</returns>
     private static object LinkHash<T>(object empty, object emptyList, in HashOffsets offsets, T[] items, long[] keys, int start, int end)
     {
-        if (start > end) return empty;
+        if (start > end)
+            return empty;
         int middle = start + ((end - start) >> 1);
         object node = offsets.Tree.New();
         Field<int>(node, offsets.Tree.Key) = (int)(keys[middle] >> 32);
@@ -819,7 +873,8 @@ public static partial class LuminTreeStorage
         Field<object>(node, offsets.Right) = right;
         Field<byte>(node, offsets.Height) = (byte)(1 + Math.Max(Field<byte>(left, offsets.Height), Field<byte>(right, offsets.Height)));
         Field<bool>(node, offsets.Frozen) = true;
-        if (offsets.Counted) Field<int>(node, offsets.Count) = 1 + Field<int>(left, offsets.Count) + Field<int>(right, offsets.Count);
+        if (offsets.Counted)
+            Field<int>(node, offsets.Count) = 1 + Field<int>(left, offsets.Count) + Field<int>(right, offsets.Count);
     }
 
     /// <summary>Replaces an empty sorted dictionary's tree with the one the sorted-array construction builds.</summary>
@@ -876,19 +931,22 @@ public static partial class LuminTreeStorage
                 return null;
             case 1:
                 root = NewNode(in offsets, items[start], Black);
-                if (redNode is not null) Field<object?>(root, offsets.Left) = redNode;
+                if (redNode is not null)
+                    Field<object?>(root, offsets.Left) = redNode;
                 break;
             case 2:
                 root = NewNode(in offsets, items[start], Black);
                 Field<object?>(root, offsets.Right) = NewNode(in offsets, items[end], Red);
-                if (redNode is not null) Field<object?>(root, offsets.Left) = redNode;
+                if (redNode is not null)
+                    Field<object?>(root, offsets.Left) = redNode;
                 break;
             case 3:
                 root = NewNode(in offsets, items[start + 1], Black);
                 object left = NewNode(in offsets, items[start], Black);
                 Field<object?>(root, offsets.Left) = left;
                 Field<object?>(root, offsets.Right) = NewNode(in offsets, items[end], Black);
-                if (redNode is not null) Field<object?>(left, offsets.Left) = redNode;
+                if (redNode is not null)
+                    Field<object?>(left, offsets.Left) = redNode;
                 break;
             default:
                 int middle = (start + end) / 2;
@@ -948,7 +1006,8 @@ public static partial class LuminTreeStorage
         for (int i = 0; i < count; i++)
         {
             var key = pairs[i].Key;
-            if (key is null) return false;
+            if (key is null)
+                return false;
             keys[i] = ((long)comparer.GetHashCode(key) << 32) | (uint)i;
         }
         return SortDistinct(keys, count);
@@ -961,17 +1020,23 @@ public static partial class LuminTreeStorage
     private static bool SortDistinct(long[] keys, int count)
     {
         int i = 1;
-        while (i < count && (int)(keys[i - 1] >> 32) < (int)(keys[i] >> 32)) i++;
-        if (i == count) return true;
+        while (i < count && (int)(keys[i - 1] >> 32) < (int)(keys[i] >> 32))
+            i++;
+        if (i == count)
+            return true;
         if (i < count && keys[i - 1] <= keys[i])
         {
             int ordered = i + 1;
-            while (ordered < count && keys[ordered - 1] <= keys[ordered]) ordered++;
-            if (ordered == count) return false;
+            while (ordered < count && keys[ordered - 1] <= keys[ordered])
+                ordered++;
+            if (ordered == count)
+                return false;
         }
 #if NETSTANDARD2_1
-        if (LegacyHashSort.Enabled) SortHashKeys(keys, count);
-        else Array.Sort(keys, 0, count);
+        if (LegacyHashSort.Enabled)
+            SortHashKeys(keys, count);
+        else
+            Array.Sort(keys, 0, count);
 #else
         Array.Sort(keys, 0, count);
 #endif
@@ -1013,8 +1078,10 @@ public static partial class LuminTreeStorage
         while (parent < (count >> 1))
         {
             int child = (parent << 1) + 1;
-            if (child + 1 < count && keys[child] < keys[child + 1]) child++;
-            if (value >= keys[child]) break;
+            if (child + 1 < count && keys[child] < keys[child + 1])
+                child++;
+            if (value >= keys[child])
+                break;
             keys[parent] = keys[child];
             parent = child;
         }
@@ -1028,7 +1095,8 @@ public static partial class LuminTreeStorage
     private static object Clone(object source)
     {
         object copy = Unsafe.As<Cloner>(source).Copy();
-        if (copy.GetType() != source.GetType()) LuminPackExceptionHelper.ThrowMessage("A storage copy produced another type.");
+        if (copy.GetType() != source.GetType())
+            LuminPackExceptionHelper.ThrowMessage("A storage copy produced another type.");
         return copy;
     }
 
@@ -1083,9 +1151,14 @@ public static partial class LuminTreeStorage
         /// <returns>The delegate, or null when it is missing or fails.</returns>
         private static Func<object>? Verify(Type? node, Func<object>? factory)
         {
-            if (node is null || factory is null) return null;
-            try { return factory().GetType() == node ? factory : null; }
-            catch { return null; }
+            if (node is null || factory is null)
+                return null;
+            try
+            {
+                return factory().GetType() == node ? factory : null; }
+            catch
+            {
+                return null; }
         }
 
         internal bool Located => (Key | Value | Left | Right | Height | Frozen | Color | Count) >= 0 && Type is { IsAbstract: false, IsValueType: false };
@@ -1138,8 +1211,12 @@ public static partial class LuminTreeStorage
             /// <returns>Whether the construction returns the set's own node type.</returns>
             private static bool Probe()
             {
-                try { return Construct(null, new T[1], 0, 0, null)?.GetType() == FieldType(typeof(System.Collections.Generic.SortedSet<T>), "root"); }
-                catch { return false; }
+                try
+                {
+                    return Construct(null, new T[1], 0, 0, null)?.GetType() == FieldType(typeof(System.Collections.Generic.SortedSet<T>), "root"); }
+                catch
+                {
+                    return false; }
             }
         }
 
@@ -1196,14 +1273,18 @@ public static partial class LuminTreeStorage
             /// <returns>Whether the built set answers as one.</returns>
             private static bool Probe()
             {
-                if (Empty is null) return false;
+                if (Empty is null)
+                    return false;
                 try
                 {
                     // Nodes reject a null key, so a reference family relies on the value-type check of the same members.
-                    if (default(T) is null) return Wrap(Empty, Comparer<T>.Default).Count == 0 && ImmutableSortedSet<int>.Available;
+                    if (default(T) is null)
+                        return Wrap(Empty, Comparer<T>.Default).Count == 0 && ImmutableSortedSet<int>.Available;
                     return Build(new T[1], 1).Count == 1;
                 }
-                catch { return false; }
+                catch
+                {
+                    return false; }
             }
         }
 
@@ -1270,14 +1351,18 @@ public static partial class LuminTreeStorage
             /// <returns>Whether the built dictionary answers as one.</returns>
             private static bool Probe()
             {
-                if (Empty is null) return false;
+                if (Empty is null)
+                    return false;
                 try
                 {
                     // Nodes reject a null key, so a reference family relies on the value-type check of the same members.
-                    if (default(TKey) is null) return Wrap(Empty, 0, Comparer<TKey>.Default, EqualityComparer<TValue>.Default).Count == 0 && ImmutableSortedDictionary<int, int>.Available;
+                    if (default(TKey) is null)
+                        return Wrap(Empty, 0, Comparer<TKey>.Default, EqualityComparer<TValue>.Default).Count == 0 && ImmutableSortedDictionary<int, int>.Available;
                     return Build(new KeyValuePair<TKey, TValue>[1], 1).Count == 1;
                 }
-                catch { return false; }
+                catch
+                {
+                    return false; }
             }
         }
     }
@@ -1352,8 +1437,12 @@ public static partial class LuminTreeStorage
     /// <returns>Whether the storage behaves as the public API does.</returns>
     private static bool Check(Func<bool> check)
     {
-        try { return check(); }
-        catch { return false; }
+        try
+        {
+            return check(); }
+        catch
+        {
+            return false; }
     }
 
     private static class SortedSetLayout<T>
@@ -1370,7 +1459,8 @@ public static partial class LuminTreeStorage
         private static bool Probe()
         {
             var set = new SortedSet<int> { 5, 1, 4, 2, 3 };
-            if (SortedSetLayout<int>.Root < 0 || !SortedSetLayout<int>.Nodes.Located || Field<int>(set, SortedSetLayout<int>.Count) != 5) return false;
+            if (SortedSetLayout<int>.Root < 0 || !SortedSetLayout<int>.Nodes.Located || Field<int>(set, SortedSetLayout<int>.Count) != 5)
+                return false;
             var copy = new int[5];
             int index = 0;
             WalkRedBlack<int>(Field<object?>(set, SortedSetLayout<int>.Root), in SortedSetLayout<int>.Nodes, copy, ref index);
@@ -1390,8 +1480,10 @@ public static partial class LuminTreeStorage
         {
             var filled = new SortedDictionary<int, int>();
             var pairs = new KeyValuePair<int, int>[9];
-            for (int i = 0; i < pairs.Length; i++) pairs[i] = new(i * 2, i);
-            if (SortedDictionaryLayout<int, int>.Set < 0 || !SortedSetLayout<KeyValuePair<int, int>>.Available) return false;
+            for (int i = 0; i < pairs.Length; i++)
+                pairs[i] = new(i * 2, i);
+            if (SortedDictionaryLayout<int, int>.Set < 0 || !SortedSetLayout<KeyValuePair<int, int>>.Available)
+                return false;
             LinkSortedDictionary(filled, pairs, pairs.Length);
             var copy = new KeyValuePair<int, int>[9];
             int index = 0;
@@ -1412,12 +1504,14 @@ public static partial class LuminTreeStorage
         /// <returns>Whether the storage behaves as the public API does.</returns>
         private static bool Probe()
         {
-            if (ImmutableSortedSetLayout<int>.Root < 0 || !ImmutableSortedSetLayout<int>.Nodes.Located) return false;
+            if (ImmutableSortedSetLayout<int>.Root < 0 || !ImmutableSortedSetLayout<int>.Nodes.Located)
+                return false;
             var set = ImmutableSortedSet.Create(5, 1, 4, 2, 3);
             var copy = new int[5];
             int index = 0;
             WalkAvl<int>(Field<object>(set, ImmutableSortedSetLayout<int>.Root), in ImmutableSortedSetLayout<int>.Nodes, copy, ref index);
-            if (index != 5 || !copy.AsSpan().SequenceEqual(new[] { 1, 2, 3, 4, 5 })) return false;
+            if (index != 5 || !copy.AsSpan().SequenceEqual(new[] { 1, 2, 3, 4, 5 }))
+                return false;
             var items = Enumerable.Range(-9, 19).ToArray();
             var template = ImmutableSortedSet.Create(items[0]);
             var offsets = ImmutableSortedSetLayout<int>.Nodes;
@@ -1446,7 +1540,8 @@ public static partial class LuminTreeStorage
                 !ImmutableSortedDictionaryLayout<int, int>.Nodes.Located)
                 return false;
             var pairs = new KeyValuePair<int, int>[10];
-            for (int i = 0; i < pairs.Length; i++) pairs[i] = new(i, i * 3);
+            for (int i = 0; i < pairs.Length; i++)
+                pairs[i] = new(i, i * 3);
             var built = BuildSortedDictionary(pairs, pairs.Length);
             var copy = new KeyValuePair<int, int>[10];
             int index = 0;
@@ -1472,18 +1567,21 @@ public static partial class LuminTreeStorage
         /// <returns>Whether the storage behaves as the public API does.</returns>
         private static bool Probe()
         {
-            if ((ImmutableHashSetLayout<int>.Root | ImmutableHashSetLayout<int>.Count) < 0 || !ImmutableHashSetLayout<int>.Hash.Located) return false;
+            if ((ImmutableHashSetLayout<int>.Root | ImmutableHashSetLayout<int>.Count) < 0 || !ImmutableHashSetLayout<int>.Hash.Located)
+                return false;
             var source = ImmutableHashSet.CreateRange(new[] { 3, -7, 11, 0, 42, int.MinValue, 5 });
             var copy = new int[source.Count];
             int index = 0;
             index = WalkHash(Field<object>(source, ImmutableHashSetLayout<int>.Root), in ImmutableHashSetLayout<int>.Hash,
                 ref copy[0], copy.Length, index);
-            if (index != source.Count || !copy.SequenceEqual(source)) return false;
+            if (index != source.Count || !copy.SequenceEqual(source))
+                return false;
             var items = Enumerable.Range(-20, 41).ToArray();
             var keys = System.Buffers.ArrayPool<long>.Shared.Rent(items.Length);
             try
             {
-                if (!TrySortHashes(items, items.Length, keys)) return false;
+                if (!TrySortHashes(items, items.Length, keys))
+                    return false;
                 var template = ImmutableHashSet.Create(items[0]);
                 object root = BuildHash<int>(Field<object>(template, ImmutableHashSetLayout<int>.Root), in ImmutableHashSetLayout<int>.Hash, items, keys, items.Length);
                 var built = Unsafe.As<ImmutableHashSet<int>>(Clone(template));
@@ -1493,7 +1591,9 @@ public static partial class LuminTreeStorage
                 return built.Count == 41 && built.SetEquals(items) && built.SequenceEqual(ImmutableHashSet.CreateRange(items)) && built.Contains(-20) &&
                     !built.Contains(21) && modified.Count == 41 && modified.Contains(100) && !modified.Contains(0) && built.Contains(0);
             }
-            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
+            finally
+            {
+                System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
     }
 
@@ -1522,12 +1622,14 @@ public static partial class LuminTreeStorage
             int index = 0;
             index = WalkHash(Field<object>(source, ImmutableDictionaryLayout<int, int>.Root), in ImmutableDictionaryLayout<int, int>.Hash,
                 ref copy[0], copy.Length, index);
-            if (index != source.Count || !copy.SequenceEqual(source)) return false;
+            if (index != source.Count || !copy.SequenceEqual(source))
+                return false;
             var pairs = Enumerable.Range(-15, 31).Select(i => new KeyValuePair<int, int>(i, i * 5)).ToArray();
             var keys = System.Buffers.ArrayPool<long>.Shared.Rent(pairs.Length);
             try
             {
-                if (!TrySortHashes(pairs, pairs.Length, keys)) return false;
+                if (!TrySortHashes(pairs, pairs.Length, keys))
+                    return false;
                 var template = ImmutableDictionary<int, int>.Empty.Add(pairs[0].Key, pairs[0].Value);
                 object root = BuildHash<KeyValuePair<int, int>>(Field<object>(template, ImmutableDictionaryLayout<int, int>.Root), in ImmutableDictionaryLayout<int, int>.Hash, pairs, keys, pairs.Length);
                 var built = Unsafe.As<ImmutableDictionary<int, int>>(Clone(template));
@@ -1537,7 +1639,9 @@ public static partial class LuminTreeStorage
                 return built.Count == 31 && built[-15] == -75 && built[15] == 75 && !built.ContainsKey(16) &&
                     built.SequenceEqual(ImmutableDictionary.CreateRange(pairs)) && modified.Count == 31 && modified[4] == -1 && built[4] == 20 && !modified.ContainsKey(3);
             }
-            finally { System.Buffers.ArrayPool<long>.Shared.Return(keys); }
+            finally
+            {
+                System.Buffers.ArrayPool<long>.Shared.Return(keys); }
         }
     }
 

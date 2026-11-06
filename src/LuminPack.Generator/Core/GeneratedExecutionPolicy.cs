@@ -27,7 +27,8 @@ internal static class GeneratedExecutionPolicy
     /// <returns>Whether to call the existing concrete state overload instead of copying its body.</returns>
     internal static bool Reuse(string operationName, BinaryOperation operation)
     {
-        if (operationName.Contains(":local:")) return false;
+        if (operationName.Contains(":local:"))
+            return false;
         return operationName.EndsWith(":json", StringComparison.Ordinal) && LetRuntimeChooseInlining(operation.Body);
     }
 

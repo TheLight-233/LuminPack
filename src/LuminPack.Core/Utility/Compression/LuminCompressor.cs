@@ -141,13 +141,15 @@ public static class LuminCompressor
         if (unchecked((uint)(sourceLength - 1)) < FastBoundMaxSourceLength)
             return HeaderSize + sourceLength + (sourceLength >> 8) + 32;
 
-        if (sourceLength == 0) return HeaderSize;
+        if (sourceLength == 0)
+            return HeaderSize;
 
         // LZ-style literal-length continuation uses one byte per 255 bytes,
         // not per 256.  The old sourceLength >> 8 bound could under-allocate
         // for large incompressible inputs and let CompressCore write past dst.
         const int MaxSourceLength = 2_139_095_016;
-        if ((uint)sourceLength > MaxSourceLength) ThrowSourceTooLarge();
+        if ((uint)sourceLength > MaxSourceLength)
+            ThrowSourceTooLarge();
         return HeaderSize + sourceLength + (sourceLength / 255) + 16;
     }
 
@@ -156,11 +158,14 @@ public static class LuminCompressor
     /// <returns>The result of the operation.</returns>
     public static int GetDecompressedSize(ReadOnlySpan<byte> compressed)
     {
-        if (compressed.Length < HeaderSize) ThrowInvalidData();
+        if (compressed.Length < HeaderSize)
+            ThrowInvalidData();
         ref byte p = ref MemoryMarshal.GetReference(compressed);
-        if (Unsafe.ReadUnaligned<uint>(ref p) != Magic) ThrowInvalidData();
+        if (Unsafe.ReadUnaligned<uint>(ref p) != Magic)
+            ThrowInvalidData();
         int len = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref p, 4));
-        if (len < 0) ThrowInvalidData();
+        if (len < 0)
+            ThrowInvalidData();
         ValidateDeclaredOutputSize(compressed.Length, len);
         return len;
     }
@@ -185,7 +190,9 @@ public static class LuminCompressor
             return result;
 #endif
         }
-        finally { ArrayPool<byte>.Shared.Return(tmp); }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(tmp); }
     }
 
     /// <summary>Restores the uncompressed bytes from a LuminPack compression frame.</summary>
@@ -194,7 +201,8 @@ public static class LuminCompressor
     public static byte[] Decompress(ReadOnlySpan<byte> source)
     {
         int origLen = GetDecompressedSize(source);
-        if (origLen == 0) return Array.Empty<byte>();
+        if (origLen == 0)
+            return Array.Empty<byte>();
 #if NET6_0_OR_GREATER
         var result = GC.AllocateUninitializedArray<byte>(origLen);
 #else
@@ -235,18 +243,22 @@ public static class LuminCompressor
     /// <returns>The result of the operation.</returns>
     public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
     {
-        if (source.Length < HeaderSize) ThrowInvalidData();
+        if (source.Length < HeaderSize)
+            ThrowInvalidData();
         ref byte src = ref MemoryMarshal.GetReference(source);
         ref byte dst = ref MemoryMarshal.GetReference(destination);
-        if (Unsafe.ReadUnaligned<uint>(ref src) != Magic) ThrowInvalidData();
+        if (Unsafe.ReadUnaligned<uint>(ref src) != Magic)
+            ThrowInvalidData();
         int origLen = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref src, 4));
-        if (origLen < 0) ThrowInvalidData();
+        if (origLen < 0)
+            ThrowInvalidData();
         if (origLen == 0)
         {
             ValidateEmptyFrame(source.Length);
             return 0;
         }
-        if (destination.Length < origLen) ThrowInsufficientBuffer();
+        if (destination.Length < origLen)
+            ThrowInsufficientBuffer();
         return DecompressCore(ref Unsafe.Add(ref src, HeaderSize), source.Length - HeaderSize, ref dst, origLen);
     }
 
@@ -350,7 +362,8 @@ public static class LuminCompressor
     /// <param name="writer">The writer receiving the output data.</param>
     public static void CompressAndWriteTo(ReadOnlySpan<byte> source, ref LuminPackWriter writer)
     {
-        if (source.IsEmpty) return;
+        if (source.IsEmpty)
+            return;
         int maxLen = GetMaxCompressedSize(source.Length);
         byte[] rent = ArrayPool<byte>.Shared.Rent(maxLen);
         try
@@ -372,7 +385,9 @@ public static class LuminCompressor
 #endif
             writer.Advance(compLen);
         }
-        finally { ArrayPool<byte>.Shared.Return(rent); }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rent); }
     }
 
     /// <summary>Compresses the input using the LuminPack compression format.</summary>
@@ -391,8 +406,10 @@ public static class LuminCompressor
         int tableBits = 8;
         for (int _v = (srcLen - 1) | 1; _v >= (1 << tableBits); tableBits++) { }
 #endif
-        if (tableBits < 8) tableBits = 8;
-        if (tableBits > 15) tableBits = 15;
+        if (tableBits < 8)
+            tableBits = 8;
+        if (tableBits > 15)
+            tableBits = 15;
         int tableSize = 1 << tableBits;
         int hashShift = 32 - tableBits;
 
@@ -553,13 +570,15 @@ public static class LuminCompressor
             op = (byte)(((litLen < 15 ? litLen : 15) << 4)
                        | (matchNib < 15 ? matchNib : 15));
             op = ref Unsafe.Add(ref op, 1);
-            if (litLen >= 15) op = ref WriteLSIC(ref op, litLen - 15);
+            if (litLen >= 15)
+                op = ref WriteLSIC(ref op, litLen - 15);
             LuminPackMarshal.CopyBlockUnaligned(ref op, ref anchor, (uint)litLen);
             op = ref Unsafe.Add(ref op, unchecked((nint)(uint)(litLen)));
             op = (byte)matchOff;
             Unsafe.Add(ref op, 1) = (byte)(matchOff >> 8);
             op = ref Unsafe.Add(ref op, OffsetBytes);
-            if (matchNib >= 15) op = ref WriteLSIC(ref op, matchNib - 15);
+            if (matchNib >= 15)
+                op = ref WriteLSIC(ref op, matchNib - 15);
 
             ip = ref Unsafe.Add(ref ip, unchecked((nint)(uint)(matchLen)));
             anchor = ref ip;
@@ -580,7 +599,8 @@ public static class LuminCompressor
             int litLen = (int)Unsafe.ByteOffset(ref anchor, ref srcEnd);
             op = (byte)((litLen < 15 ? litLen : 15) << 4);
             op = ref Unsafe.Add(ref op, 1);
-            if (litLen >= 15) op = ref WriteLSIC(ref op, litLen - 15);
+            if (litLen >= 15)
+                op = ref WriteLSIC(ref op, litLen - 15);
             LuminPackMarshal.CopyBlockUnaligned(ref op, ref anchor, (uint)litLen);
             op = ref Unsafe.Add(ref op, unchecked((nint)(uint)(litLen)));
         }
@@ -677,7 +697,8 @@ public static class LuminCompressor
             int offset = ip | (Unsafe.Add(ref ip, 1) << 8);
             ip = ref Unsafe.Add(ref ip, OffsetBytes);
 
-            if (offset == 0 || offset > (int)Unsafe.ByteOffset(ref dstBase, ref op)) ThrowInvalidData();
+            if (offset == 0 || offset > (int)Unsafe.ByteOffset(ref dstBase, ref op))
+                ThrowInvalidData();
 
             // ── Match length ──────────────────────────────────────
             int matchLen = matchNib + MinMatch;
@@ -719,18 +740,21 @@ public static class LuminCompressor
         int maxLength,
         out int decodedLength)
     {
-        if ((uint)length > (uint)maxLength) ThrowInvalidData();
+        if ((uint)length > (uint)maxLength)
+            ThrowInvalidData();
 
         byte next;
         do
         {
-            if (!Unsafe.IsAddressLessThan(ref ip, ref srcEnd)) ThrowInvalidData();
+            if (!Unsafe.IsAddressLessThan(ref ip, ref srcEnd))
+                ThrowInvalidData();
             next = ip;
             ip = ref Unsafe.Add(ref ip, 1);
 
             // Bound before adding: prevents signed wrap and rejects malicious
             // length chains as soon as they exceed the declared output size.
-            if (next > maxLength - length) ThrowInvalidData();
+            if (next > maxLength - length)
+                ThrowInvalidData();
             length += next;
         }
         while (next == byte.MaxValue);
@@ -748,10 +772,17 @@ public static class LuminCompressor
     private static void CopyMatch(ref byte dst, ref byte src, int len, int offset)
     {
 #if NETSTANDARD2_1
-        if (global::LuminPack.Core.LuminPackBurst.TryCopyMatch(ref dst, len, offset)) return;
+        if (global::LuminPack.Core.LuminPackBurst.TryCopyMatch(ref dst, len, offset))
+            return;
 #endif
-        if (offset == 1) { Unsafe.InitBlockUnaligned(ref dst, src, (uint)len); return; }
-        if (len <= offset) { LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)len); return; }
+        if (offset == 1)
+        {
+            Unsafe.InitBlockUnaligned(ref dst, src, (uint)len);
+            return; }
+        if (len <= offset)
+        {
+            LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)len);
+            return; }
 
         // Overlapping periodic fill.
         // KEY INSIGHT: when offset >= 8, no single 8-byte read window overlaps
@@ -766,9 +797,18 @@ public static class LuminCompressor
             // read window stays fully behind the current write position (offset >= width),
             // and the length is long enough that a vectorized copy pays off over the
             // chain-check overhead (short copies stay scalar).
-            if (offset >= 64 && Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && len >= 128) { CopyMatch512(ref dst, ref src, ref end); return; }
-            if (offset >= 32 && Vector256.IsHardwareAccelerated && len >= 64) { CopyMatch256(ref dst, ref src, ref end); return; }
-            if (offset >= 16 && Vector128.IsHardwareAccelerated && len >= 32) { CopyMatch128(ref dst, ref src, ref end); return; }
+            if (offset >= 64 && Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && len >= 128)
+            {
+                CopyMatch512(ref dst, ref src, ref end);
+                return; }
+            if (offset >= 32 && Vector256.IsHardwareAccelerated && len >= 64)
+            {
+                CopyMatch256(ref dst, ref src, ref end);
+                return; }
+            if (offset >= 16 && Vector128.IsHardwareAccelerated && len >= 32)
+            {
+                CopyMatch128(ref dst, ref src, ref end);
+                return; }
 #endif
             CopyMatchCore8(ref dst, ref src, ref end);
             return;
@@ -948,7 +988,8 @@ public static class LuminCompressor
             ulong d1 = ReadU64(ref Unsafe.Add(ref a, 8)) ^ ReadU64(ref Unsafe.Add(ref b, 8));
             if ((d0 | d1) != 0)
             {
-                if (d0 != 0) return (int)Unsafe.ByteOffset(ref start, ref a) + TrailingZeroBytes(d0);
+                if (d0 != 0)
+                    return (int)Unsafe.ByteOffset(ref start, ref a) + TrailingZeroBytes(d0);
                 return (int)Unsafe.ByteOffset(ref start, ref a) + 8 + TrailingZeroBytes(d1);
             }
             a = ref Unsafe.Add(ref a, 16);
@@ -958,7 +999,8 @@ public static class LuminCompressor
         if (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref a, 8), ref limit))
         {
             ulong diff = ReadU64(ref a) ^ ReadU64(ref b);
-            if (diff != 0) return (int)Unsafe.ByteOffset(ref start, ref a) + TrailingZeroBytes(diff);
+            if (diff != 0)
+                return (int)Unsafe.ByteOffset(ref start, ref a) + TrailingZeroBytes(diff);
             a = ref Unsafe.Add(ref a, 8);
             b = ref Unsafe.Add(ref b, 8);
         }
@@ -981,7 +1023,8 @@ public static class LuminCompressor
     {
 #if NETSTANDARD2_1
         int maximum = checked((int)Unsafe.ByteOffset(ref a, ref limit));
-        if (global::LuminPack.Core.LuminPackBurst.TryCountMatch(ref a, ref b, maximum, out int matched)) return matched;
+        if (global::LuminPack.Core.LuminPackBurst.TryCountMatch(ref a, ref b, maximum, out int matched))
+            return matched;
 #endif
         ref byte start = ref a;
 
@@ -1036,8 +1079,13 @@ public static class LuminCompressor
 #if NET6_0_OR_GREATER
         return BitOperations.TrailingZeroCount(v) >> 3;
 #else
-        if (v == 0) return 8;
-        int n = 0; while ((v & 0xFF) == 0) { v >>= 8; n++; }
+        if (v == 0)
+            return 8;
+        int n = 0;
+        while ((v & 0xFF) == 0)
+        {
+            v >>= 8;
+            n++; }
         return n;
 #endif
     }
@@ -1047,7 +1095,8 @@ public static class LuminCompressor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ValidateEmptyFrame(int sourceLength)
     {
-        if (sourceLength != HeaderSize) ThrowInvalidData();
+        if (sourceLength != HeaderSize)
+            ThrowInvalidData();
     }
 
     /// <summary>Validates declared output size before the operation continues.</summary>

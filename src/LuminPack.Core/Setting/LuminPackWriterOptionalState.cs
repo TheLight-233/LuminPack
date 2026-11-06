@@ -119,7 +119,8 @@ namespace LuminPack.Option
         public void ResetOperationState()
         {
             // No reference can be retained before the first id is assigned.
-            if (_nextId == 0) return;
+            if (_nextId == 0)
+                return;
             ResetReferences();
         }
 
@@ -133,7 +134,8 @@ namespace LuminPack.Option
                 _hashed = false;
             }
             var small = _small;
-            for (int i = 0; i < small.Length && i < (int)_nextId; i++) small[i].Value = null;
+            for (int i = 0; i < small.Length && i < (int)_nextId; i++)
+                small[i].Value = null;
             _nextId = 0;
         }
 
@@ -158,7 +160,8 @@ namespace LuminPack.Option
                 var small = _small;
                 int count = (int)_nextId;
                 for (int i = 0; i < small.Length && i < count; i++)
-                    if (ReferenceEquals(small[i].Value, value)) return ~i;
+                    if (ReferenceEquals(small[i].Value, value))
+                        return ~i;
                 if ((uint)count < (uint)small.Length)
                 {
                     small[count].Value = value;
@@ -168,8 +171,10 @@ namespace LuminPack.Option
                 HashSmallReferences();
             }
             ref var id = ref ObjectToRef.GetValueRefOrAddDefault(value, out var exists);
-            if (exists) return ~(int)id;
-            if (_nextId > int.MaxValue) LuminPackExceptionHelper.ThrowMessage("Too many tracked references in one operation.");
+            if (exists)
+                return ~(int)id;
+            if (_nextId > int.MaxValue)
+                LuminPackExceptionHelper.ThrowMessage("Too many tracked references in one operation.");
             id = _nextId++;
             return (int)id;
         }
@@ -179,7 +184,8 @@ namespace LuminPack.Option
         private void HashSmallReferences()
         {
             var small = _small;
-            for (int i = 0; i < small.Length; i++) ObjectToRef.TryAdd(small[i].Value!, (uint)i);
+            for (int i = 0; i < small.Length; i++)
+                ObjectToRef.TryAdd(small[i].Value!, (uint)i);
             _hashed = true;
         }
 

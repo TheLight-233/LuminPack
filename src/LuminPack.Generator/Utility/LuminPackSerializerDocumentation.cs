@@ -40,7 +40,8 @@ internal static class LuminPackSerializerDocumentation
         var completed = (CompilationUnitSyntax)GeneratedSourceDocumentation.CompleteRoot(root);
         string source = completed.ToFullString();
         if (!completed.DescendantNodes(node => node is not BaseMethodDeclarationSyntax)
-            .OfType<BaseMethodDeclarationSyntax>().Any(GeneratedSourceDocumentation.IsUserApi)) return source;
+            .OfType<BaseMethodDeclarationSyntax>().Any(GeneratedSourceDocumentation.IsUserApi))
+            return source;
         return Enhance(completed, source, types, compilation, metadata, navigationTargets);
     }
 
@@ -61,9 +62,11 @@ internal static class LuminPackSerializerDocumentation
 
         foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<MethodDeclarationSyntax>())
         {
-            if (!GeneratedSourceDocumentation.IsUserApi(method)) continue;
+            if (!GeneratedSourceDocumentation.IsUserApi(method))
+                continue;
             string name = method.Identifier.ValueText;
-            if (!(name.StartsWith("Serialize", StringComparison.Ordinal) || name.StartsWith("Deserialize", StringComparison.Ordinal) || name == "Sizeof")) continue;
+            if (!(name.StartsWith("Serialize", StringComparison.Ordinal) || name.StartsWith("Deserialize", StringComparison.Ordinal) || name == "Sizeof"))
+                continue;
 
             var valueParameter = method.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText is "value" or "input");
             ITypeSymbol type = null;
@@ -72,11 +75,13 @@ internal static class LuminPackSerializerDocumentation
             if (type == null)
             {
                 var task = method.ReturnType.DescendantNodesAndSelf().OfType<GenericNameSyntax>().FirstOrDefault(generic => generic.Identifier.ValueText == "ValueTask" && generic.TypeArgumentList.Arguments.Count == 1);
-                if (task != null) typeLookup.TryGetValue(task.TypeArgumentList.Arguments[0].ToString(), out type);
+                if (task != null)
+                    typeLookup.TryGetValue(task.TypeArgumentList.Arguments[0].ToString(), out type);
             }
 
             var trivia = method.GetLeadingTrivia().Where(item => item.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToArray();
-            if (trivia.Length == 0) continue;
+            if (trivia.Length == 0)
+                continue;
             string xml = Regex.Replace(string.Join(Environment.NewLine, trivia.Select(item => item.ToFullString())), "^[ \\t]*///[ ]?", "", RegexOptions.Multiline);
             var documentation = XElement.Parse("<documentation>" + xml + "</documentation>");
             var remarks = documentation.Element("remarks");
@@ -107,11 +112,13 @@ internal static class LuminPackSerializerDocumentation
                         contracts.Add(type, contract);
                     }
 
-                    foreach (var element in contract.Elements()) remarks.Add(new XElement(element));
+                    foreach (var element in contract.Elements())
+                        remarks.Add(new XElement(element));
                 }
 
                 var typeId = type.GetDocumentationCommentId();
-                if (typeId != null) documentation.Add(new XElement("seealso", new XAttribute("cref", typeId)));
+                if (typeId != null)
+                    documentation.Add(new XElement("seealso", new XAttribute("cref", typeId)));
                 string operation = (name.StartsWith("Deserialize", StringComparison.Ordinal) ? "Deserialize" : "Serialize") + (json ? "Json" : "");
                 string navigation = name == "Sizeof" ? null : navigationTargets?.DocumentationTarget(operation);
                 if (navigation == null && type is INamedTypeSymbol named &&
@@ -122,7 +129,8 @@ internal static class LuminPackSerializerDocumentation
                         CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(named)))
                 {
                     string rootName = name.StartsWith("Deserialize", StringComparison.Ordinal) ? "RootRead" : "RootWrite";
-                    if (name.Contains("Json")) rootName += "Json";
+                    if (name.Contains("Json"))
+                        rootName += "Json";
                     string container = RootContainerProjection.ContainerPrefix + RootContainerProjection.Hash(
                         RootContainerProjection.PayloadKey(FormatterTypeName.Get(type)));
                     navigation = "global::LuminPack.LuminPackSerializer." + container + "." + rootName;
@@ -130,7 +138,8 @@ internal static class LuminPackSerializerDocumentation
                 if (navigation != null)
                 {
                     const string owner = "global::LuminPack.LuminPackSerializer.";
-                    if (navigation.StartsWith(owner, StringComparison.Ordinal)) navigation = navigation.Substring(owner.Length);
+                    if (navigation.StartsWith(owner, StringComparison.Ordinal))
+                        navigation = navigation.Substring(owner.Length);
                     remarks.Add(new XElement("para", "Generated implementation: ", new XElement("see", new XAttribute("cref", navigation)), "."));
                 }
             }
@@ -178,7 +187,8 @@ internal static class LuminPackSerializerDocumentation
         var layoutDetails = new XElement("para", "CLR memory layout: ", new XElement("c", kind), ".");
         if (layout != null)
         {
-            foreach (var setting in layout.NamedArguments) layoutDetails.Add(" ", new XElement("c", setting.Key + " = " + setting.Value.Value), ".");
+            foreach (var setting in layout.NamedArguments)
+                layoutDetails.Add(" ", new XElement("c", setting.Key + " = " + setting.Value.Value), ".");
         }
         layoutDetails.Add(" CLR memory offsets and padding are distinct from binary member order; JSON uses member names rather than byte offsets.");
         contract.Add(layoutDetails);
@@ -235,7 +245,8 @@ internal static class LuminPackSerializerDocumentation
                 new XElement("listheader", new XElement("term", "JSON member"), new XElement("description", "Member type")),
                 data.fields.Select(field => new XElement("item", new XElement("term", new XElement("c", field.Name)), new XElement("description", TypeLink(field.TypeSymbol))))));
         }
-        if (data.callBackMethods.Count != 0) contract.Add(new XElement("para", "Callbacks: ", string.Join(", ", data.callBackMethods.Select(callback => callback.Item1 + " (" + callback.Item2 + ")")), "."));
+        if (data.callBackMethods.Count != 0)
+            contract.Add(new XElement("para", "Callbacks: ", string.Join(", ", data.callBackMethods.Select(callback => callback.Item1 + " (" + callback.Item2 + ")")), "."));
         return contract;
     }
 
@@ -244,12 +255,15 @@ internal static class LuminPackSerializerDocumentation
     /// <returns><see langword="true" /> when the first parameter is one of the runtime operation states.</returns>
     private static bool UsesOperationState(MethodDeclarationSyntax method)
     {
-        if (method.ParameterList.Parameters.Count == 0) return false;
+        if (method.ParameterList.Parameters.Count == 0)
+            return false;
         TypeSyntax type = method.ParameterList.Parameters[0].Type;
-        while (type is RefTypeSyntax reference) type = reference.Type;
+        while (type is RefTypeSyntax reference)
+            type = reference.Type;
         string name = type?.ToString() ?? string.Empty;
         int separator = name.LastIndexOf('.');
-        if (separator >= 0) name = name.Substring(separator + 1);
+        if (separator >= 0)
+            name = name.Substring(separator + 1);
         return name == "LuminPackWriter" || name == "LuminPackReader" || name == "LuminPackEvaluator" ||
                name == "LuminPackJsonWriter" || name == "LuminPackJsonReader";
     }
@@ -279,8 +293,10 @@ internal static class LuminPackSerializerDocumentation
             remarks.Add(new XElement("para", "Populates the supplied value by reference; formatter-specific merge and reuse rules apply.",
                 method.ReturnType.ToString() == "void" ? string.Empty : " The return value reports consumed bytes" +
                     (json ? " in the selected UTF-8 or UTF-16 input representation, including any transcoding performed by a character-input overload" : string.Empty) + "."));
-        if (method.Identifier.ValueText.Contains("Async")) remarks.Add(new XElement("para", "Reads or writes the caller-owned stream asynchronously; cancellation is observed through cancellationToken."));
-        if (method.Identifier.ValueText == "Sizeof") remarks.Add(new XElement("para", "Evaluates the binary size without producing a payload. This value does not describe JSON size or CLR object allocation size."));
+        if (method.Identifier.ValueText.Contains("Async"))
+            remarks.Add(new XElement("para", "Reads or writes the caller-owned stream asynchronously; cancellation is observed through cancellationToken."));
+        if (method.Identifier.ValueText == "Sizeof")
+            remarks.Add(new XElement("para", "Evaluates the binary size without producing a payload. This value does not describe JSON size or CLR object allocation size."));
     }
 
     /// <summary>Finds a serialized member on a type or one of its base types.</summary>
@@ -292,7 +308,8 @@ internal static class LuminPackSerializerDocumentation
         for (var current = type; current != null; current = current.BaseType)
         {
             var member = current.GetMembers(name).FirstOrDefault(symbol => symbol is IFieldSymbol or IPropertySymbol);
-            if (member != null) return member;
+            if (member != null)
+                return member;
         }
         return null;
     }
@@ -302,7 +319,8 @@ internal static class LuminPackSerializerDocumentation
     /// <returns>A type link or a code element when the type has no documentation identifier.</returns>
     private static XElement TypeLink(ITypeSymbol type)
     {
-        if (type == null) return new XElement("c", "formatter-defined");
+        if (type == null)
+            return new XElement("c", "formatter-defined");
         string id = type.GetDocumentationCommentId();
         // Display text retains nullable markers and tuple element names, including nested arguments.
         return id == null || type.NullableAnnotation == NullableAnnotation.Annotated || type is INamedTypeSymbol { IsGenericType: true } ? SymbolLink(type) :

@@ -43,7 +43,8 @@ public sealed class LuminUnionMap<TValue>
     /// <param name="capacity">The requested storage capacity.</param>
     public LuminUnionMap(int capacity)
     {
-        if (capacity < 0) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
+        if (capacity < 0)
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
         _capacity = CalculateCapacity(capacity);
         _count = 0;
         InitializeTable();
@@ -134,7 +135,8 @@ public sealed class LuminUnionMap<TValue>
             entry.Key = key;
             entry.Value = value;
             _count++;
-            if (_count > _capacity) Resize();
+            if (_count > _capacity)
+                Resize();
             return true;
         }
         else if (entry.Key == key)
@@ -162,7 +164,8 @@ public sealed class LuminUnionMap<TValue>
                 entry.Key = currentKey;
                 entry.Value = currentValue;
                 _count++;
-                if (_count > _capacity) Resize();
+                if (_count > _capacity)
+                    Resize();
                 return true;
             }
 
@@ -258,7 +261,8 @@ public sealed class LuminRawUnionMap<TValue>
     /// <param name="capacity">The requested storage capacity.</param>
     public LuminRawUnionMap(int capacity)
     {
-        if (capacity < 0) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
+        if (capacity < 0)
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
         _capacity = CalculateCapacity(capacity);
         InitializeTable();
     }
@@ -471,10 +475,14 @@ public sealed class LuminFrozenUnionMap<TValue>
 #else
                 ref LuminUnionMap<TValue>.Entry srcEntry = ref source._table[i];
 #endif
-                if (srcEntry.Key == default) continue;
+                if (srcEntry.Key == default)
+                    continue;
 
                 int idx = (int)(Hash(srcEntry.Key, seed) & _capacityMask);
-                if (used[idx]) { collision = true; break; }
+                if (used[idx])
+                {
+                    collision = true;
+                    break; }
                 used[idx] = true;
             }
 
@@ -496,7 +504,8 @@ public sealed class LuminFrozenUnionMap<TValue>
     private static int CalculateCapacity(int count)
     {
         int capacity = 1;
-        while (capacity < count) capacity <<= 1;
+        while (capacity < count)
+            capacity <<= 1;
         return capacity;
     }
 
@@ -518,7 +527,8 @@ public sealed class LuminFrozenUnionMap<TValue>
 #else
             ref LuminUnionMap<TValue>.Entry srcEntry = ref source._table[i];
 #endif
-            if (srcEntry.Key == default) continue;
+            if (srcEntry.Key == default)
+                continue;
 
             int idx = (int)(Hash(srcEntry.Key, _seed) & _capacityMask);
 #if NET5_0_OR_GREATER

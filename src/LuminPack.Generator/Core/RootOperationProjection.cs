@@ -25,7 +25,8 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
         {
             var key = (operation.Identifier.ValueText, operation.TypeParameterList?.Parameters.Count ?? 0,
                 Normalize(operation.ParameterList.Parameters[0].Type));
-            if (!bySignature.TryGetValue(key, out var group)) bySignature.Add(key, group = new List<MethodDeclarationSyntax>());
+            if (!bySignature.TryGetValue(key, out var group))
+                bySignature.Add(key, group = new List<MethodDeclarationSyntax>());
             group.Add(operation);
         }
         var shells = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>
@@ -50,25 +51,33 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
                     var arguments = selected is GenericNameSyntax generic ? generic.TypeArgumentList.Arguments.ToArray() : Array.Empty<TypeSyntax>();
                     MethodDeclarationSyntax target = null;
                     Dictionary<string, TypeSyntax> substitutions = null;
-                    if (!bySignature.TryGetValue((selected.Identifier.ValueText, arguments.Length, state), out var candidates)) break;
+                    if (!bySignature.TryGetValue((selected.Identifier.ValueText, arguments.Length, state), out var candidates))
+                        break;
                     foreach (var candidate in candidates)
                     {
                         var map = new Dictionary<string, TypeSyntax>(StringComparer.Ordinal);
-                        for (int index = 0; index < arguments.Length; index++) map.Add(candidate.TypeParameterList.Parameters[index].Identifier.ValueText, arguments[index]);
-                        if (Normalize(Substitute(candidate.ParameterList.Parameters[1].Type, map)) != payload) continue;
-                        target = candidate; substitutions = map; break;
+                        for (int index = 0; index < arguments.Length; index++)
+                            map.Add(candidate.TypeParameterList.Parameters[index].Identifier.ValueText, arguments[index]);
+                        if (Normalize(Substitute(candidate.ParameterList.Parameters[1].Type, map)) != payload)
+                            continue;
+                        target = candidate;
+                        substitutions = map;
+                        break;
                     }
-                    if (target == null) break;
+                    if (target == null)
+                        break;
                     valuePayload = !target.ParameterList.Parameters[1].Modifiers.Any(SyntaxKind.RefKeyword) &&
                         !target.ParameterList.Parameters[1].Modifiers.Any(SyntaxKind.InKeyword);
                     var forward = target.ExpressionBody?.Expression as InvocationExpressionSyntax;
                     if (forward == null && target.Body != null && IsForwarder(target.Body))
                         forward = target.Body.Statements[0] is ExpressionStatementSyntax statement ? (InvocationExpressionSyntax)statement.Expression
                             : (InvocationExpressionSyntax)((ReturnStatementSyntax)target.Body.Statements[0]).Expression;
-                    if (forward == null) break;
+                    if (forward == null)
+                        break;
                     var next = forward.Expression is MemberAccessExpressionSyntax member ? member.Name : forward.Expression as SimpleNameSyntax;
                     if (next == null || !(next.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal) ||
-                        next.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson")) break;
+                        next.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson"))
+                        break;
                     selected = (SimpleNameSyntax)Substitute(next, substitutions);
                 }
                 var rewrittenCall = call.WithExpression(access == null ? selected : access.WithName(selected));
@@ -94,7 +103,8 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
     /// <returns>The fragment with exactly those declared type parameters substituted.</returns>
     private static SyntaxNode Substitute(SyntaxNode node, Dictionary<string, TypeSyntax> arguments)
     {
-        if (arguments.Count == 0) return node;
+        if (arguments.Count == 0)
+            return node;
         return node.ReplaceNodes(
             node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Where(name => arguments.ContainsKey(name.Identifier.ValueText)),
             (original, rewritten) => arguments[original.Identifier.ValueText].WithTriviaFrom(rewritten));
@@ -105,7 +115,8 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
     /// <returns>The same callable operations and their private execution roots.</returns>
     public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
     {
-        if (node.Identifier.ValueText != "LuminPackSerializer") return base.VisitClassDeclaration(node);
+        if (node.Identifier.ValueText != "LuminPackSerializer")
+            return base.VisitClassDeclaration(node);
         var members = new List<MemberDeclarationSyntax>();
         foreach (var member in node.Members)
         {
@@ -147,7 +158,10 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
                 "DeserializeWithCompress" => "RootReadCompressed",
                 _ => null
             };
-            if (name == null) { members.Add(member); continue; }
+            if (name == null)
+            {
+                members.Add(member);
+                continue; }
             SimpleNameSyntax target = method.TypeParameterList == null ? SyntaxFactory.IdentifierName(name)
                 : SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
                     SyntaxFactory.SeparatedList<TypeSyntax>(method.TypeParameterList.Parameters.Select(parameter => SyntaxFactory.IdentifierName(parameter.Identifier)))));
@@ -191,12 +205,15 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
             return method;
         var list = method.ParameterList.Parameters[1].Type.DescendantNodesAndSelf().OfType<GenericNameSyntax>().First();
         var element = list.TypeArgumentList.Arguments[0];
-        if (!element.ToString().StartsWith("global::System.Collections.Generic.KeyValuePair<", StringComparison.Ordinal)) return method;
+        if (!element.ToString().StartsWith("global::System.Collections.Generic.KeyValuePair<", StringComparison.Ordinal))
+            return method;
         var pair = element.DescendantNodesAndSelf().OfType<GenericNameSyntax>().First();
-        if (!pair.TypeArgumentList.Arguments.Any(argument => argument is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.StringKeyword) || argument.ToString() == "global::System.String")) return method;
+        if (!pair.TypeArgumentList.Arguments.Any(argument => argument is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.StringKeyword) || argument.ToString() == "global::System.String"))
+            return method;
         string helper = "ReadPairElement";
         int suffix = 2;
-        while (method.DescendantTokens().Any(token => token.ValueText == helper)) helper = "ReadPairElement" + suffix++;
+        while (method.DescendantTokens().Any(token => token.ValueText == helper))
+            helper = "ReadPairElement" + suffix++;
         string profile = method.TypeParameterList.Parameters[0].Identifier.ValueText;
         var readers = new HashSet<string>(StringComparer.Ordinal) { method.ParameterList.Parameters[0].Identifier.ValueText };
         foreach (var variable in method.Body.DescendantNodes().OfType<VariableDeclaratorSyntax>())
@@ -215,7 +232,8 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
             call.ArgumentList.Arguments.Count == 1 && call.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) &&
             !call.Ancestors().Any(node => node is LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax) &&
             call.Ancestors().Any(node => node is ForStatementSyntax or ForEachStatementSyntax or ForEachVariableStatementSyntax)).ToArray();
-        if (calls.Length == 0) return method;
+        if (calls.Length == 0)
+            return method;
         var body = method.Body.ReplaceNodes(calls, (original, call) => SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName(helper),
             SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[] {
                 SyntaxFactory.Argument(((MemberAccessExpressionSyntax)call.Expression).Expression).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword)),
@@ -242,11 +260,13 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
         if (method.TypeParameterList?.Parameters.Count != 1 ||
             !(payload.StartsWith("global::System.Collections.Generic.KeyValuePair<", StringComparison.Ordinal) ||
               payload.StartsWith("global::System.ValueTuple<", StringComparison.Ordinal) ||
-              payload.StartsWith("global::System.Tuple<", StringComparison.Ordinal))) return method;
+              payload.StartsWith("global::System.Tuple<", StringComparison.Ordinal)))
+            return method;
         var compound = method.ParameterList.Parameters[1].Type.DescendantNodesAndSelf().OfType<GenericNameSyntax>().First();
         bool Text(TypeSyntax type) => type.ToString() is "string" or "global::System.String";
         if (!compound.TypeArgumentList.Arguments.Any(Text) || compound.TypeArgumentList.Arguments.Any(type =>
-            !Text(type) && !global::LuminPack.SourceGenerator.CodeEmitterRegistry.KnownValueTypes.Contains(type.ToString()))) return method;
+            !Text(type) && !global::LuminPack.SourceGenerator.CodeEmitterRegistry.KnownValueTypes.Contains(type.ToString())))
+            return method;
         var strings = new HashSet<string>(method.Body.DescendantNodes().OfType<VariableDeclarationSyntax>()
             .Where(declaration => Text(declaration.Type)).SelectMany(declaration => declaration.Variables).Select(variable => variable.Identifier.ValueText), StringComparer.Ordinal);
         string state = method.ParameterList.Parameters[0].Identifier.ValueText;
@@ -258,10 +278,12 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
             call.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) &&
             call.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax value &&
             strings.Contains(value.Identifier.ValueText)).ToArray();
-        if (calls.Length == 0) return method;
+        if (calls.Length == 0)
+            return method;
         string helper = "ReadCompoundString";
         int suffix = 2;
-        while (method.DescendantTokens().Any(token => token.ValueText == helper)) helper = "ReadCompoundString" + suffix++;
+        while (method.DescendantTokens().Any(token => token.ValueText == helper))
+            helper = "ReadCompoundString" + suffix++;
         var statements = calls.Select(call => (ExpressionStatementSyntax)call.Parent).ToArray();
         var body = method.Body.ReplaceNodes(statements, (original, statement) =>
         {

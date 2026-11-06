@@ -131,7 +131,8 @@ namespace LuminPack.Option
                 _versionTables.Clear();
                 _versionTableUsed = 0;
             }
-            if (_sequentialCount == 0 && refToObject.Count == 0) return;
+            if (_sequentialCount == 0 && refToObject.Count == 0)
+                return;
             ResetReferences();
         }
 
@@ -141,7 +142,8 @@ namespace LuminPack.Option
         internal void AddVersionTable(ulong fingerprint, ReadOnlySpan<byte> table)
         {
             _versionTables ??= new Dictionary<ulong, (int Start, int Length)>();
-            if (_versionTables.ContainsKey(fingerprint)) return;
+            if (_versionTables.ContainsKey(fingerprint))
+                return;
             if (_versionTableBytes.Length - _versionTableUsed < table.Length)
                 Array.Resize(ref _versionTableBytes, Math.Max(Math.Max(256, _versionTableBytes.Length * 2), _versionTableUsed + table.Length));
             table.CopyTo(_versionTableBytes.AsSpan(_versionTableUsed));
@@ -156,7 +158,8 @@ namespace LuminPack.Option
         internal bool TryGetVersionTable(ulong fingerprint, out Span<byte> table)
         {
             table = default;
-            if (_versionTables is null || !_versionTables.TryGetValue(fingerprint, out var entry)) return false;
+            if (_versionTables is null || !_versionTables.TryGetValue(fingerprint, out var entry))
+                return false;
             table = _versionTableBytes.AsSpan(entry.Start, entry.Length);
             return true;
         }
@@ -169,10 +172,13 @@ namespace LuminPack.Option
             var sequential = _sequential;
             int count = _sequentialCount;
             if (count <= 16)
-                for (int i = 0; i < sequential.Length && i < count; i++) sequential[i].Value = null;
-            else Array.Clear(sequential, 0, count);
+                for (int i = 0; i < sequential.Length && i < count; i++)
+                    sequential[i].Value = null;
+            else
+                Array.Clear(sequential, 0, count);
             _sequentialCount = 0;
-            if (refToObject.Count != 0) refToObject.Clear();
+            if (refToObject.Count != 0)
+                refToObject.Clear();
             reusedObjectToRef?.Clear();
             reuseIndexInitialized = false;
         }
@@ -183,7 +189,8 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public object GetObjectReference(uint id)
         {
-            if (id < (uint)_sequentialCount) return _sequential[id].Value!;
+            if (id < (uint)_sequentialCount)
+                return _sequential[id].Value!;
             return GetMappedReference(id);
         }
 
@@ -208,7 +215,8 @@ namespace LuminPack.Option
         public void AddObjectReference(uint id, object value)
         {
             Store(id, value);
-            if (reuseIndexInitialized) reusedObjectToRef!.TryAdd(value, id);
+            if (reuseIndexInitialized)
+                reusedObjectToRef!.TryAdd(value, id);
         }
 
         /// <summary>Registers an existing instance as the object of a new record unless another record of this read holds it.</summary>
@@ -226,14 +234,16 @@ namespace LuminPack.Option
                 {
                     var sequential = _sequential;
                     for (int i = 0; i < sequential.Length && i < _sequentialCount; i++)
-                        if (ReferenceEquals(sequential[i].Value, candidate)) return false;
+                        if (ReferenceEquals(sequential[i].Value, candidate))
+                            return false;
                     Store(id, candidate);
                     return true;
                 }
                 InitializeReuseIndex();
             }
             ref uint slot = ref reusedObjectToRef!.GetValueRefOrAddDefault(candidate, out bool exists);
-            if (exists) return false;
+            if (exists)
+                return false;
             slot = id;
             Store(id, candidate);
             return true;
@@ -277,8 +287,10 @@ namespace LuminPack.Option
         private void InitializeReuseIndex()
         {
             reusedObjectToRef ??= new LuminIdentityMap();
-            for (int i = 0; i < _sequentialCount; i++) reusedObjectToRef.TryAdd(_sequential[i].Value!, (uint)i);
-            foreach (var entry in refToObject) reusedObjectToRef.TryAdd(entry.Value, entry.Key);
+            for (int i = 0; i < _sequentialCount; i++)
+                reusedObjectToRef.TryAdd(_sequential[i].Value!, (uint)i);
+            foreach (var entry in refToObject)
+                reusedObjectToRef.TryAdd(entry.Value, entry.Key);
             reuseIndexInitialized = true;
         }
 
@@ -287,16 +299,19 @@ namespace LuminPack.Option
         /// <returns>Whether the instance has already been registered by identity.</returns>
         public bool IsObjectReferenceRegistered(object value)
         {
-            if (_sequentialCount == 0 && refToObject.Count == 0) return false;
+            if (_sequentialCount == 0 && refToObject.Count == 0)
+                return false;
             // A few sequential references are scanned without building the identity index.
             if (!reuseIndexInitialized && _sequentialCount <= 8 && refToObject.Count == 0)
             {
                 var sequential = _sequential;
                 for (int i = 0; i < sequential.Length && i < _sequentialCount; i++)
-                    if (ReferenceEquals(sequential[i].Value, value)) return true;
+                    if (ReferenceEquals(sequential[i].Value, value))
+                        return true;
                 return false;
             }
-            if (!reuseIndexInitialized) InitializeReuseIndex();
+            if (!reuseIndexInitialized)
+                InitializeReuseIndex();
             return reusedObjectToRef!.Contains(value);
         }
 

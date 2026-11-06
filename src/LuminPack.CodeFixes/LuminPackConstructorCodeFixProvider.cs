@@ -26,19 +26,24 @@ public sealed class LuminPackConstructorCodeFixProvider : CodeFixProvider
         context.CancellationToken.ThrowIfCancellationRequested();
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
         var model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
-        if (root == null || model == null) return;
+        if (root == null || model == null)
+            return;
         foreach (var diagnostic in context.Diagnostics)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree) continue;
-            if (diagnostic.AdditionalLocations.Count == 0 && root.FindNode(diagnostic.Location.SourceSpan) is not TypeDeclarationSyntax) continue;
+            if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree)
+                continue;
+            if (diagnostic.AdditionalLocations.Count == 0 && root.FindNode(diagnostic.Location.SourceSpan) is not TypeDeclarationSyntax)
+                continue;
             var location = diagnostic.AdditionalLocations.FirstOrDefault() ?? diagnostic.Location;
             var targetDocument = location.SourceTree == null ? null : context.Document.Project.Solution.GetDocument(location.SourceTree);
-            if (targetDocument == null) continue;
+            if (targetDocument == null)
+                continue;
             var targetRoot = await targetDocument.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
             var targetModel = await targetDocument.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
             var declaration = targetRoot?.FindNode(location.SourceSpan).FirstAncestorOrSelf<TypeDeclarationSyntax>();
-            if (declaration == null || targetModel?.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol type) continue;
+            if (declaration == null || targetModel?.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol type)
+                continue;
             bool select = diagnostic.Id == "LuminPack025";
             var constructors = type.InstanceConstructors.Where(constructor => !constructor.IsImplicitlyDeclared)
                 .SelectMany(constructor => constructor.DeclaringSyntaxReferences)
@@ -52,9 +57,11 @@ public sealed class LuminPackConstructorCodeFixProvider : CodeFixProvider
                 foreach (var constructor in targets)
                 {
                     var document = solution.GetDocument(constructor.SyntaxTree);
-                    if (document == null) continue;
+                    if (document == null)
+                        continue;
                     var constructorModel = await document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (constructorModel == null) continue;
+                    if (constructorModel == null)
+                        continue;
                     annotations[constructor] = constructor.AttributeLists.SelectMany(list => list.Attributes)
                         .Where(attribute => CodeFixSyntax.IsAttribute(attribute, constructorModel, "LuminPackConstructor")).ToArray();
                 }
@@ -63,7 +70,8 @@ public sealed class LuminPackConstructorCodeFixProvider : CodeFixProvider
                     var edited = select ? CodeFixSyntax.RemoveAttributes((MemberDeclarationSyntax)rewritten, annotations[original])
                         : (MemberDeclarationSyntax)rewritten;
                     bool chosen = original.SyntaxTree == candidate.SyntaxTree && original.Span == candidate.Span;
-                    if (select) return chosen ? CodeFixSyntax.AddAttribute(edited, "LuminPackConstructor") : edited;
+                    if (select)
+                        return chosen ? CodeFixSyntax.AddAttribute(edited, "LuminPackConstructor") : edited;
                     return CodeFixSyntax.WithAccessibility(edited, SyntaxKind.PublicKeyword);
                 }, context.CancellationToken).ConfigureAwait(false);
                 string signature = candidate.Identifier.ValueText + candidate.ParameterList;

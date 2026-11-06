@@ -54,7 +54,8 @@ internal static class LuminPackDiscovery
         ushort tag = 0;
         foreach (var d in derivedList)
         {
-            while (dataInfo.UnionMembers.Any(m => m.Id == tag)) tag++;
+            while (dataInfo.UnionMembers.Any(m => m.Id == tag))
+                tag++;
             var assignedTag = tag++;
             dataInfo.UnionMembers.Add(new LuminUnionMemberInfo(
                 assignedTag,

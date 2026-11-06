@@ -18,7 +18,8 @@ public static unsafe partial class LuminAspNetCore
     /// <param name="writer">The Core output cursor.</param><param name="value">The header/query values.</param>
     public static void Write(ref LuminPackWriter writer, in StringValues value)
     {
-        if (value.Count > MaximumStringValues) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(value), "Too many HTTP string values.");
+        if (value.Count > MaximumStringValues)
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(value), "Too many HTTP string values.");
         var evaluator = new LuminPackEvaluator();
         int size = sizeof(int);
         for (int index = 0; index < value.Count; index++)
@@ -28,7 +29,8 @@ public static unsafe partial class LuminAspNetCore
         }
         writer.EnsureAdditionalCapacity(size);
         writer.WriteCollectionHeader(value.Count);
-        for (int index = 0; index < value.Count; index++) writer.Write(value[index]);
+        for (int index = 0; index < value.Count; index++)
+            writer.Write(value[index]);
     }
 
     /// <summary>Checks a bounded count and parses all strings before publishing a value or cursor.</summary>
@@ -38,9 +40,11 @@ public static unsafe partial class LuminAspNetCore
         var pending = reader;
         int minimum = default(LuminPackWriter).StringRecordLength();
         int count = pending.ReadLength(minimum);
-        if ((uint)count > MaximumStringValues) LuminPackExceptionHelper.ThrowInvalidDataException("HTTP string value count is outside the supported range.");
+        if ((uint)count > MaximumStringValues)
+            LuminPackExceptionHelper.ThrowInvalidDataException("HTTP string value count is outside the supported range.");
         string?[] values = new string?[count];
-        for (int index = 0; index < count; index++) pending.Read(ref values[index]);
+        for (int index = 0; index < count; index++)
+            pending.Read(ref values[index]);
         StringValues candidate = new(values);
         value = candidate;
         reader = pending;

@@ -23,7 +23,8 @@ public static partial class LuminPackCollectionAccess
             items.AsSpan(0, count).Reverse();
             stack.Clear();
         }
-        if (count != 0) stack.PushRange(items, 0, count);
+        if (count != 0)
+            stack.PushRange(items, 0, count);
     }
 
     /// <summary>Captures the same immutable node chain as the public stack enumerator.</summary>
@@ -60,7 +61,8 @@ public static partial class LuminPackCollectionAccess
             _fallback = null;
             if (ConcurrentStackStorage<T>.Available)
                 _next = Volatile.Read(ref LuminFieldLayout.Field<object?>(stack, ConcurrentStackStorage<T>.Head));
-            else _fallback = stack.GetEnumerator();
+            else
+                _fallback = stack.GetEnumerator();
         }
 
         /// <summary>Returns the already captured enumeration state.</summary>
@@ -74,12 +76,14 @@ public static partial class LuminPackCollectionAccess
         {
             if (_fallback is not null)
             {
-                if (!_fallback.MoveNext()) return false;
+                if (!_fallback.MoveNext())
+                    return false;
                 Current = _fallback.Current;
                 return true;
             }
             object? node = _next;
-            if (node is null) return false;
+            if (node is null)
+                return false;
             Current = LuminFieldLayout.Field<T>(node, ConcurrentStackStorage<T>.Value);
             _next = LuminFieldLayout.Field<object?>(node, ConcurrentStackStorage<T>.Next);
             return true;
@@ -126,7 +130,8 @@ public static partial class LuminPackCollectionAccess
         {
             if (_fallback is not null)
             {
-                if (!_fallback.MoveNext()) return false;
+                if (!_fallback.MoveNext())
+                    return false;
                 Current = _fallback.Current;
                 return true;
             }
@@ -141,7 +146,10 @@ public static partial class LuminPackCollectionAccess
                 node = Volatile.Read(ref LuminFieldLayout.Field<object?>(node, ConcurrentDictionaryStorage<TKey, TValue>.Next));
             while (node is null)
             {
-                if ((uint)_index >= (uint)buckets.Length) { _node = null; return false; }
+                if ((uint)_index >= (uint)buckets.Length)
+                {
+                    _node = null;
+                    return false; }
                 ref byte first = ref Unsafe.As<byte[]>(buckets)[0];
                 ref object? slot = ref Unsafe.As<byte, object?>(ref Unsafe.AddByteOffset(ref first, (nint)_index++ * IntPtr.Size));
                 node = Volatile.Read(ref slot);
@@ -172,7 +180,8 @@ public static partial class LuminPackCollectionAccess
             {
                 var head = LuminFieldLayout.Find(typeof(ConcurrentStack<T>), "_head");
                 var node = head?.FieldType;
-                if (node is null || node.IsValueType || LuminFieldLayout.Find(node, "_next")?.FieldType != node || LuminFieldLayout.Find(node, "_value")?.FieldType != typeof(T)) return;
+                if (node is null || node.IsValueType || LuminFieldLayout.Find(node, "_next")?.FieldType != node || LuminFieldLayout.Find(node, "_value")?.FieldType != typeof(T))
+                    return;
                 Head = LuminFieldLayout.ObjectField(typeof(ConcurrentStack<T>), "_head");
                 Next = LuminFieldLayout.ObjectField(node, "_next");
                 Value = LuminFieldLayout.ObjectField(node, "_value");
@@ -199,19 +208,23 @@ public static partial class LuminPackCollectionAccess
                 var tables = LuminFieldLayout.Find(typeof(ConcurrentDictionary<TKey, TValue>), "_tables")?.FieldType;
                 var buckets = LuminFieldLayout.Find(tables, "_buckets")?.FieldType;
                 var element = buckets?.GetElementType();
-                if (tables is null || buckets is null || !buckets.IsSZArray || element is null) return;
+                if (tables is null || buckets is null || !buckets.IsSZArray || element is null)
+                    return;
                 Type node = element;
                 if (element.IsValueType)
                 {
                     var link = LuminFieldLayout.Find(element, "_node");
-                    if (link is null || link.FieldType.IsValueType || LuminFieldLayout.ValueField(element, "_node") != 0 || LuminFieldLayout.ArrayStride(element) != IntPtr.Size) return;
+                    if (link is null || link.FieldType.IsValueType || LuminFieldLayout.ValueField(element, "_node") != 0 || LuminFieldLayout.ArrayStride(element) != IntPtr.Size)
+                        return;
                     node = link.FieldType;
                 }
                 if (node.IsValueType || LuminFieldLayout.Find(node, "_next")?.FieldType != node ||
-                    LuminFieldLayout.Find(node, "_key")?.FieldType != typeof(TKey) || LuminFieldLayout.Find(node, "_value")?.FieldType != typeof(TValue)) return;
+                    LuminFieldLayout.Find(node, "_key")?.FieldType != typeof(TKey) || LuminFieldLayout.Find(node, "_value")?.FieldType != typeof(TValue))
+                    return;
                 Tables = LuminFieldLayout.ObjectField(typeof(ConcurrentDictionary<TKey, TValue>), "_tables");
                 Buckets = LuminFieldLayout.ObjectField(tables, "_buckets");
-                if (Tables >= 0 && Buckets >= 0) Node = node;
+                if (Tables >= 0 && Buckets >= 0)
+                    Node = node;
             }
             catch { }
         }
@@ -230,7 +243,8 @@ public static partial class LuminPackCollectionAccess
         /// <summary>Rejects node fields whose closed storage offsets cannot be proved.</summary>
         static ConcurrentDictionaryStorage()
         {
-            if (ConcurrentBucketStorage<TKey, TValue>.Node is not { } node) return;
+            if (ConcurrentBucketStorage<TKey, TValue>.Node is not { } node)
+                return;
             Next = LuminFieldLayout.ObjectField(node, "_next");
             Key = LuminFieldLayout.ObjectField(node, "_key");
             Value = LuminFieldLayout.ObjectField(node, "_value");
@@ -250,16 +264,20 @@ public static partial class LuminPackCollectionAccess
             var growing = new ConcurrentDictionary<int, int>(1, 1);
             using (var empty = growing.GetEnumerator())
             {
-                for (int i = 0; i < 127; i++) growing.TryAdd(i, i);
+                for (int i = 0; i < 127; i++)
+                    growing.TryAdd(i, i);
                 int count = 0;
-                while (empty.MoveNext()) count++;
-                if (count != growing.Count) return;
+                while (empty.MoveNext())
+                    count++;
+                if (count != growing.Count)
+                    return;
             }
             var dictionary = new ConcurrentDictionary<int, int>(1, 31, new CollisionComparer());
             dictionary.TryAdd(1, 1);
             dictionary.TryAdd(2, 2);
             using var iterator = dictionary.GetEnumerator();
-            if (!iterator.MoveNext()) return;
+            if (!iterator.MoveNext())
+                return;
             dictionary.TryRemove(iterator.Current.Key == 1 ? 2 : 1, out _);
             ReadNextBeforeYield = iterator.MoveNext();
             Available = true;

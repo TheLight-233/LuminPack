@@ -13,7 +13,8 @@ public static class MemoryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: false, write: true, GetBaseType(fieldData.TypeName))) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: false, write: true, GetBaseType(fieldData.TypeName)))
+            return;
         string baseType = GetBaseType(fieldData.TypeName);
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
         string elementType = GetFirstGeneric(fieldData.TypeName);
@@ -57,7 +58,8 @@ public static class MemoryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: false, write: false, GetBaseType(fieldData.TypeName))) return;
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: false, write: false, GetBaseType(fieldData.TypeName)))
+            return;
         string baseType = GetBaseType(fieldData.TypeName);
         var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
         string elementType = GetFirstGeneric(fieldData.TypeName);
@@ -250,7 +252,8 @@ public static class MemoryEmitter
     {
         string baseType = GetBaseType(fieldData.TypeName);
         sb.AppendLine("            evaluator += 4;");
-        if (baseType == "global::System.ArraySegment") sb.AppendLine("            if (value.Array is null) return;");
+        if (baseType == "global::System.ArraySegment")
+            sb.AppendLine("            if (value.Array is null) return;");
         if (baseType == "global::System.Buffers.ReadOnlySequence")
         {
             sb.AppendLine("            _ = checked((int)value.Length);");
@@ -261,7 +264,8 @@ public static class MemoryEmitter
         {
             string span = baseType == "global::System.ArraySegment" ? "value.AsSpan()" : "value.Span";
             sb.AppendLine("            var payload = " + span + ";");
-            if (CollectionEvaluatorEmitter.AppendContiguousPayloadSize(fieldData, sb, "payload.Length", allowTag: true)) return;
+            if (CollectionEvaluatorEmitter.AppendContiguousPayloadSize(fieldData, sb, "payload.Length", allowTag: true))
+                return;
             sb.AppendLine("            foreach (var element in payload)");
         }
         sb.AppendLine("            {");

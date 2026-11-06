@@ -33,7 +33,8 @@ public static partial class LuminPackCodeGenerator
             foreach (var attribute in current.GetAttributes())
                 if (attribute.AttributeClass?.ToDisplayString() == global::LuminPack.SourceGenerator.CompiledOptions.AttributeName)
                     foreach (var argument in attribute.NamedArguments)
-                        if (argument.Key == "UntrustedData" && argument.Value.Value is bool untrusted) return untrusted;
+                        if (argument.Key == "UntrustedData" && argument.Value.Value is bool untrusted)
+                            return untrusted;
         return true;
     }
 
@@ -84,7 +85,8 @@ public static partial class LuminPackCodeGenerator
                 builder.AppendLine(indent + "    " + target + " = scalar;");
                 builder.AppendLine(indent + "}");
             }
-            else AppendFixedFieldRead(builder, field, target, indent);
+            else
+                AppendFixedFieldRead(builder, field, target, indent);
             return;
         }
         if (field.Type is LuminFiledType.Class or LuminFiledType.Struct && field.ClassFields.Count != 0)
@@ -99,7 +101,8 @@ public static partial class LuminPackCodeGenerator
                     builder.AppendLine(indent + "    reader.EnsureReadable(1);");
                     builder.AppendLine(indent + "    var nestedInput = reader.Buffer[reader.Position] == 255 ? default(" + FormatterTypeName.Get(field.TypeSymbol) + ") : " + target + ";");
                 }
-                else builder.AppendLine(indent + "    var nestedInput = " + target + ";");
+                else
+                    builder.AppendLine(indent + "    var nestedInput = " + target + ";");
                 builder.AppendLine(indent + "    reader.ReadValue(ref nestedInput);");
                 builder.AppendLine(indent + "    " + target + " = nestedInput!;");
                 builder.AppendLine(indent + "}");
@@ -114,7 +117,8 @@ public static partial class LuminPackCodeGenerator
                 builder.AppendLine(indent + (guardNestedReads ? "    if (" + policy + "ReadNullMarker(ref reader, " + memberCount + ")) " : "    if (reader.Read<byte>() == 255) ") + target + " = default!;");
                 builder.AppendLine(indent + "    else");
             }
-            else builder.AppendLine(indent + (guardNestedReads ? "    " + policy + "ReadStructMarker(ref reader, " + memberCount + ");" : "    reader.Advance(1);"));
+            else
+                builder.AppendLine(indent + (guardNestedReads ? "    " + policy + "ReadStructMarker(ref reader, " + memberCount + ");" : "    reader.Advance(1);"));
             builder.AppendLine(indent + "    {");
             string spaces = indent + "        ";
             string name = "inlineRead" + depth;
@@ -127,7 +131,8 @@ public static partial class LuminPackCodeGenerator
                     : string.IsNullOrWhiteSpace(field.FullTypeName)
                         ? target + (fresh ? " = new()" : " ??= new()")
                         : (fresh ? "" : target + " ?? ") + "new " + field.FullTypeName + "()";
-                if (rents) fresh = false;
+                if (rents)
+                    fresh = false;
                 builder.AppendLine(spaces + "var " + name + " = " + allocation + ";");
                 var members = field.ClassFields;
                 string Storage(LuminDataField member) => name + "." + member.Identifier;
@@ -136,10 +141,12 @@ public static partial class LuminPackCodeGenerator
                     // Adjacent fixed members of the constructed nested object use the same proven group as root members.
                     int last = index;
                     if (!members[index].IsCompress && IsMergeableField(members[index]))
-                        while (last + 1 < members.Count && !members[last + 1].IsCompress && IsMergeableField(members[last + 1])) last++;
+                        while (last + 1 < members.Count && !members[last + 1].IsCompress && IsMergeableField(members[last + 1]))
+                            last++;
                     if (TryGenerateCursorFixedGroup(builder, members, index, last, Storage, spaces, write: false, allowBulkCopy))
                         index = last;
-                    else AppendCursorFieldRead(builder, members[index], Storage(members[index]), spaces, depth + 1, fresh, allowBulkCopy, guardNestedReads);
+                    else
+                        AppendCursorFieldRead(builder, members[index], Storage(members[index]), spaces, depth + 1, fresh, allowBulkCopy, guardNestedReads);
                 }
                 builder.AppendLine(spaces + target + " = " + name + ";");
             }

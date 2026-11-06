@@ -40,7 +40,9 @@ internal sealed class FrozenAggregateResult : IEquatable<FrozenAggregateResult>
     /// <param name="files">The complete generated files.</param>
     /// <param name="diagnostics">The diagnostics to publish separately.</param>
     internal FrozenAggregateResult(ImmutableArray<FrozenGeneratedSource> files, ImmutableArray<FrozenDiagnostic> diagnostics)
-    { Files = files; Diagnostics = diagnostics; }
+    {
+        Files = files;
+        Diagnostics = diagnostics; }
 
     /// <summary>Compares every observable aggregate value.</summary>
     /// <param name="other">The previous output batch.</param>
@@ -67,7 +69,10 @@ internal sealed class FrozenGeneratedSource : IEquatable<FrozenGeneratedSource>
     /// <summary>Creates an individual source-output value.</summary>
     /// <param name="name">The existing generated hint name.</param>
     /// <param name="text">The exact complete source text.</param>
-    internal FrozenGeneratedSource(string name, string text) { Name = name; Text = text; }
+    internal FrozenGeneratedSource(string name, string text)
+    {
+        Name = name;
+        Text = text; }
 
     /// <summary>Compares the filename and complete source.</summary>
     /// <param name="other">The previous file value.</param>

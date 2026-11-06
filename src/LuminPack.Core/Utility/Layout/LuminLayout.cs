@@ -74,7 +74,8 @@ internal sealed class LuminLayout
         internal NativeLayout(Segment[] segments, int sourceStride, int destinationStride)
         {
             int length = 0;
-            foreach (var segment in segments) length = checked(length + segment.Length);
+            foreach (var segment in segments)
+                length = checked(length + segment.Length);
             Source = new int[length];
             Destination = new int[length];
             int index = 0;
@@ -131,11 +132,16 @@ internal sealed class LuminLayout
         }
         _segments = runs.ToArray();
 #if NET8_0_OR_GREATER
-        if (!allowVectors || !(Ssse3.IsSupported || AdvSimd.Arm64.IsSupported)) return;
+        if (!allowVectors || !(Ssse3.IsSupported || AdvSimd.Arm64.IsSupported))
+            return;
         var plan = LuminLayoutPlan.Create(source, sourceStride, destination, destinationStride, _segments.Length);
-        if (plan.Mode == 0) return;
-        _mode = plan.Mode; _perBlock = plan.PerBlock; _reserve = plan.Reserve;
-        _inputVectors = plan.InputVectors; _outputVectors = plan.OutputVectors;
+        if (plan.Mode == 0)
+            return;
+        _mode = plan.Mode;
+        _perBlock = plan.PerBlock;
+        _reserve = plan.Reserve;
+        _inputVectors = plan.InputVectors;
+        _outputVectors = plan.OutputVectors;
         _mask0 = Vector128.Create(plan.Mask0Low, plan.Mask0High).AsByte();
         _mask1 = Vector128.Create(plan.Mask1Low, plan.Mask1High).AsByte();
         _mask2 = Vector128.Create(plan.Mask2Low, plan.Mask2High).AsByte();

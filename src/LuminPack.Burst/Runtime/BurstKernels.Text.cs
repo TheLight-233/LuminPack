@@ -18,7 +18,9 @@ namespace LuminPack.Burst
         public static int Utf8Encode(ushort* source, int length, byte* destination, int capacity, int* consumed, int* written, uint flags)
         {
             var status = CoreTextAlgorithms.SerializeAsUtf8(new ReadOnlySpan<char>((char*)source, length), new Span<byte>(destination, capacity), out int read, out int produced, (flags & 1) != 0, (flags & 2) != 0);
-            *consumed = read; *written = produced; return (int)status;
+            *consumed = read;
+            *written = produced;
+            return (int)status;
         }
         /// <summary>Adapts Core's UTF-8 decoder and its complete ASCII widening fast path.</summary><param name="source">Input.</param><param name="length">Byte count.</param><param name="destination">Output.</param><param name="capacity">Character capacity.</param><param name="consumed">Consumed bytes.</param><param name="written">Produced characters.</param><param name="flags">Replacement bit zero and final-block bit one.</param><returns>The operation status.</returns>
         [BurstCompile(CompileSynchronously = true)]
@@ -26,7 +28,9 @@ namespace LuminPack.Burst
         public static int Utf8Decode(byte* source, int length, ushort* destination, int capacity, int* consumed, int* written, uint flags)
         {
             var status = PortableUtf8.ToUtf16(new ReadOnlySpan<byte>(source, length), new Span<char>((char*)destination, capacity), out int read, out int produced, (flags & 1) != 0, (flags & 2) != 0);
-            *consumed = read; *written = produced; return (int)status;
+            *consumed = read;
+            *written = produced;
+            return (int)status;
         }
         /// <summary>Compares complete UTF-8 input to a candidate using Core's strict comparison paths.</summary><param name="source">Input.</param><param name="length">Byte count.</param><param name="candidate">Candidate.</param><param name="characters">Character count.</param><returns>One only for valid equal text.</returns>
         [BurstCompile(CompileSynchronously = true)]

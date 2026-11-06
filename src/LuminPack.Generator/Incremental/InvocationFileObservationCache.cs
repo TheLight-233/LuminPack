@@ -58,7 +58,8 @@ internal sealed class InvocationFileObservationCache
     private IMethodSymbol[] Observe(SyntaxTree tree)
     {
         FileEntry entry;
-        lock (_project.Entries) _project.Entries.TryGetValue(tree.FilePath, out entry);
+        lock (_project.Entries)
+            _project.Entries.TryGetValue(tree.FilePath, out entry);
         if (entry != null && ReferenceEquals(entry.Tree, tree) && entry.Dependencies.All(_compilation.ContainsSyntaxTree))
         {
             var rebound = entry.Methods.Select(_resolver.Resolve).ToArray();
@@ -81,12 +82,14 @@ internal sealed class InvocationFileObservationCache
         if (dependencies != null && identities.All(identity => identity != null))
         {
             var frozen = new FileEntry(tree, identities, dependencies);
-            lock (_project.Entries) _project.Entries[tree.FilePath] = frozen;
+            lock (_project.Entries)
+                _project.Entries[tree.FilePath] = frozen;
         }
         else
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFileFallbacks);
-            lock (_project.Entries) _project.Entries.Remove(tree.FilePath);
+            lock (_project.Entries)
+                _project.Entries.Remove(tree.FilePath);
         }
         return methods;
     }
@@ -104,7 +107,9 @@ internal sealed class InvocationFileObservationCache
         /// <param name="dependencies">Every source tree required for safe binding reuse.</param>
         internal FileEntry(SyntaxTree tree, StableMethodIdentity[] methods, SyntaxTree[] dependencies)
         {
-            Tree = tree; Methods = methods; Dependencies = dependencies;
+            Tree = tree;
+            Methods = methods;
+            Dependencies = dependencies;
         }
     }
 

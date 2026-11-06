@@ -23,11 +23,13 @@ public static class LuminPackCultureInfoCache
     /// <returns>The current read-only framework instance.</returns>
     public static CultureInfo ResolveCulture(string name)
     {
-        if (!Available) return CultureInfo.GetCultureInfo(name);
+        if (!Available)
+            return CultureInfo.GetCultureInfo(name);
         var table = Volatile.Read(ref NameCache(null));
         bool repeated = string.Equals(name, _name, StringComparison.Ordinal);
         if (repeated && _culture is { } cached && table is not null &&
-            _owner!.TryGetTarget(out var owner) && ReferenceEquals(table, owner)) return cached;
+            _owner!.TryGetTarget(out var owner) && ReferenceEquals(table, owner))
+            return cached;
 
         var resolved = CultureInfo.GetCultureInfo(name);
         _culture = null;
@@ -36,16 +38,21 @@ public static class LuminPackCultureInfoCache
             _name = name.Length <= 85 && name == resolved.Name ? resolved.Name : null;
             return resolved;
         }
-        if (table is null || !ReferenceEquals(table, Volatile.Read(ref NameCache(null)))) return resolved;
+        if (table is null || !ReferenceEquals(table, Volatile.Read(ref NameCache(null))))
+            return resolved;
         foreach (char c in name)
-            if (c > 127) return resolved;
+            if (c > 127)
+                return resolved;
         string key = name.ToLowerInvariant();
         // Concurrent first lookups can create competing instances. Retain only the instance actually stored by the BCL.
         lock (table)
         {
-            if (!table.TryGetValue(key, out var canonical) || !ReferenceEquals(resolved, canonical)) return resolved;
-            if (_owner is null) _owner = new(table);
-            else _owner.SetTarget(table);
+            if (!table.TryGetValue(key, out var canonical) || !ReferenceEquals(resolved, canonical))
+                return resolved;
+            if (_owner is null)
+                _owner = new(table);
+            else
+                _owner.SetTarget(table);
             _culture = canonical;
         }
         return resolved;
@@ -55,15 +62,20 @@ public static class LuminPackCultureInfoCache
     /// <returns>Whether the BCL exposes the add-only table replaced by ClearCachedData.</returns>
     private static bool Probe()
     {
-        if (Environment.Version.Major is not (10 or 11) || !RuntimeFeature.IsDynamicCodeCompiled) return false;
+        if (Environment.Version.Major is not (10 or 11) || !RuntimeFeature.IsDynamicCodeCompiled)
+            return false;
         try
         {
             var invariant = CultureInfo.GetCultureInfo(string.Empty);
             var table = Volatile.Read(ref NameCache(null));
-            if (table is null) return false;
-            lock (table) return table.TryGetValue(string.Empty, out var value) && ReferenceEquals(value, invariant);
+            if (table is null)
+                return false;
+            lock (table)
+                return table.TryGetValue(string.Empty, out var value) && ReferenceEquals(value, invariant);
         }
-        catch { return false; }
+        catch
+        {
+            return false; }
     }
 
     /// <summary>Accesses the framework name cache that is replaced when globalization caches are cleared.</summary>

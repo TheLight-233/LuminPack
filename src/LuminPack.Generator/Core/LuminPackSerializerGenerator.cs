@@ -143,10 +143,12 @@ public static partial class LuminPackSerializerGenerator
             cancellationToken.ThrowIfCancellationRequested();
             string typeName = FormatterTypeName.Get(type);
             var apis = apiUsage?.GetApis(type) ?? SerializerApiKind.All;
-            if (apis == SerializerApiKind.None) continue;
+            if (apis == SerializerApiKind.None)
+                continue;
             string access = HasPublicSignature(type) ? "public" : "internal";
             string outputVariant = apis == SerializerApiKind.All ? null : ((int)apis).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (stationaryInput) outputVariant = (outputVariant ?? "all") + "|stationary-input";
+            if (stationaryInput)
+                outputVariant = (outputVariant ?? "all") + "|stationary-input";
             LazyForwardingTargets targets = null;
             if (navigationTargets?.TryGetValue(typeName, out targets) == true && targets.Key.Length != 0)
             {
@@ -154,7 +156,8 @@ public static partial class LuminPackSerializerGenerator
                 rootTargets[typeName] = targets;
             }
             selected.Add((type, typeName, apis, access, outputVariant, targets));
-            if (apis == SerializerApiKind.All) completeApiTypes.Add(typeName);
+            if (apis == SerializerApiKind.All)
+                completeApiTypes.Add(typeName);
         }
         // Each payload's overloads depend only on its own type, so fragments are rendered in parallel; blocks keep the canonical order.
         var rendered = new string[selected.Count];
@@ -177,7 +180,8 @@ public static partial class LuminPackSerializerGenerator
                 _currentAccess = previousAccess;
             }
         }, cancellationToken);
-        for (int index = 0; index < selected.Count; index++) blocks.Add(new KeyValuePair<string, string>(selected[index].Name, rendered[index]));
+        for (int index = 0; index < selected.Count; index++)
+            blocks.Add(new KeyValuePair<string, string>(selected[index].Name, rendered[index]));
 
         _currentAccess = "public";
         string commonProfile = CompiledOptions.Resolve(null, compilation).Identity + (stationaryInput ? "|pointer-input" : "|managed-input");
@@ -215,8 +219,10 @@ public static partial class LuminPackSerializerGenerator
     /// <returns>Whether external consumers can name the complete type.</returns>
     private static bool IsPublicSignatureType(ITypeSymbol type)
     {
-        if (type is IArrayTypeSymbol array) return IsPublicSignatureType(array.ElementType);
-        if (type is not INamedTypeSymbol named) return type.DeclaredAccessibility == Accessibility.Public;
+        if (type is IArrayTypeSymbol array)
+            return IsPublicSignatureType(array.ElementType);
+        if (type is not INamedTypeSymbol named)
+            return type.DeclaredAccessibility == Accessibility.Public;
         return named.DeclaredAccessibility == Accessibility.Public &&
             (named.ContainingType == null || IsPublicSignatureType(named.ContainingType)) &&
             named.TypeArguments.All(IsPublicSignatureType);
@@ -236,7 +242,11 @@ public static partial class LuminPackSerializerGenerator
         /// <param name="blocks">Canonical type identities and concrete overload bodies.</param>
         /// <param name="tail">Common APIs, helpers, and closing declarations.</param>
         internal SerializerParts(string prelude, string header, IReadOnlyList<KeyValuePair<string, string>> blocks, string tail)
-        { Prelude = prelude; Header = header; Blocks = blocks; Tail = tail; }
+        {
+            Prelude = prelude;
+            Header = header;
+            Blocks = blocks;
+            Tail = tail; }
     }
 
     /// <summary>Produces and documents one concrete type's unchanged overload block.</summary>
@@ -333,7 +343,8 @@ public static partial class LuminPackSerializerGenerator
         root = (CompilationUnitSyntax)new JsonValueProjection().Visit(root);
         if (options.Input.Enabled || types.Length == 0 && SafeFacadeProjection.HasPolicies(compilation))
             root = (CompilationUnitSyntax)new SafeFacadeProjection(options, types.Length == 0).Visit(root);
-        if (RequiresStationaryInput(compilation, metadata)) root = (CompilationUnitSyntax)new PinnedReaderProjection(metadata.AllowUnsafe).Visit(root);
+        if (RequiresStationaryInput(compilation, metadata))
+            root = (CompilationUnitSyntax)new PinnedReaderProjection(metadata.AllowUnsafe).Visit(root);
         root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(root);
         string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata, navigationTargets);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
@@ -407,21 +418,36 @@ public static partial class LuminPackSerializerGenerator
         string nullableElementType = null, bool timeZoneSnapshot = false, bool statelessRead = false, string exactInterfaceWrite = null,
         bool smallHashSetWrite = false, bool fixedEnum = false, string rawSequenceWriteElement = null)
     {
-        if ((apis & SerializerApiKind.SerializeArray) != 0) AppendSerialize(sb, typeName, nullableElementType, timeZoneSnapshot, exactInterfaceWrite, smallHashSetWrite, fixedEnum, rawSequenceWriteElement);
-        if ((apis & SerializerApiKind.SerializeBuffer) != 0) AppendSerializeBuffer(sb, typeName);
-        if ((apis & SerializerApiKind.SerializeJsonString) != 0) AppendSerializeJson(sb, typeName);
-        if ((apis & SerializerApiKind.SerializeJsonBuffer) != 0) AppendSerializeJsonBuffer(sb, typeName);
-        if ((apis & SerializerApiKind.SerializeAsync) != 0) AppendSerializeAsync(sb, typeName, metaInfo);
-        if ((apis & SerializerApiKind.DeserializeSpanRef) != 0) AppendDeserializeSpanRef(sb, typeName, timeZoneSnapshot || statelessRead, fixedEnum);
-        if ((apis & SerializerApiKind.DeserializeBufferRef) != 0) AppendDeserializeBufferRef(sb, typeName);
-        if ((apis & SerializerApiKind.DeserializeSequenceRef) != 0) AppendDeserializeSequenceRef(sb, typeName);
-        if ((apis & SerializerApiKind.DeserializeJsonStringRef) != 0) AppendDeserializeJsonStringRef(sb, typeName);
-        if ((apis & SerializerApiKind.DeserializeJsonSpanByteRef) != 0) AppendDeserializeJsonSpanByteRef(sb, typeName);
-        if ((apis & SerializerApiKind.DeserializeJsonSpanCharRef) != 0) AppendDeserializeJsonSpanCharRef(sb, typeName);
-        if ((apis & SerializerApiKind.DeserializeJsonBufferRef) != 0) AppendDeserializeJsonBufferRef(sb, typeName);
-        if ((apis & SerializerApiKind.DeserializeAsyncValue) != 0) AppendDeserializeAsyncValue(sb, typeName, metaInfo);
-        if ((apis & SerializerApiKind.SerializeBufferWriter) != 0) AppendSerializeBufferWriter(sb, typeName);
-        if ((apis & SerializerApiKind.SerializeJsonBufferWriter) != 0) AppendSerializeJsonBufferWriter(sb, typeName);
+        if ((apis & SerializerApiKind.SerializeArray) != 0)
+            AppendSerialize(sb, typeName, nullableElementType, timeZoneSnapshot, exactInterfaceWrite, smallHashSetWrite, fixedEnum, rawSequenceWriteElement);
+        if ((apis & SerializerApiKind.SerializeBuffer) != 0)
+            AppendSerializeBuffer(sb, typeName);
+        if ((apis & SerializerApiKind.SerializeJsonString) != 0)
+            AppendSerializeJson(sb, typeName);
+        if ((apis & SerializerApiKind.SerializeJsonBuffer) != 0)
+            AppendSerializeJsonBuffer(sb, typeName);
+        if ((apis & SerializerApiKind.SerializeAsync) != 0)
+            AppendSerializeAsync(sb, typeName, metaInfo);
+        if ((apis & SerializerApiKind.DeserializeSpanRef) != 0)
+            AppendDeserializeSpanRef(sb, typeName, timeZoneSnapshot || statelessRead, fixedEnum);
+        if ((apis & SerializerApiKind.DeserializeBufferRef) != 0)
+            AppendDeserializeBufferRef(sb, typeName);
+        if ((apis & SerializerApiKind.DeserializeSequenceRef) != 0)
+            AppendDeserializeSequenceRef(sb, typeName);
+        if ((apis & SerializerApiKind.DeserializeJsonStringRef) != 0)
+            AppendDeserializeJsonStringRef(sb, typeName);
+        if ((apis & SerializerApiKind.DeserializeJsonSpanByteRef) != 0)
+            AppendDeserializeJsonSpanByteRef(sb, typeName);
+        if ((apis & SerializerApiKind.DeserializeJsonSpanCharRef) != 0)
+            AppendDeserializeJsonSpanCharRef(sb, typeName);
+        if ((apis & SerializerApiKind.DeserializeJsonBufferRef) != 0)
+            AppendDeserializeJsonBufferRef(sb, typeName);
+        if ((apis & SerializerApiKind.DeserializeAsyncValue) != 0)
+            AppendDeserializeAsyncValue(sb, typeName, metaInfo);
+        if ((apis & SerializerApiKind.SerializeBufferWriter) != 0)
+            AppendSerializeBufferWriter(sb, typeName);
+        if ((apis & SerializerApiKind.SerializeJsonBufferWriter) != 0)
+            AppendSerializeJsonBufferWriter(sb, typeName);
     }
 
     /// <summary>Builds the register source from the supplied metadata.</summary>

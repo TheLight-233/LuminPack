@@ -129,7 +129,8 @@ namespace LuminPack.Internal
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ulong Read64(ref byte source)
         {
-            if (Unsafe.SizeOf<IntPtr>() == 8) return Unsafe.ReadUnaligned<ulong>(ref source);
+            if (Unsafe.SizeOf<IntPtr>() == 8)
+                return Unsafe.ReadUnaligned<ulong>(ref source);
             ulong value = 0;
             LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<ulong, byte>(ref value), ref source, 8);
             return value;

@@ -16,7 +16,8 @@ namespace LuminPack.SourceGenerator
         {
             if (member.DeclaredAccessibility is Accessibility.Private or Accessibility.ProtectedAndInternal or Accessibility.Protected)
                 return true;
-            if (member is not IPropertySymbol property) return false;
+            if (member is not IPropertySymbol property)
+                return false;
             return property.SetMethod == null || property.SetMethod.IsInitOnly ||
                 property.SetMethod.DeclaredAccessibility is Accessibility.Private or Accessibility.ProtectedAndInternal or Accessibility.Protected ||
                 property.GetMethod?.DeclaredAccessibility is Accessibility.Private or Accessibility.ProtectedAndInternal or Accessibility.Protected;
@@ -30,8 +31,12 @@ namespace LuminPack.SourceGenerator
         {
             var previous = _analysisState.CurrentOptions;
             _analysisState.CurrentOptions = field.Options ?? previous;
-            try { ProcessFieldTypeCore(type, field, genericParameters); }
-            finally { _analysisState.CurrentOptions = previous; }
+            try
+            {
+                ProcessFieldTypeCore(type, field, genericParameters); }
+            finally
+            {
+                _analysisState.CurrentOptions = previous; }
         }
 
         /// <summary>Classifies a field while its declaration-time option scope is active.</summary>
@@ -390,11 +395,14 @@ namespace LuminPack.SourceGenerator
                     // Recursively process nested properties.
                     foreach (var member in namedTypeArg.GetMembers().OfType<IPropertySymbol>())
                     {
-                        if (member.IsStatic) continue;
+                        if (member.IsStatic)
+                            continue;
 
-                        if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
+                        if (TypeMetaChecker.TryCheckIgnoreAttribute(member))
+                            continue;
 
-                        if (!IsAutoProperty(member)) continue;
+                        if (!IsAutoProperty(member))
+                            continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member) && !member.Type.IsAnonymousType)
                         {
@@ -404,7 +412,8 @@ namespace LuminPack.SourceGenerator
                         if (member.DeclaredAccessibility is
                             Accessibility.Private or
                             Accessibility.ProtectedAndInternal or
-                            Accessibility.Protected) continue; // Skip static properties.
+                            Accessibility.Protected)
+                            continue; // Skip static properties.
 
                     Set:
                         if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
@@ -444,9 +453,11 @@ namespace LuminPack.SourceGenerator
                     // Recursively process nested fields.
                     foreach (var nestedMember in namedTypeArg.GetMembers().OfType<IFieldSymbol>())
                     {
-                        if (nestedMember.IsStatic) continue;
+                        if (nestedMember.IsStatic)
+                            continue;
 
-                        if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
+                        if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember))
+                            continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember) && !nestedMember.Type.IsAnonymousType)
                         {
@@ -457,7 +468,8 @@ namespace LuminPack.SourceGenerator
                             nestedMember.DeclaredAccessibility is
                                 Accessibility.Private or
                                 Accessibility.ProtectedAndInternal or
-                                Accessibility.Protected) continue; // Skip compiler-generated fields.
+                                Accessibility.Protected)
+                            continue; // Skip compiler-generated fields.
 
                     Set:
                         if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(nestedMember))
@@ -525,11 +537,14 @@ namespace LuminPack.SourceGenerator
 
                         _currentSymbol = member;
 
-                        if (member.IsStatic) continue;
+                        if (member.IsStatic)
+                            continue;
 
-                        if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
+                        if (TypeMetaChecker.TryCheckIgnoreAttribute(member))
+                            continue;
 
-                        if (!IsAutoProperty(member)) continue;
+                        if (!IsAutoProperty(member))
+                            continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                         {
@@ -539,7 +554,8 @@ namespace LuminPack.SourceGenerator
                         if (member.DeclaredAccessibility is
                             Accessibility.Private or
                             Accessibility.ProtectedAndInternal or
-                            Accessibility.Protected) continue; // Skip compiler-generated fields.
+                            Accessibility.Protected)
+                            continue; // Skip compiler-generated fields.
 
                     Set:
                         if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
@@ -582,9 +598,11 @@ namespace LuminPack.SourceGenerator
                     {
                         _currentSymbol = nestedMember;
 
-                        if (nestedMember.IsStatic) continue;
+                        if (nestedMember.IsStatic)
+                            continue;
 
-                        if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
+                        if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember))
+                            continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember))
                         {
@@ -595,7 +613,8 @@ namespace LuminPack.SourceGenerator
                             nestedMember.DeclaredAccessibility is
                                 Accessibility.Private or
                                 Accessibility.ProtectedAndInternal or
-                                Accessibility.Protected) continue; // Skip static and compiler-generated fields.
+                                Accessibility.Protected)
+                            continue; // Skip static and compiler-generated fields.
 
                     Set:
                         if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(nestedMember))
@@ -664,7 +683,8 @@ namespace LuminPack.SourceGenerator
             // Append members declared on the current type.
             foreach (var member in members)
             {
-                if (member.IsImplicitlyDeclared || member.IsStatic) continue;
+                if (member.IsImplicitlyDeclared || member.IsStatic)
+                    continue;
 
                 string typeName = "";
                 bool isValue = false;
@@ -672,7 +692,8 @@ namespace LuminPack.SourceGenerator
 
                 if (member is IPropertySymbol property)
                 {
-                    if (!IsAutoProperty(property)) continue;
+                    if (!IsAutoProperty(property))
+                        continue;
 
                     typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     isValue = property.Type.IsValueType;
@@ -879,7 +900,8 @@ namespace LuminPack.SourceGenerator
         {
             if (baseClassSymbol == null ||
                 baseClassSymbol.SpecialType == SpecialType.System_Object ||
-                baseClassSymbol.SpecialType == SpecialType.System_ValueType) return;
+                baseClassSymbol.SpecialType == SpecialType.System_ValueType)
+                return;
 
             baseClassSymbol = global::LuminPack.Code.Core.ReferencedTypeMetadata.Resolve(baseClassSymbol, _analysisState.Compilation);
 
@@ -903,11 +925,14 @@ namespace LuminPack.SourceGenerator
             {
                 _currentSymbol = member;
 
-                if (member.IsStatic) continue;
+                if (member.IsStatic)
+                    continue;
 
-                if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
+                if (TypeMetaChecker.TryCheckIgnoreAttribute(member))
+                    continue;
 
-                if (!IsAutoProperty(member)) continue;
+                if (!IsAutoProperty(member))
+                    continue;
 
                 if (member.DeclaredAccessibility == Accessibility.Private &&
                     TypeMetaChecker.TryCheckIncludeAttribute(member))
@@ -928,7 +953,8 @@ namespace LuminPack.SourceGenerator
                 if (member.DeclaredAccessibility is
                     Accessibility.Private or
                     Accessibility.ProtectedAndInternal or
-                    Accessibility.Protected) continue;
+                    Accessibility.Protected)
+                    continue;
 
             Set:
                 if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
@@ -966,9 +992,11 @@ namespace LuminPack.SourceGenerator
             {
                 _currentSymbol = nestedMember;
 
-                if (nestedMember.IsStatic) continue;
+                if (nestedMember.IsStatic)
+                    continue;
 
-                if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
+                if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember))
+                    continue;
 
                 if (nestedMember.DeclaredAccessibility == Accessibility.Private &&
                     TypeMetaChecker.TryCheckIncludeAttribute(nestedMember))
@@ -990,7 +1018,8 @@ namespace LuminPack.SourceGenerator
                     nestedMember.DeclaredAccessibility is
                         Accessibility.Private or
                         Accessibility.ProtectedAndInternal or
-                        Accessibility.Protected) continue;
+                        Accessibility.Protected)
+                    continue;
 
             Set:
                 if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(nestedMember))
@@ -1033,11 +1062,14 @@ namespace LuminPack.SourceGenerator
             // Process nested properties.
             foreach (var member in namedType.GetMembers().OfType<IPropertySymbol>())
             {
-                if (member.IsStatic) continue;
+                if (member.IsStatic)
+                    continue;
 
-                if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
+                if (TypeMetaChecker.TryCheckIgnoreAttribute(member))
+                    continue;
 
-                if (!IsAutoProperty(member)) continue;
+                if (!IsAutoProperty(member))
+                    continue;
 
                 bool shouldInclude = TypeMetaChecker.TryCheckIncludeAttribute(member);
 
@@ -1085,9 +1117,11 @@ namespace LuminPack.SourceGenerator
             // Process nested fields using the same rules as properties.
             foreach (var nestedMember in namedType.GetMembers().OfType<IFieldSymbol>())
             {
-                if (nestedMember.IsStatic) continue;
+                if (nestedMember.IsStatic)
+                    continue;
 
-                if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
+                if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember))
+                    continue;
 
                 bool shouldInclude = TypeMetaChecker.TryCheckIncludeAttribute(nestedMember);
 

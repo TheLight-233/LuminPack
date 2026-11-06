@@ -59,7 +59,8 @@ internal static class PackableGraphCache
                 var identity = _factory.Create(root);
                 Entry entry = null;
                 if (identity != null)
-                    lock (_project.Entries) _project.Entries.TryGetValue(identity.Key, out entry);
+                    lock (_project.Entries)
+                        _project.Entries.TryGetValue(identity.Key, out entry);
                 if (entry != null && entry.Dependencies.All(_compilation.ContainsSyntaxTree))
                 {
                     var owned = entry.Owned.Select(_resolver.Resolve).ToArray();
@@ -81,12 +82,15 @@ internal static class PackableGraphCache
                 if (identity != null && frozenOwned.All(type => type != null) && frozenAnalyzed.All(type => type != null))
                 {
                     var frozen = new Entry(frozenOwned, frozenAnalyzed, _observations.CaptureDependencies(new ITypeSymbol[] { root }));
-                    lock (_project.Entries) _project.Entries[identity.Key] = frozen;
+                    lock (_project.Entries)
+                        _project.Entries[identity.Key] = frozen;
                 }
                 else
                 {
                     Interlocked.Increment(ref IncrementalGenerationMetrics.OwnershipGraphFallbacks);
-                    if (identity != null) lock (_project.Entries) _project.Entries.Remove(identity.Key);
+                    if (identity != null)
+                        lock (_project.Entries)
+                            _project.Entries.Remove(identity.Key);
                 }
                 return result;
             }
@@ -105,7 +109,10 @@ internal static class PackableGraphCache
         /// <param name="analyzed">All observed graph types in first-occurrence order.</param>
         /// <param name="dependencies">Source trees required for reuse.</param>
         internal Entry(StableTypeIdentity[] owned, StableTypeIdentity[] analyzed, SyntaxTree[] dependencies)
-        { Owned = owned; Analyzed = analyzed; Dependencies = dependencies; }
+        {
+            Owned = owned;
+            Analyzed = analyzed;
+            Dependencies = dependencies; }
     }
 
     /// <summary>Projects one contribution into symbols belonging to the current compilation only.</summary>
@@ -117,6 +124,9 @@ internal static class PackableGraphCache
         /// <summary>Captures current types without retaining them in the shared project cache.</summary>
         /// <param name="owned">The current owned type sequence.</param>
         /// <param name="analyzed">The current complete type sequence.</param>
-        internal CurrentGraph(ITypeSymbol[] owned, ITypeSymbol[] analyzed) { Owned = owned; Analyzed = analyzed; }
+        internal CurrentGraph(ITypeSymbol[] owned, ITypeSymbol[] analyzed)
+        {
+            Owned = owned;
+            Analyzed = analyzed; }
     }
 }

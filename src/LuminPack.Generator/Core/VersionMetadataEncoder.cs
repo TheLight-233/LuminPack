@@ -14,13 +14,16 @@ internal static class VersionMetadataEncoder
     /// <returns>The fixed VarInt table, or null when a field width requires runtime layout information.</returns>
     internal static byte[] FixedLengths(LuminDataInfo data)
     {
-        if (!LuminPackCodeGenerator.FindAllUnmanagedType(data.fields)) return null;
+        if (!LuminPackCodeGenerator.FindAllUnmanagedType(data.fields))
+            return null;
         var lengths = new List<byte>();
         foreach (var field in data.fields)
         {
-            if (TypeIdentity(field.TypeSymbol) == null) return null;
+            if (TypeIdentity(field.TypeSymbol) == null)
+                return null;
             var type = field.TypeSymbol;
-            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration) type = enumeration.EnumUnderlyingType;
+            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
+                type = enumeration.EnumUnderlyingType;
             int size = type.SpecialType switch
             {
                 SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
@@ -30,7 +33,8 @@ internal static class VersionMetadataEncoder
                 SpecialType.System_Decimal => 16,
                 _ => 0
             };
-            if (size == 0) return null;
+            if (size == 0)
+                return null;
             lengths.Add((byte)size);
         }
         return lengths.ToArray();
@@ -41,9 +45,11 @@ internal static class VersionMetadataEncoder
     /// <returns>One entry per member in write order.</returns>
     internal static int?[] Widths(LuminDataInfo data) => data.fields.Select(field =>
     {
-        if (!LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type)) return (int?)255;
+        if (!LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
+            return (int?)255;
         var type = field.TypeSymbol;
-        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration) type = enumeration.EnumUnderlyingType;
+        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
+            type = enumeration.EnumUnderlyingType;
         int size = type.SpecialType switch
         {
             SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
@@ -65,7 +71,8 @@ internal static class VersionMetadataEncoder
         foreach (var field in data.fields)
         {
             string type = TypeIdentity(field.TypeSymbol);
-            if (type == null) return null;
+            if (type == null)
+                return null;
             Append(bytes, field.SerializedName);
             Append(bytes, Representation(field) + (IsDirectPrimitive(field) ? string.Empty : type));
         }
@@ -114,7 +121,10 @@ internal static class VersionMetadataEncoder
     {
         var bytes = Encoding.UTF8.GetBytes(value);
         int length = bytes.Length;
-        while (length >= 128) { target.Add((byte)(length | 128)); length >>= 7; }
+        while (length >= 128)
+        {
+            target.Add((byte)(length | 128));
+            length >>= 7; }
         target.Add((byte)length);
         target.AddRange(bytes);
     }
@@ -134,30 +144,35 @@ internal static class VersionMetadataEncoder
             SpecialType.System_IntPtr => "ni", SpecialType.System_UIntPtr => "nu", SpecialType.System_DateTime => "dt",
             _ => null
         };
-        if (primitive != null) return "#" + primitive;
+        if (primitive != null)
+            return "#" + primitive;
         if (type is IArrayTypeSymbol array)
         {
             string element = TypeIdentity(array.ElementType);
             return element == null ? null : element + "[" + new string(',', array.Rank - 1) + "]";
         }
-        if (type is not INamedTypeSymbol named) return null;
+        if (type is not INamedTypeSymbol named)
+            return null;
         if (named.ContainingAssembly.Name is "System.Private.CoreLib" or "mscorlib" or "System.Runtime" or "netstandard")
         {
             string known = named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) switch
             {
                 "global::System.Guid" => "g", "global::System.TimeSpan" => "ts", "global::System.DateTimeOffset" => "dto", _ => null
             };
-            if (known != null) return "#" + known;
+            if (known != null)
+                return "#" + known;
         }
         var levels = new Stack<INamedTypeSymbol>();
-        for (var current = named; current != null; current = current.ContainingType) levels.Push(current);
+        for (var current = named; current != null; current = current.ContainingType)
+            levels.Push(current);
         var namespaces = new Stack<string>();
         for (var current = named.ContainingNamespace; current != null && !current.IsGlobalNamespace; current = current.ContainingNamespace)
             namespaces.Push(current.MetadataName);
         string ns = namespaces.Count == 0 ? string.Empty : string.Join(".", namespaces) + ".";
         string name = "@" + ns + string.Join("+", levels.Select(level => level.MetadataName));
         var arguments = levels.SelectMany(level => level.TypeArguments).Select(TypeIdentity).ToArray();
-        if (arguments.Any(argument => argument == null)) return null;
+        if (arguments.Any(argument => argument == null))
+            return null;
         return arguments.Length == 0 ? name : name + "<" + string.Join(";", arguments) + ";>";
     }
 }

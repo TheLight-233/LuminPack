@@ -23,14 +23,17 @@ public static partial class LuminPackCollectionAccess
         forwards = null;
         backwards = null;
         reverse = false;
-        if (!ImmutableQueueStorage.Available || !ImmutableQueueReversalStorage.Available) return false;
+        if (!ImmutableQueueStorage.Available || !ImmutableQueueReversalStorage.Available)
+            return false;
         var front = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.Forwards);
         var back = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.BackwardsReversed);
-        if (front is null) return false;
+        if (front is null)
+            return false;
         if (back is null)
         {
             back = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.Backwards);
-            if (back is null) return false;
+            if (back is null)
+                return false;
             // A singleton is already in both orders and needs no temporary lease.
             reverse = !back.IsEmpty && !back.Pop().IsEmpty;
         }
@@ -49,12 +52,14 @@ public static partial class LuminPackCollectionAccess
     public static T[] RentImmutableQueueReversal<T>(ImmutableStack<T> stack, out int count)
     {
         count = 0;
-        foreach (T item in stack) count = checked(count + 1);
+        foreach (T item in stack)
+            count = checked(count + 1);
         T[] items = ArrayPool<T>.Shared.Rent(count);
         try
         {
             int index = count;
-            foreach (T item in stack) items[--index] = item;
+            foreach (T item in stack)
+                items[--index] = item;
             return items;
         }
         catch (Exception error)
@@ -76,24 +81,29 @@ public static partial class LuminPackCollectionAccess
         {
             try
             {
-                if (!ImmutableQueueStorage.Available) return false;
+                if (!ImmutableQueueStorage.Available)
+                    return false;
                 var integers = ImmutableQueue<int>.Empty;
                 var objects = ImmutableQueue<object>.Empty;
                 for (int index = 0; index < 17; index++)
                 {
                     integers = integers.Enqueue(index);
                     objects = objects.Enqueue(new object());
-                    if (!Matches(integers) || !Matches(objects)) return false;
+                    if (!Matches(integers) || !Matches(objects))
+                        return false;
                     if (index % 3 == 2)
                     {
                         integers = integers.Dequeue();
                         objects = objects.Dequeue();
-                        if (!Matches(integers) || !Matches(objects)) return false;
+                        if (!Matches(integers) || !Matches(objects))
+                            return false;
                     }
                 }
                 return Matches(ImmutableQueue<int>.Empty);
             }
-            catch { return false; }
+            catch
+            {
+                return false; }
         }
 
         /// <summary>Compares raw and cached stack orders with the public queue without modifying its membership.</summary>
@@ -104,9 +114,11 @@ public static partial class LuminPackCollectionAccess
         {
             var front = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.Forwards);
             var back = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.Backwards);
-            if (front is null || back is null) return false;
+            if (front is null || back is null)
+                return false;
             var expected = front.Concat(back.Reverse()).ToArray();
-            if (!queue.SequenceEqual(expected)) return false;
+            if (!queue.SequenceEqual(expected))
+                return false;
             var cached = LuminFieldLayout.Field<ImmutableStack<T>?>(queue, ImmutableQueueStorage.BackwardsReversed);
             return cached is null ? back.IsEmpty : front.Concat(cached).SequenceEqual(expected);
         }

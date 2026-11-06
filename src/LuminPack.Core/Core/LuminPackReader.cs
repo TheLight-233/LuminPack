@@ -154,7 +154,8 @@ namespace LuminPack.Core
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (Options is null) Options = CreateReferenceState();
+                if (Options is null)
+                    Options = CreateReferenceState();
                 return Options;
             }
         }
@@ -1092,14 +1093,17 @@ namespace LuminPack.Core
             bool token = recording == LuminPackStringRecording.Token;
             if (recording == LuminPackStringRecording.VarInt)
             {
-                if ((uint)index > (uint)buffer.Length) return false;
+                if ((uint)index > (uint)buffer.Length)
+                    return false;
                 ReadVarIntRecordHeader<TOptions>(buffer.Slice(index), out int prefix, out int bytes, out int characters, out bool latin1);
-                if (bytes < 0 || characters != current.Length) return false;
+                if (bytes < 0 || characters != current.Length)
+                    return false;
                 var variablePayload = buffer.Slice(index + prefix, bytes);
                 bool variableMatch = utf8 ? StringSerializer.MatchesUtf8(variablePayload, current) : latin1
                     ? StringSerializer.MatchesLatin1(ref MemoryMarshal.GetReference(variablePayload), current)
                     : variablePayload.SequenceEqual(MemoryMarshal.AsBytes(current.AsSpan()));
-                if (variableMatch) end = index + prefix + bytes;
+                if (variableMatch)
+                    end = index + prefix + bytes;
                 return variableMatch;
             }
             int header = token ? 0 : utf8 ? 8 : 4;
@@ -1194,8 +1198,10 @@ namespace LuminPack.Core
             slots = default;
             if (typeof(TOptions) != typeof(LuminPackUtf16LengthOptions) || matrix is null ||
                 matrix.GetLength(0) != rows || matrix.GetLength(1) != columns ||
-                matrix.GetLowerBound(0) != 0 || matrix.GetLowerBound(1) != 0) return false;
-            if (matrix.Length != 0) slots = MemoryMarshal.CreateSpan(ref matrix[0, 0], matrix.Length);
+                matrix.GetLowerBound(0) != 0 || matrix.GetLowerBound(1) != 0)
+                return false;
+            if (matrix.Length != 0)
+                slots = MemoryMarshal.CreateSpan(ref matrix[0, 0], matrix.Length);
             return true;
         }
 
@@ -1250,7 +1256,8 @@ namespace LuminPack.Core
                 ref string? slot = ref Unsafe.Add(ref first, (nint)(uint)i);
                 string? current = slot;
                 string? decoded = Read<TOptions>(current);
-                if (!ReferenceEquals(current, decoded)) slot = decoded;
+                if (!ReferenceEquals(current, decoded))
+                    slot = decoded;
             }
         }
 
@@ -1277,7 +1284,8 @@ namespace LuminPack.Core
                 ref byte payload = ref Unsafe.Add(ref Current, sizeof(int));
                 Advance(sizeof(int) + length);
                 Unsafe.Add(ref first, i++) = StringSerializer.CreateShortLatin1String(ref payload, length);
-                if (i == slots.Length || Unsafe.Add(ref first, i) is not null || RemainingWindowBytes < sizeof(int)) break;
+                if (i == slots.Length || Unsafe.Add(ref first, i) is not null || RemainingWindowBytes < sizeof(int))
+                    break;
                 header = Read<int>(ref Current);
             } while (IsShortLatin1Header(header));
             return i;
@@ -1308,7 +1316,8 @@ namespace LuminPack.Core
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
             {
                 var recording = default(TOptions).StringRecording;
-                if (recording == LuminPackStringRecording.VarInt) return ReadVarIntString<TOptions>(current);
+                if (recording == LuminPackStringRecording.VarInt)
+                    return ReadVarIntString<TOptions>(current);
                 utf16Length = recording == LuminPackStringRecording.Length;
             }
             if (utf16Length)
@@ -1392,19 +1401,22 @@ namespace LuminPack.Core
         internal static int ReadVarIntHeader(ReadOnlySpan<byte> source, ref int offset)
         {
             int position = offset;
-            if ((uint)position >= (uint)source.Length) LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
+            if ((uint)position >= (uint)source.Length)
+                LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
             uint first = source[position++];
             if (first < 128)
             {
                 offset = position;
                 return unchecked((int)(first - 1));
             }
-            if ((uint)position >= (uint)source.Length) LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
+            if ((uint)position >= (uint)source.Length)
+                LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
             uint second = source[position++];
             uint value = (first & 127) | ((second & 127) << 7);
             if (second < 128)
             {
-                if (second == 0) LuminPackExceptionHelper.ThrowInvalidStringLength(-2);
+                if (second == 0)
+                    LuminPackExceptionHelper.ThrowInvalidStringLength(-2);
                 offset = position;
                 return unchecked((int)(value - 1));
             }
@@ -1422,13 +1434,16 @@ namespace LuminPack.Core
         {
             for (int shift = 14; shift <= 28; shift += 7)
             {
-                if ((uint)position >= (uint)source.Length) LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
+                if ((uint)position >= (uint)source.Length)
+                    LuminPackExceptionHelper.ThrowInSufficientBuffer(1);
                 uint next = source[position++];
-                if (shift == 28 && next > 8) LuminPackExceptionHelper.ThrowInvalidStringLength(-2);
+                if (shift == 28 && next > 8)
+                    LuminPackExceptionHelper.ThrowInvalidStringLength(-2);
                 value |= (next & 127) << shift;
                 if (next < 128)
                 {
-                    if (shift != 0 && next == 0 || value > 0x80000000u) LuminPackExceptionHelper.ThrowInvalidStringLength(-2);
+                    if (shift != 0 && next == 0 || value > 0x80000000u)
+                        LuminPackExceptionHelper.ThrowInvalidStringLength(-2);
                     offset = position;
                     return unchecked((int)(value - 1));
                 }
@@ -1455,7 +1470,8 @@ namespace LuminPack.Core
             bytes = header == -1 ? -1 : utf8 ? header : StringSerializer.Utf16RecordPayload(header);
             if (utf8 && (header == -1 ? characters != -1 : characters < 0 || characters > bytes || bytes != 0 && characters == 0))
                 LuminPackExceptionHelper.ThrowInvalidStringLength(characters);
-            if (bytes >= 0 && (uint)bytes > (uint)(source.Length - prefix)) LuminPackExceptionHelper.ThrowInSufficientBuffer(bytes);
+            if (bytes >= 0 && (uint)bytes > (uint)(source.Length - prefix))
+                LuminPackExceptionHelper.ThrowInSufficientBuffer(bytes);
         }
 
         /// <summary>Decodes a validated opt-in record while preserving equal immutable string storage.</summary>
@@ -1469,8 +1485,10 @@ namespace LuminPack.Core
         {
             ReadVarIntRecordHeader<TOptions>(source, out int prefix, out int bytes, out int characters, out bool latin1);
             consumed = prefix + Math.Max(bytes, 0);
-            if (bytes < 0) return null;
-            if (bytes == 0) return string.Empty;
+            if (bytes < 0)
+                return null;
+            if (bytes == 0)
+                return string.Empty;
             var payload = source.Slice(prefix, bytes);
             ref byte text = ref MemoryMarshal.GetReference(payload);
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -1664,7 +1682,8 @@ namespace LuminPack.Core
         public uint ReadVarIntUInt32()
         {
             sbyte typeCode = this.Read<sbyte>();
-            if (typeCode >= 0) return (uint)typeCode;
+            if (typeCode >= 0)
+                return (uint)typeCode;
             return ReadExtendedVarIntUInt32(typeCode);
         }
 
@@ -1703,7 +1722,8 @@ namespace LuminPack.Core
         public int ReadVarIntInt32()
         {
             sbyte typeCode = this.Read<sbyte>();
-            if (typeCode >= 0) return (int)typeCode;
+            if (typeCode >= 0)
+                return (int)typeCode;
             return ReadExtendedVarIntInt32(typeCode);
         }
 
@@ -1845,13 +1865,17 @@ namespace LuminPack.Core
             int count = Read<int>();
             if (count <= 0)
             {
-                if (count == 0) value = Array.Empty<bool>();
-                else if (count == LuminPackCode.NullCollection) value = null;
-                else LuminPackExceptionHelper.ThrowInvalidCollectionLength(count);
+                if (count == 0)
+                    value = Array.Empty<bool>();
+                else if (count == LuminPackCode.NullCollection)
+                    value = null;
+                else
+                    LuminPackExceptionHelper.ThrowInvalidCollectionLength(count);
                 return true;
             }
             EnsureReadable(count);
-            if (value is null || value.Length != count) value = LuminPackMarshal.AllocateUninitializedArray<bool>(count);
+            if (value is null || value.Length != count)
+                value = LuminPackMarshal.AllocateUninitializedArray<bool>(count);
             bool canonical = global::LuminPack.Security.LuminPackInputPolicy.CopyBooleans(ref Current,
                 ref Unsafe.As<bool, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), count);
             Advance(count);
@@ -2284,7 +2308,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ValidateVersionFieldEnd(int actual, int expected)
         {
-            if (actual != expected) ThrowVersionFieldEnd();
+            if (actual != expected)
+                ThrowVersionFieldEnd();
         }
 
         /// <summary>Rejects a member whose read ended elsewhere than its recorded length.</summary>

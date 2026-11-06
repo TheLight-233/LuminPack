@@ -43,7 +43,8 @@ internal sealed class BinaryHeaderProjection : CSharpSyntaxRewriter
                         original = conditional.ReplaceNode(call, call.WithExpression(access.WithName(SyntaxFactory.IdentifierName(peek))));
                     }
                 }
-                if (followingAdvance) index++;
+                if (followingAdvance)
+                    index++;
             }
             statements.Add((StatementSyntax)Visit(original));
         }
@@ -60,7 +61,8 @@ internal sealed class BinaryHeaderProjection : CSharpSyntaxRewriter
         receiver = name = string.Empty;
         if (call?.Expression is not MemberAccessExpressionSyntax access || !_states.Contains(access.Expression.ToString()) ||
             call.ArgumentList.Arguments.FirstOrDefault() is not { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Position" } } first ||
-            !first.RefKindKeyword.IsKind(SyntaxKind.RefKeyword)) return 0;
+            !first.RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
+            return 0;
         receiver = access.Expression.ToString();
         name = access.Name.Identifier.ValueText;
         return name switch
@@ -80,7 +82,8 @@ internal sealed class BinaryHeaderProjection : CSharpSyntaxRewriter
     {
         string text = statement.WithoutTrivia().ToString().Replace(" ", string.Empty);
         text = text.Replace("sizeof(int)", "4").Replace("sizeof(byte)", "1").Replace("sizeof(ushort)", "2");
-        if (width == 1 && text == receiver + ".Position++;") return true;
+        if (width == 1 && text == receiver + ".Position++;")
+            return true;
         return text == receiver + ".Advance(" + width + ");" || text == receiver + ".Position+=" + width + ";";
     }
 

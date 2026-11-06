@@ -59,13 +59,17 @@ internal static class LuminByteShuffle
             var low = Vector256.Create(Vector128.LoadUnsafe(ref input, (nuint)(0 * inputStep + 0)), Vector128.LoadUnsafe(ref input, (nuint)(1 * inputStep + 0)));
             var high = wideInput ? Vector256.Create(Vector128.LoadUnsafe(ref input, (nuint)(0 * inputStep + 16)), Vector128.LoadUnsafe(ref input, (nuint)(1 * inputStep + 16))) : default;
             var first = Avx2.Shuffle(low, m0);
-            if (wideInput) first |= Avx2.Shuffle(high, m1);
+            if (wideInput)
+                first |= Avx2.Shuffle(high, m1);
             var second = wideOutput ? Avx2.Shuffle(low, m2) : default;
-            if (wideOutput && wideInput) second |= Avx2.Shuffle(high, m3);
+            if (wideOutput && wideInput)
+                second |= Avx2.Shuffle(high, m3);
             first.GetLower().StoreUnsafe(ref output, (nuint)(0 * outputStep));
-            if (wideOutput) second.GetLower().StoreUnsafe(ref output, (nuint)(0 * outputStep + 16));
+            if (wideOutput)
+                second.GetLower().StoreUnsafe(ref output, (nuint)(0 * outputStep + 16));
             first.GetUpper().StoreUnsafe(ref output, (nuint)(1 * outputStep));
-            if (wideOutput) second.GetUpper().StoreUnsafe(ref output, (nuint)(1 * outputStep + 16));
+            if (wideOutput)
+                second.GetUpper().StoreUnsafe(ref output, (nuint)(1 * outputStep + 16));
             input = ref Unsafe.Add(ref input, inputStep * 2);
             output = ref Unsafe.Add(ref output, outputStep * 2);
         }
@@ -95,17 +99,23 @@ internal static class LuminByteShuffle
             var low = Vector512.Create(Vector256.Create(Vector128.LoadUnsafe(ref input, (nuint)(0 * inputStep + 0)), Vector128.LoadUnsafe(ref input, (nuint)(1 * inputStep + 0))), Vector256.Create(Vector128.LoadUnsafe(ref input, (nuint)(2 * inputStep + 0)), Vector128.LoadUnsafe(ref input, (nuint)(3 * inputStep + 0))));
             var high = wideInput ? Vector512.Create(Vector256.Create(Vector128.LoadUnsafe(ref input, (nuint)(0 * inputStep + 16)), Vector128.LoadUnsafe(ref input, (nuint)(1 * inputStep + 16))), Vector256.Create(Vector128.LoadUnsafe(ref input, (nuint)(2 * inputStep + 16)), Vector128.LoadUnsafe(ref input, (nuint)(3 * inputStep + 16)))) : default;
             var first = Avx512BW.Shuffle(low, m0);
-            if (wideInput) first |= Avx512BW.Shuffle(high, m1);
+            if (wideInput)
+                first |= Avx512BW.Shuffle(high, m1);
             var second = wideOutput ? Avx512BW.Shuffle(low, m2) : default;
-            if (wideOutput && wideInput) second |= Avx512BW.Shuffle(high, m3);
+            if (wideOutput && wideInput)
+                second |= Avx512BW.Shuffle(high, m3);
             first.GetLower().GetLower().StoreUnsafe(ref output, (nuint)(0 * outputStep));
-            if (wideOutput) second.GetLower().GetLower().StoreUnsafe(ref output, (nuint)(0 * outputStep + 16));
+            if (wideOutput)
+                second.GetLower().GetLower().StoreUnsafe(ref output, (nuint)(0 * outputStep + 16));
             first.GetLower().GetUpper().StoreUnsafe(ref output, (nuint)(1 * outputStep));
-            if (wideOutput) second.GetLower().GetUpper().StoreUnsafe(ref output, (nuint)(1 * outputStep + 16));
+            if (wideOutput)
+                second.GetLower().GetUpper().StoreUnsafe(ref output, (nuint)(1 * outputStep + 16));
             first.GetUpper().GetLower().StoreUnsafe(ref output, (nuint)(2 * outputStep));
-            if (wideOutput) second.GetUpper().GetLower().StoreUnsafe(ref output, (nuint)(2 * outputStep + 16));
+            if (wideOutput)
+                second.GetUpper().GetLower().StoreUnsafe(ref output, (nuint)(2 * outputStep + 16));
             first.GetUpper().GetUpper().StoreUnsafe(ref output, (nuint)(3 * outputStep));
-            if (wideOutput) second.GetUpper().GetUpper().StoreUnsafe(ref output, (nuint)(3 * outputStep + 16));
+            if (wideOutput)
+                second.GetUpper().GetUpper().StoreUnsafe(ref output, (nuint)(3 * outputStep + 16));
             input = ref Unsafe.Add(ref input, inputStep * 4);
             output = ref Unsafe.Add(ref output, outputStep * 4);
         }

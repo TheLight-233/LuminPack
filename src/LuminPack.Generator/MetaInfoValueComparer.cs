@@ -13,8 +13,10 @@ internal sealed class MetaInfoValueComparer : IEqualityComparer<MetaInfo>
     /// <returns>Whether both values specify the same generation behavior.</returns>
     public bool Equals(MetaInfo left, MetaInfo right)
     {
-        if (ReferenceEquals(left, right)) return true;
-        if (left == null || right == null) return false;
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left == null || right == null)
+            return false;
         return object.Equals(left.ParseOptions, right.ParseOptions) &&
                left.CSharpVersion == right.CSharpVersion &&
                left.IsNet8 == right.IsNet8 &&
@@ -29,7 +31,8 @@ internal sealed class MetaInfoValueComparer : IEqualityComparer<MetaInfo>
     /// <returns>A hash consistent with value equality.</returns>
     public int GetHashCode(MetaInfo value)
     {
-        if (value == null) return 0;
+        if (value == null)
+            return 0;
         unchecked
         {
             int hash = value.ParseOptions?.GetHashCode() ?? 0;

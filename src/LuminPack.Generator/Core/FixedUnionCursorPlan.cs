@@ -43,7 +43,8 @@ internal sealed class FixedUnionCursorPlan
     internal static FixedUnionCursorPlan GetRoot(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } root ||
-            !IsLocal(root, compilation) || !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(root)) return null;
+            !IsLocal(root, compilation) || !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(root))
+            return null;
         var state = Cache.GetValue(compilation, _ => new Settings()).Get(metadata);
         return state.Roots.GetOrAdd(root, current => new Lazy<FixedUnionCursorPlan>(() =>
             BuildRoot(current, compilation, state), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
@@ -57,15 +58,18 @@ internal sealed class FixedUnionCursorPlan
     internal static bool CanUsePayload(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } named ||
-            !IsLocal(named, compilation)) return false;
+            !IsLocal(named, compilation))
+            return false;
         bool hasRoot = false;
         for (var parent = named.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object; parent = parent.BaseType)
         {
-            if (parent.IsGenericType) return false;
+            if (parent.IsGenericType)
+                return false;
             hasRoot |= parent.IsAbstract && IsLocal(parent, compilation) &&
                 CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(parent);
         }
-        if (!hasRoot) return false;
+        if (!hasRoot)
+            return false;
         var state = Cache.GetValue(compilation, _ => new Settings()).Get(metadata);
         return state.Payloads.GetOrAdd(named, current => new Lazy<bool>(() =>
             AnalyzePayload(current, compilation, state.Metadata), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
@@ -89,7 +93,8 @@ internal sealed class FixedUnionCursorPlan
         var data = LuminPackSourceGenerator.GetSerializationMetadata(root, compilation, state.Metadata);
         if (!data.isUnion || !data.CanGenerateUnionDispatch || data.generatorType != GeneratorType.Object || data.IsWideTag ||
             data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) ||
-            data.UnionMembers.Any(member => member.Id >= 250)) return null;
+            data.UnionMembers.Any(member => member.Id >= 250))
+            return null;
         var cases = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var ordered = new List<(int Id, string Type)>();
         foreach (var member in data.UnionMembers.OrderBy(member => member.Id))
@@ -109,21 +114,27 @@ internal sealed class FixedUnionCursorPlan
         // Keep the deliberately conservative storage restrictions of the approved experiment.
         for (var current = type; current != null && current.SpecialType != SpecialType.System_Object; current = current.BaseType)
         {
-            if (TypeMetaChecker.CheckGeneratorType(current) != GeneratorType.Object) return false;
+            if (TypeMetaChecker.CheckGeneratorType(current) != GeneratorType.Object)
+                return false;
             foreach (var member in current.GetMembers())
             {
                 if (member is IMethodSymbol callback && callback.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() is
-                    "LuminPack.Attribute.LuminPackOnSerializingAttribute" or "LuminPack.Attribute.LuminPackOnSerializedAttribute")) return false;
-                if (member.IsStatic) continue;
-                if (member is IPropertySymbol) return false;
+                    "LuminPack.Attribute.LuminPackOnSerializingAttribute" or "LuminPack.Attribute.LuminPackOnSerializedAttribute"))
+                    return false;
+                if (member.IsStatic)
+                    continue;
+                if (member is IPropertySymbol)
+                    return false;
                 if (member is IFieldSymbol field && (field.DeclaredAccessibility != Accessibility.Public || field.IsVolatile ||
-                    field.GetAttributes().Any(attribute => attribute.AttributeClass?.ContainingNamespace.ToDisplayString() == "LuminPack.Attribute"))) return false;
+                    field.GetAttributes().Any(attribute => attribute.AttributeClass?.ContainingNamespace.ToDisplayString() == "LuminPack.Attribute")))
+                    return false;
             }
         }
         var data = LuminPackSourceGenerator.GetSerializationMetadata(type, compilation, metadata);
         if (data.generatorType != GeneratorType.Object || data.isUnion || data.fields.Count == 0 ||
             data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) ||
-            data.callBackMethods.Any(callback => callback.Item2 is SerializeCallBackType.OnSerializing or SerializeCallBackType.OnSerialized)) return false;
+            data.callBackMethods.Any(callback => callback.Item2 is SerializeCallBackType.OnSerializing or SerializeCallBackType.OnSerialized))
+            return false;
         var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         return data.fields.All(field => !field.IsPrivate && !field.isProperty && !field.IsVolatile && !field.IsCompress &&
             HasRawContract(field.TypeSymbol, visited));
@@ -135,13 +146,17 @@ internal sealed class FixedUnionCursorPlan
     /// <returns>Whether its original selected operation is ordinary raw fixed storage.</returns>
     private static bool HasRawContract(ITypeSymbol type, HashSet<ITypeSymbol> visited)
     {
-        if (!EmitterTypeTraits.CanUseUnmanagedSerialization(type)) return false;
-        if (!visited.Add(type)) return true;
-        if (type is not INamedTypeSymbol named) return true;
+        if (!EmitterTypeTraits.CanUseUnmanagedSerialization(type))
+            return false;
+        if (!visited.Add(type))
+            return true;
+        if (type is not INamedTypeSymbol named)
+            return true;
         if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T ||
             TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object ||
             named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() is
-                LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or "System.Runtime.CompilerServices.UnionAttribute")) return false;
+                LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or "System.Runtime.CompilerServices.UnionAttribute"))
+            return false;
         return named.TypeKind != TypeKind.Struct || named.GetMembers().OfType<IFieldSymbol>()
             .Where(field => !field.IsStatic).All(field => HasRawContract(field.Type, visited));
     }
@@ -158,7 +173,8 @@ internal sealed class FixedUnionCursorPlan
         {
             lock (_states)
             {
-                if (_states.TryGetValue(metadata, out var state)) return state;
+                if (_states.TryGetValue(metadata, out var state))
+                    return state;
                 var snapshot = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8,
                     metadata.IsNet9_OR_GREATER, metadata.AllowUnsafe, metadata.RegisterMode) { IsForUnity = metadata.IsForUnity };
                 state = new State(snapshot);

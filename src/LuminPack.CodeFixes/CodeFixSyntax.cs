@@ -81,9 +81,11 @@ internal static class CodeFixSyntax
         {
             cancellationToken.ThrowIfCancellationRequested();
             var document = solution.GetDocument(group.Key);
-            if (document == null) continue;
+            if (document == null)
+                continue;
             var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            if (root == null) continue;
+            if (root == null)
+                continue;
             solution = solution.WithDocumentSyntaxRoot(document.Id, root.ReplaceNodes(group, rewrite));
         }
         return solution;
@@ -100,7 +102,8 @@ internal static class CodeFixSyntax
             foreach (var reference in current.DeclaringSyntaxReferences)
             {
                 var node = reference.GetSyntax(cancellationToken);
-                if (node is TypeDeclarationSyntax) yield return node;
+                if (node is TypeDeclarationSyntax)
+                    yield return node;
             }
         }
     }
@@ -113,7 +116,8 @@ internal static class CodeFixSyntax
     internal static IEnumerable<SyntaxNode> MethodDeclarations(MethodDeclarationSyntax method, SemanticModel model, CancellationToken cancellationToken)
     {
         var symbol = model.GetDeclaredSymbol(method, cancellationToken);
-        if (symbol == null) return new SyntaxNode[] { method };
+        if (symbol == null)
+            return new SyntaxNode[] { method };
         return new[] { symbol, symbol.PartialDefinitionPart, symbol.PartialImplementationPart }
             .Where(part => part != null).SelectMany(part => part!.DeclaringSyntaxReferences)
             .Select(reference => reference.GetSyntax(cancellationToken)).Distinct();

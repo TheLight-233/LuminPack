@@ -18,9 +18,12 @@ public static partial class LuminTreeStorage
     /// <remarks>Generated callers select only framework scalar or string elements. User callbacks retain their original interleaved construction.</remarks>
     public static ImmutableHashSet<T> CreateFrameworkImmutableHashSet<T>(T[] items, int count)
     {
-        if ((uint)count > (uint)items.Length) LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
-        if (count == 0) return ImmutableHashSet<T>.Empty;
-        if (count == 1) return ImmutableHashSet.Create(items[0]);
+        if ((uint)count > (uint)items.Length)
+            LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        if (count == 0)
+            return ImmutableHashSet<T>.Empty;
+        if (count == 1)
+            return ImmutableHashSet.Create(items[0]);
         if (ImmutableHashSetLayout<T>.Available && GroupedHashLayout.Available)
             return count == 2 ? BuildFrameworkHashPair(items[0], items[1]) : BuildFrameworkHash(items, count);
         return CreateImmutableHashSet(items, count);
@@ -42,7 +45,9 @@ public static partial class LuminTreeStorage
             builder.Add(second);
             return builder.ToImmutable();
         }
-        finally { LuminImmutableBuilders.ReturnHashSet(builder); }
+        finally
+        {
+            LuminImmutableBuilders.ReturnHashSet(builder); }
     }
 
     /// <summary>Completes a fresh singleton with at most one additional hash or collision node.</summary>
@@ -61,7 +66,8 @@ public static partial class LuminTreeStorage
         object emptyList = Field<object>(ref rootBucket, offsets.Additional);
         if (firstHash == secondHash)
         {
-            if (EqualityComparer<T>.Default.Equals(first, second)) return result;
+            if (EqualityComparer<T>.Default.Equals(first, second))
+                return result;
             object tail = offsets.List.New(emptyList);
             Field<T>(tail, offsets.List.Key) = second;
             Seal(tail, emptyList, emptyList, in offsets.List);
@@ -110,7 +116,8 @@ public static partial class LuminTreeStorage
                 {
                     int hash = (int)(keys[start] >> 32);
                     int end = start + 1;
-                    while (end < count && (int)(keys[end] >> 32) == hash) end++;
+                    while (end < count && (int)(keys[end] >> 32) == hash)
+                        end++;
                     int first = unique;
                     groups[groupCount++] = first;
                     for (int index = start; index < end; index++)
@@ -118,8 +125,10 @@ public static partial class LuminTreeStorage
                         long key = keys[index];
                         T item = items[(int)(uint)key];
                         int prior = first;
-                        while (prior < unique && !comparer.Equals(items[(int)(uint)keys[prior]], item)) prior++;
-                        if (prior == unique) keys[unique++] = key;
+                        while (prior < unique && !comparer.Equals(items[(int)(uint)keys[prior]], item))
+                            prior++;
+                        if (prior == unique)
+                            keys[unique++] = key;
                     }
                     start = end;
                 }
@@ -132,9 +141,13 @@ public static partial class LuminTreeStorage
                 Field<int>(result, ImmutableHashSetLayout<T>.Count) = unique;
                 return result;
             }
-            finally { ArrayPool<int>.Shared.Return(groups); }
+            finally
+            {
+                ArrayPool<int>.Shared.Return(groups); }
         }
-        finally { ArrayPool<long>.Shared.Return(keys); }
+        finally
+        {
+            ArrayPool<long>.Shared.Return(keys); }
     }
 
     /// <summary>Completes one unpublished hash node and its balanced child subtrees.</summary>
@@ -182,7 +195,8 @@ public static partial class LuminTreeStorage
     private static object LinkGroupedHash<T>(object empty, object emptyList, in HashOffsets offsets,
         T[] items, long[] keys, int[] groups, int groupCount, int unique, int start, int end)
     {
-        if (start > end) return empty;
+        if (start > end)
+            return empty;
         object node = offsets.Tree.New(empty);
         FillGroupedHash(node, empty, emptyList, in offsets, items, keys, groups, groupCount, unique, start, end);
         return node;
@@ -199,13 +213,15 @@ public static partial class LuminTreeStorage
     /// <returns>The immutable list root, retaining the BCL's root-promotion behavior after removal.</returns>
     private static object LinkHashValues<T>(object empty, in NodeOffsets offsets, T[] items, long[] keys, int start, int end)
     {
-        if (start > end) return empty;
+        if (start > end)
+            return empty;
         // Sequential AVL appends leave a complete left subtree. Its size changes
         // at 3, 6, 12, ... nodes, when the root rotates. Preserve that topology:
         // HashBucket.Remove promotes this list's root into the first-value slot.
         int width = 1;
         int limit = (end - start + 1) / 3;
-        while (width <= limit) width <<= 1;
+        while (width <= limit)
+            width <<= 1;
         int middle = start + width - 1;
         object node = offsets.New(empty);
         Field<T>(node, offsets.Key) = items[(int)(uint)keys[middle]];
@@ -224,20 +240,24 @@ public static partial class LuminTreeStorage
         /// <returns>Whether the direct construction preserves the framework's observable behavior.</returns>
         private static bool Probe()
         {
-            if (!ImmutableHashSetLayout<long>.Available) return false;
+            if (!ImmutableHashSetLayout<long>.Available)
+                return false;
             long[] items = Enumerable.Range(0, 65).Select(i => ((long)i << 32) | (uint)i).Concat(new long[] { -1, 0, 7, 11, 23, 7 }).ToArray();
             var reference = ImmutableHashSet.CreateRange(items);
             var result = BuildFrameworkHash(items, items.Length);
-            if (result.Count != reference.Count || !result.SequenceEqual(reference)) return false;
+            if (result.Count != reference.Count || !result.SequenceEqual(reference))
+                return false;
             foreach (long item in items)
             {
-                if (!result.Contains(item) || !result.Remove(item).SequenceEqual(reference.Remove(item))) return false;
+                if (!result.Contains(item) || !result.Remove(item).SequenceEqual(reference.Remove(item)))
+                    return false;
             }
             foreach (var pair in new[] { new long[] { 0, 0 }, new long[] { 0, 0x100000001 }, new long[] { 3, 7 }, new long[] { 7, 3 }, new long[] { -1, 0 } })
             {
                 var expected = ImmutableHashSet.CreateRange(pair);
                 var actual = BuildFrameworkHashPair(pair[0], pair[1]);
-                if (!actual.SequenceEqual(expected) || !actual.Remove(pair[0]).SequenceEqual(expected.Remove(pair[0]))) return false;
+                if (!actual.SequenceEqual(expected) || !actual.Remove(pair[0]).SequenceEqual(expected.Remove(pair[0])))
+                    return false;
             }
             var changed = result.Add(17).Remove(0).Add(0);
             return changed.SequenceEqual(reference.Add(17).Remove(0).Add(0)) && result.SequenceEqual(reference);

@@ -41,11 +41,15 @@ internal sealed class StorageLayoutInfo
     /// <param name="indent">The declaration indentation.</param>
     internal void AppendAttribute(StringBuilder builder, string indent)
     {
-        if (Kind == StructLayout.Default) return;
+        if (Kind == StructLayout.Default)
+            return;
         builder.Append(indent).Append("[global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.").Append(Kind);
-        if (Pack != 0) builder.Append(", Pack = ").Append(Pack);
-        if (Size != 0) builder.Append(", Size = ").Append(Size);
-        if (CharSet != 0) builder.Append(", CharSet = (global::System.Runtime.InteropServices.CharSet)").Append(CharSet);
+        if (Pack != 0)
+            builder.Append(", Pack = ").Append(Pack);
+        if (Size != 0)
+            builder.Append(", Size = ").Append(Size);
+        if (CharSet != 0)
+            builder.Append(", CharSet = (global::System.Runtime.InteropServices.CharSet)").Append(CharSet);
         builder.AppendLine(")]");
     }
 
@@ -57,7 +61,8 @@ internal sealed class StorageLayoutInfo
         var result = new StorageLayoutInfo();
         foreach (var attribute in type.GetAttributes())
         {
-            if (attribute.AttributeClass?.ToDisplayString() != "System.Runtime.InteropServices.StructLayoutAttribute") continue;
+            if (attribute.AttributeClass?.ToDisplayString() != "System.Runtime.InteropServices.StructLayoutAttribute")
+                continue;
             result.Kind = (int)attribute.ConstructorArguments[0].Value switch
             {
                 0 => StructLayout.Sequential,
@@ -66,21 +71,27 @@ internal sealed class StorageLayoutInfo
             };
             foreach (var argument in attribute.NamedArguments)
             {
-                if (argument.Key == "Pack") result.Pack = (int)argument.Value.Value;
-                if (argument.Key == "Size") result.Size = (int)argument.Value.Value;
-                if (argument.Key == "CharSet") result.CharSet = (int)argument.Value.Value;
+                if (argument.Key == "Pack")
+                    result.Pack = (int)argument.Value.Value;
+                if (argument.Key == "Size")
+                    result.Size = (int)argument.Value.Value;
+                if (argument.Key == "CharSet")
+                    result.CharSet = (int)argument.Value.Value;
             }
             return result;
         }
         // Source modules have no PE image. Older Unity compiler implementations throw here instead of returning null.
-        if (type.TypeKind == TypeKind.Error || type.DeclaringSyntaxReferences.Length != 0) return result;
+        if (type.TypeKind == TypeKind.Error || type.DeclaringSyntaxReferences.Length != 0)
+            return result;
         var metadata = type.ContainingModule.GetMetadata();
-        if (metadata == null) return result;
+        if (metadata == null)
+            return result;
         var reader = metadata.GetMetadataReader();
         foreach (var handle in reader.TypeDefinitions)
         {
             var definition = reader.GetTypeDefinition(handle);
-            if (!Matches(reader, definition, type)) continue;
+            if (!Matches(reader, definition, type))
+                continue;
             result.Kind = (definition.Attributes & TypeAttributes.LayoutMask) switch
             {
                 TypeAttributes.SequentialLayout => StructLayout.Sequential,
@@ -100,7 +111,8 @@ internal sealed class StorageLayoutInfo
             {
                 var field = reader.GetFieldDefinition(fieldHandle);
                 int offset = field.GetOffset();
-                if (offset >= 0) result._offsets.Add(reader.GetString(field.Name), offset);
+                if (offset >= 0)
+                    result._offsets.Add(reader.GetString(field.Name), offset);
             }
             return result;
         }
@@ -114,7 +126,8 @@ internal sealed class StorageLayoutInfo
     /// <returns>Whether both identify the same declaration.</returns>
     private static bool Matches(MetadataReader reader, TypeDefinition definition, INamedTypeSymbol type)
     {
-        if (reader.GetString(definition.Name) != type.MetadataName) return false;
+        if (reader.GetString(definition.Name) != type.MetadataName)
+            return false;
         var declaring = definition.GetDeclaringType();
         if (type.ContainingType != null)
             return !declaring.IsNil && Matches(reader, reader.GetTypeDefinition(declaring), type.ContainingType);

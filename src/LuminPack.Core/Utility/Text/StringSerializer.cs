@@ -46,8 +46,13 @@ public static unsafe partial class StringSerializer
 #if NET8_0_OR_GREATER
         return Utf8.IsValid(source);
 #else
-        try { StrictUtf8.GetCharCount(source); return true; }
-        catch (DecoderFallbackException) { return false; }
+        try
+        {
+            StrictUtf8.GetCharCount(source);
+            return true; }
+        catch (DecoderFallbackException)
+        {
+            return false; }
 #endif
     }
     /// <summary>Materializes validated native UTF-16 code units without a decoder or temporary character buffer.</summary>
@@ -232,7 +237,8 @@ public static unsafe partial class StringSerializer
     internal static bool MatchesUtf8(ReadOnlySpan<byte> bytes, string text)
     {
 #if NETSTANDARD2_1
-        if (LuminPackBurst.TryUtf8Equal(bytes, text.AsSpan(), out bool equal)) return equal;
+        if (LuminPackBurst.TryUtf8Equal(bytes, text.AsSpan(), out bool equal))
+            return equal;
 #endif
 #if NET8_0_OR_GREATER
         if (bytes.Length == text.Length)
@@ -557,7 +563,8 @@ public static unsafe partial class StringSerializer
         // The runtime decoder is correct on Unity and this branch is isolated to
         // the Unity-targeted netstandard2.1 build.
         var bytes = LuminPackMarshal.CreateReadOnlySpan(ref source, length);
-        if (utf16Length <= 0) return Encoding.UTF8.GetString(bytes);
+        if (utf16Length <= 0)
+            return Encoding.UTF8.GetString(bytes);
         if ((uint)utf16Length > (uint)length)
             LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
         try
@@ -641,7 +648,8 @@ public static unsafe partial class StringSerializer
     internal static void SerializeUtf16(ref byte destination, ref byte source, uint length)
     {
 #if NETSTANDARD2_1
-        if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 16 && LuminPackBurst.TryCopy(ref destination, ref source, length)) return;
+        if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 16 && LuminPackBurst.TryCopy(ref destination, ref source, length))
+            return;
 #endif
         if (Unsafe.SizeOf<IntPtr>() == 8 && length <= 64)
         {
@@ -813,7 +821,8 @@ public static unsafe partial class StringSerializer
     internal static OperationStatus SerializeAsUtf8(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
     {
 #if NETSTANDARD2_1
-        if (LuminPackBurst.TryEncodeUtf8(source, destination, replaceInvalidSequences, isFinalBlock, out charsRead, out bytesWritten, out OperationStatus nativeStatus)) return nativeStatus;
+        if (LuminPackBurst.TryEncodeUtf8(source, destination, replaceInvalidSequences, isFinalBlock, out charsRead, out bytesWritten, out OperationStatus nativeStatus))
+            return nativeStatus;
         if (LuminPackBurst.TryAsciiEncode(source, destination, escapeJson: false))
         {
             charsRead = bytesWritten = source.Length;
@@ -1056,7 +1065,8 @@ public static unsafe partial class StringSerializer
     internal static unsafe OperationStatus DeserializeFromUtf8(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
     {
 #if NETSTANDARD2_1
-        if (LuminPackBurst.TryDecodeUtf8(source, destination, replaceInvalidSequences, isFinalBlock, out bytesRead, out charsWritten, out OperationStatus nativeStatus)) return nativeStatus;
+        if (LuminPackBurst.TryDecodeUtf8(source, destination, replaceInvalidSequences, isFinalBlock, out bytesRead, out charsWritten, out OperationStatus nativeStatus))
+            return nativeStatus;
 #endif
         fixed (byte* pSource = &MemoryMarshal.GetReference(source))
         fixed (char* pDest = &MemoryMarshal.GetReference(destination))
@@ -1454,8 +1464,10 @@ public static unsafe partial class StringSerializer
                     {
                         uint ascii = (uint)(four & 0xFFUL) | (uint)((four >> 8) & 0xFF00UL) | (uint)((four >> 16) & 0xFF0000UL) | (uint)((four >> 24) & 0xFF000000UL);
 #if NETSTANDARD2_1
-                        if (IntPtr.Size == 8) ((Utf8PackedWord32*)output)->Value = ascii;
-                        else Unsafe.WriteUnaligned(output, ascii);
+                        if (IntPtr.Size == 8)
+                            ((Utf8PackedWord32*)output)->Value = ascii;
+                        else
+                            Unsafe.WriteUnaligned(output, ascii);
 #else
                         Unsafe.WriteUnaligned(output, ascii);
 #endif

@@ -16,18 +16,23 @@ internal static class DictionaryUnionSlotPlan
     internal static List<(int Id, string Type)> GetCases(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         if (!metadata.IsNet8 || metadata.IsForUnity ||
-            metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", System.StringComparison.Ordinal))) return null;
+            metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", System.StringComparison.Ordinal)))
+            return null;
         var plan = FixedUnionCursorPlan.GetRoot(type, compilation, metadata);
-        if (plan == null || type is not INamedTypeSymbol root) return null;
+        if (plan == null || type is not INamedTypeSymbol root)
+            return null;
         var data = LuminPackSourceGenerator.GetSerializationMetadata(root, compilation, metadata);
-        if (!data.isUnion || data.IsWideTag || data.callBackMethods.Count != 0 || data.RentPoolMethod != null) return null;
+        if (!data.isUnion || data.IsWideTag || data.callBackMethods.Count != 0 || data.RentPoolMethod != null)
+            return null;
         var cases = new List<(int Id, string Type)>();
         foreach (var member in data.UnionMembers)
         {
-            if (member.Id >= 250 || member.Type is not INamedTypeSymbol { IsAbstract: false, IsGenericType: false } named || !plan.Contains(named)) continue;
+            if (member.Id >= 250 || member.Type is not INamedTypeSymbol { IsAbstract: false, IsGenericType: false } named || !plan.Contains(named))
+                continue;
             var payload = LuminPackSourceGenerator.GetSerializationMetadata(named, compilation, metadata);
             if (payload.callBackMethods.Count != 0 || payload.RentPoolMethod != null ||
-                payload.SelectedConstructor is { Parameters.Count: > 0 }) continue;
+                payload.SelectedConstructor is { Parameters.Count: > 0 })
+                continue;
             cases.Add((member.Id, named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
         }
         return cases.Count == 0 ? null : cases;

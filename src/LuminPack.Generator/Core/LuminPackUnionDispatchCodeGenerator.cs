@@ -103,7 +103,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         var rootType = root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var modifier = root.TypeKind == TypeKind.Interface ? string.Empty : "public virtual ";
         var entryType = "global::LuminPack.Code.LuminPackFormatter";
-        if (cursor) AppendCursorRoot(sb, padding, rootType, suffix);
+        if (cursor)
+            AppendCursorRoot(sb, padding, rootType, suffix);
 
         // The cross-assembly manual registration registry uses function pointers (delegate*),
         // which require an unsafe context.  When the project does not enable AllowUnsafeBlocks,
@@ -246,7 +247,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
 
-        if (cursor) AppendCursorMember(sb, padding, members[0], suffix, canSeal, fixedCursor);
+        if (cursor)
+            AppendCursorMember(sb, padding, members[0], suffix, canSeal, fixedCursor);
 
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
@@ -399,7 +401,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         }
 
         for (int index = 0; index < members.Count; index++)
-            if (SymbolEqualityComparer.Default.Equals(members[index].Type, member.Type)) return data.UnionMembers.Count + index;
+            if (SymbolEqualityComparer.Default.Equals(members[index].Type, member.Type))
+                return data.UnionMembers.Count + index;
         return -1;
     }
 

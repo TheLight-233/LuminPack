@@ -57,7 +57,10 @@ internal sealed class FrozenLayoutFragment : IEquatable<FrozenLayoutFragment>
     /// <summary>Creates a frozen layout contribution.</summary>
     /// <param name="key">The existing registry key.</param>
     /// <param name="text">The declaration including its exact original whitespace.</param>
-    internal FrozenLayoutFragment(string key, string text) { Key = key; Text = text; }
+    internal FrozenLayoutFragment(string key, string text)
+    {
+        Key = key;
+        Text = text; }
 
     /// <summary>Compares the declaration identity and complete text.</summary>
     /// <param name="other">The contribution to compare.</param>
@@ -88,7 +91,11 @@ internal sealed class FrozenLayoutGroup : IEquatable<FrozenLayoutGroup>
     /// <param name="fragments">The ordered contributions.</param>
     /// <param name="error">The legacy aggregate failure message, if generation failed.</param>
     internal FrozenLayoutGroup(string className, CSharpParseOptions options, IEnumerable<FrozenLayoutFragment> fragments, string error)
-    { ClassName = className; Options = options; Fragments = fragments.ToImmutableArray(); Error = error; }
+    {
+        ClassName = className;
+        Options = options;
+        Fragments = fragments.ToImmutableArray();
+        Error = error; }
 
     /// <summary>Compares only layout output dependencies.</summary>
     /// <param name="other">The previous projection.</param>
@@ -197,11 +204,13 @@ internal sealed class FrozenDiagnostic : IEquatable<FrozenDiagnostic>
         /// <returns>The current source location or the original external position.</returns>
         internal Location Materialize(Compilation compilation)
         {
-            if (_kind == LocationKind.None) return Location.None;
+            if (_kind == LocationKind.None)
+                return Location.None;
             if (_kind == LocationKind.SourceFile)
             {
                 var tree = compilation.SyntaxTrees.FirstOrDefault(candidate => GetTreeIdentity(candidate) == _treeIdentity);
-                if (tree != null) return Location.Create(tree, _span);
+                if (tree != null)
+                    return Location.Create(tree, _span);
             }
             return Location.Create(_path, _span, _lines);
         }
@@ -210,7 +219,8 @@ internal sealed class FrozenDiagnostic : IEquatable<FrozenDiagnostic>
         /// <returns>The original source position, or its external representation if the tree is no longer alive.</returns>
         internal Location MaterializeSource()
         {
-            if (_kind == LocationKind.None) return Location.None;
+            if (_kind == LocationKind.None)
+                return Location.None;
             if (_kind == LocationKind.SourceFile && _sourceTree != null && _sourceTree.TryGetTarget(out var tree))
                 return Location.Create(tree, _span);
             return Location.Create(_path, _span, _lines);

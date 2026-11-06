@@ -13,7 +13,9 @@ internal sealed class ClosedOperationTypes : CSharpSyntaxRewriter
 
     /// <summary>Creates a syntax-only type substitution.</summary>
     /// <param name="arguments">Original parameter names and fully qualified closed arguments.</param>
-    private ClosedOperationTypes(IReadOnlyDictionary<string, string> arguments) { _arguments = arguments; }
+    private ClosedOperationTypes(IReadOnlyDictionary<string, string> arguments)
+    {
+        _arguments = arguments; }
 
     /// <summary>Produces a canonical operation identity with all original parameters substituted.</summary>
     /// <param name="type">The original bound operation type.</param>

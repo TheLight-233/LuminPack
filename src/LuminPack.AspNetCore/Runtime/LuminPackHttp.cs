@@ -23,14 +23,18 @@ public static class LuminPackHttp
     public static async ValueTask<T> ReadLuminPackAsync<T>(this HttpRequest request, LuminPackHttpCodec<T> codec,
         int maximumBodyBytes = DefaultMaximumBodyBytes, CancellationToken cancellationToken = default)
     {
-        if (request is null) Errors.ThrowArgumentNullException(nameof(request));
-        if (codec is null) Errors.ThrowArgumentNullException(nameof(codec));
+        if (request is null)
+            Errors.ThrowArgumentNullException(nameof(request));
+        if (codec is null)
+            Errors.ThrowArgumentNullException(nameof(codec));
         if (!MediaTypeHeaderValue.TryParse(request.ContentType, out var mediaType) ||
             !string.Equals(mediaType.MediaType.Value, ContentType, StringComparison.OrdinalIgnoreCase))
             Errors.Rethrow(LuminPackHttpExceptionHelper.UnsupportedMediaType());
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(request.HttpContext.RequestAborted, cancellationToken);
         using var body = await ReadBodyAsync(request, maximumBodyBytes, linked.Token).ConfigureAwait(false);
-        try { return codec.Deserialize(body.Memory); }
+        try
+        {
+            return codec.Deserialize(body.Memory); }
         catch (Exception error) when (codec.IsMalformedInput(error))
         {
             Errors.Rethrow(LuminPackHttpExceptionHelper.InvalidPayload(error));
@@ -49,8 +53,10 @@ public static class LuminPackHttp
     /// <remarks>The body is read straight into rented storage that grows by doubling, so no staging stream or final copy is allocated.</remarks>
     internal static async Task<PooledBody> ReadBodyAsync(HttpRequest request, int maximumBodyBytes, CancellationToken cancellationToken)
     {
-        if (maximumBodyBytes <= 0) Errors.ThrowArgumentOutOfRangeException(nameof(maximumBodyBytes));
-        if (request.ContentLength > maximumBodyBytes) Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
+        if (maximumBodyBytes <= 0)
+            Errors.ThrowArgumentOutOfRangeException(nameof(maximumBodyBytes));
+        if (request.ContentLength > maximumBodyBytes)
+            Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
         // One byte beyond the limit detects an oversized body whose length was not declared.
         long ceiling = (long)maximumBodyBytes + 1;
         byte[] buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Max(request.ContentLength ?? 0, 16_384), ceiling));
@@ -68,9 +74,11 @@ public static class LuminPackHttp
                 }
                 int readLength = (int)Math.Min(buffer.Length - length, ceiling - length);
                 int count = await request.Body.ReadAsync(buffer.AsMemory(length, readLength), cancellationToken).ConfigureAwait(false);
-                if (count == 0) break;
+                if (count == 0)
+                    break;
                 length += count;
-                if (length > maximumBodyBytes) Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
+                if (length > maximumBodyBytes)
+                    Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
             }
         }
         catch (Exception error)
@@ -103,7 +111,8 @@ public static class LuminPackHttp
         {
             var buffer = _buffer;
             _buffer = null;
-            if (buffer is not null) ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            if (buffer is not null)
+                ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
     }
 }
