@@ -813,6 +813,46 @@ namespace LuminPack.Core
         internal void SkipWhitespace<TOptions>()
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
+#if NET8_0_OR_GREATER
+            nint bytes = Remaining;
+            int count = 0;
+            ref byte first = ref Current;
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+            {
+                while (count < bytes)
+                {
+                    ref byte current = ref Unsafe.Add(ref first, count);
+                    byte value = current;
+                    if (!IsJsonWhitespace(value)) break;
+                    if (count >= 32)
+                    {
+                        count += CountWhitespaceTail(Buffer.Slice(Position + count));
+                        break;
+                    }
+                    count += value == ' ' && bytes - count >= 4 && Unsafe.ReadUnaligned<uint>(ref current) == 0x20202020u ? 4 : 1;
+                }
+            }
+            else
+            {
+                while (bytes - count >= 2)
+                {
+                    ref byte current = ref Unsafe.Add(ref first, count);
+                    char value = Unsafe.ReadUnaligned<char>(ref current);
+                    if (!IsJsonWhitespace(value)) break;
+                    if (count >= 64)
+                    {
+                        count += CountWhitespaceTail(MemoryMarshal.Cast<byte, char>(Buffer.Slice(Position + count))) * 2;
+                        break;
+                    }
+                    if (value == ' ' && Unsafe.SizeOf<IntPtr>() == 8 && bytes - count >= 8 &&
+                        Unsafe.ReadUnaligned<ulong>(ref current) == 0x0020002000200020UL)
+                        count += 8;
+                    else
+                        count += 2;
+                }
+            }
+            if (count != 0) Advance(count);
+#else
             if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
             {
                 while (Remaining > 0)
@@ -845,7 +885,42 @@ namespace LuminPack.Core
                         break;
                 }
             }
+#endif
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Tests the four JSON whitespace code points.</summary>
+        /// <param name="value">A byte or UTF-16 code unit.</param>
+        /// <returns>Whether the code point is JSON whitespace.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool IsJsonWhitespace(int value) => value is ' ' or '\t' or '\r' or '\n';
+
+        /// <summary>Counts the bounded tail of an established whitespace run without a search table.</summary>
+        /// <param name="tail">The remaining complete code units.</param>
+        /// <returns>The number of whitespace code units before the next token.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int CountWhitespaceTail(ReadOnlySpan<byte> tail)
+        {
+            int spaces = tail.IndexOfAnyExcept((byte)' ');
+            if (spaces < 0) return tail.Length;
+            if (!IsJsonWhitespace(tail[spaces])) return spaces;
+            int other = tail.Slice(spaces).IndexOfAnyExcept(" \t\r\n"u8);
+            return other < 0 ? tail.Length : spaces + other;
+        }
+
+        /// <summary>Counts the bounded tail of an established whitespace run without a search table.</summary>
+        /// <param name="tail">The remaining complete code units.</param>
+        /// <returns>The number of whitespace code units before the next token.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int CountWhitespaceTail(ReadOnlySpan<char> tail)
+        {
+            int spaces = tail.IndexOfAnyExcept(' ');
+            if (spaces < 0) return tail.Length;
+            if (!IsJsonWhitespace(tail[spaces])) return spaces;
+            int other = tail.Slice(spaces).IndexOfAnyExcept(" \t\r\n".AsSpan());
+            return other < 0 ? tail.Length : spaces + other;
+        }
+#endif
 
         /// <summary>Performs the push container step for the current operation.</summary>
         /// <param name = "isObject">The is object used by this operation.</param>

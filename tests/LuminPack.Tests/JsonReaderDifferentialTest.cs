@@ -26,6 +26,26 @@ public class JsonReaderDifferentialTest
     private static readonly TestSerializationProfile s_strictUtf16 =
         TestSerializationProfile.Utf16 with { ValidateJsonSyntax = true };
 
+    /// <summary>Checks the cursor through short, long and incomplete UTF-16 whitespace windows.</summary>
+    [Fact]
+    public void WhitespaceStopsExactlyAtTheFirstOtherCodeUnit()
+    {
+        foreach (int length in new[] { 0, 1, 4, 8, 15, 16, 17, 31, 32, 33, 64, 257 })
+        foreach (bool mixed in new[] { false, true })
+        foreach (bool utf8 in new[] { false, true })
+        foreach (string suffix in new[] { "", "x", "\u000b" })
+        {
+            string prefix = mixed ? new string(Enumerable.Range(0, length).Select(i => " \t\r\n"[i % 4]).ToArray()) : new string(' ', length);
+            byte[] bytes = (utf8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(prefix + suffix);
+            if (!utf8) bytes = bytes.Append((byte)0x20).ToArray();
+            Span<byte> span = bytes;
+            var reader = new LuminPackJsonReader(ref span, new LuminPackReaderOptionalState());
+            if (utf8) reader.SkipWhitespace<TestStrictUtf8Length>();
+            else reader.SkipWhitespace<TestStrictUtf16Length>();
+            Assert.Equal(utf8 ? length : length * 2, reader.Position);
+        }
+    }
+
     /// <summary>Calls the byte hexadecimal kernel without changing its span contract.</summary>
     /// <param name="source">The complete source.</param><param name="index">The first hexadecimal character.</param>
     /// <returns>The decoded code unit.</returns>
