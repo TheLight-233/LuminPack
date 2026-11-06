@@ -2512,27 +2512,27 @@ namespace LuminPack.Core
         public readonly bool UsesUtf8Enumeration<TOptions>() where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
             => default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;
 
-        /// <summary>Writes a generated enumeration element with the default profile and an independent native budget.</summary>
+        /// <summary>Writes a generated enumeration element with the default profile.</summary>
         /// <param name="value">The integer element.</param>
         /// <param name="separate">Whether a preceding element requires a comma.</param>
         [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEnumerationElement(int value, bool separate) => WriteEnumerationElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
 
-        /// <summary>Writes a generated enumeration element with the default profile and an independent native budget.</summary>
+        /// <summary>Writes a generated enumeration element with the default profile.</summary>
         /// <param name="value">The integer element.</param>
         /// <param name="separate">Whether a preceding element requires a comma.</param>
         [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEnumerationElement(long value, bool separate) => WriteEnumerationElement<global::LuminPack.Option.LuminPackDefaultOptions>(value, separate);
 
-        /// <summary>Combines an enumeration separator and integer without importing formatting into the caller.</summary>
+        /// <summary>Combines an enumeration separator and integer in the generated loop.</summary>
         /// <param name="value">The integer element.</param>
         /// <param name="separate">Whether a preceding element requires a comma.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <remarks>Near a storage boundary, the original separator, flag and scalar operations preserve growth and failure state.</remarks>
         [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEnumerationElement<TOptions>(int value, bool separate)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
@@ -2552,13 +2552,13 @@ namespace LuminPack.Core
             Write<TOptions>(value);
         }
 
-        /// <summary>Combines an enumeration separator and long integer without importing formatting into the caller.</summary>
+        /// <summary>Combines an enumeration separator and long integer in the generated loop.</summary>
         /// <param name="value">The integer element.</param>
         /// <param name="separate">Whether a preceding element requires a comma.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <remarks>Near a storage boundary, the original separator, flag and scalar operations preserve growth and failure state.</remarks>
         [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteEnumerationElement<TOptions>(long value, bool separate)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
