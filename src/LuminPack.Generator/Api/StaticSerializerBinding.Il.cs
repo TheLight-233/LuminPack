@@ -11,10 +11,10 @@ internal sealed partial class StaticSerializerBinding
     /// <param name="text">The generated source builder.</param>
     private static void AppendIlAttribute(StringBuilder text)
     {
-        text.AppendLine("namespace LuminPack.Generated {");
-        text.AppendLine("[global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]");
-        text.AppendLine("internal sealed class StaticCallAttribute : global::System.Attribute {");
-        text.AppendLine("public StaticCallAttribute(string key, int profileArgument) { }\n}\n}");
+        text.AppendLine("namespace LuminPack.Generated\n{");
+        text.AppendLine("    [global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]");
+        text.AppendLine("    internal sealed class StaticCallAttribute : global::System.Attribute\n    {");
+        text.AppendLine("        public StaticCallAttribute(string key, int profileArgument) { }\n    }\n}\n");
     }
 
     /// <summary>Associates a static body with the exact original method construction.</summary>
@@ -27,7 +27,7 @@ internal sealed partial class StaticSerializerBinding
         string key = IlType(method.ContainingType) + "::" + method.MetadataName + "`" + method.Arity + "(" +
             string.Join(",", definition.Parameters.Select(parameter => IlType(parameter.Type) + (parameter.RefKind == RefKind.None ? "" : "&"))) + ")->" +
             IlType(definition.ReturnType) + "|" + string.Join(",", method.TypeArguments.Select((type, index) => index == profileArgument ? "*" : IlType(type)));
-        text.Append("[global::LuminPack.Generated.StaticCall(").Append(SymbolDisplay.FormatLiteral(key, true))
+        text.Append("        [global::LuminPack.Generated.StaticCall(").Append(SymbolDisplay.FormatLiteral(key, true))
             .Append(", ").Append(profileArgument).AppendLine(")]");
     }
 

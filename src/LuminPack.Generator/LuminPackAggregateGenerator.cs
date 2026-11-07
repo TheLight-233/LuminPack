@@ -145,7 +145,7 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                         string interceptors = StaticSerializerBinding.For(compilation).Emit(
                             LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation, reachability));
                         if (interceptors.Length != 0)
-                            spc.AddSource("LuminPack.Interceptors.g.cs", interceptors);
+                            spc.AddSource("LuminPack.Interceptors.g.cs", GeneratedSourceLayout.Apply(interceptors));
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)

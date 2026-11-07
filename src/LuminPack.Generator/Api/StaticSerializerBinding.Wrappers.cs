@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -104,13 +105,13 @@ internal sealed partial class StaticSerializerBinding
         var model = _binding.GetSemanticModel(syntax.SyntaxTree);
         var rewriter = new WrapperBody(this, wrapper, model, TypeArguments(method), depth);
         if (syntax.Body != null)
-            wrapper.Body = rewriter.Visit(syntax.Body).NormalizeWhitespace().ToFullString();
+            wrapper.Body = rewriter.Visit(syntax.Body).NormalizeWhitespace();
         else
         {
             var expression = (ExpressionSyntax)rewriter.Visit(syntax.ExpressionBody.Expression);
             wrapper.Body = SyntaxFactory.Block(method.ReturnsVoid
                 ? (StatementSyntax)SyntaxFactory.ExpressionStatement(expression)
-                : SyntaxFactory.ReturnStatement(expression)).NormalizeWhitespace().ToFullString();
+                : SyntaxFactory.ReturnStatement(expression)).NormalizeWhitespace();
         }
         wrapper.Valid = rewriter.Valid;
         return wrapper.Valid ? wrapper : null;
@@ -130,12 +131,12 @@ internal sealed partial class StaticSerializerBinding
                 AppendIlMapping(text, wrapper.Method, -1);
             if (locationsEnabled && locations.TryGetValue(wrapper.Key, out var attributes))
                 foreach (string attribute in attributes)
-                    text.AppendLine(attribute);
+                    text.Append("        ").AppendLine(attribute);
             bool unsafeBody = wrapper.Method.DeclaringSyntaxReferences.First().GetSyntax() is MethodDeclarationSyntax declaration &&
                 declaration.Modifiers.Any(token => token.IsKind(SyntaxKind.UnsafeKeyword));
-            text.Append(unsafeBody ? "internal static unsafe " : "internal static ").Append(TypeName(wrapper.Method.ReturnType)).Append(' ').Append(wrapper.Name).Append('(')
+            text.Append(unsafeBody ? "        internal static unsafe " : "        internal static ").Append(TypeName(wrapper.Method.ReturnType)).Append(' ').Append(wrapper.Name).Append('(')
                 .Append(string.Join(", ", wrapper.Method.Parameters.Select(Parameter))).AppendLine(")");
-            text.AppendLine(wrapper.Body);
+            text.AppendLine(GeneratedSourceIndentation.At(wrapper.Body, 8)).AppendLine();
         }
     }
 
@@ -213,7 +214,7 @@ internal sealed partial class StaticSerializerBinding
         internal readonly IMethodSymbol Method;
         internal readonly List<Wrapper> Dependencies = new();
         internal readonly HashSet<string> Operations = new(StringComparer.Ordinal);
-        internal string Body;
+        internal SyntaxNode Body;
         internal bool Valid = true;
 
         /// <summary>Gets the unique generated wrapper method name.</summary>

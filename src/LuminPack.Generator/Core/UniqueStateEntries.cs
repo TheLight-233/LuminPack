@@ -37,7 +37,8 @@ internal static class UniqueStateEntries
     {
         var root = CSharpSyntaxTree.ParseText("class Container {" + source + "}", metadata.ParseOptions).GetCompilationUnitRoot();
         var rewritten = (CompilationUnitSyntax)new Rewriter(null, payload).Visit(root);
-        return string.Join("\n", rewritten.Members.OfType<ClassDeclarationSyntax>().Single().Members.Select(member => member.ToFullString()));
+        return string.Join("\n", rewritten.Members.OfType<ClassDeclarationSyntax>().Single().Members
+            .Select(member => GeneratedSourceIndentation.At(member, 12)));
     }
 
     /// <summary>Recognizes only the state-operation families eligible for renaming.</summary>
@@ -72,7 +73,8 @@ internal static class UniqueStateEntries
                 method.ContainingType.ToDisplayString() != "LuminPack.LuminPackSerializer" || method.Parameters.Length != 2 ||
                 method.Parameters[0].RefKind != RefKind.Ref || LuminPackExtensionGenerator.ContainsTypeParameter(method.Parameters[1].Type))
                 return result;
-            return result.WithIdentifier(SyntaxFactory.Identifier(Name(node.Identifier.ValueText, FormatterTypeName.Get(method.Parameters[1].Type))));
+            return result.WithIdentifier(SyntaxFactory.Identifier(Name(node.Identifier.ValueText, FormatterTypeName.Get(method.Parameters[1].Type)))
+                .WithTriviaFrom(result.Identifier));
         }
 
         /// <summary>Retargets a concrete state call without changing argument evaluation or passing.</summary>
@@ -102,7 +104,7 @@ internal static class UniqueStateEntries
             }
             if (payload == null)
                 return result;
-            var identifier = SyntaxFactory.Identifier(Name(name.Identifier.ValueText, payload));
+            var identifier = SyntaxFactory.Identifier(Name(name.Identifier.ValueText, payload)).WithTriviaFrom(name.Identifier);
             return result.Expression is MemberAccessExpressionSyntax rewrittenAccess
                 ? result.WithExpression(rewrittenAccess.WithName(rewrittenAccess.Name.WithIdentifier(identifier)))
                 : result.WithExpression(((SimpleNameSyntax)result.Expression).WithIdentifier(identifier));

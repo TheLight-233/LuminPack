@@ -4,9 +4,62 @@ using System.Text;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal static partial class SerializerInterceptorRegression
 {
+    /// <summary>Checks the visible nesting of actual generated entries, including comments and method bodies.</summary>
+    /// <param name="files">The complete consumer's generated source contributions.</param>
+    private static void VerifyIndentation(GeneratedSourceResult[] files)
+    {
+        foreach (var file in files)
+        {
+            foreach (var method in file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                var declaration = method.Modifiers.Count != 0 ? method.Modifiers.First() : method.ReturnType.GetFirstToken();
+                int column = file.SourceText.Lines.GetLinePosition(declaration.SpanStart).Character;
+                foreach (var attributes in method.AttributeLists)
+                    RequireColumn(attributes.OpenBracketToken, column);
+            }
+            foreach (var type in file.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                bool entry = type.Identifier.ValueText.StartsWith("LuminEntry_", StringComparison.Ordinal);
+                if (entry)
+                    RequireColumn(type.GetFirstToken(), 8);
+                foreach (var method in type.Members.OfType<MethodDeclarationSyntax>().Where(method => entry ||
+                    method.Identifier.ValueText.StartsWith("Intercept_", StringComparison.Ordinal) ||
+                    method.Identifier.ValueText.StartsWith("Wrapper_", StringComparison.Ordinal)))
+                {
+                    int column = entry ? 12 : 8;
+                    RequireColumn(method.GetFirstToken(), column);
+                    foreach (var attributes in method.AttributeLists)
+                        RequireColumn(attributes.OpenBracketToken, column);
+                    RequireColumn(method.Modifiers.FirstOrDefault() is { RawKind: not 0 } modifier ? modifier : method.ReturnType.GetFirstToken(), column);
+                    if (method.Body != null)
+                    {
+                        RequireColumn(method.Body.OpenBraceToken, column);
+                        RequireColumn(method.Body.CloseBraceToken, column);
+                        foreach (var statement in method.Body.Statements)
+                            RequireColumn(statement.GetFirstToken(), column + 4);
+                    }
+                    foreach (var comment in method.GetLeadingTrivia().Where(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
+                    {
+                        string line = file.SourceText.Lines.GetLineFromPosition(comment.FullSpan.Start).ToString();
+                        Require(line.TakeWhile(char.IsWhiteSpace).Count() == column,
+                            "Documentation indentation disagreed with its member in " + file.HintName + ".");
+                    }
+                }
+            }
+
+            void RequireColumn(SyntaxToken token, int expected)
+            {
+                var position = file.SourceText.Lines.GetLinePosition(token.SpanStart);
+                Require(position.Character == expected,
+                    file.HintName + ":" + (position.Line + 1) + " placed " + token.Text + " at column " + position.Character + ", expected " + expected + ".");
+            }
+        }
+    }
+
     /// <summary>Checks emitted IL rather than assuming a generated attribute changed the call.</summary>
     /// <param name="assembly">The compiled modern consumer.</param>
     private static void VerifyDirectCalls(Assembly assembly)

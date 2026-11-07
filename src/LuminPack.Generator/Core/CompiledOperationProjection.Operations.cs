@@ -53,9 +53,11 @@ internal sealed partial class CompiledOperationProjection
         StatementSyntax forward = method.ReturnType is PredefinedTypeSyntax returned && returned.Keyword.IsKind(SyntaxKind.VoidKeyword)
             ? SyntaxFactory.ExpressionStatement(call) : SyntaxFactory.ReturnStatement(call);
         bool fixedBody = stateEntry && !json && !payloadGeneric && !HasProfileWork(method);
-        members.Add(fixedBody ? method : method.WithBody(SyntaxFactory.Block(forward)).WithExpressionBody(null).WithSemicolonToken(default)
-            .WithModifiers(SyntaxFactory.TokenList(method.Modifiers.Where(modifier => !modifier.IsKind(SyntaxKind.AsyncKeyword))))
-            .NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+        var forwarded = method.WithBody(SyntaxFactory.Block(forward)).WithExpressionBody(null).WithSemicolonToken(default)
+            .WithModifiers(SyntaxFactory.TokenList(method.Modifiers.Where(modifier => !modifier.IsKind(SyntaxKind.AsyncKeyword))));
+        // Facades are normalized once after their input guards and storage lifetimes have been projected.
+        members.Add(fixedBody ? method : (facade ? forwarded : forwarded.NormalizeWhitespace())
+            .WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
 
         var parameters = (method.TypeParameterList?.Parameters ?? default).Add(SyntaxFactory.TypeParameter(profile));
         var generic = method.WithTypeParameterList(SyntaxFactory.TypeParameterList(parameters));
@@ -84,6 +86,6 @@ internal sealed partial class CompiledOperationProjection
             generic = method.Body != null ? generic.WithBody((BlockSyntax)body) : generic.WithExpressionBody((ArrowExpressionClauseSyntax)body);
         generic = generic.WithLeadingTrivia(generic.GetLeadingTrivia().AddRange(SyntaxFactory.ParseLeadingTrivia(
             "/// <typeparam name=\"" + profile + "\">The stateless profile for this serialization operation.</typeparam>\n")));
-        members.Add(generic.NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+        members.Add((facade ? generic : generic.NormalizeWhitespace()).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
     }
 }

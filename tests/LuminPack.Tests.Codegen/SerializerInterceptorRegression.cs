@@ -16,7 +16,7 @@ internal static partial class SerializerInterceptorRegression
     {
         if (il)
             references = PortableReferences();
-        const string source = """
+        const string source = """"
             using System;
             using System.Collections.Generic;
             using System.IO;
@@ -51,6 +51,20 @@ internal static partial class SerializerInterceptorRegression
                     return SaveCore(value);
                 }
                 private static byte[] SaveCore<T>(T value) => LuminPackSerializer.Serialize(value);
+                private static byte[] LiteralSave<T>(T value)
+                {
+                    string literal = @"first
+                second";
+                    if (literal.Replace("\r\n", "\n") != "first\n    second") throw new Exception("Verbatim literal indentation changed.");
+                    #if !NETSTANDARD2_1
+                    string raw = """
+                        first
+                            second
+                        """;
+                    if (raw.Replace("\r\n", "\n") != "first\n    second") throw new Exception("Raw literal indentation changed.");
+                    #endif
+                    return LuminPackSerializer.Serialize(value);
+                }
                 public static byte[] DirectWrite(Payload value) => LuminPackSerializer.Serialize(value);
                 public static Payload DirectRead(byte[] value) => LuminPackSerializer.Deserialize<Payload>(value);
                 public static byte[] DirectWrapper(Payload value) => SaveCore(value);
@@ -94,6 +108,7 @@ internal static partial class SerializerInterceptorRegression
                     #if INTERCEPTED
                     if (LuminPackSerializer.Deserialize<Payload>(bytes).Number != 37) throw new Exception("Value read mismatch.");
                     if (LuminPackSerializer.Serialize<Payload>(value).Length != bytes.Length) throw new Exception("Explicit write mismatch.");
+                    if (Convert.ToBase64String(LiteralSave(value)) != Convert.ToBase64String(bytes)) throw new Exception("Literal wrapper mismatch.");
                     if (Convert.ToBase64String(Save(value)) != Convert.ToBase64String(bytes) || Saved != 1 || ParameterName != "T" || Selected != "object" || Caller != "Save")
                         throw new Exception("Closed wrapper semantics changed.");
                     if (LuminPackSerializer.Deserialize<int>(Save(49)) != 49 || Saved != 2) throw new Exception("Closed scalar wrapper mismatch.");
@@ -119,7 +134,7 @@ internal static partial class SerializerInterceptorRegression
                     return Convert.ToBase64String(bytes) + "|" + json + "|" + Convert.ToBase64String(listBytes);
                 }
             }
-            """;
+            """";
         string baseline = Execute(references, source, false, il: il);
         string intercepted = Execute(references, source, true, il: il);
         Require(baseline == intercepted, "Interception changed the binary or JSON representation.");
@@ -170,6 +185,7 @@ internal static partial class SerializerInterceptorRegression
         if (intercept)
         {
             var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
+            VerifyIndentation(generated);
             Require(generated.Any(file => file.HintName == "LuminPack.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
             var outerMethods = generated.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
                 .Where(type => type.Identifier.ValueText == "LuminPackSerializer").SelectMany(type => type.Members.OfType<MethodDeclarationSyntax>());

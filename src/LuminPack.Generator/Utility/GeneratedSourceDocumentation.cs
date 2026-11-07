@@ -32,7 +32,30 @@ internal static class GeneratedSourceDocumentation
     {
         var removed = root.DescendantTrivia().Where(trivia => IsDocumentation(trivia) && !KeepDocumentation(trivia)).ToArray();
         if (removed.Length != 0)
-            root = root.ReplaceTrivia(removed, static (_, _) => default);
+        {
+            var removal = new HashSet<SyntaxTrivia>(removed);
+            var tokens = removed.Select(trivia => trivia.Token).Distinct().ToArray();
+            root = root.ReplaceTokens(tokens, (original, rewritten) =>
+            {
+                var leading = original.LeadingTrivia;
+                string prefix = leading.ToFullString();
+                string indentation = prefix.Substring(prefix.LastIndexOf('\n') + 1);
+                var kept = new List<SyntaxTrivia>();
+                for (int index = 0; index < leading.Count; index++)
+                    if (!removal.Contains(leading[index]) && !(leading[index].IsKind(SyntaxKind.WhitespaceTrivia) &&
+                        index + 1 < leading.Count && removal.Contains(leading[index + 1])))
+                        kept.Add(leading[index]);
+                // Parsed and normalized XML attach the final prefix differently. Retain exactly the original token's column.
+                if (indentation.All(char.IsWhiteSpace))
+                {
+                    while (kept.Count != 0 && kept[kept.Count - 1].IsKind(SyntaxKind.WhitespaceTrivia))
+                        kept.RemoveAt(kept.Count - 1);
+                    if (indentation.Length != 0)
+                        kept.Add(SyntaxFactory.Whitespace(indentation));
+                }
+                return rewritten.WithLeadingTrivia(kept);
+            });
+        }
         var apis = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax)
             .OfType<BaseMethodDeclarationSyntax>().Where(IsUserApi).ToArray();
         if (apis.Length == 0)

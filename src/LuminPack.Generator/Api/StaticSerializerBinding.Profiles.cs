@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -110,9 +111,9 @@ internal sealed partial class StaticSerializerBinding
                 .Append(", ").Append(method.TypeParameters.Single().Name).Append(">(")
                 .Append(string.Join(", ", method.Parameters.Select(parameter => Passing(parameter.RefKind) + Escape(parameter.Name)))).AppendLine(");");
             body.AppendLine("}");
-            text.AppendLine(syntax.WithModifiers(SyntaxFactory.TokenList(syntax.Modifiers.Where(token => !token.IsKind(SyntaxKind.ExternKeyword))))
+            text.AppendLine(GeneratedSourceIndentation.At(syntax.WithModifiers(SyntaxFactory.TokenList(syntax.Modifiers.Where(token => !token.IsKind(SyntaxKind.ExternKeyword))))
                 .WithBody((BlockSyntax)SyntaxFactory.ParseStatement(body.ToString())).WithSemicolonToken(default)
-                .NormalizeWhitespace().ToFullString());
+                .NormalizeWhitespace(), 8)).AppendLine();
         }
     }
 

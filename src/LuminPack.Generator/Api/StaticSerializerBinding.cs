@@ -124,7 +124,7 @@ internal sealed partial class StaticSerializerBinding
         foreach (var call in _wrapperCalls)
             key.Append(call.Attribute).Append('|').Append(call.Wrapper.Key).Append('|');
         foreach (var wrapper in _wrappers.Values.Where(wrapper => wrapper.Valid).OrderBy(wrapper => wrapper.Key, StringComparer.Ordinal))
-            key.Append(wrapper.Key).Append('|').Append(wrapper.Body).Append('|');
+            key.Append(wrapper.Key).Append('|').Append(wrapper.Body.ToFullString()).Append('|');
         Key = key.ToString();
     }
 
