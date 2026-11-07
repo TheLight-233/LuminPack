@@ -158,16 +158,6 @@ namespace LuminPack.Core
                 return 1;
             }
 
-            int digits =
-                value < 100u ? 2 :
-                value < 1_000u ? 3 :
-                value < 10_000u ? 4 :
-                value < 100_000u ? 5 :
-                value < 1_000_000u ? 6 :
-                value < 10_000_000u ? 7 :
-                value < 100_000_000u ? 8 :
-                value < 1_000_000_000u ? 9 : 10;
-
             // The complete ten-byte destination also covers the head table's four-byte store.
             // Short spans retain the pair loop and its original checked-write failure prefix.
             if (value >= 10000u && dest.Length >= 10 && BitConverter.IsLittleEndian)
@@ -188,6 +178,16 @@ namespace LuminPack.Core
                 Write4Digits(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(dest), (nint)(uint)head), 4), low);
                 return head + 4;
             }
+
+            int digits =
+                value < 100u ? 2 :
+                value < 1_000u ? 3 :
+                value < 10_000u ? 4 :
+                value < 100_000u ? 5 :
+                value < 1_000_000u ? 6 :
+                value < 10_000_000u ? 7 :
+                value < 100_000_000u ? 8 :
+                value < 1_000_000_000u ? 9 : 10;
 
             int pos = digits;
             while (value >= 100u)

@@ -4,10 +4,50 @@ using LuminPack.Option;
 using Xunit;
 namespace LuminPackUnitTest;
 
-/// <summary>Checks fused UTF-16 integer output against the original scalar operations.</summary>
+/// <summary>Checks integer digit boundaries and fused UTF-16 output against scalar operations.</summary>
 [Collection(nameof(RuntimeStateCollection))]
 public sealed unsafe class JsonIntegerUtf16WriteTest
 {
+    /// <summary>Checks the complete quad path and shorter checked spans around every decimal boundary.</summary>
+    [Fact]
+    public void Utf8IntegerDigitBoundariesMatchInvariantFormatting()
+    {
+        var values = new List<uint> { 0, 1, 9, 10, uint.MaxValue, int.MaxValue, 0x80000000 };
+        for (ulong power = 10; power <= uint.MaxValue; power *= 10)
+        {
+            values.Add((uint)power - 1);
+            values.Add((uint)power);
+            values.Add((uint)power + 1);
+        }
+        var random = new Random(71603);
+        for (int i = 0; i < 2048; i++)
+            values.Add((uint)random.NextInt64(0, (long)uint.MaxValue + 1));
+
+        byte[] buffer = new byte[32];
+        foreach (uint value in values)
+        foreach (bool signed in new[] { false, true })
+        {
+            string expected = signed
+                ? unchecked((int)value).ToString(CultureInfo.InvariantCulture)
+                : value.ToString(CultureInfo.InvariantCulture);
+            // Small packed values may write four digits inside the reserved window.
+            for (int length = Math.Max(signed ? 5 : 4, expected.Length); length <= 13; length++)
+            {
+                Array.Fill(buffer, (byte)0xCC);
+                Span<byte> destination = buffer.AsSpan(3, length);
+                int written = signed
+                    ? LuminPackJsonNumberFormatter.WriteInt32(destination, unchecked((int)value))
+                    : LuminPackJsonNumberFormatter.WriteUInt32(destination, value);
+                Assert.Equal(expected.Length, written);
+                Assert.Equal(expected, System.Text.Encoding.ASCII.GetString(destination[..written]));
+                for (int i = 0; i < 3; i++)
+                    Assert.Equal(0xCC, buffer[i]);
+                for (int i = length + 3; i < buffer.Length; i++)
+                    Assert.Equal(0xCC, buffer[i]);
+            }
+        }
+    }
+
     /// <summary>Checks output, partial failure, flags and depth with ordinary and extended negative signs.</summary>
     [Fact]
     public void BoundedOperationsPreserveScalarFormattingAndFailureState()
