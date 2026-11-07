@@ -98,7 +98,7 @@
 
 普通公开字段根对象若仅包含完整运行时记录内核和没有独立配置边界的具名成员，`SerializerCoreProjection` 可以直接使用缓存的类型元数据生成完整写入，保留原有根／成员方法、声明配置及最终存储／游标投影。读取、JSON 和更复杂的写入继续采用既有的检查和操作流水线。成员内核保留积极内联提示；包含成员调用的父对象，即使提取方法后源码调用数量变少，也由运行时决定根方法是否内联。分配型入口继续使用 `AllocateUninitializedArray`，保留缓冲池所有权和清理方式。
 
-聚合生成文件名包含声明身份，例如 `LuminPackSerializer.System.Int32.<suffix>.g.cs` 和 `LuminPack.LocalLayouts.Namespace.Model.<suffix>.g.cs`。有长度上限的可读名称后保留稳定的 128 位后缀，以区分同名类型和构造类型。内部生成符号的身份不依赖这些展示文件名。
+SourceGenerator 的文件名使用 `LuminPackGen_Namespace.Model.g.cs`，存储视图使用 `LuminPackGen_Layouts_` 前缀，Union 支持使用 `.UnionDispatch.g.cs` 后缀，不再使用 `Extension` 后缀。聚合文件保留明确的类别，例如 `LuminPackSerializer.System.Int32.g.cs` 和 `LuminPack.Formatter.System.Collections.Generic.List_Of_System.Int32_End_.g.cs`。文件名不带哈希后缀：保留可读的命名空间及泛型／数组结构，明确转义不同标点，长身份拆成有长度上限的目录段而不截断。内部生成符号的身份仍独立于文件名。
 
 框架字段分类使用 `CodeEmitterTypeCatalog` 中的 CLR 元数据名称，例如 `System.DateOnly`，不包含生成的 C# 源码所用的 `global::` 限定符。直接字段、可空值和集合元素共用该目录，在考虑用户对象的构造函数之前完成分类。
 

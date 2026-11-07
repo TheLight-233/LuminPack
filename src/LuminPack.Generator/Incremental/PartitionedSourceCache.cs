@@ -48,25 +48,46 @@ internal sealed class PartitionedSourceCache
         }
     }
 
-    /// <summary>Combines a readable declaration identity with a stable disambiguating suffix.</summary>
+    /// <summary>Preserves the complete readable declaration identity without a hash suffix.</summary>
     /// <param name="prefix">The generated file family.</param>
     /// <param name="identity">The canonical type or declaration identity.</param>
-    /// <returns>A bounded filesystem-safe name that exposes the type or declaration being generated.</returns>
+    /// <returns>A filesystem-safe name with bounded path components and an unabridged declaration identity.</returns>
     internal static string CreateHintName(string prefix, string identity)
     {
         var label = new StringBuilder();
         foreach (char character in identity.Replace("global::", string.Empty))
         {
-            if (label.Length >= 64)
-                break;
             if (char.IsLetterOrDigit(character) || character == '.')
                 label.Append(character);
-            else if (label.Length != 0 && label[label.Length - 1] != '_')
-                label.Append('_');
+            else
+                label.Append(character switch
+                {
+                    '_' => "__",
+                    '<' => "_Of_",
+                    '>' => "_End_",
+                    ',' => "_And_",
+                    '[' => "_Array_",
+                    ']' => "_EndArray_",
+                    '?' => "_Nullable_",
+                    '*' => "_Pointer_",
+                    '+' => "_Nested_",
+                    ' ' => string.Empty,
+                    _ => "_Char" + ((int)character).ToString(CultureInfo.InvariantCulture) + "_"
+                });
         }
-        string readable = label.ToString().Trim('.', '_');
-        return prefix + "." + (readable.Length == 0 ? "Declaration" : readable) + "." +
-            CreateIdentityHash(identity).Substring(0, 32) + ".g.cs";
+        string readable = label.Length == 0 ? "Declaration" : label.ToString();
+        string separator = prefix.StartsWith("LuminPackGen", StringComparison.Ordinal) ? "_" : ".";
+        var path = new StringBuilder();
+        const int componentLength = 120;
+        for (int offset = 0; offset < readable.Length; offset += componentLength)
+        {
+            if (offset != 0)
+                path.Append('/');
+            path.Append(prefix).Append(separator).Append(readable, offset, Math.Min(componentLength, readable.Length - offset));
+            if (offset + componentLength < readable.Length)
+                path.Append("_Part");
+        }
+        return path.Append(".g.cs").ToString();
     }
 
     /// <summary>Hashes a complete identity independently of its presentation filename.</summary>

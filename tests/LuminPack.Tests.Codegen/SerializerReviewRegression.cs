@@ -136,7 +136,7 @@ internal static class SerializerReviewRegression
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
         CheckErrors(driver, output);
         var files = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
-        Require(files.Any(file => file.HintName == "StateOnly.Extension.g.cs"), "A direct state API failed to retain its Minimal payload root.");
+        Require(files.Any(file => file.HintName == "LuminPackGen_StateOnly.g.cs"), "A direct state API failed to retain its Minimal payload root.");
         Require(!files.Any(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal) && file.HintName != "LuminPackSerializer.g.cs"),
             "A state-only root restored unused concrete convenience overloads.");
     }

@@ -71,7 +71,7 @@ public sealed partial class LuminPackSourceGenerator
             try
             {
                 if (!string.IsNullOrEmpty(value.Extension))
-                    output.AddSource(value.HintName + ".Extension.g.cs", GeneratedSourceLayout.Apply(value.Extension));
+                    output.AddSource(value.HintName + ".g.cs", GeneratedSourceLayout.Apply(value.Extension));
                 if (!string.IsNullOrEmpty(value.Union))
                     output.AddSource(value.HintName + ".UnionDispatch.g.cs", GeneratedSourceLayout.Apply(value.Union));
             }
@@ -120,7 +120,8 @@ public sealed partial class LuminPackSourceGenerator
         string name = data.classFullName ?? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         if (name.StartsWith("global::", StringComparison.Ordinal))
             name = name.Substring(8);
-        name = name.Replace("<", "_").Replace('>', '_');
+        name = PartitionedSourceCache.CreateHintName("LuminPackGen", name);
+        name = name.Substring(0, name.Length - ".g.cs".Length);
         string className = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
         var emptyLayouts = new FrozenLayoutGroup(className, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null);
         if (data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) || data.generatorType == GeneratorType.Custom)
@@ -201,7 +202,7 @@ public sealed partial class LuminPackSourceGenerator
         }
         foreach (var item in selected.OrderBy(item => item.Fragment.Key, StringComparer.Ordinal))
         {
-            var file = cache.Wrap("LuminPack.LocalLayouts", item.Fragment.Key, item.Group.ClassName, item.Fragment.Text, string.Empty,
+            var file = cache.Wrap("LuminPackGen_Layouts", item.Fragment.Key, item.Group.ClassName, item.Fragment.Text, string.Empty,
                 () => GeneratedSourceDocumentation.Complete(LuminPackLocalLayoutGenerator.Wrap(item.Fragment.Text, item.Group.ClassName)
                     .Replace("one dedicated file for the whole assembly", "shared declarations across assembly partitions"), item.Group.Options), item.Group.Options);
             result.AddSource(file.Name, file.Text);

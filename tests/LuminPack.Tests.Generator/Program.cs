@@ -252,7 +252,7 @@ Parallel.For(0, CompilationCount, compilationIndex =>
         .ToHashSet(StringComparer.Ordinal);
     for (var typeIndex = 0; typeIndex < ValidTypesPerCompilation; typeIndex++)
     {
-        var expectedHint = $"Case_{compilationIndex}.Model_{typeIndex}.Extension.g.cs";
+        var expectedHint = $"LuminPackGen_Case__{compilationIndex}.Model__{typeIndex}.g.cs";
         if (!generatedHints.Contains(expectedHint))
         {
             failures.Enqueue($"Compilation {compilationIndex} is missing {expectedHint}.");
@@ -260,8 +260,8 @@ Parallel.For(0, CompilationCount, compilationIndex =>
     }
 
     if (generatedHints.Any(hint =>
-            hint.Contains("Case_", StringComparison.Ordinal) &&
-            !hint.Contains($"Case_{compilationIndex}.", StringComparison.Ordinal)))
+            hint.Contains("Case__", StringComparison.Ordinal) &&
+            !hint.Contains($"Case__{compilationIndex}.", StringComparison.Ordinal)))
     {
         failures.Enqueue($"Compilation {compilationIndex} received generated source from another compilation.");
     }
@@ -496,7 +496,7 @@ static void VerifyUnionAutoDiscovery(MetadataReference[] references)
     }
 
     string messageSource = result.GeneratedSources
-        .Where(static generated => generated.HintName.Contains("IMessage.Extension", StringComparison.Ordinal))
+        .Where(static generated => generated.HintName.Contains("IMessage.g.cs", StringComparison.Ordinal))
         .Select(static generated => generated.SourceText.ToString())
         .Single();
     if (!messageSource.Contains("case 42:", StringComparison.Ordinal) ||

@@ -137,8 +137,8 @@ internal static class IncrementalGenerationChecks
             "Partial or aliased attribute discovery reported a generator error.");
         var sources = Sources(driver);
         foreach (string name in new[] { "Model", "Record", "Value" })
-            Require(sources.ContainsKey("Discovery." + name + ".Extension.g.cs"), "Attribute discovery omitted " + name + ".");
-        Require(!sources.ContainsKey("Discovery.Utility.Extension.g.cs"), "Unattributed utility entered the type pipeline.");
+            Require(sources.ContainsKey("LuminPackGen_Discovery." + name + ".g.cs"), "Attribute discovery omitted " + name + ".");
+        Require(!sources.ContainsKey("LuminPackGen_Discovery.Utility.g.cs"), "Unattributed utility entered the type pipeline.");
         Verify("partial storage changed", input, Replace(input, "Partial.cs", "long Other", "long Renamed"), 1);
         var removed = Replace(input, "Model.cs", "[Pack]", string.Empty);
         Verify("attribute removed", input, removed);
@@ -253,9 +253,9 @@ internal static class IncrementalGenerationChecks
         }
         if (expectedRoot != null)
         {
-            Require(actual.ContainsKey("IncrementalChecks." + expectedRoot + ".Extension.g.cs"), name + ": expected root is absent.");
+            Require(actual.ContainsKey("LuminPackGen_IncrementalChecks." + expectedRoot + ".g.cs"), name + ": expected root is absent.");
             string other = expectedRoot == "A" ? "B" : "A";
-            Require(actual.ContainsKey("IncrementalChecks." + other + ".Extension.g.cs"), name + ": an independently declared model was removed.");
+            Require(actual.ContainsKey("LuminPackGen_IncrementalChecks." + other + ".g.cs"), name + ": an independently declared model was removed.");
         }
         if (requireFallback)
             Require(delta["InvocationFileFallbacks"] > 0, name + ": unsupported invocation did not request fresh binding.");

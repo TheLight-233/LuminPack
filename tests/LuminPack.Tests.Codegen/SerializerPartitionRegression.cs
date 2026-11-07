@@ -16,6 +16,7 @@ internal static class SerializerPartitionRegression
     /// <param name="references">Platform and runtime references for the regression compilation.</param>
     internal static void Run(MetadataReference[] references)
     {
+        VerifyHintNames();
         var files = new Dictionary<string, string>
         {
             ["A.cs"] = "[LuminPack.Attribute.LuminPackable] public sealed class A { public int Value = 7; }",
@@ -29,9 +30,13 @@ internal static class SerializerPartitionRegression
         var initial = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var initialOutput, out _);
         CheckErrors(initialOutput);
         var initialFiles = FacadeFiles(initial);
+        var modelFiles = initial.GetRunResult().Results.Single(result => result.GeneratedSources.Any(file => file.HintName == "LuminPackGen_A.g.cs"));
+        Require(modelFiles.GeneratedSources.All(file => file.HintName.StartsWith("LuminPackGen_", StringComparison.Ordinal) &&
+            !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal)), "SourceGenerator files lost their requested prefix or retained Extension suffixes.");
         Require(initialFiles.ContainsKey("LuminPackSerializer.g.cs") && initialFiles.Count > 4, "Expected common support and independently named concrete files.");
         foreach (string name in initialFiles.Keys.Where(name => name != "LuminPackSerializer.g.cs"))
-            Require(Regex.IsMatch(name, "^LuminPackSerializer\\.[A-Za-z0-9_.]+\\.[0-9a-f]{32}\\.g\\.cs$"), "A concrete filename does not expose a readable stable identity: " + name);
+            Require(Regex.IsMatch(name, "^LuminPackSerializer\\.[A-Za-z0-9_./]+\\.g\\.cs$") && !Regex.IsMatch(name, "[0-9a-f]{32}"),
+                "A concrete filename does not expose a readable identity without hashes: " + name);
         Require(initialFiles.Values.All(text => text.Contains("public static partial class LuminPackSerializer", StringComparison.Ordinal)), "Facade files must share the same partial type.");
         Require(!initialFiles["LuminPackSerializer.g.cs"].Contains("global::A value", StringComparison.Ordinal), "Common facade support contains a concrete payload body.");
 
@@ -61,6 +66,25 @@ internal static class SerializerPartitionRegression
         Console.WriteLine("Passed facade partition signatures/bodies, readable stable identities, arrays, independent edits, and unchanged existing files after type addition.");
     }
 
+    /// <summary>Checks readable names for colliding sanitized identities and deeply nested generic declarations.</summary>
+    private static void VerifyHintNames()
+    {
+        var create = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.PartitionedSourceCache")!
+            .GetMethod("CreateHintName", BindingFlags.Static | BindingFlags.NonPublic)!;
+        string Name(string identity) => (string)create.Invoke(null, ["LuminPackSerializer", identity])!;
+        Require(Name("global::System.Int32") == "LuminPackSerializer.System.Int32.g.cs", "A scalar filename retained an opaque suffix.");
+        string[] identities = ["One.Same", "Two.Same", "N.Box<System.Int32>", "N.Box_Of_System.Int32_End_", "System.Int32[]", "System.Int32[,]", "System.Int32?", "System.Int32_Array__EndArray_", "N.Box<N.Box<System.Int32>>"];
+        Require(identities.Select(Name).Distinct(StringComparer.Ordinal).Count() == identities.Length, "Readable type names collided after punctuation encoding.");
+        string prefix = string.Concat(Enumerable.Repeat("System.Collections.Generic.List<", 12));
+        string suffix = new('>', 12);
+        string first = Name(prefix + "One.Same" + suffix);
+        string second = Name(prefix + "Two.Same" + suffix);
+        Require(first != second && first.Contains("One.Same", StringComparison.Ordinal) && first.Contains('/') &&
+            first.Split('/').All(component => component.Length <= 180 && !component.EndsWith('.')),
+            "A long generic identity was truncated, collided, or exceeded a filesystem component bound.");
+        Require(first == Name(prefix + "One.Same" + suffix), "A filename depends on generation order.");
+    }
+
     /// <summary>Checks shared mirrors, base storage, and independent layout publication after a private-field edit.</summary>
     /// <param name="references">Platform and runtime references.</param>
     private static void VerifyLayoutPartitions(MetadataReference[] references)
@@ -80,7 +104,7 @@ internal static class SerializerPartitionRegression
             string.Join(Environment.NewLine, driver.GetRunResult().Diagnostics));
         CheckErrors(output);
         var before = AllFiles(driver);
-        var layoutFiles = before.Where(pair => pair.Key.StartsWith("LuminPack.LocalLayouts.", StringComparison.Ordinal)).ToArray();
+        var layoutFiles = before.Where(pair => pair.Key.StartsWith("LuminPackGen_Layouts_", StringComparison.Ordinal)).ToArray();
         Require(layoutFiles.Length >= 5 && !before.ContainsKey("LuminPack.LocalLayouts.g.cs"), "Expected independently named layout declarations.");
         var mirrors = layoutFiles.SelectMany(pair => CSharpSyntaxTree.ParseText(pair.Value, Parse).GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
             .Where(type => type.Identifier.ValueText.StartsWith("Local", StringComparison.Ordinal)).ToArray();
