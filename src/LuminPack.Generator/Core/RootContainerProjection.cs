@@ -21,7 +21,7 @@ internal static class RootContainerProjection
 
     private static readonly HashSet<string> Roots = new(StringComparer.Ordinal)
     {
-        "RootWrite", "RootRead", "RootWriteUnion", "RootReadUnion", "RootWriteJson", "RootReadJson",
+        "RootWrite", "RootWriteMember", "RootRead", "RootWriteUnion", "RootReadUnion", "RootWriteJson", "RootReadJson",
         "RootReadFresh", "RootWriteCompressed", "RootReadCompressed"
     };
 

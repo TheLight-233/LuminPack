@@ -94,12 +94,16 @@ Main components:
 
 ### Operation pipeline
 
+`NamedBinaryMemberKernels` gives eligible source-owned positional classes one `RootWriteMember` body. Its payload-specific state forwarder is named `SerializeMember_<identity>`, so callers bind one concrete method. The member body keeps the original null/member header, adjacent-field address proofs, architecture-specific fixed stores and string operations. It does not substitute the standalone root's fused capacity reservation. This path requires at least one string field and accepts public raw fields alongside strings, excluding generic types, inheritance, callbacks, property/private storage and bounded declarations. Other contracts keep their existing emitters. Explicit member profiles continue through the bound operation path; they must not be replaced with the caller's document profile.
+
+When an ordinary public-field root consists only of complete runtime record kernels and named members without a separate profile boundary, `SerializerCoreProjection` can lower the emitted write directly from the cached type metadata. It retains the original root/member methods, declaration options and final storage/cursor projections. Readers, JSON and more complex writes retain their existing checked operation pipeline. Member kernels remain eligible for aggressive inlining; a parent containing member calls leaves its root inline decision to the runtime even when extraction reduced its source call count. The allocating facade keeps `AllocateUninitializedArray` and its existing pool ownership and cleanup.
+
 Aggregate output filenames include their declaration identity, for example `LuminPackSerializer.System.Int32.<suffix>.g.cs` and `LuminPack.LocalLayouts.Namespace.Model.<suffix>.g.cs`. A bounded readable label precedes a stable 128-bit suffix, so equal simple names and constructed types remain distinct. Private generated symbol identities are independent of these presentation names.
 
 Framework field classification uses CLR metadata names, such as `System.DateOnly`, in `CodeEmitterTypeCatalog`. These names do not include the C# `global::` qualifier used in emitted source. The same catalog classifies direct fields, nullable values and collection elements before considering user-defined object constructors.
 
 1. Analyze the canonical type contract and freeze operation templates.
-2. Bind the root and compose nested operations, keeping recursive, `Custom`, virtual and specialized boundaries.
+2. Lower eligible complete runtime-kernel writes directly from type facts; otherwise bind the root and compose nested operations, keeping recursive, `Custom`, virtual and specialized boundaries.
 3. Bind calls to the serializer state bodies and propagate compiled profiles.
 4. Normalize reader storage lifetimes and cursor slots.
 5. Simplify blocks and choose readable local names (presentation only).

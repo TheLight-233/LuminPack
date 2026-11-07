@@ -313,6 +313,11 @@ try
         SerializerUnionInliningRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-static-kernels"])
+    {
+        SerializerBinaryInliningRegression.VerifyNamedKernels(references);
+        return 0;
+    }
     if (args is ["--verify-mechanisms"])
     {
         SerializerMechanismRegression.Run(references);

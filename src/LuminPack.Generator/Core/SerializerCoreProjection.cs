@@ -46,6 +46,7 @@ internal static class SerializerCoreProjection
         SemanticModel model = null;
         var types = CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypesByName;
         var contexts = new Dictionary<string, BinaryEntryInlining>(StringComparer.Ordinal);
+        var directWrites = new Dictionary<string, bool>(StringComparer.Ordinal);
         var core = new List<MemberDeclarationSyntax>();
         var dispatch = new List<MemberDeclarationSyntax>();
         var support = new List<MemberDeclarationSyntax>();
@@ -70,7 +71,7 @@ internal static class SerializerCoreProjection
                 support.Add(member);
                 continue; }
             string name = MethodName(method.Identifier.ValueText, state.Contains("Json"));
-            if (closedRoot == null && method.Identifier.ValueText is not ("WriteValue" or "ReadValue" or "MeasureRecordWidth"))
+            if (closedRoot == null && method.Identifier.ValueText is not ("WriteValue" or "ReadValue" or "WriteMemberValue" or "MeasureRecordWidth"))
             {
                 var arguments = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(method.ParameterList.Parameters.Select((parameter, index) =>
                     SyntaxFactory.Argument(SyntaxFactory.IdentifierName(parameter.Identifier)).WithRefKindKeyword(SyntaxFactory.Token(
@@ -135,7 +136,17 @@ internal static class SerializerCoreProjection
                     contexts.Add(typeName, context = new BinaryEntryInlining(type, compilation, metadata, plans));
                 bool write = closedRoot != null ? operationName.StartsWith("Write", StringComparison.Ordinal) : parameters[1].Modifiers.Any(SyntaxKind.InKeyword);
                 string operation = operationName + (state.Contains("Json") ? ":json" : string.Empty);
-                var expanded = context.ExpandCore(operation);
+                bool direct = false;
+                if (closedRoot == null && state == "LuminPack.Core.LuminPackWriter" &&
+                    operationName is "WriteValue" or "WritePolymorphismValue" or "WriteMemberValue")
+                {
+                    if (!directWrites.TryGetValue(typeName, out direct))
+                        directWrites.Add(typeName, direct = NamedBinaryMemberKernels.CanLowerDirectly(type, compilation, metadata));
+                }
+                var expanded = direct ? null : context.ExpandCore(operation);
+                if (direct)
+                    method = method.WithBody(CompiledOptionProjection.Apply(method.Body, CompiledOptions.Resolve(type, compilation),
+                        "writer", "LuminPackWriter"));
                 if (expanded != null)
                 {
                     BlockSyntax body;
@@ -160,7 +171,7 @@ internal static class SerializerCoreProjection
             // graph into every convenience entry and Union caller.
             if (state is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or
                     "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader" &&
-                !fixedUnionPayload && GeneratedExecutionPolicy.LetRuntimeChooseInlining(method.Body))
+                !fixedUnionPayload && name != "SerializeMember" && GeneratedExecutionPolicy.LetRuntimeChooseInlining(method.Body))
             {
                 method = method.WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Select(list =>
                     list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
@@ -304,6 +315,7 @@ internal static class SerializerCoreProjection
     private static string MethodName(string name, bool json) => name switch
     {
         "WriteValue" => json ? "SerializeJson" : "Serialize",
+        "WriteMemberValue" => "SerializeMember",
         "ReadValue" => json ? "DeserializeJson" : "Deserialize",
         "MeasureRecordWidth" => "MeasureRecord",
         "WritePolymorphismValue" => "SerializeUnion",

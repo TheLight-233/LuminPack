@@ -148,6 +148,7 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
             string name = method.Identifier.ValueText switch
             {
                 "Serialize" => "RootWrite",
+                "SerializeMember" => "RootWriteMember",
                 "Deserialize" => "RootRead",
                 "SerializeUnion" => "RootWriteUnion",
                 "DeserializeUnion" => "RootReadUnion",

@@ -15,6 +15,7 @@ internal static class SerializerBinaryInliningRegression
     /// <param name="references">Runtime and platform references.</param>
     internal static void Run(MetadataReference[] references)
     {
+        VerifyNamedKernels(references);
         const string source = """
             using System;
             using System.Buffers;
@@ -347,6 +348,105 @@ internal static class SerializerBinaryInliningRegression
         var assembly = Assembly.Load(image.ToArray());
         Require((int)assembly.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)! == 6, "Nested collection execution did not cover every case.");
         Console.WriteLine("Passed shared binary roots, closed collection calls, repeated local identities, private inherited layouts, reuse, and generic wire parity.");
+    }
+
+    /// <summary>Compares shared concrete member kernels with the retained property-storage writer and checks reuse and failures.</summary>
+    /// <param name="references">Runtime and platform references.</param>
+    internal static void VerifyNamedKernels(MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using LuminPack;
+            using LuminPack.Attribute;
+            using LuminPack.Option;
+            using LuminPack.Utility;
+            [LuminPackable] public sealed class Leaf { public int X; public long Y; public string Text; }
+            [LuminPackable] public sealed class LegacyLeaf { public int X { get; set; } public long Y { get; set; } public string Text { get; set; } }
+            [LuminPackable] public sealed class Parent {
+                public List<int> Values;
+                [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)] public Leaf First;
+                public Leaf Second;
+                public int Tail;
+            }
+            [LuminPackable] public sealed class LegacyParent {
+                public List<int> Values;
+                [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)] public LegacyLeaf First;
+                public LegacyLeaf Second;
+                public int Tail;
+            }
+            [LuminPackable] public sealed class OtherParent { public Leaf Item; }
+            public static class NamedEntry {
+                public static int Check() {
+                    int cases = 0;
+                    foreach (int size in new[] { 0, 8, 4096 })
+                    foreach (string text in new[] { null, "", "ASCII", "\u4F60\u597D\uD83C\uDF81", new string('x', 24000) }) {
+                        var value = new Parent { Values = new List<int>(new int[size]), First = new Leaf { X = -17, Y = long.MinValue, Text = text },
+                            Second = new Leaf { X = 41, Y = long.MaxValue, Text = text }, Tail = 119 };
+                        var legacy = new LegacyParent { Values = value.Values, First = new LegacyLeaf { X = -17, Y = long.MinValue, Text = text },
+                            Second = new LegacyLeaf { X = 41, Y = long.MaxValue, Text = text }, Tail = 119 };
+                        byte[] bytes = LuminPackSerializer.Serialize(value);
+                        var legacyBytes = LuminPackSerializer.Serialize(legacy);
+                        if (!bytes.AsSpan().SequenceEqual(legacyBytes)) throw new Exception("Named member wire changed: " + size + "/" + text?.Length + ": " + Convert.ToHexString(bytes.AsSpan(0, Math.Min(bytes.Length, 96))) + " != " + Convert.ToHexString(legacyBytes.AsSpan(0, Math.Min(legacyBytes.Length, 96))));
+                        var copy = new Parent { Values = new(), First = new Leaf(), Second = new Leaf() };
+                        var retained = copy; var first = copy.First; var second = copy.Second; var list = copy.Values;
+                        int consumed = LuminPackSerializer.Deserialize(bytes, ref copy);
+                        if (consumed != bytes.Length || copy != retained || copy.First != first || copy.Second != second || copy.Values != list ||
+                            first.X != -17 || first.Y != long.MinValue || second.X != 41 || second.Y != long.MaxValue ||
+                            first.Text != text || second.Text != text || copy.Tail != 119 || list.Count != size) throw new Exception("Named member reuse changed.");
+                        using var buffer = new LuminBufferWriter(true);
+                        LuminPackSerializer.Serialize(value, buffer);
+                        LuminPackSerializer.Serialize(value, buffer);
+                        if (buffer.CurrentIndex != bytes.Length * 2 || !buffer.GetSpan().Slice(bytes.Length).SequenceEqual(bytes)) throw new Exception("Named member append changed.");
+                        buffer.ResetForReuse();
+                        LuminPackSerializer.Serialize(value, buffer);
+                        if (!buffer.GetSpan().SequenceEqual(bytes)) throw new Exception("Named member reset changed.");
+                        if (size == 8 && text == "ASCII") {
+                            for (int length = 0; length < bytes.Length; length++) {
+                                bool failed = false;
+                                try { LuminPackSerializer.Deserialize<Parent>(bytes.AsSpan(0, length)); } catch { failed = true; }
+                                if (!failed) throw new Exception("Named member accepted a truncated record.");
+                            }
+                            var partial = new Parent();
+                            try { LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 5), ref partial); } catch { }
+                            if (partial.Second != null) throw new Exception("A failed child was published early.");
+                        }
+                        value.First = null; legacy.First = null;
+                        if (!LuminPackSerializer.Serialize(value).AsSpan().SequenceEqual(LuminPackSerializer.Serialize(legacy))) throw new Exception("Null member wire changed.");
+                        cases++;
+                    }
+                    return cases;
+                }
+            }
+            """;
+        var parse = Parse.WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
+        var input = TestCompilation.Create("NamedMemberKernels", [CSharpSyntaxTree.ParseText(source, parse, "NamedModels.cs")], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+        driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+        Require(!diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+        var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
+        var methods = generated.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        var shared = methods.Where(method => method.Identifier.ValueText == "RootWriteMember" &&
+            method.ParameterList.Parameters[1].Type.ToString().TrimEnd('?') == "global::Leaf").ToArray();
+        Require(shared.Length == 1 && shared[0].ToString().Contains("AggressiveInlining", StringComparison.Ordinal),
+            "The shared member kernel lost its single body or inline hint.");
+        Require(!methods.Any(method => method.Identifier.ValueText == "RootWriteMember" && method.ToString().Contains("LegacyLeaf", StringComparison.Ordinal)),
+            "A property-storage contract entered the public-field member kernel.");
+        foreach (string type in new[] { "global::Parent", "global::OtherParent" })
+        {
+            var write = methods.Single(method => method.Identifier.ValueText == "RootWrite" &&
+                method.ParameterList.Parameters[1].Type.ToString().TrimEnd('?') == type);
+            Require(write.ToString().Contains("SerializeMember_", StringComparison.Ordinal) &&
+                !write.ToString().Contains(".Text", StringComparison.Ordinal) && !write.ToString().Contains("AggressiveInlining", StringComparison.Ordinal),
+                "A parent copied the shared member body or forced its expansion into the allocating entry.");
+        }
+        using var image = new MemoryStream();
+        var emit = output.Emit(image);
+        Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
+        var assembly = Assembly.Load(image.ToArray());
+        Require((int)assembly.GetType("NamedEntry")!.GetMethod("Check")!.Invoke(null, null)! == 15, "Named member cases were skipped.");
+        Console.WriteLine("Passed shared static member kernels, independent UTF-8/default profiles, legacy wire parity, growth, append/reset, reuse and failed-read publication.");
     }
 
     /// <summary>Requires the state body to use its own root bindings without a second expansion frame.</summary>

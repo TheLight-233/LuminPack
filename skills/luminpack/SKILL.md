@@ -11,6 +11,8 @@ This skill is about using the library. It does not describe how to maintain the 
 
 Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.
 
+Internal binary writes can share named static member kernels while keeping their existing wire layout and member profiles. Selection is automatic; do not introduce a generation-mode setting, require `default(TPlan)`, or call these internal helpers from user code. Keep using `LuminPackSerializer` and the supported Writer/Reader APIs.
+
 ## Quick start
 
 ```csharp

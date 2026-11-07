@@ -142,7 +142,7 @@ internal sealed partial class CompiledOperationProjection
             if (kernel && !json && access.Name is GenericNameSyntax fixedProfile && fixedProfile.TypeArgumentList.Arguments[0].ToString().Contains("LuminPackFixedOptions"))
                 return result;
             bool formatter = access.Expression.ToString().EndsWith("FormatterDispatch", StringComparison.Ordinal);
-            bool serializer = (IsFacadeOperation(name) || name is "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress") &&
+            bool serializer = (IsFacadeOperation(name) || name is "SerializeMember" or "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress") &&
                 (access.Expression.ToString().Contains("LuminPackSerializer") || formatter);
             if (formatter && name is "LuminPackJsonEncoding" or "LuminPackJsonReadBoundary")
                 serializer = true;

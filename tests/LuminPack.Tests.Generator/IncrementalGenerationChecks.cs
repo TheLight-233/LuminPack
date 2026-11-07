@@ -74,6 +74,13 @@ internal static class IncrementalGenerationChecks
         var declaredOptions = Replace(minimal, "A.cs", "public partial class A",
             "[LuminPack.Attribute.LuminPackOption(ValidateJsonSyntax = false)] public partial class A");
         Verify("compiled root JSON validation", declaredOptions, Replace(declaredOptions, "A.cs", "ValidateJsonSyntax = false", "ValidateJsonSyntax = true"));
+        var namedMember = Replace(Replace(minimal, "A.cs", "public int Value = 1;", "public B Child = new();"),
+            "B.cs", "public long Other;", "public string Other;");
+        var propertyMember = Replace(namedMember, "B.cs", "public string Other;", "public string Other { get; set; }");
+        Verify("remove named member eligibility", namedMember, propertyMember);
+        Verify("restore named member eligibility", propertyMember, namedMember);
+        Verify("named member profile boundary", namedMember, Replace(namedMember, "A.cs", "public B Child",
+            "[LuminPack.Attribute.LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF8)] public B Child"));
         VerifyDiagnosticReuse(resolvedReferences, "Shared.cs");
         VerifyDiagnosticReuse(resolvedReferences, string.Empty);
         VerifyAttributeDiscovery(resolvedReferences);

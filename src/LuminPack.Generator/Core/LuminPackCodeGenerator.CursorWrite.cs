@@ -10,6 +10,11 @@ namespace LuminPack.Code.Core;
 
 public static partial class LuminPackCodeGenerator
 {
+    /// <summary>Identifies field records whose emitted bodies already use complete runtime storage kernels.</summary>
+    /// <param name="field">The analyzed field contract.</param>
+    /// <returns>Whether no generated payload operation needs to be expanded for this record.</returns>
+    internal static bool CanLowerReservedWrite(LuminDataField field) => ReservedKind(field) is > 0 and < 6;
+
     /// <summary>Writes ordinary closed fields as consecutive records at a cursor held in a local.</summary>
     /// <param name="data">The canonical object and storage contract.</param>
     /// <param name="builder">The existing operation builder after null handling and storage selection.</param>
@@ -436,6 +441,11 @@ public static partial class LuminPackCodeGenerator
         }
         if (field.Type is LuminFiledType.Class or LuminFiledType.Struct && field.ClassFields.Count != 0 && !IsMergeableField(field))
         {
+            if (NamedBinaryMemberKernels.CanCall(field))
+            {
+                builder.AppendLine(indent + "writer.WriteMemberValue(" + expression + ");");
+                return;
+            }
             builder.AppendLine(indent + "{");
             string value = "inlineValue" + depth;
             builder.AppendLine(indent + "    var " + value + " = " + expression + ";");
@@ -469,5 +479,29 @@ public static partial class LuminPackCodeGenerator
             return;
         }
         builder.AppendLine(indent + "writer." + (field.IsCompress ? "WriteValueWithCompress" : "WriteValue") + "(" + expression + ");");
+    }
+
+    /// <summary>Emits the existing positional member kernel once for its owning declaration.</summary>
+    /// <param name="data">The eligible public leaf-storage contract.</param>
+    /// <param name="builder">The current static operation body.</param>
+    internal static void GenerateNamedMemberWrite(LuminDataInfo data, StringBuilder builder)
+    {
+        const string indent = "            ";
+        builder.AppendLine(indent + "if (value is null) { writer.Write((byte)255); return; }");
+        builder.AppendLine(indent + "writer.Write((byte)" + data.fields.Count + ");");
+        string Storage(LuminDataField member) => "value." + member.Identifier;
+        for (int index = 0; index < data.fields.Count; index++)
+        {
+            int last = index;
+            if (IsMergeableField(data.fields[index]))
+                while (last + 1 < data.fields.Count && IsMergeableField(data.fields[last + 1]))
+                    last++;
+            if (TryGenerateCursorFixedGroup(builder, data.fields, index, last, Storage, indent, write: true))
+                index = last;
+            else if (IsMergeableField(data.fields[index]))
+                builder.AppendLine(indent + "global::LuminPack.Core.LuminPackWriter.Write(ref writer, " + Storage(data.fields[index]) + ");");
+            else
+                AppendCursorField(builder, data.fields[index], Storage(data.fields[index]), indent, 0);
+        }
     }
 }

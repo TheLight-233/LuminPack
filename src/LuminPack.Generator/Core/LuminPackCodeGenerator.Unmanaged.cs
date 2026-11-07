@@ -63,7 +63,7 @@ public static partial class LuminPackCodeGenerator
     /// <summary>Determines whether the supplied value has the mergeable field classification.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool IsMergeableField(LuminDataField field)
+    internal static bool IsMergeableField(LuminDataField field)
     {
         // Unity's C# compiler does not accept Nullable<T> as an argument for
         // `where T : unmanaged`, even when newer Roslyn versions report the

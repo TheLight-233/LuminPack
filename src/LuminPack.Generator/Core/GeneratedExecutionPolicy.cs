@@ -27,6 +27,8 @@ internal static class GeneratedExecutionPolicy
     /// <returns>Whether to call the existing concrete state overload instead of copying its body.</returns>
     internal static bool Reuse(string operationName, BinaryOperation operation)
     {
+        if (operationName == "WriteMemberValue")
+            return true;
         if (operationName.Contains(":local:"))
             return false;
         return operationName.EndsWith(":json", StringComparison.Ordinal) && LetRuntimeChooseInlining(operation.Body);
@@ -36,7 +38,8 @@ internal static class GeneratedExecutionPolicy
     /// <param name="body">The final state body's generated statements.</param>
     /// <returns>Whether the method should leave native inlining to the runtime.</returns>
     internal static bool LetRuntimeChooseInlining(BlockSyntax body)
-        => body != null && (HasLargeBody(body) || body.DescendantNodes().Any(node =>
+        => body != null && (HasLargeBody(body) || body.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+            call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "WriteMemberValue" or "SerializeMember" or "RootWriteMember" }) || body.DescendantNodes().Any(node =>
             node is ForStatementSyntax or ForEachStatementSyntax or ForEachVariableStatementSyntax or
                 WhileStatementSyntax or DoStatementSyntax));
 

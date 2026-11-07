@@ -174,6 +174,7 @@ internal sealed class CompiledOptionFieldScope : IDisposable
             .Any(name => source.IndexOf("." + name + "(", StringComparison.Ordinal) >= 0) ||
             source.IndexOf(".StringCapacityScale", StringComparison.Ordinal) >= 0 || source.IndexOf(".Option.", StringComparison.Ordinal) >= 0;
         bool boundary = _payloadType != null && (source.IndexOf(".WriteValue(", StringComparison.Ordinal) >= 0 ||
+            source.IndexOf(".WriteMemberValue(", StringComparison.Ordinal) >= 0 ||
             source.IndexOf(".ReadValue(", StringComparison.Ordinal) >= 0 || source.IndexOf(".ReadFreshValue(", StringComparison.Ordinal) >= 0 ||
             source.IndexOf(".MeasureRecordWidth", StringComparison.Ordinal) >= 0);
         if (!kernels && !boundary)
@@ -209,7 +210,7 @@ internal sealed class CompiledOptionFieldScope : IDisposable
         {
             if (node.Expression is not MemberAccessExpressionSyntax access || access.Expression is not IdentifierNameSyntax receiver ||
                 receiver.Identifier.ValueText is not ("writer" or "reader" or "evaluator") ||
-                access.Name.Identifier.ValueText is not ("WriteValue" or "ReadValue" or "ReadFreshValue" or "MeasureRecordWidth") || node.ArgumentList.Arguments.Count != 1)
+                access.Name.Identifier.ValueText is not ("WriteValue" or "WriteMemberValue" or "ReadValue" or "ReadFreshValue" or "MeasureRecordWidth") || node.ArgumentList.Arguments.Count != 1)
                 return base.VisitInvocationExpression(node);
             var argument = node.ArgumentList.Arguments[0];
             if (argument.Expression is InvocationExpressionSyntax previous && previous.Expression.ToString().Contains("LuminPackOptionScope"))

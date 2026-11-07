@@ -154,6 +154,13 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="guardNestedReads">Whether external input requires typed nested object guards.</param>
     private static void GenerateRootBinaryExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo, bool fixedVersionPrefix, bool guardNestedReads)
     {
+        if (NamedBinaryMemberKernels.CanGenerate(data))
+        {
+            AppendRootMethodHeader(sb, "WriteMemberValue", "LuminPackWriter", typeName, data, metaInfo, read: false);
+            LuminPackCodeGenerator.GenerateNamedMemberWrite(data, sb);
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
         AppendRootMethodHeader(sb, "WriteValue", "LuminPackWriter", typeName, data, metaInfo, read: false);
         GenerateMyselfSerialize(data, sb, fixedVersionPrefix: fixedVersionPrefix);
         sb.AppendLine("        }");
