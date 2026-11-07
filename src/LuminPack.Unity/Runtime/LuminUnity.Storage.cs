@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace LuminPack.Unity
 {
-    public static unsafe partial class LuminUnity
+    public static partial class LuminUnity
     {
         /// <summary>Preserves the two sequential vectors without calling a normalizing Ray setter.</summary>
         [StructLayout(LayoutKind.Sequential)]

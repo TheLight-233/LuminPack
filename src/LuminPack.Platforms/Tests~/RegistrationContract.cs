@@ -4,21 +4,21 @@ using LuminPack.Core;
 namespace LuminPack.Platforms.Tests;
 
 /// <summary>Checks that module initialization preserves an application's explicit formatter.</summary>
-public static unsafe class RegistrationContract
+public static class RegistrationContract
 {
     private struct ExistingValue { }
 
-    /// <summary>Retains an existing native entry while giving the explicit Custom wrapper its selected value schema.</summary>
+    /// <summary>Retains an existing delegate entry while giving the explicit Custom wrapper its selected value schema.</summary>
     public static void Verify()
     {
-        LuminPackFormatterRegistry.Register(typeof(ExistingValue),
-            (nint)(delegate*<ref LuminPackWriter, in ExistingValue, void>)&WriteExisting,
-            (nint)(delegate*<ref LuminPackReader, ref ExistingValue, void>)&Read);
+        LuminPackWriteDelegate<ExistingValue> existing = WriteExisting;
+        LuminPackFormatterRegistry.Register(typeof(ExistingValue), existing, (LuminPackReadDelegate<ExistingValue>)Read);
         var codec = new LuminPackCodec<ExistingValue>(WriteModule, Read);
-        PlatformRegistration.Add<ExistingValue>(&WriteModule, &Read, codec);
+        PlatformRegistration.Add<ExistingValue>(WriteModule, Read, codec);
+        PlatformRegistration.Add<ExistingValue>(WriteModule, Read, codec);
         nint key = LuminPackMarshal.GetMethodTable(typeof(ExistingValue));
         CodecContract.Assert(LuminPackFormatterRegistry.TryGetValue(in key, out var entry) &&
-            entry.WriteValue == (nint)(delegate*<ref LuminPackWriter, in ExistingValue, void>)&WriteExisting,
+            ReferenceEquals(entry.WriteValue, existing),
             "Platform initialization replaced an application formatter.");
         Span<byte> output = stackalloc byte[1];
         var writer = new LuminPackWriter(ref output);

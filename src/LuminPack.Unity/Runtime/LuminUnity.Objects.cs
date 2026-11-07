@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace LuminPack.Unity
 {
-    public static unsafe partial class LuminUnity
+    public static partial class LuminUnity
     {
         /// <summary>Adds the exact encoded width of a nullable curve.</summary>
         /// <param name="evaluator">Size accumulator.</param><param name="value">Curve or null.</param>

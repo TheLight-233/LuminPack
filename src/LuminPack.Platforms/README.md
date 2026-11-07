@@ -40,7 +40,7 @@ Unity has its own modules: [LuminPack.Unity](../LuminPack.Unity/README.md) and [
 
 - It rides on the existing opaque Custom formatter mechanism and keeps concrete generic registration.
 - The wrapper adds no wire framing, and explicit application entries are preserved.
-- Initialization must finish before concurrent serialization; registered code and module codecs must stay loaded.
+- Initialization must finish before concurrent serialization. Registration uses typed delegates and requires no unsafe context; registered delegates and module codecs retain their targets for the payload type's lifetime.
 
 **`LuminPackCodec<T>`** groups a complete binary write/read/size operation. Root conveniences check the exact written length and reject trailing input before assigning the destination.
 

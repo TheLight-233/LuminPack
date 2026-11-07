@@ -3,7 +3,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <TargetFramework Condition="'$(LuminPackPlatform)' == 'Wpf'">net10.0-windows</TargetFramework>
     <OutputType>Exe</OutputType>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Exercise platform registration and generated consumers without an unsafe context. -->
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>

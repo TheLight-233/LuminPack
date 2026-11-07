@@ -3,7 +3,7 @@ using LuminPack.Platforms;
 
 namespace LuminPack.AspNetCore;
 
-public static unsafe partial class LuminAspNetCore
+public static partial class LuminAspNetCore
 {
     /// <summary>Gets the logical-value StringSegment codec.</summary>
     public static LuminPackCodec<global::Microsoft.Extensions.Primitives.StringSegment> StringSegmentCodec { get; } = new(Write, Read);
@@ -103,10 +103,10 @@ public static unsafe partial class LuminAspNetCore
     /// <summary>Registers the public text records and their generated Custom wrappers.</summary>
     static partial void RegisterTextValues()
     {
-        PlatformRegistration.Add<global::Microsoft.Extensions.Primitives.StringSegment>(&Write, &Read, StringSegmentCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.HostString>(&Write, &Read, HostStringCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.PathString>(&Write, &Read, PathStringCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.QueryString>(&Write, &Read, QueryStringCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.FragmentString>(&Write, &Read, FragmentStringCodec);
+        PlatformRegistration.Add<global::Microsoft.Extensions.Primitives.StringSegment>(Write, Read, StringSegmentCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.HostString>(Write, Read, HostStringCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.PathString>(Write, Read, PathStringCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.QueryString>(Write, Read, QueryStringCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.FragmentString>(Write, Read, FragmentStringCodec);
     }
 }

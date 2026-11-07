@@ -6,7 +6,7 @@ using DrawingColor = System.Drawing.Color;
 namespace LuminPack.Drawing;
 
 /// <summary>Preserves drawing color identity as empty, known, named or explicit ARGB.</summary>
-public static unsafe partial class LuminDrawing
+public static partial class LuminDrawing
 {
     /// <summary>Gets the color codec, retaining named/system colors and Empty.</summary>
     public static LuminPackCodec<DrawingColor> ColorCodec { get; } = new(Write, Read);
@@ -77,5 +77,5 @@ public static unsafe partial class LuminDrawing
     }
 
     /// <summary>Registers the variable color identity record.</summary>
-    public static void Register() => PlatformRegistration.Add<DrawingColor>(&Write, &Read, ColorCodec);
+    public static void Register() => PlatformRegistration.Add<DrawingColor>(Write, Read, ColorCodec);
 }

@@ -7,7 +7,7 @@ using LuminPack.Platforms;
 namespace LuminPack.SkiaSharp;
 
 /// <summary>Provides explicit public-component binary codecs for platform values.</summary>
-public static unsafe partial class LuminSkiaSharp
+public static partial class LuminSkiaSharp
 {
     /// <summary>Gets the explicit SKPoint codec.</summary>
     public static LuminPackCodec<global::SkiaSharp.SKPoint> SKPointCodec { get; } = new(Write, Read);
@@ -301,15 +301,15 @@ public static unsafe partial class LuminSkiaSharp
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::SkiaSharp.SKPoint>(&Write, &Read, SKPointCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKPointI>(&Write, &Read, SKPointICodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKSize>(&Write, &Read, SKSizeCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKSizeI>(&Write, &Read, SKSizeICodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKRect>(&Write, &Read, SKRectCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKRectI>(&Write, &Read, SKRectICodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKMatrix>(&Write, &Read, SKMatrixCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKColor>(&Write, &Read, SKColorCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKColorF>(&Write, &Read, SKColorFCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKPoint>(Write, Read, SKPointCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKPointI>(Write, Read, SKPointICodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKSize>(Write, Read, SKSizeCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKSizeI>(Write, Read, SKSizeICodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKRect>(Write, Read, SKRectCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKRectI>(Write, Read, SKRectICodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKMatrix>(Write, Read, SKMatrixCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKColor>(Write, Read, SKColorCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKColorF>(Write, Read, SKColorFCodec);
         RegisterAdditional();
     }
 

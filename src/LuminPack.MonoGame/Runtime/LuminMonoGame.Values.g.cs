@@ -7,7 +7,7 @@ using LuminPack.Platforms;
 namespace LuminPack.MonoGame;
 
 /// <summary>Provides explicit public-component binary codecs for platform values.</summary>
-public static unsafe partial class LuminMonoGame
+public static partial class LuminMonoGame
 {
     /// <summary>Gets the explicit Vector2 codec.</summary>
     public static LuminPackCodec<global::Microsoft.Xna.Framework.Vector2> Vector2Codec { get; } = new(Write, Read);
@@ -442,18 +442,18 @@ public static unsafe partial class LuminMonoGame
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector2>(&Write, &Read, Vector2Codec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector3>(&Write, &Read, Vector3Codec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector4>(&Write, &Read, Vector4Codec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Quaternion>(&Write, &Read, QuaternionCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Point>(&Write, &Read, PointCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Rectangle>(&Write, &Read, RectangleCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Matrix>(&Write, &Read, MatrixCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Color>(&Write, &Read, ColorCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingBox>(&Write, &Read, BoundingBoxCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingSphere>(&Write, &Read, BoundingSphereCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Ray>(&Write, &Read, RayCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Plane>(&Write, &Read, PlaneCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector2>(Write, Read, Vector2Codec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector3>(Write, Read, Vector3Codec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector4>(Write, Read, Vector4Codec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Quaternion>(Write, Read, QuaternionCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Point>(Write, Read, PointCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Rectangle>(Write, Read, RectangleCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Matrix>(Write, Read, MatrixCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Color>(Write, Read, ColorCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingBox>(Write, Read, BoundingBoxCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingSphere>(Write, Read, BoundingSphereCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Ray>(Write, Read, RayCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Plane>(Write, Read, PlaneCodec);
         RegisterAdditional();
     }
 

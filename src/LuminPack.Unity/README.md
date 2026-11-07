@@ -57,7 +57,7 @@ Use `LuminUnity.Write/Read` in custom formatters when a schema needs these exact
 
 ## 🔧 How it works
 
-- **Automatic registration** — the static class carries the IL2CPP eager-construction attribute and `Register` runs at `BeforeSceneLoad`. Registration turns on the existing generic formatter fallback and keeps application formatters that are already registered.
+- **Automatic registration** — the static class carries the IL2CPP eager-construction attribute and `Register` runs at `BeforeSceneLoad`. Registration passes typed delegates to the existing generic formatter fallback and keeps application formatters that are already registered. Calling `Register()` requires no unsafe context.
 - **Generator forwarding** — the generator forwards `AnimationCurve`, `Gradient` and `RectOffset` operations to this module, for ordinary fields and collection elements alike, without inspecting native handles. Reference this module when you generate contracts that contain these types.
 - **Core stays in charge** — other value-type contracts keep Core's generation and unmanaged paths; registration never forces a raw unmanaged instance call through a formatter. The Writer/Reader and the source generator still belong to Core — there is no replacement serializer, type-id map or dispatch mechanism.
 - **Binary only** — the codecs install binary and exact-size callbacks; generated native-owner JSON operations reject the call explicitly.

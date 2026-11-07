@@ -7,7 +7,7 @@ using LuminPack.Platforms;
 namespace LuminPack.Maui;
 
 /// <summary>Provides explicit public-component binary codecs for platform values.</summary>
-public static unsafe partial class LuminMaui
+public static partial class LuminMaui
 {
     /// <summary>Gets the explicit Point codec.</summary>
     public static LuminPackCodec<global::Microsoft.Maui.Graphics.Point> PointCodec { get; } = new(Write, Read);
@@ -187,12 +187,12 @@ public static unsafe partial class LuminMaui
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Point>(&Write, &Read, PointCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.PointF>(&Write, &Read, PointFCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Size>(&Write, &Read, SizeCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.SizeF>(&Write, &Read, SizeFCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Rect>(&Write, &Read, RectCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.RectF>(&Write, &Read, RectFCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Point>(Write, Read, PointCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.PointF>(Write, Read, PointFCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Size>(Write, Read, SizeCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.SizeF>(Write, Read, SizeFCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Rect>(Write, Read, RectCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.RectF>(Write, Read, RectFCodec);
         RegisterAdditional();
     }
 

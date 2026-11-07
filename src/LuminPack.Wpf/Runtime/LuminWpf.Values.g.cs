@@ -7,7 +7,7 @@ using LuminPack.Platforms;
 namespace LuminPack.Wpf;
 
 /// <summary>Provides explicit public-component binary codecs for platform values.</summary>
-public static unsafe partial class LuminWpf
+public static partial class LuminWpf
 {
     /// <summary>Gets the explicit Point codec.</summary>
     public static LuminPackCodec<global::System.Windows.Point> PointCodec { get; } = new(Write, Read);
@@ -543,21 +543,21 @@ public static unsafe partial class LuminWpf
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::System.Windows.Point>(&Write, &Read, PointCodec);
-        PlatformRegistration.Add<global::System.Windows.Vector>(&Write, &Read, VectorCodec);
-        PlatformRegistration.Add<global::System.Windows.Thickness>(&Write, &Read, ThicknessCodec);
-        PlatformRegistration.Add<global::System.Windows.CornerRadius>(&Write, &Read, CornerRadiusCodec);
-        PlatformRegistration.Add<global::System.Windows.Size>(&Write, &Read, SizeCodec);
-        PlatformRegistration.Add<global::System.Windows.Rect>(&Write, &Read, RectCodec);
-        PlatformRegistration.Add<global::System.Windows.Int32Rect>(&Write, &Read, Int32RectCodec);
-        PlatformRegistration.Add<global::System.Windows.GridLength>(&Write, &Read, GridLengthCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Matrix>(&Write, &Read, MatrixCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Point3D>(&Write, &Read, Point3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Vector3D>(&Write, &Read, Vector3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Quaternion>(&Write, &Read, QuaternionCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Size3D>(&Write, &Read, Size3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Rect3D>(&Write, &Read, Rect3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Matrix3D>(&Write, &Read, Matrix3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Point>(Write, Read, PointCodec);
+        PlatformRegistration.Add<global::System.Windows.Vector>(Write, Read, VectorCodec);
+        PlatformRegistration.Add<global::System.Windows.Thickness>(Write, Read, ThicknessCodec);
+        PlatformRegistration.Add<global::System.Windows.CornerRadius>(Write, Read, CornerRadiusCodec);
+        PlatformRegistration.Add<global::System.Windows.Size>(Write, Read, SizeCodec);
+        PlatformRegistration.Add<global::System.Windows.Rect>(Write, Read, RectCodec);
+        PlatformRegistration.Add<global::System.Windows.Int32Rect>(Write, Read, Int32RectCodec);
+        PlatformRegistration.Add<global::System.Windows.GridLength>(Write, Read, GridLengthCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Matrix>(Write, Read, MatrixCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Point3D>(Write, Read, Point3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Vector3D>(Write, Read, Vector3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Quaternion>(Write, Read, QuaternionCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Size3D>(Write, Read, Size3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Rect3D>(Write, Read, Rect3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Matrix3D>(Write, Read, Matrix3DCodec);
         RegisterAdditional();
     }
 

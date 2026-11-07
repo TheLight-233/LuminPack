@@ -6,7 +6,7 @@ using MauiColor = Microsoft.Maui.Graphics.Color;
 namespace LuminPack.Maui;
 
 /// <summary>Provides nullable value records for the managed MAUI graphics color.</summary>
-public static unsafe partial class LuminMaui
+public static partial class LuminMaui
 {
     /// <summary>Gets the nullable graphics color codec.</summary>
     public static LuminPackCodec<MauiColor?> ColorCodec { get; } = new(Write, Read);
@@ -51,5 +51,5 @@ public static unsafe partial class LuminMaui
     }
 
     /// <summary>Registers the nullable public color record.</summary>
-    static partial void RegisterAdditional() => PlatformRegistration.Add<MauiColor?>(&Write, &Read, ColorCodec);
+    static partial void RegisterAdditional() => PlatformRegistration.Add<MauiColor?>(Write, Read, ColorCodec);
 }

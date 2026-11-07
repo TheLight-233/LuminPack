@@ -10,7 +10,7 @@ namespace LuminPack.Unity
     /// <summary>Provides explicit field-ordered binary codecs for common Unity value types.</summary>
     /// <remarks>These opt-in codecs do not serialize native object handles or silently replace generated nested contracts.
     /// Fixed batches access only individual scalar fields of at most four bytes; they never assume adjacent managed field layout.</remarks>
-    public static unsafe partial class LuminUnity
+    public static partial class LuminUnity
     {
         /// <summary>Writes the 8-byte field-ordered Vector2 value.</summary>
         /// <param name="writer">The existing output cursor.</param>

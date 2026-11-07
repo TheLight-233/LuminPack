@@ -5,7 +5,7 @@ using UnityEngine;
 #pragma warning disable CS0618 // Preserve the editor tangent-mode field through Unity's public compatibility property.
 namespace LuminPack.Unity
 {
-    public static unsafe partial class LuminUnity
+    public static partial class LuminUnity
     {
         /// <summary>Writes explicit Keyframe fields without layout padding.</summary>
         /// <param name="writer">Output cursor.</param><param name="value">The value.</param>

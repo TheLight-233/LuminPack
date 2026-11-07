@@ -19,10 +19,14 @@ public static class CodecContract
         Assert(EqualityComparer<T>.Default.Equals(value, restored), name + ": changed public value.");
         Assert(bytes.AsSpan().SequenceEqual(codec.Serialize(restored)), name + ": changed component bits or identity.");
         nint key = LuminPackMarshal.GetMethodTable(typeof(T));
-        Assert(LuminPackFormatterRegistry.TryGetValue(in key, out var entry) && entry.WriteValue != 0 && entry.ReadValue != 0,
+        Assert(LuminPackFormatterRegistry.TryGetValue(in key, out var entry) &&
+            entry.WriteValue is LuminPackWriteDelegate<T> && entry.ReadValue is LuminPackReadDelegate<T>,
             name + ": missing explicit registration.");
         nint wrappedKey = LuminPackMarshal.GetMethodTable(typeof(LuminPackValue<T>));
-        Assert(LuminPackFormatterRegistry.TryGetValue(in wrappedKey, out _), name + ": missing Custom wrapper registration.");
+        Assert(LuminPackFormatterRegistry.TryGetValue(in wrappedKey, out var wrapped) &&
+            wrapped.WriteValue is LuminPackWriteDelegate<LuminPackValue<T>> && wrapped.ReadValue is LuminPackReadDelegate<LuminPackValue<T>> &&
+            wrapped.WriteValueJson is LuminPackJsonWriteDelegate<LuminPackValue<T>> && wrapped.ReadValueJson is LuminPackJsonReadDelegate<LuminPackValue<T>>,
+            name + ": missing typed Custom wrapper registration.");
         for (int length = 0; length < bytes.Length; length++)
         {
             ReadOnlySpan<byte> shortInput = bytes.AsSpan(0, length);

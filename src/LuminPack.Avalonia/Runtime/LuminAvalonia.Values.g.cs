@@ -7,7 +7,7 @@ using LuminPack.Platforms;
 namespace LuminPack.Avalonia;
 
 /// <summary>Provides explicit public-component binary codecs for platform values.</summary>
-public static unsafe partial class LuminAvalonia
+public static partial class LuminAvalonia
 {
     /// <summary>Gets the explicit Point codec.</summary>
     public static LuminPackCodec<global::Avalonia.Point> PointCodec { get; } = new(Write, Read);
@@ -454,20 +454,20 @@ public static unsafe partial class LuminAvalonia
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::Avalonia.Point>(&Write, &Read, PointCodec);
-        PlatformRegistration.Add<global::Avalonia.Vector>(&Write, &Read, VectorCodec);
-        PlatformRegistration.Add<global::Avalonia.Size>(&Write, &Read, SizeCodec);
-        PlatformRegistration.Add<global::Avalonia.Rect>(&Write, &Read, RectCodec);
-        PlatformRegistration.Add<global::Avalonia.Thickness>(&Write, &Read, ThicknessCodec);
-        PlatformRegistration.Add<global::Avalonia.CornerRadius>(&Write, &Read, CornerRadiusCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelPoint>(&Write, &Read, PixelPointCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelVector>(&Write, &Read, PixelVectorCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelSize>(&Write, &Read, PixelSizeCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelRect>(&Write, &Read, PixelRectCodec);
-        PlatformRegistration.Add<global::Avalonia.Matrix>(&Write, &Read, MatrixCodec);
-        PlatformRegistration.Add<global::Avalonia.Media.Color>(&Write, &Read, ColorCodec);
-        PlatformRegistration.Add<global::Avalonia.RelativePoint>(&Write, &Read, RelativePointCodec);
-        PlatformRegistration.Add<global::Avalonia.RelativeRect>(&Write, &Read, RelativeRectCodec);
+        PlatformRegistration.Add<global::Avalonia.Point>(Write, Read, PointCodec);
+        PlatformRegistration.Add<global::Avalonia.Vector>(Write, Read, VectorCodec);
+        PlatformRegistration.Add<global::Avalonia.Size>(Write, Read, SizeCodec);
+        PlatformRegistration.Add<global::Avalonia.Rect>(Write, Read, RectCodec);
+        PlatformRegistration.Add<global::Avalonia.Thickness>(Write, Read, ThicknessCodec);
+        PlatformRegistration.Add<global::Avalonia.CornerRadius>(Write, Read, CornerRadiusCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelPoint>(Write, Read, PixelPointCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelVector>(Write, Read, PixelVectorCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelSize>(Write, Read, PixelSizeCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelRect>(Write, Read, PixelRectCodec);
+        PlatformRegistration.Add<global::Avalonia.Matrix>(Write, Read, MatrixCodec);
+        PlatformRegistration.Add<global::Avalonia.Media.Color>(Write, Read, ColorCodec);
+        PlatformRegistration.Add<global::Avalonia.RelativePoint>(Write, Read, RelativePointCodec);
+        PlatformRegistration.Add<global::Avalonia.RelativeRect>(Write, Read, RelativeRectCodec);
         RegisterAdditional();
     }
 

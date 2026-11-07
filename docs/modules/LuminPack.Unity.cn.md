@@ -57,7 +57,7 @@ LuminUnity.Read(ref reader, ref position);
 
 ## 🔧 工作方式
 
-- **自动注册**——静态类带有 IL2CPP 预先构造特性，`Register` 在 `BeforeSceneLoad` 时运行。注册会启用现有的泛型格式化器回退，并保留应用已注册的格式化器。
+- **自动注册**——静态类带有 IL2CPP 预先构造特性，`Register` 在 `BeforeSceneLoad` 时运行。注册向现有泛型格式化器回退传递强类型委托，并保留应用已注册的格式化器。调用 `Register()` 不需要 unsafe 上下文。
 - **生成器转发**——生成器会把 `AnimationCurve`、`Gradient` 和 `RectOffset` 的操作转发给本模块，普通字段和集合元素都是如此，且不会检查原生句柄。生成包含这些类型的契约时请引用本模块。
 - **仍由 Core 主导**——其他值类型契约保留 Core 的生成与 unmanaged 路径；注册绝不会强迫原始 unmanaged 实例调用改走格式化器。Writer/Reader 与源码生成器仍归 Core 所有——不存在替代的序列化器、类型 ID 映射或分派机制。
 - **只支持二进制**——编解码器安装的是二进制和精确大小回调；生成的原生所有者 JSON 操作会显式拒绝调用。

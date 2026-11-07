@@ -6,7 +6,7 @@ using Microsoft.Extensions.Primitives;
 namespace LuminPack.AspNetCore;
 
 /// <summary>Provides explicit HTTP value records without serializing framework implementation storage.</summary>
-public static unsafe partial class LuminAspNetCore
+public static partial class LuminAspNetCore
 {
     /// <summary>Limits the number of string values accepted by one explicit header/query value record.</summary>
     public const int MaximumStringValues = 65_536;
@@ -53,7 +53,7 @@ public static unsafe partial class LuminAspNetCore
     /// <summary>Registers explicit framework value codecs for generic fallback and generated Custom wrappers.</summary>
     public static void Register()
     {
-        PlatformRegistration.Add<StringValues>(&Write, &Read, StringValuesCodec);
+        PlatformRegistration.Add<StringValues>(Write, Read, StringValuesCodec);
         RegisterTextValues();
     }
 

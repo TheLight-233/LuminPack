@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace LuminPack.Unity
 {
-    public static unsafe partial class LuminUnity
+    public static partial class LuminUnity
     {
         /// <summary>Captures curve keys before output callbacks without allocating an array snapshot.</summary>
         /// <param name="writer">The output cursor.</param>

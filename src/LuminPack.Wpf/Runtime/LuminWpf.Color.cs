@@ -6,7 +6,7 @@ using WpfColor = System.Windows.Media.Color;
 namespace LuminPack.Wpf;
 
 /// <summary>Provides linear scRGB color records without silently discarding external color profiles.</summary>
-public static unsafe partial class LuminWpf
+public static partial class LuminWpf
 {
     /// <summary>Gets the linear scRGB color codec.</summary>
     public static LuminPackCodec<WpfColor> ColorCodec { get; } = new(Write, Read);
@@ -41,5 +41,5 @@ public static unsafe partial class LuminWpf
     }
 
     /// <summary>Registers the explicit linear color record.</summary>
-    static partial void RegisterAdditional() => PlatformRegistration.Add<WpfColor>(&Write, &Read, ColorCodec);
+    static partial void RegisterAdditional() => PlatformRegistration.Add<WpfColor>(Write, Read, ColorCodec);
 }
