@@ -51,8 +51,8 @@ public class LazyFormatterRegressionTest
         nint key = LuminPackMarshal.GetMethodTable(typeof(LazyOverridePayload));
         Assert.False(LuminPackFormatterRegistry.TryGetValue(in key, out _));
         LuminPackFormatterRegistry.Register(typeof(LazyOverridePayload),
-            (nint)(delegate*<ref LuminPackWriter, in LazyOverridePayload, void>)&WriteOverride,
-            (nint)(delegate*<ref LuminPackReader, ref LazyOverridePayload, void>)&ReadOverride);
+            (LuminPack.Code.LuminPackWriteDelegate<LazyOverridePayload>)WriteOverride,
+            (LuminPack.Code.LuminPackReadDelegate<LazyOverridePayload>)ReadOverride);
         byte[] bytes = _fallback.Serialize(value);
         Assert.Equal(BitConverter.GetBytes(99), bytes);
         Assert.Equal(99, _fallback.Deserialize<LazyOverridePayload>(bytes).Value);

@@ -10,6 +10,11 @@ namespace LuminPackUnitTest;
 /// <summary>Checks concurrent profile initialization without leaving a deadlocked registry in the test host.</summary>
 public sealed class FormatterRegistryInitializationTest
 {
+    /// <summary>Creates an observable registration token for publication and invalidation checks.</summary>
+    /// <param name="value">The token identity.</param>
+    /// <returns>A delegate that preserves the token.</returns>
+    private static Delegate Callback(nint value) => (Func<nint>)(() => value);
+
     /// <summary>Runs the controlled constructor/register race in a disposable child process.</summary>
     [Fact]
     public void ConcurrentInitializationAndPublicationRemainConsistent()
@@ -77,9 +82,9 @@ public sealed class FormatterRegistryInitializationTest
                 Console.Error.WriteLine(lookupError?.ToString() ?? registrationError!.ToString());
                 return 16;
             }
-            if (!LuminPackFormatterRegistry<PausedProfile>.TryGetValue(in key, out var entry) || entry.WriteValue != 1 || entry.ReadValue != 2)
+            if (!LuminPackFormatterRegistry<PausedProfile>.TryGetValue(in key, out var entry) || ((Func<nint>)entry.WriteValue!)() != 1 || ((Func<nint>)entry.ReadValue!)() != 2)
                 return 17;
-            if (!LuminPackFormatterRegistry<EquivalentProfile>.TryGetValue(in key, out entry) || entry.WriteValue != 1 || entry.ReadValue != 2)
+            if (!LuminPackFormatterRegistry<EquivalentProfile>.TryGetValue(in key, out entry) || ((Func<nint>)entry.WriteValue!)() != 1 || ((Func<nint>)entry.ReadValue!)() != 2)
                 return 18;
             if (!CheckPublication(compiled: true) || !CheckPublication(compiled: false)) return 20;
             FormatterRegistryCacheTest.Run();
@@ -103,11 +108,11 @@ public sealed class FormatterRegistryInitializationTest
 
     /// <summary>Keeps early generic initialization from moving ahead of the registration-thread handshake.</summary>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-    private static void RegisterPausedProfile() => LuminPackFormatterRegistry<PausedProfile>.Register(typeof(Payload), 1, 2);
+    private static void RegisterPausedProfile() => LuminPackFormatterRegistry<PausedProfile>.Register(typeof(Payload), Callback(1), Callback(2));
 
-    /// <summary>Checks that inserting and rehashing registrations cannot hide existing entries or tear method addresses.</summary>
+    /// <summary>Checks that inserting and rehashing registrations cannot hide existing entries or tear delegate tokens.</summary>
     /// <param name="compiled">Whether to exercise the profile-specific or declaration-owned registry.</param>
-    /// <returns>Whether every concurrent lookup retained the already registered method addresses.</returns>
+    /// <returns>Whether every concurrent lookup retained the already registered delegate tokens.</returns>
     private static bool CheckPublication(bool compiled)
     {
         Type[] arguments = [typeof(byte), typeof(short), typeof(int), typeof(long), typeof(float), typeof(double), typeof(string), typeof(Guid),
@@ -131,9 +136,9 @@ public sealed class FormatterRegistryInitializationTest
                     bool found = compiled ? LuminPackFormatterRegistry<PublicationProfile>.TryGetValue(in keys[index], out var foundEntry) :
                         LuminPackFormatterRegistry.TryGetValue(in keys[index], out foundEntry);
                     nint expected = (index + 1) * 16;
-                    if (!found || foundEntry.WriteValue != expected + 1 || foundEntry.ReadValue != expected + 2 ||
-                        foundEntry.WriteValueJson != expected + 3 || foundEntry.ReadValueJson != expected + 4)
-                        Interlocked.CompareExchange(ref failure, "A concurrent registry lookup lost or mixed method addresses.", null);
+                    if (!found || ((Func<nint>)foundEntry.WriteValue!)() != expected + 1 || ((Func<nint>)foundEntry.ReadValue!)() != expected + 2 ||
+                        ((Func<nint>)foundEntry.WriteValueJson!)() != expected + 3 || ((Func<nint>)foundEntry.ReadValueJson!)() != expected + 4)
+                        Interlocked.CompareExchange(ref failure, "A concurrent registry lookup lost or mixed delegate tokens.", null);
                 }
                 catch (Exception exception) { Interlocked.CompareExchange(ref failure, exception.ToString(), null); }
                 index = (index + 1) & 31;
@@ -161,18 +166,18 @@ public sealed class FormatterRegistryInitializationTest
         return false;
     }
 
-    /// <summary>Publishes distinct placeholder addresses without invoking them.</summary>
+    /// <summary>Publishes distinct delegate tokens without invoking them.</summary>
     /// <param name="payload">The unique closed payload type.</param>
-    /// <param name="index">The address identity.</param>
+    /// <param name="index">The token identity.</param>
     /// <param name="compiled">The registry family under test.</param>
     private static void RegisterPublication(Type payload, int index, bool compiled)
     {
         nint value = (index + 1) * 16;
-        if (compiled) LuminPackFormatterRegistry<PublicationProfile>.Register(payload, value + 1, value + 2, value + 3, value + 4);
-        else LuminPackFormatterRegistry.Register(payload, value + 1, value + 2, value + 3, value + 4);
+        if (compiled) LuminPackFormatterRegistry<PublicationProfile>.Register(payload, Callback(value + 1), Callback(value + 2), Callback(value + 3), Callback(value + 4));
+        else LuminPackFormatterRegistry.Register(payload, Callback(value + 1), Callback(value + 2), Callback(value + 3), Callback(value + 4));
     }
 
-    /// <summary>Provides a unique key without executing the placeholder method addresses.</summary>
+    /// <summary>Provides a unique key without executing the placeholder delegate tokens.</summary>
     private sealed class Payload { }
 
     /// <summary>Supplies unique runtime keys for the registration publication test.</summary>

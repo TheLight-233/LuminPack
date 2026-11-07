@@ -146,8 +146,8 @@ public partial class CompiledOptionTest
         /// <returns>Whether initialization completed.</returns>
         private static unsafe bool Initialize()
         {
-            LuminPackSerializer.Register<OpaqueValue, TOptions>(&OpaqueValue.WriteCompiled<TOptions>, &OpaqueValue.ReadCompiled<TOptions>,
-                &OpaqueValue.WriteJsonCompiled<TOptions>, &OpaqueValue.ReadJsonCompiled<TOptions>);
+            LuminPackSerializer.Register<OpaqueValue, TOptions>(OpaqueValue.WriteCompiled<TOptions>, OpaqueValue.ReadCompiled<TOptions>,
+                OpaqueValue.WriteJsonCompiled<TOptions>, OpaqueValue.ReadJsonCompiled<TOptions>);
             return true;
         }
     }

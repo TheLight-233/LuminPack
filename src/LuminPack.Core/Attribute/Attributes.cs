@@ -285,7 +285,7 @@ public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
     public LuminPackRegisterMode Register { get; }
 
     /// <summary>Selects registration support without a generation mode.</summary>
-    /// <param name="register">Whether generated method-pointer registration is available.</param>
+    /// <param name="register">Whether generated delegate registration is available.</param>
     public LuminPackGeneratorOptionsAttribute(LuminPackRegisterMode register = LuminPackRegisterMode.Auto)
     {
         Mode = LuminPackGenerationMode.Light;
@@ -294,7 +294,7 @@ public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
 
     /// <summary>Accepts legacy assembly declarations; the mode is ignored.</summary>
     /// <param name="mode">The ignored legacy generation mode.</param>
-    /// <param name="register">Whether generated method-pointer registration is available.</param>
+    /// <param name="register">Whether generated delegate registration is available.</param>
     [Obsolete("Generation is automatic. Remove the mode argument and retain only the registration policy if needed.")]
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public LuminPackGeneratorOptionsAttribute(LuminPackGenerationMode mode, LuminPackRegisterMode register = LuminPackRegisterMode.Auto)
@@ -307,10 +307,10 @@ public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
 /// <summary>Controls whether the manual-registration (Register) APIs are generated for an assembly.</summary>
 public enum LuminPackRegisterMode : byte
 {
-    /// <summary>Follow the project's unsafe setting: Register code is generated only when <c>AllowUnsafeBlocks</c> is enabled.</summary>
+    /// <summary>Generate typed-delegate registration independently of the unsafe compilation setting.</summary>
     Auto = 0,
 
-    /// <summary>Never generate Register code, even when the project enables <c>AllowUnsafeBlocks</c>.</summary>
+    /// <summary>Never generate registration APIs or automatic Custom registration.</summary>
     Disabled = 1,
 }
 

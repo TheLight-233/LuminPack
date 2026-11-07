@@ -7,10 +7,10 @@ namespace LuminPack.SourceGenerator;
 /// <summary>Controls whether the manual-registration (Register) code is generated.</summary>
 public enum LuminPackRegisterMode
 {
-    /// <summary>Follow the project's unsafe setting.</summary>
+    /// <summary>Generate typed-delegate registration independently of the unsafe compilation setting.</summary>
     Auto = 0,
 
-    /// <summary>Never generate Register code, even when AllowUnsafeBlocks is enabled.</summary>
+    /// <summary>Never generate registration APIs or automatic Custom registration.</summary>
     Disabled = 1,
 }
 

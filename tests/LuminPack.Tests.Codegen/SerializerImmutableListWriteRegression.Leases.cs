@@ -72,7 +72,7 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static void CheckProfile<TProfile>() where TProfile : struct, ILuminPackOptions
             {
-                unsafe { LuminPackSerializer.Register<LeasePayload, TProfile>(&LeasePayload.Serialize, &LeasePayload.Deserialize, &LeasePayload.WriteJson<TProfile>, &LeasePayload.ReadJson<TProfile>); }
+                unsafe { LuminPackSerializer.Register<LeasePayload, TProfile>(LeasePayload.Serialize, LeasePayload.Deserialize, LeasePayload.WriteJson<TProfile>, LeasePayload.ReadJson<TProfile>); }
                 CheckScalarPairs<TProfile>();
                 CheckStringPairs<TProfile>();
                 var allFailures = new List<string>();

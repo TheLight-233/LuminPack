@@ -86,13 +86,13 @@ output.ResetForReuse();                             // clear content + reference
 
 ## Registration
 
-Requires `AllowUnsafeBlocks`. Generated only when unsafe code is enabled; disable with `[assembly: LuminPackGeneratorOptions(mode, LuminPackRegisterMode.Disabled)]`.
+Accepts typed delegates independently of `AllowUnsafeBlocks`; disable with `[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]`.
 
 ```csharp
 static void Write(ref LuminPackWriter writer, in Legacy value) { writer.Write(value.Id); }
 static void Read(ref LuminPackReader reader, ref Legacy value) { value = new Legacy(); reader.Read(ref value.Id); }
 
-unsafe { LuminPackSerializer.Register<Legacy>(&Write, &Read); }
+LuminPackSerializer.Register<Legacy>(Write, Read);
 ```
 
 | Overload | Methods |
@@ -101,7 +101,7 @@ unsafe { LuminPackSerializer.Register<Legacy>(&Write, &Read); }
 | `Register<T>(write, read, writeJson, readJson)` | + JSON |
 | `Register<T, TOptions>(...)` | same, for one closed profile |
 
-Signatures: `(ref LuminPackWriter, in T)`, `(ref LuminPackReader, ref T)`, `(ref LuminPackJsonWriter, in T)`, `(ref LuminPackJsonReader, ref T)`. Duplicate registration throws `ArgumentException`. Registries store method pointers keyed by method table, so they don't keep plugin assemblies alive; keep registered code loaded while it can run.
+Signatures: `(ref LuminPackWriter, in T)`, `(ref LuminPackReader, ref T)`, `(ref LuminPackJsonWriter, in T)`, `(ref LuminPackJsonReader, ref T)`. Duplicate registration throws `ArgumentException`. Conditional weak tables own delegates for their payload type's lifetime, with weak MethodTable indexes. Collectible payload assemblies can unload. Delegate targets remain alive while registered; registering plugin code for a noncollectible payload keeps that code alive.
 
 ### Union cases the generator cannot see
 
@@ -121,7 +121,7 @@ static void Read(ref LuminPackReader reader, ref Lib.IShape value)
 }
 // WriteJson writes {"$type":10,"$value":...}; ReadJson reads the value.
 
-unsafe { Lib.IShape.Register<Hexagon>(10, &Write, &Read, &WriteJson, &ReadJson); }
+Lib.IShape.Register<Hexagon>(10, Write, Read, WriteJson, ReadJson);
 ```
 
 All four methods are required; tags must not collide with generated cases (`WriteWideUnionHeader` for wide tags). Prefer `[assembly: LuminPackable(typeof(Lib.IShape))]` with local `partial` cases, which needs no registration.

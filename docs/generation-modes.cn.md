@@ -17,7 +17,7 @@ LuminPack 采用统一的自动生成规则，不需要选择生成档位，也�
 
 对于 `static byte[] Save<T>(T value) => LuminPackSerializer.Serialize(value)` 这样的源码包装方法，可在闭合调用处拦截到具体方法体副本。调用图按方法和类型定义建立索引，关联的类型实参一起替换。嵌套静态包装方法和普通递归共享各自的具体方法体，并保留原来的重载选择、调用者信息常量和副作用。
 
-特化采用保守边界。实例或虚方法、引用程序集中的方法体、不可访问的依赖、显式静态初始化、异步或迭代器方法体、lambda 或局部函数、缩减形式的扩展调用、展开的 `params`，以及绑定依赖开放负载类型的运算符，均保留原路径。特化深度有上限。这些边界需要既有的[注册兜底](custom-formatters.cn.md#runtime-registration)；类型可达不会自动注册。静态路径和兜底都不增加 Runtime Plan、反射工厂或委托缓存。既有 Union 虚方法派发及泛型缓存槽位保持不变。
+特化采用保守边界。实例或虚方法、引用程序集中的方法体、不可访问的依赖、显式静态初始化、异步或迭代器方法体、lambda 或局部函数、缩减形式的扩展调用、展开的 `params`，以及绑定依赖开放负载类型的运算符，均保留原路径。特化深度有上限。这些边界需要既有的[注册兜底](custom-formatters.cn.md#runtime-registration)；类型可达不会自动注册。静态路径和兜底都不增加 Runtime Plan 或反射工厂。只有显式注册和 Custom 兜底保留强类型委托，普通静态路径不保留委托。既有 Union 虚方法派发及泛型缓存槽位保持不变。
 
 生成器仍以 Roslyn 4.3 为依赖下限；只有编译器宿主的可选能力发现使用反射，不会把反射加入生成的序列化代码。可显式禁用编译器 Interceptor，改用已安装的 IL 后端：
 
@@ -39,7 +39,7 @@ NuGet 包同时安装 IL 后处理器。编译器不支持 Interceptor 时（包
 [assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]
 ```
 
-默认在项目开启 unsafe 时允许方法指针注册。此设置不改变静态格式化器的选择。
+默认允许强类型委托注册，与项目的 unsafe 编译设置无关。此设置不改变静态格式化器的选择。
 
 删除 MSBuild 中的 `LuminPackGenerationMode` 及对应的 `CompilerVisibleProperty`。删除程序集特性的档位参数，仅在需要时保留注册策略。旧的 `Full`、`Medium`、`Light`、`Minimal` 枚举值和构造函数作为已废弃的兼容写法保留，但全部被忽略；在旧编译器上也使用相同的自动保留规则。
 

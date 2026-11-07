@@ -24,7 +24,7 @@ internal static class SerializerGenericOverloadRegression
             public static class GenericRegistration
             {
                 public static unsafe void Register<TProfile>() where TProfile : struct, LuminPack.Option.ILuminPackOptions
-                    => LuminPack.LuminPackSerializer.Register<GenericPayload, TProfile>(&Write<TProfile>, &Read<TProfile>, &WriteJson<TProfile>, &ReadJson<TProfile>);
+                    => LuminPack.LuminPackSerializer.Register<GenericPayload, TProfile>(Write<TProfile>, Read<TProfile>, WriteJson<TProfile>, ReadJson<TProfile>);
                 private static void Write<TProfile>(ref LuminPack.Core.LuminPackWriter writer, in GenericPayload value) where TProfile : struct, LuminPack.Option.ILuminPackOptions
                     => LuminPack.LuminPackSerializer.Serialize<TProfile>(ref writer, in value);
                 private static void Read<TProfile>(ref LuminPack.Core.LuminPackReader reader, ref GenericPayload value) where TProfile : struct, LuminPack.Option.ILuminPackOptions
@@ -263,9 +263,9 @@ internal static class SerializerGenericOverloadRegression
             #if REGISTER
                 static unsafe void Register()
                 {
-                    LuminPackSerializer.Register<Item>(&Write, &Read, &WriteJson, &ReadJson);
-                    LuminPackSerializer.Register<OverrideValue>(&WriteOverride, &ReadOverride);
-                    LuminPackSerializer.Register<Item, LuminPack.Option.LuminPackUtf8LengthOptions>(&WriteProfile, &ReadProfile);
+                    LuminPackSerializer.Register<Item>(Write, Read, WriteJson, ReadJson);
+                    LuminPackSerializer.Register<OverrideValue>(WriteOverride, ReadOverride);
+                    LuminPackSerializer.Register<Item, LuminPack.Option.LuminPackUtf8LengthOptions>(WriteProfile, ReadProfile);
                 }
                 static void Write(ref LuminPackWriter writer, in Item value) => LuminPackSerializer.Serialize(ref writer, in value);
                 static void Read(ref LuminPackReader reader, ref Item value) => LuminPackSerializer.Deserialize(ref reader, ref value);

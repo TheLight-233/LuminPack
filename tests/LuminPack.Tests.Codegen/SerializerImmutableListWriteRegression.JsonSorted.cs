@@ -137,8 +137,8 @@ internal static partial class SerializerImmutableListWriteRegression
                 if (!registered.Add(typeof(TProfile))) return;
                 unsafe
                 {
-                    LuminPackSerializer.Register<SortedMutationKey, TProfile>(&SortedMutationKey.Serialize, &SortedMutationKey.Deserialize, &SortedMutationKey.SerializeJson, &SortedMutationKey.DeserializeJson);
-                    LuminPackSerializer.Register<SortedMutationValue, TProfile>(&SortedMutationValue.Serialize, &SortedMutationValue.Deserialize, &SortedMutationValue.SerializeJson, &SortedMutationValue.DeserializeJson);
+                    LuminPackSerializer.Register<SortedMutationKey, TProfile>(SortedMutationKey.Serialize, SortedMutationKey.Deserialize, SortedMutationKey.SerializeJson, SortedMutationKey.DeserializeJson);
+                    LuminPackSerializer.Register<SortedMutationValue, TProfile>(SortedMutationValue.Serialize, SortedMutationValue.Deserialize, SortedMutationValue.SerializeJson, SortedMutationValue.DeserializeJson);
                 }
             }
             private static void CheckProfile<TProfile>(bool fallback) where TProfile : struct, ILuminPackOptions

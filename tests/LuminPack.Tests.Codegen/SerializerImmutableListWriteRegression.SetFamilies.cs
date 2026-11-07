@@ -126,7 +126,7 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static void CheckProfile<P>()where P:struct,ILuminPackOptions
             {
-                unsafe{LuminPackSerializer.Register<SetItem,P>(&SetItem.Serialize,&SetItem.Deserialize,&SetItem.WriteJson<P>,&SetItem.ReadJson<P>);}
+                unsafe{LuminPackSerializer.Register<SetItem,P>(SetItem.Serialize,SetItem.Deserialize,SetItem.WriteJson<P>,SetItem.ReadJson<P>);}
                 using var buffer=new LuminBufferWriter(true);
                 ISet<int> emptySorted=new SortedSet<int>();IReadOnlySet<int> emptyReadOnlySorted=(SortedSet<int>)emptySorted;
                 if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<P>(emptySorted,buffer);})!=0 ||

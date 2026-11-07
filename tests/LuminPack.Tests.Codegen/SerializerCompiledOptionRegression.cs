@@ -224,8 +224,8 @@ internal static partial class SerializerCompiledOptionRegression
             {
                 public static void Check()
                 {
-                    LuminPackSerializer.Register<Opaque, AssemblyProfile>(&Write<AssemblyProfile>, &Read<AssemblyProfile>, &WriteJson<AssemblyProfile>, &ReadJson<AssemblyProfile>);
-                    LuminPackSerializer.Register<Opaque, LuminPackDefaultOptions>(&Write<LuminPackDefaultOptions>, &Read<LuminPackDefaultOptions>, &WriteJson<LuminPackDefaultOptions>, &ReadJson<LuminPackDefaultOptions>);
+                    LuminPackSerializer.Register<Opaque, AssemblyProfile>(Write<AssemblyProfile>, Read<AssemblyProfile>, WriteJson<AssemblyProfile>, ReadJson<AssemblyProfile>);
+                    LuminPackSerializer.Register<Opaque, LuminPackDefaultOptions>(Write<LuminPackDefaultOptions>, Read<LuminPackDefaultOptions>, WriteJson<LuminPackDefaultOptions>, ReadJson<LuminPackDefaultOptions>);
                     var value = new Opaque { Text = "\u4E2D\uD83D\uDE00" };
                     byte[] expected = LuminPackSerializer.Serialize<AssemblyProfile>(value.Text);
                     byte[] bytes = LuminPackSerializer.Serialize<Opaque>(value);

@@ -114,24 +114,21 @@ namespace LuminPackUnitTest
         private static void DuplicateRegistrationThrows()
         {
             bool threw = false;
-            unsafe
+            try
             {
-                try
-                {
-                    LuminPackSerializer.Register<ManualRegisteredType>(&WriteManual, &ReadManual);
-                }
-                catch (ArgumentException)
-                {
-                    threw = true;
-                }
+                LuminPackSerializer.Register<ManualRegisteredType>(WriteManual, ReadManual);
+            }
+            catch (ArgumentException)
+            {
+                threw = true;
             }
             Assert(threw, "Registering the same type twice did not throw ArgumentException.");
         }
 
         /// <summary>Verifies register all.</summary>
-        private static unsafe void RegisterAll()
+        private static void RegisterAll()
         {
-            LuminPackSerializer.Register<ManualRegisteredType>(&WriteManual, &ReadManual, &WriteManualJson, &ReadManualJson);
+            LuminPackSerializer.Register<ManualRegisteredType>(WriteManual, ReadManual, WriteManualJson, ReadManualJson);
         }
 
         /// <summary>Verifies run case.</summary>

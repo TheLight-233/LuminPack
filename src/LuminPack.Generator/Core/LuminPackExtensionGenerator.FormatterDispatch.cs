@@ -8,7 +8,7 @@ public static partial class LuminPackExtensionGenerator
     private const string Declared = "global::LuminPack.Option.LuminPackDeclaredOptions";
     private const string ProfileConstraint = "where TLuminProfile : struct, global::LuminPack.Option.ILuminPackOptions";
 
-    /// <summary>Builds generic operation boundaries that invoke explicitly registered method pointers.</summary>
+    /// <summary>Builds generic operation boundaries that invoke explicitly registered delegates.</summary>
     /// <param name="metaInfo">Current language, framework, and registration settings.</param>
     /// <param name="fallback">The consuming assembly's constants for unknown registered types.</param>
     /// <param name="inputPolicies">Whether generic facade staging requires an assembly input limit.</param>
@@ -19,7 +19,7 @@ public static partial class LuminPackExtensionGenerator
         string scopedIn = metaInfo.IsNet8 ? "scoped in " : "in ";
         string scopedRef = metaInfo.IsNet8 ? "scoped ref " : "ref ";
         string scopedState = metaInfo.IsNet8 ? "scoped " : string.Empty;
-        bool registry = metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled;
+        bool registry = metaInfo.RegisterMode != LuminPackRegisterMode.Disabled;
         string fallbackProfile = "global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, " + fallback.TypeName + ">";
         sb.AppendLine("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649");
         sb.AppendLine("using global::System;");
@@ -157,7 +157,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            private static void " + operation.Name + "Registered<T, TLuminProfile>" + signature);
         sb.AppendLine("                " + ProfileConstraint);
         sb.AppendLine("            {");
-        if (operation.Pointer == null)
+        if (operation.Callback == null)
         {
             // Exact widths serve generated direct records only; registrations carry no width method.
             sb.AppendLine("                " + UnsupportedWidth);
@@ -169,16 +169,15 @@ public static partial class LuminPackExtensionGenerator
         else
         {
             sb.AppendLine("                global::LuminPack.Code.LuminPackFormatterRegistry<" + fallbackProfile + ">." + (operation.Binary ? "TryGetCachedValue" : "TryGetCachedJsonValue") + "<T>(out var registration);");
-            sb.AppendLine("                if (registration." + operation.Pointer + " == 0)");
+            sb.AppendLine("                if (registration." + operation.Callback + " == null)");
             sb.AppendLine("                {");
             sb.AppendLine("                    " + MissingRegistration);
             sb.AppendLine("                    return;");
             sb.AppendLine("                }");
             sb.AppendLine();
-            sb.AppendLine("                unsafe");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    ((delegate*<ref " + stateType + ", " + operation.PointerKeyword + " T, void>)registration." + operation.Pointer + ")(ref " + operation.Parameter + ", " + operation.PointerKeyword + " value);");
-            sb.AppendLine("                }");
+            string callback = "global::LuminPack.Code.LuminPack" + (operation.Binary ? "" : "Json") +
+                (operation.CallbackKeyword == "in" ? "Write" : "Read") + "Delegate<T>";
+            sb.AppendLine("                ((" + callback + ")registration." + operation.Callback + ")(ref " + operation.Parameter + ", " + operation.CallbackKeyword + " value);");
         }
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -186,7 +185,7 @@ public static partial class LuminPackExtensionGenerator
 
     private const string MissingRegistration = "global::LuminPack.Code.LuminPackExceptionHelper.ThrowMessage(\"No formatter is registered for type '\" + typeof(T) + \"' and the requested operation. Call LuminPackSerializer.Register before using generic entry points.\");";
 
-    /// <summary>Describes one generic operation of the dispatch: its state and registered operation pointer.</summary>
+    /// <summary>Describes one generic operation of the dispatch: its state and registered operation callback.</summary>
     private sealed class DispatchOperation
     {
         /// <summary>Initializes a new instance of <c>DispatchOperation</c>.</summary>
@@ -195,19 +194,19 @@ public static partial class LuminPackExtensionGenerator
         /// <param name="parameter">The state parameter name.</param>
         /// <param name="keyword">The payload reference keyword of the generic entry.</param>
         /// <param name="binary">Whether this is a binary operation.</param>
-        /// <param name="pointer">The registry entry member for this operation, or null when registrations cannot supply it.</param>
-        /// <param name="pointerKeyword">The payload reference keyword of the registered method pointer.</param>
-        /// <param name="optionalPointer">Whether a registration may omit this operation.</param>
-        internal DispatchOperation(string name, string state, string parameter, string keyword, bool binary, string pointer, string pointerKeyword, bool optionalPointer)
+        /// <param name="callback">The registry entry member for this operation, or null when registrations cannot supply it.</param>
+        /// <param name="callbackKeyword">The payload reference keyword of the registered delegate.</param>
+        /// <param name="optionalCallback">Whether a registration may omit this operation.</param>
+        internal DispatchOperation(string name, string state, string parameter, string keyword, bool binary, string callback, string callbackKeyword, bool optionalCallback)
         {
             Name = name;
             State = state;
             Parameter = parameter;
             Keyword = keyword;
             Binary = binary;
-            Pointer = pointer;
-            PointerKeyword = pointerKeyword;
-            OptionalPointer = optionalPointer;
+            Callback = callback;
+            CallbackKeyword = callbackKeyword;
+            OptionalCallback = optionalCallback;
         }
 
         /// <summary>Gets the operation name on the Serializer.</summary>
@@ -221,11 +220,11 @@ public static partial class LuminPackExtensionGenerator
         /// <summary>Gets whether this is a binary operation.</summary>
         internal bool Binary { get; }
         /// <summary>Gets the registry entry member for this operation, or null when registrations cannot supply it.</summary>
-        internal string Pointer { get; }
-        /// <summary>Gets the payload reference keyword of the registered method pointer.</summary>
-        internal string PointerKeyword { get; }
+        internal string Callback { get; }
+        /// <summary>Gets the payload reference keyword of the registered delegate.</summary>
+        internal string CallbackKeyword { get; }
         /// <summary>Gets whether a registration may omit this operation.</summary>
-        internal bool OptionalPointer { get; }
+        internal bool OptionalCallback { get; }
     }
 
 }

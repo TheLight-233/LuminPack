@@ -17,7 +17,7 @@ The profile-only spelling `Serialize<TOptions>(value)` remains supported through
 
 For source wrappers such as `static byte[] Save<T>(T value) => LuminPackSerializer.Serialize(value)`, closed calls can be intercepted into a concrete copy of the wrapper body. The call graph is indexed by method/type definition, and correlated type arguments are substituted together. Nested static wrappers and ordinary recursion share their concrete bodies. Original overload selection, caller-information constants and side effects are retained.
 
-Specialization is deliberately conservative. Instance/virtual methods, referenced method bodies, inaccessible dependencies, explicit static initialization, async/iterator bodies, lambdas/local functions, reduced extension calls, expanded `params` and operators whose binding depends on an open payload remain on their original path. Specialization depth is bounded. These boundaries require the existing [registered fallback](custom-formatters.md#runtime-registration); registration is not inferred from reachability. Neither the static path nor the fallback adds a runtime Plan, reflection-based factory or delegate cache. Existing Union virtual dispatch and cached generic slots remain intact.
+Specialization is deliberately conservative. Instance/virtual methods, referenced method bodies, inaccessible dependencies, explicit static initialization, async/iterator bodies, lambdas/local functions, reduced extension calls, expanded `params` and operators whose binding depends on an open payload remain on their original path. Specialization depth is bounded. These boundaries require the existing [registered fallback](custom-formatters.md#runtime-registration); registration is not inferred from reachability. Neither path adds a runtime Plan or reflection-based factory. Only explicit and Custom fallback registrations retain typed delegates; ordinary static paths retain no delegates. Existing Union virtual dispatch and cached generic slots remain intact.
 
 The generator still targets Roslyn 4.3; only compiler-host capability discovery uses optional reflection. This does not add reflection to generated serialization code. To disable compiler interception and select the installed IL backend explicitly:
 
@@ -39,7 +39,7 @@ Registration remains an independent policy:
 [assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]
 ```
 
-The default permits method-pointer registration when unsafe compilation is enabled. This setting does not change static formatter selection.
+The default permits typed-delegate registration regardless of the unsafe compilation setting. This setting does not change static formatter selection.
 
 Remove `LuminPackGenerationMode` MSBuild properties and their `CompilerVisibleProperty` entries. Remove the mode argument from assembly attributes, retaining a registration policy only if needed. The old `Full`, `Medium`, `Light` and `Minimal` enum values and constructor remain as obsolete compatibility syntax; all are ignored and produce the same automatic retention policy, including on older compiler hosts.
 

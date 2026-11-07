@@ -41,13 +41,13 @@ Provide exactly one of these method sets:
 
 - Methods must be `static` and `public` or `internal`.
 - Your methods own the complete representation: null handling, reuse and string encoding.
-- Diagnostics `LuminPack100` to `LuminPack108` report missing or non-static methods, wrong signatures, half a JSON pair, unsupported generic types or Union roots, and skipped registration when unsafe code is disabled.
+- Diagnostics `LuminPack100` to `LuminPack108` report missing or non-static methods, wrong signatures, half a JSON pair, unsupported generic types or Union roots, and skipped registration when registration is explicitly disabled.
 - When a `Custom` type is a member of another `[LuminPackable]` type, mark that member `[LuminPackableObject]` so it calls your formatter instead of being inlined.
 - Default JSON registrations use UTF-16. A UTF-8 JSON document needs a registration for the matching closed profile.
 
 ## Runtime registration
 
-`LuminPackSerializer.Register<T>` registers static method pointers for generic fallback entry points. Registration is required when the implementation is opaque or the call remains open, even for built-in and source-generated types. On the modern [interceptor backend](generation-modes.md#static-interception), closed generic syntax can bind a concrete Root directly and does not request registered dispatch. The installed IL backend provides the same static bindings on older compilers; without either integration, generic payload APIs require registration. Registration needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`.
+`LuminPackSerializer.Register<T>` registers typed delegates for generic fallback entry points. Registration is required when the implementation is opaque or the call remains open, even for built-in and source-generated types. On the modern [interceptor backend](generation-modes.md#static-interception), closed generic syntax can bind a concrete Root directly and does not request registered dispatch. The installed IL backend provides the same static bindings on older compilers; without either integration, generic payload APIs require registration. Pass method groups directly; registration does not require `AllowUnsafeBlocks` or an `unsafe` block.
 
 ```csharp
 static void Write(ref LuminPackWriter writer, in LegacyModel value)
@@ -63,10 +63,7 @@ static void Read(ref LuminPackReader reader, ref LegacyModel value)
     reader.Read(ref value.Name);
 }
 
-unsafe
-{
-    LuminPackSerializer.Register<LegacyModel>(&Write, &Read);
-}
+LuminPackSerializer.Register<LegacyModel>(Write, Read);
 ```
 
 | Overload | Methods |
@@ -82,14 +79,14 @@ static void WritePerson(ref LuminPackWriter writer, in Person value)
     => LuminPackSerializer.Serialize(ref writer, in value);
 static void ReadPerson(ref LuminPackReader reader, ref Person value)
     => LuminPackSerializer.Deserialize(ref reader, ref value);
-unsafe { LuminPackSerializer.Register<Person>(&WritePerson, &ReadPerson); }
+LuminPackSerializer.Register<Person>(WritePerson, ReadPerson);
 ```
 
-Those callback bodies select concrete operations. Calling `Serialize<Person>` inside `WritePerson` would re-enter the same registered generic operation.
+Those callback bodies select concrete operations. A closed `Serialize<Person>` call can also be intercepted; an opaque open generic callback must not call itself through registered fallback.
 
 - Registering the same type twice throws `ArgumentException`.
-- Concrete roots and intercepted calls never consult the registry. Generic fallback bodies use explicit and `Custom` registrations only. An absent registration or missing operation throws `LuminPackException`; there is no automatic generated fallback. Without unsafe support, or with `LuminPackRegisterMode.Disabled`, fallback operations cannot use Register. Fallback JSON boundaries and input staging use the consuming assembly defaults or the explicit profile; the registered callback owns its representation and any declaration-specific policy. Intercepted roots retain declaration-owned policies.
-- Registration holds no strong references, so plugins loaded into a collectible `AssemblyLoadContext` can still unload. Keep the registered code loaded while it can be called.
+- Concrete roots and intercepted calls never consult the registry. Generic fallback bodies use explicit and `Custom` registrations only. An absent registration or missing operation throws `LuminPackException`; there is no automatic generated fallback. With `LuminPackRegisterMode.Disabled`, fallback operations cannot use Register. Fallback JSON boundaries and input staging use the consuming assembly defaults or the explicit profile; the registered callback owns its representation and any declaration-specific policy. Intercepted roots retain declaration-owned policies.
+- Delegate registrations remain alive with their payload type. Conditional weak ownership allows collectible payload assemblies to unload; a noncollectible payload keeps its registered delegates and their targets alive.
 
 ## Member-level formatters
 

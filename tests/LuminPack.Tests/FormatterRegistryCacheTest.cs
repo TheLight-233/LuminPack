@@ -11,17 +11,22 @@ namespace LuminPackUnitTest;
 /// <summary>Exercises registration snapshots inside the isolated registry worker.</summary>
 internal static class FormatterRegistryCacheTest
 {
+    /// <summary>Creates an observable registration token for publication and invalidation checks.</summary>
+    /// <param name="value">The token identity.</param>
+    /// <returns>A delegate that preserves the token.</returns>
+    private static Delegate Callback(nint value) => (Func<nint>)(() => value);
+
     /// <summary>Checks late registration, invalidation, complete publication and collectible payload lifetime.</summary>
     internal static void Run()
     {
         Assert.False(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out _));
-        LuminPackFormatterRegistry.Register(typeof(Payload), 1, 2, 3, 4);
+        LuminPackFormatterRegistry.Register(typeof(Payload), Callback(1), Callback(2), Callback(3), Callback(4));
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out var entry));
         CheckEntry(entry, 0);
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedJsonValue<Payload>(out entry));
         CheckEntry(entry, 0);
 
-        LuminPackFormatterRegistry<Profile>.Register(typeof(Payload), 11, 12, 13, 14);
+        LuminPackFormatterRegistry<Profile>.Register(typeof(Payload), Callback(11), Callback(12), Callback(13), Callback(14));
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out entry));
         CheckEntry(entry, 10);
         Assert.True(LuminPackFormatterRegistry<EquivalentProfile>.TryGetCachedValue<Payload>(out entry));
@@ -29,16 +34,16 @@ internal static class FormatterRegistryCacheTest
         Assert.True(LuminPackFormatterRegistry<Utf8Profile>.TryGetCachedValue<Payload>(out entry));
         CheckEntry(entry, 0);
         Assert.False(LuminPackFormatterRegistry<Utf8Profile>.TryGetCachedJsonValue<Payload>(out _));
-        LuminPackFormatterRegistry<Utf8Profile>.Register(typeof(Payload), 21, 22, 23, 24);
+        LuminPackFormatterRegistry<Utf8Profile>.Register(typeof(Payload), Callback(21), Callback(22), Callback(23), Callback(24));
         Assert.True(LuminPackFormatterRegistry<Utf8Profile>.TryGetCachedJsonValue<Payload>(out entry));
         CheckEntry(entry, 20);
 
-        Assert.Throws<ArgumentException>(() => LuminPackFormatterRegistry<Profile>.Register(typeof(Payload), 31, 32));
+        Assert.Throws<ArgumentException>(() => LuminPackFormatterRegistry<Profile>.Register(typeof(Payload), Callback(31), Callback(32)));
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out entry));
         CheckEntry(entry, 10);
         CheckConcurrentInvalidation();
 
-        LuminPackFormatterRegistry.Register(typeof(ColdMarker), 101, 102);
+        LuminPackFormatterRegistry.Register(typeof(ColdMarker), Callback(101), Callback(102));
         long allocated = GC.GetAllocatedBytesForCurrentThread();
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out entry));
         Assert.True(GC.GetAllocatedBytesForCurrentThread() > allocated);
@@ -58,15 +63,15 @@ internal static class FormatterRegistryCacheTest
         Assert.False(context.IsAlive, "A registered snapshot retained its collectible payload context.");
     }
 
-    /// <summary>Checks that all four addresses come from one immutable registration result.</summary>
+    /// <summary>Checks that all four delegate tokens come from one immutable registration result.</summary>
     /// <param name="entry">The observed entry.</param>
-    /// <param name="basis">The common address prefix.</param>
+    /// <param name="basis">The common token prefix.</param>
     private static void CheckEntry(LuminPackFormatter entry, int basis)
     {
-        Assert.Equal((nint)(basis + 1), entry.WriteValue);
-        Assert.Equal((nint)(basis + 2), entry.ReadValue);
-        Assert.Equal((nint)(basis + 3), entry.WriteValueJson);
-        Assert.Equal((nint)(basis + 4), entry.ReadValueJson);
+        Assert.Equal((nint)(basis + 1), ((Func<nint>)entry.WriteValue!)());
+        Assert.Equal((nint)(basis + 2), ((Func<nint>)entry.ReadValue!)());
+        Assert.Equal((nint)(basis + 3), ((Func<nint>)entry.WriteValueJson!)());
+        Assert.Equal((nint)(basis + 4), ((Func<nint>)entry.ReadValueJson!)());
     }
 
     /// <summary>Invalidates warm snapshots while multiple threads read complete binary and JSON entries.</summary>
@@ -102,7 +107,7 @@ internal static class FormatterRegistryCacheTest
         {
             foreach (Type payload in payloads)
             {
-                LuminPackFormatterRegistry.Register(payload, 201, 202);
+                LuminPackFormatterRegistry.Register(payload, Callback(201), Callback(202));
                 Thread.Yield();
             }
         }
@@ -123,7 +128,9 @@ internal static class FormatterRegistryCacheTest
         var context = new AssemblyLoadContext("RegistryCachePayload", isCollectible: true);
         Type payload = context.LoadFromAssemblyPath(typeof(FormatterRegistryCacheTest).Assembly.Location)
             .GetType(typeof(CollectiblePayload).FullName!, throwOnError: true)!;
-        LuminPackFormatterRegistry.Register(payload, 301, 302);
+        var callback = payload.GetMethod(nameof(CollectiblePayload.Callback), BindingFlags.Public | BindingFlags.Static)!
+            .CreateDelegate(typeof(Func<nint>));
+        LuminPackFormatterRegistry.Register(payload, callback, callback);
         MethodInfo method = typeof(LuminPackFormatterRegistry<Profile>).GetMethod("TryGetCachedValue")!.MakeGenericMethod(payload);
         Assert.True((bool)method.Invoke(null, [null])!);
         var weak = new WeakReference(context);
@@ -136,7 +143,12 @@ internal static class FormatterRegistryCacheTest
     /// <summary>Supplies a final invalidation before the allocation assertion.</summary>
     private sealed class ColdMarker { }
     /// <summary>Supplies a payload owned by a collectible assembly.</summary>
-    private sealed class CollectiblePayload { }
+    private sealed class CollectiblePayload
+    {
+        /// <summary>Supplies a delegate whose code belongs to the collectible payload assembly.</summary>
+        /// <returns>A stable observable value.</returns>
+        public static nint Callback() => 301;
+    }
     /// <summary>Supplies distinct keys for concurrent registration.</summary>
     /// <typeparam name="TLeft">The first identity component.</typeparam>
     /// <typeparam name="TRight">The second identity component.</typeparam>

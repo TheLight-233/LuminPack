@@ -104,7 +104,7 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static unsafe void Check<P>(StringBuilder evidence)where P:struct,ILuminPackOptions
             {
-                LuminPackSerializer.Register<ConcurrentItem,P>(&ConcurrentItem.Serialize,&ConcurrentItem.Deserialize,&ConcurrentItem.WriteJson<P>,&ConcurrentItem.ReadJson<P>);
+                LuminPackSerializer.Register<ConcurrentItem,P>(ConcurrentItem.Serialize,ConcurrentItem.Deserialize,ConcurrentItem.WriteJson<P>,ConcurrentItem.ReadJson<P>);
                 using var output=new LuminPack.Utility.LuminBufferWriter(true);
                 foreach(int count in new[]{0,1,17,257})
                 {

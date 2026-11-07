@@ -11,31 +11,31 @@ public sealed class UnionRegistrationBoundaryTest
 {
     /// <summary>Rejects invalid registration metadata and preserves the first complete valid entry.</summary>
     [Fact]
-    public unsafe void InvalidRegistrationsDoNotPublishEntries()
+    public void InvalidRegistrationsDoNotPublishEntries()
     {
-        // Minimal generation discovers the Union contract through an actual serializer operation.
+        // Root the concrete Union operation independently of its external registrations.
         RegistrationAuditRoot? root = null;
         LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(root), ref root);
         Assert.Null(root);
         Assert.Throws<ArgumentException>(() => Register(-1));
         Assert.Throws<ArgumentException>(() => Register(65536));
         Assert.Throws<ArgumentException>(() => Register(1));
-        Assert.Throws<ArgumentException>(() => RegistrationAuditRoot.Register<string>(78, &Write, &Read, &WriteJson, &ReadJson));
-        Assert.Throws<ArgumentException>(() => RegistrationAuditRoot.Register<RegistrationAuditCase>(78, null, &Read, &WriteJson, &ReadJson));
+        Assert.Throws<ArgumentException>(() => RegistrationAuditRoot.Register<string>(78, Write, Read, WriteJson, ReadJson));
+        Assert.Throws<ArgumentException>(() => RegistrationAuditRoot.Register<RegistrationAuditCase>(78, null, Read, WriteJson, ReadJson));
         Assert.False(RegistrationAuditRoot.TryGetRegisteredFormatter(78, out _));
         Register(77);
         Assert.Throws<ArgumentException>(() => Register(77));
         Assert.True(RegistrationAuditRoot.TryGetRegisteredFormatter(77, out LuminPackFormatter entry));
         Assert.Equal(77, entry.Tag);
-        Assert.NotEqual(0, entry.WriteValue);
-        Assert.NotEqual(0, entry.ReadValue);
-        Assert.NotEqual(0, entry.WriteValueJson);
-        Assert.NotEqual(0, entry.ReadValueJson);
+        Assert.NotNull(entry.WriteValue);
+        Assert.NotNull(entry.ReadValue);
+        Assert.NotNull(entry.WriteValueJson);
+        Assert.NotNull(entry.ReadValueJson);
     }
 
-    /// <summary>Submits one complete pointer registration for a compatible member.</summary>
+    /// <summary>Submits one complete delegate registration for a compatible member.</summary>
     /// <param name="tag">The proposed wire tag.</param>
-    private static unsafe void Register(int tag) => RegistrationAuditRoot.Register<RegistrationAuditCase>(tag, &Write, &Read, &WriteJson, &ReadJson);
+    private static void Register(int tag) => RegistrationAuditRoot.Register<RegistrationAuditCase>(tag, Write, Read, WriteJson, ReadJson);
 
     /// <summary>Provides the binary write signature without invoking the callback.</summary>
     /// <param name="writer">The supplied writer.</param>

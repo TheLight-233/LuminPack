@@ -132,7 +132,7 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static void CheckProfile<P>()where P:struct,ILuminPackOptions
             {
-                unsafe{LuminPackSerializer.Register<SequenceItem,P>(&SequenceItem.Serialize,&SequenceItem.Deserialize,&SequenceItem.WriteJson<P>,&SequenceItem.ReadJson<P>);}
+                unsafe{LuminPackSerializer.Register<SequenceItem,P>(SequenceItem.Serialize,SequenceItem.Deserialize,SequenceItem.WriteJson<P>,SequenceItem.ReadJson<P>);}
                 using var buffer=new LuminBufferWriter(true);
                 foreach(int count in new[]{0,1,33})
                 {

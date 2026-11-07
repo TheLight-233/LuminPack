@@ -213,10 +213,10 @@ internal static class BinaryUnionSafetyTest
         unsafe
         {
             IFastInterfaceUnion.Register<RegisteredInterfaceUnionMember>(100,
-                &WriteRegisteredMember, &ReadRegisteredMember, &WriteJsonRegisteredMember, &ReadJsonRegisteredMember);
+                WriteRegisteredMember, ReadRegisteredMember, WriteJsonRegisteredMember, ReadJsonRegisteredMember);
         }
 
-        Assert(IFastInterfaceUnion.TryGetRegisteredFormatter(100, out var probeEntry) && probeEntry.ReadValue != 0,
+        Assert(IFastInterfaceUnion.TryGetRegisteredFormatter(100, out var probeEntry) && probeEntry.ReadValue != null,
             "probe: registered formatter not found by tag after Register.");
 
         IFastInterfaceUnion value = new RegisteredInterfaceUnionMember { Value = 321 };

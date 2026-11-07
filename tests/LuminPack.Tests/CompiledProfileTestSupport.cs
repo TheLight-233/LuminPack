@@ -53,7 +53,7 @@ namespace LuminPackUnitTest
             where TOptions : struct, ILuminPackOptions
         {
             internal static readonly bool Ready = Register();
-            /// <summary>Publishes actual generated pointers once for this managed fixture and profile.</summary>
+            /// <summary>Publishes actual generated delegates once for this managed fixture and profile.</summary>
             /// <returns>True after an existing or newly published registration is available.</returns>
             private static bool Register()
             {
@@ -62,9 +62,9 @@ namespace LuminPackUnitTest
                 {
                     if (LuminPack.Code.LuminPackFormatterRegistry<TOptions>.TryGetCachedValue<T>(out _))
                         return true;
-                    nint write = Find("Serialize", typeof(LuminPackWriter));
-                    nint read = Find("Deserialize", typeof(LuminPackReader));
-                    if (write == 0 || read == 0)
+                    Delegate? write = Find("Serialize", typeof(LuminPackWriter));
+                    Delegate? read = Find("Deserialize", typeof(LuminPackReader));
+                    if (write == null || read == null)
                         throw new InvalidOperationException("The profile fixture has no complete concrete binary roots: " + typeof(T));
                     LuminPack.Code.LuminPackFormatterRegistry<TOptions>.Register(typeof(T), write, read, Find("SerializeJson", typeof(LuminPackJsonWriter)), Find("DeserializeJson", typeof(LuminPackJsonReader)));
                     return true;
@@ -74,17 +74,21 @@ namespace LuminPackUnitTest
             /// <summary>Finds the concrete generated operation with this exact state and payload signature.</summary>
             /// <param name = "name">The root operation.</param>
             /// <param name = "state">Its advancing state type.</param>
-            /// <returns>The closed method pointer, or zero when the operation is absent.</returns>
-            private static nint Find(string name, Type state)
+            /// <returns>The closed typed delegate, or null when the operation is absent.</returns>
+            private static Delegate? Find(string name, Type state)
             {
                 foreach (var method in TestStateMethods.Where(method => (method.Name == name || method.Name.StartsWith(name + "_", StringComparison.Ordinal)) && method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1))
                 {
                     var parameters = method.GetParameters();
                     if (parameters.Length == 2 && parameters[0].ParameterType == state.MakeByRefType() && parameters[1].ParameterType == typeof(T).MakeByRefType())
-                        return method.MakeGenericMethod(typeof(TOptions)).MethodHandle.GetFunctionPointer();
+                        return method.MakeGenericMethod(typeof(TOptions)).CreateDelegate(
+                            state == typeof(LuminPackWriter) ? typeof(LuminPack.Code.LuminPackWriteDelegate<T>) :
+                            state == typeof(LuminPackReader) ? typeof(LuminPack.Code.LuminPackReadDelegate<T>) :
+                            state == typeof(LuminPackJsonWriter) ? typeof(LuminPack.Code.LuminPackJsonWriteDelegate<T>) :
+                            typeof(LuminPack.Code.LuminPackJsonReadDelegate<T>));
                 }
 
-                return 0;
+                return null;
             }
         }
 

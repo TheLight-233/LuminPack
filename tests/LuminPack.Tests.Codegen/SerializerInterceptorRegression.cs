@@ -81,7 +81,7 @@ internal static partial class SerializerInterceptorRegression
                     bool missing = false;
                     try { sink.Save(value); } catch (Exception error) when (error.GetType().Name == "LuminPackException") { missing = true; }
                     if (!missing) throw new Exception("An opaque call bypassed registration.");
-                    LuminPackSerializer.Register<Payload>(&Write, &Read);
+                    LuminPackSerializer.Register<Payload>(Write, Read);
                     if (Convert.ToBase64String(sink.Save(value)) != Convert.ToBase64String(expected)) throw new Exception("Registered fallback mismatch.");
                 }
                 #endif

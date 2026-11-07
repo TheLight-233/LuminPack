@@ -37,8 +37,8 @@ internal sealed class FrozenCustomRegistration
         string registration = string.Empty;
         if (!model.HasErrors && model.RegisterTier > 0)
         {
-            if (!metadata.AllowUnsafe || metadata.RegisterMode == LuminPackRegisterMode.Disabled)
-                registrationDiagnostics = ImmutableArray.Create(FrozenDiagnostic.From(Diagnostic.Create(DiagnosticDescriptors.CustomRegistrationSkippedNoUnsafe,
+            if (metadata.RegisterMode == LuminPackRegisterMode.Disabled)
+                registrationDiagnostics = ImmutableArray.Create(FrozenDiagnostic.From(Diagnostic.Create(DiagnosticDescriptors.CustomRegistrationDisabled,
                     type.Locations.FirstOrDefault() ?? Location.None, type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat))));
             else
                 registration = CustomFormatterRegistrationGenerator.GenerateRegistrationBlock(model.TypeName, model.RegisterTier);

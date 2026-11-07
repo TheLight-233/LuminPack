@@ -84,7 +84,7 @@ internal sealed class UnionDispatchTierPlan
             types.Add(type);
         }
         var cases = types.Select(type => (type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), type.IsSealed)).ToList();
-        bool registration = metadata.AllowUnsafe && metadata.RegisterMode != LuminPackRegisterMode.Disabled;
+        bool registration = metadata.RegisterMode != LuminPackRegisterMode.Disabled;
         if (!registration && types.Count == 1 && types[0].IsSealed && IsClosed(root, compilation) && HasOnlyDerivedType(root, types[0], compilation))
             return new UnionDispatchTierPlan(UnionDispatchTier.Direct, cases);
         return new UnionDispatchTierPlan(UnionDispatchTier.Guard, cases);

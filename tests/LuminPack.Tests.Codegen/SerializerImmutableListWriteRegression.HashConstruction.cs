@@ -163,7 +163,7 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static void CheckCallbacks<P>(Encoding encoding)where P:struct,ILuminPackOptions
             {
-                unsafe{LuminPackSerializer.Register<ObservedHash,P>(&ObservedHash.Serialize,&ObservedHash.Deserialize,&ObservedHash.WriteJson<P>,&ObservedHash.ReadJson<P>);}
+                unsafe{LuminPackSerializer.Register<ObservedHash,P>(ObservedHash.Serialize,ObservedHash.Deserialize,ObservedHash.WriteJson<P>,ObservedHash.ReadJson<P>);}
                 var values=new[]{new ObservedHash{Id=1},new ObservedHash{Id=2},new ObservedHash{Id=3}};
                 byte[] binary=LuminPackSerializer.Serialize<P>(values),json=encoding.GetBytes("[1,2,3]");
                 foreach(bool isJson in new[]{false,true})

@@ -44,7 +44,7 @@ internal static class SerializerJsonScalarLoopRegression
                 }
                 private static void Profile<TOptions>() where TOptions : struct, ILuminPackOptions
                 {
-                    LuminPackSerializer.Register<Scalars<int, long>, TOptions>(&Write<TOptions>, &Read<TOptions>, &WriteJson<TOptions>, &ReadJson<TOptions>);
+                    LuminPackSerializer.Register<Scalars<int, long>, TOptions>(Write<TOptions>, Read<TOptions>, WriteJson<TOptions>, ReadJson<TOptions>);
                     var value = new Scalars<int, long> { A = float.MaxValue, B = -0.0f, C = double.Epsilon, D = double.MinValue,
                         Optional = 1.1754944E-38f, Values = new List<float> { 0.1f, float.Epsilon, -float.MaxValue }, First = 17, Second = 19 };
                     string json = LuminPackSerializer.SerializeJson<TOptions>(value);

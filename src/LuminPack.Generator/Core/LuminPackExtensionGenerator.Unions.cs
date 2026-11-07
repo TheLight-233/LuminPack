@@ -73,7 +73,7 @@ public static partial class LuminPackExtensionGenerator
             sb.AppendLine(reuse ? "                    return value;" : "                    return;");
             sb.AppendLine("                }");
         }
-        if (!metaInfo.AllowUnsafe || metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
+        if (metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
         {
             sb.AppendLine("                default:");
             sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + data.classFullName + ")); ");
@@ -83,10 +83,10 @@ public static partial class LuminPackExtensionGenerator
         {
             sb.AppendLine("                default:");
             sb.AppendLine("                {");
-            sb.AppendLine("                    if (" + data.classFullName + ".TryGetRegisteredFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValue != 0)");
+            sb.AppendLine("                    if (" + data.classFullName + ".TryGetRegisteredFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValue != null)");
             sb.AppendLine("                    {");
             sb.AppendLine("                        " + data.classFullName + " registeredValue = default!;");
-            sb.AppendLine("                        unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackReader, ref " + data.classFullName + ", void>)registeredFormatter.ReadValue)(ref reader, ref registeredValue); }");
+            sb.AppendLine("                        ((global::LuminPack.Code.LuminPackReadDelegate<" + data.classFullName + ">)registeredFormatter.ReadValue)(ref reader, ref registeredValue);");
             sb.AppendLine("                        value = registeredValue;");
             sb.AppendLine(reuse ? "                        return value;" : "                        return;");
             sb.AppendLine("                    }");
@@ -208,7 +208,7 @@ public static partial class LuminPackExtensionGenerator
             sb.AppendLine("                        break;");
             sb.AppendLine("                    }");
         }
-        if (!metaInfo.AllowUnsafe || metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
+        if (metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
         {
             sb.AppendLine("                    default: global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + typeName + ")); break;");
         }
@@ -216,10 +216,10 @@ public static partial class LuminPackExtensionGenerator
         {
             sb.AppendLine("                    default:");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        if (" + typeName + ".TryGetRegisteredFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != 0)");
+            sb.AppendLine("                        if (" + typeName + ".TryGetRegisteredFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
             sb.AppendLine("                        {");
             sb.AppendLine("                            " + typeName + " registeredValue = default!;");
-            sb.AppendLine("                            unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref " + typeName + ", void>)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue); }");
+            sb.AppendLine("                            ((global::LuminPack.Code.LuminPackJsonReadDelegate<" + typeName + ">)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue);");
             sb.AppendLine("                            value = registeredValue;");
             sb.AppendLine("                            break;");
             sb.AppendLine("                        }");

@@ -289,7 +289,7 @@ public class FixedUnionCursorTest
     [Fact]
     public unsafe void RegisteredRuntimeCaseRetainsItsOriginalFormatter()
     {
-        CursorRoot.Register<RegisteredCase>(42, &WriteRegistered, &ReadRegistered, &WriteRegisteredJson, &ReadRegisteredJson);
+        CursorRoot.Register<RegisteredCase>(42, WriteRegistered, ReadRegistered, WriteRegisteredJson, ReadRegisteredJson);
         var source = new Dictionary<int, CursorRoot?>
         {
             [1] = new FixedCase

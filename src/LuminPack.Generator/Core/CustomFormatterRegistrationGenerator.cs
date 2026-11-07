@@ -57,7 +57,7 @@ internal static class CustomFormatterRegistrationGenerator
             sb.AppendLine($"namespace LuminPackRegisters.{asmSafe}");
             sb.AppendLine("{"); }
 
-        sb.AppendLine("    internal static unsafe class LuminPackCustomFormatterRegistry");
+        sb.AppendLine("    internal static class LuminPackCustomFormatterRegistry");
         sb.AppendLine("    {");
 
         if (isUnity)
@@ -97,12 +97,12 @@ internal static class CustomFormatterRegistrationGenerator
     {
         var sb = new StringBuilder();
         sb.AppendLine($"            global::LuminPack.LuminPackSerializer.Register<{type}>(");
-        sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.SerializeName},");
-        sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.DeserializeName}");
+        sb.AppendLine($"                {type}.{CustomFormatterAnalyzer.SerializeName},");
+        sb.AppendLine($"                {type}.{CustomFormatterAnalyzer.DeserializeName}");
         if (tier >= 2)
         {
-            sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.SerializeJsonName}");
-            sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.DeserializeJsonName}");
+            sb.AppendLine($"                , {type}.{CustomFormatterAnalyzer.SerializeJsonName}");
+            sb.AppendLine($"                , {type}.{CustomFormatterAnalyzer.DeserializeJsonName}");
         }
         sb.AppendLine("            );");
         return sb.ToString();

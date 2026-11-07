@@ -52,7 +52,7 @@ A Union root from a referenced assembly can be listed the same way. Local `parti
 
 ## Manual registration
 
-When the generator cannot see a case at all, register it at runtime. Registration passes static method pointers, so the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`; the generator only emits `Register` APIs when unsafe code is enabled. Disable them with `[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]`.
+When the generator cannot see a case at all, register it at runtime. Registration accepts typed delegates and is generated independently of `AllowUnsafeBlocks`. Pass method groups directly, without `&` or an `unsafe` block. Disable them with `[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]`.
 
 The root's generated `Register<TCase>` takes a tag and four methods, written against the root type:
 
@@ -73,16 +73,13 @@ static void Read(ref LuminPackReader reader, ref MyLib.IShape value)
 // WriteJson(ref LuminPackJsonWriter, ref MyLib.IShape) writes {"$type":10,"$value":...};
 // ReadJson(ref LuminPackJsonReader, ref MyLib.IShape) reads the value.
 
-unsafe
-{
-    MyLib.IShape.Register<Hexagon>(10, &Write, &Read, &WriteJson, &ReadJson);
-}
+MyLib.IShape.Register<Hexagon>(10, Write, Read, WriteJson, ReadJson);
 ```
 
 - The tag must be unique and must not collide with a generated case; use `WriteWideUnionHeader` for wide tags.
 - All four methods are required.
 - Registration is validated: duplicate tags, incompatible case types and missing methods are rejected.
-- Registration holds no strong references, so plugins loaded into a collectible `AssemblyLoadContext` can still unload. The code you register must stay loaded while it can be called.
+- Delegate registrations remain alive with their payload type. Conditional weak ownership allows collectible payload assemblies to unload; a noncollectible payload keeps its registered delegates and their targets alive.
 
 For a type that is not part of a Union and has no generated formatter, use `LuminPackSerializer.Register<T>` or `GeneratorType.Custom`; see [Custom formatters](custom-formatters.md).
 

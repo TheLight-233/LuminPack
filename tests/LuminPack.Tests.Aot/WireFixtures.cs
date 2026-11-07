@@ -20,30 +20,30 @@ internal static class WireFixtures
     [ModuleInitializer]
     internal static unsafe void RegisterFixtures()
     {
-        LuminPackSerializer.Register<int, LuminPackUtf8LengthOptions>(&WriteFixture0<LuminPackUtf8LengthOptions>, &ReadFixture0<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<int, LuminPackUtf16LengthOptions>(&WriteFixture0<LuminPackUtf16LengthOptions>, &ReadFixture0<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<string, LuminPackUtf8LengthOptions>(&WriteFixture1<LuminPackUtf8LengthOptions>, &ReadFixture1<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<string, LuminPackUtf16LengthOptions>(&WriteFixture1<LuminPackUtf16LengthOptions>, &ReadFixture1<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<int[], LuminPackUtf8LengthOptions>(&WriteFixture2<LuminPackUtf8LengthOptions>, &ReadFixture2<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<int[], LuminPackUtf16LengthOptions>(&WriteFixture2<LuminPackUtf16LengthOptions>, &ReadFixture2<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<List<string>, LuminPackUtf8LengthOptions>(&WriteFixture3<LuminPackUtf8LengthOptions>, &ReadFixture3<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<List<string>, LuminPackUtf16LengthOptions>(&WriteFixture3<LuminPackUtf16LengthOptions>, &ReadFixture3<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<string[], LuminPackUtf8LengthOptions>(&WriteFixture4<LuminPackUtf8LengthOptions>, &ReadFixture4<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<string[], LuminPackUtf16LengthOptions>(&WriteFixture4<LuminPackUtf16LengthOptions>, &ReadFixture4<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<Dictionary<string, int>, LuminPackUtf8LengthOptions>(&WriteFixture5<LuminPackUtf8LengthOptions>, &ReadFixture5<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<Dictionary<string, int>, LuminPackUtf16LengthOptions>(&WriteFixture5<LuminPackUtf16LengthOptions>, &ReadFixture5<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<Queue<int>, LuminPackUtf8LengthOptions>(&WriteFixture6<LuminPackUtf8LengthOptions>, &ReadFixture6<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<Queue<int>, LuminPackUtf16LengthOptions>(&WriteFixture6<LuminPackUtf16LengthOptions>, &ReadFixture6<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<Stack<int>, LuminPackUtf8LengthOptions>(&WriteFixture7<LuminPackUtf8LengthOptions>, &ReadFixture7<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<Stack<int>, LuminPackUtf16LengthOptions>(&WriteFixture7<LuminPackUtf16LengthOptions>, &ReadFixture7<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<BitArray, LuminPackUtf8LengthOptions>(&WriteFixture8<LuminPackUtf8LengthOptions>, &ReadFixture8<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<BitArray, LuminPackUtf16LengthOptions>(&WriteFixture8<LuminPackUtf16LengthOptions>, &ReadFixture8<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<StringBuilder, LuminPackUtf8LengthOptions>(&WriteFixture9<LuminPackUtf8LengthOptions>, &ReadFixture9<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<StringBuilder, LuminPackUtf16LengthOptions>(&WriteFixture9<LuminPackUtf16LengthOptions>, &ReadFixture9<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<int[,], LuminPackUtf8LengthOptions>(&WriteFixture10<LuminPackUtf8LengthOptions>, &ReadFixture10<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<int[,], LuminPackUtf16LengthOptions>(&WriteFixture10<LuminPackUtf16LengthOptions>, &ReadFixture10<LuminPackUtf16LengthOptions>);
-        LuminPackSerializer.Register<WireModel, LuminPackUtf8LengthOptions>(&WriteFixture11<LuminPackUtf8LengthOptions>, &ReadFixture11<LuminPackUtf8LengthOptions>);
-        LuminPackSerializer.Register<WireModel, LuminPackUtf16LengthOptions>(&WriteFixture11<LuminPackUtf16LengthOptions>, &ReadFixture11<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<int, LuminPackUtf8LengthOptions>(WriteFixture0<LuminPackUtf8LengthOptions>, ReadFixture0<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<int, LuminPackUtf16LengthOptions>(WriteFixture0<LuminPackUtf16LengthOptions>, ReadFixture0<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<string, LuminPackUtf8LengthOptions>(WriteFixture1<LuminPackUtf8LengthOptions>, ReadFixture1<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<string, LuminPackUtf16LengthOptions>(WriteFixture1<LuminPackUtf16LengthOptions>, ReadFixture1<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<int[], LuminPackUtf8LengthOptions>(WriteFixture2<LuminPackUtf8LengthOptions>, ReadFixture2<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<int[], LuminPackUtf16LengthOptions>(WriteFixture2<LuminPackUtf16LengthOptions>, ReadFixture2<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<List<string>, LuminPackUtf8LengthOptions>(WriteFixture3<LuminPackUtf8LengthOptions>, ReadFixture3<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<List<string>, LuminPackUtf16LengthOptions>(WriteFixture3<LuminPackUtf16LengthOptions>, ReadFixture3<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<string[], LuminPackUtf8LengthOptions>(WriteFixture4<LuminPackUtf8LengthOptions>, ReadFixture4<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<string[], LuminPackUtf16LengthOptions>(WriteFixture4<LuminPackUtf16LengthOptions>, ReadFixture4<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<Dictionary<string, int>, LuminPackUtf8LengthOptions>(WriteFixture5<LuminPackUtf8LengthOptions>, ReadFixture5<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<Dictionary<string, int>, LuminPackUtf16LengthOptions>(WriteFixture5<LuminPackUtf16LengthOptions>, ReadFixture5<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<Queue<int>, LuminPackUtf8LengthOptions>(WriteFixture6<LuminPackUtf8LengthOptions>, ReadFixture6<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<Queue<int>, LuminPackUtf16LengthOptions>(WriteFixture6<LuminPackUtf16LengthOptions>, ReadFixture6<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<Stack<int>, LuminPackUtf8LengthOptions>(WriteFixture7<LuminPackUtf8LengthOptions>, ReadFixture7<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<Stack<int>, LuminPackUtf16LengthOptions>(WriteFixture7<LuminPackUtf16LengthOptions>, ReadFixture7<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<BitArray, LuminPackUtf8LengthOptions>(WriteFixture8<LuminPackUtf8LengthOptions>, ReadFixture8<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<BitArray, LuminPackUtf16LengthOptions>(WriteFixture8<LuminPackUtf16LengthOptions>, ReadFixture8<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<StringBuilder, LuminPackUtf8LengthOptions>(WriteFixture9<LuminPackUtf8LengthOptions>, ReadFixture9<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<StringBuilder, LuminPackUtf16LengthOptions>(WriteFixture9<LuminPackUtf16LengthOptions>, ReadFixture9<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<int[,], LuminPackUtf8LengthOptions>(WriteFixture10<LuminPackUtf8LengthOptions>, ReadFixture10<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<int[,], LuminPackUtf16LengthOptions>(WriteFixture10<LuminPackUtf16LengthOptions>, ReadFixture10<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<WireModel, LuminPackUtf8LengthOptions>(WriteFixture11<LuminPackUtf8LengthOptions>, ReadFixture11<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<WireModel, LuminPackUtf16LengthOptions>(WriteFixture11<LuminPackUtf16LengthOptions>, ReadFixture11<LuminPackUtf16LengthOptions>);
     }
 
     /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>

@@ -153,7 +153,7 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static void Evidence<P>(StringBuilder report)where P:struct,ILuminPackOptions
             {
-                unsafe{LuminPackSerializer.Register<RemainingItem,P>(&RemainingItem.Serialize,&RemainingItem.Deserialize,&RemainingItem.WriteJson<P>,&RemainingItem.ReadJson<P>);}
+                unsafe{LuminPackSerializer.Register<RemainingItem,P>(RemainingItem.Serialize,RemainingItem.Deserialize,RemainingItem.WriteJson<P>,RemainingItem.ReadJson<P>);}
                 using var output=new LuminBufferWriter(true);
                 foreach(string text in new[]{"{\"Key\":1,\"Elements\":[2,3]}","{\"K\\u0065y\":2,\"Elements\":[],\"ignored\":[1],\"Key\":3}","{\"Elements\":[4],\"\u00e9\":null,\"Key\":4}","{\"Key\":1,\"Elements\":null}","{\"Key\":1,\"Elements\":["})
                 {

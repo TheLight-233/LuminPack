@@ -106,22 +106,20 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         if (cursor)
             AppendCursorRoot(sb, padding, rootType, suffix);
 
-        // The cross-assembly manual registration registry uses function pointers (delegate*),
-        // which require an unsafe context.  When the project does not enable AllowUnsafeBlocks,
-        // emit the plain throwing slots instead, so the generated code compiles without unsafe.
-        if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
+        // Delegate registration is available independently of unsafe code generation.
+        if (metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
         {
             // Cross-assembly manual registration: derived types living in assemblies the generator
             // cannot see are registered at runtime by their MethodTable, so the throwing base slots
             // below can dispatch to the registered static methods instead.
-            sb.AppendLine($"{padding}private static readonly global::LuminPack.Utility.LuminCircleReferenceMap<nint, {entryType}> s_unionRegistry_{suffix} = new global::LuminPack.Utility.LuminCircleReferenceMap<nint, {entryType}>(4);");
+            sb.AppendLine($"{padding}private static readonly global::LuminPack.Code.LuminPackFormatterTable s_unionRegistry_{suffix} = new global::LuminPack.Code.LuminPackFormatterTable();");
             sb.AppendLine();
             sb.AppendLine($"{padding}[global::LuminPack.Attribute.Preserve]");
-            sb.AppendLine($"{padding}public static unsafe void Register<TMember>(int tag,");
-            sb.AppendLine($"{padding}    delegate*<ref global::LuminPack.Core.LuminPackWriter, ref {rootType}, void> writeValue,");
-            sb.AppendLine($"{padding}    delegate*<ref global::LuminPack.Core.LuminPackReader, ref {rootType}, void> readValue,");
-            sb.AppendLine($"{padding}    delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, ref {rootType}, void> writeValueJson,");
-            sb.AppendLine($"{padding}    delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref {rootType}, void> readValueJson)");
+            sb.AppendLine($"{padding}public static void Register<TMember>(int tag,");
+            sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackUnionWriteDelegate<{rootType}> writeValue,");
+            sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackReadDelegate<{rootType}> readValue,");
+            sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackUnionJsonWriteDelegate<{rootType}> writeValueJson,");
+            sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackJsonReadDelegate<{rootType}> readValueJson)");
             sb.AppendLine($"{padding}{{");
             sb.AppendLine($"{padding}    if ((uint)tag > ushort.MaxValue) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"A Union tag must fit in UInt16.\");");
             if (knownTags.Length != 0)
@@ -132,8 +130,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             sb.AppendLine($"{padding}    {{");
             sb.AppendLine($"{padding}        if (TryGetRegisteredFormatter(tag, out _)) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"This Union tag is already registered.\");");
             sb.AppendLine($"{padding}        if (!s_unionRegistry_{suffix}.TryAdd(");
-            sb.AppendLine($"{padding}            (nint)global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(TMember)),");
-            sb.AppendLine($"{padding}            new {entryType} {{ Tag = tag, WriteValue = (nint)writeValue, ReadValue = (nint)readValue, WriteValueJson = (nint)writeValueJson, ReadValueJson = (nint)readValueJson }}))");
+            sb.AppendLine($"{padding}            typeof(TMember),");
+            sb.AppendLine($"{padding}            new {entryType} {{ Tag = tag, WriteValue = writeValue, ReadValue = readValue, WriteValueJson = writeValueJson, ReadValueJson = readValueJson }}))");
             sb.AppendLine($"{padding}        {{");
             sb.AppendLine($"{padding}            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"A formatter for this union member is already registered.\");");
             sb.AppendLine($"{padding}        }}");
@@ -145,12 +143,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             sb.AppendLine($"{padding}{{");
             sb.AppendLine($"{padding}    lock (s_unionRegistry_{suffix})");
             sb.AppendLine($"{padding}    {{");
-            sb.AppendLine($"{padding}    foreach (var pair in s_unionRegistry_{suffix})");
-            sb.AppendLine($"{padding}    {{");
-            sb.AppendLine($"{padding}        if (pair.Value.Tag == tag) {{ entry = pair.Value; return true; }}");
-            sb.AppendLine($"{padding}    }}");
-            sb.AppendLine($"{padding}    entry = default;");
-            sb.AppendLine($"{padding}    return false;");
+            sb.AppendLine($"{padding}        return s_unionRegistry_{suffix}.TryGetTag(tag, out entry);");
             sb.AppendLine($"{padding}    }}");
             sb.AppendLine($"{padding}}}");
             sb.AppendLine();
@@ -165,12 +158,12 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
-        if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
+        if (metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
         {
-            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValue != 0)");
+            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValue != null)");
             sb.AppendLine($"{padding}    {{");
             sb.AppendLine($"{padding}        {rootType} rootValue = this;");
-            sb.AppendLine($"{padding}        unsafe {{ ((delegate*<ref global::LuminPack.Core.LuminPackWriter, ref {rootType}, void>)registration.WriteValue)(ref writer, ref rootValue); }}");
+            sb.AppendLine($"{padding}        ((global::LuminPack.Code.LuminPackUnionWriteDelegate<{rootType}>)registration.WriteValue)(ref writer, ref rootValue);");
             sb.AppendLine($"{padding}        return;");
             sb.AppendLine($"{padding}    }}");
         }
@@ -182,12 +175,12 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
-        if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
+        if (metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
         {
-            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValueJson != 0)");
+            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValueJson != null)");
             sb.AppendLine($"{padding}    {{");
             sb.AppendLine($"{padding}        {rootType} rootValue = this;");
-            sb.AppendLine($"{padding}        unsafe {{ ((delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, ref {rootType}, void>)registration.WriteValueJson)(ref writer, ref rootValue); }}");
+            sb.AppendLine($"{padding}        ((global::LuminPack.Code.LuminPackUnionJsonWriteDelegate<{rootType}>)registration.WriteValueJson)(ref writer, ref rootValue);");
             sb.AppendLine($"{padding}        return;");
             sb.AppendLine($"{padding}    }}");
         }

@@ -52,7 +52,7 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 
 ## 手动注册
 
-如果生成器完全看不到某个 case，可以在运行时注册。注册传入的是静态方法指针，所以项目需要开启 `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`；只有开启 unsafe 时生成器才会生成 `Register` API。可以用 `[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]` 关闭它们。
+如果生成器完全看不到某个 case，可以在运行时注册。注册接收强类型委托，不依赖 `AllowUnsafeBlocks`。直接传入方法组，无需 `&` 或 `unsafe` 块。可以用 `[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]` 关闭它们。
 
 根类型上生成的 `Register<TCase>` 接收一个标签和四个方法，参数类型都是根类型：
 
@@ -73,16 +73,13 @@ static void Read(ref LuminPackReader reader, ref MyLib.IShape value)
 // WriteJson(ref LuminPackJsonWriter, ref MyLib.IShape) 写出 {"$type":10,"$value":...}；
 // ReadJson(ref LuminPackJsonReader, ref MyLib.IShape) 读取值。
 
-unsafe
-{
-    MyLib.IShape.Register<Hexagon>(10, &Write, &Read, &WriteJson, &ReadJson);
-}
+MyLib.IShape.Register<Hexagon>(10, Write, Read, WriteJson, ReadJson);
 ```
 
 - 标签必须唯一，不能与生成的 case 冲突；宽标签使用 `WriteWideUnionHeader`。
 - 四个方法都必须提供。
 - 注册时会校验：重复标签、不兼容的 case 类型、缺少方法都会被拒绝。
-- 注册不持有强引用，加载在可回收 `AssemblyLoadContext` 中的插件仍然可以卸载。被注册的代码在可能被调用期间必须保持加载。
+- 委托注册项随载荷类型存活。条件弱引用归属允许可回收载荷程序集卸载；不可回收载荷会持续保留注册委托及其目标对象。
 
 不属于 Union、又没有生成格式化器的类型，使用 `LuminPackSerializer.Register<T>` 或 `GeneratorType.Custom`，见[自定义格式化器](custom-formatters.cn.md)。
 

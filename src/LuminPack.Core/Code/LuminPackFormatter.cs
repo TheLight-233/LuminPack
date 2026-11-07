@@ -7,38 +7,37 @@ using LuminPack.Utility;
 namespace LuminPack.Code;
 
 /// <summary>
-/// Common method-pointer carrier for manual, Custom, compiled-profile and external Union registrations. Each operation is the raw address of a
-/// static method (converted to <see cref="nint"/>); 0 means the operation is not supported.
-/// The generic dispatch casts the pointer back to the T-typed function pointer and calls it
-/// directly, so the value is never boxed.
+/// Delegate carrier for manual, Custom, compiled-profile and external Union registrations.
+/// Operations use the matching typed LuminPack delegate; null means an operation is unavailable.
+/// Ordinary closed serializer calls do not consult this carrier.
 /// </summary>
 public struct LuminPackFormatter
 {
     /// <summary>Stores the wire tag when this formatter is registered as a Union member.</summary>
     public int Tag;
     /// <summary>Stores the write value.</summary>
-    public nint WriteValue;
+    public Delegate? WriteValue;
     /// <summary>Stores the read value.</summary>
-    public nint ReadValue;
+    public Delegate? ReadValue;
     /// <summary>Stores the write value json.</summary>
-    public nint WriteValueJson;
+    public Delegate? WriteValueJson;
     /// <summary>Stores the read value json.</summary>
-    public nint ReadValueJson;
+    public Delegate? ReadValueJson;
 }
 
 /// <summary>
 /// Global explicit-registration table used by generic fallbacks and opaque Custom operations.
-/// Concrete ordinary types do not consult this table. A raw MethodTable key does not keep
-/// an assembly alive; callers must keep registered code loaded for every invocation.
+/// Concrete ordinary types do not consult this table. Entries are owned by their payload type
+/// through a conditional weak table so collectible payload assemblies can unload.
 /// </summary>
 public static class LuminPackFormatterRegistry
 {
-    private static readonly ConcurrentDictionary<nint, LuminPackFormatter> s_entries = new();
+    private static readonly LuminPackFormatterTable s_entries = new();
 
     /// <summary>
-    /// Registers the raw method pointers for a type the source generator did not cover.
+    /// Registers the typed delegates for a type the source generator did not cover.
     /// <paramref name="writeValue"/> and <paramref name="readValue"/> are required; the others may
-    /// be 0 to leave that operation unsupported.
+    /// be null to leave that operation unsupported.
     /// </summary>
     /// <param name="type">The type or symbol to analyze.</param>
     /// <param name="writeValue">The write value used by this operation.</param>
@@ -47,16 +46,16 @@ public static class LuminPackFormatterRegistry
     /// <param name="readValueJson">The read value json used by this operation.</param>
     public static void Register(
         Type type,
-        nint writeValue,
-        nint readValue,
-        [System.Runtime.InteropServices.Optional] nint writeValueJson,
-        [System.Runtime.InteropServices.Optional] nint readValueJson)
+        Delegate writeValue,
+        Delegate readValue,
+        Delegate? writeValueJson = null,
+        Delegate? readValueJson = null)
     {
         if (type is null)
             LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
-        if (writeValue == 0)
+        if (writeValue is null)
             LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
-        if (readValue == 0)
+        if (readValue is null)
             LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
 
         var entry = new LuminPackFormatter
@@ -67,8 +66,7 @@ public static class LuminPackFormatterRegistry
             ReadValueJson = readValueJson
         };
 
-        nint key = (nint)LuminPackMarshal.GetMethodTable(type);
-        if (!s_entries.TryAdd(key, entry))
+        if (!s_entries.TryAdd(type, entry))
             LuminPackExceptionHelper.ThrowArgumentException("A formatter for this type is already registered.");
         Interlocked.Increment(ref LuminPackCompiledFormatterTables.Revision);
     }
@@ -83,42 +81,41 @@ public static class LuminPackFormatterRegistry
     }
 }
 
-/// <summary>Registers closed, profile-specific method pointers for opaque Custom or external formatters.</summary>
+/// <summary>Registers closed, profile-specific delegates for opaque Custom or external formatters.</summary>
 /// <typeparam name="TOptions">The stateless profile used to close the formatter methods.</typeparam>
 /// <remarks>Unregistered profiles retain the original declaration-owned registration. No configuration object is attached to an operation state.</remarks>
 public static partial class LuminPackFormatterRegistry<TOptions> where TOptions : struct, ILuminPackOptions
 {
-    private static readonly ConcurrentDictionary<nint, LuminPackFormatter> s_entries = LuminPackCompiledFormatterTables.Get<TOptions>();
+    private static readonly LuminPackFormatterTable s_entries = LuminPackCompiledFormatterTables.Get<TOptions>();
 
-    /// <summary>Registers method pointers whose bodies explicitly use this compiled profile.</summary>
+    /// <summary>Registers delegates whose bodies explicitly use this compiled profile.</summary>
     /// <param name="type">The formatter's payload type.</param>
-    /// <param name="writeValue">The required binary writer method address.</param>
-    /// <param name="readValue">The required binary reader method address.</param>
-    /// <param name="writeValueJson">The optional JSON writer method address.</param>
-    /// <param name="readValueJson">The optional JSON reader method address.</param>
-    public static void Register(Type type, nint writeValue, nint readValue,
-        [System.Runtime.InteropServices.Optional] nint writeValueJson,
-        [System.Runtime.InteropServices.Optional] nint readValueJson)
+    /// <param name="writeValue">The required binary writer delegate.</param>
+    /// <param name="readValue">The required binary reader delegate.</param>
+    /// <param name="writeValueJson">The optional JSON writer delegate.</param>
+    /// <param name="readValueJson">The optional JSON reader delegate.</param>
+    public static void Register(Type type, Delegate writeValue, Delegate readValue,
+        Delegate? writeValueJson = null,
+        Delegate? readValueJson = null)
     {
         if (type is null)
             LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
-        if (writeValue == 0)
+        if (writeValue is null)
             LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
-        if (readValue == 0)
+        if (readValue is null)
             LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
         var entry = new LuminPackFormatter { WriteValue = writeValue, ReadValue = readValue, WriteValueJson = writeValueJson,
             ReadValueJson = readValueJson };
-        nint key = LuminPackMarshal.GetMethodTable(type);
         // Resolve the closed profile before publishing its immutable entry.
         var entries = s_entries;
-        if (!entries.TryAdd(key, entry))
+        if (!entries.TryAdd(type, entry))
             LuminPackExceptionHelper.ThrowArgumentException("A formatter for this type and compiled profile is already registered.");
         Interlocked.Increment(ref LuminPackCompiledFormatterTables.Revision);
     }
 
     /// <summary>Looks up a closed-profile formatter, then the original declaration-owned registration.</summary>
     /// <param name="methodTable">The payload MethodTable key.</param>
-    /// <param name="entry">Receives the registered static method addresses.</param>
+    /// <param name="entry">Receives the registered typed operation delegates.</param>
     /// <returns>Whether either registration table contains this payload.</returns>
     public static bool TryGetValue(in nint methodTable, out LuminPackFormatter entry)
     {
@@ -130,7 +127,7 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
 
     /// <summary>Finds JSON methods for this document encoding, preventing a default formatter from entering a document with another encoding.</summary>
     /// <param name="methodTable">The payload MethodTable key.</param>
-    /// <param name="entry">Receives the registered static method addresses.</param>
+    /// <param name="entry">Receives the registered typed operation delegates.</param>
     /// <returns>Whether an encoding-compatible registration exists.</returns>
     /// <remarks>Default registrations use UTF-16. Other encodings require an explicit closed-profile registration.</remarks>
     public static bool TryGetJsonValue(in nint methodTable, out LuminPackFormatter entry)
@@ -143,16 +140,16 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
     }
 }
 
-/// <summary>Shares method-pointer tables between stateless profiles with identical constants, without retaining profile types.</summary>
+/// <summary>Shares delegate tables between stateless profiles with identical constants, without retaining profile types.</summary>
 internal static class LuminPackCompiledFormatterTables
 {
     internal static long Revision;
-    private static readonly ConcurrentDictionary<Profile, ConcurrentDictionary<nint, LuminPackFormatter>> Tables = new();
+    private static readonly ConcurrentDictionary<Profile, LuminPackFormatterTable> Tables = new();
 
     /// <summary>Resolves a profile's shared table once at closed generic type initialization.</summary>
     /// <typeparam name="TOptions">The stateless profile whose properties are constant.</typeparam>
     /// <returns>The MethodTable-keyed formatter map for the complete constant profile.</returns>
-    internal static ConcurrentDictionary<nint, LuminPackFormatter> Get<TOptions>() where TOptions : struct, ILuminPackOptions
+    internal static LuminPackFormatterTable Get<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         var value = default(TOptions);
         var key = new Profile(value.StringEncoding, value.StringRecording, value.StandardFormat, value.MaxJsonDepth, value.ValidateJsonSyntax);
@@ -202,7 +199,7 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
 {
     /// <summary>Looks up an immutable entry snapshot and invalidates it after any successful registration.</summary>
     /// <typeparam name="T">The exact payload type.</typeparam>
-    /// <param name="entry">Receives the matching registered method addresses.</param>
+    /// <param name="entry">Receives the matching registered operation delegates.</param>
     /// <returns>Whether the profile or declaration table contains a formatter.</returns>
     /// <remarks>The first lookup and a lookup invalidated by registration allocate an immutable snapshot. Unchanged registrations require no per-lookup allocation.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -219,7 +216,7 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
 
     /// <summary>Looks up an encoding-compatible snapshot while retaining late profile registration.</summary>
     /// <typeparam name="T">The exact payload type.</typeparam>
-    /// <param name="entry">Receives the compatible registered method addresses.</param>
+    /// <param name="entry">Receives the compatible registered operation delegates.</param>
     /// <returns>Whether the existing JSON lookup accepts the formatter.</returns>
     /// <remarks>The cache retains the encoding checks of <see cref="TryGetJsonValue"/> and observes later profile registrations.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -237,7 +234,7 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
     /// <summary>Resolves through the concurrent maps and safely publishes a complete cache entry.</summary>
     /// <typeparam name="T">The exact payload type.</typeparam>
     /// <param name="json">Whether to apply the existing JSON compatibility rule.</param>
-    /// <param name="entry">Receives the resolved method addresses.</param>
+    /// <param name="entry">Receives the resolved operation delegates.</param>
     /// <returns>Whether the selected original lookup succeeds.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool ResolveCached<T>(bool json, out LuminPackFormatter entry)
@@ -266,7 +263,7 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
         internal static Snapshot? Json;
     }
 
-    /// <summary>Publishes all method addresses and their registration generation as one immutable reference.</summary>
+    /// <summary>Publishes all operation delegates and their registration generation as one immutable reference.</summary>
     private sealed class Snapshot
     {
         internal readonly long Revision;

@@ -133,7 +133,7 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static void CheckFailure<P>(LuminPack.Utility.LuminBufferWriter output,bool available)where P:struct,ILuminPackOptions
             {
-                unsafe{LuminPackSerializer.Register<QueueFailItem,P>(&QueueFailItem.Serialize,&QueueFailItem.Deserialize,&QueueFailItem.WriteJson<P>,&QueueFailItem.ReadJson<P>);}
+                unsafe{LuminPackSerializer.Register<QueueFailItem,P>(QueueFailItem.Serialize,QueueFailItem.Deserialize,QueueFailItem.WriteJson<P>,QueueFailItem.ReadJson<P>);}
                 CheckJsonTreeFailures<P>(output);
                 foreach(bool json in new[]{false,true})foreach(int failure in new[]{0,2})
                 {

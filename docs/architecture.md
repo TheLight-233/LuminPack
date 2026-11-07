@@ -94,6 +94,8 @@ Main components:
 
 ### Operation pipeline
 
+Aggregate output filenames include their declaration identity, for example `LuminPackSerializer.System.Int32.<suffix>.g.cs` and `LuminPack.LocalLayouts.Namespace.Model.<suffix>.g.cs`. A bounded readable label precedes a stable 128-bit suffix, so equal simple names and constructed types remain distinct. Private generated symbol identities are independent of these presentation names.
+
 Framework field classification uses CLR metadata names, such as `System.DateOnly`, in `CodeEmitterTypeCatalog`. These names do not include the C# `global::` qualifier used in emitted source. The same catalog classifies direct fields, nullable values and collection elements before considering user-defined object constructors.
 
 1. Analyze the canonical type contract and freeze operation templates.
@@ -197,7 +199,7 @@ The generator runs independent work on several threads: observing each source fi
 
 Private shared facade helpers and adapters retain all 128 bits of their existing identity in a 26-character, identifier-safe base-32 suffix. This shortens generated source and metadata names without truncating identities or changing API signatures, operation bodies, file identities or dispatch.
 
-Generic fallback bodies invoke only registered method pointers. Intercepted closed generic calls bypass those bodies. `LuminPack.Dispatch.Formatters.g.cs` has constant-size dispatch and assembly policy helpers, independent of the payload list; no `LuminPack.Dispatch.Lazy.g.cs`, per-payload factory or delegate cache is emitted. Its cache depends on assembly constants and whether generic staging needs an input limit. Concrete roots and their XML navigation facts remain independent of registration.
+Generic fallback bodies invoke only registered typed delegates. Intercepted closed generic calls bypass those bodies. `LuminPack.Dispatch.Formatters.g.cs` has constant-size dispatch and assembly policy helpers, independent of the payload list; no `LuminPack.Dispatch.Lazy.g.cs`, per-payload factory or delegate cache is emitted. Its cache depends on assembly constants and whether generic staging needs an input limit. Concrete roots and their XML navigation facts remain independent of registration.
 
 Closed generic payloads discovered through reachability are indexed before state-call projection. Generated calls to these known types bind their concrete state operations rather than the public registration-only generic APIs. Generic Union overrides retain their original virtual call and cached slots; observed closed cases use the same wire tag and their closed concrete operation.
 

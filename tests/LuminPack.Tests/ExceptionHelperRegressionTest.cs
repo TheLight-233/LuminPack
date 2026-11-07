@@ -24,9 +24,10 @@ public class ExceptionHelperRegressionTest
     [Fact]
     public void FormatterRegistrationPreservesParameterNames()
     {
-        Assert.Equal("type", Assert.Throws<ArgumentNullException>(() => LuminPackFormatterRegistry.Register(null!, 1, 1)).ParamName);
-        Assert.Equal("writeValue", Assert.Throws<ArgumentNullException>(() => LuminPackFormatterRegistry.Register(typeof(int), 0, 1)).ParamName);
-        Assert.Equal("readValue", Assert.Throws<ArgumentNullException>(() => LuminPackFormatterRegistry.Register(typeof(int), 1, 0)).ParamName);
+        Action callback = () => { };
+        Assert.Equal("type", Assert.Throws<ArgumentNullException>(() => LuminPackFormatterRegistry.Register(null!, callback, callback)).ParamName);
+        Assert.Equal("writeValue", Assert.Throws<ArgumentNullException>(() => LuminPackFormatterRegistry.Register(typeof(int), null!, callback)).ParamName);
+        Assert.Equal("readValue", Assert.Throws<ArgumentNullException>(() => LuminPackFormatterRegistry.Register(typeof(int), callback, null!)).ParamName);
     }
 
     /// <summary>Checks that frozen dictionary mutation and missing-key failures retain their standard exception types.</summary>

@@ -175,7 +175,7 @@ internal static class SerializerCustomFormatterRegression
         {
             var input = TestCompilation.Create("NestedCustom" + mode,
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: false));
             GeneratorDriver driver = CSharpGeneratorDriver.Create(
                 [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
             driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out _);
@@ -197,7 +197,8 @@ internal static class SerializerCustomFormatterRegression
             if (stateMethods.Length != 4 || compiledMethods.Length != 4 || compiledMethods.Any(method =>
                 !method.ToString().Contains("LuminPackFormatterRegistry<", StringComparison.Ordinal) ||
                 !method.ToString().Contains(method.Identifier.ValueText.EndsWith("Json", StringComparison.Ordinal) ? ".TryGetCachedJsonValue<" : ".TryGetCachedValue<", StringComparison.Ordinal) ||
-                !method.ToString().Contains("delegate*", StringComparison.Ordinal)))
+                !method.ToString().Contains("Delegate<", StringComparison.Ordinal) ||
+                method.ToString().Contains("delegate*", StringComparison.Ordinal)))
             {
                 string candidates = string.Join(" | ", driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
                     .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())

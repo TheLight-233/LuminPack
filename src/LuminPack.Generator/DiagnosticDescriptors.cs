@@ -296,11 +296,11 @@ internal static class DiagnosticDescriptors
         "Custom formatter type cannot be a union root",
         "Custom formatter type '{0}' cannot be abstract or a union root; union dispatch requires generated formatters.");
 
-    /// <summary>Stores the custom registration skipped no unsafe.</summary>
-    public static readonly DiagnosticDescriptor CustomRegistrationSkippedNoUnsafe = Warning(
+    /// <summary>Reports explicitly disabled Custom registration.</summary>
+    public static readonly DiagnosticDescriptor CustomRegistrationDisabled = Warning(
         "LuminPack108",
-        "Custom registration skipped without unsafe",
-        "Custom type '{0}' will not be registered automatically because the project does not enable AllowUnsafeBlocks (Register uses function pointers); enable unsafe or call LuminPackSerializer.Register manually.");
+        "Custom registration is disabled",
+        "Custom type '{0}' will not be registered automatically because registration is disabled; enable LuminPackRegisterMode.Auto to use its registered formatter.");
 
     /// <summary>Performs the error step for the current operation.</summary>
     /// <param name="id">The id used by this operation.</param>

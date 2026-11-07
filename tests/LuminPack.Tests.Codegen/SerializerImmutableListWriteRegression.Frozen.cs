@@ -71,7 +71,7 @@ internal static partial class SerializerImmutableListWriteRegression
         [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
         public static class FrozenFixture {
         static FrozenFixture(){Register<LuminPackUtf8LengthOptions>();Register<LuminPackUtf16LengthOptions>();}
-        static unsafe void Register<P>()where P:struct,ILuminPackOptions=>LuminPackSerializer.Register<FrozenProbe,P>(&FrozenProbe.Serialize,&FrozenProbe.Deserialize,&FrozenProbe.WriteJson<P>,&FrozenProbe.ReadJson<P>);
+        static unsafe void Register<P>()where P:struct,ILuminPackOptions=>LuminPackSerializer.Register<FrozenProbe,P>(FrozenProbe.Serialize,FrozenProbe.Deserialize,FrozenProbe.WriteJson<P>,FrozenProbe.ReadJson<P>);
         static readonly LuminPack.Utility.LuminBufferWriter Output=new LuminPack.Utility.LuminBufferWriter(true);
         static byte[][][] Inputs;
         static FrozenDictionary<int,int> Value0;

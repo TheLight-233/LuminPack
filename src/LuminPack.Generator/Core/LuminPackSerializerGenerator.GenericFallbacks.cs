@@ -13,11 +13,8 @@ public static partial class LuminPackSerializerGenerator
     /// a state directly to a managed array or span without pinning it.</param>
     private static void AppendGenericFallbacks(StringBuilder sb, MetaInfo metaInfo, bool managedInput)
     {
-        // The manual-registration API uses function pointers (delegate*), which require an unsafe
-        // context.  When the project does not enable AllowUnsafeBlocks (or opts out via
-        // [LuminPackGeneratorOptions(register: Disabled)]), skip it entirely so the generated
-        // code compiles without unsafe.
-        if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
+        // Registration accepts typed delegates independently of the consumer's unsafe setting.
+        if (metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
         {
             AppendRegister(sb);
         }
