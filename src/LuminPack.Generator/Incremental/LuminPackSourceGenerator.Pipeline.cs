@@ -202,7 +202,7 @@ public sealed partial class LuminPackSourceGenerator
         }
         foreach (var item in selected.OrderBy(item => item.Fragment.Key, StringComparer.Ordinal))
         {
-            var file = cache.Wrap("LuminPackGen_Layouts", item.Fragment.Key, item.Group.ClassName, item.Fragment.Text, string.Empty,
+            var file = cache.Wrap("LuminPackGen.Layouts", item.Fragment.Key, item.Group.ClassName, item.Fragment.Text, string.Empty,
                 () => GeneratedSourceDocumentation.Complete(LuminPackLocalLayoutGenerator.Wrap(item.Fragment.Text, item.Group.ClassName)
                     .Replace("one dedicated file for the whole assembly", "shared declarations across assembly partitions"), item.Group.Options), item.Group.Options);
             result.AddSource(file.Name, file.Text);

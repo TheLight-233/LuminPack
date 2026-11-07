@@ -187,6 +187,8 @@ internal static partial class SerializerInterceptorRegression
             var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
             VerifyIndentation(generated);
             Require(generated.Any(file => file.HintName == "LuminPack.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
+            Require(generated.Any(file => file.HintName == "LuminPackGen.Union.UnionDispatch.g.cs"),
+                "The Union dispatch file did not use the LuminPackGen. prefix.");
             var outerMethods = generated.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
                 .Where(type => type.Identifier.ValueText == "LuminPackSerializer").SelectMany(type => type.Members.OfType<MethodDeclarationSyntax>());
             Require(!outerMethods.Any(method => method.Identifier.ValueText == "Serialize" &&

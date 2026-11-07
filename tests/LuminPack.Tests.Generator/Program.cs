@@ -252,7 +252,7 @@ Parallel.For(0, CompilationCount, compilationIndex =>
         .ToHashSet(StringComparer.Ordinal);
     for (var typeIndex = 0; typeIndex < ValidTypesPerCompilation; typeIndex++)
     {
-        var expectedHint = $"LuminPackGen_Case__{compilationIndex}.Model__{typeIndex}.g.cs";
+        var expectedHint = $"LuminPackGen.Case__{compilationIndex}.Model__{typeIndex}.g.cs";
         if (!generatedHints.Contains(expectedHint))
         {
             failures.Enqueue($"Compilation {compilationIndex} is missing {expectedHint}.");

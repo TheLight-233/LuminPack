@@ -337,7 +337,7 @@ internal static class SerializerOperationCacheRegression
     /// <param name="files">Generated files.</param>
     /// <param name="type">The canonical payload type.</param>
     /// <returns>The concrete partition hint name.</returns>
-    private static string PayloadFile(Dictionary<string, string> files, string type) => files.Single(pair => pair.Key.StartsWith("LuminPackGen_", StringComparison.Ordinal) &&
+    private static string PayloadFile(Dictionary<string, string> files, string type) => files.Single(pair => pair.Key.StartsWith("LuminPackGen.", StringComparison.Ordinal) &&
         CSharpSyntaxTree.ParseText(pair.Value, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Any(method =>
             method.Identifier.ValueText == "Serialize" && method.TypeParameterList == null && method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == type))).Key;
 

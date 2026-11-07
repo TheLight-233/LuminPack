@@ -30,8 +30,8 @@ internal static class SerializerPartitionRegression
         var initial = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var initialOutput, out _);
         CheckErrors(initialOutput);
         var initialFiles = FacadeFiles(initial);
-        var modelFiles = initial.GetRunResult().Results.Single(result => result.GeneratedSources.Any(file => file.HintName == "LuminPackGen_A.g.cs"));
-        Require(modelFiles.GeneratedSources.All(file => file.HintName.StartsWith("LuminPackGen_", StringComparison.Ordinal) &&
+        var modelFiles = initial.GetRunResult().Results.Single(result => result.GeneratedSources.Any(file => file.HintName == "LuminPackGen.A.g.cs"));
+        Require(modelFiles.GeneratedSources.All(file => file.HintName.StartsWith("LuminPackGen.", StringComparison.Ordinal) &&
             !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal)), "SourceGenerator files lost their requested prefix or retained Extension suffixes.");
         Require(initialFiles.ContainsKey("LuminPackSerializer.g.cs") && initialFiles.Count > 4, "Expected common support and independently named concrete files.");
         foreach (string name in initialFiles.Keys.Where(name => name != "LuminPackSerializer.g.cs"))
@@ -72,6 +72,10 @@ internal static class SerializerPartitionRegression
         var create = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.PartitionedSourceCache")!
             .GetMethod("CreateHintName", BindingFlags.Static | BindingFlags.NonPublic)!;
         string Name(string identity) => (string)create.Invoke(null, ["LuminPackSerializer", identity])!;
+        Require((string)create.Invoke(null, ["LuminPackGen", "Namespace.Model"])! == "LuminPackGen.Namespace.Model.g.cs",
+            "A model filename did not use the LuminPackGen. prefix.");
+        Require((string)create.Invoke(null, ["LuminPackGen.Layouts", "Namespace.Model"])! == "LuminPackGen.Layouts.Namespace.Model.g.cs",
+            "A layout filename did not use the LuminPackGen.Layouts. prefix.");
         Require(Name("global::System.Int32") == "LuminPackSerializer.System.Int32.g.cs", "A scalar filename retained an opaque suffix.");
         string[] identities = ["One.Same", "Two.Same", "N.Box<System.Int32>", "N.Box_Of_System.Int32_End_", "System.Int32[]", "System.Int32[,]", "System.Int32?", "System.Int32_Array__EndArray_", "N.Box<N.Box<System.Int32>>"];
         Require(identities.Select(Name).Distinct(StringComparer.Ordinal).Count() == identities.Length, "Readable type names collided after punctuation encoding.");
@@ -104,7 +108,7 @@ internal static class SerializerPartitionRegression
             string.Join(Environment.NewLine, driver.GetRunResult().Diagnostics));
         CheckErrors(output);
         var before = AllFiles(driver);
-        var layoutFiles = before.Where(pair => pair.Key.StartsWith("LuminPackGen_Layouts_", StringComparison.Ordinal)).ToArray();
+        var layoutFiles = before.Where(pair => pair.Key.StartsWith("LuminPackGen.Layouts.", StringComparison.Ordinal)).ToArray();
         Require(layoutFiles.Length >= 5 && !before.ContainsKey("LuminPack.LocalLayouts.g.cs"), "Expected independently named layout declarations.");
         var mirrors = layoutFiles.SelectMany(pair => CSharpSyntaxTree.ParseText(pair.Value, Parse).GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
             .Where(type => type.Identifier.ValueText.StartsWith("Local", StringComparison.Ordinal)).ToArray();

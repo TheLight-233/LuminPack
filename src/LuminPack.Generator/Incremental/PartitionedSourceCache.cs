@@ -76,14 +76,13 @@ internal sealed class PartitionedSourceCache
                 });
         }
         string readable = label.Length == 0 ? "Declaration" : label.ToString();
-        string separator = prefix.StartsWith("LuminPackGen", StringComparison.Ordinal) ? "_" : ".";
         var path = new StringBuilder();
         const int componentLength = 120;
         for (int offset = 0; offset < readable.Length; offset += componentLength)
         {
             if (offset != 0)
                 path.Append('/');
-            path.Append(prefix).Append(separator).Append(readable, offset, Math.Min(componentLength, readable.Length - offset));
+            path.Append(prefix).Append('.').Append(readable, offset, Math.Min(componentLength, readable.Length - offset));
             if (offset + componentLength < readable.Length)
                 path.Append("_Part");
         }

@@ -291,6 +291,11 @@ try
         SerializerCustomFormatterRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-state-roots"])
+    {
+        SerializerReviewRegression.VerifyStateRoots(references);
+        return 0;
+    }
     if (args is ["--verify-partitions"])
     {
         SerializerPartitionRegression.Run(references);
