@@ -429,7 +429,7 @@ public class CollectionStorageLayoutTest
     /// <param name="ordinal">The position of the item.</param>
     private static void Check<T>(SortedSet<T> value, bool ordinal = false)
     {
-        LuminPackSerializer.RegisterTestProfile<SortedSet<T>, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<SortedSet<T>, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(value);
         Assert.Equal(EnumerationRecord(value), bytes.Length);
         SortedSet<T>? copy = null;
@@ -461,7 +461,7 @@ public class CollectionStorageLayoutTest
     /// <param name="value">The value.</param>
     private static void Check<T>(ImmutableHashSet<T> value) where T : notnull
     {
-        LuminPackSerializer.RegisterTestProfile<ImmutableHashSet<T>, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<ImmutableHashSet<T>, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(value);
         ImmutableHashSet<T>? copy = null;
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes.AsSpan(), ref copy));
@@ -537,7 +537,7 @@ public class CollectionStorageLayoutTest
     private static int EnumerationRecord<T>(SortedSet<T> value)
     {
         if (typeof(T) == typeof(int)) return 4 + value.Count * 4;
-        LuminPackSerializer.RegisterTestProfile<List<T>, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<List<T>, LuminPackDefaultOptions>();
         return LuminPackSerializer.Serialize(value.ToList()).Length;
     }
 

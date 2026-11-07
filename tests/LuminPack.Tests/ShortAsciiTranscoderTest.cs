@@ -137,11 +137,11 @@ public class ShortAsciiTranscoderTest
                     var chars = new string('a', length).ToCharArray();
                     chars[position] = (char)code;
                     string value = new(chars);
-                    string json = LuminPackSerializer.SerializeJson(value, option);
+                    string json = TestProfileSerializer.SerializeJson(value, option);
                     using var document = JsonDocument.Parse(json);
                     Assert.Equal(value, document.RootElement.GetString());
-                    Assert.Equal(value, LuminPackSerializer.DeserializeJson<string>(json, option));
-                    Assert.Equal(value, LuminPackSerializer.Deserialize<string>(LuminPackSerializer.Serialize(value, option), option));
+                    Assert.Equal(value, TestProfileSerializer.DeserializeJson<string>(json, option));
+                    Assert.Equal(value, TestProfileSerializer.Deserialize<string>(TestProfileSerializer.Serialize(value, option), option));
                 }
     }
 }

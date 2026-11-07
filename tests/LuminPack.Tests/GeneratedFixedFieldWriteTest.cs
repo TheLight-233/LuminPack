@@ -58,11 +58,11 @@ public class GeneratedFixedFieldWriteTest
             StringEncoding = encoding
         };
         byte[] expected = ReferenceWrite(value, option);
-        Assert.Equal(expected, LuminPackSerializer.Serialize(value, option));
-        var copy = LuminPackSerializer.Deserialize<FixedPrimitiveWriteModel>(expected, option);
+        Assert.Equal(expected, TestProfileSerializer.Serialize(value, option));
+        var copy = TestProfileSerializer.Deserialize<FixedPrimitiveWriteModel>(expected, option);
         Assert.Equal(BitConverter.SingleToInt32Bits(value.F32), BitConverter.SingleToInt32Bits(copy.F32));
         Assert.Equal(BitConverter.DoubleToInt64Bits(value.F64), BitConverter.DoubleToInt64Bits(copy.F64));
-        Assert.Equal(expected, LuminPackSerializer.Serialize(copy, option));
+        Assert.Equal(expected, TestProfileSerializer.Serialize(copy, option));
         // The fixed-span writer can exercise primitive blocks directly.
         // String-bearing formatters also use the pooled writer's flush path.
         var fixedValue = new FixedPrimitiveGuardModel
@@ -72,7 +72,7 @@ public class GeneratedFixedFieldWriteTest
             Third = value.Decimal,
             Fourth = true
         };
-        byte[] fixedExpected = LuminPackSerializer.Serialize(fixedValue, option);
+        byte[] fixedExpected = TestProfileSerializer.Serialize(fixedValue, option);
         foreach (int prefix in new[]
         {
             1,

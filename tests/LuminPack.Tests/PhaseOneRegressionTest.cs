@@ -67,14 +67,14 @@ internal static class PhaseOneRegressionTest
     /// <summary>Verifies json stray number in object does not hang.</summary>
     private static void JsonStrayNumberInObjectDoesNotHang()
     {
-        AssertThrows(() => LuminPackSerializer.DeserializeJson<StrayNumberProbeModel>("{\"Age\":1, 5}", StrictJson.Utf8),
+        AssertThrows(() => TestProfileSerializer.DeserializeJson<StrayNumberProbeModel>("{\"Age\":1, 5}", StrictJson.Utf8),
             "A stray number in a JSON object was accepted.");
     }
 
     /// <summary>Verifies json circle ref drain does not hang.</summary>
     private static void JsonCircleRefDrainDoesNotHang()
     {
-        AssertThrows(() => LuminPackSerializer.DeserializeJson<CircleRefJsonProbe>("{\"$id\":1,\"Name\":\"a\",5,\"$ref\":1}", StrictJson.Utf8),
+        AssertThrows(() => TestProfileSerializer.DeserializeJson<CircleRefJsonProbe>("{\"$id\":1,\"Name\":\"a\",5,\"$ref\":1}", StrictJson.Utf8),
             "A stray number in a circle-reference object was accepted.");
     }
 
@@ -100,7 +100,7 @@ internal static class PhaseOneRegressionTest
     private static void JsonDeepNestingIsRejected()
     {
         var json = new string('[', 5000) + "0" + new string(']', 5000);
-        AssertThrows(() => LuminPackSerializer.DeserializeJson<int[]>(json, StrictJson.Utf8),
+        AssertThrows(() => TestProfileSerializer.DeserializeJson<int[]>(json, StrictJson.Utf8),
             "Deeply nested JSON exceeded the depth limit without an error.");
     }
 
@@ -110,7 +110,7 @@ internal static class PhaseOneRegressionTest
     private static void JsonManySeparatorsDoNotOverflowStack()
     {
         var json = "[" + new string(',', 100_000) + "]";
-        AssertThrows(() => LuminPackSerializer.DeserializeJson<int[]>(json, StrictJson.Utf8),
+        AssertThrows(() => TestProfileSerializer.DeserializeJson<int[]>(json, StrictJson.Utf8),
             "A stream of separators was accepted.");
     }
 

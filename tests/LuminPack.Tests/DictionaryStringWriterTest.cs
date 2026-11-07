@@ -64,9 +64,9 @@ public class DictionaryStringWriterTest
                 writer.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(writer.Buffer), (nint)(uint)index), pair.Value));
             }
 
-            byte[] keyBytes = LuminPackSerializer.Serialize(keyStrings, option);
+            byte[] keyBytes = TestProfileSerializer.Serialize(keyStrings, option);
             Assert.Equal(storage.AsSpan(0, writer.Position).ToArray(), keyBytes);
-            Assert.Equal(keyStrings.ToArray(), LuminPackSerializer.Deserialize<Dictionary<string, long>>(keyBytes, option).ToArray());
+            Assert.Equal(keyStrings.ToArray(), TestProfileSerializer.Deserialize<Dictionary<string, long>>(keyBytes, option).ToArray());
             writer = new LuminPackWriter(ref span, state);
             index = 0;
             writer.WriteCollectionHeader(valueStrings.Count);
@@ -77,9 +77,9 @@ public class DictionaryStringWriterTest
                 WriteText(ref writer, pair.Value, option);
             }
 
-            byte[] valueBytes = LuminPackSerializer.Serialize(valueStrings, option);
+            byte[] valueBytes = TestProfileSerializer.Serialize(valueStrings, option);
             Assert.Equal(storage.AsSpan(0, writer.Position).ToArray(), valueBytes);
-            Assert.Equal(valueStrings.ToArray(), LuminPackSerializer.Deserialize<Dictionary<int, string>>(valueBytes, option).ToArray());
+            Assert.Equal(valueStrings.ToArray(), TestProfileSerializer.Deserialize<Dictionary<int, string>>(valueBytes, option).ToArray());
             writer = new LuminPackWriter(ref span, state);
             index = 0;
             writer.WriteCollectionHeader(bothStrings.Count);
@@ -89,9 +89,9 @@ public class DictionaryStringWriterTest
                 WriteText(ref writer, pair.Value, option);
             }
 
-            byte[] bothBytes = LuminPackSerializer.Serialize(bothStrings, option);
+            byte[] bothBytes = TestProfileSerializer.Serialize(bothStrings, option);
             Assert.Equal(storage.AsSpan(0, writer.Position).ToArray(), bothBytes);
-            Assert.Equal(bothStrings.ToArray(), LuminPackSerializer.Deserialize<Dictionary<string, string>>(bothBytes, option).ToArray());
+            Assert.Equal(bothStrings.ToArray(), TestProfileSerializer.Deserialize<Dictionary<string, string>>(bothBytes, option).ToArray());
         }
     }
 

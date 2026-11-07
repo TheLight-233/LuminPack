@@ -36,7 +36,7 @@ public class JsonNumberSyntaxTest
             foreach (int width in new[] { 8, 9, 16, 19 })
             {
                 string valid = new string('1', width);
-                Assert.Equal(long.Parse(valid, CultureInfo.InvariantCulture), LuminPackSerializer.DeserializeJson<long>(valid, profile));
+                Assert.Equal(long.Parse(valid, CultureInfo.InvariantCulture), TestProfileSerializer.DeserializeJson<long>(valid, profile));
                 for (int position = 0; position < width; position++)
                 foreach (char invalid in new[] { '/', ':', 'x', '\u0080', '\u0131', '\uFF11' })
                 {
@@ -46,16 +46,16 @@ public class JsonNumberSyntaxTest
                     // this is separate from the integer token's own grammar.
                     if (position == 0 && invalid == ':' && !profile.ValidateJsonSyntax)
                     {
-                        Assert.Equal(long.Parse(valid.Substring(1), CultureInfo.InvariantCulture), LuminPackSerializer.DeserializeJson<long>(malformed, profile));
+                        Assert.Equal(long.Parse(valid.Substring(1), CultureInfo.InvariantCulture), TestProfileSerializer.DeserializeJson<long>(malformed, profile));
                         continue;
                     }
-                    Assert.True(Record.Exception(() => LuminPackSerializer.DeserializeJson<long>(malformed, profile)) != null, "Accepted invalid integer: " + malformed + " under " + profile);
+                    Assert.True(Record.Exception(() => TestProfileSerializer.DeserializeJson<long>(malformed, profile)) != null, "Accepted invalid integer: " + malformed + " under " + profile);
                 }
             }
             foreach (string malformed in new[] { "11111111x", "1111111111111111x", "9223372036854775808", "-9223372036854775809", "99999999999999999999", "01111111", "-01111111" })
-                Assert.True(Record.Exception(() => LuminPackSerializer.DeserializeJson<long>(malformed, profile)) != null, "Accepted invalid integer: " + malformed + " under " + profile);
-            Assert.Equal(long.MinValue, LuminPackSerializer.DeserializeJson<long>("-9223372036854775808", profile));
-            Assert.Equal(long.MaxValue, LuminPackSerializer.DeserializeJson<long>("9223372036854775807", profile));
+                Assert.True(Record.Exception(() => TestProfileSerializer.DeserializeJson<long>(malformed, profile)) != null, "Accepted invalid integer: " + malformed + " under " + profile);
+            Assert.Equal(long.MinValue, TestProfileSerializer.DeserializeJson<long>("-9223372036854775808", profile));
+            Assert.Equal(long.MaxValue, TestProfileSerializer.DeserializeJson<long>("9223372036854775807", profile));
         }
     }
 
@@ -93,8 +93,8 @@ public class JsonNumberSyntaxTest
     InlineData("-2147483649")]
     public void InvalidIntegerTokensAreRejected(string literal)
     {
-        Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<int>(literal, s_strictUtf8));
-        Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<int>(literal, s_strictUtf16));
+        Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<int>(literal, s_strictUtf8));
+        Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<int>(literal, s_strictUtf16));
     }
 
     /// <summary>Verifies malformed structures are rejected.</summary>
@@ -116,8 +116,8 @@ public class JsonNumberSyntaxTest
     [InlineData("{\"Age\":1")]
     public void MalformedStructuresAreRejected(string json)
     {
-        Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<NumberSyntaxProbe>(json, s_strictUtf8));
-        Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<NumberSyntaxProbe>(json, s_strictUtf16));
+        Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<NumberSyntaxProbe>(json, s_strictUtf8));
+        Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<NumberSyntaxProbe>(json, s_strictUtf16));
     }
 
     /// <summary>Verifies malformed literals are rejected.</summary>
@@ -130,8 +130,8 @@ public class JsonNumberSyntaxTest
     [InlineData("nul")]
     public void MalformedLiteralsAreRejected(string json)
     {
-        Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<bool>(json, s_strictUtf8));
-        Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<bool>(json, s_strictUtf16));
+        Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<bool>(json, s_strictUtf8));
+        Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<bool>(json, s_strictUtf16));
     }
 
     /// <summary>Verifies valid numbers still parse.</summary>
@@ -141,8 +141,8 @@ public class JsonNumberSyntaxTest
     [InlineData("[1,2,3]", new[] { 1, 2, 3 })]
     public void ValidNumbersStillParse(string json, int[] expected)
     {
-        Assert.Equal(expected, LuminPackSerializer.DeserializeJson<int[]>(json, s_strictUtf8));
-        Assert.Equal(expected, LuminPackSerializer.DeserializeJson<int[]>(json, s_strictUtf16));
+        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<int[]>(json, s_strictUtf8));
+        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<int[]>(json, s_strictUtf16));
     }
 
     /// <summary>Verifies valid double tokens parse.</summary>
@@ -160,8 +160,8 @@ public class JsonNumberSyntaxTest
     [InlineData("-2.5", -2.5)]
     public void ValidDoubleTokensParse(string literal, double expected)
     {
-        Assert.Equal(expected, LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf8));
-        Assert.Equal(expected, LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf16));
+        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8));
+        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf16));
     }
 
     /// <summary>Verifies valid integer tokens parse.</summary>
@@ -175,8 +175,8 @@ public class JsonNumberSyntaxTest
     [InlineData("-2147483648", int.MinValue)]
     public void ValidIntegerTokensParse(string literal, int expected)
     {
-        Assert.Equal(expected, LuminPackSerializer.DeserializeJson<int>(literal, s_strictUtf8));
-        Assert.Equal(expected, LuminPackSerializer.DeserializeJson<int>(literal, s_strictUtf16));
+        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<int>(literal, s_strictUtf8));
+        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<int>(literal, s_strictUtf16));
     }
 
     /// <summary>Verifies negative zero keeps its sign bit.</summary>
@@ -185,10 +185,10 @@ public class JsonNumberSyntaxTest
     {
         foreach (var option in new[] { s_strictUtf8, s_strictUtf16 })
         {
-            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(LuminPackSerializer.DeserializeJson<double>("-0.0", option)));
-            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(LuminPackSerializer.DeserializeJson<double>("-0", option)));
-            Assert.Equal(0x8000_0000u, System.BitConverter.SingleToUInt32Bits(LuminPackSerializer.DeserializeJson<float>("-0.0", option)));
-            Assert.Equal(0UL, System.BitConverter.DoubleToUInt64Bits(LuminPackSerializer.DeserializeJson<double>("0.0", option)));
+            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(TestProfileSerializer.DeserializeJson<double>("-0.0", option)));
+            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(TestProfileSerializer.DeserializeJson<double>("-0", option)));
+            Assert.Equal(0x8000_0000u, System.BitConverter.SingleToUInt32Bits(TestProfileSerializer.DeserializeJson<float>("-0.0", option)));
+            Assert.Equal(0UL, System.BitConverter.DoubleToUInt64Bits(TestProfileSerializer.DeserializeJson<double>("0.0", option)));
         }
     }
 
@@ -203,13 +203,13 @@ public class JsonNumberSyntaxTest
             if (double.IsInfinity(expected))
             {
                 // Overflow keeps LuminPack's documented policy: reject instead of producing Infinity.
-                Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf8));
-                Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf16));
+                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8));
+                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf16));
                 continue;
             }
 
-            double utf8 = LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf8);
-            double utf16 = LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf16);
+            double utf8 = TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8);
+            double utf16 = TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf16);
 
             Assert.Equal(System.BitConverter.DoubleToUInt64Bits(expected), System.BitConverter.DoubleToUInt64Bits(utf8));
             Assert.Equal(System.BitConverter.DoubleToUInt64Bits(expected), System.BitConverter.DoubleToUInt64Bits(utf16));
@@ -226,13 +226,13 @@ public class JsonNumberSyntaxTest
 
             if (float.IsInfinity(expected))
             {
-                Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<float>(literal, s_strictUtf8));
-                Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<float>(literal, s_strictUtf16));
+                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8));
+                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf16));
                 continue;
             }
 
-            float utf8 = LuminPackSerializer.DeserializeJson<float>(literal, s_strictUtf8);
-            float utf16 = LuminPackSerializer.DeserializeJson<float>(literal, s_strictUtf16);
+            float utf8 = TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8);
+            float utf16 = TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf16);
 
             Assert.Equal(System.BitConverter.SingleToUInt32Bits(expected), System.BitConverter.SingleToUInt32Bits(utf8));
             Assert.Equal(System.BitConverter.SingleToUInt32Bits(expected), System.BitConverter.SingleToUInt32Bits(utf16));
@@ -267,8 +267,8 @@ public class JsonNumberSyntaxTest
             float expectedSingle = float.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
             foreach (var profile in new[] { TestSerializationProfile.Utf8, TestSerializationProfile.Utf16, s_strictUtf8, s_strictUtf16 })
             {
-                double actualDouble = LuminPackSerializer.DeserializeJson<double>(literal, profile);
-                float actualSingle = LuminPackSerializer.DeserializeJson<float>(literal, profile);
+                double actualDouble = TestProfileSerializer.DeserializeJson<double>(literal, profile);
+                float actualSingle = TestProfileSerializer.DeserializeJson<float>(literal, profile);
                 Assert.True(System.BitConverter.DoubleToUInt64Bits(expectedDouble) == System.BitConverter.DoubleToUInt64Bits(actualDouble),
                     $"Double rounding differs for {literal} under {profile}.");
                 Assert.True(System.BitConverter.SingleToUInt32Bits(expectedSingle) == System.BitConverter.SingleToUInt32Bits(actualSingle),
@@ -287,7 +287,7 @@ public class JsonNumberSyntaxTest
         {
             string literal = RandomLiteral(rng, 17);
             double expected = double.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
-            double actual = LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf8);
+            double actual = TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8);
 
             Assert.Equal(System.BitConverter.DoubleToUInt64Bits(expected), System.BitConverter.DoubleToUInt64Bits(actual));
         }
@@ -306,11 +306,11 @@ public class JsonNumberSyntaxTest
 
             if (float.IsInfinity(expected))
             {
-                Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<float>(literal, s_strictUtf8));
+                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8));
                 continue;
             }
 
-            float actual = LuminPackSerializer.DeserializeJson<float>(literal, s_strictUtf8);
+            float actual = TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8);
 
             Assert.Equal(System.BitConverter.SingleToUInt32Bits(expected), System.BitConverter.SingleToUInt32Bits(actual));
         }
@@ -322,18 +322,18 @@ public class JsonNumberSyntaxTest
     {
         foreach (string literal in UnsignedLiterals)
         {
-            Assert.Equal(literal, LuminPackSerializer.SerializeJson(LuminPackSerializer.DeserializeJson<ulong>(literal, s_strictUtf8)));
-            Assert.Equal(literal, LuminPackSerializer.SerializeJson(LuminPackSerializer.DeserializeJson<ulong>(literal, s_strictUtf16)));
+            Assert.Equal(literal, LuminPackSerializer.SerializeJson(TestProfileSerializer.DeserializeJson<ulong>(literal, s_strictUtf8)));
+            Assert.Equal(literal, LuminPackSerializer.SerializeJson(TestProfileSerializer.DeserializeJson<ulong>(literal, s_strictUtf16)));
         }
 
         foreach (string literal in SignedLiterals)
         {
             Assert.Equal(
                 long.Parse(literal, CultureInfo.InvariantCulture),
-                LuminPackSerializer.DeserializeJson<long>(literal, s_strictUtf8));
+                TestProfileSerializer.DeserializeJson<long>(literal, s_strictUtf8));
             Assert.Equal(
                 long.Parse(literal, CultureInfo.InvariantCulture),
-                LuminPackSerializer.DeserializeJson<long>(literal, s_strictUtf16));
+                TestProfileSerializer.DeserializeJson<long>(literal, s_strictUtf16));
         }
     }
 

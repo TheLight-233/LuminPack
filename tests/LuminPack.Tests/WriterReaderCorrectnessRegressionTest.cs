@@ -143,8 +143,8 @@ internal static class WriterReaderCorrectnessRegressionTest
             StringRecording = LuminPackStringRecording.Length
         };
 
-        var payload = LuminPackSerializer.Serialize(value, option);
-        var roundTrip = LuminPackSerializer.Deserialize<GeneratorIdentifierModel>(payload, option);
+        var payload = TestProfileSerializer.Serialize(value, option);
+        var roundTrip = TestProfileSerializer.Deserialize<GeneratorIdentifierModel>(payload, option);
         Assert(roundTrip is not null && roundTrip.@class == value.@class && roundTrip.\u4e2d\u6587\u5b57\u6bb5 == "tail",
             "A UTF-8 string larger than the initial writer buffer did not grow and round-trip correctly.");
     }

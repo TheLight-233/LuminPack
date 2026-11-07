@@ -138,10 +138,10 @@ public class JsonStreamingWriterTest
             Numbers = Enumerable.Range(0, 2000).ToList()
         };
         using var contiguous = new LuminPack.Utility.LuminBufferWriter(true);
-        LuminPackSerializer.SerializeJson(value, contiguous, option);
+        TestProfileSerializer.SerializeJson(value, contiguous, option);
         byte[] expectedBytes = contiguous.GetSpan().ToArray();
         var output = new ChunkWriter();
-        LuminPackSerializer.SerializeJson(value, output, option);
+        TestProfileSerializer.SerializeJson(value, output, option);
         Assert.Equal(expectedBytes, output.ToArray());
         Assert.True(output.CommitCount > 1);
         Assert.InRange(output.MaxSizeHint, 1, 4096);
@@ -158,8 +158,8 @@ public class JsonStreamingWriterTest
         string name = new string('\u4e2d', 4000) + "\"\\\n😀";
         var value = new Dictionary<string, string> { [name] = new string('x', 9000) + "😀" };
         var output = new ChunkWriter();
-        LuminPackSerializer.SerializeJson(value, output, option);
-        string expected = LuminPackSerializer.SerializeJson(value, option);
+        TestProfileSerializer.SerializeJson(value, output, option);
+        string expected = TestProfileSerializer.SerializeJson(value, option);
         Assert.Equal(encoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8.GetBytes(expected) : Encoding.Unicode.GetBytes(expected), output.ToArray());
         Assert.InRange(output.MaxSizeHint, 1, 4096);
     }

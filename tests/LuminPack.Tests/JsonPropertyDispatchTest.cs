@@ -99,7 +99,7 @@ public class JsonPropertyDispatchTest
     public void SmallModelsMatchLengthsAndActualNames(LuminPackStringEncoding encoding)
     {
         var option = new TestSerializationProfile { StringEncoding = encoding };
-        var result = LuminPackSerializer.DeserializeJson<JsonSmallDispatchModel>(
+        var result = TestProfileSerializer.DeserializeJson<JsonSmallDispatchModel>(
             "{\u0022AZ\u0022:{\u0022ignored\u0022:[\u0022escape\\n\u0022]},\u0022A\\u0042\u0022:2,\u0022\u540D\u79F0\u0022:\u0022\u4E2D\u6587\uD83D\uDE00\u0022,\u0022AA\u0022:1,\u0022aa\u0022:99}", option);
         Assert.NotNull(result);
         Assert.Equal(1, result.AA);
@@ -115,7 +115,7 @@ public class JsonPropertyDispatchTest
     public void LargeModelsVerifyNamesAndSkipUnknownValues(LuminPackStringEncoding encoding)
     {
         var option = new TestSerializationProfile { StringEncoding = encoding };
-        var result = LuminPackSerializer.DeserializeJson<JsonLargeDispatchModel>(
+        var result = TestProfileSerializer.DeserializeJson<JsonLargeDispatchModel>(
             "{\"F11\":11,\"F99\":[{\"x\":\"\\u4F60\"}],\"F0\\u0030\":1,\"F01\":2,\"f02\":99}", option);
         Assert.NotNull(result);
         Assert.Equal(1, result.F00);
@@ -132,14 +132,14 @@ public class JsonPropertyDispatchTest
     public void CanonicalAliasShapedNamesKeepTheirOwnLookupMetadata(LuminPackStringEncoding encoding)
     {
         var profile = new TestSerializationProfile { StringEncoding = encoding };
-        var result = LuminPackSerializer.DeserializeJson<JsonAliasDispatchModel>(
+        var result = TestProfileSerializer.DeserializeJson<JsonAliasDispatchModel>(
             "{\"Alias_0_0\":42,\"legacyF00\":17,\"F11\":11}", profile);
         Assert.NotNull(result);
         Assert.Equal(42, result.Alias_0_0);
         Assert.Equal(17, result.F00);
         Assert.Equal(11, result.F11);
-        string json = LuminPackSerializer.SerializeJson(result, profile);
-        var repeated = LuminPackSerializer.DeserializeJson<JsonAliasDispatchModel>(json, profile);
+        string json = TestProfileSerializer.SerializeJson(result, profile);
+        var repeated = TestProfileSerializer.DeserializeJson<JsonAliasDispatchModel>(json, profile);
         Assert.NotNull(repeated);
         Assert.Equal(42, repeated.Alias_0_0);
         Assert.Equal(17, repeated.F00);
@@ -155,9 +155,9 @@ public class JsonPropertyDispatchTest
         var option = new TestSerializationProfile { StringEncoding = encoding };
         var node = new CircleReferenceSerializationTest.SimpleNode { Name = "\u4E2D\u6587\uD83D\uDE00" };
         node.Parent = node;
-        string json = LuminPackSerializer.SerializeJson(node, option);
+        string json = TestProfileSerializer.SerializeJson(node, option);
         json = json.Replace("\"$id\"", "\"$i\\u0064\"").Replace("\"$ref\"", "\"$r\\u0065f\"");
-        var result = LuminPackSerializer.DeserializeJson<CircleReferenceSerializationTest.SimpleNode>(json, option);
+        var result = TestProfileSerializer.DeserializeJson<CircleReferenceSerializationTest.SimpleNode>(json, option);
         Assert.NotNull(result);
         Assert.Equal(node.Name, result.Name);
         Assert.Same(result, result.Parent);

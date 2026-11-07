@@ -275,8 +275,8 @@ internal static class BufferWriterSerializationTest
 
         foreach (var value in new string?[] { null, string.Empty, "A", "\u4EAE\u5EA6", "emoji😀" })
         {
-            var payload = LuminPackSerializer.Serialize(value, option);
-            Assert(LuminPackSerializer.Deserialize<string?>(payload, option) == (value ?? string.Empty),
+            var payload = TestProfileSerializer.Serialize(value, option);
+            Assert(TestProfileSerializer.Deserialize<string?>(payload, option) == (value ?? string.Empty),
                 "UTF-16 token string did not round-trip according to the protocol's null/empty normalization.");
         }
     }

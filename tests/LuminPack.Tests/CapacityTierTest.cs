@@ -19,9 +19,9 @@ public partial class CapacityTierTest
         var ordinary = new LargeOrdinary { Text = value.Text, Values = value.Values, Builder = value.Builder };
         foreach (var option in Options())
         {
-            byte[] bytes = LuminPackSerializer.Serialize(value, option);
-            Assert.Equal(LuminPackSerializer.Serialize(ordinary, option), bytes);
-            var copy = LuminPackSerializer.Deserialize<LargeGuaranteed>(bytes, option);
+            byte[] bytes = TestProfileSerializer.Serialize(value, option);
+            Assert.Equal(TestProfileSerializer.Serialize(ordinary, option), bytes);
+            var copy = TestProfileSerializer.Deserialize<LargeGuaranteed>(bytes, option);
             Assert.Equal(value.Text, copy.Text);
             Assert.Equal(value.Values, copy.Values);
             Assert.Equal(value.Builder.ToString(), copy.Builder.ToString());
@@ -57,20 +57,20 @@ public partial class CapacityTierTest
         foreach (var option in Options())
         {
             var graph = new TextGraph { Values = strings, List = strings.ToList(), Tail = 971 };
-            byte[] bytes = LuminPackSerializer.Serialize(graph, option);
-            var copy = LuminPackSerializer.Deserialize<TextGraph>(bytes, option);
+            byte[] bytes = TestProfileSerializer.Serialize(graph, option);
+            var copy = TestProfileSerializer.Deserialize<TextGraph>(bytes, option);
             Assert.Equal(strings.Select(value => value ?? ""), copy.Values.Select(value => value ?? ""));
             Assert.Equal(strings.Select(value => value ?? ""), copy.List.Select(value => value ?? ""));
             Assert.Equal(graph.Tail, copy.Tail);
-            Assert.Equal(bytes, LuminPackSerializer.Serialize(copy, option));
-            Assert.Equal(LuminPackSerializer.Serialize(strings, option), LuminPackSerializer.Serialize(strings.ToList(), option));
+            Assert.Equal(bytes, TestProfileSerializer.Serialize(copy, option));
+            Assert.Equal(TestProfileSerializer.Serialize(strings, option), TestProfileSerializer.Serialize(strings.ToList(), option));
             var dictionary = strings.Select((value, index) => (value, index)).ToDictionary(pair => "key-" + pair.index, pair => pair.value);
             foreach (string key in dictionary.Keys.Where((_, index) => index % 7 == 0).ToArray()) dictionary.Remove(key);
-            byte[] map = LuminPackSerializer.Serialize(dictionary, option);
-            var mapCopy = LuminPackSerializer.Deserialize<Dictionary<string, string>>(map, option);
+            byte[] map = TestProfileSerializer.Serialize(dictionary, option);
+            var mapCopy = TestProfileSerializer.Deserialize<Dictionary<string, string>>(map, option);
             Assert.Equal(dictionary.Keys, mapCopy.Keys);
             Assert.Equal(dictionary.Values.Select(value => value ?? ""), mapCopy.Values.Select(value => value ?? ""));
-            Assert.Equal(map, LuminPackSerializer.Serialize(mapCopy, option));
+            Assert.Equal(map, TestProfileSerializer.Serialize(mapCopy, option));
         }
     }
 
@@ -105,18 +105,18 @@ public partial class CapacityTierTest
             {
                 var bounded = new LargeGuaranteed { Text = text! };
                 var ordinary = new LargeOrdinary { Text = text! };
-                Assert.Equal(LuminPackSerializer.Serialize(ordinary, option), LuminPackSerializer.Serialize(bounded, option));
+                Assert.Equal(TestProfileSerializer.Serialize(ordinary, option), TestProfileSerializer.Serialize(bounded, option));
             }
             foreach (string text in new[] { "\ud800", "x\udfffy" })
             {
                 var bounded = new LargeGuaranteed { Text = text };
                 var ordinary = new LargeOrdinary { Text = text };
                 if (option.StringEncoding == LuminPackStringEncoding.UTF16)
-                    Assert.Equal(LuminPackSerializer.Serialize(ordinary, option), LuminPackSerializer.Serialize(bounded, option));
+                    Assert.Equal(TestProfileSerializer.Serialize(ordinary, option), TestProfileSerializer.Serialize(bounded, option));
                 else
                 {
-                    Exception expected = Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize(ordinary, option));
-                    Exception actual = Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize(bounded, option));
+                    Exception expected = Assert.ThrowsAny<Exception>(() => TestProfileSerializer.Serialize(ordinary, option));
+                    Exception actual = Assert.ThrowsAny<Exception>(() => TestProfileSerializer.Serialize(bounded, option));
                     Assert.Equal(expected.GetType(), actual.GetType());
                     Assert.Equal(expected.Message, actual.Message);
                 }
@@ -133,9 +133,9 @@ public partial class CapacityTierTest
         var ordinary = new VersionedOrdinary { Values = values, Text = versioned.Text };
         foreach (var option in Options())
         {
-            byte[] bytes = LuminPackSerializer.Serialize(versioned, option);
-            Assert.Equal(LuminPackSerializer.Serialize(ordinary, option), bytes);
-            var copy = LuminPackSerializer.Deserialize<VersionedGuaranteed>(bytes, option);
+            byte[] bytes = TestProfileSerializer.Serialize(versioned, option);
+            Assert.Equal(TestProfileSerializer.Serialize(ordinary, option), bytes);
+            var copy = TestProfileSerializer.Deserialize<VersionedGuaranteed>(bytes, option);
             Assert.Equal(values.Select(value => value.Id), copy.Values.Select(value => value.Id));
             Assert.Equal(versioned.Text, copy.Text);
         }

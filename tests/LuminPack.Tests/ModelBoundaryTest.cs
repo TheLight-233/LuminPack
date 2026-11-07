@@ -87,7 +87,7 @@ namespace LuminPackUnitTest
         {
             try
             {
-                LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
+                TestProfileSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
                 var bytes = LuminPackSerializer.Serialize(value);
                 var back = LuminPackSerializer.Deserialize<T>(bytes);
                 results.Add(same(value, back)

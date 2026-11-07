@@ -47,9 +47,9 @@ public class JsonSimpleDecimalTest
             double expectedDouble = doc.RootElement.GetDouble();
             float expectedFloat = doc.RootElement.GetSingle();
             Assert.Equal(BitConverter.DoubleToInt64Bits(expectedDouble),
-                BitConverter.DoubleToInt64Bits(LuminPackSerializer.DeserializeJson<double>(literal, option)));
+                BitConverter.DoubleToInt64Bits(TestProfileSerializer.DeserializeJson<double>(literal, option)));
             Assert.Equal(BitConverter.SingleToInt32Bits(expectedFloat),
-                BitConverter.SingleToInt32Bits(LuminPackSerializer.DeserializeJson<float>(literal, option)));
+                BitConverter.SingleToInt32Bits(TestProfileSerializer.DeserializeJson<float>(literal, option)));
         }
     }
 }

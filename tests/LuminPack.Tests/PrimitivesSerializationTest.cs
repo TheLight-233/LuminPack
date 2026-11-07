@@ -99,8 +99,8 @@ namespace LuminPackUnitTest
                              new TestSerializationProfile { StringRecording = LuminPackStringRecording.Length, StringEncoding = LuminPackStringEncoding.UTF16 },
                          })
                 {
-                    string? emptyBack = LuminPackSerializer.Deserialize<string>(LuminPackSerializer.Serialize(empty, option), option);
-                    string? nullBack = LuminPackSerializer.Deserialize<string>(LuminPackSerializer.Serialize(nullValue, option), option);
+                    string? emptyBack = TestProfileSerializer.Deserialize<string>(TestProfileSerializer.Serialize(empty, option), option);
+                    string? nullBack = TestProfileSerializer.Deserialize<string>(TestProfileSerializer.Serialize(nullValue, option), option);
                     if (emptyBack != "" || nullBack != null)
                     {
                         results.Add($"✗ TestStringNullAndEmpty - FAILED: empty='{emptyBack}' null={nullBack}");
@@ -123,12 +123,12 @@ namespace LuminPackUnitTest
             try
             {
                 string val = "\u55E8\u55E8Test\uFF01";
-                byte[] buf = LuminPackSerializer.Serialize(val, new TestSerializationProfile()
+                byte[] buf = TestProfileSerializer.Serialize(val, new TestSerializationProfile()
                 {
                     StringEncoding = LuminPackStringEncoding.UTF8,
                     StringRecording = LuminPackStringRecording.Token
                 });
-                string result = LuminPackSerializer.Deserialize<string>(buf, new TestSerializationProfile()
+                string result = TestProfileSerializer.Deserialize<string>(buf, new TestSerializationProfile()
                 {
                     StringEncoding = LuminPackStringEncoding.UTF8,
                     StringRecording = LuminPackStringRecording.Token
@@ -152,12 +152,12 @@ namespace LuminPackUnitTest
             try
             {
                 string val = "\u55E8\u55E8Test\uFF01";
-                byte[] buf = LuminPackSerializer.Serialize(val, new TestSerializationProfile()
+                byte[] buf = TestProfileSerializer.Serialize(val, new TestSerializationProfile()
                 {
                     StringEncoding = LuminPackStringEncoding.UTF16,
                     StringRecording = LuminPackStringRecording.Length
                 });
-                string result = LuminPackSerializer.Deserialize<string>(buf, new TestSerializationProfile()
+                string result = TestProfileSerializer.Deserialize<string>(buf, new TestSerializationProfile()
                 {
                     StringEncoding = LuminPackStringEncoding.UTF16,
                     StringRecording = LuminPackStringRecording.Length

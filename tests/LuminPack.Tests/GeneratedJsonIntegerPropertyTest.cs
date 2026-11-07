@@ -45,10 +45,10 @@ public class GeneratedJsonIntegerPropertyTest
                 Optional = extreme ? int.MinValue : null
             };
             string expected = JsonSerializer.Serialize(value, jsonContext.GeneratedIntegerPropertyModel);
-            string actual = LuminPackSerializer.SerializeJson(value, option);
+            string actual = TestProfileSerializer.SerializeJson(value, option);
             Assert.Equal(expected, actual);
-            Assert.Equal(actual, LuminPackSerializer.SerializeJson(
-                LuminPackSerializer.DeserializeJson<GeneratedIntegerPropertyModel>(actual, option), option));
+            Assert.Equal(actual, TestProfileSerializer.SerializeJson(
+                TestProfileSerializer.DeserializeJson<GeneratedIntegerPropertyModel>(actual, option), option));
         }
     }
 

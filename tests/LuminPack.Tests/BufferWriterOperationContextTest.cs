@@ -89,8 +89,8 @@ internal static class BufferWriterOperationContextTest
         using var buffer = new LuminBufferWriter(true);
         const string expected = "JSON context \u4E2D\u6587 \uD83D\uDE00";
         var utf16 = new TestSerializationProfile { StringEncoding = LuminPackStringEncoding.UTF16 };
-        LuminPackSerializer.SerializeJson(expected, buffer, utf16);
-        Assert(LuminPackSerializer.DeserializeJson<string>(System.Text.Encoding.Unicode.GetString(buffer.GetSpan()), utf16) == expected,
+        TestProfileSerializer.SerializeJson(expected, buffer, utf16);
+        Assert(TestProfileSerializer.DeserializeJson<string>(System.Text.Encoding.Unicode.GetString(buffer.GetSpan()), utf16) == expected,
             "UTF-16 document round trip failed.");
         buffer.ResetCore();
         LuminPackSerializer.SerializeJson(expected, buffer);

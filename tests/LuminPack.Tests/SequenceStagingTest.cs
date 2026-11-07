@@ -53,10 +53,10 @@ public class SequenceStagingTest
     {
         var option = new TestSerializationProfile { StringEncoding = encoding };
         var value = new IBufferModel { Id = 42, Name = new string('\u4e2d', 10_000) + "😀", Numbers = [1, 2, 3] };
-        byte[] payload = LuminPackSerializer.Serialize(value, option);
+        byte[] payload = TestProfileSerializer.Serialize(value, option);
         ReadOnlySequence<byte> sequence = Split(payload);
         IBufferModel result = default!;
-        int consumed = LuminPackSerializer.Deserialize(sequence, ref result, option);
+        int consumed = TestProfileSerializer.Deserialize(sequence, ref result, option);
         Assert.Equal(payload.Length, consumed);
         Assert.Equal(value.Id, result.Id);
         Assert.Equal(value.Name, result.Name);

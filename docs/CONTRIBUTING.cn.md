@@ -16,6 +16,8 @@ dotnet build LuminPack.sln -c Release
 
 ## 检查
 
+运行时 profile 矩阵使用测试专用的 `LuminPackUnitTest.TestProfileSerializer` 适配器。此类辅助代码与生成的 `LuminPack.LuminPackSerializer` 分开定义；手写同名 partial 声明可能让 IDE 在生成成员尚未可用时错误绑定。普通序列化调用继续使用正式 API。
+
 运行覆盖本次改动的检查，而不是每次都跑全部测试。运行时测试规模很大，建议只选一个框架并加 `--filter`。
 
 ```text
@@ -28,6 +30,7 @@ dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.cspro
 # Roslyn 4.3 上的生成器流水线，以及增量失效
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
+dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-source-references
 
 # 静态入口后端，包括真实 Roslyn 4.3 和可移植运行时
 dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.csproj -c Release -- --verify-interceptors

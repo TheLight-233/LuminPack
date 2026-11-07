@@ -101,7 +101,7 @@ public class RootDirectPathTest
     /// <param name="value">The value to check.</param>
     private static void Check<T>(T value)
     {
-        LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
         byte[] direct = LuminPackSerializer.Serialize(value);
         var buffer = LuminBufferWriterPool.Rent();
         try

@@ -18,6 +18,8 @@ With a .NET 11 SDK on x64 or Arm64 Windows, Linux or macOS, repository MSBuild b
 
 Run what covers your change rather than every suite. The full runtime suite is large; prefer one framework and a focused `--filter`.
 
+Runtime profile matrices use the test-only `LuminPackUnitTest.TestProfileSerializer` adapter. Keep these helpers separate from the generated `LuminPack.LuminPackSerializer`; a handwritten partial declaration can hide missing generated members during IDE analysis. Ordinary serializer calls must continue to use the production API.
+
 ```text
 # Source standards: XML docs, English prose, exception routing, raw copy routing
 dotnet run --project tools/LuminPack.RepositoryChecks/LuminPack.RepositoryChecks.csproj -c Release -- .
@@ -28,6 +30,7 @@ dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.cspro
 # Generator pipeline on Roslyn 4.3, then incremental invalidation
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
+dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-source-references
 
 # Static entry backends, including real Roslyn 4.3 and the portable runtime
 dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.csproj -c Release -- --verify-interceptors

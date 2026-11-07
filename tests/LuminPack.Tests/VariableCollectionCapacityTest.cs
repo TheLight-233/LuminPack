@@ -65,13 +65,13 @@ public partial class VariableCollectionCapacityTest
         };
         var option = new TestSerializationProfile { StringEncoding = encoding, StringRecording = recording };
         using var buffer = new LuminBufferWriter(true);
-        LuminPackSerializer.Serialize(value, buffer, option);
+        TestProfileSerializer.Serialize(value, buffer, option);
         byte[] bytes = buffer.GetSpan().ToArray();
-        var copy = LuminPackSerializer.Deserialize<Graph>(bytes, option);
+        var copy = TestProfileSerializer.Deserialize<Graph>(bytes, option);
         Assert.Equal(value.Items.Select(text => text ?? ""), copy.Items.Select(text => text ?? ""));
         Assert.Equal(value.Array.Select(text => text ?? ""), copy.Array.Select(text => text ?? ""));
         Assert.Equal(value.Tail, copy.Tail);
-        Assert.Equal(bytes, LuminPackSerializer.Serialize(copy, option));
+        Assert.Equal(bytes, TestProfileSerializer.Serialize(copy, option));
     }
 
     /// <summary>Checks the completed variable payload rather than its stale starting cursor before a fixed tail.</summary>
@@ -88,16 +88,16 @@ public partial class VariableCollectionCapacityTest
         if (shape == 0)
         {
             var value = new TextEdge { Text = new string('Ā', 16381), Tail = 1917 };
-            LuminPackSerializer.Serialize(value, buffer, option);
-            Assert.Equal(value.Tail, LuminPackSerializer.Deserialize<TextEdge>(buffer.GetSpan(), option).Tail);
+            TestProfileSerializer.Serialize(value, buffer, option);
+            Assert.Equal(value.Tail, TestProfileSerializer.Deserialize<TextEdge>(buffer.GetSpan(), option).Tail);
         }
         else
         {
             var value = new CollectionEdge { Tail = 1917 };
             if (shape == 1) value.List = [new string('Ā', 16379)];
             else value.Array = [new string('Ā', 16377)];
-            LuminPackSerializer.Serialize(value, buffer, option);
-            var copy = LuminPackSerializer.Deserialize<CollectionEdge>(buffer.GetSpan(), option);
+            TestProfileSerializer.Serialize(value, buffer, option);
+            var copy = TestProfileSerializer.Deserialize<CollectionEdge>(buffer.GetSpan(), option);
             Assert.Equal(value.Tail, copy.Tail);
             Assert.Equal(value.List, copy.List);
             Assert.Equal(value.Array, copy.Array);

@@ -65,7 +65,7 @@ namespace LuminPackUnitTest
             };
 
             // Void wrapper: type inference resolves T = WrapperPayload.
-            LuminPackSerializer.RegisterTestProfile<WrapperPayload, LuminPackDefaultOptions>();
+            TestProfileSerializer.RegisterTestProfile<WrapperPayload, LuminPackDefaultOptions>();
             Save(original);
 
             // Round-trip through the wrapper that returns the payload.

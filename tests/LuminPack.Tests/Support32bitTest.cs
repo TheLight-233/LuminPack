@@ -185,7 +185,7 @@ public class Support32bitTest
     /// <param name="value">The portable generic value.</param>
     private static void WriteGeneric<T>(ref LuminPackWriter writer, in PortableGeneric<T> value) where T : unmanaged
     {
-        LuminPackSerializer.RegisterTestProfile<PortableGeneric<T>, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<PortableGeneric<T>, LuminPackDefaultOptions>();
         LuminPackSerializer.Serialize(ref writer, in value);
     }
 
@@ -195,7 +195,7 @@ public class Support32bitTest
     /// <param name="value">The destination storage.</param>
     private static void ReadGeneric<T>(ref LuminPackReader reader, ref PortableGeneric<T> value) where T : unmanaged
     {
-        LuminPackSerializer.RegisterTestProfile<PortableGeneric<T>, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<PortableGeneric<T>, LuminPackDefaultOptions>();
         LuminPackSerializer.Deserialize(ref reader, ref value);
     }
 

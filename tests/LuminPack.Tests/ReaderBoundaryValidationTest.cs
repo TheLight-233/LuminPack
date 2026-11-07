@@ -220,8 +220,8 @@ internal static class ReaderBoundaryValidationTest
 
         )
         {
-            var payload = LuminPackSerializer.Serialize(value, option);
-            var result = LuminPackSerializer.Deserialize<string>(payload, option);
+            var payload = TestProfileSerializer.Serialize(value, option);
+            var result = TestProfileSerializer.Deserialize<string>(payload, option);
             Assert(result == value, $"Length-prefixed {option.StringEncoding} string did not round-trip.");
         }
     }

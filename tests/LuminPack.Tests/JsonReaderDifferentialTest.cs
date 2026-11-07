@@ -246,7 +246,7 @@ public class JsonReaderDifferentialTest
 
             using JsonDocument oracle = JsonDocument.Parse(json);
             string?[] oracleStrings = FlattenStrings(oracle.RootElement);
-            string?[] readerStrings = LuminPackSerializer
+            string?[] readerStrings = TestProfileSerializer
                 .DeserializeJson<List<string?>>(json, s_strictUtf8)!.ToArray();
 
             Assert.Equal(oracleStrings.Length, readerStrings.Length);
@@ -377,7 +377,7 @@ public class JsonReaderDifferentialTest
     {
         try
         {
-            values = LuminPackSerializer.DeserializeJson<double[]>(json, s_strictUtf8)!;
+            values = TestProfileSerializer.DeserializeJson<double[]>(json, s_strictUtf8)!;
             return true;
         }
         catch (Exception)
@@ -395,7 +395,7 @@ public class JsonReaderDifferentialTest
     {
         try
         {
-            values = LuminPackSerializer.DeserializeJson<long[]>(json, s_strictUtf8)!;
+            values = TestProfileSerializer.DeserializeJson<long[]>(json, s_strictUtf8)!;
             return true;
         }
         catch (Exception)

@@ -18,6 +18,13 @@ if (args.Contains("--verify-il-rewriting", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--verify-source-references", StringComparer.Ordinal))
+{
+    IncrementalGenerationChecks.VerifyReferenceInvalidation(CompatibilityCompilationReferences.Create());
+    Console.WriteLine("Passed source project reference attributes and incremental invalidation.");
+    return;
+}
+
 if (args.Contains("--verify-readonly-collection-builder", StringComparer.Ordinal))
 {
     VerifyReadOnlyCollectionBuilder(references);

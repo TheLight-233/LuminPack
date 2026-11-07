@@ -64,7 +64,7 @@ public class ScalarReadReturnTest
     /// <param name="expected">The complete scalar storage.</param>
     private static void CheckStorage<T>(T expected) where T : unmanaged
     {
-        LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(16, Unsafe.SizeOf<T>());
         Assert.Equal(16, bytes.Length);
@@ -84,7 +84,7 @@ public class ScalarReadReturnTest
     /// <param name="expected">The nullable value.</param>
     private static void CheckNullable<T>(T? expected) where T : struct
     {
-        LuminPackSerializer.RegisterTestProfile<T?, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<T?, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(expected, LuminPackSerializer.Deserialize<T?>(bytes));
         Assert.Equal(expected, LuminPackSerializer.Deserialize<T?, LuminPackDefaultOptions>(bytes));

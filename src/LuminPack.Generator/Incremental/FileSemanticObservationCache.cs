@@ -160,7 +160,8 @@ internal sealed class FileSemanticObservationCache
                         AddDependencies(alias.Target as ITypeSymbol, dependencies, seenDependencies);
                     AddDependencies(target as ITypeSymbol ?? target.ContainingType, dependencies, seenDependencies);
                     foreach (var declaration in target.DeclaringSyntaxReferences)
-                        dependencies.Add(declaration.SyntaxTree);
+                        if (_compilation.ContainsSyntaxTree(declaration.SyntaxTree))
+                            dependencies.Add(declaration.SyntaxTree);
                 }
             }
         }
@@ -213,7 +214,8 @@ internal sealed class FileSemanticObservationCache
         {
             AddDependencies(named.OriginalDefinition, trees, visited);
             return; }
-        if (named.DeclaringSyntaxReferences.Length == 0)
+        // IDE project references retain source declarations from another compilation. Reference identity already guards their changes.
+        if (!named.DeclaringSyntaxReferences.Any(reference => _compilation.ContainsSyntaxTree(reference.SyntaxTree)))
             return;
         DependencyNode direct;
         lock (_direct)
@@ -265,7 +267,7 @@ internal sealed class FileSemanticObservationCache
                 foreach (var argument in attribute.NamedArguments)
                     Constant(argument.Value);
                 var syntax = attribute.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
-                if (syntax?.ArgumentList == null)
+                if (syntax?.ArgumentList == null || !_compilation.ContainsSyntaxTree(syntax.SyntaxTree))
                     continue;
                 var model = GetSemanticModel(syntax.SyntaxTree);
                 foreach (var identifier in syntax.ArgumentList.DescendantNodes().OfType<IdentifierNameSyntax>())
@@ -309,7 +311,8 @@ internal sealed class FileSemanticObservationCache
                     break;
             }
         }
-        return new DependencyNode(type.DeclaringSyntaxReferences.Select(reference => reference.SyntaxTree).ToArray(), types.ToArray());
+        return new DependencyNode(type.DeclaringSyntaxReferences.Select(reference => reference.SyntaxTree)
+            .Where(_compilation.ContainsSyntaxTree).ToArray(), types.ToArray());
     }
 
     /// <summary>Retains only syntax identities and frozen type descriptions across compilations.</summary>

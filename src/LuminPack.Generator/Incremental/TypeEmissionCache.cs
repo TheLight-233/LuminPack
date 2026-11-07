@@ -350,7 +350,8 @@ internal sealed class TypeEmissionCache
                 {
                     pending.Push(named.OriginalDefinition);
                     continue; }
-                if (named.DeclaringSyntaxReferences.Length == 0)
+                // Source-backed project references belong to another compilation and are invalidated by the reference guard.
+                if (!named.DeclaringSyntaxReferences.Any(reference => compilation.ContainsSyntaxTree(reference.SyntaxTree)))
                     continue;
                 // Collection templates and enclosing class bodies now also select the
                 // fixed cursor protocol from their nested Union's complete case graph.
@@ -416,7 +417,7 @@ internal sealed class TypeEmissionCache
                     foreach (var argument in attribute.NamedArguments)
                         AddConstant(argument.Value);
                     var syntax = attribute.ApplicationSyntaxReference?.GetSyntax() as AttributeSyntax;
-                    if (syntax?.ArgumentList == null)
+                    if (syntax?.ArgumentList == null || !compilation.ContainsSyntaxTree(syntax.SyntaxTree))
                         continue;
                     var model = FileSemanticObservationCache.For(compilation).GetSemanticModel(syntax.SyntaxTree);
                     foreach (var identifier in syntax.ArgumentList.DescendantNodes().OfType<IdentifierNameSyntax>())
@@ -460,7 +461,8 @@ internal sealed class TypeEmissionCache
                         break;
                 }
             }
-            return new DirectDependencies(type.DeclaringSyntaxReferences.Select(reference => reference.SyntaxTree).Distinct().ToArray(), types.ToArray());
+            return new DirectDependencies(type.DeclaringSyntaxReferences.Select(reference => reference.SyntaxTree)
+                .Where(compilation.ContainsSyntaxTree).Distinct().ToArray(), types.ToArray());
         }
     }
 

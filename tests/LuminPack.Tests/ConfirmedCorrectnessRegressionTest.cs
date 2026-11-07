@@ -226,7 +226,7 @@ internal static class ConfirmedCorrectnessRegressionTest
         const string scalarJson = "{\"Value\":17}";
 
         var utf8 = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshSmallModel>(json, static (string concreteReadInput, ref JsonFreshSmallModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
-        var utf16 = LuminPackSerializer.DeserializeJson<JsonFreshSmallModel>(json,
+        var utf16 = TestProfileSerializer.DeserializeJson<JsonFreshSmallModel>(json,
             new TestSerializationProfile { StringEncoding = LuminPackStringEncoding.UTF16 });
         var scalar = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshScalarModel>(scalarJson, static (string concreteReadInput, ref JsonFreshScalarModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 

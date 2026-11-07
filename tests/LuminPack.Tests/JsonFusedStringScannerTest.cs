@@ -167,7 +167,7 @@ public class JsonFusedStringScannerTest
                 byte[] bytes = (encoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
                 byte[] guarded = Enumerable.Repeat((byte)0xA5, bytes.Length + 16).ToArray();
                 bytes.CopyTo(guarded, 3);
-                Assert.Equal(expected.RootElement.GetString(), LuminPackSerializer.DeserializeJson<string>(guarded.AsSpan(3, bytes.Length), option));
+                Assert.Equal(expected.RootElement.GetString(), TestProfileSerializer.DeserializeJson<string>(guarded.AsSpan(3, bytes.Length), option));
                 Assert.Equal(bytes, guarded.AsSpan(3, bytes.Length).ToArray());
                 Assert.All(guarded.AsSpan(0, 3).ToArray(), value => Assert.Equal((byte)0xA5, value));
                 Assert.All(guarded.AsSpan(3 + bytes.Length).ToArray(), value => Assert.Equal((byte)0xA5, value));
@@ -220,12 +220,12 @@ public class JsonFusedStringScannerTest
             {
                 string json = "\"" + prefix + suffix + "\"";
                 using var document = JsonDocument.Parse(json);
-                Assert.Equal(document.RootElement.GetString(), LuminPackSerializer.DeserializeJson<string>(json, option));
+                Assert.Equal(document.RootElement.GetString(), TestProfileSerializer.DeserializeJson<string>(json, option));
                 byte[] bytes = encoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8.GetBytes(json) : Encoding.Unicode.GetBytes(json);
                 for (int cut = 1; cut < bytes.Length; cut++)
                 {
                     int truncatedLength = cut;
-                    Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<string>(bytes.AsSpan(0, truncatedLength), option));
+                    Assert.ThrowsAny<Exception>(() => TestProfileSerializer.DeserializeJson<string>(bytes.AsSpan(0, truncatedLength), option));
                 }
             }
 
@@ -233,8 +233,8 @@ public class JsonFusedStringScannerTest
             {
                 string beforeEscape = "\"" + prefix + control + "\\n\"";
                 string afterEscape = "\"" + prefix + "\\n" + control + "\"";
-                Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<string>(beforeEscape, option));
-                Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<string>(afterEscape, option));
+                Assert.ThrowsAny<Exception>(() => TestProfileSerializer.DeserializeJson<string>(beforeEscape, option));
+                Assert.ThrowsAny<Exception>(() => TestProfileSerializer.DeserializeJson<string>(afterEscape, option));
             }
         }
     }

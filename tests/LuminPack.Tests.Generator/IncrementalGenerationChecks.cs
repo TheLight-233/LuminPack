@@ -85,18 +85,28 @@ internal static class IncrementalGenerationChecks
 
     /// <summary>Requires a replaced compilation reference to invalidate unchanged source declarations.</summary>
     /// <param name="references">Platform and runtime references for the consumer.</param>
-    private static void VerifyReferenceInvalidation(MetadataReference[] references)
+    internal static void VerifyReferenceInvalidation(MetadataReference[] references)
     {
         var dependency = CSharpCompilation.Create("ReferenceConstants",
-            new[] { CSharpSyntaxTree.ParseText("public static class Constants { public const int Order = 0; }", ParseOptions) }, references,
+            new[] { CSharpSyntaxTree.ParseText("[System.Obsolete(\"Source reference fixture\")] public static class Constants { public const int Order = 0; }", ParseOptions) }, references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var changed = dependency.ReplaceSyntaxTree(dependency.SyntaxTrees.Single(),
-            CSharpSyntaxTree.ParseText("public static class Constants { public const int Order = 2; }", ParseOptions));
+            CSharpSyntaxTree.ParseText("[System.Obsolete(\"Source reference fixture\")] public static class Constants { public const int Order = 2; }", ParseOptions));
         var consumer = CSharpCompilation.Create("ReferenceInvalidation", new[]
         {
-            CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public class Model { [LuminPack.Attribute.LuminPackOrder(Constants.Order)] public int Value; [LuminPack.Attribute.LuminPackOrder(1)] public long Other; }", ParseOptions, "Model.cs")
+            CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public class Model { [LuminPack.Attribute.LuminPackOrder(Constants.Order)] public int Value; [LuminPack.Attribute.LuminPackOrder(1)] public long Other; }", ParseOptions, "Model.cs"),
+            CSharpSyntaxTree.ParseText("internal static class Utility { internal static int Touch() => 17; }", ParseOptions, "Utility.cs")
         }, references.Append(dependency.ToMetadataReference()), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        var cacheType = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.FileSemanticObservationCache", throwOnError: true)!;
+        var cache = cacheType.GetMethod("For", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new object[] { consumer })!;
+        var modelTree = consumer.SyntaxTrees.First();
+        cacheType.GetMethod("Read", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(cache,
+            new object[] { modelTree, (Func<ITypeSymbol, bool>)(_ => true) });
+        var dependencies = (SyntaxTree[])cacheType.GetMethod("ObservedDependencies", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(cache, new object[] { modelTree })!;
+        Require(dependencies.All(consumer.ContainsSyntaxTree), "Source-reference declarations were retained as local syntax dependencies.");
         Verify("compilation reference changed", consumer, consumer.WithReferences(references.Append(changed.ToMetadataReference())), 1);
+        Verify("unchanged compilation reference", consumer, Replace(consumer, "Utility.cs", "17", "18"), 0);
     }
 
     /// <summary>Checks alias discovery and emits a partially declared payload exactly once.</summary>
@@ -210,6 +220,9 @@ internal static class IncrementalGenerationChecks
     {
         Require(!after.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), name + ": invalid input fixture.");
         GeneratorDriver retained = NewDriver().RunGenerators(before);
+        Require(retained.GetRunResult().Results.All(result => result.Exception == null),
+            name + ": generator failed: " + string.Join(Environment.NewLine,
+                retained.GetRunResult().Results.Where(result => result.Exception != null).Select(result => result.Exception)));
         var original = Sources(retained);
         var counters = ReadCounters();
         retained = retained.RunGenerators(after);

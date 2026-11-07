@@ -24,8 +24,8 @@ internal static class SerializerReentrancyTest
     private static void BinaryCallbacksCanReenterSerializer()
     {
         var value = new ReentrantSerializerModel { Value = "outer-\u4EAE\u5EA6-\uD83D\uDE00" };
-        var payload = LuminPackSerializer.Serialize(value, OuterOption);
-        var result = LuminPackSerializer.Deserialize<ReentrantSerializerModel>(payload, OuterOption);
+        var payload = TestProfileSerializer.Serialize(value, OuterOption);
+        var result = TestProfileSerializer.Deserialize<ReentrantSerializerModel>(payload, OuterOption);
 
         Assert(result?.Value == value.Value,
             "A nested callback serialization corrupted the outer binary serializer state.");
@@ -35,8 +35,8 @@ internal static class SerializerReentrancyTest
     private static void JsonCallbacksCanReenterSerializer()
     {
         var value = new ReentrantSerializerModel { Value = "outer-json-\u4EAE\u5EA6-\uD83D\uDE00" };
-        var json = LuminPackSerializer.SerializeJson(value, OuterOption);
-        var result = LuminPackSerializer.DeserializeJson<ReentrantSerializerModel>(json, OuterOption);
+        var json = TestProfileSerializer.SerializeJson(value, OuterOption);
+        var result = TestProfileSerializer.DeserializeJson<ReentrantSerializerModel>(json, OuterOption);
 
         Assert(result?.Value == value.Value,
             "A nested callback serialization corrupted the outer JSON serializer state.");

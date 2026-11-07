@@ -253,10 +253,10 @@ public partial class JsonFormattedScalarTest
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     private static void AssertSerializerMatches<T>(T value, string expected)
     {
-        LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
+        TestProfileSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
         Assert.Equal(expected, LuminPackSerializer.SerializeJson(value));
 
-        string utf16 = LuminPackSerializer.SerializeJson(value, new TestSerializationProfile
+        string utf16 = TestProfileSerializer.SerializeJson(value, new TestSerializationProfile
         {
             StringEncoding = LuminPackStringEncoding.UTF16
         });

@@ -15,16 +15,18 @@ public class JsonOrderedPropertyTest
     public void GenericNamesAndEmptyContractsKeepTheirOrderedPaths()
     {
         var source = new JsonOrderedGenericModel<int, string> { First = 731, Second = "value" };
+        string expected = LuminPackSerializer.SerializeJson(source);
         foreach (var encoding in new[] { LuminPackStringEncoding.UTF8, LuminPackStringEncoding.UTF16 })
         foreach (bool strict in new[] { false, true })
         {
             var option = new TestSerializationProfile { StringEncoding = encoding, ValidateJsonSyntax = strict };
-            string json = LuminPackSerializer.SerializeJson(source, option);
-            var value = LuminPackSerializer.DeserializeJson<JsonOrderedGenericModel<int, string>>(json, option);
+            string json = TestProfileSerializer.SerializeJson(source, option);
+            Assert.Equal(expected, json);
+            var value = TestProfileSerializer.DeserializeJson<JsonOrderedGenericModel<int, string>>(json, option);
             Assert.Equal(source.First, value.First);
             Assert.Equal(source.Second, value.Second);
-            Assert.Equal("{}", LuminPackSerializer.SerializeJson(new JsonOrderedEmptyModel(), option));
-            Assert.NotNull(LuminPackSerializer.DeserializeJson<JsonOrderedEmptyModel>("{}", option));
+            Assert.Equal("{}", TestProfileSerializer.SerializeJson(new JsonOrderedEmptyModel(), option));
+            Assert.NotNull(TestProfileSerializer.DeserializeJson<JsonOrderedEmptyModel>("{}", option));
         }
     }
 
@@ -43,7 +45,7 @@ public class JsonOrderedPropertyTest
         // whitespace, duplicate and then an ordered suffix in the same object.
         const string json = "{\"F00\":10,\"F01\":11,\"unknown\":{\"x\":[{\"F02\":99}]}," +
             "\"F0\\u0032\":12,\"F07\":17, \"F03\" : 13,\"F03\":23,\"F04\":14,\"F05\":15}";
-        var result = LuminPackSerializer.DeserializeJson<JsonLargeDispatchModel>(json, option);
+        var result = TestProfileSerializer.DeserializeJson<JsonLargeDispatchModel>(json, option);
         Assert.Equal(10, result.F00);
         Assert.Equal(11, result.F01);
         Assert.Equal(12, result.F02);
@@ -53,7 +55,7 @@ public class JsonOrderedPropertyTest
         Assert.Equal(0, result.F06);
         Assert.Equal(17, result.F07);
 
-        var unicode = LuminPackSerializer.DeserializeJson<JsonSmallDispatchModel>(
+        var unicode = TestProfileSerializer.DeserializeJson<JsonSmallDispatchModel>(
             "{\u0022AA\u0022:1,\u0022AB\u0022:2,\u0022\u540D\u79F0\u0022:\u0022\u4E2D\u6587\uD83D\uDE00\\n\u0022}", option);
         Assert.Equal("\u4E2D\u6587\uD83D\uDE00\n", unicode.\u540d\u79f0);
     }
@@ -74,7 +76,7 @@ public class JsonOrderedPropertyTest
             "{\"F00\":0,\"F01\":1]", "{\"F00\":0}{}"
         };
         foreach (string json in invalid)
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<JsonLargeDispatchModel>(json, option));
+            Assert.ThrowsAny<Exception>(() => TestProfileSerializer.DeserializeJson<JsonLargeDispatchModel>(json, option));
 
         const string complete = "{\"F00\":0,\"F01\":1,\"F02\":2}";
         var bytes = encoding == LuminPackStringEncoding.UTF8
@@ -83,7 +85,7 @@ public class JsonOrderedPropertyTest
         {
             int cut = length;
             Assert.ThrowsAny<Exception>(() =>
-                LuminPackSerializer.DeserializeJson<JsonLargeDispatchModel>(bytes.AsSpan(0, cut), option));
+                TestProfileSerializer.DeserializeJson<JsonLargeDispatchModel>(bytes.AsSpan(0, cut), option));
         }
     }
 
@@ -100,10 +102,10 @@ public class JsonOrderedPropertyTest
         {
             string json = "{" + string.Join(",", Enumerable.Range(0, 12)
                 .OrderBy(_ => random.Next()).Select(n => $"\"F{n:D2}\":{n + 10}")) + "}";
-            var value = LuminPackSerializer.DeserializeJson<JsonLargeDispatchModel>(json, option);
+            var value = TestProfileSerializer.DeserializeJson<JsonLargeDispatchModel>(json, option);
             Assert.Equal("{\"F00\":10,\"F01\":11,\"F02\":12,\"F03\":13,\"F04\":14,\"F05\":15," +
                 "\"F06\":16,\"F07\":17,\"F08\":18,\"F09\":19,\"F10\":20,\"F11\":21}",
-                LuminPackSerializer.SerializeJson(value, option));
+                TestProfileSerializer.SerializeJson(value, option));
         }
     }
 
