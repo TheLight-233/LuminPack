@@ -48,18 +48,38 @@ internal sealed class PartitionedSourceCache
         }
     }
 
-    /// <summary>Derives a filesystem-safe name from the complete identity instead of lossy punctuation replacement.</summary>
+    /// <summary>Combines a readable declaration identity with a stable disambiguating suffix.</summary>
     /// <param name="prefix">The generated file family.</param>
     /// <param name="identity">The canonical type or declaration identity.</param>
-    /// <returns>A deterministic name with a complete SHA-256 identity suffix.</returns>
+    /// <returns>A bounded filesystem-safe name that exposes the type or declaration being generated.</returns>
     internal static string CreateHintName(string prefix, string identity)
+    {
+        var label = new StringBuilder();
+        foreach (char character in identity.Replace("global::", string.Empty))
+        {
+            if (label.Length >= 64)
+                break;
+            if (char.IsLetterOrDigit(character) || character == '.')
+                label.Append(character);
+            else if (label.Length != 0 && label[label.Length - 1] != '_')
+                label.Append('_');
+        }
+        string readable = label.ToString().Trim('.', '_');
+        return prefix + "." + (readable.Length == 0 ? "Declaration" : readable) + "." +
+            CreateIdentityHash(identity).Substring(0, 32) + ".g.cs";
+    }
+
+    /// <summary>Hashes a complete identity independently of its presentation filename.</summary>
+    /// <param name="identity">The canonical type or declaration identity.</param>
+    /// <returns>The complete SHA-256 hexadecimal identity.</returns>
+    internal static string CreateIdentityHash(string identity)
     {
         using var hash = SHA256.Create();
         var bytes = hash.ComputeHash(Encoding.UTF8.GetBytes(identity));
-        var name = new StringBuilder(prefix).Append('.');
+        var name = new StringBuilder();
         foreach (byte value in bytes)
             name.Append(value.ToString("x2", CultureInfo.InvariantCulture));
-        return name.Append(".g.cs").ToString();
+        return name.ToString();
     }
 
     /// <summary>Retains source text components and their completed output without semantic symbols.</summary>

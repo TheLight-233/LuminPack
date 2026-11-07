@@ -22,6 +22,7 @@ internal static class SerializerPartitionRegression
             ["B.cs"] = "[LuminPack.Attribute.LuminPackable] public sealed class B { public long Other; public int[] Values = []; public System.Collections.Generic.List<int> Items = []; }",
             ["Names.cs"] = "namespace One { [LuminPack.Attribute.LuminPackable] public sealed class Same { public int Value; } } namespace Two { [LuminPack.Attribute.LuminPackable] public sealed class Same { public long Value; } }",
             ["Utility.cs"] = "internal static class Utility { internal static int Touch() => 17; }",
+            ["Calls.cs"] = "public static class Calls { public static void Save(A a, B b, One.Same one, Two.Same two) { LuminPack.LuminPackSerializer.Serialize(a); LuminPack.LuminPackSerializer.Serialize(b); LuminPack.LuminPackSerializer.Serialize(one); LuminPack.LuminPackSerializer.Serialize(two); } }",
         };
         var input = CSharpCompilation.Create("FacadePartitions", files.Select(file => CSharpSyntaxTree.ParseText(file.Value, Parse, file.Key)), references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
@@ -30,19 +31,22 @@ internal static class SerializerPartitionRegression
         var initialFiles = FacadeFiles(initial);
         Require(initialFiles.ContainsKey("LuminPackSerializer.g.cs") && initialFiles.Count > 4, "Expected common support and independently named concrete files.");
         foreach (string name in initialFiles.Keys.Where(name => name != "LuminPackSerializer.g.cs"))
-            Require(Regex.IsMatch(name, "^LuminPackSerializer\\.[0-9a-f]{64}\\.g\\.cs$"), "A concrete filename does not encode a complete stable identity: " + name);
+            Require(Regex.IsMatch(name, "^LuminPackSerializer\\.[A-Za-z0-9_.]+\\.[0-9a-f]{32}\\.g\\.cs$"), "A concrete filename does not expose a readable stable identity: " + name);
         Require(initialFiles.Values.All(text => text.Contains("public static partial class LuminPackSerializer", StringComparison.Ordinal)), "Facade files must share the same partial type.");
         Require(!initialFiles["LuminPackSerializer.g.cs"].Contains("global::A value", StringComparison.Ordinal), "Common facade support contains a concrete payload body.");
 
         var metadata = new MetaInfo(Parse, Parse.LanguageVersion, true, true, true);
-        string legacy = LuminPackSerializerGenerator.GenerateSerializerClass(input, metadata);
+        string legacy = LuminPackSerializerGenerator.GenerateSerializerClass(input, metadata, Reachability(input));
         var expectedMethods = MethodInventory([legacy]);
         var actualMethods = MethodInventory(initialFiles.Values);
-        Require(expectedMethods.Count == actualMethods.Count && expectedMethods.All(pair => actualMethods.GetValueOrDefault(pair.Key) == pair.Value),
-            "Partitioning changed a concrete/generic method signature, implementation, attribute, default value, or XML contract: " +
-            string.Join(Environment.NewLine, expectedMethods.Where(pair => actualMethods.GetValueOrDefault(pair.Key) != pair.Value)
-                .Select(pair => pair.Key + Environment.NewLine + Code(pair.Value) + Environment.NewLine + Code(actualMethods.GetValueOrDefault(pair.Key))).Take(2)));
+        Require(expectedMethods.Count == actualMethods.Count && actualMethods.All(pair => expectedMethods.GetValueOrDefault(pair.Key) == pair.Value),
+            "Partitioning changed a concrete/generic method signature, implementation, attribute, or default value: " +
+            string.Join(Environment.NewLine, actualMethods.Where(pair => expectedMethods.GetValueOrDefault(pair.Key) != pair.Value)
+                .Select(pair => pair.Key + Environment.NewLine + Code(expectedMethods.GetValueOrDefault(pair.Key)) + Environment.NewLine + Code(pair.Value)).Take(2)));
         Require(PayloadFiles(initialFiles, "global::One.Same").Single() != PayloadFiles(initialFiles, "global::Two.Same").Single(), "Same simple names collided across namespaces.");
+        Require(PayloadFiles(initialFiles, "global::One.Same").Single().Contains("One.Same.", StringComparison.Ordinal) &&
+            PayloadFiles(initialFiles, "global::Two.Same").Single().Contains("Two.Same.", StringComparison.Ordinal),
+            "Partition names hide the declaring namespace and type.");
 
         VerifyEdit("unrelated body", input, Replace(input, "Utility.cs", "17", "18"), expectedFiles: 0, expectedFragments: 0);
         VerifyEdit("model initializer", input, Replace(input, "A.cs", "= 7", "= 8"), expectedFiles: 0, expectedFragments: 1);
@@ -54,7 +58,7 @@ internal static class SerializerPartitionRegression
         Require(initialFiles.All(pair => additionFiles.GetValueOrDefault(pair.Key) == pair.Value), "Adding a type renamed or rewrote an existing facade partition.");
         VerifyLayoutPartitions(references);
         VerifyFormatterPartitions(references);
-        Console.WriteLine("Passed facade partition signatures/bodies/XML, stable identities, arrays, independent edits, and unchanged existing files after type addition.");
+        Console.WriteLine("Passed facade partition signatures/bodies, readable stable identities, arrays, independent edits, and unchanged existing files after type addition.");
     }
 
     /// <summary>Checks shared mirrors, base storage, and independent layout publication after a private-field edit.</summary>
@@ -119,11 +123,14 @@ internal static class SerializerPartitionRegression
         var expected = MethodInventory([legacy]);
         var actual = MethodInventory(original.Where(pair => pair.Key.StartsWith("LuminPack.Formatter.", StringComparison.Ordinal) ||
             pair.Key.StartsWith("LuminPack.Dispatch.", StringComparison.Ordinal) || pair.Key == "LuminPack.FormatterBridges.g.cs").Select(pair => pair.Value));
-        Require(expected.Count == actual.Count && expected.All(pair => actual.GetValueOrDefault(pair.Key) == pair.Value), "Formatter or generic dispatch partition changed executable method text or documentation.");
+        Require(expected.Count == actual.Count && expected.All(pair => actual.GetValueOrDefault(pair.Key) == pair.Value),
+            "Formatter or generic dispatch partition changed executable method text: " + expected.Count + "/" + actual.Count + Environment.NewLine +
+            string.Join(Environment.NewLine, expected.Where(pair => actual.GetValueOrDefault(pair.Key) != pair.Value)
+                .Select(pair => pair.Key + Environment.NewLine + Code(pair.Value) + Environment.NewLine + Code(actual.GetValueOrDefault(pair.Key))).Take(2)));
         GeneratorDriver typeDriver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator()], parseOptions: Parse);
         typeDriver.RunGeneratorsAndUpdateCompilation(input, out var legacyOutput, out _);
         legacyOutput = legacyOutput.AddSyntaxTrees(CSharpSyntaxTree.ParseText(legacy, Parse),
-            CSharpSyntaxTree.ParseText(LuminPackSerializerGenerator.GenerateSerializerClass(input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true)), Parse));
+            CSharpSyntaxTree.ParseText(LuminPackSerializerGenerator.GenerateSerializerClass(input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), Reachability(input)), Parse));
         CheckErrors(legacyOutput);
         long count = ReadMetric("InvocationFormatterBuilds");
         var edited = Replace(input, "Choice.cs", "Second", "Renamed");
@@ -141,8 +148,17 @@ internal static class SerializerPartitionRegression
     {
         var utility = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.GeneratedSourceDocumentation", throwOnError: true)!;
         var complete = utility.GetMethod("Complete", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!;
-        return (string)complete.Invoke(null, [LuminPackExtensionGenerator.GenerateSerializerInvocationSupport(input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true)), Parse])!;
+        return (string)complete.Invoke(null, [LuminPackExtensionGenerator.GenerateSerializerInvocationSupport(input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), Reachability(input)), Parse])!;
     }
+
+    /// <summary>Uses the production automatic policy for both aggregate and partitioned comparisons.</summary>
+    /// <param name="input">The consumer compilation with real serializer calls.</param>
+    /// <returns>The shared automatic reachability and API selection.</returns>
+    private static ReachabilityAnalysis Reachability(CSharpCompilation input)
+        => (ReachabilityAnalysis)typeof(LuminPackSourceGenerator).Assembly
+            .GetType("LuminPack.Code.Core.ReachabilityAnalysisCache", throwOnError: true)!
+            .GetMethod("GetOrCreate", BindingFlags.Static | BindingFlags.NonPublic)!
+            .Invoke(null, [input, LuminPackGenerationTier.Automatic])!;
 
     /// <summary>Captures all generator files as pure comparable values.</summary>
     /// <param name="driver">The completed production driver.</param>
@@ -179,13 +195,13 @@ internal static class SerializerPartitionRegression
             name + ": retained partitions differ from fresh generation.");
     }
 
-    /// <summary>Inventories every serializer method, retaining its complete body and documentation.</summary>
+    /// <summary>Inventories every serializer method, retaining its complete body and signature.</summary>
     /// <param name="sources">Legacy aggregate text or independent generated files.</param>
     /// <returns>Method signatures mapped to exact declaration text.</returns>
     private static Dictionary<string, string> MethodInventory(IEnumerable<string> sources)
         => sources.SelectMany(text => CSharpSyntaxTree.ParseText(text, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .ToDictionary(method => method.Identifier.ValueText + method.TypeParameterList + method.ParameterList.ToString(),
-                method => DirectRoots(Regex.Replace(method.ToFullString().Trim(), "<para>Generated implementation:.*?</para>", string.Empty)), StringComparer.Ordinal);
+                method => DirectRoots(method.WithoutLeadingTrivia().NormalizeWhitespace().ToFullString()), StringComparer.Ordinal);
 
     /// <summary>Drops documentation lines so a failure shows the differing code.</summary>
     /// <param name="method">A method with documentation, or null.</param>

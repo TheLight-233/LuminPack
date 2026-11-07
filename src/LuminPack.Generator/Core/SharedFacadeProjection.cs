@@ -157,7 +157,7 @@ internal sealed class SharedFacadeProjection
     /// <param name="key">The complete normalized identity.</param>
     /// <returns>A valid member name with a 128-bit identity suffix.</returns>
     private static string Identity(string prefix, string key)
-        => prefix + "_" + EncodeIdentity(PartitionedSourceCache.CreateHintName("id", key).Substring(3, 32));
+        => prefix + "_" + EncodeIdentity(PartitionedSourceCache.CreateIdentityHash(key).Substring(0, 32));
 
     /// <summary>Encodes every bit of the existing private identity using identifier-safe base-32 characters.</summary>
     /// <param name="hexadecimal">The existing 128-bit hexadecimal identity.</param>
