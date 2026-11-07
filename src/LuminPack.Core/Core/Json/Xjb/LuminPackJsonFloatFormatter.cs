@@ -97,10 +97,11 @@ namespace LuminPack.Core
         /// <param name="dest">The destination receiving the result.</param>
         /// <param name="value">The value consumed or produced by this operation.</param>
         /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="useQuads">Whether the scientific path can use complete digit quads.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteDigitsUtf8(
-            Span<byte> dest, ulong value, int digits)
+            Span<byte> dest, ulong value, int digits, bool useQuads = false)
         {
             if (dest.Length < digits)
                 LuminPackExceptionHelper.ThrowArgumentException(
@@ -112,7 +113,21 @@ namespace LuminPack.Core
             ref byte lut = ref MemoryMarshal.GetReference(pairs);
 
             int pos = digits;
-
+            // Scientific coefficients can share the integer formatter's complete quads.
+            // Other call sites keep their short-value pair path after constant folding.
+            if (useQuads && digits >= 8 && BitConverter.IsLittleEndian)
+            {
+                while (value >= 10000UL)
+                {
+                    ulong quotient = value / 10000UL;
+                    uint packed = LuminPackJsonNumberFormatter.GetFourDigits(
+                        (uint)(value - quotient * 10000UL));
+                    pos -= 4;
+                    Unsafe.WriteUnaligned(
+                        ref Unsafe.Add(ref output, (nint)(uint)pos), packed);
+                    value = quotient;
+                }
+            }
             while (value >= 100UL)
             {
                 ulong q = value / 100UL;
@@ -151,14 +166,23 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteDigitsUtf16(Span<char> dest, ulong value)
         {
+            return WriteDigitsUtf16(dest, value, CountDecimalDigits(value));
+        }
 
+        /// <summary>Writes a coefficient with its established decimal length.</summary>
+        /// <param name="dest">The output.</param>
+        /// <param name="value">The coefficient.</param>
+        /// <param name="digits">The decimal length.</param>
+        /// <returns>The character count.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int WriteDigitsUtf16(Span<char> dest, ulong value, int digits)
+        {
             if (value < 10)
             {
                 dest[0] = (char)('0' + value);
                 return 1;
             }
 
-            int digits = CountDecimalDigits(value);
             int pos = digits;
             ReadOnlySpan<byte> pairs = DigitPairs;
 
@@ -581,7 +605,7 @@ namespace LuminPack.Core
         {
             if (exponent10 >= 0)
             {
-                int written = WriteDigitsUtf8(dest, digits);
+                int written = WriteDigitsUtf8(dest, digits, length);
                 for (int i = 0; i < exponent10; i++)
                     dest[written + i] = (byte)'0';
                 return written + exponent10;
@@ -610,9 +634,12 @@ namespace LuminPack.Core
                     return integerDigits + 1 + fractionDigits;
                 }
 
-                int written = WriteDigitsUtf8(dest, digits);
+                int written = WriteDigitsUtf8(dest, digits, length);
                 int dot = length - fractionDigits;
-                dest.Slice(dot, fractionDigits).CopyTo(dest.Slice(dot + 1));
+                if (dest.Length > length)
+                    ShiftFractionRight(ref MemoryMarshal.GetReference(dest), length, fractionDigits, 1);
+                else
+                    dest.Slice(dot, fractionDigits).CopyTo(dest.Slice(dot + 1));
                 dest[dot] = (byte)'.';
                 return written + 1;
             }
@@ -624,7 +651,7 @@ namespace LuminPack.Core
             for (int i = 0; i < zeros; i++)
                 dest[pos + i] = (byte)'0';
             pos += zeros;
-            return pos + WriteDigitsUtf8(dest.Slice(pos), digits);
+            return pos + WriteDigitsUtf8(dest.Slice(pos), digits, length);
         }
 
         /// <summary>Performs the emit fixed utf16 step for the current operation.</summary>
@@ -637,7 +664,7 @@ namespace LuminPack.Core
         {
             if (exponent10 >= 0)
             {
-                int written = WriteDigitsUtf16(dest, digits);
+                int written = WriteDigitsUtf16(dest, digits, length);
                 for (int i = 0; i < exponent10; i++)
                     dest[written + i] = '0';
                 return written + exponent10;
@@ -666,9 +693,14 @@ namespace LuminPack.Core
                     return integerDigits + 1 + fractionDigits;
                 }
 
-                int written = WriteDigitsUtf16(dest, digits);
+                int written = WriteDigitsUtf16(dest, digits, length);
                 int dot = length - fractionDigits;
-                dest.Slice(dot, fractionDigits).CopyTo(dest.Slice(dot + 1));
+                if (dest.Length > length)
+                    ShiftFractionRight(
+                        ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(dest)),
+                        length * 2, fractionDigits * 2, 2);
+                else
+                    dest.Slice(dot, fractionDigits).CopyTo(dest.Slice(dot + 1));
                 dest[dot] = '.';
                 return written + 1;
             }
@@ -680,7 +712,44 @@ namespace LuminPack.Core
             for (int i = 0; i < zeros; i++)
                 dest[pos + i] = '0';
             pos += zeros;
-            return pos + WriteDigitsUtf16(dest.Slice(pos), digits);
+            return pos + WriteDigitsUtf16(dest.Slice(pos), digits, length);
+        }
+
+        /// <summary>Copies a validated fractional suffix from end to start to make room for its decimal point.</summary>
+        /// <param name="output">The beginning of the complete reserved output.</param>
+        /// <param name="end">The exclusive end of the original coefficient in bytes.</param>
+        /// <param name="count">The number of suffix bytes to move.</param>
+        /// <param name="shift">The decimal point width in bytes.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ShiftFractionRight(ref byte output, int end, int count, int shift)
+        {
+            // Load each chunk before storing it; reverse traversal preserves overlap.
+            if (Unsafe.SizeOf<IntPtr>() == 8)
+            {
+                while (count >= 8)
+                {
+                    end -= 8;
+                    ulong value = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref output, (nint)(uint)end));
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, (nint)(uint)(end + shift)), value);
+                    count -= 8;
+                }
+            }
+            while (count >= 4)
+            {
+                end -= 4;
+                uint value = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref output, (nint)(uint)end));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, (nint)(uint)(end + shift)), value);
+                count -= 4;
+            }
+            if (count >= 2)
+            {
+                end -= 2;
+                ushort value = Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref output, (nint)(uint)end));
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, (nint)(uint)(end + shift)), value);
+                count -= 2;
+            }
+            if (count != 0)
+                Unsafe.Add(ref output, (nint)(uint)(end - 1 + shift)) = Unsafe.Add(ref output, (nint)(uint)(end - 1));
         }
 
         /// <summary>Performs the emit scientific utf8 step for the current operation.</summary>
@@ -693,18 +762,17 @@ namespace LuminPack.Core
         {
             int leadingExponent = exponent10 + length - 1;
 
-            // Digits are written two slots to the right so the leading digit can move in front of the point.
-            int written = WriteDigitsUtf8(dest.Slice(2), digits);
+            // Leave the decimal point slot in front of the digit tail.
+            int written = WriteDigitsUtf8(dest.Slice(1), digits, length, true);
             int pos;
             if (written == 1)
             {
-                dest[0] = dest[2];
+                dest[0] = dest[1];
                 pos = 1;
             }
             else
             {
-                byte leading = dest[2];
-                dest.Slice(3, written - 1).CopyTo(dest.Slice(2));
+                byte leading = dest[1];
                 dest[0] = leading;
                 dest[1] = (byte)'.';
                 pos = written + 1;
@@ -723,17 +791,16 @@ namespace LuminPack.Core
         {
             int leadingExponent = exponent10 + length - 1;
 
-            int written = WriteDigitsUtf16(dest.Slice(2), digits);
+            int written = WriteDigitsUtf16(dest.Slice(1), digits, length);
             int pos;
             if (written == 1)
             {
-                dest[0] = dest[2];
+                dest[0] = dest[1];
                 pos = 1;
             }
             else
             {
-                char leading = dest[2];
-                dest.Slice(3, written - 1).CopyTo(dest.Slice(2));
+                char leading = dest[1];
                 dest[0] = leading;
                 dest[1] = '.';
                 pos = written + 1;

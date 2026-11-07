@@ -771,6 +771,52 @@ public class JsonXjbFormatterTest
 
     // ---------------------------------------------------------------- emitter buffers
 
+    /// <summary>Checks fixed fractional tails, scientific mantissas, exponent widths and signs in exact output slices.</summary>
+    [Fact]
+    public void FixedAndScientificNotationFitExactUtf8AndUtf16Slices()
+    {
+        string[] doubles =
+        {
+            "1E+100", "1.2E+100", "1.23E+100", "1.234E+100", "1.2345E+100",
+            "1.23456E+100", "1.234567E+100", "1.2345678E+100", "1.23456789E+100",
+            "1.234567891E+100", "1.2345678912E+100", "1.23456789123E+100",
+            "1.234567891234E+100", "1.2345678912345E+100", "1.23456789123456E+100",
+            "1.234567891234567E+100", "1.2345678912345679E+100",
+            "1E-20", "1.25E-99", "1.7976931348623157E+308", "5E-324"
+        };
+        doubles = doubles.Concat(Enumerable.Range(3, 14).Select(power =>
+            (1m + 1m / (1 << power)).ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray();
+        string[] singles = { "1.125", "10.0625", "1E+10", "1.2E+20", "1.2345678E+30", "1E-20", "3.4028235E+38", "1E-45" };
+        foreach (bool single in new[] { false, true })
+        foreach (string magnitude in single ? singles : doubles)
+        foreach (string sign in new[] { "", "-" })
+        {
+            string expected = sign + magnitude;
+            double value = double.Parse(expected, System.Globalization.CultureInfo.InvariantCulture);
+            byte[] bytes = new byte[expected.Length + 4];
+            Array.Fill(bytes, (byte)0xCC);
+            char[] characters = new char[expected.Length + 4];
+            Array.Fill(characters, '\uFFFF');
+            Span<byte> output = bytes.AsSpan(2, expected.Length);
+            Span<char> text = characters.AsSpan(2, expected.Length);
+            int written = single
+                ? LuminPackJsonFloatFormatter.WriteFloatUtf8(output, (float)value)
+                : LuminPackJsonFloatFormatter.WriteDoubleUtf8(output, value);
+            int charsWritten = single
+                ? LuminPackJsonFloatFormatter.WriteFloatUtf16(text, (float)value)
+                : LuminPackJsonFloatFormatter.WriteDoubleUtf16(text, value);
+            Assert.Equal(expected.Length, written);
+            Assert.Equal(expected.Length, charsWritten);
+            Assert.Equal(expected, System.Text.Encoding.ASCII.GetString(output));
+            Assert.Equal(expected, new string(text));
+            foreach (int index in new[] { 0, 1, bytes.Length - 2, bytes.Length - 1 })
+            {
+                Assert.Equal(0xCC, bytes[index]);
+                Assert.Equal('\uFFFF', characters[index]);
+            }
+        }
+    }
+
     /// <summary>Verifies emitter writes exactly the reported length inside an exact buffer.</summary>
     [Fact]
     public void EmitterWritesExactlyTheReportedLengthInsideAnExactBuffer()
