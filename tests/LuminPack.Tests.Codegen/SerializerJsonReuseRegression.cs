@@ -118,27 +118,27 @@ internal static class SerializerJsonReuseRegression
                             Words = ImmutableList.CreateRange(Enumerable.Range(0, count).Select(index => index % 3 == 0 ? null : "word\u00e9\u4e2d" + index)),
                             Nodes = ImmutableList.CreateRange(Enumerable.Range(0, count).Select(index => new Node { Number = index, Text = "node" + index }))
                         };
-                        string json = LuminPackSerializer.SerializeJson<TOptions>(value);
+                        string json = LuminPackSerializer.SerializeJson<ImmutableGraph, TOptions>(value);
                         byte[] bytes = encoding.GetBytes(json);
                         var original = value; var numbers = value.Numbers; var words = value.Words; var nodes = value.Nodes;
-                        int consumed = LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref value);
+                        int consumed = LuminPackSerializer.DeserializeJson<ImmutableGraph, TOptions>(bytes, ref value);
                         Require(consumed == bytes.Length && ReferenceEquals(original, value), "Immutable list owner reuse");
                         Require(value.Numbers.SequenceEqual(numbers) && value.Words.SequenceEqual(words), "Immutable list ordering/nulls");
-                        Require(value.Nodes.Count == count && LuminPackSerializer.SerializeJson<TOptions>(value) == json, "Immutable object list values");
+                        Require(value.Nodes.Count == count && LuminPackSerializer.SerializeJson<ImmutableGraph, TOptions>(value) == json, "Immutable object list values");
                         if (count != 0) Require(!ReferenceEquals(nodes[0], value.Nodes[0]) && nodes[0].Number == 0, "Immutable element construction");
                         if (count == 0) Require(ReferenceEquals(value.Numbers, ImmutableList<int>.Empty), "Immutable empty singleton");
                         ImmutableGraph fresh = null!;
-                        LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref fresh);
-                        Require(LuminPackSerializer.SerializeJson<TOptions>(fresh) == json, "Fresh immutable lists");
+                        LuminPackSerializer.DeserializeJson<ImmutableGraph, TOptions>(bytes, ref fresh);
+                        Require(LuminPackSerializer.SerializeJson<ImmutableGraph, TOptions>(fresh) == json, "Fresh immutable lists");
                         bool failed = false;
                         var retained = value.Nodes;
-                        try { LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("{\"Nodes\":[{\"Number\":1},{\"Number\":true}]}"), ref value); }
+                        try { LuminPackSerializer.DeserializeJson<ImmutableGraph, TOptions>(encoding.GetBytes("{\"Nodes\":[{\"Number\":1},{\"Number\":true}]}"), ref value); }
                         catch (InvalidOperationException) { failed = true; }
                         catch (FormatException) { failed = true; }
                         Require(failed && ReferenceEquals(value.Nodes, retained), "Immutable list failure publication");
-                        LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("{\"Numbers\":null,\"Words\":null,\"Nodes\":null}"), ref value);
+                        LuminPackSerializer.DeserializeJson<ImmutableGraph, TOptions>(encoding.GetBytes("{\"Numbers\":null,\"Words\":null,\"Nodes\":null}"), ref value);
                         Require(value.Numbers is null && value.Words is null && value.Nodes is null, "Immutable list nulls");
-                        Require(LuminPackSerializer.SerializeJson<TOptions>(fresh) == json, "Immutable list survives pooled storage reuse");
+                        Require(LuminPackSerializer.SerializeJson<ImmutableGraph, TOptions>(fresh) == json, "Immutable list survives pooled storage reuse");
                     }
                 }
                 private static void CheckUnionLoops<TOptions>() where TOptions : struct, ILuminPackOptions
@@ -146,19 +146,19 @@ internal static class SerializerJsonReuseRegression
                     var graph = new Graph { Child = new Node { Number = 1 }, Items = new List<Node> { new Node { Number = 2 } }, Array = new[] { new Node { Number = 3 } } };
                     graph.Map["key"] = new Node { Number = 4 };
                     Root root = new LoopCase { Graph = graph };
-                    string json = LuminPackSerializer.SerializeJson<TOptions>(root);
+                    string json = LuminPackSerializer.SerializeJson<Root, TOptions>(root);
                     var original = root; var child = graph.Child; var item = graph.Items[0]; var element = graph.Array[0]; var mapped = graph.Map["key"];
                     child.Number = item.Number = element.Number = mapped.Number = 99;
-                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref root);
+                    LuminPackSerializer.DeserializeJson<Root, TOptions>(json, ref root);
                     Require(ReferenceEquals(original, root) && ReferenceEquals(graph, ((LoopCase)root).Graph), "Union loop root reuse");
                     Require(ReferenceEquals(child, graph.Child) && child.Number == 1 && ReferenceEquals(item, graph.Items[0]) && item.Number == 2, "Union loop object/list reuse");
                     Require(ReferenceEquals(element, graph.Array[0]) && element.Number == 3 && ReferenceEquals(mapped, graph.Map["key"]) && mapped.Number == 4, "Union loop array/map reuse");
                     root = new Case();
-                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref root);
+                    LuminPackSerializer.DeserializeJson<Root, TOptions>(json, ref root);
                     Require(root is LoopCase replacement && replacement.Graph.Map["key"].Number == 4, "Union loop case replacement");
                     Root fresh = null!;
-                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref fresh);
-                    Require(LuminPackSerializer.SerializeJson<TOptions>(fresh) == json, "Union loop fresh round trip");
+                    LuminPackSerializer.DeserializeJson<Root, TOptions>(json, ref fresh);
+                    Require(LuminPackSerializer.SerializeJson<Root, TOptions>(fresh) == json, "Union loop fresh round trip");
                 }
                 private static void CheckPresence<TOptions>() where TOptions : struct, ILuminPackOptions
                 {
@@ -169,7 +169,7 @@ internal static class SerializerJsonReuseRegression
                     foreach (var field in fields)
                         if (field.FieldType == typeof(int)) field.SetValue(value, 99);
                     const string json = "{\"F64\":64,\"F31\":31,\"unknown\":{\"x\":[{},42]},\"F3\\u0032\":32,\"F00\":1,\"F63\":63,\"F31\":131,\"Child\":{\"Number\":7}}";
-                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref value);
+                    LuminPackSerializer.DeserializeJson<Presence<int, string, long>, TOptions>(json, ref value);
                     Require(ReferenceEquals(original, value) && ReferenceEquals(child, value.Child) && child.Number == 7, "Presence reuse");
                     foreach (var field in fields)
                     {
@@ -179,22 +179,22 @@ internal static class SerializerJsonReuseRegression
                     }
                     value.F64 = 99;
                     bool failed = false;
-                    try { LuminPackSerializer.DeserializeJson<TOptions>("{\"F31\":17,\"F32\":true}", ref value); }
+                    try { LuminPackSerializer.DeserializeJson<Presence<int, string, long>, TOptions>("{\"F31\":17,\"F32\":true}", ref value); }
                     catch (InvalidOperationException) { failed = true; }
                     catch (FormatException) { failed = true; }
                     Require(failed && ReferenceEquals(original, value) && value.F31 == 17 && value.F64 == 99, "Presence failure order");
                     Presence<int, string, long> fresh = null!;
                     failed = false;
-                    try { LuminPackSerializer.DeserializeJson<TOptions>("{\"F31\":17,\"F32\":true}", ref fresh); }
+                    try { LuminPackSerializer.DeserializeJson<Presence<int, string, long>, TOptions>("{\"F31\":17,\"F32\":true}", ref fresh); }
                     catch (InvalidOperationException) { failed = true; }
                     catch (FormatException) { failed = true; }
                     Require(failed && fresh is null, "Presence fresh publication");
-                    LuminPackSerializer.DeserializeJson<TOptions>("{}", ref value);
+                    LuminPackSerializer.DeserializeJson<Presence<int, string, long>, TOptions>("{}", ref value);
                     Require(ReferenceEquals(original, value) && value.Child is null, "Presence empty object");
                     foreach (var field in fields)
                         if (field.FieldType == typeof(int)) Require((int)field.GetValue(value)! == 0, "Presence empty reset");
                     var mixed = MixedPresence.Create();
-                    LuminPackSerializer.DeserializeJson<TOptions>("{\"D\":44,\"Hidden\":55,\"Property\":66}", ref mixed);
+                    LuminPackSerializer.DeserializeJson<MixedPresence, TOptions>("{\"D\":44,\"Hidden\":55,\"Property\":66}", ref mixed);
                     Require(mixed.A == 0 && mixed.B == 0 && mixed.C == 0 && mixed.D == 44 && mixed.HiddenValue == 55 && mixed.Property == 66, "Presence staged members");
                 }
                 private static void CheckProfile<TOptions>() where TOptions : struct, ILuminPackOptions
@@ -202,11 +202,11 @@ internal static class SerializerJsonReuseRegression
                     var node = new Node { Number = 7, Text = "same\u00E9" };
                     var target = new Graph { Child = node, Items = new List<Node> { new Node() }, Array = new[] { new Node() } };
                     target.Map["key"] = new Node();
-                    string json = LuminPackSerializer.SerializeJson<TOptions>(target);
+                    string json = LuminPackSerializer.SerializeJson<Graph, TOptions>(target);
                     byte[] bytes = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
                     var root = target; var child = target.Child; var text = child.Text;
                     var list = target.Items; var item = list[0]; var array = target.Array; var element = array[0]; var map = target.Map; var mapped = map["key"];
-                    int consumed = LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target);
+                    int consumed = LuminPackSerializer.DeserializeJson<Graph, TOptions>(bytes, ref target);
                     Require(consumed == bytes.Length && ReferenceEquals(root, target) && ReferenceEquals(child, target.Child), "Object graph");
                     Require(ReferenceEquals(text, child.Text) && ReferenceEquals(list, target.Items) && ReferenceEquals(item, list[0]), "List and string");
                     Require(ReferenceEquals(array, target.Array) && ReferenceEquals(element, array[0]), "Array");
@@ -218,7 +218,7 @@ internal static class SerializerJsonReuseRegression
                 .Replace("DERIVED_PRESENCE_FIELDS", string.Join(" ", Enumerable.Range(32, 33).Select(index => "public int F" + index.ToString("D2") + ";")), StringComparison.Ordinal);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("JsonReuse" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse, "Shape.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));

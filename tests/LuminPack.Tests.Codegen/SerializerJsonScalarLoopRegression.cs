@@ -47,59 +47,59 @@ internal static class SerializerJsonScalarLoopRegression
                     LuminPackSerializer.Register<Scalars<int, long>, TOptions>(Write<TOptions>, Read<TOptions>, WriteJson<TOptions>, ReadJson<TOptions>);
                     var value = new Scalars<int, long> { A = float.MaxValue, B = -0.0f, C = double.Epsilon, D = double.MinValue,
                         Optional = 1.1754944E-38f, Values = new List<float> { 0.1f, float.Epsilon, -float.MaxValue }, First = 17, Second = 19 };
-                    string json = LuminPackSerializer.SerializeJson<TOptions>(value);
+                    string json = LuminPackSerializer.SerializeJson<Scalars<int, long>, TOptions>(value);
                     var encoding = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode;
                     byte[] bytes = encoding.GetBytes(json);
                     var original = value; var list = value.Values;
-                    int consumed = LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref value);
+                    int consumed = LuminPackSerializer.DeserializeJson<Scalars<int, long>, TOptions>(bytes, ref value);
                     Require(consumed == bytes.Length && ReferenceEquals(value, original) && ReferenceEquals(value.Values, list), "Reader or reuse state");
-                    Require(LuminPackSerializer.SerializeJson<TOptions>(value) == json && BitConverter.SingleToInt32Bits(value.B) < 0, "Numeric bits or rewrite");
+                    Require(LuminPackSerializer.SerializeJson<Scalars<int, long>, TOptions>(value) == json && BitConverter.SingleToInt32Bits(value.B) < 0, "Numeric bits or rewrite");
                     Scalars<int, long> fresh = null!;
                     ReadGeneric<TOptions, int, long>(bytes, ref fresh);
-                    Require(LuminPackSerializer.SerializeJson<TOptions>(fresh) == json, "Fresh generic graph");
+                    Require(LuminPackSerializer.SerializeJson<Scalars<int, long>, TOptions>(fresh) == json, "Fresh generic graph");
                     const string reordered = "{\"D\":2.2250738585072014e-308,\"unknown\":[{},42],\"A\":1.0,\"A\":3.4028235e38,\"B\":-0.0,\"C\":9007199254740993,\"Optional\":null}";
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(reordered), ref value);
+                    LuminPackSerializer.DeserializeJson<Scalars<int, long>, TOptions>(encoding.GetBytes(reordered), ref value);
                     Require(value.A == float.MaxValue && BitConverter.SingleToInt32Bits(value.B) < 0 && value.C == 9007199254740992d && value.D == 2.2250738585072014e-308 && value.Optional == null, "Reordered duplicate numeric fields");
                     value.C = 29;
                     bool failed = false;
-                    try { LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("{\"A\":17,\"B\":1e}"), ref value); }
+                    try { LuminPackSerializer.DeserializeJson<Scalars<int, long>, TOptions>(encoding.GetBytes("{\"A\":17,\"B\":1e}"), ref value); }
                     catch (FormatException) { failed = true; }
                     catch (InvalidOperationException) { failed = true; }
                     Require(failed && ReferenceEquals(value, original) && value.A == 17 && value.C == 29, "Failure publication order");
                     fresh = null!; failed = false;
-                    try { LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("{\"A\":17,\"B\":1e}"), ref fresh); }
+                    try { LuminPackSerializer.DeserializeJson<Scalars<int, long>, TOptions>(encoding.GetBytes("{\"A\":17,\"B\":1e}"), ref fresh); }
                     catch (FormatException) { failed = true; }
                     catch (InvalidOperationException) { failed = true; }
                     Require(failed && fresh is null, "Fresh failure publication");
                     var bound = new Bound(float.MaxValue, double.Epsilon);
-                    json = LuminPackSerializer.SerializeJson<TOptions>(bound);
+                    json = LuminPackSerializer.SerializeJson<Bound, TOptions>(bound);
                     Bound constructed = null!;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref constructed);
+                    LuminPackSerializer.DeserializeJson<Bound, TOptions>(encoding.GetBytes(json), ref constructed);
                     Require(constructed.A == bound.A && constructed.B == bound.B, "Constructor arguments");
                     var single = new SingleValue();
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("{\"Value\":-0.0}"), ref single);
+                    LuminPackSerializer.DeserializeJson<SingleValue, TOptions>(encoding.GetBytes("{\"Value\":-0.0}"), ref single);
                     Require(BitConverter.SingleToInt32Bits(single.Value) < 0, "Small root");
                     List<float> sequence = null!;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("[1.25,-0.0]"), ref sequence);
+                    LuminPackSerializer.DeserializeJson<List<float>, TOptions>(encoding.GetBytes("[1.25,-0.0]"), ref sequence);
                     Require(sequence.Count == 2 && sequence[0] == 1.25f && BitConverter.SingleToInt32Bits(sequence[1]) < 0, "Single-site collection");
                 }
                 private static void ReadGeneric<TOptions, __luminReadJsonScalar, __luminJsonScalarState>(byte[] bytes,
                     ref Scalars<__luminReadJsonScalar, __luminJsonScalarState> value) where TOptions : struct, ILuminPackOptions
                     => LuminPackSerializer.DeserializeJson<Scalars<__luminReadJsonScalar, __luminJsonScalarState>, TOptions>(bytes, ref value);
                 private static void Write<TOptions>(ref LuminPack.Core.LuminPackWriter writer, in Scalars<int, long> value) where TOptions : struct, ILuminPackOptions
-                    => LuminPackSerializer.Serialize<TOptions>(ref writer, in value);
+                    => LuminPackSerializer.Serialize<Scalars<int, long>, TOptions>(ref writer, in value);
                 private static void Read<TOptions>(ref LuminPack.Core.LuminPackReader reader, ref Scalars<int, long> value) where TOptions : struct, ILuminPackOptions
-                    => LuminPackSerializer.Deserialize<TOptions>(ref reader, ref value);
+                    => LuminPackSerializer.Deserialize<Scalars<int, long>, TOptions>(ref reader, ref value);
                 private static void WriteJson<TOptions>(ref LuminPack.Core.LuminPackJsonWriter writer, in Scalars<int, long> value) where TOptions : struct, ILuminPackOptions
-                    => LuminPackSerializer.SerializeJson<TOptions>(ref writer, in value);
+                    => LuminPackSerializer.SerializeJson<Scalars<int, long>, TOptions>(ref writer, in value);
                 private static void ReadJson<TOptions>(ref LuminPack.Core.LuminPackJsonReader reader, ref Scalars<int, long> value) where TOptions : struct, ILuminPackOptions
-                    => LuminPackSerializer.DeserializeJson<TOptions>(ref reader, ref value);
+                    => LuminPackSerializer.DeserializeJson<Scalars<int, long>, TOptions>(ref reader, ref value);
                 private static void Require(bool condition, string message) { if (!condition) throw new Exception(message); }
             }
             """;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("JsonScalars" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));

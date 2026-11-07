@@ -56,7 +56,6 @@ internal sealed partial class StaticSerializerBinding
             AppendCall(text, method, Payload(method));
             text.AppendLine("        }\n");
         }
-        EmitProfiles(text);
         EmitWrappers(text);
         text.AppendLine("    }\n}");
         return text.ToString();
@@ -71,7 +70,7 @@ internal sealed partial class StaticSerializerBinding
         bool state = method.Parameters.Length != 0 && method.Parameters[0].Type.ContainingNamespace?.ToDisplayString() == "LuminPack.Core" &&
             method.Parameters[0].Type.Name is "LuminPackWriter" or "LuminPackReader" or "LuminPackJsonWriter" or "LuminPackJsonReader" or "LuminPackEvaluator";
         string owner = "global::LuminPack.LuminPackSerializer" + (state ? "" : "." + EntryName(FormatterTypeName.Get(payload)));
-        string profile = method.TypeArguments.Length > 1 || IsProfileSignature(method) ? "<" + TypeName(method.TypeArguments.Last()) + ">" : string.Empty;
+        string profile = method.TypeArguments.Length > 1 ? "<" + TypeName(method.TypeArguments.Last()) + ">" : string.Empty;
         if (!state && profile.Length == 0)
         {
             var declaration = LuminPack.SourceGenerator.CompiledOptions.Resolve(payload, _binding);

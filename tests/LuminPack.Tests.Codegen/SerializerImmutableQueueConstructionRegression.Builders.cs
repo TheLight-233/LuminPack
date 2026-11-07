@@ -8,7 +8,7 @@ internal static partial class SerializerImmutableQueueConstructionRegression
     /// <param name="references">The actual consumer metadata.</param>
     internal static void RunBuilders(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var initial = CSharpCompilation.Create("BuilderCases" + Guid.NewGuid().ToString("N"),
@@ -94,8 +94,8 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                     var graph=new BuilderGraph{Hash=keys.ToImmutableDictionary(k=>k,k=>k.Value),Sorted=keys.ToImmutableSortedDictionary(k=>k,k=>k.Value),Set=keys.ToImmutableHashSet(),SortedSet=keys.ToImmutableSortedSet(),Tail=917};
                     graph.Contract=graph.Hash;graph.SetContract=graph.Set;
                     var binary=LuminPackSerializer.Serialize(graph);
-                    var utf8=Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(graph));
-                    var utf16=Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(graph));
+                    var utf8=Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson<BuilderGraph, LuminPackUtf8LengthOptions>(graph));
+                    var utf16=Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson<BuilderGraph, LuminPackUtf16LengthOptions>(graph));
                     for(int format=0;format<3;format++)
                     {
                         BuilderGraph first=null, second=null;
@@ -103,8 +103,8 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                         {
                             BuilderGraph result=null;
                             if(format==0)LuminPackSerializer.Deserialize(binary,ref result);
-                            else if(format==1)LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(utf8,ref result);
-                            else LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(utf16,ref result);
+                            else if(format==1)LuminPackSerializer.DeserializeJson<BuilderGraph, LuminPackUtf8LengthOptions>(utf8,ref result);
+                            else LuminPackSerializer.DeserializeJson<BuilderGraph, LuminPackUtf16LengthOptions>(utf16,ref result);
                             if(result.Tail!=917 || result.Hash.Count!=count || result.Sorted.Count!=count || result.Contract.Count!=count || result.Set.Count!=count || result.SortedSet.Count!=count || result.SetContract.Count!=count)throw new Exception("Builder result framing changed.");
                             foreach(var key in keys)if(result.Hash[key]!=key.Value || result.Sorted[key]!=key.Value || result.Contract[key]!=key.Value || !result.Set.Contains(key) || !result.SortedSet.Contains(key) || !result.SetContract.Contains(key))throw new Exception("Builder contents changed.");
                             if(pass==0)first=result;else second=result;

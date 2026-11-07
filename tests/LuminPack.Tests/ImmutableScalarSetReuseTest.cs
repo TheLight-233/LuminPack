@@ -27,14 +27,14 @@ public sealed class ImmutableScalarSetReuseTest
             var hashed = sorted.ToImmutableHashSet();
             var sortedTarget = sorted;
             var hashedTarget = hashed;
-            byte[] sortedBytes = LuminPackSerializer.Serialize<TOptions>(sorted);
-            byte[] hashedBytes = LuminPackSerializer.Serialize<TOptions>(hashed);
-            Assert.Equal(sortedBytes.Length, LuminPackSerializer.Deserialize<TOptions>(sortedBytes, ref sortedTarget));
-            Assert.Equal(hashedBytes.Length, LuminPackSerializer.Deserialize<TOptions>(hashedBytes, ref hashedTarget));
+            byte[] sortedBytes = LuminPackSerializer.Serialize<ImmutableSortedSet<int>, TOptions>(sorted);
+            byte[] hashedBytes = LuminPackSerializer.Serialize<ImmutableHashSet<int>, TOptions>(hashed);
+            Assert.Equal(sortedBytes.Length, LuminPackSerializer.Deserialize<ImmutableSortedSet<int>, TOptions>(sortedBytes, ref sortedTarget));
+            Assert.Equal(hashedBytes.Length, LuminPackSerializer.Deserialize<ImmutableHashSet<int>, TOptions>(hashedBytes, ref hashedTarget));
             Assert.Same(sorted, sortedTarget);
             Assert.Same(hashed, hashedTarget);
-            Assert.Equal(sortedBytes, LuminPackSerializer.Serialize<TOptions>(sortedTarget));
-            Assert.Equal(hashedBytes, LuminPackSerializer.Serialize<TOptions>(hashedTarget));
+            Assert.Equal(sortedBytes, LuminPackSerializer.Serialize<ImmutableSortedSet<int>, TOptions>(sortedTarget));
+            Assert.Equal(hashedBytes, LuminPackSerializer.Serialize<ImmutableHashSet<int>, TOptions>(hashedTarget));
             Assert.DoesNotContain(int.MaxValue, sorted);
             Assert.Contains(int.MaxValue, sortedTarget.Add(int.MaxValue));
             Assert.DoesNotContain(int.MaxValue, hashed);
@@ -42,18 +42,18 @@ public sealed class ImmutableScalarSetReuseTest
 
             var changedSorted = sorted.Remove(-17).Add(2000);
             var changedHash = hashed.Remove(-17).Add(2000);
-            LuminPackSerializer.Deserialize<TOptions>(LuminPackSerializer.Serialize<TOptions>(changedSorted), ref sortedTarget);
-            LuminPackSerializer.Deserialize<TOptions>(LuminPackSerializer.Serialize<TOptions>(changedHash), ref hashedTarget);
+            LuminPackSerializer.Deserialize<ImmutableSortedSet<int>, TOptions>(LuminPackSerializer.Serialize<ImmutableSortedSet<int>, TOptions>(changedSorted), ref sortedTarget);
+            LuminPackSerializer.Deserialize<ImmutableHashSet<int>, TOptions>(LuminPackSerializer.Serialize<ImmutableHashSet<int>, TOptions>(changedHash), ref hashedTarget);
             Assert.NotSame(sorted, sortedTarget);
             Assert.NotSame(hashed, hashedTarget);
             Assert.Equal(changedSorted, sortedTarget);
             Assert.True(changedHash.SetEquals(hashedTarget));
-            LuminPackSerializer.Deserialize<TOptions>(new byte[4], ref sortedTarget);
-            LuminPackSerializer.Deserialize<TOptions>(new byte[4], ref hashedTarget);
+            LuminPackSerializer.Deserialize<ImmutableSortedSet<int>, TOptions>(new byte[4], ref sortedTarget);
+            LuminPackSerializer.Deserialize<ImmutableHashSet<int>, TOptions>(new byte[4], ref hashedTarget);
             Assert.Same(ImmutableSortedSet<int>.Empty, sortedTarget);
             Assert.Same(ImmutableHashSet<int>.Empty, hashedTarget);
-            LuminPackSerializer.Deserialize<TOptions>(new byte[] { 255, 255, 255, 255 }, ref sortedTarget);
-            LuminPackSerializer.Deserialize<TOptions>(new byte[] { 255, 255, 255, 255 }, ref hashedTarget);
+            LuminPackSerializer.Deserialize<ImmutableSortedSet<int>, TOptions>(new byte[] { 255, 255, 255, 255 }, ref sortedTarget);
+            LuminPackSerializer.Deserialize<ImmutableHashSet<int>, TOptions>(new byte[] { 255, 255, 255, 255 }, ref hashedTarget);
             Assert.Null(sortedTarget);
             Assert.Null(hashedTarget);
         }
@@ -189,15 +189,15 @@ public sealed class ImmutableScalarSetReuseTest
         var characterTarget = characters;
         var sortedTarget = sorted;
         var booleanTarget = booleans;
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>(characters);
+        byte[] bytes = LuminPackSerializer.Serialize<ImmutableHashSet<char>, TOptions>(characters);
         Assert.Equal(4 + characters.Count * sizeof(char), bytes.Length);
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref characterTarget);
-        LuminPackSerializer.Deserialize<TOptions>(LuminPackSerializer.Serialize<TOptions>(sorted), ref sortedTarget);
-        LuminPackSerializer.Deserialize<TOptions>(LuminPackSerializer.Serialize<TOptions>(booleans), ref booleanTarget);
+        LuminPackSerializer.Deserialize<ImmutableHashSet<char>, TOptions>(bytes, ref characterTarget);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<char>, TOptions>(LuminPackSerializer.Serialize<ImmutableSortedSet<char>, TOptions>(sorted), ref sortedTarget);
+        LuminPackSerializer.Deserialize<ImmutableHashSet<bool>, TOptions>(LuminPackSerializer.Serialize<ImmutableHashSet<bool>, TOptions>(booleans), ref booleanTarget);
         Assert.Same(characters, characterTarget);
         Assert.Same(sorted, sortedTarget);
         Assert.Same(booleans, booleanTarget);
-        Assert.Equal(bytes, LuminPackSerializer.Serialize<TOptions>(characterTarget));
+        Assert.Equal(bytes, LuminPackSerializer.Serialize<ImmutableHashSet<char>, TOptions>(characterTarget));
     }
 
     /// <summary>Detects accidental observations of an excluded destination comparer.</summary>

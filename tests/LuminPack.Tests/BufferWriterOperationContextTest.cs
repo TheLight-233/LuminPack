@@ -158,7 +158,7 @@ internal static class BufferWriterOperationContextTest
     private static void Write<TOptions>(LuminBufferWriter buffer, string value) where TOptions : struct, ILuminPackOptions
     {
         var writer = new LuminPackWriter(buffer, buffer.WriterState);
-        try { LuminPackSerializer.Serialize<TOptions>(ref writer, in value); buffer.CompleteWrite(writer.CurrentIndex); }
+        try { LuminPackSerializer.Serialize<string, TOptions>(ref writer, in value); buffer.CompleteWrite(writer.CurrentIndex); }
         finally { buffer.WriterState.ResetOperationState(); }
     }
 
@@ -171,7 +171,7 @@ internal static class BufferWriterOperationContextTest
         ReadOnlySpan<byte> bytes = buffer.GetSpan();
         var reader = new LuminPackReader(ref bytes, buffer.ReaderState);
         string value = null!;
-        try { LuminPackSerializer.Deserialize<TOptions>(ref reader, ref value); return value; }
+        try { LuminPackSerializer.Deserialize<string, TOptions>(ref reader, ref value); return value; }
         finally { buffer.ReaderState.ResetOperationState(); }
     }
 

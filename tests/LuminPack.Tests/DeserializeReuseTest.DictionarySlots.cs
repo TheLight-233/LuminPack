@@ -28,12 +28,12 @@ public partial class DeserializeReuseTest
         var versionedMap = new Dictionary<int, SlotVersionedLeaf> { [1] = versionedNode };
         var text = node.Text;
         var versionedText = versionedNode.Text;
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>(
+        byte[] bytes = LuminPackSerializer.Serialize<Dictionary<int, ReuseNode>, TOptions>(
 (Dictionary<int, ReuseNode>)            new() { [1] = new() { Number = 17, Text = "leaf" } });
-        byte[] versionedBytes = LuminPackSerializer.Serialize<TOptions>(
+        byte[] versionedBytes = LuminPackSerializer.Serialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(
 (Dictionary<int, SlotVersionedLeaf>)            new() { [1] = new() { Number = 19, Text = "named" } });
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref map));
-        Assert.Equal(versionedBytes.Length, LuminPackSerializer.Deserialize<TOptions>(versionedBytes, ref versionedMap));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>, TOptions>(bytes, ref map));
+        Assert.Equal(versionedBytes.Length, LuminPackSerializer.Deserialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(versionedBytes, ref versionedMap));
         Assert.Same(node, map[1]);
         Assert.Same(versionedNode, versionedMap[1]);
         Assert.Same(text, node.Text);
@@ -42,14 +42,14 @@ public partial class DeserializeReuseTest
         Assert.Equal(19, versionedNode.Number);
         for (int i = 0; i < 128; i++)
         {
-LuminPackSerializer.Deserialize<TOptions>(bytes, ref map);
-LuminPackSerializer.Deserialize<TOptions>(versionedBytes, ref versionedMap);
+LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>, TOptions>(bytes, ref map);
+LuminPackSerializer.Deserialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(versionedBytes, ref versionedMap);
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 1024; i++)
         {
-LuminPackSerializer.Deserialize<TOptions>(bytes, ref map);
-LuminPackSerializer.Deserialize<TOptions>(versionedBytes, ref versionedMap);
+LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>, TOptions>(bytes, ref map);
+LuminPackSerializer.Deserialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(versionedBytes, ref versionedMap);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }

@@ -40,13 +40,13 @@ public class SequenceRawWriteTest
         var head = new Segment<string?>(storage.AsMemory(0, 4));
         var tail = head.Append(ReadOnlyMemory<string?>.Empty).Append(storage.AsMemory(4));
         var sequence = new ReadOnlySequence<string?>(head, 1, tail, 3);
-        Assert.Equal(LuminPackSerializer.SerializeJson<TOptions>(storage[1..^1]), LuminPackSerializer.SerializeJson<TOptions>(sequence));
+        Assert.Equal(LuminPackSerializer.SerializeJson<string?[], TOptions>(storage[1..^1]), LuminPackSerializer.SerializeJson<ReadOnlySequence<string?>, TOptions>(sequence));
         var matrix = new string?[,] { { storage[1], storage[2], storage[3] }, { storage[4], storage[5], storage[6] } };
-        var records = storage[1..^1].SelectMany(text => LuminPackSerializer.Serialize<TOptions>(text)).ToArray();
+        var records = storage[1..^1].SelectMany(text => LuminPackSerializer.Serialize<string, TOptions>(text)).ToArray();
         byte[] counted = BitConverter.GetBytes(6).Concat(records).ToArray();
-        Assert.Equal(counted, LuminPackSerializer.Serialize<TOptions>(sequence));
+        Assert.Equal(counted, LuminPackSerializer.Serialize<ReadOnlySequence<string?>, TOptions>(sequence));
         byte[] shape = [0, 2, 0, 0, 0, 3, 0, 0, 0];
-        Assert.Equal(shape.Concat(counted).ToArray(), LuminPackSerializer.Serialize<TOptions>(matrix));
+        Assert.Equal(shape.Concat(counted).ToArray(), LuminPackSerializer.Serialize<string?[,], TOptions>(matrix));
     }
 
     /// <summary>Compares each selected segmented record with independent contiguous element storage.</summary>
@@ -56,19 +56,19 @@ public class SequenceRawWriteTest
         foreach(int length in new[]{0,1,3,17,1000,17000})
         {
             int[] values=Enumerable.Range(0,length).Select(i=>unchecked(i*719+137)).ToArray();
-            byte[] expected=LuminPackSerializer.Serialize<T>(values);
+            byte[] expected=LuminPackSerializer.Serialize<int[], T>(values);
             foreach(int split in new[]{0,length/2,length})
             {
                 var head=new Segment<int>(values.AsMemory(0,split));
                 var empty=head.Append(Memory<int>.Empty);
                 var tail=empty.Append(values.AsMemory(split));
                 ReadOnlySequence<int> sequence=new(head,0,tail,tail.Memory.Length);
-                Assert.Equal(expected,LuminPackSerializer.Serialize<T>(sequence));
+                Assert.Equal(expected,LuminPackSerializer.Serialize<ReadOnlySequence<int>, T>(sequence));
                 ReadOnlySequence<int> single=new(values);
-                Assert.Equal(expected,LuminPackSerializer.Serialize<T>(single));
+                Assert.Equal(expected,LuminPackSerializer.Serialize<ReadOnlySequence<int>, T>(single));
                 if(length>2)
                 {
-                    Assert.Equal(LuminPackSerializer.Serialize<T>(values[1..^1]),LuminPackSerializer.Serialize<T>(sequence.Slice(1,length-2)));
+                    Assert.Equal(LuminPackSerializer.Serialize<int[], T>(values[1..^1]),LuminPackSerializer.Serialize<ReadOnlySequence<int>, T>(sequence.Slice(1,length-2)));
                 }
             }
         }

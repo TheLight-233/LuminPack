@@ -15,7 +15,7 @@ LuminPack 采用统一的自动生成规则，不需要选择生成档位，也�
 
 生成器包自动启用 `LuminPack` Interceptor 命名空间。在 C# 11 或更高版本、编译器提供带版本的 `GetInterceptableLocation` 时，公共门面使用固定数量的泛型签名。`Serialize(value)`、`Serialize<Player>(value)` 和 `Deserialize<Player>(bytes)` 等调用被拦截到既有具体实现。相同构造签名的多个源码位置共享一个 Interceptor。内部状态入口使用负载专属名称，分配数组、缓冲区和流等便捷入口位于独立的 `LuminEntry_<hash>` 容器。只保留实际使用的便捷 API 类别；格式化器保留范围遵循前述统一声明与调用图规则。
 
-`Serialize<TOptions>(value)` 这种仅指定配置类型的写法继续可用，只为使用它的负载生成兼容签名。配置类型参数可以保持开放：它选择编译期选项，不在运行时选择负载格式化器。每个实际使用的便捷操作保留既有的编译期配置方法体；默认调用由 Interceptor 直接传入声明配置，因此不再需要额外的默认配置转发方法。这里使用的是既有选项 struct，不是格式化器 Plan。
+显式配置使用两个类型参数，例如 `Serialize<Player, TOptions>(value)`。配置类型参数可以保持开放：它选择编译期选项，不在运行时选择负载格式化器。生成器不再为各负载类型生成公开的配置便捷重载。每个实际使用的便捷操作保留既有的编译期配置方法体，默认调用由 Interceptor 直接传入声明配置。这里使用的是既有选项 struct，不是格式化器 Plan。
 
 对于 `static byte[] Save<T>(T value) => LuminPackSerializer.Serialize(value)` 这样的源码包装方法，可在闭合调用处拦截到具体方法体副本。调用图按方法和类型定义建立索引，关联的类型实参一起替换。嵌套静态包装方法和普通递归共享各自的具体方法体，并保留原来的重载选择、调用者信息常量和副作用。
 
@@ -31,7 +31,7 @@ LuminPack 采用统一的自动生成规则，不需要选择生成档位，也�
 
 NuGet 包同时安装 IL 后处理器。编译器不支持 Interceptor 时（包括 Roslyn 4.3 和 C# 9），生成器输出相同的具体入口及仅供构建使用的签名映射。MSBuild 在编译后、复制产物前替换匹配的本程序集静态 `call` 操作数。这条路径不需要生成具体公共重载，也不依赖 PDB 行号匹配；保留参数求值顺序，写入前校验参数和返回值的栈类型。Portable PDB 会同步保留；签名程序集需要原来的 `AssemblyOriginatorKeyFile`。不改写引用程序集、虚调用或方法组函数指针。
 
-`LuminPackUseInterceptors=false` 且 `LuminPackUseIlRewriting` 保持启用时选择 IL 后端。同时关闭这两个属性才使用重载兼容后端。这些是编译接入开关，不是生成档位。直接安装 Analyzer DLL 时，需要自行安装相应接入。Unity 通过 `ILPostProcessor` 使用同一个改写器，参见 [Unity 安装步骤](unity.cn.md)。未安装后处理器时，不要定义 `LUMINPACK_IL_REWRITE`。
+`LuminPackUseInterceptors=false` 且 `LuminPackUseIlRewriting` 保持启用时选择 IL 后端。同时关闭这两个属性才使用重载兼容后端：普通默认调用保留具体重载，显式配置调用使用已注册的泛型兜底。这些是编译接入开关，不是生成档位。直接安装 Analyzer DLL 时，需要自行安装相应接入。Unity 通过 `ILPostProcessor` 使用同一个改写器，参见 [Unity 安装步骤](unity.cn.md)。未安装后处理器时，不要定义 `LUMINPACK_IL_REWRITE`。
 
 ## 注册与迁移
 

@@ -30,15 +30,15 @@ public class ImmutableListWriteTest
             string?[] values = Enumerable.Range(0, count).Select(index => index % 7 == 0 ? null :
                 new string((char)('a' + index % 20), index % 2 == 0 ? 1024 : 37)).ToArray();
             ImmutableList<string?> source = ImmutableList.Create(values);
-            Assert.Equal(LuminPackSerializer.Serialize<TProfile>(values), LuminPackSerializer.Serialize<TProfile>(source));
+            Assert.Equal(LuminPackSerializer.Serialize<string?[], TProfile>(values), LuminPackSerializer.Serialize<ImmutableList<string?>, TProfile>(source));
             ImmutableList<string?>? target = null;
-            byte[] bytes = LuminPackSerializer.Serialize<TProfile>(source);
-            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TProfile>(bytes, ref target));
+            byte[] bytes = LuminPackSerializer.Serialize<ImmutableList<string?>, TProfile>(source);
+            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<ImmutableList<string?>, TProfile>(bytes, ref target));
             Assert.Equal(default(TProfile).StringRecording == LuminPackStringRecording.Token
                 ? values.Select(value => value ?? string.Empty) : values, target);
         }
         ImmutableList<string>? absent = null;
-        Assert.Equal(new byte[] { 255, 255, 255, 255 }, LuminPackSerializer.Serialize<TProfile>(absent));
+        Assert.Equal(new byte[] { 255, 255, 255, 255 }, LuminPackSerializer.Serialize<ImmutableList<string>, TProfile>(absent));
     }
 
     /// <summary>Keeps alias repetition, future-object mutations and the originally selected immutable root.</summary>

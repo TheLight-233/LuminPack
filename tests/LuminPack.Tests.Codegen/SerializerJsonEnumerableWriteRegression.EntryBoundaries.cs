@@ -12,7 +12,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
     {
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var input = CSharpCompilation.Create("DictionaryBoundaries" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(BuildDictionaryBoundarySource(mode), parse, "Entry.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
@@ -102,14 +102,14 @@ internal static partial class SerializerJsonEnumerableWriteRegression
           string first=extra?(ARRAYS?"[3]":"3")+",9":"";
           string json="{\"Map\":["+ignored+"[\"k\""+(extra?","+first:"")+"],"+ignored+"[\"m\","+second+"]"+(ignored.Length==0?"":","+ignored.TrimEnd(','))+"],\"Tail\":123}";
           byte[] bytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(json);
-          LuminPackSerializer.DeserializeJson<P>(bytes,ref target);
+          LuminPackSerializer.DeserializeJson<MODEL,P>(bytes,ref target);
           string expected="k:"+(extra?"3":ARRAYS?"null":"0")+"|m:"+(ARRAYS?"1,2":"2");
           if(target.Tail!=123||Values(target.Map)!=expected)throw new Exception("Dictionary entry consumed a following entry or field: MODEL / "+typeof(P).Name+" / "+Values(target.Map));
           if(ignored.Length!=0)
           {
            TYPE empty=reuse?target.Map:null;
            var emptyBytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes("["+ignored.TrimEnd(',')+"]");
-           LuminPackSerializer.DeserializeJson<P>(emptyBytes,ref empty);
+           LuminPackSerializer.DeserializeJson<TYPE,P>(emptyBytes,ref empty);
            if(empty is null||Values(empty)!="")throw new Exception("Ignored dictionary values produced entries: MODEL");
           }
          }
@@ -118,7 +118,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
          {
           TYPE target=null;bool rejected=false;
           var bytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(invalid);
-          try{LuminPackSerializer.DeserializeJson<P>(bytes,ref target);}catch(FormatException){rejected=true;}
+          try{LuminPackSerializer.DeserializeJson<TYPE,P>(bytes,ref target);}catch(FormatException){rejected=true;}
           if(!rejected)throw new Exception("Invalid ignored dictionary value was accepted: MODEL / "+invalid);
          }
         }

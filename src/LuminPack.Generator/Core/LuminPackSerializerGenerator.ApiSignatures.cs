@@ -98,7 +98,7 @@ public static partial class LuminPackSerializerGenerator
             AppendTypeOverloads(concrete, placeholder, metadata);
             string[] templates = ReadSignatures(concrete.ToString(), metadata).ToArray();
             // Profile variants depend only on the template, so each is rendered once and specialized by text.
-            string[][] variants = templates.Select(template => ProfileSignatures(template, metadata).ToArray()).ToArray();
+            string[][] variants = templates.Select(template => ConcreteSignatureVariants(template, metadata).ToArray()).ToArray();
             var source = new StringBuilder(header);
             var orderedKinds = new List<SerializerApiKind>();
             foreach (var type in types)
@@ -155,6 +155,20 @@ public static partial class LuminPackSerializerGenerator
             yield return method.WithAttributeLists(default).WithModifiers(modifiers).WithBody(null).WithExpressionBody(null)
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithoutTrivia().NormalizeWhitespace().ToFullString();
         }
+    }
+
+    /// <summary>Mirrors the legacy facade, where profile convenience bodies no longer appear as overloads.</summary>
+    /// <param name="signature">One concrete facade signature.</param>
+    /// <param name="metadata">The consumer's language settings.</param>
+    /// <returns>The default signature and, for state APIs, its profile variant.</returns>
+    private static IEnumerable<string> ConcreteSignatureVariants(string signature, MetaInfo metadata)
+    {
+        yield return signature;
+        var method = SyntaxFactory.ParseMemberDeclaration(signature, options: metadata.ParseOptions) as MethodDeclarationSyntax;
+        if (method?.ParameterList.Parameters.FirstOrDefault()?.Modifiers.Any(SyntaxKind.RefKeyword) != true)
+            yield break;
+        foreach (string variant in ProfileSignatures(signature, metadata).Skip(1))
+            yield return variant;
     }
 
     /// <summary>Exposes compiled state overloads to the same semantic trimming analysis as their default entries.</summary>

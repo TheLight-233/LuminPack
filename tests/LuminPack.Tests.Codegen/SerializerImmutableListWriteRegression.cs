@@ -44,7 +44,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     string[] items={"a","",null,"\u00e9\u4e2d\ud83d\ude00"};
                     var list=ImmutableList.Create(items);
-                    if(!LuminPackSerializer.Serialize<TProfile>(list).AsSpan().SequenceEqual(LuminPackSerializer.Serialize<TProfile>(items))) throw new Exception("Staging changed string bytes.");
+                    if(!LuminPackSerializer.Serialize<ImmutableList<string>, TProfile>(list).AsSpan().SequenceEqual(LuminPackSerializer.Serialize<string[], TProfile>(items))) throw new Exception("Staging changed string bytes.");
                     Plain[] objects={new Plain{Value=137,Text="value"},null};
                     if(!LuminPackSerializer.Serialize(ImmutableList.Create(objects)).AsSpan().SequenceEqual(LuminPackSerializer.Serialize(objects))) throw new Exception("Staging changed object bytes.");
                 }
@@ -52,7 +52,7 @@ internal static partial class SerializerImmutableListWriteRegression
             """;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             string text = source.Replace("MODE", mode, StringComparison.Ordinal);
             var compilation = CSharpCompilation.Create("ImmutableWrite" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(text, parse, "Entry.cs")], references,

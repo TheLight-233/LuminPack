@@ -38,22 +38,22 @@ internal static partial class SerializerFrameworkEntryRegression
                 }
                 private static void Json<TOptions>(BigIntegerGraph graph,Encoding encoding) where TOptions:struct,ILuminPackOptions
                 {
-                    string scalar=LuminPackSerializer.SerializeJson<TOptions>(graph.Value);
+                    string scalar=LuminPackSerializer.SerializeJson<BigInteger, TOptions>(graph.Value);
                     BigInteger value=default;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(scalar),ref value);
+                    LuminPackSerializer.DeserializeJson<BigInteger, TOptions>(encoding.GetBytes(scalar),ref value);
                     if(graph.Value!=value||scalar!="\""+value.ToString(System.Globalization.CultureInfo.InvariantCulture)+"\"")throw new Exception("BigInteger JSON root changed.");
-                    string json=LuminPackSerializer.SerializeJson<TOptions>(graph);
+                    string json=LuminPackSerializer.SerializeJson<BigIntegerGraph, TOptions>(graph);
                     BigIntegerGraph target=null;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json),ref target);
+                    LuminPackSerializer.DeserializeJson<BigIntegerGraph, TOptions>(encoding.GetBytes(json),ref target);
                     var original=target;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json),ref target);
-                    if(!ReferenceEquals(original,target)||LuminPackSerializer.SerializeJson<TOptions>(target)!=json)
+                    LuminPackSerializer.DeserializeJson<BigIntegerGraph, TOptions>(encoding.GetBytes(json),ref target);
+                    if(!ReferenceEquals(original,target)||LuminPackSerializer.SerializeJson<BigIntegerGraph, TOptions>(target)!=json)
                         throw new Exception("BigInteger graph reuse changed.");
                 }
                 public static void NumericBinding(ref LuminPackJsonWriter writer)=>writer.Write<LuminPackUtf8LengthOptions>(1);
             }
             """;
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("BigIntegerPaths" + mode + Guid.NewGuid().ToString("N"),

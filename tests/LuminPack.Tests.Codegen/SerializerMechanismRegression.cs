@@ -155,24 +155,26 @@ internal static class SerializerMechanismRegression
             AddJson<LuminPack.Option.LuminPackUtf16LengthOptions>();
             void AddJson<TProfile>() where TProfile : struct, LuminPack.Option.ILuminPackOptions
             {
-                string json = LuminPackSerializer.SerializeJson<TProfile>(value);
-                T restored = default!; LuminPackSerializer.DeserializeJson<TProfile>(json, ref restored);
-                results.Add(LuminPackSerializer.SerializeJson<TProfile>(restored));
+                string json = LuminPackSerializer.SerializeJson<__PAYLOAD__, TProfile>(value);
+                __PAYLOAD__ restored = default!; LuminPackSerializer.DeserializeJson<__PAYLOAD__, TProfile>(json, ref restored);
+                results.Add(LuminPackSerializer.SerializeJson<__PAYLOAD__, TProfile>(restored));
             }
             """;
         // Compare the same explicit binary profile after the approved default-encoding change.
         string binaryRecord = """
-            byte[] bytes = LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf8LengthOptions>(value);
+            byte[] bytes = LuminPackSerializer.Serialize<__PAYLOAD__, LuminPack.Option.LuminPackUtf8LengthOptions>(value);
             """;
         string addTemplate = source.Substring(source.IndexOf("private static void Add<T>", StringComparison.Ordinal));
         addTemplate = addTemplate.Substring(0, addTemplate.IndexOf("\n}", StringComparison.Ordinal));
         source = source.Replace(addTemplate, string.Join("\n", new[] { "Storage", "Root", "GenericRoot<int>", "GenericRoot<string>", "VersionFull", "VersionGap", "Node", "ValueGraph", "RawValue", "ManagedValue", "WideEnum", "Queue<int>", "Stack<int>", "ConstrainedValue<int>" }
             .Select(type => addTemplate.Replace("Add<T>(T value", "Add(" + type + " value", StringComparison.Ordinal)
-                .Replace("JSON_PROFILE_LOOP", profileLoop.Replace("T restored", type + " restored", StringComparison.Ordinal), StringComparison.Ordinal))), StringComparison.Ordinal);
+                .Replace("BINARY_PROFILE_RECORD", binaryRecord.Replace("__PAYLOAD__", type, StringComparison.Ordinal), StringComparison.Ordinal)
+                .Replace("JSON_PROFILE_LOOP", profileLoop.Replace("__PAYLOAD__", type, StringComparison.Ordinal), StringComparison.Ordinal))), StringComparison.Ordinal);
         source = source.Replace("BINARY_PROFILE_RECORD", binaryRecord, StringComparison.Ordinal)
             .Replace("JSON_PROFILE_LOOP", profileLoop, StringComparison.Ordinal);
         var parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse,
-            preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
+            preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"])
+            .WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         var input = TestCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse, "Mechanisms.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parse);

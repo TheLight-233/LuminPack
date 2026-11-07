@@ -117,7 +117,7 @@ public sealed class SortedListReferenceReuseTest
     private static void Check<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         var source = Make();
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>(source);
+        byte[] bytes = LuminPackSerializer.Serialize<SortedList<string, ReferenceReuseValue>, TOptions>(source);
         var target = Make();
         var root = target;
         var first = target["a"];
@@ -125,7 +125,7 @@ public sealed class SortedListReferenceReuseTest
         var tags = first.Tags;
         var name = first.Name;
         string key = target.Keys[0];
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+        LuminPackSerializer.Deserialize<SortedList<string, ReferenceReuseValue>, TOptions>(bytes, ref target);
         Assert.Same(root, target);
         Assert.Same(first, target["a"]);
         Assert.Same(child, first.Child);
@@ -135,8 +135,8 @@ public sealed class SortedListReferenceReuseTest
         var text = new SortedList<string, string> { ["a"] = new('x', 7), ["b"] = new('y', 9) };
         key = text.Keys[0];
         name = text["a"];
-        byte[] textBytes = LuminPackSerializer.Serialize<TOptions>(text);
-        LuminPackSerializer.Deserialize<TOptions>(textBytes, ref text);
+        byte[] textBytes = LuminPackSerializer.Serialize<SortedList<string, string>, TOptions>(text);
+        LuminPackSerializer.Deserialize<SortedList<string, string>, TOptions>(textBytes, ref text);
         Assert.Same(key, text.Keys[0]);
         Assert.Same(name, text["a"]);
         for (int prefix = 0; prefix < bytes.Length; prefix++)
@@ -145,7 +145,7 @@ public sealed class SortedListReferenceReuseTest
             var actual = Make();
             byte[] input = bytes.AsSpan(0, prefix).ToArray();
             Exception? before = Record.Exception(() => ReadExpected<TOptions>(input, ref expected));
-            Exception? after = Record.Exception(() => LuminPackSerializer.Deserialize<TOptions>(input, ref actual));
+            Exception? after = Record.Exception(() => LuminPackSerializer.Deserialize<SortedList<string, ReferenceReuseValue>, TOptions>(input, ref actual));
             Assert.Equal(before?.GetType(), after?.GetType());
             Assert.Equal(Snapshot(expected), Snapshot(actual));
             Assert.Equal(Version(expected), Version(actual));
@@ -173,10 +173,10 @@ public sealed class SortedListReferenceReuseTest
             {
                 var previous = index < prior.Length ? prior[index] : default;
                 string key = previous.Key;
-                LuminPackSerializer.Deserialize<TOptions>(ref reader, ref key);
+                LuminPackSerializer.Deserialize<string, TOptions>(ref reader, ref key);
                 ReferenceReuseValue item = key is not null && string.Equals(key, previous.Key, StringComparison.Ordinal) ? previous.Value : null!;
                 if (reader.PeekIsNullObject()) item = null!;
-                LuminPackSerializer.Deserialize<TOptions>(ref reader, ref item);
+                LuminPackSerializer.Deserialize<ReferenceReuseValue, TOptions>(ref reader, ref item);
                 if (!append || !ReferenceEquals(value, selected) || !ReferenceEquals(culture, System.Globalization.CultureInfo.CurrentCulture) ||
                     !LuminPack.Code.LuminPackCollectionAccess.TryAppendSortedListOrdered(value, key!, item, true)) value.Add(key!, item);
             }

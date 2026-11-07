@@ -194,23 +194,24 @@ internal static class SerializerRootApiRegression
                     public static int Check()
                     {
                         var value = new Lazy<int>(17);
-                        var bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(value);
-                        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Lazy<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Lazy<int> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
+                        var bytes = LuminPackSerializer.Serialize<Lazy<int>, LuminPackUtf16LengthOptions>(value);
+                        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Lazy<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Lazy<int> concreteReadTarget) => LuminPackSerializer.Deserialize<Lazy<int>, LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
                         if (copy.Value != 17)
                             throw new Exception("Lazy primitive profile failed.");
                         int? number = 255;
-                        bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(number);
-                        if (global::LuminPackUnitTest.ConcreteReads.Read<int?>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget)) != number)
+                        bytes = LuminPackSerializer.Serialize<int?, LuminPackUtf16LengthOptions>(number);
+                        if (global::LuminPackUnitTest.ConcreteReads.Read<int?>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize<int?, LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget)) != number)
                             throw new Exception("Nullable primitive profile failed.");
                         var tuple = Tuple.Create(13, 19L);
-                        bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(tuple);
-                        if (!tuple.Equals(global::LuminPackUnitTest.ConcreteReads.Read<Tuple<int, long>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Tuple<int, long> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget))))
+                        bytes = LuminPackSerializer.Serialize<Tuple<int, long>, LuminPackUtf16LengthOptions>(tuple);
+                        if (!tuple.Equals(global::LuminPackUnitTest.ConcreteReads.Read<Tuple<int, long>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Tuple<int, long> concreteReadTarget) => LuminPackSerializer.Deserialize<Tuple<int, long>, LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget))))
                             throw new Exception("Tuple primitive profile failed.");
                         return 17;
                     }
                 }
                 """;
-            var input = TestCompilation.Create("BclProfiles" + mode, [CSharpSyntaxTree.ParseText(source, Parse, "Entry.cs")],
+            var profileParse = Parse.WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
+            var input = TestCompilation.Create("BclProfiles" + mode, [CSharpSyntaxTree.ParseText(source, profileParse, "Entry.cs")],
                 references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
             Run(input, out var output);
             using var image = new MemoryStream();
@@ -267,12 +268,12 @@ internal static class SerializerRootApiRegression
                 void RunProfile<TProfile>()
                     where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
                 {
-                    string json = S.SerializeJson<TProfile>(value);
+                    string json = S.SerializeJson<Parent, TProfile>(value);
                     Parent fromJson = null!;
-                    S.DeserializeJson<TProfile>(json, ref fromJson);
+                    S.DeserializeJson<Parent, TProfile>(json, ref fromJson);
                     if (fromJson.Child.Value != 913)
                         throw new Exception("Selected JSON string/ref or nested formatter parity failed.");
-                    S.DeserializeJson<TProfile>(json.AsSpan(), ref fromJson);
+                    S.DeserializeJson<Parent, TProfile>(json.AsSpan(), ref fromJson);
                     if (fromJson.Child.Value != 913)
                         throw new Exception("Selected JSON character/ref parity failed.");
                 }
@@ -283,7 +284,11 @@ internal static class SerializerRootApiRegression
         string? expected = null;
         foreach (string mode in new[] { "Full", "Light", "Minimal" })
         {
-            Run(Create(references, mode, entry), out var output);
+            var input = Create(references, mode, entry);
+            var profileParse = Parse.WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
+            foreach (var tree in input.SyntaxTrees.ToArray())
+                input = input.ReplaceSyntaxTree(tree, tree.WithRootAndOptions(tree.GetRoot(), profileParse));
+            Run(input, out var output);
             using var image = new MemoryStream();
             var result = output.Emit(image);
             Require(result.Success, string.Join(Environment.NewLine, result.Diagnostics));
@@ -371,7 +376,8 @@ internal static class SerializerRootApiRegression
     /// <returns>The retained production driver.</returns>
     private static GeneratorDriver Run(CSharpCompilation input, out Compilation output)
     {
-        GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: Parse);
+        var parse = (CSharpParseOptions)input.SyntaxTrees.First().Options;
+        GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out output, out var diagnostics);
         Require(driver.GetRunResult().Results.All(result => result.Exception == null), string.Join(Environment.NewLine, driver.GetRunResult().Results.Select(result => result.Exception?.ToString())));
         Require(!diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));

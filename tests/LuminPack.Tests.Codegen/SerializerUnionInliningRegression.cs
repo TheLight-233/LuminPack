@@ -12,7 +12,7 @@ internal static class SerializerUnionInliningRegression
     internal static void Run(MetadataReference[] references)
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse,
-            preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
+            preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         const string source = """
             using System;
             using System.Collections.Generic;
@@ -63,14 +63,14 @@ internal static class SerializerUnionInliningRegression
                     where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
                 {
                     Events.Clear();
-                    string expectedJson = LuminPackSerializer.SerializeJson<TProfile>(value);
+                    string expectedJson = LuminPackSerializer.SerializeJson<Animal, TProfile>(value);
                     callbacks = string.Join(",", Events);
                     Events.Clear();
-                    string actualJson = LuminPackSerializer.SerializeJson<TProfile>(value);
+                    string actualJson = LuminPackSerializer.SerializeJson<Animal, TProfile>(value);
                     if (actualJson != expectedJson || callbacks != string.Join(",", Events))
                         throw new Exception("Union JSON wire or callbacks changed.");
                     Animal jsonValue = null!;
-                    LuminPackSerializer.DeserializeJson<TProfile>(actualJson, ref jsonValue);
+                    LuminPackSerializer.DeserializeJson<Animal, TProfile>(actualJson, ref jsonValue);
                     if (value is null ? jsonValue is not null : jsonValue is null)
                         throw new Exception("Union JSON null changed.");
                 }
@@ -125,17 +125,19 @@ internal static class SerializerUnionInliningRegression
         Require(driver.GetRunResult().Results.All(result => result.Exception == null), string.Join(Environment.NewLine, driver.GetRunResult().Results.Select(result => result.Exception)));
         var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         Require(errors.Length == 0, string.Join(Environment.NewLine, errors));
-        int entries = 0, jsonEntries = 0;
-        foreach (var tree in output.SyntaxTrees.Where(tree => Path.GetFileName(tree.FilePath).StartsWith("LuminPackSerializer.", StringComparison.Ordinal)))
+        var entries = new HashSet<string>(StringComparer.Ordinal);
+        int jsonEntries = 0;
+        foreach (var tree in output.SyntaxTrees)
         {
             var model = output.GetSemanticModel(tree);
-            foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method => method.TypeParameterList == null &&
-                method.Identifier.ValueText is "Serialize" or "SerializeJson" &&
-                method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() is
-                    "global::Animal" or "global::IShape" or "global::EnvelopeBase<int>" or "global::EnvelopeBase<string>")))
+            foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>
+                method.Identifier.ValueText is "RootWrite" or "RootWriteJson" && method.ParameterList.Parameters.Count == 2 &&
+                method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText.StartsWith("LuminRoots_", StringComparison.Ordinal)))
             {
                 string name = method.Identifier.ValueText;
-                if (name == "Serialize") entries++;
+                string payload = model.GetDeclaredSymbol(method)!.Parameters[1].Type.ToDisplayString().TrimEnd('?');
+                if (payload is not ("Animal" or "IShape" or "EnvelopeBase<int>" or "EnvelopeBase<string>")) continue;
+                if (name == "RootWrite") entries.Add(payload);
                 else jsonEntries++;
 
                 var calls = method.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
@@ -164,7 +166,7 @@ internal static class SerializerUnionInliningRegression
                         statement.Expression.ToString().Contains("GetMethodTable", StringComparison.Ordinal)),
                     "A concrete union entry retained a switch-on-tag lookup dispatch: " + name);
 
-                if (name == "Serialize")
+                if (name == "RootWrite")
                 {
                     Require(calls.Any(call => call.Expression is MemberAccessExpressionSyntax forward &&
                         forward.Name.Identifier.ValueText.StartsWith("LuminPackUnion", StringComparison.Ordinal)),
@@ -172,7 +174,8 @@ internal static class SerializerUnionInliningRegression
                 }
             }
         }
-        Require(entries == 5, "Expected two class, one interface, and two closed generic concrete write entries.");
+        Require(entries.SetEquals(["Animal", "IShape", "EnvelopeBase<int>", "EnvelopeBase<string>"]),
+            "Expected class, interface, and both closed generic concrete Union roots: " + string.Join(", ", entries));
         Require(jsonEntries != 0, "Union JSON entries were not inspected.");
         foreach (var tree in output.SyntaxTrees)
         {

@@ -30,20 +30,20 @@ internal static class SerializerTimeZoneCacheRegression
                     if (Read(record, ref copy) != record.Length || copy.ToSerializedString() != zone.ToSerializedString())
                         throw new Exception("Concrete snapshot mismatch");
                     var container = new TimeZoneEnvelope { Zone = zone, Tail = 137 };
-                    byte[] nested = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(container);
+                    byte[] nested = LuminPackSerializer.Serialize<TimeZoneEnvelope, LuminPackUtf8LengthOptions>(container);
                     TimeZoneEnvelope result = null;
-                    LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(nested.AsSpan(), ref result);
+                    LuminPackSerializer.Deserialize<TimeZoneEnvelope, LuminPackUtf8LengthOptions>(nested.AsSpan(), ref result);
                     if (result.Tail != 137 || result.Zone.ToSerializedString() != zone.ToSerializedString())
                         throw new Exception("Nested UTF8 snapshot mismatch");
-                    string json = LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(zone);
+                    string json = LuminPackSerializer.SerializeJson<TimeZoneInfo, LuminPackUtf8LengthOptions>(zone);
                     copy = null;
-                    LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(json, ref copy);
+                    LuminPackSerializer.DeserializeJson<TimeZoneInfo, LuminPackUtf8LengthOptions>(json, ref copy);
                     if (copy.ToSerializedString() != zone.ToSerializedString()) throw new Exception("JSON snapshot mismatch");
                 }
             }
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview,
-            preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER", "NET11_0_OR_GREATER"]);
+            preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER", "NET11_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("TimeZoneCache" + mode,
@@ -121,7 +121,7 @@ internal static class SerializerTimeZoneCacheRegression
                 }
             }
             """;
-        var parse = new CSharpParseOptions(LanguageVersion.CSharp13);
+        var parse = new CSharpParseOptions(LanguageVersion.CSharp13).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         var root = CSharpSyntaxTree.ParseText(source, parse).GetRoot();
         var projection = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.Code.Core.PinnedReaderProjection", throwOnError: true)!;
         var rewriter = (CSharpSyntaxRewriter)Activator.CreateInstance(projection,
@@ -151,7 +151,7 @@ internal static class SerializerTimeZoneCacheRegression
     {
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var input = CSharpCompilation.Create("ZoneRead" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(ReadCasesSource.Replace("MODE", mode, StringComparison.Ordinal), parse, "Entry.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
@@ -226,18 +226,18 @@ internal static class SerializerTimeZoneCacheRegression
                 foreach(var zone in zones)
                 {
                     string text=zone.ToSerializedString();LuminPackTimeZoneInfoCache.Parse(text);
-                    output.ResetCore();LuminPackSerializer.Serialize<T>(zone,output);byte[] binary=output.GetSpan().ToArray();
-                    output.ResetCore();LuminPackSerializer.SerializeJson<T>(zone,output);byte[] json=output.GetSpan().ToArray();
+                    output.ResetCore();LuminPackSerializer.Serialize<TimeZoneInfo, T>(zone,output);byte[] binary=output.GetSpan().ToArray();
+                    output.ResetCore();LuminPackSerializer.SerializeJson<TimeZoneInfo, T>(zone,output);byte[] json=output.GetSpan().ToArray();
                     Compare<T>(binary,false);Compare<T>(json,true);Compare<T>(JsonBytes<T>(JsonSerializer.Serialize(text)),true);
                     Compare<T>(JsonBytes<T>("\""+string.Concat(text.Select(c=>"\\u"+((int)c).ToString("x4")))+"\""),true);
                     foreach(var other in zones.Skip(5).Take(3))LuminPackTimeZoneInfoCache.Parse(other.ToSerializedString());
                     Compare<T>(binary,false);Compare<T>(json,true);
                     var graph=new ZoneReadEnvelope{Zone=zone,Tail=137};
-                    output.ResetCore();LuminPackSerializer.Serialize<T>(graph,output);ZoneReadEnvelope decoded=null;
-                    LuminPackSerializer.Deserialize<T>(output.GetSpan(),ref decoded);
+                    output.ResetCore();LuminPackSerializer.Serialize<ZoneReadEnvelope, T>(graph,output);ZoneReadEnvelope decoded=null;
+                    LuminPackSerializer.Deserialize<ZoneReadEnvelope, T>(output.GetSpan(),ref decoded);
                     if(decoded.Tail!=137||decoded.Zone.ToSerializedString()!=text)throw new Exception("Nested binary snapshot changed.");
-                    output.ResetCore();LuminPackSerializer.SerializeJson<T>(graph,output);decoded=null;
-                    LuminPackSerializer.DeserializeJson<T>(output.GetSpan(),ref decoded);
+                    output.ResetCore();LuminPackSerializer.SerializeJson<ZoneReadEnvelope, T>(graph,output);decoded=null;
+                    LuminPackSerializer.DeserializeJson<ZoneReadEnvelope, T>(output.GetSpan(),ref decoded);
                     if(decoded.Tail!=137||decoded.Zone.ToSerializedString()!=text)throw new Exception("Nested JSON snapshot changed.");
                     if(zone==TimeZoneInfo.Utc||zone.Id=="Unicode")
                     {
@@ -254,7 +254,7 @@ internal static class SerializerTimeZoneCacheRegression
                     }
                     Compare<T>(JsonBytes<T>(JsonSerializer.Serialize(text)),true);
                 }
-                TimeZoneInfo absent=null;output.ResetCore();LuminPackSerializer.Serialize<T>(absent,output);Compare<T>(output.GetSpan().ToArray(),false);
+                TimeZoneInfo absent=null;output.ResetCore();LuminPackSerializer.Serialize<TimeZoneInfo, T>(absent,output);Compare<T>(output.GetSpan().ToArray(),false);
                 foreach(string text in new[]{"null","\"\"","true","123","{}","[]","\"invalid\"","\"\\x\"","\"\\uD800\"","\"a\nb\""})Compare<T>(JsonBytes<T>(text),true);
                 if(default(T).StringEncoding==LuminPackStringEncoding.UTF8)
                 {
@@ -295,7 +295,7 @@ internal static class SerializerTimeZoneCacheRegression
                         try
                         {
                             if(selected)reader.Read<T>();
-                            if(generated)LuminPackSerializer.DeserializeJson<T>(ref reader,ref value);
+                            if(generated)LuminPackSerializer.DeserializeJson<TimeZoneInfo, T>(ref reader,ref value);
                             else if(reader.IsNull())value=null;
                             else value=LuminPackTimeZoneInfoCache.Parse(reader.Read<string,T>());
                         }
@@ -307,7 +307,7 @@ internal static class SerializerTimeZoneCacheRegression
                         var reader=new LuminPackReader(ref span);
                         try
                         {
-                            if(generated)LuminPackSerializer.Deserialize<T>(ref reader,ref value);
+                            if(generated)LuminPackSerializer.Deserialize<TimeZoneInfo, T>(ref reader,ref value);
                             else if(!reader.TryReadObjectHead())value=null;
                             else
                             {

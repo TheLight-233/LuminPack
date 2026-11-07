@@ -92,10 +92,10 @@ public sealed class StringMatrixReuseTest
         CheckReplacement<MatchingTextProfile>();
         void CheckReplacement<TOptions>() where TOptions : struct, ILuminPackOptions
         {
-            byte[] encoded = LuminPackSerializer.Serialize<TOptions>(source);
+            byte[] encoded = LuminPackSerializer.Serialize<string[,], TOptions>(source);
             var alias = new string[2, 2];
             var target = alias;
-            LuminPackSerializer.Deserialize<TOptions>(encoded, ref target);
+            LuminPackSerializer.Deserialize<string[,], TOptions>(encoded, ref target);
             Assert.NotSame(alias, target);
             Assert.Equal(source.Cast<string>(), target.Cast<string>());
         }

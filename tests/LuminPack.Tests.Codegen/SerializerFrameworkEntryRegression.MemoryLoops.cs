@@ -8,7 +8,7 @@ internal static partial class SerializerFrameworkEntryRegression
     /// <param name="references">The platform and runtime metadata references.</param>
     internal static void RunMemoryLoops(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("MemoryLoops" + Guid.NewGuid().ToString("N"),
@@ -46,15 +46,15 @@ internal static partial class SerializerFrameworkEntryRegression
                 using var output=new LuminBufferWriter(true);
                 foreach(bool json in new[]{false,true})
                 {
-                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(value,output);else LuminPackSerializer.Serialize<P>(value,output);
+                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<MemoryEnvelope, P>(value,output);else LuminPackSerializer.Serialize<MemoryEnvelope, P>(value,output);
                     var bytes=output.GetSpan().ToArray();MemoryEnvelope result=null;
-                    if(json)LuminPackSerializer.DeserializeJson<P>(bytes,ref result);else LuminPackSerializer.Deserialize<P>(bytes,ref result);
+                    if(json)LuminPackSerializer.DeserializeJson<MemoryEnvelope, P>(bytes,ref result);else LuminPackSerializer.Deserialize<MemoryEnvelope, P>(bytes,ref result);
                     int[] storage={-113,0,0,0,-127};result.Mutable=new Memory<int>(storage,1,3);
-                    if(json)LuminPackSerializer.DeserializeJson<P>(bytes,ref result);else LuminPackSerializer.Deserialize<P>(bytes,ref result);
+                    if(json)LuminPackSerializer.DeserializeJson<MemoryEnvelope, P>(bytes,ref result);else LuminPackSerializer.Deserialize<MemoryEnvelope, P>(bytes,ref result);
                     if(result.Tail!=731||!result.Views[0].Span.SequenceEqual(items.AsSpan(1,3))||!result.Views[1].IsEmpty||!result.Mutable.Equals(new Memory<int>(storage,1,3))||storage[0]!=-113||storage[4]!=-127||!result.Mutable.Span.SequenceEqual(items.AsSpan(1,3))||!result.Segments.ToArray().SequenceEqual(longs.AsSpan(1,3).ToArray())||!result.Slice.AsSpan().SequenceEqual(longs.AsSpan(1,3)))throw new Exception("Nested memory graph or slice reuse changed.");
                 }
             }
-            static void Allocation(){using var buffer=new LuminBufferWriter(true);var source=Enumerable.Range(0,257).ToArray();var value=new ReadOnlyMemory<int>(source);var sequence=CreateSequence(source);for(int i=0;i<128;i++){buffer.ResetCore();LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value,buffer);buffer.ResetCore();LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(sequence,buffer);}long start=GC.GetAllocatedBytesForCurrentThread();for(int i=0;i<64;i++){buffer.ResetCore();LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value,buffer);buffer.ResetCore();LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(sequence,buffer);}if(GC.GetAllocatedBytesForCurrentThread()!=start)throw new Exception("Memory JSON writes allocated temporary objects.");}
+            static void Allocation(){using var buffer=new LuminBufferWriter(true);var source=Enumerable.Range(0,257).ToArray();var value=new ReadOnlyMemory<int>(source);var sequence=CreateSequence(source);for(int i=0;i<128;i++){buffer.ResetCore();LuminPackSerializer.SerializeJson<ReadOnlyMemory<int>, LuminPackUtf8LengthOptions>(value,buffer);buffer.ResetCore();LuminPackSerializer.SerializeJson<ReadOnlySequence<int>, LuminPackUtf8LengthOptions>(sequence,buffer);}long start=GC.GetAllocatedBytesForCurrentThread();for(int i=0;i<64;i++){buffer.ResetCore();LuminPackSerializer.SerializeJson<ReadOnlyMemory<int>, LuminPackUtf8LengthOptions>(value,buffer);buffer.ResetCore();LuminPackSerializer.SerializeJson<ReadOnlySequence<int>, LuminPackUtf8LengthOptions>(sequence,buffer);}if(GC.GetAllocatedBytesForCurrentThread()!=start)throw new Exception("Memory JSON writes allocated temporary objects.");}
         }
         [LuminPackable]public sealed class MemoryEnvelope{public ReadOnlyMemory<int>[] Views;public Memory<int> Mutable;public ReadOnlySequence<long> Segments;public ArraySegment<long> Slice;public int Tail;}
         public sealed class MemorySegment<T>:ReadOnlySequenceSegment<T>{public MemorySegment(Memory<T> value){Memory=value;}public MemorySegment<T> Add(Memory<T> value){var next=new MemorySegment<T>(value){RunningIndex=RunningIndex+Memory.Length};Next=next;return next;}}
@@ -121,10 +121,10 @@ internal static partial class SerializerFrameworkEntryRegression
                     {
                         switch(Shape)
                         {
-                            case 0:{var value=new Memory<long>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
-                            case 1:{var value=new ReadOnlyMemory<long>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
-                            case 2:{var value=new ArraySegment<long>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
-                            case 3:{var value=CreateSequence<long>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
+                            case 0:{var value=new Memory<long>(values);LuminPackSerializer.SerializeJson<Memory<long>, TProfile>(ref writer,in value);break;}
+                            case 1:{var value=new ReadOnlyMemory<long>(values);LuminPackSerializer.SerializeJson<ReadOnlyMemory<long>, TProfile>(ref writer,in value);break;}
+                            case 2:{var value=new ArraySegment<long>(values);LuminPackSerializer.SerializeJson<ArraySegment<long>, TProfile>(ref writer,in value);break;}
+                            case 3:{var value=CreateSequence<long>(values);LuminPackSerializer.SerializeJson<ReadOnlySequence<long>, TProfile>(ref writer,in value);break;}
                         }
                     }
                     else
@@ -154,10 +154,10 @@ internal static partial class SerializerFrameworkEntryRegression
                     {
                         switch(Shape)
                         {
-                            case 0:{var value=new Memory<int>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
-                            case 1:{var value=new ReadOnlyMemory<int>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
-                            case 2:{var value=new ArraySegment<int>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
-                            case 3:{var value=CreateSequence<int>(values);LuminPackSerializer.SerializeJson<TProfile>(ref writer,in value);break;}
+                            case 0:{var value=new Memory<int>(values);LuminPackSerializer.SerializeJson<Memory<int>, TProfile>(ref writer,in value);break;}
+                            case 1:{var value=new ReadOnlyMemory<int>(values);LuminPackSerializer.SerializeJson<ReadOnlyMemory<int>, TProfile>(ref writer,in value);break;}
+                            case 2:{var value=new ArraySegment<int>(values);LuminPackSerializer.SerializeJson<ArraySegment<int>, TProfile>(ref writer,in value);break;}
+                            case 3:{var value=CreateSequence<int>(values);LuminPackSerializer.SerializeJson<ReadOnlySequence<int>, TProfile>(ref writer,in value);break;}
                         }
                     }
                     else

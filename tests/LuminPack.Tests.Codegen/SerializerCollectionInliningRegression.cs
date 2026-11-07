@@ -8,8 +8,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// <summary>Checks independent local identities across repeated collection and wrapper operation shapes.</summary>
 internal static class SerializerCollectionInliningRegression
 {
-    private static readonly CSharpParseOptions Parse = new(LanguageVersion.Preview, DocumentationMode.Parse,
-        preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
+    private static readonly CSharpParseOptions Parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse,
+        preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
 
     /// <summary>Compiles and executes concrete binary, JSON, and size entries for repeated managed element graphs.</summary>
     /// <param name="references">Platform and runtime references.</param>
@@ -114,8 +114,8 @@ internal static class SerializerCollectionInliningRegression
                         if (i % 3 == 2) part.Add(new(i, "\u6E2C" + i));
                         typeof(WideChannels).GetField("Channel" + i).SetValue(wide, part);
                         byte[] payload = i % 2 == 0
-                            ? LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf16LengthOptions>(part)
-                            : LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf8LengthOptions>(part);
+                            ? LuminPackSerializer.Serialize<List<KeyValuePair<int, string>>, LuminPack.Option.LuminPackUtf16LengthOptions>(part)
+                            : LuminPackSerializer.Serialize<List<KeyValuePair<int, string>>, LuminPack.Option.LuminPackUtf8LengthOptions>(part);
                         expected.AddRange(payload);
                         if (i < 4)
                         {
@@ -166,7 +166,9 @@ internal static class SerializerCollectionInliningRegression
         foreach (var tree in output.SyntaxTrees.Where(tree => Path.GetFileName(tree.FilePath).StartsWith("LuminPackSerializer.", StringComparison.Ordinal)))
         {
             var model = output.GetSemanticModel(tree);
-            foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method => method.TypeParameterList == null &&
+            foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>
+                method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText.StartsWith("LuminEntry_", StringComparison.Ordinal) &&
+                method.TypeParameterList?.Parameters.Count == 1 &&
                 method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().StartsWith("global::Model", StringComparison.Ordinal) == true)))
             {
                 inspected++;

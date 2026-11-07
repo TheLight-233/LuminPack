@@ -83,8 +83,8 @@ public sealed class BufferAppendTest
         byte[] prefix = Enumerable.Repeat((byte)0xA5, 32767).ToArray();
         buffer.LoadSequence(new System.Buffers.ReadOnlySequence<byte>(prefix));
         const string value = "appended \u4E2D\uD83D\uDE00";
-        byte[] expected = LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>((string)(value));
-        LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>((string)(value), buffer);
+        byte[] expected = LuminPackSerializer.Serialize<string, LuminPackUtf16TokenOptions>((string)(value));
+        LuminPackSerializer.Serialize<string, LuminPackUtf16TokenOptions>((string)(value), buffer);
         Assert.Equal(prefix.Length + expected.Length, buffer.CurrentIndex);
         Assert.True(buffer.GetSpan()[..prefix.Length].SequenceEqual(prefix));
         Assert.True(buffer.GetSpan()[prefix.Length..].SequenceEqual(expected));
@@ -169,9 +169,9 @@ public sealed class BufferAppendTest
         Assert.True(buffer.GetSpan().SequenceEqual(first.Concat(second).ToArray()));
         Assert.True(buffer.WriterState.GetOrAddReference(marker).existsReference);
         buffer.ResetForReuse();
-        LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>((string)("first"), buffer);
+        LuminPackSerializer.SerializeJson<string, LuminPackUtf16LengthOptions>((string)("first"), buffer);
         int offset = buffer.CurrentIndex;
-        LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>((string)("second"), buffer);
+        LuminPackSerializer.SerializeJson<string, LuminPackUtf16LengthOptions>((string)("second"), buffer);
         Assert.Equal("\"first\"", Encoding.Unicode.GetString(buffer.GetSpan()[..offset]));
         Assert.Equal("\"second\"", Encoding.Unicode.GetString(buffer.GetSpan()[offset..]));
     }

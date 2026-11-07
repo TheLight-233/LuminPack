@@ -16,7 +16,7 @@ public class Utf8StringKernelTest
         foreach (int length in new[] { 4, 7, 8, 15, 16 })
         {
             string text = new string('a', length);
-            byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+            byte[] record = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
             for (int position = 0; position < length; position++)
             for (int bit = 7; bit < 16; bit++)
             {
@@ -24,13 +24,13 @@ public class Utf8StringKernelTest
                 chars[position] = (char)(chars[position] | (1 << bit));
                 string existing = new string(chars);
                 string? result = existing;
-                LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(record, ref result);
+                LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(record, ref result);
                 Assert.Equal(text, result);
                 Assert.NotSame(existing, result);
             }
             string equal = new string(text.ToCharArray());
             string? reused = equal;
-            LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(record, ref reused);
+            LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(record, ref reused);
             Assert.Same(equal, reused);
         }
     }
@@ -57,12 +57,12 @@ public class Utf8StringKernelTest
         // <param name="text">The text being written.</param>
         static void Check(string text)
         {
-            byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+            byte[] record = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
             byte[] expected = Encoding.UTF8.GetBytes(text);
             Assert.Equal(expected.Length, BitConverter.ToInt32(record, 0));
             Assert.Equal(text.Length, BitConverter.ToInt32(record, 4));
             Assert.Equal(expected, record.AsSpan(8).ToArray());
-            Assert.Equal(text, global::LuminPackUnitTest.ConcreteReads.Read<string>(record, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget)));
+            Assert.Equal(text, global::LuminPackUnitTest.ConcreteReads.Read<string>(record, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget)));
         }
     }
 
@@ -70,13 +70,13 @@ public class Utf8StringKernelTest
     [Fact]
     public void LongAsciiPrefixKeepsInvalidSurrogateFailures()
     {
-        var shortFailure = Record.Exception(() => LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>("ab\uD800"));
+        var shortFailure = Record.Exception(() => LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>("ab\uD800"));
         Assert.NotNull(shortFailure);
         foreach (int length in new[] { 33, 40, 64, 65, 100 })
             for (int position = 0; position < length; position += 3)
             {
                 string text = new string('a', position) + "\uD800" + new string('b', length - position - 1);
-                var failure = Record.Exception(() => LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text));
+                var failure = Record.Exception(() => LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text));
                 Assert.NotNull(failure);
                 Assert.Equal(shortFailure!.GetType(), failure!.GetType());
             }
@@ -118,7 +118,7 @@ public class Utf8StringKernelTest
     public void ShortUnicodeReuseComparesDecodedText()
     {
         string original = "\u89D2\u8272_00042_\u88C5\u5907_\uD83C\uDF1F";
-        byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(original);
+        byte[] record = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(original);
         string current = new(original.ToCharArray());
         Assert.Same(current, Read(record, current));
         string changed = "\u89D2\u8272_00043_\u88C5\u5907_\uD83C\uDF1F";

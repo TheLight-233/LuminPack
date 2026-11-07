@@ -65,7 +65,7 @@ Person fromJson = null!;
 LuminPackSerializer.DeserializeJson(json, ref fromJson);
 ```
 
-在支持的现代编译器上，`Serialize(person)`、`Deserialize(bytes, ref copy)` 以及 `Deserialize<Person>(bytes)` 等闭合的显式泛型调用被拦截到类型的既有具体实现。可安全迁移的静态 `Save<T>` 包装方法也可在闭合调用处特化。`Serialize<TOptions>(person)` 配置写法保持可用。不透明调用需要显式或 Custom 格式化器[注册](custom-formatters.cn.md#runtime-registration)，缺少注册时抛出 `LuminPackException`。旧编译器通过包内 IL 后处理器绑定相同静态入口，Unity 需要安装配套编辑器接入。详见[静态拦截与兼容边界](generation-modes.cn.md#静态拦截)。
+在支持的现代编译器上，`Serialize(person)`、`Deserialize(bytes, ref copy)` 以及 `Deserialize<Person>(bytes)` 等闭合的显式泛型调用被拦截到类型的既有具体实现。可安全迁移的静态 `Save<T>` 包装方法也可在闭合调用处特化。显式配置使用 `Serialize<Person, TOptions>(person)`。不透明调用需要显式或 Custom 格式化器[注册](custom-formatters.cn.md#runtime-registration)，缺少注册时抛出 `LuminPackException`。旧编译器通过包内 IL 后处理器绑定相同静态入口，Unity 需要安装配套编辑器接入。详见[静态拦截与兼容边界](generation-modes.cn.md#静态拦截)。
 
 具体模型重载，以及具有执行根方法的内置重载，其 XML 说明中提供 **Generated implementation** 链接，可在 IDE 中直接跳转到二进制或 JSON 的 `Root` 方法，不必逐层经过转发方法。闭合泛型模型、集合与复合值在格式器具有根方法时都支持此导航。原始非托管二进制读取可能直接调用运行时，因此没有独立的 `RootRead`；Custom 格式化器保留用户定义的入口。根据泛型实参选择格式器的回退 API 没有唯一具体 Root 可供链接。
 
@@ -83,7 +83,7 @@ LuminPackSerializer.DeserializeJson(json, ref fromJson);
 | `IBufferWriter<byte>` | `Serialize(value, bufferWriter)` | `SerializeJson(value, bufferWriter)` |
 | `Stream` | `SerializeAsync(stream, value)`、`DeserializeAsync<T>(stream)` | |
 
-每个入口还有一个带选项配置的形式，例如 `Serialize<LuminPackUtf8LengthOptions>(value)`，见[选项](options.cn.md)。
+每个入口还有一个带选项配置的形式，例如 `Serialize<Person, LuminPackUtf8LengthOptions>(value)`，见[选项](options.cn.md)。
 
 流由调用方持有，不会被关闭。异步读取会缓冲完整输入；连续消息的分帧由你的协议负责。
 

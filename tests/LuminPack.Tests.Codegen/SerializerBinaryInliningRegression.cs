@@ -8,8 +8,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// <summary>Executes repeated nested operation expansions and checks that concrete binary entries contain no ordinary formatter calls.</summary>
 internal static class SerializerBinaryInliningRegression
 {
-    private static readonly CSharpParseOptions Parse = new(LanguageVersion.Preview, DocumentationMode.Parse,
-        preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
+    private static readonly CSharpParseOptions Parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse,
+        preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
 
     /// <summary>Checks reference lifetimes, independent local names, private mirrors, local helpers, reuse, and generic wire parity.</summary>
     /// <param name="references">Runtime and platform references.</param>
@@ -137,27 +137,27 @@ internal static class SerializerBinaryInliningRegression
                 void RunProfile<TProfile>()
                     where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
                 {
-                    string expectedJson = LuminPackSerializer.SerializeJson<TProfile>(value);
-                    string actualJson = LuminPackSerializer.SerializeJson<TProfile>(value);
+                    string expectedJson = LuminPackSerializer.SerializeJson<Payload, TProfile>(value);
+                    string actualJson = LuminPackSerializer.SerializeJson<Payload, TProfile>(value);
                     if (actualJson != expectedJson)
                         throw new Exception("Concrete JSON output changed.");
                     Payload jsonValue = null!;
-                    int consumedJson = LuminPackSerializer.DeserializeJson<TProfile>(actualJson, ref jsonValue);
+                    int consumedJson = LuminPackSerializer.DeserializeJson<Payload, TProfile>(actualJson, ref jsonValue);
                     if (consumedJson != (encoding == LuminPackStringEncoding.UTF8 ? System.Text.Encoding.UTF8 : System.Text.Encoding.Unicode).GetByteCount(actualJson))
                         throw new Exception("JSON string consumed-byte units changed.");
                     Validate(value, jsonValue);
-                    LuminPackSerializer.DeserializeJson<TProfile>(actualJson.AsSpan(), ref jsonValue);
+                    LuminPackSerializer.DeserializeJson<Payload, TProfile>(actualJson.AsSpan(), ref jsonValue);
                     Validate(value, jsonValue);
                     var bytesJson = (encoding == LuminPackStringEncoding.UTF8 ? System.Text.Encoding.UTF8 : System.Text.Encoding.Unicode).GetBytes(actualJson);
-                    LuminPackSerializer.DeserializeJson<TProfile>(bytesJson.AsSpan(), ref jsonValue);
+                    LuminPackSerializer.DeserializeJson<Payload, TProfile>(bytesJson.AsSpan(), ref jsonValue);
                     Validate(value, jsonValue);
                     var jsonBuffer = LuminBufferWriterPool.Rent();
                     try
                     {
-                        LuminPackSerializer.SerializeJson<TProfile>(value, jsonBuffer);
+                        LuminPackSerializer.SerializeJson<Payload, TProfile>(value, jsonBuffer);
                         if (!jsonBuffer.GetSpan().SequenceEqual(bytesJson))
                             throw new Exception("Buffered JSON output changed.");
-                        LuminPackSerializer.DeserializeJson<TProfile>(jsonBuffer, ref jsonValue);
+                        LuminPackSerializer.DeserializeJson<Payload, TProfile>(jsonBuffer, ref jsonValue);
                         Validate(value, jsonValue);
                     }
                     finally
@@ -167,12 +167,12 @@ internal static class SerializerBinaryInliningRegression
 
                     using var document = System.Text.Json.JsonDocument.Parse(actualJson);
                     string reordered = "{\"unknown\":[{\"skip\":42}]," + string.Join(",", document.RootElement.EnumerateObject().Reverse().Select(property => "\"" + property.Name + "\":" + property.Value.GetRawText())) + "}";
-                    LuminPackSerializer.DeserializeJson<TProfile>(reordered, ref jsonValue);
+                    LuminPackSerializer.DeserializeJson<Payload, TProfile>(reordered, ref jsonValue);
                     Validate(value, jsonValue);
                     bool rejected = false;
                     try
                     {
-                        LuminPackSerializer.DeserializeJson<TProfile>(actualJson + " true", ref jsonValue);
+                        LuminPackSerializer.DeserializeJson<Payload, TProfile>(actualJson + " true", ref jsonValue);
                     }
                     catch
                     {
@@ -259,7 +259,8 @@ internal static class SerializerBinaryInliningRegression
         {
             var model = output.GetSemanticModel(tree);
             foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>
-                method.TypeParameterList == null && method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeAsync" or "DeserializeAsync" or "SerializeJson" or "DeserializeJson" &&
+                method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText.StartsWith("LuminEntry_", StringComparison.Ordinal) &&
+                method.TypeParameterList?.Parameters.Count == 1 && method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeAsync" or "DeserializeAsync" or "SerializeJson" or "DeserializeJson" &&
                 method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == "global::Payload")))
             {
                 inspected++;

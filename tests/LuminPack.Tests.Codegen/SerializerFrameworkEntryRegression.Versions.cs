@@ -36,22 +36,22 @@ internal static partial class SerializerFrameworkEntryRegression
                 }
                 private static void Json<TOptions>(VersionGraph graph,Encoding encoding) where TOptions:struct,ILuminPackOptions
                 {
-                    string scalar=LuminPackSerializer.SerializeJson<TOptions>(graph.Value);
+                    string scalar=LuminPackSerializer.SerializeJson<Version, TOptions>(graph.Value);
                     Version value=null;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(scalar),ref value);
+                    LuminPackSerializer.DeserializeJson<Version, TOptions>(encoding.GetBytes(scalar),ref value);
                     if(!graph.Value.Equals(value)||scalar!="\""+value+"\"")throw new Exception("Version JSON root changed.");
-                    string json=LuminPackSerializer.SerializeJson<TOptions>(graph);
+                    string json=LuminPackSerializer.SerializeJson<VersionGraph, TOptions>(graph);
                     VersionGraph target=null;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json),ref target);
+                    LuminPackSerializer.DeserializeJson<VersionGraph, TOptions>(encoding.GetBytes(json),ref target);
                     var original=target;var component=target.Value;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json),ref target);
-                    if(!ReferenceEquals(original,target)||ReferenceEquals(component,target.Value)||LuminPackSerializer.SerializeJson<TOptions>(target)!=json)
+                    LuminPackSerializer.DeserializeJson<VersionGraph, TOptions>(encoding.GetBytes(json),ref target);
+                    if(!ReferenceEquals(original,target)||ReferenceEquals(component,target.Value)||LuminPackSerializer.SerializeJson<VersionGraph, TOptions>(target)!=json)
                         throw new Exception("Version graph reuse changed.");
                 }
                 public static void NullLiteral(ref LuminPackJsonWriter writer)=>writer.Write<LuminPackUtf8LengthOptions>(null);
             }
             """;
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("VersionPaths" + mode + Guid.NewGuid().ToString("N"),

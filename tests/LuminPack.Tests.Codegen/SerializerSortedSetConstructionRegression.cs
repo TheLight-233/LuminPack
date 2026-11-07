@@ -13,7 +13,7 @@ internal static class SerializerSortedSetConstructionRegression
     /// <param name="references">The platform and current runtime metadata references.</param>
     internal static void Run(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = Compile(Source(mode), parse, references);
@@ -133,13 +133,13 @@ internal static class SerializerSortedSetConstructionRegression
                     ReadList(mapBytes,ref mapTarget);
                     if(!ReferenceEquals(mapIdentity,mapTarget)||mapTarget.Count!=2||mapTarget["b"].Value!=2)throw new Exception("Ordered list reuse changed");
                     var malformed = new List<byte>(BitConverter.GetBytes(2));
-                    malformed.AddRange(LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>((string)null));
-                    malformed.AddRange(LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>("value"));
-                    malformed.AddRange(LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>("other"));
-                    malformed.AddRange(LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>("second"));
+                    malformed.AddRange(LuminPackSerializer.Serialize<string, LuminPackUtf16LengthOptions>((string)null));
+                    malformed.AddRange(LuminPackSerializer.Serialize<string, LuminPackUtf16LengthOptions>("value"));
+                    malformed.AddRange(LuminPackSerializer.Serialize<string, LuminPackUtf16LengthOptions>("other"));
+                    malformed.AddRange(LuminPackSerializer.Serialize<string, LuminPackUtf16LengthOptions>("second"));
                     SortedList<string,string> invalid = null;
                     bool rejected = false;
-                    try { LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(malformed.ToArray(),ref invalid); }
+                    try { LuminPackSerializer.Deserialize<SortedList<string, string>, LuminPackUtf16LengthOptions>(malformed.ToArray(),ref invalid); }
                     catch (ArgumentNullException error) { rejected = error.ParamName == "key"; }
                     if(!rejected || invalid != null)throw new Exception("Fresh sorted list published a null key");
                 }

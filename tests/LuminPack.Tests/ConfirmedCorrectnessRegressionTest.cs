@@ -208,12 +208,12 @@ internal static class ConfirmedCorrectnessRegressionTest
             "Generated binary code did not handle escaped identifiers.");
 
         using var jsonBuffer = new LuminBufferWriter(true);
-        LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value, jsonBuffer);
+        LuminPackSerializer.SerializeJson<GeneratorIdentifierModel, LuminPackUtf8LengthOptions>(value, jsonBuffer);
         var json = System.Text.Encoding.UTF8.GetString(jsonBuffer.GetSpan());
         Assert(json.Contains("\u0022\u4E2D\u6587\u5B57\u6BB5\u0022", StringComparison.Ordinal),
             "Generated UTF-8 JSON property bytes corrupted a Unicode member name.");
 
-        var jsonRoundTrip = global::LuminPackUnitTest.ConcreteReads.ReadJson<GeneratorIdentifierModel>(jsonBuffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref GeneratorIdentifierModel concreteReadTarget) => LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget));
+        var jsonRoundTrip = global::LuminPackUnitTest.ConcreteReads.ReadJson<GeneratorIdentifierModel>(jsonBuffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref GeneratorIdentifierModel concreteReadTarget) => LuminPackSerializer.DeserializeJson<GeneratorIdentifierModel, LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget));
         Assert(jsonRoundTrip is not null && jsonRoundTrip.@event == value.@event &&
                jsonRoundTrip.@class == value.@class && jsonRoundTrip.\u4e2d\u6587\u5b57\u6bb5 == value.\u4e2d\u6587\u5b57\u6bb5,
             "Generated JSON code did not handle escaped identifiers or Unicode names.");

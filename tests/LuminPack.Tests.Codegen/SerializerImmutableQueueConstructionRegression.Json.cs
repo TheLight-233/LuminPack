@@ -28,17 +28,17 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                     var stack = StackOracle(values);
                     var oldQueue = global::System.Collections.Immutable.ImmutableQueue.Create(999);
                     var oldStack = global::System.Collections.Immutable.ImmutableStack.Create(999);
-                    var input = encoding.GetBytes(LuminPackSerializer.SerializeJson<TProfile>(queue));
-                    if (LuminPackSerializer.SerializeJson<TProfile>(stack) != LuminPackSerializer.SerializeJson<TProfile>(queue))
+                    var input = encoding.GetBytes(LuminPackSerializer.SerializeJson<ImmutableQueue<int>, TProfile>(queue));
+                    if (LuminPackSerializer.SerializeJson<ImmutableStack<int>, TProfile>(stack) != LuminPackSerializer.SerializeJson<ImmutableQueue<int>, TProfile>(queue))
                         throw new Exception("Stack top-first JSON order changed.");
                     var restoredQueue = oldQueue;
                     var restoredStack = oldStack;
                     global::System.Collections.Immutable.IImmutableQueue<int> queueContract = oldQueue;
                     global::System.Collections.Immutable.IImmutableStack<int> stackContract = oldStack;
-                    LuminPackSerializer.DeserializeJson<TProfile>(input, ref restoredQueue);
-                    LuminPackSerializer.DeserializeJson<TProfile>(input, ref restoredStack);
-                    LuminPackSerializer.DeserializeJson<TProfile>(input, ref queueContract);
-                    LuminPackSerializer.DeserializeJson<TProfile>(input, ref stackContract);
+                    LuminPackSerializer.DeserializeJson<ImmutableQueue<int>, TProfile>(input, ref restoredQueue);
+                    LuminPackSerializer.DeserializeJson<ImmutableStack<int>, TProfile>(input, ref restoredStack);
+                    LuminPackSerializer.DeserializeJson<IImmutableQueue<int>, TProfile>(input, ref queueContract);
+                    LuminPackSerializer.DeserializeJson<IImmutableStack<int>, TProfile>(input, ref stackContract);
                     if (!restoredQueue.SequenceEqual(values) || !restoredStack.SequenceEqual(values) ||
                         !queueContract.SequenceEqual(values) || !stackContract.SequenceEqual(values))
                         throw new Exception("Concrete or interface JSON sequence order changed.");
@@ -49,9 +49,9 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                     if (length > 0 && (!restoredQueue.Dequeue().SequenceEqual(values.Skip(1)) || !restoredStack.Pop().SequenceEqual(values.Skip(1))))
                         throw new Exception("Removing the first sequence element changed.");
                     var graph = new SequenceGraph { Queue = queue, Stack = stack, QueueContract = queue, StackContract = stack };
-                    var graphInput = encoding.GetBytes(LuminPackSerializer.SerializeJson<TProfile>(graph));
+                    var graphInput = encoding.GetBytes(LuminPackSerializer.SerializeJson<SequenceGraph, TProfile>(graph));
                     SequenceGraph restoredGraph = null;
-                    LuminPackSerializer.DeserializeJson<TProfile>(graphInput, ref restoredGraph);
+                    LuminPackSerializer.DeserializeJson<SequenceGraph, TProfile>(graphInput, ref restoredGraph);
                     if (!restoredGraph.Queue.SequenceEqual(values) || !restoredGraph.Stack.SequenceEqual(values) ||
                         !restoredGraph.QueueContract.SequenceEqual(values) || !restoredGraph.StackContract.SequenceEqual(values))
                         throw new Exception("Nested immutable sequence construction changed.");
@@ -59,18 +59,18 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                     {
                         long necessary = Allocations(() => { GC.KeepAlive(QueueOracle(values)); GC.KeepAlive(QueueOracle(values)); GC.KeepAlive(StackOracle(values)); GC.KeepAlive(StackOracle(values)); });
                         long actual = Allocations(() => {
-                            LuminPackSerializer.DeserializeJson<TProfile>(input, ref restoredQueue);
-                            LuminPackSerializer.DeserializeJson<TProfile>(input, ref restoredStack);
-                            LuminPackSerializer.DeserializeJson<TProfile>(input, ref queueContract);
-                            LuminPackSerializer.DeserializeJson<TProfile>(input, ref stackContract);
+                            LuminPackSerializer.DeserializeJson<ImmutableQueue<int>, TProfile>(input, ref restoredQueue);
+                            LuminPackSerializer.DeserializeJson<ImmutableStack<int>, TProfile>(input, ref restoredStack);
+                            LuminPackSerializer.DeserializeJson<IImmutableQueue<int>, TProfile>(input, ref queueContract);
+                            LuminPackSerializer.DeserializeJson<IImmutableStack<int>, TProfile>(input, ref stackContract);
                         });
                         if (actual != necessary) throw new Exception("JSON immutable construction allocated temporary objects: " + actual + " vs " + necessary);
-                        byte[] binary = LuminPackSerializer.Serialize<TProfile>(queue);
+                        byte[] binary = LuminPackSerializer.Serialize<ImmutableQueue<int>, TProfile>(queue);
                         actual = Allocations(() => {
-                            LuminPackSerializer.Deserialize<TProfile>(binary, ref restoredQueue);
-                            LuminPackSerializer.Deserialize<TProfile>(binary, ref restoredStack);
-                            LuminPackSerializer.Deserialize<TProfile>(binary, ref queueContract);
-                            LuminPackSerializer.Deserialize<TProfile>(binary, ref stackContract);
+                            LuminPackSerializer.Deserialize<ImmutableQueue<int>, TProfile>(binary, ref restoredQueue);
+                            LuminPackSerializer.Deserialize<ImmutableStack<int>, TProfile>(binary, ref restoredStack);
+                            LuminPackSerializer.Deserialize<IImmutableQueue<int>, TProfile>(binary, ref queueContract);
+                            LuminPackSerializer.Deserialize<IImmutableStack<int>, TProfile>(binary, ref stackContract);
                         });
                         if (actual != necessary) throw new Exception("Binary immutable construction allocated temporary objects: " + actual + " vs " + necessary);
                     }
@@ -84,27 +84,27 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                     var priorStack = stack;
                     global::System.Collections.Immutable.IImmutableQueue<int> queueContract = queue;
                     global::System.Collections.Immutable.IImmutableStack<int> stackContract = stack;
-                    Throws(() => LuminPackSerializer.DeserializeJson<TProfile>(malformed, ref queue));
-                    Throws(() => LuminPackSerializer.DeserializeJson<TProfile>(malformed, ref stack));
-                    Throws(() => LuminPackSerializer.DeserializeJson<TProfile>(malformed, ref queueContract));
-                    Throws(() => LuminPackSerializer.DeserializeJson<TProfile>(malformed, ref stackContract));
+                    Throws(() => LuminPackSerializer.DeserializeJson<ImmutableQueue<int>, TProfile>(malformed, ref queue));
+                    Throws(() => LuminPackSerializer.DeserializeJson<ImmutableStack<int>, TProfile>(malformed, ref stack));
+                    Throws(() => LuminPackSerializer.DeserializeJson<IImmutableQueue<int>, TProfile>(malformed, ref queueContract));
+                    Throws(() => LuminPackSerializer.DeserializeJson<IImmutableStack<int>, TProfile>(malformed, ref stackContract));
                     if (!ReferenceEquals(queue, priorQueue) || !ReferenceEquals(stack, priorStack) || !ReferenceEquals(queueContract, priorQueue) || !ReferenceEquals(stackContract, priorStack))
                         throw new Exception("Incomplete immutable input published a replacement.");
                 }
                 var words = new[] { "", "alpha", "\u65e5\u672c", "\U0001F30D", null };
                 var stringQueue = global::System.Collections.Immutable.ImmutableQueue.Create(words);
-                var wordInput = encoding.GetBytes(LuminPackSerializer.SerializeJson<TProfile>(stringQueue));
+                var wordInput = encoding.GetBytes(LuminPackSerializer.SerializeJson<ImmutableQueue<string>, TProfile>(stringQueue));
                 global::System.Collections.Immutable.ImmutableStack<string> stringStack = null;
                 global::System.Collections.Immutable.IImmutableStack<string> stringContract = null;
-                LuminPackSerializer.DeserializeJson<TProfile>(wordInput, ref stringStack);
-                LuminPackSerializer.DeserializeJson<TProfile>(wordInput, ref stringContract);
-                LuminPackSerializer.DeserializeJson<TProfile>(wordInput, ref stringQueue);
+                LuminPackSerializer.DeserializeJson<ImmutableStack<string>, TProfile>(wordInput, ref stringStack);
+                LuminPackSerializer.DeserializeJson<IImmutableStack<string>, TProfile>(wordInput, ref stringContract);
+                LuminPackSerializer.DeserializeJson<ImmutableQueue<string>, TProfile>(wordInput, ref stringQueue);
                 if (!stringStack.SequenceEqual(words) || !stringContract.SequenceEqual(words) || !stringQueue.SequenceEqual(words))
                     throw new Exception("Reference sequence elements changed.");
                 byte[] absent = encoding.GetBytes("null");
-                LuminPackSerializer.DeserializeJson<TProfile>(absent, ref stringStack);
-                LuminPackSerializer.DeserializeJson<TProfile>(absent, ref stringContract);
-                LuminPackSerializer.DeserializeJson<TProfile>(absent, ref stringQueue);
+                LuminPackSerializer.DeserializeJson<ImmutableStack<string>, TProfile>(absent, ref stringStack);
+                LuminPackSerializer.DeserializeJson<IImmutableStack<string>, TProfile>(absent, ref stringContract);
+                LuminPackSerializer.DeserializeJson<ImmutableQueue<string>, TProfile>(absent, ref stringQueue);
                 if (stringStack != null || stringContract != null || stringQueue != null) throw new Exception("Null sequence changed.");
             }
             private static void Throws(Action action)

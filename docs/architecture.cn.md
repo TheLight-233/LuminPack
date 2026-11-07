@@ -197,7 +197,7 @@ Observable JSON 读取器仅在实例为精确框架类型、已验证的集合�
 
 ### 生成的文件
 
-`LuminPackSerializer.g.cs` 存放共享泛型 API。启用[静态拦截](generation-modes.cn.md#静态拦截)时，`StaticSerializerBinding` 绑定固定大小的签名树，记录编译器提供的调用位置，在 `LuminPack.Interceptors.g.cs` 中生成共享方法。仅指定配置的兼容写法只为实际使用的负载增加签名。具体便捷方法放在 `LuminEntry_<hash>` 容器中，状态转发方法使用负载专属名称。IL 后端输出相同入口及构建期签名映射，`LuminPack.ILPostProcessor` 在编译后替换本地调用。主动关闭两种接入时，兼容后端保留具体重载文件。每个生成的程序集都拥有 public 的 `LuminPackSerializer`，生成文件屏蔽 CS0436，以遮蔽引用程序集中的同名类型。Root 继续位于 `LuminRoots_<hash>` 容器中。负载已知的推进调用直接指名 `Binary_<assembly>_<hash>` 扩展类，转发扩展与便捷方法都调用已记录的同一个 Root。供用户使用的 `Write`/`Read` 扩展签名继续保留。不新增 Plan struct。
+`LuminPackSerializer.g.cs` 存放共享泛型 API。启用[静态拦截](generation-modes.cn.md#静态拦截)时，`StaticSerializerBinding` 绑定固定大小的签名树，记录编译器提供的调用位置，在 `LuminPack.Interceptors.g.cs` 中生成共享方法。显式配置同时指定负载和选项类型，此路径不增加负载专属的配置重载。具体便捷方法放在 `LuminEntry_<hash>` 容器中，状态转发方法使用负载专属名称。IL 后端输出相同入口及构建期签名映射，`LuminPack.ILPostProcessor` 在编译后替换本地调用。主动关闭两种接入时，兼容后端保留具体重载文件。每个生成的程序集都拥有 public 的 `LuminPackSerializer`，生成文件屏蔽 CS0436，以遮蔽引用程序集中的同名类型。Root 继续位于 `LuminRoots_<hash>` 容器中。负载已知的推进调用直接指名 `Binary_<assembly>_<hash>` 扩展类，转发扩展与便捷方法都调用已记录的同一个 Root。供用户使用的 `Write`/`Read` 扩展签名继续保留。不新增 Plan struct。
 
 源码静态包装方法通过反向调用图索引闭合，每个完整方法构造只复制一份方法体。迁移保留原有方法绑定与参数转换，固定调用者信息的默认常量，拒绝不支持或不可访问的方法体。兜底边界保留原源码与注册规则。编译上下文中的语义对象使用弱关联持有；聚合缓存标识包含拦截位置及所有特化方法体，包括嵌套依赖。Root 与便捷入口的标识不依赖源码位置。
 

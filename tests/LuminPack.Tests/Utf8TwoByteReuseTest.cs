@@ -17,7 +17,7 @@ public class Utf8TwoByteReuseTest
         {
             char[] chars = Enumerable.Range(0, length).Select(i => (char)(0x80 + i * 37 % 0x780)).ToArray();
             string text = new(chars);
-            byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+            byte[] record = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
             string equal = new(chars);
             Assert.Same(equal, Read(record, equal));
             for (int index = 0; index < length; index++)
@@ -42,7 +42,7 @@ public class Utf8TwoByteReuseTest
             {
                 string text = new string('\u00E9', prefix) + tail;
                 Assert.Equal(text.Length * 2, Encoding.UTF8.GetByteCount(text));
-                byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+                byte[] record = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
                 string equal = new(text.ToCharArray());
                 Assert.Same(equal, Read(record, equal));
                 Assert.Equal(text, Read(record, new string('\u00E9', text.Length)));
@@ -57,7 +57,7 @@ public class Utf8TwoByteReuseTest
         foreach (int length in new[] { 8, 9, 16, 17, 33, 65 })
         {
             string text = new('\u00E9', length);
-            byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+            byte[] record = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
             for (int offset = 8; offset < record.Length; offset++)
             {
                 byte saved = record[offset];

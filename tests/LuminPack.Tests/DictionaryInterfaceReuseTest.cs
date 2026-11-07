@@ -52,7 +52,7 @@ public sealed class DictionaryInterfaceReuseTest
         MutatingKeyProfile.OnEncoding = () => backing["a"] = replacement = new() { Number = 981 };
         try
         {
-            LuminPackSerializer.Deserialize<MutatingKeyProfile>(bytes, ref target);
+            LuminPackSerializer.Deserialize<IReadOnlyDictionary<string, DictionaryInterfaceConstructedValue>, MutatingKeyProfile>(bytes, ref target);
             Assert.Same(backing, target);
             Assert.NotNull(replacement);
             Assert.Same(replacement, target["a"]);
@@ -253,25 +253,25 @@ public sealed class DictionaryInterfaceReuseTest
     private static void Check<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         IDictionary<string, ReferenceReuseValue> source = new Dictionary<string, ReferenceReuseValue> { ["a"] = Make(137), ["b"] = null! };
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>(source);
+        byte[] bytes = LuminPackSerializer.Serialize<IDictionary<string, ReferenceReuseValue>, TOptions>(source);
         var backing = new Dictionary<string, ReferenceReuseValue> { [new string('a', 1)] = Make(719), ["b"] = Make(981), ["removed"] = Make(3) };
         IDictionary<string, ReferenceReuseValue> target = backing;
         var first = backing["a"]; var child = first.Child; var tags = first.Tags; var name = first.Name; var key = backing.Keys.First();
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref target));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<IDictionary<string, ReferenceReuseValue>, TOptions>(bytes, ref target));
         Assert.Same(backing, target); Assert.Same(first, target["a"]); Assert.Same(child, first.Child); Assert.Same(tags, first.Tags); Assert.Same(name, first.Name); Assert.Same(key, backing.Keys.First());
         Assert.Equal(137, first.Number); Assert.Null(target["b"]); Assert.False(target.ContainsKey("removed"));
         IReadOnlyDictionary<string, ReferenceReuseValue> readOnly = backing;
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref readOnly);
+        LuminPackSerializer.Deserialize<IReadOnlyDictionary<string, ReferenceReuseValue>, TOptions>(bytes, ref readOnly);
         Assert.Same(backing, readOnly); Assert.Same(first, readOnly["a"]);
         IDictionary<string, string> text = new Dictionary<string, string> { ["a"] = new('x', 7) };
         var textRoot = text; string previous = text["a"];
-        bytes = LuminPackSerializer.Serialize<TOptions>(text);
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref text);
+        bytes = LuminPackSerializer.Serialize<IDictionary<string, string>, TOptions>(text);
+        LuminPackSerializer.Deserialize<IDictionary<string, string>, TOptions>(bytes, ref text);
         Assert.Same(textRoot, text); Assert.Same(previous, text["a"]);
-        source = new Dictionary<string, ReferenceReuseValue>(); bytes = LuminPackSerializer.Serialize<TOptions>(source);
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref target); Assert.Same(backing, target); Assert.Empty(target);
-        source = null!; bytes = LuminPackSerializer.Serialize<TOptions>(source);
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref target); Assert.Null(target);
+        source = new Dictionary<string, ReferenceReuseValue>(); bytes = LuminPackSerializer.Serialize<IDictionary<string, ReferenceReuseValue>, TOptions>(source);
+        LuminPackSerializer.Deserialize<IDictionary<string, ReferenceReuseValue>, TOptions>(bytes, ref target); Assert.Same(backing, target); Assert.Empty(target);
+        source = null!; bytes = LuminPackSerializer.Serialize<IDictionary<string, ReferenceReuseValue>, TOptions>(source);
+        LuminPackSerializer.Deserialize<IDictionary<string, ReferenceReuseValue>, TOptions>(bytes, ref target); Assert.Null(target);
     }
 
     /// <summary>Creates independent ordinary nested storage with stable text.</summary>

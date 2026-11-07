@@ -48,24 +48,24 @@ public partial class CompiledOptionTest
     private static async Task CheckProfile<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         var value = new PlainRecord { Text = "\u4E2D\uD83D\uDE00", Items = ["a", "", "tail"] };
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((PlainRecord)(value));
-        Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.Read<PlainRecord>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PlainRecord concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)).Text);
+        byte[] bytes = LuminPackSerializer.Serialize<PlainRecord, TOptions>((PlainRecord)(value));
+        Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.Read<PlainRecord>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PlainRecord concreteReadTarget) => LuminPackSerializer.Deserialize<PlainRecord, TOptions>(concreteReadInput, ref concreteReadTarget)).Text);
         using var buffer = new LuminBufferWriter(true);
-        LuminPackSerializer.Serialize<TOptions>((PlainRecord)(value), buffer);
+        LuminPackSerializer.Serialize<PlainRecord, TOptions>((PlainRecord)(value), buffer);
         Assert.Equal(bytes, buffer.GetSpan().ToArray());
-        Assert.Equal(value.Items, global::LuminPackUnitTest.ConcreteReads.Read<PlainRecord>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref PlainRecord concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)).Items);
-        string json = LuminPackSerializer.SerializeJson<TOptions>((PlainRecord)(value));
-        Assert.Equal(value.Items, global::LuminPackUnitTest.ConcreteReads.ReadJson<PlainRecord>(json, static (string concreteReadInput, ref PlainRecord concreteReadTarget) => LuminPackSerializer.DeserializeJson<TOptions>(concreteReadInput, ref concreteReadTarget)).Items);
+        Assert.Equal(value.Items, global::LuminPackUnitTest.ConcreteReads.Read<PlainRecord>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref PlainRecord concreteReadTarget) => LuminPackSerializer.Deserialize<PlainRecord, TOptions>(concreteReadInput, ref concreteReadTarget)).Items);
+        string json = LuminPackSerializer.SerializeJson<PlainRecord, TOptions>((PlainRecord)(value));
+        Assert.Equal(value.Items, global::LuminPackUnitTest.ConcreteReads.ReadJson<PlainRecord>(json, static (string concreteReadInput, ref PlainRecord concreteReadTarget) => LuminPackSerializer.DeserializeJson<PlainRecord, TOptions>(concreteReadInput, ref concreteReadTarget)).Items);
         var streamBytes = new ArrayBufferWriter<byte>();
-        LuminPackSerializer.SerializeJson<TOptions>((PlainRecord)(value), streamBytes);
+        LuminPackSerializer.SerializeJson<PlainRecord, TOptions>((PlainRecord)(value), streamBytes);
         PlainRecord parsed = null!;
-        Assert.Equal(streamBytes.WrittenCount, LuminPackSerializer.DeserializeJson<TOptions>(streamBytes.WrittenSpan, ref parsed));
+        Assert.Equal(streamBytes.WrittenCount, LuminPackSerializer.DeserializeJson<PlainRecord, TOptions>(streamBytes.WrittenSpan, ref parsed));
         Assert.Equal(value.Text, parsed.Text);
         using var stream = new MemoryStream();
-        await LuminPackSerializer.SerializeAsync<TOptions>(stream, value);
+        await LuminPackSerializer.SerializeAsync<PlainRecord, TOptions>(stream, value);
         Assert.Equal(bytes, stream.ToArray());
         stream.Position = 0;
-        Assert.Equal(value.Items, (await LuminPackSerializer.DeserializeAsync<TOptions>(stream, (PlainRecord)null!)).Items);
+        Assert.Equal(value.Items, (await LuminPackSerializer.DeserializeAsync<PlainRecord, TOptions>(stream, (PlainRecord)null!)).Items);
     }
 
     /// <summary>Checks null and empty framing lengths without writing past exact caller spans.</summary>
@@ -97,8 +97,8 @@ public partial class CompiledOptionTest
     /// <param name="value">The collection and trailing-field fixture.</param>
     private static void CheckCollectionTail<TOptions>(CollectionTail value) where TOptions : struct, ILuminPackOptions
     {
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((CollectionTail)(value));
-        var copy = global::LuminPackUnitTest.ConcreteReads.Read<CollectionTail>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CollectionTail concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
+        byte[] bytes = LuminPackSerializer.Serialize<CollectionTail, TOptions>((CollectionTail)(value));
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<CollectionTail>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CollectionTail concreteReadTarget) => LuminPackSerializer.Deserialize<CollectionTail, TOptions>(concreteReadInput, ref concreteReadTarget));
         bool token = default(TOptions).StringRecording == LuminPackStringRecording.Token;
         Assert.Equal(value.List.Select(item => token ? item ?? "" : item), copy.List);
         Assert.Equal(value.Array.Select(item => token ? item ?? "" : item), copy.Array);
@@ -115,8 +115,8 @@ public partial class CompiledOptionTest
         CheckCustomProfile<LuminPackUtf16TokenOptions>();
         CheckCustomProfile<DeepUtf16Token>();
         var equivalent = new OpaqueValue { Text = "equivalent profile" };
-        byte[] equivalentBytes = LuminPackSerializer.Serialize<EquivalentUtf16Token>((OpaqueValue)(equivalent));
-        Assert.Equal(equivalent.Text, global::LuminPackUnitTest.ConcreteReads.Read<OpaqueValue>(equivalentBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref OpaqueValue concreteReadTarget) => LuminPackSerializer.Deserialize<EquivalentUtf16Token>(concreteReadInput, ref concreteReadTarget)).Text);
+        byte[] equivalentBytes = LuminPackSerializer.Serialize<OpaqueValue, EquivalentUtf16Token>((OpaqueValue)(equivalent));
+        Assert.Equal(equivalent.Text, global::LuminPackUnitTest.ConcreteReads.Read<OpaqueValue>(equivalentBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref OpaqueValue concreteReadTarget) => LuminPackSerializer.Deserialize<OpaqueValue, EquivalentUtf16Token>(concreteReadInput, ref concreteReadTarget)).Text);
         var value = new CustomHost { Value = new() { Text = "custom" } };
         byte[] bytes = LuminPackSerializer.Serialize(value);
         var restored = global::LuminPackUnitTest.ConcreteReads.Read<CustomHost>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CustomHost concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
@@ -130,10 +130,10 @@ public partial class CompiledOptionTest
         // The generated Custom registry already owns the declaration profile; registering it again is a duplicate.
         if (typeof(TOptions) != typeof(LuminPackDefaultOptions)) _ = CustomRegistration<TOptions>.Ready;
         var value = new OpaqueValue { Text = "custom-\u4E2D\uD83D\uDE00" };
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((OpaqueValue)(value));
-        Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.Read<OpaqueValue>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref OpaqueValue concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)).Text);
-        string json = LuminPackSerializer.SerializeJson<TOptions>((OpaqueValue)(value));
-        Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.ReadJson<OpaqueValue>(json, static (string concreteReadInput, ref OpaqueValue concreteReadTarget) => LuminPackSerializer.DeserializeJson<TOptions>(concreteReadInput, ref concreteReadTarget)).Text);
+        byte[] bytes = LuminPackSerializer.Serialize<OpaqueValue, TOptions>((OpaqueValue)(value));
+        Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.Read<OpaqueValue>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref OpaqueValue concreteReadTarget) => LuminPackSerializer.Deserialize<OpaqueValue, TOptions>(concreteReadInput, ref concreteReadTarget)).Text);
+        string json = LuminPackSerializer.SerializeJson<OpaqueValue, TOptions>((OpaqueValue)(value));
+        Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.ReadJson<OpaqueValue>(json, static (string concreteReadInput, ref OpaqueValue concreteReadTarget) => LuminPackSerializer.DeserializeJson<OpaqueValue, TOptions>(concreteReadInput, ref concreteReadTarget)).Text);
     }
 
     /// <summary>Closes and registers pointers once per profile, without binding configuration to an operation state.</summary>
@@ -178,7 +178,7 @@ public partial class CompiledOptionTest
         /// <param name="writer">The binary writer.</param>
         /// <param name="value">The Custom payload.</param>
         public static void WriteCompiled<TOptions>(ref LuminPackWriter writer, in OpaqueValue value) where TOptions : struct, ILuminPackOptions
-            => LuminPackSerializer.Serialize<TOptions>(ref writer, (string)(value.Text));
+            => LuminPackSerializer.Serialize<string, TOptions>(ref writer, (string)(value.Text));
         /// <summary>Reads one explicitly configured binary string record.</summary>
         /// <typeparam name="TOptions">The stateless profile.</typeparam>
         /// <param name="reader">The binary reader.</param>
@@ -186,7 +186,7 @@ public partial class CompiledOptionTest
         public static void ReadCompiled<TOptions>(ref LuminPackReader reader, ref OpaqueValue value) where TOptions : struct, ILuminPackOptions
         {
             string text = "";
-LuminPackSerializer.Deserialize<TOptions>(ref reader, ref text);
+LuminPackSerializer.Deserialize<string, TOptions>(ref reader, ref text);
             value = new() { Text = text };
         }
         /// <summary>Writes one explicitly configured JSON string.</summary>
@@ -194,7 +194,7 @@ LuminPackSerializer.Deserialize<TOptions>(ref reader, ref text);
         /// <param name="writer">The JSON writer.</param>
         /// <param name="value">The Custom payload.</param>
         public static void WriteJsonCompiled<TOptions>(ref LuminPackJsonWriter writer, in OpaqueValue value) where TOptions : struct, ILuminPackOptions
-            => LuminPackSerializer.SerializeJson<TOptions>(ref writer, (string)(value.Text));
+            => LuminPackSerializer.SerializeJson<string, TOptions>(ref writer, (string)(value.Text));
         /// <summary>Reads one explicitly configured JSON string.</summary>
         /// <typeparam name="TOptions">The stateless profile.</typeparam>
         /// <param name="reader">The JSON reader.</param>
@@ -202,7 +202,7 @@ LuminPackSerializer.Deserialize<TOptions>(ref reader, ref text);
         public static void ReadJsonCompiled<TOptions>(ref LuminPackJsonReader reader, ref OpaqueValue value) where TOptions : struct, ILuminPackOptions
         {
             string text = "";
-LuminPackSerializer.DeserializeJson<TOptions>(ref reader, ref text);
+LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
             value = new() { Text = text };
         }
     }

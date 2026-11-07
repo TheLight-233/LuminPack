@@ -214,13 +214,13 @@ public class TimeZoneInfoCacheTest
     /// <param name="zone">The complete source snapshot.</param>
     private static void VerifyProfile<TProfile>(TimeZoneInfo zone) where TProfile : struct, ILuminPackOptions
     {
-        byte[] bytes = LuminPackSerializer.Serialize<TProfile>(zone);
+        byte[] bytes = LuminPackSerializer.Serialize<TimeZoneInfo, TProfile>(zone);
         TimeZoneInfo? copy = null;
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TProfile>(bytes.AsSpan(), ref copy));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TimeZoneInfo, TProfile>(bytes.AsSpan(), ref copy));
         Assert.Equal(zone.ToSerializedString(), copy!.ToSerializedString());
-        string json = LuminPackSerializer.SerializeJson<TProfile>(zone);
+        string json = LuminPackSerializer.SerializeJson<TimeZoneInfo, TProfile>(zone);
         copy = null;
-        LuminPackSerializer.DeserializeJson<TProfile>(json, ref copy);
+        LuminPackSerializer.DeserializeJson<TimeZoneInfo, TProfile>(json, ref copy);
         Assert.Equal(zone.ToSerializedString(), copy!.ToSerializedString());
     }
 }

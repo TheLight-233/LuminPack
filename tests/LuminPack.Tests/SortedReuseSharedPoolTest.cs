@@ -40,7 +40,7 @@ public sealed class SortedReuseSharedPoolTest
     public void DifferentCollectionReadersShareTheSameStringRental()
     {
         string[] values = { "alpha", "beta", "gamma" };
-        byte[] payload = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(values);
+        byte[] payload = LuminPackSerializer.Serialize<string[], LuminPackUtf16LengthOptions>(values);
         string[] expected = ArrayPool<string>.Shared.Rent(16);
         ArrayPool<string>.Shared.Return(expected, clearArray: true);
         string[]? returned = null;
@@ -50,7 +50,7 @@ public sealed class SortedReuseSharedPoolTest
             SharedCollectionPoolOptions.SawPopulatedRental = false;
             var set = new SortedSet<string> { "old" };
             var original = set;
-            Assert.Equal(payload.Length, LuminPackSerializer.Deserialize<SharedCollectionPoolOptions>(payload, ref set));
+            Assert.Equal(payload.Length, LuminPackSerializer.Deserialize<SortedSet<string>, SharedCollectionPoolOptions>(payload, ref set));
             Assert.Same(original, set);
             Assert.True(set.SetEquals(values));
             Assert.True(SharedCollectionPoolOptions.SawPopulatedRental);
@@ -58,7 +58,7 @@ public sealed class SortedReuseSharedPoolTest
 
             SharedCollectionPoolOptions.SawPopulatedRental = false;
             ImmutableList<string>? list = null;
-            Assert.Equal(payload.Length, LuminPackSerializer.Deserialize<SharedCollectionPoolOptions>(payload, ref list));
+            Assert.Equal(payload.Length, LuminPackSerializer.Deserialize<ImmutableList<string>, SharedCollectionPoolOptions>(payload, ref list));
             Assert.Equal(values, list);
             Assert.True(SharedCollectionPoolOptions.SawPopulatedRental);
             Assert.All(expected, value => Assert.Null(value));

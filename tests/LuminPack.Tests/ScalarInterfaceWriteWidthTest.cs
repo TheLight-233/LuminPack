@@ -24,9 +24,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckBoolean<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<bool>(static count => Enumerable.Range(0, count).Select(index => index % 2 == 0).ToArray(),
-            static (IList<bool> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<bool> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<bool> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<bool> value) => LuminPackSerializer.Serialize<IList<bool>, TProfile>(in value),
+            static (ISet<bool> value) => LuminPackSerializer.Serialize<ISet<bool>, TProfile>(in value),
+            static (IReadOnlySet<bool> value) => LuminPackSerializer.Serialize<IReadOnlySet<bool>, TProfile>(in value));
 
     /// <summary>Preserves native Byte collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -42,9 +42,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckByte<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<byte>(static count => Enumerable.Range(0, count).Select(index => (byte)index).ToArray(),
-            static (IList<byte> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<byte> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<byte> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<byte> value) => LuminPackSerializer.Serialize<IList<byte>, TProfile>(in value),
+            static (ISet<byte> value) => LuminPackSerializer.Serialize<ISet<byte>, TProfile>(in value),
+            static (IReadOnlySet<byte> value) => LuminPackSerializer.Serialize<IReadOnlySet<byte>, TProfile>(in value));
 
     /// <summary>Preserves native SByte collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -60,9 +60,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckSByte<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<sbyte>(static count => Enumerable.Range(0, count).Select(index => (sbyte)index).ToArray(),
-            static (IList<sbyte> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<sbyte> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<sbyte> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<sbyte> value) => LuminPackSerializer.Serialize<IList<sbyte>, TProfile>(in value),
+            static (ISet<sbyte> value) => LuminPackSerializer.Serialize<ISet<sbyte>, TProfile>(in value),
+            static (IReadOnlySet<sbyte> value) => LuminPackSerializer.Serialize<IReadOnlySet<sbyte>, TProfile>(in value));
 
     /// <summary>Preserves native Int16 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -78,9 +78,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckInt16<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<short>(static count => Enumerable.Range(0, count).Select(index => (short)(index * 31)).ToArray(),
-            static (IList<short> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<short> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<short> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<short> value) => LuminPackSerializer.Serialize<IList<short>, TProfile>(in value),
+            static (ISet<short> value) => LuminPackSerializer.Serialize<ISet<short>, TProfile>(in value),
+            static (IReadOnlySet<short> value) => LuminPackSerializer.Serialize<IReadOnlySet<short>, TProfile>(in value));
 
     /// <summary>Preserves native UInt16 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -96,9 +96,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckUInt16<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<ushort>(static count => Enumerable.Range(0, count).Select(index => (ushort)(index * 31)).ToArray(),
-            static (IList<ushort> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<ushort> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<ushort> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<ushort> value) => LuminPackSerializer.Serialize<IList<ushort>, TProfile>(in value),
+            static (ISet<ushort> value) => LuminPackSerializer.Serialize<ISet<ushort>, TProfile>(in value),
+            static (IReadOnlySet<ushort> value) => LuminPackSerializer.Serialize<IReadOnlySet<ushort>, TProfile>(in value));
 
     /// <summary>Preserves native Char collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -114,9 +114,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckChar<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<char>(static count => Enumerable.Range(0, count).Select(index => (char)(index+32)).ToArray(),
-            static (IList<char> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<char> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<char> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<char> value) => LuminPackSerializer.Serialize<IList<char>, TProfile>(in value),
+            static (ISet<char> value) => LuminPackSerializer.Serialize<ISet<char>, TProfile>(in value),
+            static (IReadOnlySet<char> value) => LuminPackSerializer.Serialize<IReadOnlySet<char>, TProfile>(in value));
 
     /// <summary>Preserves native Int32 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -132,9 +132,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckInt32<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<int>(static count => Enumerable.Range(0, count).Select(index => index * 7919 - 50000).ToArray(),
-            static (IList<int> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<int> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<int> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<int> value) => LuminPackSerializer.Serialize<IList<int>, TProfile>(in value),
+            static (ISet<int> value) => LuminPackSerializer.Serialize<ISet<int>, TProfile>(in value),
+            static (IReadOnlySet<int> value) => LuminPackSerializer.Serialize<IReadOnlySet<int>, TProfile>(in value));
 
     /// <summary>Preserves native UInt32 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -150,9 +150,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckUInt32<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<uint>(static count => Enumerable.Range(0, count).Select(index => (uint)index * 7919).ToArray(),
-            static (IList<uint> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<uint> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<uint> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<uint> value) => LuminPackSerializer.Serialize<IList<uint>, TProfile>(in value),
+            static (ISet<uint> value) => LuminPackSerializer.Serialize<ISet<uint>, TProfile>(in value),
+            static (IReadOnlySet<uint> value) => LuminPackSerializer.Serialize<IReadOnlySet<uint>, TProfile>(in value));
 
     /// <summary>Preserves native Int64 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -168,9 +168,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckInt64<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<long>(static count => Enumerable.Range(0, count).Select(index => (long)index * 7919 - 50000).ToArray(),
-            static (IList<long> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<long> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<long> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<long> value) => LuminPackSerializer.Serialize<IList<long>, TProfile>(in value),
+            static (ISet<long> value) => LuminPackSerializer.Serialize<ISet<long>, TProfile>(in value),
+            static (IReadOnlySet<long> value) => LuminPackSerializer.Serialize<IReadOnlySet<long>, TProfile>(in value));
 
     /// <summary>Preserves native UInt64 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -186,9 +186,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckUInt64<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<ulong>(static count => Enumerable.Range(0, count).Select(index => (ulong)index * 7919).ToArray(),
-            static (IList<ulong> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<ulong> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<ulong> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<ulong> value) => LuminPackSerializer.Serialize<IList<ulong>, TProfile>(in value),
+            static (ISet<ulong> value) => LuminPackSerializer.Serialize<ISet<ulong>, TProfile>(in value),
+            static (IReadOnlySet<ulong> value) => LuminPackSerializer.Serialize<IReadOnlySet<ulong>, TProfile>(in value));
 
     /// <summary>Preserves native Single collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -204,9 +204,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckSingle<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<float>(static count => Enumerable.Range(0, count).Select(index => index * 1.25f).ToArray(),
-            static (IList<float> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<float> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<float> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<float> value) => LuminPackSerializer.Serialize<IList<float>, TProfile>(in value),
+            static (ISet<float> value) => LuminPackSerializer.Serialize<ISet<float>, TProfile>(in value),
+            static (IReadOnlySet<float> value) => LuminPackSerializer.Serialize<IReadOnlySet<float>, TProfile>(in value));
 
     /// <summary>Preserves native Double collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -222,9 +222,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckDouble<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<double>(static count => Enumerable.Range(0, count).Select(index => index * 1.25).ToArray(),
-            static (IList<double> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<double> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<double> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<double> value) => LuminPackSerializer.Serialize<IList<double>, TProfile>(in value),
+            static (ISet<double> value) => LuminPackSerializer.Serialize<ISet<double>, TProfile>(in value),
+            static (IReadOnlySet<double> value) => LuminPackSerializer.Serialize<IReadOnlySet<double>, TProfile>(in value));
 
     /// <summary>Preserves native Decimal collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -240,9 +240,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckDecimal<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<decimal>(static count => Enumerable.Range(0, count).Select(index => (decimal)index * 7919 / 100).ToArray(),
-            static (IList<decimal> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<decimal> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<decimal> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<decimal> value) => LuminPackSerializer.Serialize<IList<decimal>, TProfile>(in value),
+            static (ISet<decimal> value) => LuminPackSerializer.Serialize<ISet<decimal>, TProfile>(in value),
+            static (IReadOnlySet<decimal> value) => LuminPackSerializer.Serialize<IReadOnlySet<decimal>, TProfile>(in value));
 
     /// <summary>Preserves native Guid collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -258,9 +258,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckGuid<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<Guid>(static count => Enumerable.Range(0, count).Select(index => new Guid(index,17,29,3,5,7,11,13,17,19,23)).ToArray(),
-            static (IList<Guid> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<Guid> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<Guid> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<Guid> value) => LuminPackSerializer.Serialize<IList<Guid>, TProfile>(in value),
+            static (ISet<Guid> value) => LuminPackSerializer.Serialize<ISet<Guid>, TProfile>(in value),
+            static (IReadOnlySet<Guid> value) => LuminPackSerializer.Serialize<IReadOnlySet<Guid>, TProfile>(in value));
 
     /// <summary>Preserves native Half collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -276,9 +276,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckHalf<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<Half>(static count => Enumerable.Range(0, count).Select(index => (Half)(index * 1.25f)).ToArray(),
-            static (IList<Half> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<Half> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<Half> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<Half> value) => LuminPackSerializer.Serialize<IList<Half>, TProfile>(in value),
+            static (ISet<Half> value) => LuminPackSerializer.Serialize<ISet<Half>, TProfile>(in value),
+            static (IReadOnlySet<Half> value) => LuminPackSerializer.Serialize<IReadOnlySet<Half>, TProfile>(in value));
 
     /// <summary>Preserves native Int128 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -294,9 +294,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckInt128<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<Int128>(static count => Enumerable.Range(0, count).Select(index => (Int128)index << 72).ToArray(),
-            static (IList<Int128> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<Int128> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<Int128> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<Int128> value) => LuminPackSerializer.Serialize<IList<Int128>, TProfile>(in value),
+            static (ISet<Int128> value) => LuminPackSerializer.Serialize<ISet<Int128>, TProfile>(in value),
+            static (IReadOnlySet<Int128> value) => LuminPackSerializer.Serialize<IReadOnlySet<Int128>, TProfile>(in value));
 
     /// <summary>Preserves native UInt128 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -312,9 +312,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckUInt128<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<UInt128>(static count => Enumerable.Range(0, count).Select(index => (UInt128)index << 72).ToArray(),
-            static (IList<UInt128> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<UInt128> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<UInt128> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<UInt128> value) => LuminPackSerializer.Serialize<IList<UInt128>, TProfile>(in value),
+            static (ISet<UInt128> value) => LuminPackSerializer.Serialize<ISet<UInt128>, TProfile>(in value),
+            static (IReadOnlySet<UInt128> value) => LuminPackSerializer.Serialize<IReadOnlySet<UInt128>, TProfile>(in value));
 
     /// <summary>Preserves native Vector2 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -330,9 +330,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckVector2<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Vector2>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Vector2(index,index+1)).ToArray(),
-            static (IList<System.Numerics.Vector2> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Vector2> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Vector2> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Vector2> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Vector2>, TProfile>(in value),
+            static (ISet<System.Numerics.Vector2> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Vector2>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Vector2> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Vector2>, TProfile>(in value));
 
     /// <summary>Preserves native Vector3 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -348,9 +348,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckVector3<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Vector3>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Vector3(index,index+1,index+2)).ToArray(),
-            static (IList<System.Numerics.Vector3> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Vector3> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Vector3> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Vector3> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Vector3>, TProfile>(in value),
+            static (ISet<System.Numerics.Vector3> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Vector3>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Vector3> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Vector3>, TProfile>(in value));
 
     /// <summary>Preserves native Vector4 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -366,9 +366,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckVector4<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Vector4>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Vector4(index,index+1,index+2,index+3)).ToArray(),
-            static (IList<System.Numerics.Vector4> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Vector4> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Vector4> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Vector4> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Vector4>, TProfile>(in value),
+            static (ISet<System.Numerics.Vector4> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Vector4>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Vector4> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Vector4>, TProfile>(in value));
 
     /// <summary>Preserves native Matrix3x2 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -384,9 +384,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckMatrix3x2<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Matrix3x2>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Matrix3x2(index,2,3,4,5,6)).ToArray(),
-            static (IList<System.Numerics.Matrix3x2> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Matrix3x2> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Matrix3x2> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Matrix3x2> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Matrix3x2>, TProfile>(in value),
+            static (ISet<System.Numerics.Matrix3x2> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Matrix3x2>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Matrix3x2> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Matrix3x2>, TProfile>(in value));
 
     /// <summary>Preserves native Matrix4x4 collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -402,9 +402,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckMatrix4x4<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Matrix4x4>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Matrix4x4(index,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)).ToArray(),
-            static (IList<System.Numerics.Matrix4x4> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Matrix4x4> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Matrix4x4> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Matrix4x4> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Matrix4x4>, TProfile>(in value),
+            static (ISet<System.Numerics.Matrix4x4> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Matrix4x4>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Matrix4x4> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Matrix4x4>, TProfile>(in value));
 
     /// <summary>Preserves native TimeSpan collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -420,9 +420,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckTimeSpan<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<TimeSpan>(static count => Enumerable.Range(0, count).Select(index => TimeSpan.FromTicks(index * 7919L)).ToArray(),
-            static (IList<TimeSpan> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<TimeSpan> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<TimeSpan> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<TimeSpan> value) => LuminPackSerializer.Serialize<IList<TimeSpan>, TProfile>(in value),
+            static (ISet<TimeSpan> value) => LuminPackSerializer.Serialize<ISet<TimeSpan>, TProfile>(in value),
+            static (IReadOnlySet<TimeSpan> value) => LuminPackSerializer.Serialize<IReadOnlySet<TimeSpan>, TProfile>(in value));
 
     /// <summary>Preserves native DateTime collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -438,9 +438,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckDateTime<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<DateTime>(static count => Enumerable.Range(0, count).Select(index => new DateTime(index * 7919L,DateTimeKind.Utc)).ToArray(),
-            static (IList<DateTime> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<DateTime> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<DateTime> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<DateTime> value) => LuminPackSerializer.Serialize<IList<DateTime>, TProfile>(in value),
+            static (ISet<DateTime> value) => LuminPackSerializer.Serialize<ISet<DateTime>, TProfile>(in value),
+            static (IReadOnlySet<DateTime> value) => LuminPackSerializer.Serialize<IReadOnlySet<DateTime>, TProfile>(in value));
 
     /// <summary>Preserves native DateOnly collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -456,9 +456,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckDateOnly<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<DateOnly>(static count => Enumerable.Range(0, count).Select(index => DateOnly.FromDayNumber(index+1)).ToArray(),
-            static (IList<DateOnly> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<DateOnly> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<DateOnly> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<DateOnly> value) => LuminPackSerializer.Serialize<IList<DateOnly>, TProfile>(in value),
+            static (ISet<DateOnly> value) => LuminPackSerializer.Serialize<ISet<DateOnly>, TProfile>(in value),
+            static (IReadOnlySet<DateOnly> value) => LuminPackSerializer.Serialize<IReadOnlySet<DateOnly>, TProfile>(in value));
 
     /// <summary>Preserves native TimeOnly collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -474,9 +474,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckTimeOnly<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<TimeOnly>(static count => Enumerable.Range(0, count).Select(index => new TimeOnly(index * 7919L)).ToArray(),
-            static (IList<TimeOnly> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<TimeOnly> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<TimeOnly> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<TimeOnly> value) => LuminPackSerializer.Serialize<IList<TimeOnly>, TProfile>(in value),
+            static (ISet<TimeOnly> value) => LuminPackSerializer.Serialize<ISet<TimeOnly>, TProfile>(in value),
+            static (IReadOnlySet<TimeOnly> value) => LuminPackSerializer.Serialize<IReadOnlySet<TimeOnly>, TProfile>(in value));
 
     /// <summary>Preserves native Rune collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -492,9 +492,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckRune<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Text.Rune>(static count => Enumerable.Range(0, count).Select(index => new System.Text.Rune(index+32)).ToArray(),
-            static (IList<System.Text.Rune> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Text.Rune> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Text.Rune> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Text.Rune> value) => LuminPackSerializer.Serialize<IList<System.Text.Rune>, TProfile>(in value),
+            static (ISet<System.Text.Rune> value) => LuminPackSerializer.Serialize<ISet<System.Text.Rune>, TProfile>(in value),
+            static (IReadOnlySet<System.Text.Rune> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Text.Rune>, TProfile>(in value));
 
     /// <summary>Preserves native DateTimeOffset collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -510,9 +510,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckDateTimeOffset<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<DateTimeOffset>(static count => Enumerable.Range(0, count).Select(index => new DateTimeOffset(2026,1,1,0,0,0,TimeSpan.FromHours(9)).AddTicks(index * 7919L)).ToArray(),
-            static (IList<DateTimeOffset> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<DateTimeOffset> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<DateTimeOffset> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<DateTimeOffset> value) => LuminPackSerializer.Serialize<IList<DateTimeOffset>, TProfile>(in value),
+            static (ISet<DateTimeOffset> value) => LuminPackSerializer.Serialize<ISet<DateTimeOffset>, TProfile>(in value),
+            static (IReadOnlySet<DateTimeOffset> value) => LuminPackSerializer.Serialize<IReadOnlySet<DateTimeOffset>, TProfile>(in value));
 
     /// <summary>Preserves native Complex collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -528,9 +528,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckComplex<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Complex>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Complex(index,index+1)).ToArray(),
-            static (IList<System.Numerics.Complex> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Complex> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Complex> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Complex> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Complex>, TProfile>(in value),
+            static (ISet<System.Numerics.Complex> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Complex>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Complex> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Complex>, TProfile>(in value));
 
     /// <summary>Preserves native Plane collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -546,9 +546,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckPlane<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Plane>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Plane(index,2,3,4)).ToArray(),
-            static (IList<System.Numerics.Plane> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Plane> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Plane> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Plane> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Plane>, TProfile>(in value),
+            static (ISet<System.Numerics.Plane> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Plane>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Plane> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Plane>, TProfile>(in value));
 
     /// <summary>Preserves native Quaternion collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -564,9 +564,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckQuaternion<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<System.Numerics.Quaternion>(static count => Enumerable.Range(0, count).Select(index => new System.Numerics.Quaternion(index,2,3,4)).ToArray(),
-            static (IList<System.Numerics.Quaternion> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<System.Numerics.Quaternion> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<System.Numerics.Quaternion> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<System.Numerics.Quaternion> value) => LuminPackSerializer.Serialize<IList<System.Numerics.Quaternion>, TProfile>(in value),
+            static (ISet<System.Numerics.Quaternion> value) => LuminPackSerializer.Serialize<ISet<System.Numerics.Quaternion>, TProfile>(in value),
+            static (IReadOnlySet<System.Numerics.Quaternion> value) => LuminPackSerializer.Serialize<IReadOnlySet<System.Numerics.Quaternion>, TProfile>(in value));
 
     /// <summary>Preserves native IntPtr collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -582,9 +582,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckIntPtr<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<nint>(static count => Enumerable.Range(0, count).Select(index => (nint)(index * 7919 - 50000)).ToArray(),
-            static (IList<nint> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<nint> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<nint> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<nint> value) => LuminPackSerializer.Serialize<IList<nint>, TProfile>(in value),
+            static (ISet<nint> value) => LuminPackSerializer.Serialize<ISet<nint>, TProfile>(in value),
+            static (IReadOnlySet<nint> value) => LuminPackSerializer.Serialize<IReadOnlySet<nint>, TProfile>(in value));
 
     /// <summary>Preserves native UIntPtr collection bytes in every existing binary profile.</summary>
     [Fact]
@@ -600,9 +600,9 @@ public sealed class ScalarInterfaceWriteWidthTest
     /// <typeparam name="TProfile">The original binary profile.</typeparam>
     private static void CheckUIntPtr<TProfile>() where TProfile : struct, ILuminPackOptions
         => CheckNative<nuint>(static count => Enumerable.Range(0, count).Select(index => (nuint)(index * 7919)).ToArray(),
-            static (IList<nuint> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (ISet<nuint> value) => LuminPackSerializer.Serialize<TProfile>(in value),
-            static (IReadOnlySet<nuint> value) => LuminPackSerializer.Serialize<TProfile>(in value));
+            static (IList<nuint> value) => LuminPackSerializer.Serialize<IList<nuint>, TProfile>(in value),
+            static (ISet<nuint> value) => LuminPackSerializer.Serialize<ISet<nuint>, TProfile>(in value),
+            static (IReadOnlySet<nuint> value) => LuminPackSerializer.Serialize<IReadOnlySet<nuint>, TProfile>(in value));
 
     /// <summary>Checks exact, sparse and colliding implementations through statically closed serializer callbacks.</summary>
     /// <typeparam name="T">The original native scalar type.</typeparam>

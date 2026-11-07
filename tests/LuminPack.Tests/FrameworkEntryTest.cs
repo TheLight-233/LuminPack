@@ -70,25 +70,25 @@ public class FrameworkEntryTest
             byte[] expected = new byte[4 + (length + 31) / 32 * 4];
             BinaryPrimitives.WriteInt32LittleEndian(expected, length);
             for (int i = 0; i < length; i++) if (source[i] = i % 3 == 0) expected[4 + i / 8] |= (byte)(1 << (i & 7));
-            Assert.Equal(expected, LuminPackSerializer.Serialize<TProfile>(source));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<BitArray, TProfile>(source));
             var target = new BitArray(length, true);
             var original = target;
-            Assert.Equal(expected.Length, LuminPackSerializer.Deserialize<TProfile>(expected, ref target));
+            Assert.Equal(expected.Length, LuminPackSerializer.Deserialize<BitArray, TProfile>(expected, ref target));
             Assert.Same(original, target);
             for (int i = 0; i < length; i++) Assert.Equal(source[i], target[i]);
             for (int prefix = 0; prefix < expected.Length; prefix++)
             {
                 target = new BitArray(length, true);
                 original = target;
-                Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<TProfile>(expected.AsSpan(0, prefix), ref target));
+                Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<BitArray, TProfile>(expected.AsSpan(0, prefix), ref target));
                 Assert.Same(original, target);
                 for (int i = 0; i < length; i++) Assert.True(target[i]);
             }
         }
         BitArray? absent = null;
-        byte[] marker = LuminPackSerializer.Serialize<TProfile>(absent);
+        byte[] marker = LuminPackSerializer.Serialize<BitArray, TProfile>(absent);
         Assert.Equal(new byte[] { 255, 255, 255, 255 }, marker);
-        LuminPackSerializer.Deserialize<TProfile>(marker, ref absent);
+        LuminPackSerializer.Deserialize<BitArray, TProfile>(marker, ref absent);
         Assert.Null(absent);
     }
 }

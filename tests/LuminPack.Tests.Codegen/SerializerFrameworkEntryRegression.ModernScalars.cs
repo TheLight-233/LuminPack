@@ -78,7 +78,7 @@ internal static partial class SerializerFrameworkEntryRegression
                 }
                 private static void Profile<TOptions>(ScalarGraph graph) where TOptions : struct, ILuminPackOptions
                 {
-                    string json = LuminPackSerializer.SerializeJson<TOptions>(graph);
+                    string json = LuminPackSerializer.SerializeJson<ScalarGraph, TOptions>(graph);
                     Require(json.Contains("\"Date\":\"2024-02-29\"") && json.Contains("\"Time\":\"12:34:56.1234567\"") &&
                         json.Contains("\"Signed\":\"-170141183460469231731687303715884105727\"") &&
                         json.Contains("\"Unsigned\":\"340282366920938463463374607431768211455\"") &&
@@ -86,15 +86,15 @@ internal static partial class SerializerFrameworkEntryRegression
                     var encoding = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode;
                     byte[] bytes = encoding.GetBytes(json);
                     ScalarGraph result = null;
-                    Require(LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref result) == bytes.Length, "JSON consumption");
-                    Require(LuminPackSerializer.SerializeJson<TOptions>(result) == json, "JSON scalar graph");
+                    Require(LuminPackSerializer.DeserializeJson<ScalarGraph, TOptions>(bytes, ref result) == bytes.Length, "JSON consumption");
+                    Require(LuminPackSerializer.SerializeJson<ScalarGraph, TOptions>(result) == json, "JSON scalar graph");
                     var original = result;
-                    LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref result);
-                    Require(ReferenceEquals(original, result) && LuminPackSerializer.SerializeJson<TOptions>(result) == json, "JSON reuse");
+                    LuminPackSerializer.DeserializeJson<ScalarGraph, TOptions>(bytes, ref result);
+                    Require(ReferenceEquals(original, result) && LuminPackSerializer.SerializeJson<ScalarGraph, TOptions>(result) == json, "JSON reuse");
                     graph.OptionalDate = null; graph.OptionalTime = null; graph.OptionalSigned = null;
                     graph.OptionalUnsigned = null; graph.OptionalHalf = null; graph.OptionalRune = null;
-                    json = LuminPackSerializer.SerializeJson<TOptions>(graph);
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref result);
+                    json = LuminPackSerializer.SerializeJson<ScalarGraph, TOptions>(graph);
+                    LuminPackSerializer.DeserializeJson<ScalarGraph, TOptions>(encoding.GetBytes(json), ref result);
                     Require(result.OptionalDate is null && result.OptionalTime is null && result.OptionalSigned is null &&
                         result.OptionalUnsigned is null && result.OptionalHalf is null && result.OptionalRune is null, "Nullable scalars");
                     graph.OptionalDate = graph.Value.Date; graph.OptionalTime = graph.Value.Time; graph.OptionalSigned = graph.Value.Signed;
@@ -107,7 +107,7 @@ internal static partial class SerializerFrameworkEntryRegression
             """;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("ModernScalarFields" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse, "ModernScalars.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));

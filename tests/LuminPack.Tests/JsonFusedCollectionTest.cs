@@ -95,13 +95,13 @@ public class JsonFusedCollectionTest
             string key = escaped ? "key\\u0061" : "keya";
             string value = escaped ? "value\\u0062" : "valueb";
             Check<Dictionary<string, int>>("\"" + key + "\",123", static (ReadOnlySpan<byte> input, ref Dictionary<string, int> target) =>
-                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+                LuminPackSerializer.DeserializeJson<Dictionary<string, int>, LuminPackUtf8LengthOptions>(input, ref target));
             Check<Dictionary<string, long>>("\"" + key + "\",123", static (ReadOnlySpan<byte> input, ref Dictionary<string, long> target) =>
-                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+                LuminPackSerializer.DeserializeJson<Dictionary<string, long>, LuminPackUtf8LengthOptions>(input, ref target));
             Check<Dictionary<string, string>>("\"" + key + "\",\"" + value + "\"", static (ReadOnlySpan<byte> input, ref Dictionary<string, string> target) =>
-                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+                LuminPackSerializer.DeserializeJson<Dictionary<string, string>, LuminPackUtf8LengthOptions>(input, ref target));
             Check<Dictionary<int, string>>("123,\"" + value + "\"", static (ReadOnlySpan<byte> input, ref Dictionary<int, string> target) =>
-                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+                LuminPackSerializer.DeserializeJson<Dictionary<int, string>, LuminPackUtf8LengthOptions>(input, ref target));
         }
 
         // <summary>Compares equal result allocations with and without ignored trailing values.</summary>
@@ -178,9 +178,9 @@ public class JsonFusedCollectionTest
         Assert.Equal(value.Counts, utf8Copy.Counts);
         Assert.Equal(value.Map, utf8Copy.Map);
 
-        string utf16 = LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>((FusedJsonHolder)(value));
+        string utf16 = LuminPackSerializer.SerializeJson<FusedJsonHolder, LuminPackUtf16LengthOptions>((FusedJsonHolder)(value));
         Assert.Equal(utf8, utf16);
-        var utf16Copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<FusedJsonHolder>(utf16, static (string concreteReadInput, ref FusedJsonHolder concreteReadTarget) => LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
+        var utf16Copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<FusedJsonHolder>(utf16, static (string concreteReadInput, ref FusedJsonHolder concreteReadTarget) => LuminPackSerializer.DeserializeJson<FusedJsonHolder, LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.Map, utf16Copy.Map);
 
         var strict = new StrictFusedJsonHolder { Map = value.Map };

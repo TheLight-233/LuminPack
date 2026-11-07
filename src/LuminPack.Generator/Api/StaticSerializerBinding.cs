@@ -62,7 +62,6 @@ internal sealed partial class StaticSerializerBinding
         var signatures = LuminPackSerializerGenerator.GetInterceptionSignatures(metadata);
         _facadeSignatures = signatures;
         _binding = compilation.AddSyntaxTrees(signatures);
-        BindProfileSignatures(signatures, options);
         var payloads = new List<ITypeSymbol>();
         var invocations = new List<IMethodSymbol>();
         var sourceCalls = new List<SourceCall>();
@@ -95,9 +94,8 @@ internal sealed partial class StaticSerializerBinding
                     continue;
                 if (!_binding.IsSymbolAccessibleWithin(payload, _binding.Assembly))
                     continue;
-                if (method.TypeArguments.Length > 1 || IsProfileSignature(method))
-                    method = IsProfileSignature(method) ? method.OriginalDefinition :
-                        method.OriginalDefinition.Construct(payload, method.OriginalDefinition.TypeParameters.Last());
+                if (method.TypeArguments.Length > 1)
+                    method = method.OriginalDefinition.Construct(payload, method.OriginalDefinition.TypeParameters.Last());
                 string attribute = InterceptionSupport.Attribute(model, call);
                 if (attribute == null)
                     continue;
@@ -188,7 +186,12 @@ internal sealed partial class StaticSerializerBinding
     private bool IsSerializer(IMethodSymbol method)
         => method.ContainingType.ToDisplayString() == "LuminPack.LuminPackSerializer" &&
             (method.DeclaringSyntaxReferences.Length == 0 || method.DeclaringSyntaxReferences.Any(reference =>
-                reference.SyntaxTree == _facadeSignatures || reference.SyntaxTree == _profileSignatures));
+                reference.SyntaxTree == _facadeSignatures));
+
+    /// <summary>Gets the payload type from a generic serializer operation.</summary>
+    /// <param name="method">The bound facade operation.</param>
+    /// <returns>The selected payload type.</returns>
+    private static ITypeSymbol Payload(IMethodSymbol method) => method.TypeArguments[0];
 
     /// <summary>Maps an operation to its concrete convenience family.</summary>
     /// <param name="method">The selected facade operation and its exact parameter shape.</param>

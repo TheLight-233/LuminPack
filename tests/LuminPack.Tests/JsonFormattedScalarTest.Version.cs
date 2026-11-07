@@ -125,11 +125,11 @@ public partial class JsonFormattedScalarTest
     {
         foreach (var value in Versions())
         {
-            string json = LuminPackSerializer.SerializeJson<TOptions>(value);
+            string json = LuminPackSerializer.SerializeJson<Version, TOptions>(value);
             Assert.Equal(value is null ? "null" : "\"" + value + "\"", json);
             var target = new Version(9, 8);
             var previous = target;
-            LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target);
+            LuminPackSerializer.DeserializeJson<Version, TOptions>(encoding.GetBytes(json), ref target);
             Assert.Equal(value, target);
             Assert.NotSame(previous, target);
         }
@@ -137,10 +137,10 @@ public partial class JsonFormattedScalarTest
         {
             Version? expected = null;
             Exception? failure = Record.Exception(() => expected = Version.Parse(text));
-            string json = LuminPackSerializer.SerializeJson<TOptions>(text);
+            string json = LuminPackSerializer.SerializeJson<string, TOptions>(text);
             var target = new Version(9, 8);
             var previous = target;
-            Exception? actual = Record.Exception(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target));
+            Exception? actual = Record.Exception(() => LuminPackSerializer.DeserializeJson<Version, TOptions>(encoding.GetBytes(json), ref target));
             Assert.Equal(failure?.GetType(), actual?.GetType());
             Assert.Equal((failure as ArgumentException)?.ParamName, (actual as ArgumentException)?.ParamName);
             if (failure is null) Assert.Equal(expected, target);
@@ -150,7 +150,7 @@ public partial class JsonFormattedScalarTest
         {
             var target = new Version(9, 8);
             var previous = target;
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<Version, TOptions>(encoding.GetBytes(json), ref target));
             Assert.Same(previous, target);
         }
     }
@@ -160,8 +160,8 @@ public partial class JsonFormattedScalarTest
     /// <param name="output">The reusable destination.</param>
     private static void WriteVersionPair(Version value, LuminBufferWriter output)
     {
-        output.ResetCore(); LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value, output);
-        output.ResetCore(); LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(value, output);
+        output.ResetCore(); LuminPackSerializer.SerializeJson<Version, LuminPackUtf8LengthOptions>(value, output);
+        output.ResetCore(); LuminPackSerializer.SerializeJson<Version, LuminPackUtf16LengthOptions>(value, output);
     }
 
     /// <summary>Compares complete generated reads with the allocation required by the original BCL constructor.</summary>
@@ -171,9 +171,9 @@ public partial class JsonFormattedScalarTest
     private static void CheckVersionReadAllocation<TOptions>(byte[] input, long expected) where TOptions : struct, ILuminPackOptions
     {
         var target = new Version(9, 8);
-        for (int i = 0; i < 256; i++) LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+        for (int i = 0; i < 256; i++) LuminPackSerializer.DeserializeJson<Version, TOptions>(input, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 256; i++) LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+        for (int i = 0; i < 256; i++) LuminPackSerializer.DeserializeJson<Version, TOptions>(input, ref target);
         Assert.Equal(expected, GC.GetAllocatedBytesForCurrentThread() - before);
         GC.KeepAlive(target);
     }

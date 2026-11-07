@@ -31,9 +31,9 @@ public sealed class SortedSetConstructionTest
                 foreach (var word in input) builder.Add(word);
                 var text = System.Text.Json.JsonSerializer.Serialize(input);
                 var result = ImmutableSortedSet.Create("prior");
-                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(System.Text.Encoding.UTF8.GetBytes(text), ref result);
+                LuminPackSerializer.DeserializeJson<ImmutableSortedSet<string>, LuminPackUtf8LengthOptions>(System.Text.Encoding.UTF8.GetBytes(text), ref result);
                 Assert.Equal(builder.ToArray(), result.ToArray());
-                LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(System.Text.Encoding.Unicode.GetBytes(text), ref result);
+                LuminPackSerializer.DeserializeJson<ImmutableSortedSet<string>, LuminPackUtf16LengthOptions>(System.Text.Encoding.Unicode.GetBytes(text), ref result);
                 Assert.Equal(builder.ToArray(), result.ToArray());
             }
             var numbers = ImmutableSortedSet.Create(99);
@@ -204,15 +204,15 @@ public sealed class SortedSetConstructionTest
     private static void CheckProfile<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         var source = new SortedSet<string> { "alpha", "\u00e9clair", "\u4e2d\u6587" };
-        byte[] complete = LuminPackSerializer.Serialize<TOptions>(source);
+        byte[] complete = LuminPackSerializer.Serialize<SortedSet<string>, TOptions>(source);
         SortedSet<string>? copy = null;
-        int consumed = LuminPackSerializer.Deserialize<TOptions>(complete, ref copy);
+        int consumed = LuminPackSerializer.Deserialize<SortedSet<string>, TOptions>(complete, ref copy);
         Assert.Equal(complete.Length, consumed);
         Assert.True(copy!.SetEquals(source));
         for (int prefix = 0; prefix < complete.Length; prefix++)
         {
             SortedSet<string>? target = null;
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<TOptions>(complete.AsSpan(0, prefix), ref target));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<SortedSet<string>, TOptions>(complete.AsSpan(0, prefix), ref target));
             Assert.Null(target);
         }
     }

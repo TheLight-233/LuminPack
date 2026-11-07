@@ -43,21 +43,21 @@ internal static class SerializerBuilderPathRegression
                 }
                 private static void Json<TOptions>(BuilderGraph graph,Encoding encoding) where TOptions:struct,ILuminPackOptions
                 {
-                    string scalar=LuminPackSerializer.SerializeJson<TOptions>(graph.Text);
+                    string scalar=LuminPackSerializer.SerializeJson<StringBuilder, TOptions>(graph.Text);
                     StringBuilder scalarCopy=null;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(scalar),ref scalarCopy);
+                    LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(encoding.GetBytes(scalar),ref scalarCopy);
                     if(scalarCopy.ToString()!=graph.Text.ToString())throw new Exception("Scalar JSON changed.");
-                    string json=LuminPackSerializer.SerializeJson<TOptions>(graph);
+                    string json=LuminPackSerializer.SerializeJson<BuilderGraph, TOptions>(graph);
                     BuilderGraph restored=null;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json),ref restored);
+                    LuminPackSerializer.DeserializeJson<BuilderGraph, TOptions>(encoding.GetBytes(json),ref restored);
                     var target=restored.Text;
-                    LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json),ref restored);
+                    LuminPackSerializer.DeserializeJson<BuilderGraph, TOptions>(encoding.GetBytes(json),ref restored);
                     if(!ReferenceEquals(target,restored.Text)||restored.Text.ToString()!=graph.Text.ToString()||restored.Items[2]!=null)throw new Exception("Nested JSON reuse changed.");
                 }
                 public static void NullLiteralStillBinds(ref LuminPackJsonWriter writer) => writer.Write<LuminPackUtf8LengthOptions>(null);
             }
             """;
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("BuilderPaths" + mode + Guid.NewGuid().ToString("N"),

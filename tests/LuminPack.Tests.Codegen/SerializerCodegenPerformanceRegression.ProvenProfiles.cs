@@ -17,7 +17,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             if (profile == "default") source = source.Replace("LuminPackUtf16LengthOptions", "LuminPackDefaultOptions");
             if (profile == "fixed") source = source.Replace("struct LuminPackUtf16LengthOptions : ILuminPackOptions", "struct LuminPackFixedOptions<T> : ILuminPackOptions where T:struct,ILuminPackOptions")
                 .Replace("Record<LuminPack.Option.LuminPackUtf16LengthOptions>", "Record<LuminPack.Option.LuminPackFixedOptions<LuminPack.Option.LuminPackUtf16LengthOptions>>");
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var input = ProvenInput(source, parse, references);
             var driver = ProvenDriver(parse).RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             var errors = diagnostics.Concat(output.GetDiagnostics()).Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();
@@ -85,8 +85,8 @@ internal static partial class SerializerCodegenPerformanceRegression
                     Span<byte> span=new(pointer,width);var writer=new LuminPackWriter(ref span);
                     try
                     {
-                        if(array){Payload[] values=[source];LuminPackSerializer.Serialize<P>(ref writer,in values);}
-                        else LuminPackSerializer.Serialize<P>(ref writer,in source);
+                        if(array){Payload[] values=[source];LuminPackSerializer.Serialize<Payload[], P>(ref writer,in values);}
+                        else LuminPackSerializer.Serialize<Payload, P>(ref writer,in source);
                     }
                     catch(Exception exception){error=exception.GetType().FullName;}
                     cursor=writer.Position;

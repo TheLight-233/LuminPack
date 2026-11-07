@@ -7,7 +7,7 @@ internal static partial class SerializerFrameworkEntryRegression
     /// <param name="references">The actual runtime and framework references.</param>
     internal static void RunBitStorage(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var initial = CSharpCompilation.Create("BitStorage" + Guid.NewGuid().ToString("N"),
@@ -70,8 +70,8 @@ internal static partial class SerializerFrameworkEntryRegression
             }
             private static void Json<P>(BitEnvelope source)where P:struct,ILuminPackOptions
             {
-                string json=LuminPackSerializer.SerializeJson<P>(source);BitEnvelope value=null;LuminPackSerializer.DeserializeJson<P>(json,ref value);
-                Same(source.Bits,value.Bits);if(value.Tail!=719||LuminPackSerializer.SerializeJson<P>(value)!=json)throw new Exception("Bit JSON framing changed.");
+                string json=LuminPackSerializer.SerializeJson<BitEnvelope, P>(source);BitEnvelope value=null;LuminPackSerializer.DeserializeJson<BitEnvelope, P>(json,ref value);
+                Same(source.Bits,value.Bits);if(value.Tail!=719||LuminPackSerializer.SerializeJson<BitEnvelope, P>(value)!=json)throw new Exception("Bit JSON framing changed.");
             }
             private static void Same(BitArray a,BitArray b){if(a.Length!=b.Length)throw new Exception("Bit length changed.");for(int i=0;i<a.Length;i++)if(a[i]!=b[i])throw new Exception("Bit value changed.");}
         }

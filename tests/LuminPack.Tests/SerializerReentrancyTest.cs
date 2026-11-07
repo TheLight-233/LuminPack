@@ -46,7 +46,7 @@ internal static class SerializerReentrancyTest
     private static void ExplicitProfilesDoNotChangeImplicitDefaults()
     {
         var expected = LuminPackSerializer.Serialize("stable-default");
-        var alternate = LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>((string)("stable-default"));
+        var alternate = LuminPackSerializer.Serialize<string, LuminPackUtf16TokenOptions>((string)("stable-default"));
         Assert(!alternate.AsSpan().SequenceEqual(expected), "The explicit profile did not select its own wire representation.");
         var actual = LuminPackSerializer.Serialize("stable-default");
         Assert(actual.AsSpan().SequenceEqual(expected), "An explicit profile changed implicit serialization defaults.");

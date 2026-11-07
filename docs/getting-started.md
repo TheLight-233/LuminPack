@@ -65,7 +65,7 @@ Person fromJson = null!;
 LuminPackSerializer.DeserializeJson(json, ref fromJson);
 ```
 
-On supported modern compilers, `Serialize(person)`, `Deserialize(bytes, ref copy)` and closed explicit generic calls such as `Deserialize<Person>(bytes)` are intercepted into the type's existing concrete code. Safely relocatable static `Save<T>` wrappers can also be specialized at closed calls. The profile spelling `Serialize<TOptions>(person)` stays available. Opaque calls require explicit or Custom formatter [registration](custom-formatters.md#runtime-registration); missing registrations throw `LuminPackException`. Older compiler hosts use the packaged IL postprocessor to bind the same static entries; Unity requires its matching editor integration. See [static interception and compatibility boundaries](generation-modes.md#static-interception).
+On supported modern compilers, `Serialize(person)`, `Deserialize(bytes, ref copy)` and closed explicit generic calls such as `Deserialize<Person>(bytes)` are intercepted into the type's existing concrete code. Safely relocatable static `Save<T>` wrappers can also be specialized at closed calls. An explicit profile uses `Serialize<Person, TOptions>(person)`. Opaque calls require explicit or Custom formatter [registration](custom-formatters.md#runtime-registration); missing registrations throw `LuminPackException`. Older compiler hosts use the packaged IL postprocessor to bind the same static entries; Unity requires its matching editor integration. See [static interception and compatibility boundaries](generation-modes.md#static-interception).
 
 The XML remarks of concrete model overloads and built-in overloads with an execution root include a **Generated implementation** link to the binary or JSON `Root` method. Follow that link in your IDE to inspect the implementation without stepping through forwarding methods. Closed generic models, collections and compound values are supported when their formatter has a root. Raw unmanaged binary reads may call the runtime directly and therefore have no separate `RootRead`; Custom formatters keep their user-defined entry points. Generic type-selected fallback APIs have no single concrete root to link to.
 
@@ -83,7 +83,7 @@ Read methods that take `ref` return the number of bytes (or characters) consumed
 | `IBufferWriter<byte>` | `Serialize(value, bufferWriter)` | `SerializeJson(value, bufferWriter)` |
 | `Stream` | `SerializeAsync(stream, value)`, `DeserializeAsync<T>(stream)` | |
 
-Every entry also has a form with an option profile, for example `Serialize<LuminPackUtf8LengthOptions>(value)`; see [Options](options.md).
+Every entry also has a form with an option profile, for example `Serialize<Person, LuminPackUtf8LengthOptions>(value)`; see [Options](options.md).
 
 Streams stay owned by the caller and are not closed. Asynchronous reads buffer the complete input; framing consecutive messages is up to your protocol.
 

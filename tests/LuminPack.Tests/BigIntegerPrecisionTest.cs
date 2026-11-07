@@ -42,12 +42,12 @@ public class BigIntegerPrecisionTest
             foreach (var value in new[] { magnitude, -magnitude })
             {
                 string expected = "\"" + value.ToString(CultureInfo.InvariantCulture) + "\"";
-                Assert.Equal(expected, LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value));
-                Assert.Equal(expected, LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(value));
+                Assert.Equal(expected, LuminPackSerializer.SerializeJson<BigInteger, LuminPackUtf8LengthOptions>(value));
+                Assert.Equal(expected, LuminPackSerializer.SerializeJson<BigInteger, LuminPackUtf16LengthOptions>(value));
                 BigInteger target = default;
-                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(Encoding.UTF8.GetBytes(expected), ref target);
+                LuminPackSerializer.DeserializeJson<BigInteger, LuminPackUtf8LengthOptions>(Encoding.UTF8.GetBytes(expected), ref target);
                 Assert.Equal(value, target);
-                LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(Encoding.Unicode.GetBytes(expected), ref target);
+                LuminPackSerializer.DeserializeJson<BigInteger, LuminPackUtf16LengthOptions>(Encoding.Unicode.GetBytes(expected), ref target);
                 Assert.Equal(value, target);
             }
         }
@@ -151,8 +151,8 @@ public class BigIntegerPrecisionTest
         for (int i = 0; i < 64; i++)
         {
             output.ResetCore();
-            LuminPackSerializer.SerializeJson<TOptions>(value, output);
-            LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+            LuminPackSerializer.SerializeJson<BigInteger, TOptions>(value, output);
+            LuminPackSerializer.DeserializeJson<BigInteger, TOptions>(input, ref target);
             target = ReadDirect<TOptions>(input, state);
             target = new BigInteger(magnitude, isUnsigned: true);
         }
@@ -160,14 +160,14 @@ public class BigIntegerPrecisionTest
         for (int i = 0; i < 64; i++)
         {
             output.ResetCore();
-            LuminPackSerializer.SerializeJson<TOptions>(value, output);
+            LuminPackSerializer.SerializeJson<BigInteger, TOptions>(value, output);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 64; i++) target = new BigInteger(magnitude, isUnsigned: true);
         long necessary = GC.GetAllocatedBytesForCurrentThread() - before;
         before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 64; i++) LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+        for (int i = 0; i < 64; i++) LuminPackSerializer.DeserializeJson<BigInteger, TOptions>(input, ref target);
         Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Equal(value, target);
         before = GC.GetAllocatedBytesForCurrentThread();
@@ -210,10 +210,10 @@ public class BigIntegerPrecisionTest
             BigInteger power = BigInteger.One << bit;
             foreach (BigInteger value in new[] { power - 1, power, power + 1, -power - 1, -power, -power + 1 })
             {
-                string json = LuminPackSerializer.SerializeJson<TOptions>(value);
+                string json = LuminPackSerializer.SerializeJson<BigInteger, TOptions>(value);
                 Assert.Equal("\"" + value.ToString(CultureInfo.InvariantCulture) + "\"", json);
                 BigInteger target = default;
-                LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target);
+                LuminPackSerializer.DeserializeJson<BigInteger, TOptions>(encoding.GetBytes(json), ref target);
                 Assert.Equal(value, target);
             }
         }
@@ -221,10 +221,10 @@ public class BigIntegerPrecisionTest
         {
             BigInteger expected = default;
             Exception? failure = Record.Exception(() => expected = BigInteger.Parse(text!, CultureInfo.InvariantCulture));
-            string json = LuminPackSerializer.SerializeJson<TOptions>(text!);
+            string json = LuminPackSerializer.SerializeJson<string, TOptions>(text!);
             var target = (BigInteger.One << 256) + 17;
             var previous = target;
-            Exception? actual = Record.Exception(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target));
+            Exception? actual = Record.Exception(() => LuminPackSerializer.DeserializeJson<BigInteger, TOptions>(encoding.GetBytes(json), ref target));
             Assert.Equal(failure?.GetType(), actual?.GetType());
             Assert.Equal((failure as ArgumentException)?.ParamName, (actual as ArgumentException)?.ParamName);
             Assert.Equal(failure is null ? expected : previous, target);
@@ -233,7 +233,7 @@ public class BigIntegerPrecisionTest
         {
             var target = (BigInteger.One << 256) + 17;
             var previous = target;
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<BigInteger, TOptions>(encoding.GetBytes(json), ref target));
             Assert.Equal(previous, target);
         }
     }

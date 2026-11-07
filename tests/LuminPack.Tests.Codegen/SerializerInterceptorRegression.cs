@@ -69,9 +69,9 @@ internal static partial class SerializerInterceptorRegression
                 public static Payload DirectRead(byte[] value) => LuminPackSerializer.Deserialize<Payload>(value);
                 public static byte[] DirectWrapper(Payload value) => SaveCore(value);
                 private static byte[] Profile<TOptions>(Payload value) where TOptions : struct, ILuminPackOptions
-                    => LuminPackSerializer.Serialize<TOptions>(value);
-                private static byte[] ProfileExplicit<TOptions>(Payload value) where TOptions : struct, ILuminPackOptions
                     => LuminPackSerializer.Serialize<Payload, TOptions>(value);
+                private static byte[] ProfileSave<T, TOptions>(T value) where TOptions : struct, ILuminPackOptions
+                    => LuminPackSerializer.Serialize<T, TOptions>(value);
                 private static void Write(ref LuminPackWriter writer, in Payload value) => LuminPackSerializer.Serialize(ref writer, in value);
                 private static void Read(ref LuminPackReader reader, ref Payload value) => LuminPackSerializer.Deserialize(ref reader, ref value);
                 #if !NO_REGISTER
@@ -112,12 +112,18 @@ internal static partial class SerializerInterceptorRegression
                     if (Convert.ToBase64String(Save(value)) != Convert.ToBase64String(bytes) || Saved != 1 || ParameterName != "T" || Selected != "object" || Caller != "Save")
                         throw new Exception("Closed wrapper semantics changed.");
                     if (LuminPackSerializer.Deserialize<int>(Save(49)) != 49 || Saved != 2) throw new Exception("Closed scalar wrapper mismatch.");
-                    var profiled = LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>(value);
+                    var profiled = LuminPackSerializer.Serialize<Payload, LuminPackUtf16TokenOptions>(value);
                     Payload profileValue = null;
-                    LuminPackSerializer.Deserialize<LuminPackUtf16TokenOptions>(profiled, ref profileValue);
+                    LuminPackSerializer.Deserialize<Payload, LuminPackUtf16TokenOptions>(profiled, ref profileValue);
                     if (profileValue.Text != value.Text || Convert.ToBase64String(Profile<LuminPackUtf16TokenOptions>(value)) != Convert.ToBase64String(profiled))
-                        throw new Exception("Profile-only spelling mismatch.");
-                    if (Convert.ToBase64String(ProfileExplicit<LuminPackUtf16TokenOptions>(value)) != Convert.ToBase64String(profiled)) throw new Exception("Open profile mismatch.");
+                        throw new Exception("Explicit profile mismatch.");
+                    if (LuminPackSerializer.Deserialize<Payload, LuminPackUtf16TokenOptions>(profiled).Text != value.Text)
+                        throw new Exception("Explicit profile value read mismatch.");
+                    string profileJson = LuminPackSerializer.SerializeJson<Payload, LuminPackUtf16TokenOptions>(value);
+                    if (LuminPackSerializer.DeserializeJson<Payload, LuminPackUtf16TokenOptions>(profileJson).Text != value.Text)
+                        throw new Exception("Explicit JSON profile mismatch.");
+                    if (Convert.ToBase64String(ProfileSave<Payload, LuminPackUtf16TokenOptions>(value)) != Convert.ToBase64String(profiled))
+                        throw new Exception("Generic payload and profile wrapper mismatch.");
                     if (Convert.ToBase64String(GenericOwner<Payload>.Save(value)) != Convert.ToBase64String(bytes)) throw new Exception("Generic owner mismatch.");
                     int? nullable = 19;
                     if (LuminPackSerializer.Deserialize<int?>(LuminPackSerializer.Serialize(nullable)) != nullable) throw new Exception("Nullable mismatch.");
@@ -127,6 +133,11 @@ internal static partial class SerializerInterceptorRegression
                     LuminPackSerializer.SerializeAsync(stream, value).GetAwaiter().GetResult();
                     stream.Position = 0;
                     if (LuminPackSerializer.DeserializeAsync<Payload>(stream).GetAwaiter().GetResult().Number != 37) throw new Exception("Async mismatch.");
+                    using var profileStream = new MemoryStream();
+                    LuminPackSerializer.SerializeAsync<Payload, LuminPackUtf16TokenOptions>(profileStream, value).GetAwaiter().GetResult();
+                    profileStream.Position = 0;
+                    if (LuminPackSerializer.DeserializeAsync<Payload, LuminPackUtf16TokenOptions>(profileStream).GetAwaiter().GetResult().Text != value.Text)
+                        throw new Exception("Explicit async profile mismatch.");
                     #if !NO_REGISTER
                     CheckFallback(value, bytes);
                     #endif
@@ -182,15 +193,21 @@ internal static partial class SerializerInterceptorRegression
                 File.WriteAllText(Path.Combine(".tmp/interceptor-failure", generated.HintName), generated.SourceText.ToString());
             throw new InvalidOperationException(string.Join(Environment.NewLine, errors.Select(item => item.ToString())));
         }
+        var generatedFiles = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
+        VerifyIndentation(generatedFiles);
+        var outerMethods = generatedFiles.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
+            .Where(type => type.Identifier.ValueText == "LuminPackSerializer").SelectMany(type => type.Members.OfType<MethodDeclarationSyntax>());
+        Require(!outerMethods.Any(method => method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync" &&
+            method.TypeParameterList?.Parameters.Count == 1 && method.ConstraintClauses.Any(clause => clause.ToString().Contains("ILuminPackOptions", StringComparison.Ordinal)) &&
+            method.ParameterList.Parameters.FirstOrDefault()?.Modifiers.Any(SyntaxKind.RefKeyword) != true &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == "value" &&
+                parameter.Type?.ToString() != method.TypeParameterList.Parameters[0].Identifier.ValueText)),
+            "A payload-specific profile convenience overload remained in the global facade.");
         if (intercept)
         {
-            var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
-            VerifyIndentation(generated);
-            Require(generated.Any(file => file.HintName == "LuminPack.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
-            Require(generated.Any(file => file.HintName == "LuminPackGen.Union.UnionDispatch.g.cs"),
+            Require(generatedFiles.Any(file => file.HintName == "LuminPack.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
+            Require(generatedFiles.Any(file => file.HintName == "LuminPackGen.Union.UnionDispatch.g.cs"),
                 "The Union dispatch file did not use the LuminPackGen. prefix.");
-            var outerMethods = generated.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
-                .Where(type => type.Identifier.ValueText == "LuminPackSerializer").SelectMany(type => type.Members.OfType<MethodDeclarationSyntax>());
             Require(!outerMethods.Any(method => method.Identifier.ValueText == "Serialize" &&
                 method.TypeParameterList == null &&
                 method.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString() == "global::Payload"),

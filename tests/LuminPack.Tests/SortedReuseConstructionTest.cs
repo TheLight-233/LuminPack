@@ -106,7 +106,7 @@ public sealed class SortedReuseConstructionTest
         {
             ["a"] = new() { Number = 1 }, ["b"] = new() { Number = 2 }, ["c"] = new() { Number = 3 }
         };
-        byte[] payload = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(source);
+        byte[] payload = LuminPackSerializer.Serialize<SortedList<string, SortedReuseCallbackValue>, LuminPackUtf16LengthOptions>(source);
         CultureInfo saved = CultureInfo.CurrentCulture;
         try
         {
@@ -139,7 +139,7 @@ public sealed class SortedReuseConstructionTest
                     if (action == "throw") throw failure;
                     if (action == "culture") CultureInfo.CurrentCulture = afterCulture;
                 };
-                try { LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(payload, ref actual); }
+                try { LuminPackSerializer.Deserialize<SortedList<string, SortedReuseCallbackValue>, LuminPackUtf16LengthOptions>(payload, ref actual); }
                 catch (Exception error) { after = error; }
                 Assert.Same(before, after);
                 Assert.Equal(beforeCalls, afterCulture.Calls);
@@ -166,7 +166,7 @@ public sealed class SortedReuseConstructionTest
             new[] { "a", "a", "b" }, new string?[] { null, "a", null }, new[] { "I", "i", "\u0130", "\u0131", "\u00e4" }
         })
         {
-            byte[] payload = LuminPackSerializer.Serialize<TOptions>(values);
+            byte[] payload = LuminPackSerializer.Serialize<string?[], TOptions>(values);
             foreach (bool custom in new[] { false, true })
             for (int prefix = 0; prefix <= payload.Length; prefix++)
             {
@@ -177,7 +177,7 @@ public sealed class SortedReuseConstructionTest
                 byte[] input = payload.AsSpan(0, prefix).ToArray();
                 Exception? before = null, after = null;
                 try { ReadSetOriginal<TOptions>(input, expected); } catch (Exception error) { before = error; }
-                try { LuminPackSerializer.Deserialize<TOptions>(input, ref actual); } catch (Exception error) { after = error; }
+                try { LuminPackSerializer.Deserialize<SortedSet<string?>, TOptions>(input, ref actual); } catch (Exception error) { after = error; }
                 Assert.Equal(before?.GetType(), after?.GetType());
                 Assert.Equal(before?.Message, after?.Message);
                 Assert.Same(original, actual);
@@ -213,7 +213,7 @@ public sealed class SortedReuseConstructionTest
         {
             ["a"] = new() { Number = 1 }, ["b"] = new() { Number = 2 }, ["c"] = new() { Number = 3 }
         };
-        byte[] payload = LuminPackSerializer.Serialize<TOptions>(source);
+        byte[] payload = LuminPackSerializer.Serialize<SortedList<string, SortedReuseCallbackValue>, TOptions>(source);
         foreach (bool custom in new[] { false, true })
         foreach (bool mutate in new[] { false, true })
         foreach (int capacity in new[] { 0, 16 })
@@ -241,7 +241,7 @@ public sealed class SortedReuseConstructionTest
                     afterEvents.Add(item.Number + ":" + actual.Count);
                     if (mutate) actual["external" + item.Number] = new() { Number = -item.Number };
                 };
-                try { LuminPackSerializer.Deserialize<TOptions>(input, ref actual); } catch (Exception error) { after = error; }
+                try { LuminPackSerializer.Deserialize<SortedList<string, SortedReuseCallbackValue>, TOptions>(input, ref actual); } catch (Exception error) { after = error; }
             }
             finally { SortedReuseCallbackValue.OnRead = null; }
             Assert.Equal(before?.GetType(), after?.GetType());
@@ -273,7 +273,7 @@ public sealed class SortedReuseConstructionTest
             {
                 string? key = reader.Read<TOptions>((string?)null);
                 SortedReuseCallbackValue value = null!;
-                LuminPackSerializer.Deserialize<TOptions>(ref reader, ref value);
+                LuminPackSerializer.Deserialize<SortedReuseCallbackValue, TOptions>(ref reader, ref value);
                 target.Add(key!, value);
             }
         }

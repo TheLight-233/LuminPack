@@ -28,28 +28,28 @@ public partial class BinaryStringHotPathTest
     private static void CheckStringListProfile<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         List<string?> source = [null, "", "ascii", "\u00e9\u00ff", "\u4e2d\u6587", "\ud83d\ude03", new('x', 4096)];
-        var bytes = LuminPackSerializer.Serialize<TOptions>(source);
+        var bytes = LuminPackSerializer.Serialize<List<string?>, TOptions>(source);
         List<string?>? expected = null, actual = null;
         expected = source.Select(text => text is null && default(TOptions).StringRecording == LuminPackStringRecording.Token ? "" : text).ToList();
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref actual));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<List<string?>, TOptions>(bytes, ref actual));
         Assert.Equal(expected, actual);
         var original = actual;
         var strings = actual!.ToArray();
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref actual);
+        LuminPackSerializer.Deserialize<List<string?>, TOptions>(bytes, ref actual);
         Assert.Same(original, actual);
         for (int i = 0; i < strings.Length; i++) Assert.Same(strings[i], actual![i]);
         foreach (int count in new[] { 1, 16, 0, 256 })
         {
             source = Enumerable.Range(0, count).Select(i => (string?) ("changed-" + i)).ToList();
-            bytes = LuminPackSerializer.Serialize<TOptions>(source);
+            bytes = LuminPackSerializer.Serialize<List<string?>, TOptions>(source);
             expected = source;
-            LuminPackSerializer.Deserialize<TOptions>(bytes, ref actual);
+            LuminPackSerializer.Deserialize<List<string?>, TOptions>(bytes, ref actual);
             Assert.Same(original, actual);
             Assert.Equal(expected, actual);
         }
         source = null!;
-        bytes = LuminPackSerializer.Serialize<TOptions>(source);
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref actual);
+        bytes = LuminPackSerializer.Serialize<List<string?>, TOptions>(source);
+        LuminPackSerializer.Deserialize<List<string?>, TOptions>(bytes, ref actual);
         Assert.Null(actual);
     }
 

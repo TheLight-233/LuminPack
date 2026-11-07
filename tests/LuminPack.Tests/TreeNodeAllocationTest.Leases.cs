@@ -150,14 +150,14 @@ public sealed partial class TreeNodeAllocationTest
             if (dictionary)
             {
                 if (format == 0) LuminPackSerializer.Serialize(map, output);
-                else if (format == 1) LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(map, output);
-                else LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(map, output);
+                else if (format == 1) LuminPackSerializer.SerializeJson<ImmutableDictionary<HashLeaseKey, int>, LuminPackUtf8LengthOptions>(map, output);
+                else LuminPackSerializer.SerializeJson<ImmutableDictionary<HashLeaseKey, int>, LuminPackUtf16LengthOptions>(map, output);
             }
             else
             {
                 if (format == 0) LuminPackSerializer.Serialize(set, output);
-                else if (format == 1) LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(set, output);
-                else LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(set, output);
+                else if (format == 1) LuminPackSerializer.SerializeJson<ImmutableHashSet<HashLeaseKey>, LuminPackUtf8LengthOptions>(set, output);
+                else LuminPackSerializer.SerializeJson<ImmutableHashSet<HashLeaseKey>, LuminPackUtf16LengthOptions>(set, output);
             }
             byte[] bytes = output.GetSpan().ToArray();
             ImmutableHashSet<HashLeaseKey>? readSet = null;
@@ -206,14 +206,14 @@ public sealed partial class TreeNodeAllocationTest
                 if (dictionary)
                 {
                     if (format == 0) LuminPackSerializer.Deserialize(bytes, ref readMap!);
-                    else if (format == 1) LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(bytes, ref readMap!);
-                    else LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(bytes, ref readMap!);
+                    else if (format == 1) LuminPackSerializer.DeserializeJson<ImmutableDictionary<HashLeaseKey, int>, LuminPackUtf8LengthOptions>(bytes, ref readMap!);
+                    else LuminPackSerializer.DeserializeJson<ImmutableDictionary<HashLeaseKey, int>, LuminPackUtf16LengthOptions>(bytes, ref readMap!);
                 }
                 else
                 {
                     if (format == 0) LuminPackSerializer.Deserialize(bytes, ref readSet!);
-                    else if (format == 1) LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(bytes, ref readSet!);
-                    else LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(bytes, ref readSet!);
+                    else if (format == 1) LuminPackSerializer.DeserializeJson<ImmutableHashSet<HashLeaseKey>, LuminPackUtf8LengthOptions>(bytes, ref readSet!);
+                    else LuminPackSerializer.DeserializeJson<ImmutableHashSet<HashLeaseKey>, LuminPackUtf16LengthOptions>(bytes, ref readSet!);
                 }
             }
         }

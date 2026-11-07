@@ -38,23 +38,23 @@ internal static class SerializerCompoundStringReuseRegression
                     string text = new string('x',17), candidate = new string('x',17);
                     var pair = new KeyValuePair<Scalar,string>(default(Scalar),text);
                     var target = new KeyValuePair<Scalar,string>(default(Scalar),candidate);
-                    byte[] bytes = LuminPackSerializer.Serialize<T>(pair);
-                    if(LuminPackSerializer.Deserialize<T>(bytes,ref target)!=bytes.Length || !ReferenceEquals(candidate,target.Value)) throw new Exception("Pair candidate changed.");
+                    byte[] bytes = LuminPackSerializer.Serialize<KeyValuePair<Scalar, string>, T>(pair);
+                    if(LuminPackSerializer.Deserialize<KeyValuePair<Scalar, string>, T>(bytes,ref target)!=bytes.Length || !ReferenceEquals(candidate,target.Value)) throw new Exception("Pair candidate changed.");
                     var tuple = new ValueTuple<Scalar,string,bool>(default(Scalar),text,true);
                     var value = new ValueTuple<Scalar,string,bool>(default(Scalar),candidate,false);
-                    bytes=LuminPackSerializer.Serialize<T>(tuple);
-                    if(LuminPackSerializer.Deserialize<T>(bytes,ref value)!=bytes.Length || !ReferenceEquals(candidate,value.Item2) || !value.Item3) throw new Exception("ValueTuple candidate changed.");
+                    bytes=LuminPackSerializer.Serialize<(Scalar, string, bool), T>(tuple);
+                    if(LuminPackSerializer.Deserialize<(Scalar, string, bool), T>(bytes,ref value)!=bytes.Length || !ReferenceEquals(candidate,value.Item2) || !value.Item3) throw new Exception("ValueTuple candidate changed.");
                     var reference = Tuple.Create(default(Scalar),text,true);
                     var receiver = Tuple.Create(default(Scalar),candidate,false);
                     object original=receiver;
-                    bytes=LuminPackSerializer.Serialize<T>(reference);
-                    if(LuminPackSerializer.Deserialize<T>(bytes,ref receiver)!=bytes.Length || !ReferenceEquals(candidate,receiver.Item2) || ReferenceEquals(original,receiver)) throw new Exception("Reference tuple construction changed.");
+                    bytes=LuminPackSerializer.Serialize<Tuple<Scalar, string, bool>, T>(reference);
+                    if(LuminPackSerializer.Deserialize<Tuple<Scalar, string, bool>, T>(bytes,ref receiver)!=bytes.Length || !ReferenceEquals(candidate,receiver.Item2) || ReferenceEquals(original,receiver)) throw new Exception("Reference tuple construction changed.");
                 }
             }
             """;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             string text = source.Replace("MODE", mode, StringComparison.Ordinal);
             var compilation = CSharpCompilation.Create("CompoundReuse" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(text, parse, "Entry.cs")], references,

@@ -10,7 +10,7 @@ internal static partial class SerializerImmutableListWriteRegression
     internal static void RunConcurrent(MetadataReference[] references)
     {
         VerifyConcurrentRuntime();
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         string[] helpers = ["EnumerateConcurrentDictionary", "EnumerateConcurrentStack", "RentConcurrentBagSnapshot", "TryWriteConcurrentBagRaw", "PublishConcurrentStack"];
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
@@ -88,12 +88,12 @@ internal static partial class SerializerImmutableListWriteRegression
                 using var output=new LuminPack.Utility.LuminBufferWriter(true);
                 foreach(bool json in new[]{false,true})
                 {
-                    Action write=()=>{output.ResetCore();if(json){LuminPackSerializer.SerializeJson<P>(bag,output);LuminPackSerializer.SerializeJson<P>(stack,output);LuminPackSerializer.SerializeJson<P>(map,output);}else{LuminPackSerializer.Serialize<P>(bag,output);LuminPackSerializer.Serialize<P>(stack,output);LuminPackSerializer.Serialize<P>(map,output);}};
+                    Action write=()=>{output.ResetCore();if(json){LuminPackSerializer.SerializeJson<ConcurrentBag<int>, P>(bag,output);LuminPackSerializer.SerializeJson<ConcurrentStack<int>, P>(stack,output);LuminPackSerializer.SerializeJson<ConcurrentDictionary<int, int>, P>(map,output);}else{LuminPackSerializer.Serialize<ConcurrentBag<int>, P>(bag,output);LuminPackSerializer.Serialize<ConcurrentStack<int>, P>(stack,output);LuminPackSerializer.Serialize<ConcurrentDictionary<int, int>, P>(map,output);}};
                     if(Measure(write)!=0)throw new Exception("Concurrent traversal allocated after warmup.");
                 }
-                output.ResetCore();LuminPackSerializer.SerializeJson<P>(stack,output);byte[] bytes=output.GetSpan().ToArray();
+                output.ResetCore();LuminPackSerializer.SerializeJson<ConcurrentStack<int>, P>(stack,output);byte[] bytes=output.GetSpan().ToArray();
                 long finalGraph=Measure(()=>{Sink=new ConcurrentStack<int>();Sink.PushRange(values);});
-                long reading=Measure(()=>{ConcurrentStack<int> value=null;LuminPackSerializer.DeserializeJson<P>(bytes,ref value);Sink=value;});
+                long reading=Measure(()=>{ConcurrentStack<int> value=null;LuminPackSerializer.DeserializeJson<ConcurrentStack<int>, P>(bytes,ref value);Sink=value;});
                 if(reading!=finalGraph||Sink.Count!=values.Length)throw new Exception("Framework stack JSON allocated beyond final nodes.");
             }
             private static long Measure(Action action)
@@ -112,10 +112,10 @@ internal static partial class SerializerImmutableListWriteRegression
                     var graph=new ConcurrentGraph{Map=new ConcurrentDictionary<int,int>(values.ToDictionary(i=>i,i=>i+1)),Stack=new ConcurrentStack<int>(values),Bag=new ConcurrentBag<int>(values),Queue=new ConcurrentQueue<int>(values),Blocking=new BlockingCollection<int>(new ConcurrentQueue<int>(values)),Tail=719};
                     foreach(bool json in new[]{false,true})
                     {
-                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(graph,output);else LuminPackSerializer.Serialize<P>(graph,output);
+                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ConcurrentGraph, P>(graph,output);else LuminPackSerializer.Serialize<ConcurrentGraph, P>(graph,output);
                         byte[] bytes=output.GetSpan().ToArray();evidence.AppendLine(Convert.ToBase64String(bytes));
                         ConcurrentGraph copy=null;
-                        if(json)LuminPackSerializer.DeserializeJson<P>(bytes,ref copy);else LuminPackSerializer.Deserialize<P>(bytes,ref copy);
+                        if(json)LuminPackSerializer.DeserializeJson<ConcurrentGraph, P>(bytes,ref copy);else LuminPackSerializer.Deserialize<ConcurrentGraph, P>(bytes,ref copy);
                         if(copy.Tail!=719||copy.Map.Count!=count||values.Any(i=>copy.Map[i]!=i+1)||!copy.Stack.SequenceEqual(values.Reverse())||!copy.Queue.SequenceEqual(values)||!copy.Blocking.SequenceEqual(values)||!copy.Bag.OrderBy(i=>i).SequenceEqual(values))throw new Exception("Concurrent graph changed.");
                         copy.Blocking.Dispose();
                     }
@@ -125,34 +125,34 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     var value=fresh?null:new ConcurrentStack<int>(new[]{991});var old=value;
                     byte[] bytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(json);
-                    try{LuminPackSerializer.DeserializeJson<P>(bytes,ref value);evidence.Append("ok");}catch(Exception error){evidence.Append(error.GetType().FullName);}
+                    try{LuminPackSerializer.DeserializeJson<ConcurrentStack<int>, P>(bytes,ref value);evidence.Append("ok");}catch(Exception error){evidence.Append(error.GetType().FullName);}
                     evidence.Append(':').Append(ReferenceEquals(value,old)).Append(':').AppendLine(value==null?"null":string.Join(",",value));
                 }
                 var nullable=new ConcurrentStack<int?>(new int?[]{1,null,3});
-                byte[] nullableBytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(LuminPackSerializer.SerializeJson<P>(nullable));
-                ConcurrentStack<int?> nullableCopy=null;LuminPackSerializer.DeserializeJson<P>(nullableBytes,ref nullableCopy);
+                byte[] nullableBytes=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(LuminPackSerializer.SerializeJson<ConcurrentStack<int?>, P>(nullable));
+                ConcurrentStack<int?> nullableCopy=null;LuminPackSerializer.DeserializeJson<ConcurrentStack<int?>, P>(nullableBytes,ref nullableCopy);
                 if(!nullable.SequenceEqual(nullableCopy))throw new Exception("Nullable stack order changed.");
                 foreach(bool json in new[]{false,true})
                 {
                     var bag=new ConcurrentBag<ConcurrentItem>(new[]{new ConcurrentItem{Id=1},new ConcurrentItem{Id=2},new ConcurrentItem{Id=3}});
                     ConcurrentItem.Writing=id=>{evidence.Append(id).Append(',');bag.Clear();bag.Add(new ConcurrentItem{Id=9});};
-                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(bag,output);else LuminPackSerializer.Serialize<P>(bag,output);
+                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ConcurrentBag<ConcurrentItem>, P>(bag,output);else LuminPackSerializer.Serialize<ConcurrentBag<ConcurrentItem>, P>(bag,output);
                     ConcurrentItem.Writing=null;evidence.AppendLine(Convert.ToBase64String(output.GetSpan().ToArray()));
                     ConcurrentItem.Writing=id=>throw new InvalidOperationException("write callback");bool failed=false;
-                    try{output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(bag,output);else LuminPackSerializer.Serialize<P>(bag,output);}catch(InvalidOperationException){failed=true;}finally{ConcurrentItem.Writing=null;}
+                    try{output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ConcurrentBag<ConcurrentItem>, P>(bag,output);else LuminPackSerializer.Serialize<ConcurrentBag<ConcurrentItem>, P>(bag,output);}catch(InvalidOperationException){failed=true;}finally{ConcurrentItem.Writing=null;}
                     if(!failed)throw new Exception("Missing callback failure.");
                     var worker=new System.Threading.Thread(()=>bag.Add(new ConcurrentItem{Id=17})){IsBackground=true};worker.Start();if(!worker.Join(5000))throw new Exception("Bag lock survived callback failure.");
                     var map=new ConcurrentDictionary<int,ConcurrentItem>(1,3);for(int i=0;i<7;i++)map[i]=new ConcurrentItem{Id=i};
                     ConcurrentItem.Writing=id=>{evidence.Append(id).Append(',');map.TryRemove(id+1,out _);for(int key=10;key<40;key++)map[key]=new ConcurrentItem{Id=key};};
-                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(map,output);else LuminPackSerializer.Serialize<P>(map,output);
+                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ConcurrentDictionary<int, ConcurrentItem>, P>(map,output);else LuminPackSerializer.Serialize<ConcurrentDictionary<int, ConcurrentItem>, P>(map,output);
                     ConcurrentItem.Writing=null;evidence.AppendLine(Convert.ToBase64String(output.GetSpan().ToArray()));
                     foreach(bool fail in new[]{false,true})
                     {
                         var stack=new ConcurrentStack<ConcurrentItem>(new[]{new ConcurrentItem{Id=1},new ConcurrentItem{Id=2},new ConcurrentItem{Id=3}});
-                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(stack,output);else LuminPackSerializer.Serialize<P>(stack,output);byte[] bytes=output.GetSpan().ToArray();
+                        output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ConcurrentStack<ConcurrentItem>, P>(stack,output);else LuminPackSerializer.Serialize<ConcurrentStack<ConcurrentItem>, P>(stack,output);byte[] bytes=output.GetSpan().ToArray();
                         stack=new ConcurrentStack<ConcurrentItem>();
                         ConcurrentItem.Reading=id=>{evidence.Append(id).Append(':').Append(string.Join(",",stack.Select(v=>v.Id))).Append(';');if(fail&&id==2)throw new InvalidOperationException("read callback");};
-                        try{if(json)LuminPackSerializer.DeserializeJson<P>(bytes,ref stack);else LuminPackSerializer.Deserialize<P>(bytes,ref stack);}catch(Exception error){evidence.Append(error.GetType().Name);}finally{ConcurrentItem.Reading=null;}
+                        try{if(json)LuminPackSerializer.DeserializeJson<ConcurrentStack<ConcurrentItem>, P>(bytes,ref stack);else LuminPackSerializer.Deserialize<ConcurrentStack<ConcurrentItem>, P>(bytes,ref stack);}catch(Exception error){evidence.Append(error.GetType().Name);}finally{ConcurrentItem.Reading=null;}
                         evidence.Append('=').AppendLine(string.Join(",",stack.Select(v=>v.Id)));
                     }
                 }

@@ -38,19 +38,19 @@ internal static class SerializerStringListReadRegression
                 private static void Profile<T>() where T:struct,ILuminPackOptions
                 {
                     var source = Enumerable.Range(0,256).Select(Value).ToList();
-                    byte[] bytes=LuminPackSerializer.Serialize<T>(source);
+                    byte[] bytes=LuminPackSerializer.Serialize<List<Element>, T>(source);
                     List<Element> target=null;
-                    LuminPackSerializer.Deserialize<T>(bytes,ref target);
+                    LuminPackSerializer.Deserialize<List<Element>, T>(bytes,ref target);
                     var original=target; var first=target[0];
-                    LuminPackSerializer.Deserialize<T>(bytes,ref target);
+                    LuminPackSerializer.Deserialize<List<Element>, T>(bytes,ref target);
                     if(!ReferenceEquals(original,target) || !source.SequenceEqual(target)) throw new Exception("Root list reuse differs.");
                     if(typeof(Element)==typeof(string) && !ReferenceEquals(first,target[0])) throw new Exception("String identity changed.");
                     var holder = new Holder {Values=source,Tail=new(){Value(17)}};
-                    bytes=LuminPackSerializer.Serialize<T>(holder);
+                    bytes=LuminPackSerializer.Serialize<Holder, T>(holder);
                     Holder receiver=null;
-                    LuminPackSerializer.Deserialize<T>(bytes,ref receiver);
+                    LuminPackSerializer.Deserialize<Holder, T>(bytes,ref receiver);
                     var values=receiver.Values; var tail=receiver.Tail;
-                    LuminPackSerializer.Deserialize<T>(bytes,ref receiver);
+                    LuminPackSerializer.Deserialize<Holder, T>(bytes,ref receiver);
                     if(!ReferenceEquals(values,receiver.Values) || !ReferenceEquals(tail,receiver.Tail) || !source.SequenceEqual(values)) throw new Exception("Nested list storage changed.");
                 }
             }
@@ -58,7 +58,7 @@ internal static class SerializerStringListReadRegression
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var parse = new CSharpParseOptions(LanguageVersion.Preview,
-                preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+                preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             string text = source.Replace("MODE", mode, StringComparison.Ordinal);
             var tree = CSharpSyntaxTree.ParseText(text, parse, "Entry.cs");
             var compilation = CSharpCompilation.Create("StringListReads" + mode + Guid.NewGuid().ToString("N"), [tree], references,

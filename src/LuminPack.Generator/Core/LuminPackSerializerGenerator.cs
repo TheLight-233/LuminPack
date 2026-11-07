@@ -210,6 +210,9 @@ public static partial class LuminPackSerializerGenerator
             if (InterceptionSupport.IsEnabled(metaInfo.ParseOptions))
                 blocks[index] = new KeyValuePair<string, string>(blocks[index].Key,
                     UniqueStateEntries.Facade(blocks[index].Value, blocks[index].Key, metaInfo));
+            else
+                blocks[index] = new KeyValuePair<string, string>(blocks[index].Key,
+                    LegacyProfileContainers.Apply(blocks[index].Value, blocks[index].Key, metaInfo));
         }, cancellationToken);
         if (sharedSupport.Length != 0)
         {

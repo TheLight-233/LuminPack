@@ -254,7 +254,7 @@ internal static class SerializerGenericOverloadRegression
                     Require(LuminPackSerializer.Serialize(overridden).SequenceEqual(directOverride), "Concrete API bypasses registration");
                     Require(LuminPackSerializer.Serialize(number).SequenceEqual(integers), "Concrete API bypasses registration");
                     Require(LuminPackSerializer.Serialize(item).SequenceEqual(bytes), "Concrete object API after registration");
-                    var profileBytes = LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf8LengthOptions>(item);
+                    var profileBytes = LuminPackSerializer.Serialize<Item, LuminPack.Option.LuminPackUtf8LengthOptions>(item);
                     Require(SaveProfile(item).SequenceEqual(profileBytes) && LoadProfile<Item>(profileBytes).Name == "example", "Registered explicit profile");
                     Require(Load<CustomValue>(Save(new CustomValue { Value = 901 })).Value == 901, "Custom automatic Register");
             #endif

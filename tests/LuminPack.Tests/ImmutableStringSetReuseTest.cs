@@ -28,17 +28,17 @@ public sealed class ImmutableStringSetReuseTest
         var hashed = sorted.ToImmutableHashSet();
         var a = sorted;
         var b = hashed;
-        byte[] sortedBytes = LuminPackSerializer.Serialize<TOptions>(sorted);
-        byte[] hashBytes = LuminPackSerializer.Serialize<TOptions>(hashed);
-        Assert.Equal(sortedBytes.Length, LuminPackSerializer.Deserialize<TOptions>(sortedBytes, ref a));
-        Assert.Equal(hashBytes.Length, LuminPackSerializer.Deserialize<TOptions>(hashBytes, ref b));
+        byte[] sortedBytes = LuminPackSerializer.Serialize<ImmutableSortedSet<string>, TOptions>(sorted);
+        byte[] hashBytes = LuminPackSerializer.Serialize<ImmutableHashSet<string>, TOptions>(hashed);
+        Assert.Equal(sortedBytes.Length, LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, TOptions>(sortedBytes, ref a));
+        Assert.Equal(hashBytes.Length, LuminPackSerializer.Deserialize<ImmutableHashSet<string>, TOptions>(hashBytes, ref b));
         Assert.Same(sorted, a);
         Assert.Same(hashed, b);
-        Assert.Equal(sortedBytes, LuminPackSerializer.Serialize<TOptions>(a));
-        Assert.Equal(hashBytes, LuminPackSerializer.Serialize<TOptions>(b));
+        Assert.Equal(sortedBytes, LuminPackSerializer.Serialize<ImmutableSortedSet<string>, TOptions>(a));
+        Assert.Equal(hashBytes, LuminPackSerializer.Serialize<ImmutableHashSet<string>, TOptions>(b));
         var changed = sorted.Remove("alpha").Add("alphb");
-        LuminPackSerializer.Deserialize<TOptions>(LuminPackSerializer.Serialize<TOptions>(changed), ref a);
-        LuminPackSerializer.Deserialize<TOptions>(LuminPackSerializer.Serialize<TOptions>(changed.ToImmutableHashSet()), ref b);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, TOptions>(LuminPackSerializer.Serialize<ImmutableSortedSet<string>, TOptions>(changed), ref a);
+        LuminPackSerializer.Deserialize<ImmutableHashSet<string>, TOptions>(LuminPackSerializer.Serialize<ImmutableHashSet<string>, TOptions>(changed.ToImmutableHashSet()), ref b);
         Assert.NotSame(sorted, a);
         Assert.NotSame(hashed, b);
         Assert.Equal(changed, a);
@@ -47,12 +47,12 @@ public sealed class ImmutableStringSetReuseTest
         Assert.Contains("alpha", hashed);
         Assert.DoesNotContain("alpha", a);
         Assert.DoesNotContain("alpha", b);
-        LuminPackSerializer.Deserialize<TOptions>(new byte[4], ref a);
-        LuminPackSerializer.Deserialize<TOptions>(new byte[4], ref b);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, TOptions>(new byte[4], ref a);
+        LuminPackSerializer.Deserialize<ImmutableHashSet<string>, TOptions>(new byte[4], ref b);
         Assert.Same(ImmutableSortedSet<string>.Empty, a);
         Assert.Same(ImmutableHashSet<string>.Empty, b);
-        LuminPackSerializer.Deserialize<TOptions>(new byte[] { 255, 255, 255, 255 }, ref a);
-        LuminPackSerializer.Deserialize<TOptions>(new byte[] { 255, 255, 255, 255 }, ref b);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, TOptions>(new byte[] { 255, 255, 255, 255 }, ref a);
+        LuminPackSerializer.Deserialize<ImmutableHashSet<string>, TOptions>(new byte[] { 255, 255, 255, 255 }, ref b);
         Assert.Null(a);
         Assert.Null(b);
     }
@@ -63,21 +63,21 @@ public sealed class ImmutableStringSetReuseTest
     {
         var sorted = ImmutableSortedSet.Create("alpha", "beta", "gamma");
         var hashed = sorted.ToImmutableHashSet();
-        byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(sorted);
+        byte[] bytes = LuminPackSerializer.Serialize<ImmutableSortedSet<string>, LuminPackUtf16LengthOptions>(sorted);
         for (int length = 0; length < bytes.Length; length++)
         {
             var a = sorted;
             var b = hashed;
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes.AsSpan(0, length), ref a));
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes.AsSpan(0, length), ref b));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, LuminPackUtf16LengthOptions>(bytes.AsSpan(0, length), ref a));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<ImmutableHashSet<string>, LuminPackUtf16LengthOptions>(bytes.AsSpan(0, length), ref b));
             Assert.Same(sorted, a);
             Assert.Same(hashed, b);
         }
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(4), 1);
         var sortedTarget = sorted;
         var hashTarget = hashed;
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes, ref sortedTarget));
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes, ref hashTarget));
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, LuminPackUtf16LengthOptions>(bytes, ref sortedTarget));
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<ImmutableHashSet<string>, LuminPackUtf16LengthOptions>(bytes, ref hashTarget));
         Assert.Same(sorted, sortedTarget);
         Assert.Same(hashed, hashTarget);
     }
@@ -135,15 +135,15 @@ public sealed class ImmutableStringSetReuseTest
     private static void CheckNullProfile<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         string[] source = [null!, "", "alpha"];
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>(source);
+        byte[] bytes = LuminPackSerializer.Serialize<string[], TOptions>(source);
         string[] decoded = null!;
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref decoded);
+        LuminPackSerializer.Deserialize<string[], TOptions>(bytes, ref decoded);
         var sorted = source.ToImmutableSortedSet();
         var hashed = source.ToImmutableHashSet();
         var a = sorted;
         var b = hashed;
-        LuminPackSerializer.Deserialize<TOptions>(bytes, ref a);
-        LuminPackSerializer.Deserialize<TOptions>(LuminPackSerializer.Serialize<TOptions>(hashed), ref b);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, TOptions>(bytes, ref a);
+        LuminPackSerializer.Deserialize<ImmutableHashSet<string>, TOptions>(LuminPackSerializer.Serialize<ImmutableHashSet<string>, TOptions>(hashed), ref b);
         Assert.Equal(decoded.ToImmutableSortedSet(), a);
         Assert.True(decoded.ToImmutableHashSet().SetEquals(b));
         if (default(TOptions).StringRecording == LuminPackStringRecording.Length)
@@ -163,9 +163,9 @@ public sealed class ImmutableStringSetReuseTest
     public void FailedReadClearsTheReferenceRental()
     {
         var sorted = ImmutableSortedSet.Create("alpha", "beta", "gamma");
-        byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(new[] { "alphb", "beta", "gamma" });
+        byte[] bytes = LuminPackSerializer.Serialize<string[], LuminPackUtf16LengthOptions>(new[] { "alphb", "beta", "gamma" });
         var target = sorted;
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes.AsSpan(0, bytes.Length - 1), ref target));
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, LuminPackUtf16LengthOptions>(bytes.AsSpan(0, bytes.Length - 1), ref target));
         Assert.Same(sorted, target);
         string[] rental = ArrayPool<string>.Shared.Rent(3);
         try { Assert.All(rental, item => Assert.Null(item)); }

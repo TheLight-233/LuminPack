@@ -57,7 +57,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                 if (wide)
                 {
                     var values = new Queue<long>(Enumerable.Range(0,count).Select(i => i % 3 == 0 ? long.MinValue : i % 3 == 1 ? 1L : long.MaxValue));
-                    if (generated) LuminPackSerializer.SerializeJson<TProfile>(ref writer,in values);
+                    if (generated) LuminPackSerializer.SerializeJson<Queue<long>, TProfile>(ref writer,in values);
                     else
                     {
                         writer.WriteArrayStart<TProfile>(); bool separate = false;
@@ -72,7 +72,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                 else
                 {
                     var values = new Queue<int>(Enumerable.Range(0,count).Select(i => i % 3 == 0 ? int.MinValue : i % 3 == 1 ? 1 : int.MaxValue));
-                    if (generated) LuminPackSerializer.SerializeJson<TProfile>(ref writer,in values);
+                    if (generated) LuminPackSerializer.SerializeJson<Queue<int>, TProfile>(ref writer,in values);
                     else
                     {
                         writer.WriteArrayStart<TProfile>(); bool separate = false;

@@ -844,7 +844,7 @@ public class PolymorphismBenchmark
             }
         }
 
-        buffer1 = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(myClass);
+        buffer1 = LuminPackSerializer.Serialize<PolymorphismClassBase, LuminPackUtf16LengthOptions>(myClass);
         buffer2 = MemoryPackSerializer.Serialize(myClass);
         buffer3 = MessagePackSerializer.Serialize(myClass);
         buffer4 = NinoSerializer.Serialize(myClass);
@@ -864,7 +864,7 @@ public class PolymorphismBenchmark
     {
         luminBufferWriter.ResetCore();
         luminBufferWriter.WriterState.ResetOperationState();
-        LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(myClass, luminBufferWriter);
+        LuminPackSerializer.Serialize<PolymorphismClassBase, LuminPackUtf16LengthOptions>(myClass, luminBufferWriter);
     }
 
     /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
@@ -899,7 +899,7 @@ public class PolymorphismBenchmark
     [BenchmarkCategory("Deserialize")]
     public void LuminPackDeserialize()
     {
-        PolymorphismClassBase value = null!; LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(buffer1, ref value);
+        PolymorphismClassBase value = null!; LuminPackSerializer.Deserialize<PolymorphismClassBase, LuminPackUtf16LengthOptions>(buffer1, ref value);
     }
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>

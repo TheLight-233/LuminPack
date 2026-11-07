@@ -39,15 +39,15 @@ public sealed class DefaultEncodingTest
     public void ExplicitUtf8ProfilesRemainIndependent()
     {
         const string value = "A\u00e9\u4e2d\ud83d\ude00";
-        byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(value);
+        byte[] bytes = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(value);
         Assert.Equal(8 + Encoding.UTF8.GetByteCount(value), bytes.Length);
         Assert.Equal(Encoding.UTF8.GetBytes(value), bytes.AsSpan(8).ToArray());
         string? restored = null;
-        LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(bytes, ref restored);
+        LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(bytes, ref restored);
         Assert.Equal(value, restored);
-        byte[] token = LuminPackSerializer.Serialize<LuminPackUtf8TokenOptions>(value);
+        byte[] token = LuminPackSerializer.Serialize<string, LuminPackUtf8TokenOptions>(value);
         Assert.Equal(0, token[^1]);
-        LuminPackSerializer.Deserialize<LuminPackUtf8TokenOptions>(token, ref restored);
+        LuminPackSerializer.Deserialize<string, LuminPackUtf8TokenOptions>(token, ref restored);
         Assert.Equal(value, restored);
     }
 
@@ -56,10 +56,10 @@ public sealed class DefaultEncodingTest
     public void ExplicitUtf8LongReuseRetainsTheExistingString()
     {
         string value = new string('\u00e9', 400) + "\u4e2d\ud83d\ude00";
-        byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(value);
+        byte[] bytes = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(value);
         string? restored = new string(value.ToCharArray());
         string existing = restored;
-        LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(bytes, ref restored);
+        LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(bytes, ref restored);
         Assert.Same(existing, restored);
     }
 

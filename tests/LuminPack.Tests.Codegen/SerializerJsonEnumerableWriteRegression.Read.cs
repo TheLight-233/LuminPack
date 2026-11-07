@@ -14,7 +14,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
         var missing = MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(runtime.Display!, "TryReadCompleteEntry"), filePath: "CoreWithoutCompleteEntry.dll");
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var input = CSharpCompilation.Create("DictionaryEntries" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(BuildDictionaryReadSource(mode), parse, "Entry.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
@@ -122,7 +122,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
          foreach(int count in new[]{0,1,7})
          {
           var seed=Enumerable.Range(0,count).ToDictionary(i=>KEYEXPR,i=>VALUEEXPR);TYPE source=FACTORY;var model=new MODEL{Map=source};
-          byte[] bytes=LuminPackSerializer.Serialize<P>(model);MODEL fresh=null;LuminPackSerializer.Deserialize<P>(bytes,ref fresh);var reuse=new MODEL{Map=FACTORY};LuminPackSerializer.Deserialize<P>(bytes,ref reuse);
+          byte[] bytes=LuminPackSerializer.Serialize<MODEL,P>(model);MODEL fresh=null;LuminPackSerializer.Deserialize<MODEL,P>(bytes,ref fresh);var reuse=new MODEL{Map=FACTORY};LuminPackSerializer.Deserialize<MODEL,P>(bytes,ref reuse);
           if(Snapshot(source)!=Snapshot(fresh.Map)||Snapshot(source)!=Snapshot(reuse.Map))throw new Exception("Binary integration mismatch");
           Transcript.AppendLine($"{typeof(P).Name},binary,KIND,SHAPE,{count},{Convert.ToBase64String(bytes)},{Snapshot(fresh.Map)},{Snapshot(reuse.Map)}");
          }
@@ -133,7 +133,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
            var seed=new Dictionary<KEY,VALUE>{[SEEDKEY]=SEEDVALUE};MODEL target=reused?new MODEL{Map=FACTORY}:null;var prior=target;var priorMap=target?.Map;
            byte[] input=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes("{\"Map\":"+document+",\"Tail\":123}");unsafe { fixed (byte* pinnedInput=input) { ReadOnlySpan<byte> span=new(pinnedInput,input.Length);
            var reader=new LuminPackJsonReader(ref span,new LuminPackReaderOptionalState());string error="ok";
-           try{LuminPackSerializer.DeserializeJson<P>(ref reader,ref target);}catch(Exception ex){error=ex.GetType().FullName+":"+(ex as ArgumentException)?.ParamName;}
+           try{LuminPackSerializer.DeserializeJson<MODEL,P>(ref reader,ref target);}catch(Exception ex){error=ex.GetType().FullName+":"+(ex as ArgumentException)?.ParamName;}
            Transcript.AppendLine($"{typeof(P).Name},json,KIND,SHAPE,{reused},{index++},{State(ref reader,error)},{ReferenceEquals(prior,target)},{ReferenceEquals(priorMap,target?.Map)},{target?.Tail},{Snapshot(target?.Map)}");reader.OptionState.Reset(); } }
           }
          }

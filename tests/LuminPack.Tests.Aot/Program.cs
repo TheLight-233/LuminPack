@@ -66,9 +66,9 @@ internal static partial class Program
             var asyncCopy = LuminPackSerializer.DeserializeAsync(stream, source).GetAwaiter().GetResult();
             Check(!ReferenceEquals(source, asyncCopy) && asyncCopy.Id == source.Id && stream.CanRead, "Async read or stream ownership failed.");
         }
-        byte[] profileBytes = LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf16LengthOptions>(source);
+        byte[] profileBytes = LuminPackSerializer.Serialize<Message, LuminPack.Option.LuminPackUtf16LengthOptions>(source);
         var profileCopy = new Message();
-        LuminPackSerializer.Deserialize<LuminPack.Option.LuminPackUtf16LengthOptions>(profileBytes.AsSpan(), ref profileCopy);
+        LuminPackSerializer.Deserialize<Message, LuminPack.Option.LuminPackUtf16LengthOptions>(profileBytes.AsSpan(), ref profileCopy);
         Check(profileCopy.Name == source.Name, "Concrete compiled profile read failed.");
 
         byte[] versioned = LuminPackSerializer.Serialize(new VersionOne { Id = 13, Name = "player", Removed = 17 });

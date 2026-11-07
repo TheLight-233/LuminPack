@@ -124,9 +124,9 @@ public sealed class ScalarInterfaceWriteTest
         ISet<int> mutable = set;
         IReadOnlySet<int> readOnly = set;
         IList<int> sequence = list;
-        AssertWire(LuminPackSerializer.Serialize<TProfile>(in mutable), set.ToArray());
-        AssertWire(LuminPackSerializer.Serialize<TProfile>(in readOnly), set.ToArray());
-        AssertWire(LuminPackSerializer.Serialize<TProfile>(in sequence), list.ToArray());
+        AssertWire(LuminPackSerializer.Serialize<ISet<int>, TProfile>(in mutable), set.ToArray());
+        AssertWire(LuminPackSerializer.Serialize<IReadOnlySet<int>, TProfile>(in readOnly), set.ToArray());
+        AssertWire(LuminPackSerializer.Serialize<IList<int>, TProfile>(in sequence), list.ToArray());
     }
 
     /// <summary>Compares the original little-endian count and each native integer.</summary>

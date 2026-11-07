@@ -10,7 +10,7 @@ internal static partial class SerializerImmutableQueueConstructionRegression
     {
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var modern = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var modern = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var legacy = modern.WithPreprocessorSymbols("NET8_0_OR_GREATER");
             var initial = CSharpCompilation.Create("ListCases" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(ListSource.Replace("MODE", mode, StringComparison.Ordinal), modern, "ListCases.cs")], references,
@@ -98,10 +98,10 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                     int[] values=Enumerable.Range(0,count).Select(x=>x*7-31).ToArray();
                     var source=ImmutableList.CreateRange(values);
                     IImmutableList<int> sourceContract=source;
-                    byte[] binary=LuminPackSerializer.Serialize<P>(source);
-                    byte[] json=encoding.GetBytes(LuminPackSerializer.SerializeJson<P>(source));
-                    if(!binary.SequenceEqual(LuminPackSerializer.Serialize<P>(sourceContract)) ||
-                        LuminPackSerializer.SerializeJson<P>(source)!=LuminPackSerializer.SerializeJson<P>(sourceContract))
+                    byte[] binary=LuminPackSerializer.Serialize<ImmutableList<int>, P>(source);
+                    byte[] json=encoding.GetBytes(LuminPackSerializer.SerializeJson<ImmutableList<int>, P>(source));
+                    if(!binary.SequenceEqual(LuminPackSerializer.Serialize<IImmutableList<int>, P>(sourceContract)) ||
+                        LuminPackSerializer.SerializeJson<ImmutableList<int>, P>(source)!=LuminPackSerializer.SerializeJson<IImmutableList<int>, P>(sourceContract))
                         throw new Exception("Concrete and interface list bytes differ.");
                     foreach(bool isJson in new[]{false,true})
                     {
@@ -109,8 +109,8 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                         var restored=original;
                         IImmutableList<int> contract=original;
                         Action read=()=>{
-                            if(isJson){LuminPackSerializer.DeserializeJson<P>(json,ref restored);LuminPackSerializer.DeserializeJson<P>(json,ref contract);}
-                            else{LuminPackSerializer.Deserialize<P>(binary,ref restored);LuminPackSerializer.Deserialize<P>(binary,ref contract);}
+                            if(isJson){LuminPackSerializer.DeserializeJson<ImmutableList<int>, P>(json,ref restored);LuminPackSerializer.DeserializeJson<IImmutableList<int>, P>(json,ref contract);}
+                            else{LuminPackSerializer.Deserialize<ImmutableList<int>, P>(binary,ref restored);LuminPackSerializer.Deserialize<IImmutableList<int>, P>(binary,ref contract);}
                         };
                         read();
                         if(!restored.SequenceEqual(values)||!contract.SequenceEqual(values)||original[0]!=999)
@@ -125,37 +125,37 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                         }
                         var graph=new ListGraph{List=source,Contract=source,Tail=719};
                         ListGraph decoded=null;
-                        if(isJson)LuminPackSerializer.DeserializeJson<P>(encoding.GetBytes(LuminPackSerializer.SerializeJson<P>(graph)),ref decoded);
-                        else LuminPackSerializer.Deserialize<P>(LuminPackSerializer.Serialize<P>(graph),ref decoded);
+                        if(isJson)LuminPackSerializer.DeserializeJson<ListGraph, P>(encoding.GetBytes(LuminPackSerializer.SerializeJson<ListGraph, P>(graph)),ref decoded);
+                        else LuminPackSerializer.Deserialize<ListGraph, P>(LuminPackSerializer.Serialize<ListGraph, P>(graph),ref decoded);
                         if(!decoded.List.SequenceEqual(values)||!decoded.Contract.SequenceEqual(values)||decoded.Tail!=719)
                             throw new Exception("List field construction consumed the following field.");
                         restored=original;contract=original;
                         byte[] malformed=isJson?encoding.GetBytes("[1,\"broken\"]"):binary.AsSpan(0,binary.Length-1).ToArray();
                         bool failed=false;
-                        try{if(isJson)LuminPackSerializer.DeserializeJson<P>(malformed,ref restored);else LuminPackSerializer.Deserialize<P>(malformed,ref restored);}catch{failed=true;}
+                        try{if(isJson)LuminPackSerializer.DeserializeJson<ImmutableList<int>, P>(malformed,ref restored);else LuminPackSerializer.Deserialize<ImmutableList<int>, P>(malformed,ref restored);}catch{failed=true;}
                         if(!failed||!ReferenceEquals(restored,original))throw new Exception("A failed concrete list was published.");
                         failed=false;
-                        try{if(isJson)LuminPackSerializer.DeserializeJson<P>(malformed,ref contract);else LuminPackSerializer.Deserialize<P>(malformed,ref contract);}catch{failed=true;}
+                        try{if(isJson)LuminPackSerializer.DeserializeJson<IImmutableList<int>, P>(malformed,ref contract);else LuminPackSerializer.Deserialize<IImmutableList<int>, P>(malformed,ref contract);}catch{failed=true;}
                         if(!failed||!ReferenceEquals(contract,original))throw new Exception("A failed interface list was published.");
                     }
                 }
                 var text=ImmutableList.Create("", "alpha", "\u65e5\u672c", "\U0001F30D");
                 IImmutableList<string> textContract=null;
                 ImmutableList<string> textResult=null;
-                var textBytes=LuminPackSerializer.Serialize<P>(text);
-                LuminPackSerializer.Deserialize<P>(textBytes,ref textResult);
-                LuminPackSerializer.Deserialize<P>(textBytes,ref textContract);
+                var textBytes=LuminPackSerializer.Serialize<ImmutableList<string>, P>(text);
+                LuminPackSerializer.Deserialize<ImmutableList<string>, P>(textBytes,ref textResult);
+                LuminPackSerializer.Deserialize<IImmutableList<string>, P>(textBytes,ref textContract);
                 if(!text.SequenceEqual(textResult)||!text.SequenceEqual(textContract))throw new Exception("String list changed.");
-                textBytes=encoding.GetBytes(LuminPackSerializer.SerializeJson<P>(text));
-                LuminPackSerializer.DeserializeJson<P>(textBytes,ref textResult);
-                LuminPackSerializer.DeserializeJson<P>(textBytes,ref textContract);
+                textBytes=encoding.GetBytes(LuminPackSerializer.SerializeJson<ImmutableList<string>, P>(text));
+                LuminPackSerializer.DeserializeJson<ImmutableList<string>, P>(textBytes,ref textResult);
+                LuminPackSerializer.DeserializeJson<IImmutableList<string>, P>(textBytes,ref textContract);
                 if(!text.SequenceEqual(textResult)||!text.SequenceEqual(textContract))throw new Exception("JSON string list changed.");
                 ImmutableList<int> absent=null;
                 IImmutableList<int> absentContract=ImmutableList.Create(9);
-                LuminPackSerializer.Deserialize<P>(LuminPackSerializer.Serialize<P>(absent),ref absentContract);
+                LuminPackSerializer.Deserialize<IImmutableList<int>, P>(LuminPackSerializer.Serialize<ImmutableList<int>, P>(absent),ref absentContract);
                 if(absentContract!=null)throw new Exception("Null binary list changed.");
                 absentContract=ImmutableList.Create(9);
-                LuminPackSerializer.DeserializeJson<P>(encoding.GetBytes("null"),ref absentContract);
+                LuminPackSerializer.DeserializeJson<IImmutableList<int>, P>(encoding.GetBytes("null"),ref absentContract);
                 if(absentContract!=null)throw new Exception("Null JSON list changed.");
             }
             private static long Allocated(Action action)

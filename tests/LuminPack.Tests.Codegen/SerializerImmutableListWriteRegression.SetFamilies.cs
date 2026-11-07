@@ -10,7 +10,7 @@ internal static partial class SerializerImmutableListWriteRegression
     {
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("SetFamilies" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(SetFamilySource.Replace("MODE", mode, StringComparison.Ordinal) + HashConstructionSource, parse, "Entry.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
@@ -30,7 +30,7 @@ internal static partial class SerializerImmutableListWriteRegression
     /// <param name="references">The platform and runtime compilation references.</param>
     private static void CheckFrozenEnumerationCapability(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         var compilation = CSharpCompilation.Create("SetCapability" + Guid.NewGuid().ToString("N"),
             [CSharpSyntaxTree.ParseText("""
                 using System.Collections.Generic;
@@ -129,33 +129,33 @@ internal static partial class SerializerImmutableListWriteRegression
                 unsafe{LuminPackSerializer.Register<SetItem,P>(SetItem.Serialize,SetItem.Deserialize,SetItem.WriteJson<P>,SetItem.ReadJson<P>);}
                 using var buffer=new LuminBufferWriter(true);
                 ISet<int> emptySorted=new SortedSet<int>();IReadOnlySet<int> emptyReadOnlySorted=(SortedSet<int>)emptySorted;
-                if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<P>(emptySorted,buffer);})!=0 ||
-                   Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<P>(emptyReadOnlySorted,buffer);})!=0)
+                if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<ISet<int>, P>(emptySorted,buffer);})!=0 ||
+                   Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(emptyReadOnlySorted,buffer);})!=0)
                     throw new Exception("Empty sorted interface writing allocated a traversal stack.");
                 buffer.ResetCore();
                 foreach(int count in new[]{0,1,33})
                 {
                     int[] items=Enumerable.Range(0,count).ToArray();ISet<int> set=new HashSet<int>(items);
                     IReadOnlySet<int> frozen=items.ToFrozenSet();
-                    LuminPackSerializer.SerializeJson<P>(items,buffer);byte[] expected=buffer.GetSpan().ToArray();
-                    buffer.ResetCore();LuminPackSerializer.SerializeJson<P>(set,buffer);
+                    LuminPackSerializer.SerializeJson<int[], P>(items,buffer);byte[] expected=buffer.GetSpan().ToArray();
+                    buffer.ResetCore();LuminPackSerializer.SerializeJson<ISet<int>, P>(set,buffer);
                     if(!buffer.GetSpan().SequenceEqual(expected))throw new Exception("Hash interface JSON order changed.");
-                    if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.SerializeJson<P>(set,buffer);})!=0)
+                    if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.SerializeJson<ISet<int>, P>(set,buffer);})!=0)
                         throw new Exception("Hash interface JSON boxed its enumerator.");
-                    if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.SerializeJson<P>(frozen,buffer);})!=0 ||
-                       Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<P>(frozen,buffer);})!=0)
+                    if(Allocated(()=>{buffer.ResetCore();LuminPackSerializer.SerializeJson<IReadOnlySet<int>, P>(frozen,buffer);})!=0 ||
+                       Allocated(()=>{buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(frozen,buffer);})!=0)
                         throw new Exception("Frozen interface writing boxed its enumerator.");
-                    buffer.ResetCore();LuminPackSerializer.Serialize<P>(frozen,buffer);IReadOnlySet<int> result=null;
-                    LuminPackSerializer.Deserialize<P>(buffer.GetSpan(),ref result);
+                    buffer.ResetCore();LuminPackSerializer.Serialize<IReadOnlySet<int>, P>(frozen,buffer);IReadOnlySet<int> result=null;
+                    LuminPackSerializer.Deserialize<IReadOnlySet<int>, P>(buffer.GetSpan(),ref result);
                     if(!result.SetEquals(items))throw new Exception("Frozen interface binary contents changed.");
                     buffer.ResetCore();
                 }
                 var derived=new ReversedSet();ISet<int> derivedInterface=derived;
-                LuminPackSerializer.SerializeJson<P>(derivedInterface,buffer);int[] reversed=null;
-                LuminPackSerializer.DeserializeJson<P>(buffer.GetSpan(),ref reversed);
+                LuminPackSerializer.SerializeJson<ISet<int>, P>(derivedInterface,buffer);int[] reversed=null;
+                LuminPackSerializer.DeserializeJson<int[], P>(buffer.GetSpan(),ref reversed);
                 if(derived.Visits!=1 || !reversed.SequenceEqual(new[]{3,2,1}))throw new Exception("Derived set enumeration was bypassed.");
-                buffer.ResetCore();LuminPackSerializer.Serialize<P>(derivedInterface,buffer);
-                reversed=null;LuminPackSerializer.Deserialize<P>(buffer.GetSpan(),ref reversed);
+                buffer.ResetCore();LuminPackSerializer.Serialize<ISet<int>, P>(derivedInterface,buffer);
+                reversed=null;LuminPackSerializer.Deserialize<int[], P>(buffer.GetSpan(),ref reversed);
                 if(derived.Visits!=2 || !reversed.SequenceEqual(new[]{3,2,1}))throw new Exception("Derived binary enumeration was bypassed.");
                 CheckCallbacks<P>();
                 CheckReads<P>();
@@ -172,8 +172,8 @@ internal static partial class SerializerImmutableListWriteRegression
                     Exception observed=null;buffer.ResetCore();
                     try
                     {
-                        if(readOnly){if(json)LuminPackSerializer.SerializeJson<P>(view,buffer);else LuminPackSerializer.Serialize<P>(view,buffer);}
-                        else{if(json)LuminPackSerializer.SerializeJson<P>(mutable,buffer);else LuminPackSerializer.Serialize<P>(mutable,buffer);}
+                        if(readOnly){if(json)LuminPackSerializer.SerializeJson<IReadOnlySet<SetItem>, P>(view,buffer);else LuminPackSerializer.Serialize<IReadOnlySet<SetItem>, P>(view,buffer);}
+                        else{if(json)LuminPackSerializer.SerializeJson<ISet<SetItem>, P>(mutable,buffer);else LuminPackSerializer.Serialize<ISet<SetItem>, P>(mutable,buffer);}
                     }
                     catch(Exception error){observed=error;}
                     finally{SetItem.Action=null;}
@@ -183,25 +183,25 @@ internal static partial class SerializerImmutableListWriteRegression
             }
             private static void CheckReads<P>()where P:struct,ILuminPackOptions
             {
-                byte[] empty=LuminPackSerializer.Serialize<P>(FrozenSet<int>.Empty);
+                byte[] empty=LuminPackSerializer.Serialize<FrozenSet<int>, P>(FrozenSet<int>.Empty);
                 byte[] json=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes("[]");
                 FrozenSet<int> frozen=null;
-                if(Allocated(()=>{LuminPackSerializer.Deserialize<P>(empty,ref frozen);sink=frozen;})!=0 ||
-                   Allocated(()=>{LuminPackSerializer.DeserializeJson<P>(json,ref frozen);sink=frozen;})!=0 ||
+                if(Allocated(()=>{LuminPackSerializer.Deserialize<FrozenSet<int>, P>(empty,ref frozen);sink=frozen;})!=0 ||
+                   Allocated(()=>{LuminPackSerializer.DeserializeJson<FrozenSet<int>, P>(json,ref frozen);sink=frozen;})!=0 ||
                    !ReferenceEquals(frozen,FrozenSet<int>.Empty))throw new Exception("Empty Frozen reading retained a temporary set.");
                 foreach(string text in new[]{"[]","[ ]","[17]","[17,17]","[19,17]"})
                 {
                     byte[] payload=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes("{\"Items\":"+text+",\"Tail\":123}");
                     var envelope=new SetEnvelope{Items=new[]{99}.ToFrozenSet(),Tail=-1};
-                    LuminPackSerializer.DeserializeJson<P>(payload,ref envelope);
+                    LuminPackSerializer.DeserializeJson<SetEnvelope, P>(payload,ref envelope);
                     if(envelope.Tail!=123 || envelope.Items.Contains(99))throw new Exception("Frozen nested consumption or replacement changed.");
                 }
                 byte[] singleton=(default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes("[17]");
                 ImmutableHashSet<int> hash=null;ImmutableSortedSet<int> sorted=null;IImmutableSet<int> contract=null;
                 long hashResult=Allocated(()=>sink=ImmutableHashSet.Create(17));long sortedResult=Allocated(()=>sink=ImmutableSortedSet.Create(17));
-                if(Allocated(()=>{hash=null;LuminPackSerializer.DeserializeJson<P>(singleton,ref hash);sink=hash;})!=hashResult ||
-                   Allocated(()=>{sorted=null;LuminPackSerializer.DeserializeJson<P>(singleton,ref sorted);sink=sorted;})!=sortedResult ||
-                   Allocated(()=>{contract=null;LuminPackSerializer.DeserializeJson<P>(singleton,ref contract);sink=contract;})!=hashResult)
+                if(Allocated(()=>{hash=null;LuminPackSerializer.DeserializeJson<ImmutableHashSet<int>, P>(singleton,ref hash);sink=hash;})!=hashResult ||
+                   Allocated(()=>{sorted=null;LuminPackSerializer.DeserializeJson<ImmutableSortedSet<int>, P>(singleton,ref sorted);sink=sorted;})!=sortedResult ||
+                   Allocated(()=>{contract=null;LuminPackSerializer.DeserializeJson<IImmutableSet<int>, P>(singleton,ref contract);sink=contract;})!=hashResult)
                     throw new Exception("Immutable singleton reading retained a builder allocation.");
                 if(!hash.SetEquals(new[]{17})||!sorted.SetEquals(new[]{17})||!contract.SetEquals(new[]{17}))throw new Exception("Singleton contents changed.");
             }

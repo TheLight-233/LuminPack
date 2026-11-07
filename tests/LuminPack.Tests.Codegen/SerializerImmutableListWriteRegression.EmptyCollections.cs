@@ -8,7 +8,7 @@ internal static partial class SerializerImmutableListWriteRegression
     /// <param name="references">The actual runtime and framework references.</param>
     internal static void RunEmptyCollections(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("EmptyCollections" + Guid.NewGuid().ToString("N"),
@@ -76,37 +76,37 @@ internal static partial class SerializerImmutableListWriteRegression
                     Map=ImmutableDictionary<string,int>.Empty,MapInterface=ImmutableDictionary<string,int>.Empty,SortedMap=ImmutableSortedDictionary<string,int>.Empty
                 };
                 EmptyGraph result=null;
-                LuminPackSerializer.Deserialize<P>(LuminPackSerializer.Serialize<P>(source),ref result); CheckGraph(result);
-                LuminPackSerializer.DeserializeJson<P>(LuminPackSerializer.SerializeJson<P>(source),ref result); CheckGraph(result);
+                LuminPackSerializer.Deserialize<EmptyGraph, P>(LuminPackSerializer.Serialize<EmptyGraph, P>(source),ref result); CheckGraph(result);
+                LuminPackSerializer.DeserializeJson<EmptyGraph, P>(LuminPackSerializer.SerializeJson<EmptyGraph, P>(source),ref result); CheckGraph(result);
                 byte[] empty=Encode<P>("[]"), absent=Encode<P>("null");
                 var dictionary=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase){{"A",1}};
                 var retained=dictionary;
-                LuminPackSerializer.DeserializeJson<P>(empty,ref dictionary);
+                LuminPackSerializer.DeserializeJson<Dictionary<string, int>, P>(empty,ref dictionary);
                 if(!ReferenceEquals(retained,dictionary)||dictionary.Count!=0||dictionary.Comparer!=StringComparer.OrdinalIgnoreCase)throw new Exception("Dictionary reuse changed");
                 var sorted=new SortedDictionary<string,int>(StringComparer.OrdinalIgnoreCase){{"A",1}};
                 var retainedSorted=sorted;
-                LuminPackSerializer.DeserializeJson<P>(empty,ref sorted);
+                LuminPackSerializer.DeserializeJson<SortedDictionary<string, int>, P>(empty,ref sorted);
                 if(!ReferenceEquals(retainedSorted,sorted)||sorted.Count!=0||sorted.Comparer!=StringComparer.OrdinalIgnoreCase)throw new Exception("Sorted dictionary reuse changed");
                 var concurrent=new ConcurrentDictionary<string,int>();
                 ConcurrentDictionary<string,int> concurrentCopy=null;
-                LuminPackSerializer.Deserialize<P>(LuminPackSerializer.Serialize<P>(concurrent),ref concurrentCopy);
+                LuminPackSerializer.Deserialize<ConcurrentDictionary<string, int>, P>(LuminPackSerializer.Serialize<ConcurrentDictionary<string, int>, P>(concurrent),ref concurrentCopy);
                 if(concurrentCopy is null||concurrentCopy.Count!=0)throw new Exception("Concurrent binary empty changed");
                 var bits=new BitArray(0); BitArray bitsCopy=null;
-                LuminPackSerializer.Deserialize<P>(LuminPackSerializer.Serialize<P>(bits),ref bitsCopy);
-                LuminPackSerializer.DeserializeJson<P>(LuminPackSerializer.SerializeJson<P>(bits),ref bitsCopy);
+                LuminPackSerializer.Deserialize<BitArray, P>(LuminPackSerializer.Serialize<BitArray, P>(bits),ref bitsCopy);
+                LuminPackSerializer.DeserializeJson<BitArray, P>(LuminPackSerializer.SerializeJson<BitArray, P>(bits),ref bitsCopy);
                 if(bitsCopy.Length!=0)throw new Exception("BitArray empty changed");
 
                 var coldList=ImmutableList<ColdItem>.Empty;
                 var coldMap=ImmutableDictionary<string,ColdItem>.Empty;
-                LuminPackSerializer.DeserializeJson<P>(absent,ref coldList);
-                LuminPackSerializer.DeserializeJson<P>(absent,ref coldMap);
-                Measure(()=>LuminPackSerializer.DeserializeJson<P>(empty,ref coldList));
-                Measure(()=>LuminPackSerializer.DeserializeJson<P>(empty,ref coldMap));
+                LuminPackSerializer.DeserializeJson<ImmutableList<ColdItem>, P>(absent,ref coldList);
+                LuminPackSerializer.DeserializeJson<ImmutableDictionary<string, ColdItem>, P>(absent,ref coldMap);
+                Measure(()=>LuminPackSerializer.DeserializeJson<ImmutableList<ColdItem>, P>(empty,ref coldList));
+                Measure(()=>LuminPackSerializer.DeserializeJson<ImmutableDictionary<string, ColdItem>, P>(empty,ref coldMap));
                 if(!ReferenceEquals(coldList,ImmutableList<ColdItem>.Empty)||!ReferenceEquals(coldMap,ImmutableDictionary<string,ColdItem>.Empty))throw new Exception("Empty identity changed");
                 if(default(P).ValidateJsonSyntax)
                 {
                     var prior=ImmutableList.Create(7); var failed=prior; bool threw=false;
-                    try{LuminPackSerializer.DeserializeJson<P>(Encode<P>("[1,"),ref failed);}catch(FormatException){threw=true;}
+                    try{LuminPackSerializer.DeserializeJson<ImmutableList<int>, P>(Encode<P>("[1,"),ref failed);}catch(FormatException){threw=true;}
                     if(!threw||!ReferenceEquals(prior,failed))throw new Exception("Strict failure published a replacement");
                 }
             }

@@ -24,13 +24,13 @@ internal static partial class SerializerImmutableListWriteRegression
                     foreach(int count in new[]{0,1,2,33})foreach(bool reuse in new[]{false,true})
                     {
                         var value=new PriorityQueue<int,int>(Enumerable.Range(0,count).Select(i=>(i,i+7)));
-                        output.ResetCore();LuminPackSerializer.SerializeJson<P>(value,output);
+                        output.ResetCore();LuminPackSerializer.SerializeJson<PriorityQueue<int, int>, P>(value,output);
                         PriorityQueue<int,int> result=reuse?new(new[]{(-1,-1)}):null;var prior=result;
-                        LuminPackSerializer.DeserializeJson<P>(output.GetSpan(),ref result);
+                        LuminPackSerializer.DeserializeJson<PriorityQueue<int, int>, P>(output.GetSpan(),ref result);
                         if(!result.UnorderedItems.SequenceEqual(value.UnorderedItems)||reuse&&!ReferenceEquals(prior,result))throw new Exception("Priority pair tokens or reuse changed.");
                         var graph=new PriorityEnvelope{Queue=new(Enumerable.Range(0,count).Select(i=>("item"+i,i+7))),Tail=137};
-                        output.ResetCore();LuminPackSerializer.SerializeJson<P>(graph,output);PriorityEnvelope restored=null;
-                        LuminPackSerializer.DeserializeJson<P>(output.GetSpan(),ref restored);
+                        output.ResetCore();LuminPackSerializer.SerializeJson<PriorityEnvelope, P>(graph,output);PriorityEnvelope restored=null;
+                        LuminPackSerializer.DeserializeJson<PriorityEnvelope, P>(output.GetSpan(),ref restored);
                         if(restored.Tail!=137||!restored.Queue.UnorderedItems.SequenceEqual(graph.Queue.UnorderedItems))throw new Exception("Nested priority pair tokens changed.");
                     }
                     foreach(string ignored in new[]{"1", "\"ignored\"", "true,false,null", "{\"nested\":[[\"hidden\",5]]}"})
@@ -38,11 +38,11 @@ internal static partial class SerializerImmutableListWriteRegression
                     {
                         var encoding=default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode;
                         PriorityQueue<string,int> result=reuse?new(new[]{("old",-1)}):null;var prior=result;
-                        LuminPackSerializer.DeserializeJson<P>(encoding.GetBytes("["+ignored+"]"),ref result);
+                        LuminPackSerializer.DeserializeJson<PriorityQueue<string, int>, P>(encoding.GetBytes("["+ignored+"]"),ref result);
                         if(result.Count!=0||reuse&&!ReferenceEquals(prior,result))throw new Exception("Ignored priority value changed reuse or contents.");
                         var graph=new PriorityEnvelope{Queue=result};
                         string json="{\"Queue\":["+ignored+",[\"first\",1],"+ignored+",[\"second\",2],"+ignored+"],\"Tail\":137}";
-                        LuminPackSerializer.DeserializeJson<P>(encoding.GetBytes(json),ref graph);
+                        LuminPackSerializer.DeserializeJson<PriorityEnvelope, P>(encoding.GetBytes(json),ref graph);
                         if(graph.Tail!=137||graph.Queue.Count!=2||graph.Queue.Dequeue()!="first"||graph.Queue.Dequeue()!="second")throw new Exception("Ignored priority value consumed a pair or following field.");
                     }
                     if(!default(P).ValidateJsonSyntax)return;
@@ -50,13 +50,13 @@ internal static partial class SerializerImmutableListWriteRegression
                     {
                         var bytes=default(P).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8.GetBytes(text):Encoding.Unicode.GetBytes(text);
                         PriorityQueue<int,int> result=null;bool rejected=false;
-                        try{LuminPackSerializer.DeserializeJson<P>(bytes,ref result);}catch(FormatException){rejected=true;}
+                        try{LuminPackSerializer.DeserializeJson<PriorityQueue<int, int>, P>(bytes,ref result);}catch(FormatException){rejected=true;}
                         if(!rejected)throw new Exception("Malformed priority pair was accepted: "+text);
                     }
                 }
             }
             """;
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("PriorityJson" + Guid.NewGuid().ToString("N"),

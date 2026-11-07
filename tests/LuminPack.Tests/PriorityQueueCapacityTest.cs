@@ -150,17 +150,17 @@ public sealed class PriorityQueueCapacityTest
         var source = new PriorityQueue<Guid, long>();
         source.Enqueue(new Guid(19, 17, 29, 3, 5, 7, 11, 13, 17, 19, 23), 7);
         source.Enqueue(Guid.Empty, -11);
-        byte[] record = LuminPackSerializer.Serialize<TOptions>(source);
+        byte[] record = LuminPackSerializer.Serialize<PriorityQueue<Guid, long>, TOptions>(source);
         Assert.Equal(4 + 24 * source.Count, record.Length);
         PriorityQueue<Guid, long>? copy = null;
         byte[] withTail = record.Concat(new byte[] { 0xAC }).ToArray();
-        Assert.Equal(record.Length, LuminPackSerializer.Deserialize<TOptions>(withTail, ref copy));
+        Assert.Equal(record.Length, LuminPackSerializer.Deserialize<PriorityQueue<Guid, long>, TOptions>(withTail, ref copy));
         Assert.Equal(Guid.Empty, copy!.Dequeue());
         Assert.Equal(source.UnorderedItems.Single(item => item.Priority == 7).Element, copy.Dequeue());
         for (int prefix = 0; prefix < record.Length; prefix++)
         {
             PriorityQueue<Guid, long>? target = null;
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<TOptions>(record.AsSpan(0, prefix), ref target));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<PriorityQueue<Guid, long>, TOptions>(record.AsSpan(0, prefix), ref target));
             Assert.Null(target);
         }
     }

@@ -116,9 +116,9 @@ public sealed class Utf16ReuseReadTest
             Tags = new List<string> { "small", "a longer string containing more than sixteen code units", "\u00e9clair" },
             Map = new Dictionary<string, string> { ["key"] = "value" }
         };
-        byte[] record = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(source);
+        byte[] record = LuminPackSerializer.Serialize<Utf16ReusePayload, LuminPackUtf16LengthOptions>(source);
         Utf16ReusePayload? copy = null;
-        Assert.Equal(record.Length, LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(record, ref copy));
+        Assert.Equal(record.Length, LuminPackSerializer.Deserialize<Utf16ReusePayload, LuminPackUtf16LengthOptions>(record, ref copy));
         Assert.Equal(source.Name, copy!.Name);
         Assert.Equal(source.Child.Text, copy.Child.Text);
         var child = copy.Child;
@@ -128,7 +128,7 @@ public sealed class Utf16ReuseReadTest
         string childText = child.Text;
         string[] items = tags.ToArray();
         var identity = copy;
-        LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(record, ref copy);
+        LuminPackSerializer.Deserialize<Utf16ReusePayload, LuminPackUtf16LengthOptions>(record, ref copy);
         Assert.Same(identity, copy);
         Assert.Same(child, copy!.Child);
         Assert.Same(tags, copy.Tags);
@@ -139,8 +139,8 @@ public sealed class Utf16ReuseReadTest
         source.Name = "changed! property";
         source.Child.Text = "different text";
         source.Tags[1] = "different content with the same destination list";
-        record = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(source);
-        LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(record, ref copy);
+        record = LuminPackSerializer.Serialize<Utf16ReusePayload, LuminPackUtf16LengthOptions>(source);
+        LuminPackSerializer.Deserialize<Utf16ReusePayload, LuminPackUtf16LengthOptions>(record, ref copy);
         Assert.Same(identity, copy);
         Assert.Same(child, copy!.Child);
         Assert.Equal(source.Name, copy.Name);

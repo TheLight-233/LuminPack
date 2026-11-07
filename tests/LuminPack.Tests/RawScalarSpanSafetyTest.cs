@@ -55,7 +55,7 @@ public sealed class RawScalarSpanSafetyTest
     [Fact]
     public void ProfileAndGenericEntriesValidateBeforeAssignment()
     {
-        Check<Guid>(Guid.Empty, new Guid("7f3311a7-42b2-47c1-9569-a7c6a10ad5f7"), static (ReadOnlySpan<byte> bytes, ref Guid value) => LuminPackSerializer.Deserialize<LuminPackUtf8TokenOptions>(bytes, ref value));
+        Check<Guid>(Guid.Empty, new Guid("7f3311a7-42b2-47c1-9569-a7c6a10ad5f7"), static (ReadOnlySpan<byte> bytes, ref Guid value) => LuminPackSerializer.Deserialize<Guid, LuminPackUtf8TokenOptions>(bytes, ref value));
         Check<int>(int.MaxValue, int.MinValue, static (ReadOnlySpan<byte> bytes, ref int value) => LuminPackSerializer.Deserialize(bytes, ref value));
     }
 

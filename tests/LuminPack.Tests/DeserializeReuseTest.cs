@@ -61,7 +61,7 @@ LuminPackSerializer.Deserialize(versionedBytes, ref versioned);
             Names = ["ascii", "\u4E2D\uD83D\uDE00"],
             Numbers = [1, 2, 3], Tail = 99
         };
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((ReuseGraph)(source));
+        byte[] bytes = LuminPackSerializer.Serialize<ReuseGraph, TOptions>((ReuseGraph)(source));
         var target = new ReuseGraph
         {
             Child = new() { Text = new(source.Child.Text.ToCharArray()) },
@@ -81,7 +81,7 @@ LuminPackSerializer.Deserialize(versionedBytes, ref versioned);
         var name = names[1];
         var numbers = target.Numbers;
 
-        int consumed = LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+        int consumed = LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes, ref target);
         Assert.Equal(bytes.Length, consumed);
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
@@ -100,10 +100,10 @@ LuminPackSerializer.Deserialize(versionedBytes, ref versioned);
         Assert.Equal(99, target.Tail);
 
         for (int i = 0; i < 128; i++)
-LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 1024; i++)
-LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes, ref target);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(0, allocated);
     }
@@ -451,22 +451,22 @@ LuminPackSerializer.Deserialize(bytes, ref nested);
         foreach (string text in new[] { "a", "ASCII text", "\u4E2D\u6587", "\uD83D\uDE00\uD83D\uDE80", new string('x', 400),
             new string('\u4E2D', 513) + "\uD83D\uDE00", new string('x', 255) + "\uD83D\uDE80" + new string('\u6587', 300) })
         {
-            byte[] bytes = LuminPackSerializer.Serialize<TOptions>((string)(text));
+            byte[] bytes = LuminPackSerializer.Serialize<string, TOptions>((string)(text));
             string target = new(text.ToCharArray());
             string identity = target;
-            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref target));
+            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target));
             Assert.Same(identity, target);
             target = "changed";
-LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target);
             Assert.Equal(text, target);
-            for (int i = 0; i < 32; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+            for (int i = 0; i < 32; i++) LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target);
             long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+            for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target);
             Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         }
-        byte[] nullBytes = LuminPackSerializer.Serialize<TOptions>((string?)null);
+        byte[] nullBytes = LuminPackSerializer.Serialize<string, TOptions>((string?)null);
         string? nullable = "before";
-LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
+LuminPackSerializer.Deserialize<string, TOptions>(nullBytes, ref nullable);
         Assert.Equal(default(TOptions).StringRecording == LuminPackStringRecording.Token ? "" : null, nullable);
     }
 
@@ -494,7 +494,7 @@ LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
                 other[index] = (char)(0x4E00 + index + 1);
             }
 
-            byte[] record = LuminPackSerializer.Serialize<TOptions>((string)(new string(distinct)));
+            byte[] record = LuminPackSerializer.Serialize<string, TOptions>((string)(new string(distinct)));
             CompareStringRecord<TOptions>(record, new string(distinct), true);
             CompareStringRecord<TOptions>(record, new string(other));
             for (int prefix = 0; prefix < record.Length; prefix += Math.Max(1, record.Length / 7))
@@ -514,9 +514,9 @@ LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
         string? reused = candidate;
         Exception? freshError = null;
         Exception? reuseError = null;
-        try { LuminPackSerializer.Deserialize<TOptions>(record, ref fresh); }
+        try { LuminPackSerializer.Deserialize<string, TOptions>(record, ref fresh); }
         catch (Exception exception) { freshError = exception; }
-        try { LuminPackSerializer.Deserialize<TOptions>(record, ref reused); }
+        try { LuminPackSerializer.Deserialize<string, TOptions>(record, ref reused); }
         catch (Exception exception) { reuseError = exception; }
         Assert.Equal(freshError?.GetType(), reuseError?.GetType());
         if (freshError is null)
@@ -543,7 +543,7 @@ LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
         foreach (int length in new[] { 0, 1, 7, 8, 15, 16, 31, 32, 63, 64, 65, 129, 4096 })
         {
             string text = new('x', length);
-            byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+            byte[] record = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
             CompareAsciiStringRecord(record, new string(text.ToCharArray()), true);
             CompareAsciiStringRecord(record, new string('y', length));
             // Distinct characters expose window and lane mistakes that a uniform fill cannot.
@@ -554,7 +554,7 @@ LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
                 distinctChars[index] = (char)('A' + index % 26);
                 otherChars[index] = (char)('a' + index % 26);
             }
-            byte[] distinctRecord = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(new string(distinctChars));
+            byte[] distinctRecord = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(new string(distinctChars));
             CompareAsciiStringRecord(distinctRecord, new string(distinctChars), true);
             CompareAsciiStringRecord(distinctRecord, new string(otherChars));
             if (length != 0)
@@ -614,7 +614,7 @@ LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
     /// <typeparam name="TOptions">The binary string profile.</typeparam>
     private static void CheckMalformedStrings<TOptions>() where TOptions : struct, ILuminPackOptions
     {
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((string)("\u4E2D\uD83D\uDE00"));
+        byte[] bytes = LuminPackSerializer.Serialize<string, TOptions>((string)("\u4E2D\uD83D\uDE00"));
         for (int length = 0; length < bytes.Length; length++)
             CompareStringReads<TOptions>(bytes.AsSpan(0, length).ToArray());
         var malformed = (byte[])bytes.Clone();
@@ -632,9 +632,9 @@ LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
         string? reused = "\u4E2D\uD83D\uDE00";
         Exception? first = null;
         Exception? second = null;
-        try { LuminPackSerializer.Deserialize<TOptions>(bytes, ref fresh); }
+        try { LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref fresh); }
         catch (Exception exception) { first = exception; }
-        try { LuminPackSerializer.Deserialize<TOptions>(bytes, ref reused); }
+        try { LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref reused); }
         catch (Exception exception) { second = exception; }
         Assert.Equal(first?.GetType(), second?.GetType());
         if (first is null) Assert.Equal(fresh, reused);

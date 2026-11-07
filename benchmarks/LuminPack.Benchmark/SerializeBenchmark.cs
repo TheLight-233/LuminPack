@@ -1072,7 +1072,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     [GlobalSetup]
     public void SetUp()
     {
-        _luminBuffer = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(_data);
+        _luminBuffer = LuminPackSerializer.Serialize<CharacterSaveData, LuminPackUtf16LengthOptions>(_data);
         _memoryBuffer = MemoryPackSerializer.Serialize(_data, memoryPackSerializerOption);
         _msgpackBuffer = MessagePackSerializer.Serialize(_data);
         _ninoBuffer = NinoSerializer.Serialize(_data);
@@ -1088,7 +1088,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     public void LuminPackSerialize()
     {
         _luminWriter.ResetForReuse();
-        LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(_data, _luminWriter);
+        LuminPackSerializer.Serialize<CharacterSaveData, LuminPackUtf16LengthOptions>(_data, _luminWriter);
     }
 
     /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
@@ -1123,7 +1123,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserialize()
-        { CharacterSaveData value = null!; LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(_luminBuffer, ref value); return value; }
+        { CharacterSaveData value = null!; LuminPackSerializer.Deserialize<CharacterSaveData, LuminPackUtf16LengthOptions>(_luminBuffer, ref value); return value; }
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>

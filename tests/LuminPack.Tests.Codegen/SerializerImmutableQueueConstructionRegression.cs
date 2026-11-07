@@ -34,13 +34,13 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                     {
                         var values = Enumerable.Range(0, length).Select(i => i * 7 - 13).ToArray();
                         var source = ImmutableQueue.CreateRange(values);
-                        byte[] bytes = LuminPackSerializer.Serialize<TProfile>(source);
+                        byte[] bytes = LuminPackSerializer.Serialize<ImmutableQueue<int>, TProfile>(source);
                         ImmutableQueue<int> fresh = null;
-                        if (LuminPackSerializer.Deserialize<TProfile>(bytes, ref fresh) != bytes.Length || !fresh.SequenceEqual(values))
+                        if (LuminPackSerializer.Deserialize<ImmutableQueue<int>, TProfile>(bytes, ref fresh) != bytes.Length || !fresh.SequenceEqual(values))
                             throw new Exception("Queue values or consumed width changed.");
                         var original = ImmutableQueue.Create(999);
                         var reuse = original;
-                        LuminPackSerializer.Deserialize<TProfile>(bytes, ref reuse);
+                        LuminPackSerializer.Deserialize<ImmutableQueue<int>, TProfile>(bytes, ref reuse);
                         if (!reuse.SequenceEqual(values) || !original.SequenceEqual(new[] { 999 }))
                             throw new Exception("Immutable queue reuse mutated its old value.");
                         if (!reuse.Enqueue(23).SequenceEqual(values.Append(23)))
@@ -48,47 +48,47 @@ internal static partial class SerializerImmutableQueueConstructionRegression
                         if (length != 0 && !reuse.Dequeue().SequenceEqual(values.Skip(1)))
                             throw new Exception("The reconstructed queue cannot dequeue.");
                         IImmutableQueue<int> contract = source;
-                        byte[] interfaceBytes = LuminPackSerializer.Serialize<TProfile>(contract);
+                        byte[] interfaceBytes = LuminPackSerializer.Serialize<IImmutableQueue<int>, TProfile>(contract);
                         if (!interfaceBytes.SequenceEqual(bytes)) throw new Exception("Interface queue wire bytes changed.");
                         contract = original;
-                        if (LuminPackSerializer.Deserialize<TProfile>(bytes, ref contract) != bytes.Length || !contract.SequenceEqual(values))
+                        if (LuminPackSerializer.Deserialize<IImmutableQueue<int>, TProfile>(bytes, ref contract) != bytes.Length || !contract.SequenceEqual(values))
                             throw new Exception("Interface queue reconstruction changed.");
                         for (int prefix = 0; prefix < bytes.Length; prefix++)
                         {
                             reuse = original;
                             contract = original;
                             bool failed = false;
-                            try { LuminPackSerializer.Deserialize<TProfile>(bytes.AsSpan(0, prefix), ref reuse); }
+                            try { LuminPackSerializer.Deserialize<ImmutableQueue<int>, TProfile>(bytes.AsSpan(0, prefix), ref reuse); }
                             catch { failed = true; }
                             if (!failed || !ReferenceEquals(reuse, original)) throw new Exception("Truncated concrete queue was published.");
                             failed = false;
-                            try { LuminPackSerializer.Deserialize<TProfile>(bytes.AsSpan(0, prefix), ref contract); }
+                            try { LuminPackSerializer.Deserialize<IImmutableQueue<int>, TProfile>(bytes.AsSpan(0, prefix), ref contract); }
                             catch { failed = true; }
                             if (!failed || !ReferenceEquals(contract, original)) throw new Exception("Truncated interface queue was published.");
                         }
                     }
                     var text = ImmutableQueue.Create("", "alpha", "\u65e5\u672c", "\U0001F30D");
-                    byte[] textBytes = LuminPackSerializer.Serialize<TProfile>(text);
+                    byte[] textBytes = LuminPackSerializer.Serialize<ImmutableQueue<string>, TProfile>(text);
                     ImmutableQueue<string> result = null;
-                    LuminPackSerializer.Deserialize<TProfile>(textBytes, ref result);
+                    LuminPackSerializer.Deserialize<ImmutableQueue<string>, TProfile>(textBytes, ref result);
                     if (!result.SequenceEqual(text)) throw new Exception("Queue strings or order changed.");
                     IImmutableQueue<string> textContract = null;
-                    LuminPackSerializer.Deserialize<TProfile>(textBytes, ref textContract);
+                    LuminPackSerializer.Deserialize<IImmutableQueue<string>, TProfile>(textBytes, ref textContract);
                     if (!textContract.SequenceEqual(text)) throw new Exception("Interface string queue changed.");
                     ImmutableQueue<int> absent = null;
-                    byte[] nullBytes = LuminPackSerializer.Serialize<TProfile>(absent);
+                    byte[] nullBytes = LuminPackSerializer.Serialize<ImmutableQueue<int>, TProfile>(absent);
                     absent = ImmutableQueue.Create(19);
-                    if (LuminPackSerializer.Deserialize<TProfile>(nullBytes, ref absent) != nullBytes.Length || absent != null)
+                    if (LuminPackSerializer.Deserialize<ImmutableQueue<int>, TProfile>(nullBytes, ref absent) != nullBytes.Length || absent != null)
                         throw new Exception("Null concrete queue framing changed.");
                     IImmutableQueue<int> absentContract = ImmutableQueue.Create(19);
-                    if (LuminPackSerializer.Deserialize<TProfile>(nullBytes, ref absentContract) != nullBytes.Length || absentContract != null)
+                    if (LuminPackSerializer.Deserialize<IImmutableQueue<int>, TProfile>(nullBytes, ref absentContract) != nullBytes.Length || absentContract != null)
                         throw new Exception("Null interface queue framing changed.");
                 }
             }
             """ + JsonSource;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var modern = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var modern = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var legacy = modern.WithPreprocessorSymbols("NET8_0_OR_GREATER");
             var initial = CSharpCompilation.Create("QueueCases" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), modern, "QueueCases.cs")], references,

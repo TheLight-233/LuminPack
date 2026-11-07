@@ -249,7 +249,7 @@ public class ReaderFixedBoundsPolicyTest
             if (source.HasValue) BinaryPrimitives.WriteInt32LittleEndian(expected.AsSpan(1), source.Value);
             byte[] record = LuminPackSerializer.Serialize(source);
             Assert.Equal(expected, record);
-            Assert.Equal(expected, LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(source));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<int?, LuminPackUtf8LengthOptions>(source));
             int? destination = 719;
             Assert.Equal(record.Length, LuminPackSerializer.Deserialize(record.AsSpan(), ref destination));
             Assert.Equal(source, destination);

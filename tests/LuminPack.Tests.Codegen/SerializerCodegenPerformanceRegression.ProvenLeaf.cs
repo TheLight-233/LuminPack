@@ -12,7 +12,7 @@ internal static partial class SerializerCodegenPerformanceRegression
     private static void VerifyProvenLeafWrites(MetadataReference[] references)
     {
         string[] modern = ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"];
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: modern);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: modern).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             string source = ProvenLeafFixture.Replace("GenerationMode.MODE", "GenerationMode." + mode);
@@ -182,19 +182,19 @@ internal static partial class SerializerCodegenPerformanceRegression
                         Head = (byte)index, Number = long.MinValue + index, Raw = RawBits(index), Text = new string((index & 1) == 0 ? 'a' : '\u4E2D', length),
                         Other = index % 3 == 0 ? null : "tail_" + index, Flag = (index & 1) != 0, __leafRecordBound = 71 + index
                     }).ToArray();
-                    byte[] bytes = LuminPackSerializer.Serialize<P>(source);
+                    byte[] bytes = LuminPackSerializer.Serialize<Leaf[], P>(source);
                     var expected = new List<byte>(BitConverter.GetBytes(count));
-                    foreach (var value in source) expected.AddRange(LuminPackSerializer.Serialize<P>(value));
+                    foreach (var value in source) expected.AddRange(LuminPackSerializer.Serialize<Leaf, P>(value));
                     if (!bytes.AsSpan().SequenceEqual(expected.ToArray())) throw new Exception("Field-ordered record bytes differ.");
                     Summary.AddRange(SHA256.HashData(bytes));
-                    var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Leaf[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Leaf[] concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
+                    var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Leaf[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Leaf[] concreteReadTarget) => LuminPackSerializer.Deserialize<Leaf[], P>(concreteReadInput, ref concreteReadTarget));
                     if (fresh.Length != count) throw new Exception("Fresh count differs.");
                     var writer = LuminBufferWriterPool.Rent();
                     try
                     {
                         for (int iteration = 0; iteration < 3; iteration++)
                         {
-                            LuminPackSerializer.Serialize<P>(source, writer);
+                            LuminPackSerializer.Serialize<Leaf[], P>(source, writer);
                             byte[] actual = writer.GetSpan().ToArray();
                             if (!actual.AsSpan(iteration * bytes.Length, bytes.Length).SequenceEqual(bytes)) throw new Exception("Append output differs.");
                         }
@@ -213,7 +213,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                             {
                                 Span<byte> window = new(pinned, width);
                                 var state = new LuminPackWriter(ref window);
-                                try { LuminPackSerializer.Serialize<P>(ref state, in source); }
+                                try { LuminPackSerializer.Serialize<Leaf[], P>(ref state, in source); }
                                 catch (Exception exception) { error = exception.GetType().FullName; }
                                 cursor = state.Position;
                             }

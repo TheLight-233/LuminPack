@@ -132,9 +132,9 @@ public class ScalarInterfaceReadTest
         IEnumerable<long>? sequence = null;
         ICollection<long>? collection = null;
         IReadOnlyList<long>? list = null;
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TProfile>(bytes.AsSpan(), ref sequence));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TProfile>(bytes.AsSpan(), ref collection));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TProfile>(bytes.AsSpan(), ref list));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<IEnumerable<long>, TProfile>(bytes.AsSpan(), ref sequence));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<ICollection<long>, TProfile>(bytes.AsSpan(), ref collection));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<IReadOnlyList<long>, TProfile>(bytes.AsSpan(), ref list));
         Assert.Equal(sequence, collection);
         Assert.Equal(sequence, list);
     }

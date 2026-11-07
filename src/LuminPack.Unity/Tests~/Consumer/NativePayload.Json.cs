@@ -21,9 +21,9 @@ namespace LuminPack.Unity.ContractFixture
                 RejectJson(() => LuminPackSerializer.SerializeJson(curve));
                 RejectJson(() => LuminPackSerializer.SerializeJson(gradient));
                 RejectJson(() => LuminPackSerializer.SerializeJson(offset));
-                RejectJson(() => LuminPackSerializer.SerializeJson<LuminPack.Option.LuminPackUtf8LengthOptions>(curve, output));
-                RejectJson(() => LuminPackSerializer.SerializeJson<LuminPack.Option.LuminPackUtf8LengthOptions>(gradient, output));
-                RejectJson(() => LuminPackSerializer.SerializeJson<LuminPack.Option.LuminPackUtf8LengthOptions>(offset, output));
+                RejectJson(() => LuminPackSerializer.SerializeJson<AnimationCurve, LuminPack.Option.LuminPackUtf8LengthOptions>(curve, output));
+                RejectJson(() => LuminPackSerializer.SerializeJson<Gradient, LuminPack.Option.LuminPackUtf8LengthOptions>(gradient, output));
+                RejectJson(() => LuminPackSerializer.SerializeJson<RectOffset, LuminPack.Option.LuminPackUtf8LengthOptions>(offset, output));
                 var retainedCurve = curve;
                 var retainedGradient = gradient;
                 var retainedOffset = offset;
@@ -33,9 +33,9 @@ namespace LuminPack.Unity.ContractFixture
                     RejectJson(() => LuminPackSerializer.DeserializeJson(text, ref curve));
                     RejectJson(() => LuminPackSerializer.DeserializeJson(text, ref gradient));
                     RejectJson(() => LuminPackSerializer.DeserializeJson(text, ref offset));
-                    RejectJson(() => LuminPackSerializer.DeserializeJson<LuminPack.Option.LuminPackUtf8LengthOptions>((ReadOnlySpan<byte>)utf8, ref curve));
-                    RejectJson(() => LuminPackSerializer.DeserializeJson<LuminPack.Option.LuminPackUtf8LengthOptions>((ReadOnlySpan<byte>)utf8, ref gradient));
-                    RejectJson(() => LuminPackSerializer.DeserializeJson<LuminPack.Option.LuminPackUtf8LengthOptions>((ReadOnlySpan<byte>)utf8, ref offset));
+                    RejectJson(() => LuminPackSerializer.DeserializeJson<AnimationCurve, LuminPack.Option.LuminPackUtf8LengthOptions>((ReadOnlySpan<byte>)utf8, ref curve));
+                    RejectJson(() => LuminPackSerializer.DeserializeJson<Gradient, LuminPack.Option.LuminPackUtf8LengthOptions>((ReadOnlySpan<byte>)utf8, ref gradient));
+                    RejectJson(() => LuminPackSerializer.DeserializeJson<RectOffset, LuminPack.Option.LuminPackUtf8LengthOptions>((ReadOnlySpan<byte>)utf8, ref offset));
                     if (!ReferenceEquals(curve, retainedCurve) || !ReferenceEquals(gradient, retainedGradient) || !ReferenceEquals(offset, retainedOffset))
                         LuminPackExceptionHelper.ThrowInvalidOperationException("Unsupported JSON changed a native owner.");
                 }

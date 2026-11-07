@@ -85,7 +85,7 @@ public class JsonStreamingWriterTest
             output.OnGetMemory = () => builder.Clear().Append("changed");
             writer.WriteStringBuilder<TOptions>(builder);
             writer.FlushToBufferWriter();
-            Assert.Equal(encoding.GetBytes(LuminPackSerializer.SerializeJson<TOptions>(original)), output.ToArray());
+            Assert.Equal(encoding.GetBytes(LuminPackSerializer.SerializeJson<string, TOptions>(original)), output.ToArray());
             Assert.Equal("changed", builder.ToString());
         }
     }

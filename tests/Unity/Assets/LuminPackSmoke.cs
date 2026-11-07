@@ -62,12 +62,12 @@ public static class LuminPackSmoke
     private static void VerifyLayouts()
     {
         string text = "\u00E9\u4E2D\uD83D\uDE00";
-        byte[] utf8 = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
-        string restoredText = null; LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(utf8, ref restoredText);
+        byte[] utf8 = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
+        string restoredText = null; LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(utf8, ref restoredText);
         if (restoredText != text)
             throw new InvalidOperationException("The compatibility UTF-8 decoder lost Unicode scalars.");
         bool rejected = false;
-        try { LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(new byte[] { 1, 0, 0, 0, 2, 0, 0, 0, 65 }, ref restoredText); }
+        try { LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(new byte[] { 1, 0, 0, 0, 2, 0, 0, 0, 65 }, ref restoredText); }
         catch (Exception) { rejected = true; }
         if (!rejected) throw new InvalidOperationException("The compatibility decoder accepted an inconsistent character count.");
         const long expected = 123456789012345;

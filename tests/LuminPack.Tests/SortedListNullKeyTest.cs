@@ -21,12 +21,12 @@ public sealed class SortedListNullKeyTest
     [Fact]
     public void NullableValueKeysRejectAbsentValues()
     {
-        byte[] absent = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>((int?)null);
-        byte[] present = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>((int?)137);
-        byte[] value = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>("value");
+        byte[] absent = LuminPackSerializer.Serialize<int?, LuminPackUtf16LengthOptions>((int?)null);
+        byte[] present = LuminPackSerializer.Serialize<int?, LuminPackUtf16LengthOptions>((int?)137);
+        byte[] value = LuminPackSerializer.Serialize<string, LuminPackUtf16LengthOptions>("value");
         byte[] bytes = BitConverter.GetBytes(2).Concat(absent).Concat(value).Concat(present).Concat(value).ToArray();
         SortedList<int?, string>? target = null;
-        var failure = Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes, ref target));
+        var failure = Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<SortedList<int?, string>, LuminPackUtf16LengthOptions>(bytes, ref target));
         Assert.Equal("key", failure.ParamName);
         Assert.Null(target);
     }
@@ -35,23 +35,23 @@ public sealed class SortedListNullKeyTest
     /// <typeparam name="TOptions">A length profile that distinguishes null from empty strings.</typeparam>
     private static void Check<TOptions>() where TOptions : struct, ILuminPackOptions
     {
-        byte[] key = LuminPackSerializer.Serialize<TOptions>((string?)null);
-        byte[] first = LuminPackSerializer.Serialize<TOptions>(new NullKeyObservedValue { Number = 137 });
-        byte[] nextKey = LuminPackSerializer.Serialize<TOptions>("second");
-        byte[] second = LuminPackSerializer.Serialize<TOptions>(new NullKeyObservedValue { Number = 271 });
+        byte[] key = LuminPackSerializer.Serialize<string, TOptions>((string?)null);
+        byte[] first = LuminPackSerializer.Serialize<NullKeyObservedValue, TOptions>(new NullKeyObservedValue { Number = 137 });
+        byte[] nextKey = LuminPackSerializer.Serialize<string, TOptions>("second");
+        byte[] second = LuminPackSerializer.Serialize<NullKeyObservedValue, TOptions>(new NullKeyObservedValue { Number = 271 });
         byte[] bytes = BitConverter.GetBytes(2).Concat(key).Concat(first).Concat(nextKey).Concat(second).ToArray();
         var callbacks = new List<int>();
         NullKeyObservedValue.OnRead = item => callbacks.Add(item.Number);
         try
         {
             SortedList<string, NullKeyObservedValue>? fresh = null;
-            var failure = Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<TOptions>(bytes, ref fresh));
+            var failure = Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<SortedList<string, NullKeyObservedValue>, TOptions>(bytes, ref fresh));
             Assert.Equal("key", failure.ParamName);
             Assert.Null(fresh);
             Assert.Equal(new[] { 137 }, callbacks);
             callbacks.Clear();
             var reused = new SortedList<string, NullKeyObservedValue> { ["old"] = new() { Number = 719 } };
-            failure = Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<TOptions>(bytes, ref reused));
+            failure = Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<SortedList<string, NullKeyObservedValue>, TOptions>(bytes, ref reused));
             Assert.Equal("key", failure.ParamName);
             Assert.Empty(reused);
             Assert.Equal(new[] { 137 }, callbacks);

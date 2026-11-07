@@ -13,7 +13,7 @@ internal static partial class SerializerCodegenPerformanceRegression
         string[] modern = ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"];
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: modern);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: modern).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             string source = ProvenObjectFixture.Replace("GenerationMode.MODE", "GenerationMode." + mode);
             var input = ProvenInput(source, parse, references);
             var driver = ProvenDriver(parse).RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
@@ -147,19 +147,19 @@ internal static partial class SerializerCodegenPerformanceRegression
                         Head = (byte)index, Number = long.MinValue + index, Raw = RawBits(index), Text = new string((index & 1) == 0 ? 'a' : '\u4E2D', length),
                         Other = index % 3 == 0 ? null : "tail_" + index, Flag = (index & 1) != 0, __leafRecordBound = 71 + index
                     }).ToArray();
-                    byte[] bytes = LuminPackSerializer.Serialize<P>(source);
+                    byte[] bytes = LuminPackSerializer.Serialize<Leaf[], P>(source);
                     var expected = new List<byte>(BitConverter.GetBytes(count));
-                    foreach (var value in source) expected.AddRange(LuminPackSerializer.Serialize<P>(value));
+                    foreach (var value in source) expected.AddRange(LuminPackSerializer.Serialize<Leaf, P>(value));
                     if (!bytes.AsSpan().SequenceEqual(expected.ToArray())) throw new Exception("Field-ordered record bytes differ.");
                     Summary.AddRange(SHA256.HashData(bytes));
-                    var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Leaf[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Leaf[] concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
+                    var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Leaf[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Leaf[] concreteReadTarget) => LuminPackSerializer.Deserialize<Leaf[], P>(concreteReadInput, ref concreteReadTarget));
                     if (fresh.Length != count) throw new Exception("Fresh count differs.");
                     var writer = LuminBufferWriterPool.Rent();
                     try
                     {
                         for (int iteration = 0; iteration < 3; iteration++)
                         {
-                            LuminPackSerializer.Serialize<P>(source, writer);
+                            LuminPackSerializer.Serialize<Leaf[], P>(source, writer);
                             byte[] actual = writer.GetSpan().ToArray();
                             if (!actual.AsSpan(iteration * bytes.Length, bytes.Length).SequenceEqual(bytes)) throw new Exception("Append output differs.");
                         }
@@ -178,7 +178,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                             {
                                 Span<byte> window = new(pinned, width);
                                 var state = new LuminPackWriter(ref window);
-                                try { LuminPackSerializer.Serialize<P>(ref state, in source); }
+                                try { LuminPackSerializer.Serialize<Leaf[], P>(ref state, in source); }
                                 catch (Exception exception) { error = exception.GetType().FullName; }
                                 cursor = state.Position;
                             }
@@ -196,9 +196,9 @@ internal static partial class SerializerCodegenPerformanceRegression
                 {
                     OtherProfile.Gets = 0;
                     Parent source = present ? new Child { Identity = length, Name = new string('a', length), Raw = RawBits(length), Number = long.MinValue + length, OtherText = "\u4E2D_tail" } : null;
-                    byte[] bytes = LuminPackSerializer.Serialize<P>(source);
+                    byte[] bytes = LuminPackSerializer.Serialize<Parent, P>(source);
                     Summary.AddRange(SHA256.HashData(bytes));
-                    var restored = global::LuminPackUnitTest.ConcreteReads.Read<Parent>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Parent concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
+                    var restored = global::LuminPackUnitTest.ConcreteReads.Read<Parent>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Parent concreteReadTarget) => LuminPackSerializer.Deserialize<Parent, P>(concreteReadInput, ref concreteReadTarget));
                     if ((source is null) != (restored is null) || restored is Child actual && (actual.Identity != length || actual.Name != ((Child)source).Name || actual.OtherText != ((Child)source).OtherText))
                         throw new Exception("Union field round trip differs.");
                     var writer = LuminBufferWriterPool.Rent();
@@ -206,7 +206,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                     {
                         for (int iteration = 0; iteration < 3; iteration++)
                         {
-                            LuminPackSerializer.Serialize<P>(source, writer);
+                            LuminPackSerializer.Serialize<Parent, P>(source, writer);
                             if (!writer.GetSpan().Slice(iteration * bytes.Length, bytes.Length).SequenceEqual(bytes)) throw new Exception("Union append differs.");
                         }
                     }
@@ -220,7 +220,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                         {
                             Span<byte> window = new(pointer, width);
                             var state = new LuminPackWriter(ref window);
-                            try { LuminPackSerializer.Serialize<P>(ref state, in source); }
+                            try { LuminPackSerializer.Serialize<Parent, P>(ref state, in source); }
                             catch (Exception exception) { error = exception.GetType().FullName; }
                             cursor = state.Position;
                         }

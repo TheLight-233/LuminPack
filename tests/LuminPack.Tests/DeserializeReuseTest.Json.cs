@@ -31,9 +31,9 @@ public partial class DeserializeReuseTest
             Array = [new() { Number = 8, Text = "array" }],
             Names = ["ascii", "quote\"\u00E9"], Numbers = [1, 2, 3], Tail = 99
         };
-        string json = LuminPackSerializer.SerializeJson<TOptions>((ReuseGraph)(source));
+        string json = LuminPackSerializer.SerializeJson<ReuseGraph, TOptions>((ReuseGraph)(source));
         byte[] bytes = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
-        var target = global::LuminPackUnitTest.ConcreteReads.ReadJson<ReuseGraph>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReuseGraph concreteReadTarget) => LuminPackSerializer.DeserializeJson<TOptions>(concreteReadInput, ref concreteReadTarget));
+        var target = global::LuminPackUnitTest.ConcreteReads.ReadJson<ReuseGraph>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReuseGraph concreteReadTarget) => LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(concreteReadInput, ref concreteReadTarget));
         var root = target;
         var child = target.Child;
         var text = child.Text;
@@ -45,7 +45,7 @@ public partial class DeserializeReuseTest
         var name = names[1];
         var numbers = target.Numbers;
         target.Tail = 0;
-        Assert.Equal(bytes.Length, LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target));
+        Assert.Equal(bytes.Length, LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(bytes, ref target));
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
         Assert.Same(text, child.Text);
@@ -57,9 +57,9 @@ public partial class DeserializeReuseTest
         Assert.Same(name, names[1]);
         Assert.Same(numbers, target.Numbers);
         Assert.Equal(99, target.Tail);
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
@@ -208,9 +208,9 @@ LuminPackSerializer.DeserializeJson("[{\"Number\":36}]", ref segment);
         var map = new Dictionary<string, string> { ["key"] = "quote\"\u00E9" };
         var text = map["key"];
         byte[] bytes = Encoding.UTF8.GetBytes("[[\"key\",\"quote\\\"\\u00e9\"]]");
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TestUtf8Length>(bytes, ref map);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<Dictionary<string, string>, TestUtf8Length>(bytes, ref map);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TestUtf8Length>(bytes, ref map);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<Dictionary<string, string>, TestUtf8Length>(bytes, ref map);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Same(text, map["key"]);
     }
@@ -291,8 +291,8 @@ LuminPackSerializer.DeserializeJson("{\"$id\":0,\"Number\":44,\"Next\":{\"$id\":
     public void JsonReuseRejectsMalformedArrays(string json)
     {
         var array = new[] { new ReuseNode() };
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<TestStrictUtf8Length>(json, ref array));
-LuminPackSerializer.DeserializeJson<TestStrictUtf8Length>("[{\"Number\":51}]", ref array);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<ReuseNode[], TestStrictUtf8Length>(json, ref array));
+LuminPackSerializer.DeserializeJson<ReuseNode[], TestStrictUtf8Length>("[{\"Number\":51}]", ref array);
         Assert.Equal(51, array[0].Number);
     }
 }

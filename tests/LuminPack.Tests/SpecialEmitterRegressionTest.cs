@@ -316,21 +316,21 @@ public class SpecialEmitterRegressionTest
     private static void CheckWrapperProfile<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         CultureInfo culture = CultureInfo.InvariantCulture;
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((CultureInfo)(culture));
-        Assert.Equal(culture.Name, global::LuminPackUnitTest.ConcreteReads.Read<CultureInfo>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)).Name);
+        byte[] bytes = LuminPackSerializer.Serialize<CultureInfo, TOptions>((CultureInfo)(culture));
+        Assert.Equal(culture.Name, global::LuminPackUnitTest.ConcreteReads.Read<CultureInfo>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.Deserialize<CultureInfo, TOptions>(concreteReadInput, ref concreteReadTarget)).Name);
         Uri uri = new("https://example.com/" + new string('a', 235));
-        bytes = LuminPackSerializer.Serialize<TOptions>((Uri)(uri));
-        Assert.Equal(uri, global::LuminPackUnitTest.ConcreteReads.Read<Uri>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
+        bytes = LuminPackSerializer.Serialize<Uri, TOptions>((Uri)(uri));
+        Assert.Equal(uri, global::LuminPackUnitTest.ConcreteReads.Read<Uri>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri concreteReadTarget) => LuminPackSerializer.Deserialize<Uri, TOptions>(concreteReadInput, ref concreteReadTarget)));
         Type type = typeof(Dictionary<string, int[]>);
-        bytes = LuminPackSerializer.Serialize<TOptions>((Type)(type));
+        bytes = LuminPackSerializer.Serialize<Type, TOptions>((Type)(type));
         if (RuntimeFeature.IsDynamicCodeSupported)
-            Assert.Equal(type, global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
+            Assert.Equal(type, global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<Type, TOptions>(concreteReadInput, ref concreteReadTarget)));
         else
-            Assert.Throws<PlatformNotSupportedException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
-        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Type>(LuminPackSerializer.Serialize<TOptions>((Type)null!), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
+            Assert.Throws<PlatformNotSupportedException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<Type, TOptions>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Type>(LuminPackSerializer.Serialize<Type, TOptions>((Type)null!), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<Type, TOptions>(concreteReadInput, ref concreteReadTarget)));
         Uri? absent = null;
-        bytes = LuminPackSerializer.Serialize<TOptions>((Uri?)(absent));
-        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Uri?>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri? concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
+        bytes = LuminPackSerializer.Serialize<Uri, TOptions>((Uri?)(absent));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Uri?>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri? concreteReadTarget) => LuminPackSerializer.Deserialize<Uri, TOptions>(concreteReadInput, ref concreteReadTarget)));
         Assert.Single(bytes);
     }
 

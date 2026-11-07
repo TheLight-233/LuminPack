@@ -12,7 +12,7 @@ internal static partial class SerializerDictionaryScalarSlotRegression
     /// <param name="references">Current runtime and platform metadata.</param>
     private static void VerifyStableStringKeys(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         byte[] runtime = File.ReadAllBytes(typeof(LuminPackReader).Assembly.Location);
         int entry = runtime.AsSpan().IndexOf("TryReadStableStringKeys\0"u8);
         Require(entry >= 0, "The optional stable-key runtime entry is missing.");
@@ -137,13 +137,13 @@ internal static partial class SerializerDictionaryScalarSlotRegression
                 var source = new Message { Values = keys.ToDictionary(key => key, key => default(Element)), Tail = 53 };
                 var target = new Message { Values = keys.ToDictionary(key => key, key => default(Element)) };
                 var original = target.Values;
-                byte[] bytes = LuminPackSerializer.Serialize<P>(source);
-                var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Message>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Message concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
+                byte[] bytes = LuminPackSerializer.Serialize<Message, P>(source);
+                var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Message>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Message concreteReadTarget) => LuminPackSerializer.Deserialize<Message, P>(concreteReadInput, ref concreteReadTarget));
                 if (!fresh.Values.Keys.SequenceEqual(keys) || fresh.Tail != 53) throw new Exception("Fresh graph differs.");
                 for (int iteration = 0; iteration < 4; iteration++)
                 {
                     var enumerator = target.Values.GetEnumerator(); enumerator.MoveNext();
-                    if (LuminPackSerializer.Deserialize<P>(bytes, ref target) != bytes.Length ||
+                    if (LuminPackSerializer.Deserialize<Message, P>(bytes, ref target) != bytes.Length ||
                         !ReferenceEquals(target.Values, original) || !target.Values.Keys.SequenceEqual(keys) || target.Tail != 53)
                         throw new Exception("Stable-key generated root differs.");
                     bool invalidated = false;
@@ -154,16 +154,16 @@ internal static partial class SerializerDictionaryScalarSlotRegression
                 for (int iteration = 0; iteration < 4; iteration++)
                 {
                     source.Values = keys.Select(key => key + iteration).ToDictionary(key => key, key => default(Element));
-                    bytes = LuminPackSerializer.Serialize<P>(source);
-                    LuminPackSerializer.Deserialize<P>(bytes, ref target);
+                    bytes = LuminPackSerializer.Serialize<Message, P>(source);
+                    LuminPackSerializer.Deserialize<Message, P>(bytes, ref target);
                     if (!target.Values.Keys.SequenceEqual(source.Values.Keys)) throw new Exception("Changed generated keys differ.");
                 }
                 var fixedSource = new FixedMessage { Values = keys.ToDictionary(key => key, key => default(Element)), Tail = 71 };
                 var fixedTarget = new FixedMessage { Values = keys.ToDictionary(key => key, key => default(Element)) };
-                byte[] fixedBytes = LuminPackSerializer.Serialize<P>(fixedSource);
-                LuminPackSerializer.Deserialize<P>(fixedBytes, ref fixedTarget);
+                byte[] fixedBytes = LuminPackSerializer.Serialize<FixedMessage, P>(fixedSource);
+                LuminPackSerializer.Deserialize<FixedMessage, P>(fixedBytes, ref fixedTarget);
                 if (!fixedTarget.Values.Keys.SequenceEqual(keys) || fixedTarget.Tail != 71) throw new Exception("A fixed member profile was lost.");
-                byte[] mapBytes = LuminPackSerializer.Serialize<P>(source.Values);
+                byte[] mapBytes = LuminPackSerializer.Serialize<Dictionary<string, Element>, P>(source.Values);
                 for (int width = 8; width < mapBytes.Length; width++)
                 {
                     ReadOnlySpan<byte> input = mapBytes.AsSpan(0, width);
@@ -171,7 +171,7 @@ internal static partial class SerializerDictionaryScalarSlotRegression
                     var map = source.Values.ToDictionary();
                     int version = LuminPack.Code.LuminPackMarshal.GetDictionaryView(map)._version;
                     bool failed = false;
-                    try { LuminPackSerializer.Deserialize<P>(ref reader, ref map); }
+                    try { LuminPackSerializer.Deserialize<Dictionary<string, Element>, P>(ref reader, ref map); }
                     catch { failed = true; }
                     if (!failed || reader.Position != 0 || LuminPack.Code.LuminPackMarshal.GetDictionaryView(map)._version != version ||
                         !map.Keys.SequenceEqual(source.Values.Keys)) throw new Exception("Generated dictionary failure published cursor or staging.");

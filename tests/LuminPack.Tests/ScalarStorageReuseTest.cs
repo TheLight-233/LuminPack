@@ -79,18 +79,18 @@ public sealed class ScalarStorageReuseTest
     private static void CheckInterfaces<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         IList<int> source = new List<int> { 3, 5, 7 };
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>(source);
+        byte[] bytes = LuminPackSerializer.Serialize<IList<int>, TOptions>(source);
         IEnumerable<int> sequence = new int[3];
         ICollection<int> collection = new List<int> { 101 };
         IList<int> list = new List<int> { 103 };
         IReadOnlyList<int> readOnlyList = new int[3];
         IReadOnlyCollection<int> readOnlyCollection = new List<int> { 107 };
         object[] original = [sequence, collection, list, readOnlyList, readOnlyCollection];
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref sequence));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref collection));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref list));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref readOnlyList));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref readOnlyCollection));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<IEnumerable<int>, TOptions>(bytes, ref sequence));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<ICollection<int>, TOptions>(bytes, ref collection));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<IList<int>, TOptions>(bytes, ref list));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<IReadOnlyList<int>, TOptions>(bytes, ref readOnlyList));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<IReadOnlyCollection<int>, TOptions>(bytes, ref readOnlyCollection));
         object[] actual = [sequence, collection, list, readOnlyList, readOnlyCollection];
         for (int i = 0; i < actual.Length; i++)
         {

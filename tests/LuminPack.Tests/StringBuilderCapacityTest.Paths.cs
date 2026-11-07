@@ -79,8 +79,8 @@ public partial class StringBuilderCapacityTest
         Assert.True(chunks > 8);
 #endif
         using var buffer = new LuminBufferWriter(true);
-        byte[] json = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(value));
-        byte[] utf8 = Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value));
+        byte[] json = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf16LengthOptions>(value));
+        byte[] utf8 = Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf8LengthOptions>(value));
         var restored = new StringBuilder(value.ToString());
         for (int i = 0; i < 256; i++) Exercise(value, buffer, json, utf8, ref restored);
         long before = GC.GetAllocatedBytesForCurrentThread();
@@ -106,15 +106,15 @@ public partial class StringBuilderCapacityTest
     /// <typeparam name="TOptions">The compiled document profile.</typeparam>
     private static void CheckFreshAllocation<TOptions>(string text, Encoding encoding) where TOptions : struct, ILuminPackOptions
     {
-        byte[] input = encoding.GetBytes(LuminPackSerializer.SerializeJson<TOptions>(text));
+        byte[] input = encoding.GetBytes(LuminPackSerializer.SerializeJson<string, TOptions>(text));
         string decoded = string.Empty;
-        LuminPackSerializer.DeserializeJson<TOptions>(input, ref decoded);
+        LuminPackSerializer.DeserializeJson<string, TOptions>(input, ref decoded);
         StringBuilder? target = null;
         for (int i = 0; i < 64; i++)
         {
             GC.KeepAlive(CreateNecessaryBuilder(decoded));
             target = null;
-            LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+            LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(input, ref target);
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 64; i++) GC.KeepAlive(CreateNecessaryBuilder(decoded));
@@ -123,7 +123,7 @@ public partial class StringBuilderCapacityTest
         for (int i = 0; i < 64; i++)
         {
             target = null;
-            LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+            LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(input, ref target);
         }
         Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
         var expected = new StringBuilder(decoded);
@@ -155,18 +155,18 @@ public partial class StringBuilderCapacityTest
     /// <typeparam name="TOptions">The compiled document profile.</typeparam>
     private static void CheckJson<TOptions>(StringBuilder? value, Encoding encoding) where TOptions : struct, ILuminPackOptions
     {
-        string json = LuminPackSerializer.SerializeJson<TOptions>(value);
-        Assert.Equal(LuminPackSerializer.SerializeJson<TOptions>(value?.ToString()), json);
+        string json = LuminPackSerializer.SerializeJson<StringBuilder, TOptions>(value);
+        Assert.Equal(LuminPackSerializer.SerializeJson<string, TOptions>(value?.ToString()), json);
         byte[] bytes = encoding.GetBytes(json);
         string? expected = null;
-        LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref expected);
+        LuminPackSerializer.DeserializeJson<string, TOptions>(bytes, ref expected);
         StringBuilder? restored = null;
-        LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref restored);
+        LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(bytes, ref restored);
         Assert.Equal(expected, restored?.ToString());
         if (restored is not null) Assert.Equal(new StringBuilder(expected).Capacity, restored.Capacity);
         restored = new StringBuilder("previous", 128);
         var original = restored;
-        LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref restored);
+        LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(bytes, ref restored);
         Assert.Equal(expected, restored?.ToString());
         if (value is not null) Assert.Same(original, restored);
     }
@@ -180,12 +180,12 @@ public partial class StringBuilderCapacityTest
         {
             var value = new StringBuilder("keep");
             var original = value;
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(malformed), ref value));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(encoding.GetBytes(malformed), ref value));
             Assert.Same(original, value);
             Assert.Equal("keep", value.ToString());
         }
         var bounded = new StringBuilder(2, 2).Append('a');
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("\"four\""), ref bounded));
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(encoding.GetBytes("\"four\""), ref bounded));
         Assert.Equal(string.Empty, bounded.ToString());
     }
 
@@ -198,9 +198,9 @@ public partial class StringBuilderCapacityTest
     private static void Exercise(StringBuilder value, LuminBufferWriter buffer, byte[] json, byte[] utf8, ref StringBuilder restored)
     {
         buffer.ResetCore(); LuminPackSerializer.Serialize(value, buffer);
-        buffer.ResetCore(); LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value, buffer);
-        buffer.ResetCore(); LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(value, buffer);
-        LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(json, ref restored);
-        LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(utf8, ref restored);
+        buffer.ResetCore(); LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf8LengthOptions>(value, buffer);
+        buffer.ResetCore(); LuminPackSerializer.SerializeJson<StringBuilder, LuminPackUtf16LengthOptions>(value, buffer);
+        LuminPackSerializer.DeserializeJson<StringBuilder, LuminPackUtf16LengthOptions>(json, ref restored);
+        LuminPackSerializer.DeserializeJson<StringBuilder, LuminPackUtf8LengthOptions>(utf8, ref restored);
     }
 }

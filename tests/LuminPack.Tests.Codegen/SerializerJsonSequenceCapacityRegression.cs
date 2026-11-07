@@ -32,43 +32,43 @@ internal static class SerializerJsonSequenceCapacityRegression
                 {
                     int[] items=Enumerable.Range(0,17).ToArray();
                     string json="["+string.Join(",",items)+"]";
-                    List<int> list=null; LuminPackSerializer.DeserializeJson<T>(json,ref list);
+                    List<int> list=null; LuminPackSerializer.DeserializeJson<List<int>, T>(json,ref list);
                     if(list.Capacity!=17||!list.SequenceEqual(items))throw new Exception("Fresh List sizing.");
                     var original=list;list.Capacity=64;
-                    LuminPackSerializer.DeserializeJson<T>(json,ref list);
+                    LuminPackSerializer.DeserializeJson<List<int>, T>(json,ref list);
                     if(!ReferenceEquals(original,list)||list.Capacity!=64)throw new Exception("List reuse.");
-                    IEnumerable<int> sequence=null; LuminPackSerializer.DeserializeJson<T>(json,ref sequence);
+                    IEnumerable<int> sequence=null; LuminPackSerializer.DeserializeJson<IEnumerable<int>, T>(json,ref sequence);
                     if(sequence is not List<int> storage||storage.Capacity!=17)throw new Exception("Sequence storage.");
-                    Queue<int> queue=null;LuminPackSerializer.DeserializeJson<T>(json,ref queue);
+                    Queue<int> queue=null;LuminPackSerializer.DeserializeJson<Queue<int>, T>(json,ref queue);
                     if(!queue.SequenceEqual(items))throw new Exception("Queue order.");
-                    Collection<int> collection=null;LuminPackSerializer.DeserializeJson<T>(json,ref collection);
-                    ObservableCollection<int> observable=null;LuminPackSerializer.DeserializeJson<T>(json,ref observable);
-                    ReadOnlyCollection<int> readOnly=null;LuminPackSerializer.DeserializeJson<T>(json,ref readOnly);
-                    ReadOnlyObservableCollection<int> readOnlyObservable=null;LuminPackSerializer.DeserializeJson<T>(json,ref readOnlyObservable);
+                    Collection<int> collection=null;LuminPackSerializer.DeserializeJson<Collection<int>, T>(json,ref collection);
+                    ObservableCollection<int> observable=null;LuminPackSerializer.DeserializeJson<ObservableCollection<int>, T>(json,ref observable);
+                    ReadOnlyCollection<int> readOnly=null;LuminPackSerializer.DeserializeJson<ReadOnlyCollection<int>, T>(json,ref readOnly);
+                    ReadOnlyObservableCollection<int> readOnlyObservable=null;LuminPackSerializer.DeserializeJson<ReadOnlyObservableCollection<int>, T>(json,ref readOnlyObservable);
                     foreach(var value in new IEnumerable<int>[]{collection,observable,readOnly,readOnlyObservable})
                         if(!value.SequenceEqual(items))throw new Exception("Sequence wrapper contents.");
                     var root=new Root{Items=list,Queue=queue};
-                    var encoded=LuminPackSerializer.SerializeJson<T>(root);Root copy=null;
-                    LuminPackSerializer.DeserializeJson<T>(encoded,ref copy);
+                    var encoded=LuminPackSerializer.SerializeJson<Root, T>(root);Root copy=null;
+                    LuminPackSerializer.DeserializeJson<Root, T>(encoded,ref copy);
                     if(copy.Items.Capacity!=17||!copy.Queue.SequenceEqual(items))throw new Exception("Nested sequence.");
                     var bytes=LuminPackSerializer.Serialize(root);Root binary=null;LuminPackSerializer.Deserialize(bytes,ref binary);
                     if(!binary.Items.SequenceEqual(items)||!binary.Queue.SequenceEqual(items))throw new Exception("Binary control.");
                     List<int> prefix=null;bool failed=false;
-                    try{LuminPackSerializer.DeserializeJson<T>("[1,2,\"bad\"]",ref prefix);}catch(Exception){failed=true;}
+                    try{LuminPackSerializer.DeserializeJson<List<int>, T>("[1,2,\"bad\"]",ref prefix);}catch(Exception){failed=true;}
                     if(!failed||prefix==null||!prefix.SequenceEqual(new[]{1,2}))throw new Exception("Failed-read prefix.");
-                    int[] array=null;LuminPackSerializer.DeserializeJson<T>(json,ref array);
-                    HashSet<int> set=null;LuminPackSerializer.DeserializeJson<T>("[1,1,1]",ref set);
-                    Dictionary<int,int> map=null;LuminPackSerializer.DeserializeJson<T>("[[1,2],[1,3]]",ref map);
+                    int[] array=null;LuminPackSerializer.DeserializeJson<int[], T>(json,ref array);
+                    HashSet<int> set=null;LuminPackSerializer.DeserializeJson<HashSet<int>, T>("[1,1,1]",ref set);
+                    Dictionary<int,int> map=null;LuminPackSerializer.DeserializeJson<Dictionary<int, int>, T>("[[1,2],[1,3]]",ref map);
                     if(array.Length!=17||set.Count!=1||map[1]!=3)throw new Exception("Unchanged array/hash paths.");
                     IGrouping<int,int> group=null;
-                    LuminPackSerializer.DeserializeJson<T>("{\"Key\":7,\"Elements\":"+json+"}",ref group);
+                    LuminPackSerializer.DeserializeJson<IGrouping<int, int>, T>("{\"Key\":7,\"Elements\":"+json+"}",ref group);
                     if(group.Key!=7||!group.SequenceEqual(items))throw new Exception("Grouping sequence.");
                 }
             }
             """;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("SequenceCapacity" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));

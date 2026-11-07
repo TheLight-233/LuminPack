@@ -165,9 +165,9 @@ public sealed class StringRunWriteTest
         void Check<TOptions>() where TOptions : struct, ILuminPackOptions
         {
             byte[] expected = Counted(sorted.Count, sorted.SelectMany(pair =>
-                LuminPackSerializer.Serialize<TOptions>(pair.Key).Concat(LuminPackSerializer.Serialize<TOptions>(pair.Value))));
-            Assert.Equal(expected, LuminPackSerializer.Serialize<TOptions>(sorted));
-            Assert.Equal(expected, LuminPackSerializer.Serialize<TOptions>(immutable));
+                LuminPackSerializer.Serialize<string, TOptions>(pair.Key).Concat(LuminPackSerializer.Serialize<string, TOptions>(pair.Value))));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<SortedDictionary<string, string?>, TOptions>(sorted));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<ImmutableSortedDictionary<string, string>, TOptions>(immutable));
         }
     }
 
@@ -227,10 +227,10 @@ public sealed class StringRunWriteTest
 
         void Check<TOptions>() where TOptions : struct, ILuminPackOptions
         {
-            byte[] records = ordered.SelectMany(text => LuminPackSerializer.Serialize<TOptions>(text)).ToArray();
+            byte[] records = ordered.SelectMany(text => LuminPackSerializer.Serialize<string, TOptions>(text)).ToArray();
             byte[] stackBytes = Counted(ordered.Length, records);
-            Assert.Equal(stackBytes, LuminPackSerializer.Serialize<TOptions>(stack));
-            Assert.Equal(Counted(ordered.Length, new byte[8].Concat(stackBytes)), LuminPackSerializer.Serialize<TOptions>(queue));
+            Assert.Equal(stackBytes, LuminPackSerializer.Serialize<Stack<string?>, TOptions>(stack));
+            Assert.Equal(Counted(ordered.Length, new byte[8].Concat(stackBytes)), LuminPackSerializer.Serialize<Queue<string?>, TOptions>(queue));
         }
     }
 
@@ -300,8 +300,8 @@ public sealed class StringRunWriteTest
         void Check<TOptions>() where TOptions : struct, ILuminPackOptions
         {
             byte[] expected = Counted(list.Count, list.SelectMany(pair =>
-                LuminPackSerializer.Serialize<TOptions>(pair.Key).Concat(LuminPackSerializer.Serialize<TOptions>(pair.Value))));
-            Assert.Equal(expected, LuminPackSerializer.Serialize<TOptions>(list));
+                LuminPackSerializer.Serialize<string, TOptions>(pair.Key).Concat(LuminPackSerializer.Serialize<long, TOptions>(pair.Value))));
+            Assert.Equal(expected, LuminPackSerializer.Serialize<SortedList<string, long>, TOptions>(list));
         }
     }
 

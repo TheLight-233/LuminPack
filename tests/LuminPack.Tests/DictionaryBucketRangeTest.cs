@@ -144,10 +144,10 @@ public class DictionaryBucketRangeTest
         var source = keys.Select((key, index) => new KeyValuePair<string, long>(key, index + 71)).ToDictionary();
         var target = keys.ToDictionary(key => key, key => 0L);
         var original = target;
-        byte[] payload = LuminPackSerializer.Serialize<TOptions>((Dictionary<string, long>)(source));
+        byte[] payload = LuminPackSerializer.Serialize<Dictionary<string, long>, TOptions>((Dictionary<string, long>)(source));
         var enumerator = target.GetEnumerator();
         Assert.True(enumerator.MoveNext());
-        Assert.Equal(payload.Length, LuminPackSerializer.Deserialize<TOptions>(payload, ref target));
+        Assert.Equal(payload.Length, LuminPackSerializer.Deserialize<Dictionary<string, long>, TOptions>(payload, ref target));
         Assert.Same(original, target);
         Assert.Equal(source.ToArray(), target.ToArray());
         for (int index = 0; index < keys.Length; index++) Assert.Same(keys[index], target.Keys.ElementAt(index));
@@ -163,15 +163,15 @@ public class DictionaryBucketRangeTest
             source.Select(pair => new KeyValuePair<string, long>("changed_" + pair.Key, pair.Value + 1)).ToDictionary()
         })
         {
-            byte[] changedPayload = LuminPackSerializer.Serialize<TOptions>((Dictionary<string, long>)(changed));
-            Assert.Equal(changedPayload.Length, LuminPackSerializer.Deserialize<TOptions>(changedPayload, ref target));
+            byte[] changedPayload = LuminPackSerializer.Serialize<Dictionary<string, long>, TOptions>((Dictionary<string, long>)(changed));
+            Assert.Equal(changedPayload.Length, LuminPackSerializer.Deserialize<Dictionary<string, long>, TOptions>(changedPayload, ref target));
             Assert.Same(original, target);
             Assert.Equal(changed.ToArray(), target.ToArray());
         }
 
         var custom = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase) { ["FIRST_KEY"] = -1 };
         var comparer = custom.Comparer;
-LuminPackSerializer.Deserialize<TOptions>(payload, ref custom);
+LuminPackSerializer.Deserialize<Dictionary<string, long>, TOptions>(payload, ref custom);
         Assert.Same(comparer, custom.Comparer);
         Assert.Equal(source.ToArray(), custom.ToArray());
 
@@ -180,13 +180,13 @@ LuminPackSerializer.Deserialize<TOptions>(payload, ref custom);
         for (int width = 0; width < payload.Length; width++)
         {
             byte[] truncated = payload.AsSpan(0, width).ToArray();
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<TOptions>(truncated, ref incomplete));
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<Dictionary<string, long>, TOptions>(truncated, ref incomplete));
             Assert.Equal(before, incomplete.ToArray());
         }
 
         var duplicateTarget = new Dictionary<string, long> { ["first"] = -1, ["second"] = -2 };
         byte[] duplicate = DuplicateStringScalarPayload<TOptions>();
-        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize<TOptions>(duplicate, ref duplicateTarget));
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize<Dictionary<string, long>, TOptions>(duplicate, ref duplicateTarget));
         Assert.Single(duplicateTarget);
         Assert.Equal(71, duplicateTarget["first"]);
     }

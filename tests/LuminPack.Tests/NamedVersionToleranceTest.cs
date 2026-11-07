@@ -39,19 +39,19 @@ LuminPackSerializer.Deserialize(bytes, ref target.Next);
     private static void CheckFixedTable<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         var source = new FixedRecord { Number = 7, Stamp = 11, Flag = FixedFlag.Enabled };
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((FixedRecord)(source));
-        var target = global::LuminPackUnitTest.ConcreteReads.Read<FixedRecord>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedRecord concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
+        byte[] bytes = LuminPackSerializer.Serialize<FixedRecord, TOptions>((FixedRecord)(source));
+        var target = global::LuminPackUnitTest.ConcreteReads.Read<FixedRecord>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedRecord concreteReadTarget) => LuminPackSerializer.Deserialize<FixedRecord, TOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Number, target.Number);
         Assert.Equal(source.Stamp, target.Stamp);
         Assert.Equal(source.Flag, target.Flag);
         var original = target;
-LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<FixedRecord, TOptions>(bytes, ref target);
         Assert.Same(original, target);
-        var evolved = global::LuminPackUnitTest.ConcreteReads.Read<FixedReordered>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedReordered concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
+        var evolved = global::LuminPackUnitTest.ConcreteReads.Read<FixedReordered>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedReordered concreteReadTarget) => LuminPackSerializer.Deserialize<FixedReordered, TOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Stamp, evolved.Stamp);
         Assert.Equal(source.Flag, evolved.Flag);
         Assert.Equal(0, evolved.Added);
-        var restored = global::LuminPackUnitTest.ConcreteReads.Read<FixedRecord>(LuminPackSerializer.Serialize<TOptions>((FixedReordered)(evolved)), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedRecord concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
+        var restored = global::LuminPackUnitTest.ConcreteReads.Read<FixedRecord>(LuminPackSerializer.Serialize<FixedReordered, TOptions>((FixedReordered)(evolved)), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedRecord concreteReadTarget) => LuminPackSerializer.Deserialize<FixedRecord, TOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Stamp, restored.Stamp);
         Assert.Equal(0, restored.Number);
     }
@@ -95,7 +95,7 @@ LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
     public void JsonAcceptsFormerNames()
     {
         Assert.Equal(41, global::LuminPackUnitTest.ConcreteReads.ReadJson<Latest>("{\"A\":41}", static (string concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).C);
-        Assert.Equal(43, global::LuminPackUnitTest.ConcreteReads.ReadJson<Latest>("{\"B\":43}", static (string concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget)).C);
+        Assert.Equal(43, global::LuminPackUnitTest.ConcreteReads.ReadJson<Latest>("{\"B\":43}", static (string concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.DeserializeJson<Latest, LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget)).C);
         Assert.Equal("{\"C\":47}", LuminPackSerializer.SerializeJson(new Latest { C = 47 }));
     }
 
@@ -129,10 +129,10 @@ LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         var items = target.Items;
         var item = items[0];
         var text = child.Text;
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((GraphBefore)(source));
-        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+        byte[] bytes = LuminPackSerializer.Serialize<GraphBefore, TOptions>((GraphBefore)(source));
+        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<GraphAfter, TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<GraphAfter, TOptions>(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Same(child, target.Child);
         Assert.Same(items, target.Items);
@@ -149,15 +149,15 @@ LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
     {
         var source = new Graph { Child = new() { Text = new string('c', 300), Number = 7 }, Items = [new() { Text = new string('i', 512), Number = 8 }] };
         var target = new Graph { Child = new() { Text = new string(source.Child.Text.ToCharArray()) }, Items = [new() { Text = new string(source.Items[0].Text.ToCharArray()) }] };
-        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((Graph)(source));
+        byte[] bytes = LuminPackSerializer.Serialize<Graph, TOptions>((Graph)(source));
         var root = target;
         var child = target.Child;
         var list = target.Items;
         var item = list[0];
         var text = child.Text;
-        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<Graph, TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<Graph, TOptions>(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
@@ -189,7 +189,7 @@ LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         byte[] bytes = LuminPackSerializer.Serialize(new Earliest { A = 123 });
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<ChangedType>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ChangedType concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         // The default profile is the UTF-16 length profile, so a UTF-8 reader sees a different member contract.
-        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize<Earliest, LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget)));
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Latest>(LuminPackSerializer.Serialize(new TwoInts { A = 1, B = 2 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 

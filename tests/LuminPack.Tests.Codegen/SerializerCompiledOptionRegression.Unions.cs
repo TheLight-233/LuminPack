@@ -27,8 +27,8 @@ internal static partial class SerializerCompiledOptionRegression
                     var reused = copy;
                     LuminPackSerializer.Deserialize(bytes, ref copy);
                     if (!ReferenceEquals(reused, copy) || ((Case)copy).Text != "hello") throw new Exception("Wide reuse changed.");
-                    var utf8 = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(value);
-                    if (utf8.Length != 14 || ((Case)global::LuminPackUnitTest.ConcreteReads.Read<Root>(utf8, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget))).Text != "hello") throw new Exception("Union switches fixed the string profile.");
+                    var utf8 = LuminPackSerializer.Serialize<Root, LuminPackUtf8LengthOptions>(value);
+                    if (utf8.Length != 14 || ((Case)global::LuminPackUnitTest.ConcreteReads.Read<Root>(utf8, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize<Root, LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget))).Text != "hello") throw new Exception("Union switches fixed the string profile.");
                     if (LuminPackSerializer.Serialize((Root)null!)[0] != 255) throw new Exception("Wide null changed.");
                     INarrow narrow = new Small();
                     if (LuminPackSerializer.Serialize(narrow)[0] != 1) throw new Exception("False option enabled wide framing.");

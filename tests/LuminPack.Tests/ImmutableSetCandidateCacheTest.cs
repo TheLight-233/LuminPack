@@ -42,10 +42,10 @@ public sealed class ImmutableSetCandidateCacheTest
         ImmutableSortedSet<string> second = null!;
         ImmutableSortedSet<string> third = null!;
         ImmutableSortedSet<string> fourth = null!;
-        LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(source), ref first);
-        LuminPackSerializer.Deserialize<LuminPackUtf8TokenOptions>(LuminPackSerializer.Serialize<LuminPackUtf8TokenOptions>(source), ref second);
-        LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(source), ref third);
-        LuminPackSerializer.Deserialize<LuminPackUtf16TokenOptions>(LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>(source), ref fourth);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, LuminPackUtf8LengthOptions>(LuminPackSerializer.Serialize<ImmutableSortedSet<string>, LuminPackUtf8LengthOptions>(source), ref first);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, LuminPackUtf8TokenOptions>(LuminPackSerializer.Serialize<ImmutableSortedSet<string>, LuminPackUtf8TokenOptions>(source), ref second);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, LuminPackUtf16LengthOptions>(LuminPackSerializer.Serialize<ImmutableSortedSet<string>, LuminPackUtf16LengthOptions>(source), ref third);
+        LuminPackSerializer.Deserialize<ImmutableSortedSet<string>, LuminPackUtf16TokenOptions>(LuminPackSerializer.Serialize<ImmutableSortedSet<string>, LuminPackUtf16TokenOptions>(source), ref fourth);
         Assert.Same(first, second);
         Assert.Same(first, third);
         Assert.Same(first, fourth);

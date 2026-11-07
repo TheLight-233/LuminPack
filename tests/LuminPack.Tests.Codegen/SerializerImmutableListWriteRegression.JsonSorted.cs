@@ -9,7 +9,7 @@ internal static partial class SerializerImmutableListWriteRegression
     {
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
-            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
             var compilation = CSharpCompilation.Create("SortedJson" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(SortedJsonSource.Replace("MODE", mode, StringComparison.Ordinal), parse, "Entry.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
@@ -126,7 +126,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     component = part; at = trigger; mutation = change; Reset(false, false); buffer.ResetCore();
                     var writer = new LuminPackJsonWriter(buffer);
                     string error = "success";
-                    try { LuminPackSerializer.SerializeJson<TProfile>(ref writer, in active); }
+                    try { LuminPackSerializer.SerializeJson<SortedList<SortedMutationKey, SortedMutationValue>, TProfile>(ref writer, in active); }
                     catch (Exception exception) { error = exception.GetType().FullName; }
                     results.Add(error + ":" + writer.Position + ":" + writer.Depth + ":" + writer.IsFirstElement + ":" + Convert.ToBase64String(writer.Buffer.Slice(0, writer.Position).ToArray()) + ":" + string.Join(",", events));
                 }
@@ -156,7 +156,7 @@ internal static partial class SerializerImmutableListWriteRegression
                     Exception expectedError = Observe(() => { foreach (var pair in active) { Before("k", pair.Key.Number); Before("v", pair.Value.Number); } });
                     string[] expectedEvents = events.ToArray();
                     Reset(derived, reverse); buffer.ResetCore();
-                    Exception actualError = Observe(() => LuminPackSerializer.SerializeJson<TProfile>(active, buffer));
+                    Exception actualError = Observe(() => LuminPackSerializer.SerializeJson<SortedList<SortedMutationKey, SortedMutationValue>, TProfile>(active, buffer));
                     if (actualError?.GetType() != expectedError?.GetType() || !events.SequenceEqual(expectedEvents))
                         throw new Exception("Sorted-list mutation or pair capture differs from public enumeration: " + change + "/" + part + "/" + trigger);
                     if (expectedError == failure && actualError != failure) throw new Exception("A formatter exception was replaced.");
@@ -168,10 +168,10 @@ internal static partial class SerializerImmutableListWriteRegression
                     for (int i = 0; i < count; i++) list.Add(i, i * 3);
                     string text = "[" + string.Join(",", list.Select(pair => "[" + pair.Key.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," + pair.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]")) + "]";
                     var encoding = default(TProfile).StringEncoding == LuminPackStringEncoding.UTF16 ? System.Text.Encoding.Unicode : System.Text.Encoding.UTF8;
-                    buffer.ResetCore(); LuminPackSerializer.SerializeJson<TProfile>(list, buffer);
+                    buffer.ResetCore(); LuminPackSerializer.SerializeJson<SortedList<int, int>, TProfile>(list, buffer);
                     if (!buffer.GetSpan().SequenceEqual(encoding.GetBytes(text))) throw new Exception("Sorted-list JSON bytes changed.");
                     SortedList<int, int> decoded = null;
-                    LuminPackSerializer.DeserializeJson<TProfile>(buffer.GetSpan(), ref decoded);
+                    LuminPackSerializer.DeserializeJson<SortedList<int, int>, TProfile>(buffer.GetSpan(), ref decoded);
                     if (!decoded.SequenceEqual(list)) throw new Exception("Sorted-list JSON round trip changed.");
                 }
                 var values = new SortedList<int, int> { [1] = 3, [2] = 6, [3] = 9 };
@@ -179,7 +179,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 foreach (bool json in new[] { false, true })
                 foreach (bool nested in new[] { false, true })
                 {
-                    Action write = () => { buffer.ResetCore(); if (nested) { if (json) LuminPackSerializer.SerializeJson<TProfile>(graph, buffer); else LuminPackSerializer.Serialize<TProfile>(graph, buffer); } else { if (json) LuminPackSerializer.SerializeJson<TProfile>(values, buffer); else LuminPackSerializer.Serialize<TProfile>(values, buffer); } };
+                    Action write = () => { buffer.ResetCore(); if (nested) { if (json) LuminPackSerializer.SerializeJson<SortedEnvelope, TProfile>(graph, buffer); else LuminPackSerializer.Serialize<SortedEnvelope, TProfile>(graph, buffer); } else { if (json) LuminPackSerializer.SerializeJson<SortedList<int, int>, TProfile>(values, buffer); else LuminPackSerializer.Serialize<SortedList<int, int>, TProfile>(values, buffer); } };
                     for (int i = 0; i < 128; i++) write();
                     long before = GC.GetAllocatedBytesForCurrentThread();
                     for (int i = 0; i < 128; i++) write();

@@ -8,7 +8,7 @@ internal static partial class SerializerImmutableListWriteRegression
     /// <param name="references">The actual runtime and framework metadata references.</param>
     private static void CheckTraversalCapabilities(MetadataReference[] references)
     {
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         var compilation = CSharpCompilation.Create("QueueCapabilities" + Guid.NewGuid().ToString("N"),
             [CSharpSyntaxTree.ParseText("""
                 using System;
@@ -94,8 +94,8 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     int[] values=Enumerable.Range(0,count).Select(i=>i*7-13).ToArray();
                     ImmutableQueue<int> queue=Build(values);
-                    Action write=()=>{output.ResetCore();if(json){if(contract)LuminPackSerializer.SerializeJson<P>((IImmutableQueue<int>)queue,output);else LuminPackSerializer.SerializeJson<P>(queue,output);}
-                        else{if(contract)LuminPackSerializer.Serialize<P>((IImmutableQueue<int>)queue,output);else LuminPackSerializer.Serialize<P>(queue,output);}};
+                    Action write=()=>{output.ResetCore();if(json){if(contract)LuminPackSerializer.SerializeJson<IImmutableQueue<int>, P>((IImmutableQueue<int>)queue,output);else LuminPackSerializer.SerializeJson<ImmutableQueue<int>, P>(queue,output);}
+                        else{if(contract)LuminPackSerializer.Serialize<IImmutableQueue<int>, P>((IImmutableQueue<int>)queue,output);else LuminPackSerializer.Serialize<ImmutableQueue<int>, P>(queue,output);}};
                     for(int i=0;i<64;i++)write();
                     long allocated=long.MaxValue;
                     for(int sample=0;sample<3;sample++)
@@ -106,23 +106,23 @@ internal static partial class SerializerImmutableListWriteRegression
                     if(available && allocated!=0)throw new Exception("First queue write allocated a reversal: "+allocated);
                     if(available && cache.GetValue(queue)!=null)throw new Exception("Serialization populated the lazy queue cache.");
                     byte[] actual=output.GetSpan().ToArray();output.ResetCore();
-                    if(json)LuminPackSerializer.SerializeJson<P>(values,output);else LuminPackSerializer.Serialize<P>(values,output);
+                    if(json)LuminPackSerializer.SerializeJson<int[], P>(values,output);else LuminPackSerializer.Serialize<int[], P>(values,output);
                     if(!actual.SequenceEqual(output.GetSpan().ToArray()))throw new Exception("Uncached queue framing or element order changed.");
                     if(!queue.SequenceEqual(values)||!queue.Enqueue(719).SequenceEqual(values.Append(719)))throw new Exception("Queue contents changed.");
                     write();if(!actual.SequenceEqual(output.GetSpan().ToArray()))throw new Exception("Cached queue traversal changed.");
                     var graph=new UncachedQueueGraph{Queue=Build(values),Contract=Build(values),Tail=719};
                     UncachedQueueGraph decoded=null;
-                    if(json){var encoding=default(P).StringEncoding==LuminPackStringEncoding.UTF8?System.Text.Encoding.UTF8:System.Text.Encoding.Unicode;LuminPackSerializer.DeserializeJson<P>(encoding.GetBytes(LuminPackSerializer.SerializeJson<P>(graph)),ref decoded);}
-                    else LuminPackSerializer.Deserialize<P>(LuminPackSerializer.Serialize<P>(graph),ref decoded);
+                    if(json){var encoding=default(P).StringEncoding==LuminPackStringEncoding.UTF8?System.Text.Encoding.UTF8:System.Text.Encoding.Unicode;LuminPackSerializer.DeserializeJson<UncachedQueueGraph, P>(encoding.GetBytes(LuminPackSerializer.SerializeJson<UncachedQueueGraph, P>(graph)),ref decoded);}
+                    else LuminPackSerializer.Deserialize<UncachedQueueGraph, P>(LuminPackSerializer.Serialize<UncachedQueueGraph, P>(graph),ref decoded);
                     if(!decoded.Queue.SequenceEqual(values)||!decoded.Contract.SequenceEqual(values)||decoded.Tail!=719)throw new Exception("Queue field traversal changed.");
                 }
                 string[] words={"alpha",null,"\u65e5\ud83d\ude00","quote\"\\"};
                 var text=ImmutableQueue<string>.Empty;foreach(string word in words)text=text.Enqueue(word);
                 foreach(bool json in new[]{false,true})
                 {
-                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>((IImmutableQueue<string>)text,output);else LuminPackSerializer.Serialize<P>((IImmutableQueue<string>)text,output);
+                    output.ResetCore();if(json)LuminPackSerializer.SerializeJson<IImmutableQueue<string>, P>((IImmutableQueue<string>)text,output);else LuminPackSerializer.Serialize<IImmutableQueue<string>, P>((IImmutableQueue<string>)text,output);
                     byte[] actual=output.GetSpan().ToArray();output.ResetCore();
-                    if(json)LuminPackSerializer.SerializeJson<P>(words,output);else LuminPackSerializer.Serialize<P>(words,output);
+                    if(json)LuminPackSerializer.SerializeJson<string[], P>(words,output);else LuminPackSerializer.Serialize<string[], P>(words,output);
                     if(!actual.SequenceEqual(output.GetSpan().ToArray()))throw new Exception("Queue string/null framing changed.");
                 }
                 CheckFailure<P>(output,available);
@@ -139,7 +139,7 @@ internal static partial class SerializerImmutableListWriteRegression
                 {
                     var queue=ImmutableQueue<QueueFailItem>.Empty;
                     for(int i=0;i<4;i++)queue=queue.Enqueue(new QueueFailItem{Id=i,Text="value"});
-                    Action write=()=>{output.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(queue,output);else LuminPackSerializer.Serialize<P>(queue,output);};
+                    Action write=()=>{output.ResetCore();if(json)LuminPackSerializer.SerializeJson<ImmutableQueue<QueueFailItem>, P>(queue,output);else LuminPackSerializer.Serialize<ImmutableQueue<QueueFailItem>, P>(queue,output);};
                     QueueFailItem.ThrowOn=-1;QueueFailItem.Events.Clear();write();
                     var expected=System.Buffers.ArrayPool<QueueFailItem>.Shared.Rent(16);System.Buffers.ArrayPool<QueueFailItem>.Shared.Return(expected,true);
                     QueueFailItem.Events.Clear();QueueFailItem.ThrowOn=failure;Exception observed=null;
@@ -160,10 +160,10 @@ internal static partial class SerializerImmutableListWriteRegression
                 var set = list.ToImmutableSortedSet(Comparer<QueueFailItem>.Create((a,b) => b.Id.CompareTo(a.Id)));
                 var map = ImmutableSortedDictionary.CreateRange(Comparer<int>.Create((a,b) => b.CompareTo(a)),
                     list.Select(item => new KeyValuePair<int,QueueFailItem>(item.Id,item)));
-                Check(items, () => LuminPackSerializer.SerializeJson<P>(list, output), new[] { 2, 1 });
-                Check(items, () => LuminPackSerializer.SerializeJson<P>((IImmutableList<QueueFailItem>)list, output), new[] { 2, 1 });
-                Check(set.ToArray(), () => LuminPackSerializer.SerializeJson<P>(set, output), new[] { 3, 2 });
-                Check(map.ToArray(), () => LuminPackSerializer.SerializeJson<P>(map, output), new[] { 3, 2 });
+                Check(items, () => LuminPackSerializer.SerializeJson<ImmutableList<QueueFailItem>, P>(list, output), new[] { 2, 1 });
+                Check(items, () => LuminPackSerializer.SerializeJson<IImmutableList<QueueFailItem>, P>((IImmutableList<QueueFailItem>)list, output), new[] { 2, 1 });
+                Check(set.ToArray(), () => LuminPackSerializer.SerializeJson<ImmutableSortedSet<QueueFailItem>, P>(set, output), new[] { 3, 2 });
+                Check(map.ToArray(), () => LuminPackSerializer.SerializeJson<ImmutableSortedDictionary<int, QueueFailItem>, P>(map, output), new[] { 3, 2 });
 
                 void Check<T>(T[] contents, Action write, int[] prefix)
                 {

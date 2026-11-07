@@ -39,17 +39,17 @@ internal static class SerializerCollectionBuilderRegression
                     {
                         var numbers=Enumerable.Range(0,count).ToArray();var text=numbers.Select(item=>item.ToString()).ToArray();
                         var value=new CollectionBuilderGraph{Numbers=new(numbers),Text=new(text),Tail=123};
-                        buffer.ResetCore();if(json)LuminPackSerializer.SerializeJson<P>(value,buffer);else LuminPackSerializer.Serialize<P>(value,buffer);
+                        buffer.ResetCore();if(json)LuminPackSerializer.SerializeJson<CollectionBuilderGraph, P>(value,buffer);else LuminPackSerializer.Serialize<CollectionBuilderGraph, P>(value,buffer);
                         var old=new CollectionBuilderGraph{Numbers=new(new[]{-1}),Text=new(new[]{"old"}),Tail=-1};
                         CollectionBuilderGraph result=reused?old:null;
-                        if(json)LuminPackSerializer.DeserializeJson<P>(buffer.GetSpan(),ref result);else LuminPackSerializer.Deserialize<P>(buffer.GetSpan(),ref result);
+                        if(json)LuminPackSerializer.DeserializeJson<CollectionBuilderGraph, P>(buffer.GetSpan(),ref result);else LuminPackSerializer.Deserialize<CollectionBuilderGraph, P>(buffer.GetSpan(),ref result);
                         if(result.Tail!=123||!result.Numbers.SequenceEqual(numbers)||!result.Text.SequenceEqual(text)||reused&&!ReferenceEquals(old,result))
                             throw new Exception("Nested builder storage or object reuse changed.");
                     }
                 }
             }
             """;
-        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var compilation = CSharpCompilation.Create("CollectionBuilderFields" + Guid.NewGuid().ToString("N"),

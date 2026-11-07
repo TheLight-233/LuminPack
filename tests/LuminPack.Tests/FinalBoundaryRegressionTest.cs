@@ -24,11 +24,11 @@ public class FinalBoundaryRegressionTest
         var source = new PriorityQueue<int, long>();
         source.Enqueue(17, 7);
         source.Enqueue(23, 3);
-        byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>((PriorityQueue<int, long>)(source));
+        byte[] bytes = LuminPackSerializer.Serialize<PriorityQueue<int, long>, LuminPackUtf16LengthOptions>((PriorityQueue<int, long>)(source));
         var comparer = Comparer<long>.Create((left, right) => right.CompareTo(left));
         var target = new PriorityQueue<int, long>(32, comparer);
         var identity = target;
-        int consumed = LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes, ref target);
+        int consumed = LuminPackSerializer.Deserialize<PriorityQueue<int, long>, LuminPackUtf16LengthOptions>(bytes, ref target);
         Assert.Same(identity, target);
         Assert.Same(comparer, target.Comparer);
         Assert.Equal(bytes.Length, consumed);
@@ -37,8 +37,8 @@ public class FinalBoundaryRegressionTest
 
         var strings = new PriorityQueue<string, int>();
         strings.Enqueue("\u00E9\u4E2D", 1);
-        bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>((PriorityQueue<string, int>)(strings));
-        var copy = global::LuminPackUnitTest.ConcreteReads.Read<PriorityQueue<string, int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PriorityQueue<string, int> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
+        bytes = LuminPackSerializer.Serialize<PriorityQueue<string, int>, LuminPackUtf16LengthOptions>((PriorityQueue<string, int>)(strings));
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<PriorityQueue<string, int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PriorityQueue<string, int> concreteReadTarget) => LuminPackSerializer.Deserialize<PriorityQueue<string, int>, LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal("\u00E9\u4E2D", copy.Dequeue());
     }
 
@@ -47,13 +47,13 @@ public class FinalBoundaryRegressionTest
     public void CastNamedGenericPayloadRetainsBinaryReuse()
     {
         var source = new As<int, string> { First = 17, Second = "nested cast name" };
-        var bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>((As<int, string>)(source));
-        var fresh = global::LuminPackUnitTest.ConcreteReads.Read<As<int, string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref As<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
+        var bytes = LuminPackSerializer.Serialize<As<int, string>, LuminPackUtf16LengthOptions>((As<int, string>)(source));
+        var fresh = global::LuminPackUnitTest.ConcreteReads.Read<As<int, string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref As<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize<As<int, string>, LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.First, fresh.First);
         Assert.Equal(source.Second, fresh.Second);
         var target = new As<int, string>();
         var identity = target;
-        int consumed = LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes, ref target);
+        int consumed = LuminPackSerializer.Deserialize<As<int, string>, LuminPackUtf16LengthOptions>(bytes, ref target);
         Assert.Same(identity, target);
         Assert.Equal(bytes.Length, consumed);
         Assert.Equal(source.First, target.First);
@@ -146,11 +146,11 @@ public class FinalBoundaryRegressionTest
         LuminPackSerializer.DeserializeJson(json, ref destination);
         Assert.Same(original, destination);
         Assert.Equal(source.ToArray(), destination.ToArray());
-        destination = global::LuminPackUnitTest.ConcreteReads.ReadJson<ConcurrentStack<string?>>(LuminPackSerializer.SerializeJson<StrictUtf16>((ConcurrentStack<string?>)(source)), static (string concreteReadInput, ref ConcurrentStack<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget));
+        destination = global::LuminPackUnitTest.ConcreteReads.ReadJson<ConcurrentStack<string?>>(LuminPackSerializer.SerializeJson<ConcurrentStack<string?>, StrictUtf16>((ConcurrentStack<string?>)(source)), static (string concreteReadInput, ref ConcurrentStack<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson<ConcurrentStack<string?>, StrictUtf16>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.ToArray(), destination.ToArray());
         Assert.Empty(global::LuminPackUnitTest.ConcreteReads.ReadJson<ConcurrentStack<string?>>("[]", static (string concreteReadInput, ref ConcurrentStack<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Null(global::LuminPackUnitTest.ConcreteReads.ReadJson<ConcurrentStack<string?>>("null", static (string concreteReadInput, ref ConcurrentStack<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
-        Assert.Throws<FormatException>(() => LuminPackSerializer.DeserializeJson<StrictUtf16>(
+        Assert.Throws<FormatException>(() => LuminPackSerializer.DeserializeJson<ConcurrentStack<string?>, StrictUtf16>(
             "[\"parsed\",", ref destination));
         Assert.Equal(new[] { "parsed" }, destination.ToArray());
     }
@@ -183,8 +183,8 @@ public class FinalBoundaryRegressionTest
         Assert.Equal(expected, destination);
         Assert.Equal(bytes.Length, reader.Position);
         Assert.Equal(17, reader.Read<int>());
-        bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>((List<KeyValuePair<string, int>>)(expected));
-LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes.AsSpan(), ref destination);
+        bytes = LuminPackSerializer.Serialize<List<KeyValuePair<string, int>>, LuminPackUtf16LengthOptions>((List<KeyValuePair<string, int>>)(expected));
+LuminPackSerializer.Deserialize<List<KeyValuePair<string, int>>, LuminPackUtf16LengthOptions>(bytes.AsSpan(), ref destination);
         Assert.Same(original, destination);
         Assert.Equal(expected, destination);
     }
@@ -329,8 +329,8 @@ LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes.AsSpan(), ref
         var expected = new DateOnly(2024, 2, 29);
         Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"2024-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"\\u0032024-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
-        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"2024-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
-        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"\\u0032024-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"2024-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson<DateOnly, StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"\\u0032024-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson<DateOnly, StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"2023-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"2024/02/29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<DateOnly>("\"\\u00E9024-02-29\"", static (string concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
@@ -350,23 +350,23 @@ LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes.AsSpan(), ref
     public void JsonBoundaryRepairsSupportStrictUtf16()
     {
         var lazy = new Lazy<string?>(() => null);
-        string json = LuminPackSerializer.SerializeJson<StrictUtf16>((Lazy<string?>)(lazy));
-        Assert.NotNull(global::LuminPackUnitTest.ConcreteReads.ReadJson<Lazy<string?>>(json, static (string concreteReadInput, ref Lazy<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
-        Assert.Equal(9, global::LuminPackUnitTest.ConcreteReads.ReadJson<Lazy<int>>("{\"Val\\u0075e\":9}", static (string concreteReadInput, ref Lazy<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget)).Value);
+        string json = LuminPackSerializer.SerializeJson<Lazy<string?>, StrictUtf16>((Lazy<string?>)(lazy));
+        Assert.NotNull(global::LuminPackUnitTest.ConcreteReads.ReadJson<Lazy<string?>>(json, static (string concreteReadInput, ref Lazy<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson<Lazy<string?>, StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(9, global::LuminPackUnitTest.ConcreteReads.ReadJson<Lazy<int>>("{\"Val\\u0075e\":9}", static (string concreteReadInput, ref Lazy<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson<Lazy<int>, StrictUtf16>(concreteReadInput, ref concreteReadTarget)).Value);
         var source = (string[,])Array.CreateInstance(typeof(string), new[] { 1, 2 }, new[] { -2, 4 });
         source[-2, 4] = "\u4E2D\u6587";
-        json = LuminPackSerializer.SerializeJson<StrictUtf16>((string[,])(source));
-        var copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<string[,]>(json, static (string concreteReadInput, ref string[,] concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget));
+        json = LuminPackSerializer.SerializeJson<string[,], StrictUtf16>((string[,])(source));
+        var copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<string[,]>(json, static (string concreteReadInput, ref string[,] concreteReadTarget) => LuminPackSerializer.DeserializeJson<string[,], StrictUtf16>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source[-2, 4], copy[-2, 4]);
         Assert.Null(copy[-2, 5]);
         var pairs = new List<KeyValuePair<string, int>> { new("a", 1), new("b", 2) };
-        json = LuminPackSerializer.SerializeJson<StrictUtf16>((List<KeyValuePair<string, int>>)(pairs));
-        Assert.Equal(pairs, global::LuminPackUnitTest.ConcreteReads.ReadJson<List<KeyValuePair<string, int>>>(json, static (string concreteReadInput, ref List<KeyValuePair<string, int>> concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
+        json = LuminPackSerializer.SerializeJson<List<KeyValuePair<string, int>>, StrictUtf16>((List<KeyValuePair<string, int>>)(pairs));
+        Assert.Equal(pairs, global::LuminPackUnitTest.ConcreteReads.ReadJson<List<KeyValuePair<string, int>>>(json, static (string concreteReadInput, ref List<KeyValuePair<string, int>> concreteReadTarget) => LuminPackSerializer.DeserializeJson<List<KeyValuePair<string, int>>, StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
         var frozen = pairs.ToFrozenDictionary();
-        json = LuminPackSerializer.SerializeJson<StrictUtf16>((FrozenDictionary<string, int>)(frozen));
-        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.ReadJson<FrozenDictionary<string, int>>(json, static (string concreteReadInput, ref FrozenDictionary<string, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget)).Count);
+        json = LuminPackSerializer.SerializeJson<FrozenDictionary<string, int>, StrictUtf16>((FrozenDictionary<string, int>)(frozen));
+        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.ReadJson<FrozenDictionary<string, int>>(json, static (string concreteReadInput, ref FrozenDictionary<string, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson<FrozenDictionary<string, int>, StrictUtf16>(concreteReadInput, ref concreteReadTarget)).Count);
         const string quaternion = "{\"X\":1,\"LongUnknown\":[true],\"Y\":2,\"Z\":3,\"W\":4}";
-        Assert.Equal(new Quaternion(1, 2, 3, 4), global::LuminPackUnitTest.ConcreteReads.ReadJson<Quaternion>(quaternion, static (string concreteReadInput, ref Quaternion concreteReadTarget) => LuminPackSerializer.DeserializeJson<StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(new Quaternion(1, 2, 3, 4), global::LuminPackUnitTest.ConcreteReads.ReadJson<Quaternion>(quaternion, static (string concreteReadInput, ref Quaternion concreteReadTarget) => LuminPackSerializer.DeserializeJson<Quaternion, StrictUtf16>(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Provides a constant strict UTF-16 document profile.</summary>

@@ -60,10 +60,10 @@ public sealed partial class MessageBody : MessageBase { public int Id; }
 每个入口都接受一个无状态的配置类型作为泛型参数。该配置会传递到所有嵌套操作；自己声明了 `[LuminPackOption]` 的成员保持自己的设置。
 
 ```csharp
-byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(message);
+byte[] bytes = LuminPackSerializer.Serialize<Message, LuminPackUtf8LengthOptions>(message);
 
 Message copy = null!;
-LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(bytes, ref copy);
+LuminPackSerializer.Deserialize<Message, LuminPackUtf8LengthOptions>(bytes, ref copy);
 ```
 
 内置配置：`LuminPackDefaultOptions`（UTF-16、固定长度记录）、`LuminPackUtf8LengthOptions`、`LuminPackUtf8TokenOptions`、`LuminPackUtf16LengthOptions`、`LuminPackUtf16TokenOptions`、`LuminPackUtf8VarIntOptions`、`LuminPackUtf16VarIntOptions`。也可以自己定义一个实现 `ILuminPackOptions` 的 `struct`。
@@ -81,9 +81,9 @@ public partial class Labels
 }
 
 // 或为整次操作选择表示方式：
-byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf16VarIntOptions>(names);
+byte[] bytes = LuminPackSerializer.Serialize<List<string>, LuminPackUtf16VarIntOptions>(names);
 List<string> copy = null!;
-LuminPackSerializer.Deserialize<LuminPackUtf16VarIntOptions>(bytes, ref copy);
+LuminPackSerializer.Deserialize<List<string>, LuminPackUtf16VarIntOptions>(bytes, ref copy);
 ```
 
 默认仍为 `Length`：UTF-16 使用 4 字节头，UTF-8 使用 8 字节头。`VarInt` 将每个原有有符号长度头加一，再以规范的无符号 base-128 编码存储，占 1–5 字节。null 映射为零，空字符串映射为一。UTF-16 保留原始 UTF-16 或紧凑 Latin-1 负载及原有最低位标记；UTF-8 保留字节数和字符数两个字段，分别编码，null 和空字符串也保留两个字段。例如，UTF-16 的 `"a"` 为 `04 61`，UTF-8 的 `"a"` 为 `02 02 61`。

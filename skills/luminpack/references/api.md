@@ -2,7 +2,7 @@
 
 ## Generated serializer
 
-The generator emits `LuminPack.LuminPackSerializer` into each consuming assembly. Modern compilers bind generic signatures (`<T>` and `<T, TOptions>`) and intercept closed calls into existing concrete implementations; inference keeps ordinary `Serialize(value)` usage. Observed profile-only calls retain the `<TOptions>` spelling. Older hosts use build-time IL substitution into the same concrete entries when the package or Unity postprocessor is installed. `TOptions` is a stateless profile struct (see Options).
+The generator emits `LuminPack.LuminPackSerializer` into each consuming assembly. Modern compilers bind generic signatures (`<T>` and `<T, TOptions>`) and intercept closed calls into existing concrete implementations; inference keeps ordinary `Serialize(value)` usage. Explicit profiles use both type arguments. Older hosts use build-time IL substitution into the same concrete entries when the package or Unity postprocessor is installed. `TOptions` is a stateless profile struct (see Options).
 
 Generated XML documents these directly callable facade APIs. Internal roots, state forwarders, dispatch slots and layout helpers omit XML; this does not remove their methods or change serialization behavior.
 
@@ -28,12 +28,12 @@ ValueTask    SerializeAsync(Stream stream, T value, CancellationToken cancellati
 ValueTask<T> DeserializeAsync(Stream stream, T value, CancellationToken cancellationToken = default);
 ValueTask<T> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default);
 
-// Profile forms, for example:
-byte[] Serialize<LuminPackUtf8LengthOptions>(in T value);
-int    Deserialize<LuminPackUtf8LengthOptions>(ReadOnlySpan<byte> buffer, ref T value);
+// Profile calls, for example:
+byte[] bytes = LuminPackSerializer.Serialize<Message, LuminPackUtf8LengthOptions>(message);
+int consumed = LuminPackSerializer.Deserialize<Message, LuminPackUtf8LengthOptions>(bytes, ref message);
 ```
 
-Intercepted calls and legacy concrete overloads call the type's generated code directly. Only calls remaining on generic fallback require explicit/Custom registrations, including for built-in and source-generated types. No generated fallback factory or type table exists. Generation automatically retains declared model graphs and used convenience families. With both compiler and IL integration disabled, explicit generic payload calls require registration; use concrete `Deserialize(bytes, ref value)` and `Serialize<TOptions>(concreteValue)` for direct roots. See [static interception](../../../docs/generation-modes.md#static-interception) for wrapper and compiler boundaries.
+Intercepted calls and legacy concrete overloads call the type's generated code directly. Only calls remaining on generic fallback require explicit/Custom registrations, including for built-in and source-generated types. No generated fallback factory or type table exists. Generation automatically retains declared model graphs and used convenience families. With both compiler and IL integration disabled, explicit generic payload calls require registration; use concrete `Deserialize(bytes, ref value)` for direct roots. See [static interception](../../../docs/generation-modes.md#static-interception) for wrapper and compiler boundaries.
 
 Binary and JSON `ref` overloads fill compatible existing storage. JSON reuses object graphs, lists, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked identities; unchanged decoded strings retain their references. JSON `null` clears a reference and omitted members reset to `default` on an existing object. Reuse is not transactional. Immutable collection formatters retain their existing construction behavior.
 
