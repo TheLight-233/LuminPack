@@ -317,7 +317,7 @@ public static class MultiDimensionalArrayEmitter
     /// <summary>Evaluates the existing zero-based binary shape and flat element payload.</summary>
     /// <param name="fieldData">The multidimensional array metadata.</param>
     /// <param name="sb">The emitted statements.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         int rank = GetRank(fieldData.TypeName);
         sb.AppendLine("            evaluator += 1;");
@@ -340,7 +340,7 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            foreach (var element in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var item = element;");
-        sb.AppendLine("                evaluator.CalculateOffset(ref item);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref item);");
         sb.AppendLine("            }");
     }
 

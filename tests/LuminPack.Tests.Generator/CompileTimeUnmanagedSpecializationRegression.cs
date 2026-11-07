@@ -146,7 +146,7 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         var calculate = new StringBuilder();
         NullableEmitter.GenerateSerializeCode(data, serialize);
         NullableEmitter.GenerateDeserializeCode(data, deserialize);
-        NullableEmitter.GenerateCalculateOffsetCode(data, calculate);
+        NullableEmitter.GenerateMeasureRecordWidthCode(data, calculate);
         string generated = serialize.ToString() + deserialize + calculate;
 
         VerifyRuntimeFallback(generated, expected, field.Name);
@@ -163,7 +163,7 @@ internal static class CompileTimeUnmanagedSpecializationRegression
                 Reject(generated, "DangerousReadUnmanaged", field.Name);
                 Require(generated, "writer.WriteValue(in valRef)", field.Name);
                 Require(generated, "reader.ReadValue(ref valRef)", field.Name);
-                Require(generated, "evaluator.CalculateOffset(ref val)", field.Name);
+                Require(generated, "evaluator.MeasureRecordWidth(ref val)", field.Name);
                 break;
         }
     }
@@ -174,7 +174,7 @@ internal static class CompileTimeUnmanagedSpecializationRegression
     private static void VerifyArrayEvaluator(IFieldSymbol field, ExpectedKind expected)
     {
         var generated = new StringBuilder();
-        CollectionEvaluatorEmitter.GenerateArrayCalculateOffsetCode(CreateFieldData(field), generated);
+        CollectionEvaluatorEmitter.GenerateArrayMeasureRecordWidthCode(CreateFieldData(field), generated);
         string text = generated.ToString();
 
         VerifyRuntimeFallback(text, expected, field.Name);
@@ -253,7 +253,7 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         owner.fields.Add(collectionField);
 
         var generated = new StringBuilder();
-        LuminPackCodeGenerator.GenerateCalculateOffsetCode(owner, generated);
+        LuminPackCodeGenerator.GenerateMeasureRecordWidthCode(owner, generated);
         string text = generated.ToString();
 
         VerifyRuntimeFallback(text, expected, field.Name);
@@ -310,7 +310,7 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         });
 
         var generated = new StringBuilder();
-        LuminPackCodeGenerator.GenerateCalculateOffsetCode(owner, generated);
+        LuminPackCodeGenerator.GenerateMeasureRecordWidthCode(owner, generated);
         string text = generated.ToString();
 
         Require(text, "value.CoreReferenceTrap", "Core CriticalHandle classification");

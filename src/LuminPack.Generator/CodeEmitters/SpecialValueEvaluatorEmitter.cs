@@ -9,11 +9,11 @@ internal static class SpecialValueEvaluatorEmitter
     /// <summary>Appends the exact wrapper header and selected child contribution.</summary>
     /// <param name="data">The closed BCL value metadata.</param>
     /// <param name="sb">The generated operation body.</param>
-    internal static void GenerateCalculateOffsetCode(LuminLocalFieldData data, StringBuilder sb)
+    internal static void GenerateMeasureRecordWidthCode(LuminLocalFieldData data, StringBuilder sb)
     {
         if (TupleEmitter.IsTuple(data.TypeName) && EmitterTypeTraits.CanUseUnmanagedSerialization(data.TypeSymbol))
         {
-            UnmanagedEmitter.GenerateCalculateOffsetCode(data, sb);
+            UnmanagedEmitter.GenerateMeasureRecordWidthCode(data, sb);
             return;
         }
         bool valueTuple = data.TypeName.StartsWith("global::System.ValueTuple<", System.StringComparison.Ordinal);
@@ -29,14 +29,14 @@ internal static class SpecialValueEvaluatorEmitter
             for (int index = 1; index <= count; index++)
             {
                 sb.AppendLine("            var item" + index + " = value." + (index == 8 ? "Rest" : "Item" + index) + ";");
-                sb.AppendLine("            evaluator.CalculateOffset(ref item" + index + ");");
+                sb.AppendLine("            evaluator.MeasureRecordWidth(ref item" + index + ");");
             }
             return;
         }
         if (data.TypeName.StartsWith("global::System.Lazy<", System.StringComparison.Ordinal))
         {
             sb.AppendLine("            var item = value.Value;");
-            sb.AppendLine("            evaluator.CalculateOffset(ref item);");
+            sb.AppendLine("            evaluator.MeasureRecordWidth(ref item);");
             return;
         }
         switch (data.TypeName)

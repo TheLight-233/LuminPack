@@ -38,14 +38,14 @@ public static class KeyValuePairEmitter
     /// <summary>Appends statements that calculate the binary payload size.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
         string valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            " + keyType + " key = value.Key;");
-        sb.AppendLine("            evaluator.CalculateOffset(ref key);");
+        sb.AppendLine("            evaluator.MeasureRecordWidth(ref key);");
         sb.AppendLine("            " + valueType + " itemValue = value.Value;");
-        sb.AppendLine("            evaluator.CalculateOffset(ref itemValue);");
+        sb.AppendLine("            evaluator.MeasureRecordWidth(ref itemValue);");
     }
 
     /// <summary>Appends JSON writing statements for key value pair values.</summary>

@@ -132,17 +132,17 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertContains(managedSetRead, "reader.ReadValue(ref item)", "Managed set elements must read into fresh local storage.");
         AssertContains(managedSetRead, ".Value = item", "Managed set elements were not committed to their entry after reading.");
         AssertDoesNotContain(managedSetRead, "set.Add(", "Read-only set interfaces retained duplicate comparisons.");
-        string setSize = Generate(GetField(compilation, "ClosedCollections", "PrimitiveSet"), CollectionEvaluatorEmitter.GenerateEnumerableCalculateOffsetCode);
+        string setSize = Generate(GetField(compilation, "ClosedCollections", "PrimitiveSet"), CollectionEvaluatorEmitter.GenerateEnumerableMeasureRecordWidthCode);
         AssertContains(setSize, "checked(value.Count *", "Raw HashSet size evaluation lost its constant-time payload width.");
         AssertDoesNotContain(setSize, "foreach", "Raw HashSet size evaluation still traverses the set.");
-        string linkedSize = Generate(GetField(compilation, "ClosedCollections", "PrimitiveLinkedList"), CollectionEvaluatorEmitter.GenerateEnumerableCalculateOffsetCode);
+        string linkedSize = Generate(GetField(compilation, "ClosedCollections", "PrimitiveLinkedList"), CollectionEvaluatorEmitter.GenerateEnumerableMeasureRecordWidthCode);
         AssertContains(linkedSize, "checked(value.Count *", "Known-scalar LinkedList size evaluation lost its fixed payload width.");
         AssertDoesNotContain(linkedSize, "foreach", "Known-scalar LinkedList size evaluation still walks the nodes.");
-        AssertContains(Generate(GetField(compilation, "ClosedCollections", "NodeLinkedList"), CollectionEvaluatorEmitter.GenerateEnumerableCalculateOffsetCode),
+        AssertContains(Generate(GetField(compilation, "ClosedCollections", "NodeLinkedList"), CollectionEvaluatorEmitter.GenerateEnumerableMeasureRecordWidthCode),
             "foreach", "Managed linked elements lost their formatter-specific size calculation.");
-        AssertContains(Generate(GetField(compilation, "ClosedCollections", "NullablePacketSet"), CollectionEvaluatorEmitter.GenerateEnumerableCalculateOffsetCode),
+        AssertContains(Generate(GetField(compilation, "ClosedCollections", "NullablePacketSet"), CollectionEvaluatorEmitter.GenerateEnumerableMeasureRecordWidthCode),
             "foreach", "Nullable element framing cannot use its complete native storage width.");
-        AssertContains(Generate(GetField(compilation, "ClosedCollections", "NodeSet"), CollectionEvaluatorEmitter.GenerateEnumerableCalculateOffsetCode),
+        AssertContains(Generate(GetField(compilation, "ClosedCollections", "NodeSet"), CollectionEvaluatorEmitter.GenerateEnumerableMeasureRecordWidthCode),
             "foreach", "Managed set elements lost their formatter-specific size calculation.");
     }
 

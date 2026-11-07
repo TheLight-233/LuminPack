@@ -65,7 +65,7 @@ internal static class LuminPackSerializerDocumentation
             if (!GeneratedSourceDocumentation.IsUserApi(method))
                 continue;
             string name = method.Identifier.ValueText;
-            if (!(name.StartsWith("Serialize", StringComparison.Ordinal) || name.StartsWith("Deserialize", StringComparison.Ordinal) || name == "Sizeof"))
+            if (!(name.StartsWith("Serialize", StringComparison.Ordinal) || name.StartsWith("Deserialize", StringComparison.Ordinal)))
                 continue;
 
             var valueParameter = method.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText is "value" or "input");
@@ -97,9 +97,8 @@ internal static class LuminPackSerializerDocumentation
                 var summary = documentation.Element("summary");
                 if (summary != null)
                 {
-                    summary.ReplaceNodes(name == "Sizeof" ? "Calculates the binary payload size for " :
-                        name.StartsWith("Deserialize", StringComparison.Ordinal) ? "Reads " : "Writes ",
-                        TypeLink(type), name == "Sizeof" ? "." : json ? " using JSON." : " using the binary format.");
+                    summary.ReplaceNodes(name.StartsWith("Deserialize", StringComparison.Ordinal) ? "Reads " : "Writes ",
+                        TypeLink(type), json ? " using JSON." : " using the binary format.");
                 }
 
                 remarks.Add(new XElement("para", type.IsValueType ? "Value type." : "Reference type.", " ",
@@ -120,10 +119,10 @@ internal static class LuminPackSerializerDocumentation
                 if (typeId != null)
                     documentation.Add(new XElement("seealso", new XAttribute("cref", typeId)));
                 string operation = (name.StartsWith("Deserialize", StringComparison.Ordinal) ? "Deserialize" : "Serialize") + (json ? "Json" : "");
-                string navigation = name == "Sizeof" ? null : navigationTargets?.DocumentationTarget(operation);
+                string navigation = navigationTargets?.DocumentationTarget(operation);
                 if (navigation == null && type is INamedTypeSymbol named &&
                     CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named) &&
-                    TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Custom && name != "Sizeof" &&
+                    TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Custom &&
                     !(name.StartsWith("Deserialize", StringComparison.Ordinal) && !name.Contains("Json") &&
                         named.IsValueType && TypeMetaChecker.CheckGeneratorType(named) == GeneratorType.Object &&
                         CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(named)))
@@ -291,14 +290,12 @@ internal static class LuminPackSerializerDocumentation
         }
         if (parameters.Any(parameter => parameter.Type?.ToString().EndsWith("IBufferWriter<byte>", StringComparison.Ordinal) == true))
             remarks.Add(new XElement("para", "Writes to the supplied IBufferWriter<byte> and advances it by the produced byte count; the destination remains caller-owned."));
-        if (method.Identifier.ValueText != "Sizeof" && parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Modifiers.Any(SyntaxKind.RefKeyword)))
+        if (parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Modifiers.Any(SyntaxKind.RefKeyword)))
             remarks.Add(new XElement("para", "Populates the supplied value by reference; formatter-specific merge and reuse rules apply.",
                 method.ReturnType.ToString() == "void" ? string.Empty : " The return value reports consumed bytes" +
                     (json ? " in the selected UTF-8 or UTF-16 input representation, including any transcoding performed by a character-input overload" : string.Empty) + "."));
         if (method.Identifier.ValueText.Contains("Async"))
             remarks.Add(new XElement("para", "Reads or writes the caller-owned stream asynchronously; cancellation is observed through cancellationToken."));
-        if (method.Identifier.ValueText == "Sizeof")
-            remarks.Add(new XElement("para", "Evaluates the binary size without producing a payload. This value does not describe JSON size or CLR object allocation size."));
     }
 
     /// <summary>Finds a serialized member on a type or one of its base types.</summary>

@@ -9,7 +9,7 @@ public static class BitArrayEmitter
     /// <summary>Evaluates the bit-count header and word-rounded binary payload.</summary>
     /// <param name="fieldData">The BitArray metadata.</param>
     /// <param name="sb">The emitted statements.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            evaluator += 4;");
         sb.AppendLine("            if (value is null) return;");

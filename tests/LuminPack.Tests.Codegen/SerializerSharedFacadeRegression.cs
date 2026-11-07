@@ -141,8 +141,8 @@ internal static class SerializerSharedFacadeRegression
             Require(concrete.Where(method => method.TypeParameterList != null).All(method => method.Body!.Statements.Count == 1 && method.Body.ToString().Contains("LuminFacade_", StringComparison.Ordinal)),
                 "A managed full facade retained repeated profile bodies.");
             var adapters = methods.Where(method => method.Parent is StructDeclarationSyntax && method.ParameterList.Parameters.LastOrDefault()?.Type?.ToString() == type).ToArray();
-            // Only direct records evaluate an exact width, so the other adapters reject it instead of dispatching.
-            Require(adapters.Length == 5 && adapters.Where(method => method.Identifier.ValueText != "Size").All(method =>
+            // Record allocation widths do not belong to the shared operation contract.
+            Require(adapters.Length == 4 && adapters.All(method =>
                 method.ExpressionBody?.Expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } } &&
                 generic.TypeArgumentList.Arguments.Count == 1), "Concrete adapters added generic payload dispatch.");
             Require(adapters.All(method => method.ParameterList.Parameters.All(parameter => parameter.Modifiers.Any(SyntaxKind.ScopedKeyword) == modern)),

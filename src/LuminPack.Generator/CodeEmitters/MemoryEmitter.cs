@@ -248,7 +248,7 @@ public static class MemoryEmitter
     /// <summary>Evaluates the exact contiguous or segmented binary element contract.</summary>
     /// <param name="fieldData">The memory type metadata.</param>
     /// <param name="sb">The emitted statements.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseType = GetBaseType(fieldData.TypeName);
         sb.AppendLine("            evaluator += 4;");
@@ -270,7 +270,7 @@ public static class MemoryEmitter
         }
         sb.AppendLine("            {");
         sb.AppendLine("                var item = element;");
-        sb.AppendLine("                evaluator.CalculateOffset(ref item);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref item);");
         sb.AppendLine("            }");
     }
 

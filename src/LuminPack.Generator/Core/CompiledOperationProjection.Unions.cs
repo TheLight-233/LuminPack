@@ -17,8 +17,7 @@ internal sealed partial class CompiledOperationProjection
     /// <param name="writer">Whether this slot writes a binary or JSON payload.</param>
     private void AppendUnionSlots(List<MemberDeclarationSyntax> members, MethodDeclarationSyntax method, TypeDeclarationSyntax owner, bool writer)
     {
-        string operation = method.Identifier.ValueText.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) ? "LuminPackUnionSerializeJson_" :
-            method.Identifier.ValueText.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ? "LuminPackUnionCalculateOffset_" : "LuminPackUnionSerialize_";
+        string operation = method.Identifier.ValueText.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_";
         string suffix = method.Identifier.ValueText.Substring(operation.Length);
         var root = _types.Values.OfType<INamedTypeSymbol>().FirstOrDefault(type =>
             (type.IsAbstract || type.TypeKind == TypeKind.Interface) && LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type.OriginalDefinition) == suffix)?.OriginalDefinition;
@@ -50,8 +49,7 @@ internal sealed partial class CompiledOperationProjection
         source.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         source.Append("public static void ").Append(method.Identifier.ValueText).Append("_Compiled<").Append(profileParameter).Append(">(ref ").Append(method.ParameterList.Parameters[0].Type).Append(" writer, ")
             .Append(rootName).Append(" value) where ").Append(profileParameter).AppendLine(" : struct, global::LuminPack.Option.ILuminPackOptions {");
-        // Write slots use the tiered dispatch; offset calculation keeps the original virtual call.
-        var tier = root != null && operation != "LuminPackUnionCalculateOffset_" ? UnionDispatchTierPlan.Get(root, _compilation) : null;
+        var tier = root != null ? UnionDispatchTierPlan.Get(root, _compilation) : null;
         if (operation == "LuminPackUnionSerialize_" && HasCanonicalUnionProfiles(profiles))
             foreach (var profile in profiles)
             {

@@ -381,7 +381,7 @@ public static class InterfaceGroupingEmitter
     /// <summary>Appends statements that calculate the binary payload size.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
         var elementType = GetSecondGeneric(fieldData.TypeName);
@@ -391,9 +391,9 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            " + keyType + " key = value.Key;");
-        sb.AppendLine("            evaluator.CalculateOffset(ref key);");
+        sb.AppendLine("            evaluator.MeasureRecordWidth(ref key);");
         sb.AppendLine("            global::System.Collections.Generic.IEnumerable<" + elementType + "> elements = value;");
-        sb.AppendLine("            evaluator.CalculateOffset(ref elements);");
+        sb.AppendLine("            evaluator.MeasureRecordWidth(ref elements);");
     }
 
     /// <summary>Appends JSON writing statements for interface grouping values.</summary>

@@ -784,7 +784,7 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
 
             if (method.Name == "WriteValue") directWrites++;
             else if (method.Name == "ReadValue") directReads++;
-            else if (method.Name == "CalculateOffset")
+            else if (method.Name == "MeasureRecordWidth")
             {
                 directCalculates++;
                 if (invocation.ArgumentList.Arguments.Any(static argument =>
@@ -802,7 +802,7 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
             "Closed local formatter calls bound to LuminPackLocalExtension<T>: " +
             string.Join(" | ", runtimeFallbacks.Take(8)));
     }
-    if (directWrites < 12 || directReads < 12 || directCalculates < 8 || directObjectFieldCalculates < 4)
+    if (directWrites < 12 || directReads < 12 || directCalculates != 0 || directObjectFieldCalculates != 0)
     {
         throw new InvalidOperationException(
             $"Insufficient concrete generated bindings: Write={directWrites}, Read={directReads}, " +
@@ -875,11 +875,11 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
 
             if (method.Name == "WriteValue") fallbackWrites++;
             else if (method.Name == "ReadValue") fallbackReads++;
-            else if (method.Name == "CalculateOffset") fallbackCalculates++;
+            else if (method.Name == "MeasureRecordWidth") fallbackCalculates++;
         }
     }
 
-    if (fallbackWrites == 0 || fallbackReads == 0 || fallbackCalculates == 0)
+    if (fallbackWrites == 0 || fallbackReads == 0 || fallbackCalculates != 0)
     {
         throw new InvalidOperationException(
             $"Referenced [LuminPackable] fallback bindings missing: Write={fallbackWrites}, " +
@@ -1374,11 +1374,11 @@ static void VerifyFormatterScope(MetadataReference[] references)
     {
         throw new InvalidOperationException("Registered closed generic formatter support was not emitted.");
     }
-    if (!generated.Split('\n').Any(static line =>
-            line.Contains("CalculateOffset(ref this global::LuminPack.Core.LuminPackEvaluator evaluator", StringComparison.Ordinal) &&
+    if (generated.Split('\n').Any(static line =>
+            line.Contains("MeasureRecordWidth(ref this global::LuminPack.Core.LuminPackEvaluator evaluator", StringComparison.Ordinal) &&
             line.Contains("Dictionary<", StringComparison.Ordinal)))
     {
-        throw new InvalidOperationException("Closed dictionary formatter did not emit its size evaluator.");
+        throw new InvalidOperationException("A compound dictionary retained an obsolete size evaluator.");
     }
     if (generated.Contains("InputControl", StringComparison.Ordinal))
     {

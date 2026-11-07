@@ -43,7 +43,7 @@ internal sealed partial class StaticSerializerBinding
                         argument = call.ArgumentList.Arguments.LastOrDefault(item => item.RefKindKeyword.IsKind(SyntaxKind.RefKeyword));
                     else
                     {
-                        int index = name.Identifier.ValueText is "SerializeAsync" or "DeserializeAsync" or "Sizeof" ||
+                        int index = name.Identifier.ValueText is "SerializeAsync" or "DeserializeAsync" ||
                             call.ArgumentList.Arguments.FirstOrDefault()?.RefKindKeyword.IsKind(SyntaxKind.RefKeyword) == true ? 1 : 0;
                         argument = call.ArgumentList.Arguments.ElementAtOrDefault(index);
                     }

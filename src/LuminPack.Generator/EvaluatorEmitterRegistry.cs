@@ -19,20 +19,20 @@ public static class EvaluatorEmitterRegistry
         if (typeName is "global::UnityEngine.AnimationCurve" or "global::UnityEngine.Gradient" or "global::UnityEngine.RectOffset")
             return UnityObjectEmitter.Size;
         if (MultiDimensionalArrayEmitter.IsMultiDimensionalArray(typeName))
-            return MultiDimensionalArrayEmitter.GenerateCalculateOffsetCode;
+            return MultiDimensionalArrayEmitter.GenerateMeasureRecordWidthCode;
         if (MultiDimensionalArrayEmitter.GetRank(typeName) == 1)
         {
-            return CollectionEvaluatorEmitter.GenerateArrayCalculateOffsetCode;
+            return CollectionEvaluatorEmitter.GenerateArrayMeasureRecordWidthCode;
         }
 
         if (CodeEmitterRegistry.KnownValueTypes.Contains(typeName))
         {
-            return UnmanagedEmitter.GenerateCalculateOffsetCode;
+            return UnmanagedEmitter.GenerateMeasureRecordWidthCode;
         }
 
         if (typeName is "string" or "global::System.String")
         {
-            return StringEmitter.GenerateCalculateOffsetCode;
+            return StringEmitter.GenerateMeasureRecordWidthCode;
         }
 
         int genericSeparator = typeName.IndexOf('<');
@@ -40,16 +40,16 @@ public static class EvaluatorEmitterRegistry
         switch (baseTypeName)
         {
             case "global::System.Numerics.BigInteger":
-                return BigIntegerEmitter.GenerateCalculateOffsetCode;
+                return BigIntegerEmitter.GenerateMeasureRecordWidthCode;
             case "global::System.Collections.BitArray":
-                return BitArrayEmitter.GenerateCalculateOffsetCode;
+                return BitArrayEmitter.GenerateMeasureRecordWidthCode;
             case "global::System.Collections.Generic.PriorityQueue":
-                return PriorityQueueEmitter.GenerateCalculateOffsetCode;
+                return PriorityQueueEmitter.GenerateMeasureRecordWidthCode;
             case "global::System.Memory":
             case "global::System.ReadOnlyMemory":
             case "global::System.ArraySegment":
             case "global::System.Buffers.ReadOnlySequence":
-                return MemoryEmitter.GenerateCalculateOffsetCode;
+                return MemoryEmitter.GenerateMeasureRecordWidthCode;
             case "global::System.Version":
             case "global::System.Uri":
             case "global::System.Type":
@@ -59,13 +59,13 @@ public static class EvaluatorEmitterRegistry
             case "global::System.Tuple":
             case "global::System.ValueTuple":
             case "global::System.Lazy":
-                return SpecialValueEvaluatorEmitter.GenerateCalculateOffsetCode;
+                return SpecialValueEvaluatorEmitter.GenerateMeasureRecordWidthCode;
 
             case "global::System.Collections.Generic.KeyValuePair":
-                return KeyValuePairEmitter.GenerateCalculateOffsetCode;
+                return KeyValuePairEmitter.GenerateMeasureRecordWidthCode;
 
             case "global::System.Linq.IGrouping":
-                return InterfaceGroupingEmitter.GenerateCalculateOffsetCode;
+                return InterfaceGroupingEmitter.GenerateMeasureRecordWidthCode;
 
             case "global::System.Collections.Generic.Dictionary":
             case "global::System.Collections.Concurrent.ConcurrentDictionary":
@@ -78,13 +78,13 @@ public static class EvaluatorEmitterRegistry
             case "global::System.Collections.Immutable.ImmutableSortedDictionary":
             case "global::System.Collections.Immutable.IImmutableDictionary":
             case "global::System.Collections.Frozen.FrozenDictionary":
-                return CollectionEvaluatorEmitter.GenerateDictionaryCalculateOffsetCode;
+                return CollectionEvaluatorEmitter.GenerateDictionaryMeasureRecordWidthCode;
 
             case "global::System.Collections.Generic.Queue":
-                return CollectionEvaluatorEmitter.GenerateQueueCalculateOffsetCode;
+                return CollectionEvaluatorEmitter.GenerateQueueMeasureRecordWidthCode;
 
             case "global::System.Collections.Immutable.ImmutableArray":
-                return CollectionEvaluatorEmitter.GenerateValueEnumerableCalculateOffsetCode;
+                return CollectionEvaluatorEmitter.GenerateValueEnumerableMeasureRecordWidthCode;
 
             case "global::System.Collections.Generic.List":
             case "global::System.Collections.Generic.Stack":
@@ -117,7 +117,7 @@ public static class EvaluatorEmitterRegistry
             case "global::System.Collections.Immutable.IImmutableSet":
             case "global::System.Runtime.CompilerServices.ReadOnlyCollectionBuilder":
             case "global::System.Collections.Frozen.FrozenSet":
-                return CollectionEvaluatorEmitter.GenerateEnumerableCalculateOffsetCode;
+                return CollectionEvaluatorEmitter.GenerateEnumerableMeasureRecordWidthCode;
 
             default:
                 return null;

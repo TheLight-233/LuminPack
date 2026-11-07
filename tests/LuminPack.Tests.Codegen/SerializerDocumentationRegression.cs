@@ -274,6 +274,14 @@ internal static class SerializerDocumentationRegression
                 "Compact Root references did not emit canonical method documentation identifiers.");
         }
         var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
+        var generatedMethods = generated.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        Require(generatedMethods.All(method => !method.Identifier.ValueText.Contains("Sizeof", StringComparison.Ordinal) &&
+                !method.Identifier.ValueText.Contains("CalculateOffset", StringComparison.Ordinal) &&
+                method.Identifier.ValueText != "MeasureRecordWidth"),
+            "A removed size API or generic evaluator bridge was generated.");
+        Require(generatedMethods.Where(method => method.Identifier.ValueText.StartsWith("MeasureRecord", StringComparison.Ordinal))
+            .All(method => method.Modifiers.Any(SyntaxKind.InternalKeyword)),
+            "Concrete record allocation helpers must remain internal.");
         foreach (var file in generated)
         {
             if (documentationMode != DocumentationMode.None)
@@ -323,7 +331,9 @@ internal static class SerializerDocumentationRegression
                     int column = method.Modifiers[0].GetLocation().GetLineSpan().StartLinePosition.Character;
                     foreach (var attribute in method.AttributeLists)
                         Require(attribute.GetLocation().GetLineSpan().StartLinePosition.Character == column,
-                            "Generated method attributes must retain their declaration's indentation: " + attribute);
+                            "Generated method attributes must retain their declaration's indentation: " + attribute +
+                            " in " + file.HintName + " at " + method.GetLocation().GetLineSpan() + " declaration column " + column +
+                            Environment.NewLine + method.ToString());
                 }
             }
         }

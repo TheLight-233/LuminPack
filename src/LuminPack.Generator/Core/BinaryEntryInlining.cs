@@ -61,7 +61,7 @@ internal sealed class BinaryEntryInlining
     /// <returns>The expanded syntax block, or null when the original fallback must be retained.</returns>
     internal BlockSyntax ExpandCore(string operation)
     {
-        string state = operation == "CalculateOffset" ? "evaluator" : operation.StartsWith("Read", StringComparison.Ordinal) ? "reader" : "writer";
+        string state = operation == "MeasureRecordWidth" ? "evaluator" : operation.StartsWith("Read", StringComparison.Ordinal) ? "reader" : "writer";
         var expanded = Expand(GetPlan(_root), operation, new ExpressionSyntax[] { SyntaxFactory.IdentifierName(state), SyntaxFactory.IdentifierName("value") },
             new[] { true, true }, new HashSet<string>(StringComparer.Ordinal), root: true);
         if (expanded == null)
@@ -70,7 +70,7 @@ internal sealed class BinaryEntryInlining
             expanded = BinaryEntryPayloadAliases.Rewrite(expanded);
         expanded = (BlockSyntax)new ReservedCapacityRegions().Visit(expanded);
         return CompiledOptionProjection.Apply(expanded, CompiledOptions.Resolve(_root, _compilation), state,
-            operation == "CalculateOffset" ? "LuminPackEvaluator" : operation.EndsWith(":json", StringComparison.Ordinal)
+            operation == "MeasureRecordWidth" ? "LuminPackEvaluator" : operation.EndsWith(":json", StringComparison.Ordinal)
                 ? operation.StartsWith("Read", StringComparison.Ordinal) ? "LuminPackJsonReader" : "LuminPackJsonWriter"
                 : operation.StartsWith("Read", StringComparison.Ordinal) ? "LuminPackReader" : "LuminPackWriter");
     }

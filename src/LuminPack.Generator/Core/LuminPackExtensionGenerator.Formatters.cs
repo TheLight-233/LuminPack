@@ -88,29 +88,13 @@ public static partial class LuminPackExtensionGenerator
             : formatter.Write is not null && formatter.Read is not null;
     }
 
-    /// <summary>Performs the can register calculate formatter step for the current operation.</summary>
+    /// <summary>Identifies concrete allocation-width helpers supported by direct record writes.</summary>
     /// <param name="type">The type or symbol to analyze.</param>
-    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    internal static bool CanRegisterCalculateFormatter(ITypeSymbol type, Compilation compilation)
+    internal static bool SupportsRecordWidth(ITypeSymbol type)
     {
-        if (IsCustomGeneratorType(type))
-            return false;
-        if (type.TypeKind == TypeKind.Enum ||
-            type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
-        {
-            return true;
-        }
-
-        if (CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type))
-            return true;
-
-        if (type is INamedTypeSymbol named && HasPackableAttribute(named))
-        {
-            return SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly);
-        }
-
-        return PortableStructPlan.IsImplicitFormatterType(type) || EvaluatorEmitterRegistry.GetEmitter(FormatterTypeName.Get(type)) is not null;
+        return !IsCustomGeneratorType(type) && (EmitterTypeTraits.IsFixedRecord(type) ||
+            EmitterTypeTraits.IsDirectRecord(type) || EmitterTypeTraits.IsKnownScalar(type));
     }
 
     /// <summary>Determines whether the supplied value has the static formatter candidate classification.</summary>
@@ -220,7 +204,7 @@ public static partial class LuminPackExtensionGenerator
                 (EnumEmitter.GenerateJsonSerializeCode, EnumEmitter.GenerateJsonDeserializeCode);
             AppendBinaryFormatterExtension(sb, typeName, field, formatter, metaInfo);
             AppendJsonFormatterExtension(sb, typeName, field, jsonFormatter, metaInfo);
-            AppendCalculateFormatterExtension(sb, typeName, field, EnumEmitter.GenerateCalculateOffsetCode, metaInfo);
+            AppendRecordWidthTemplate(sb, typeName, field, EnumEmitter.GenerateMeasureRecordWidthCode, metaInfo);
             return;
         }
 
@@ -237,7 +221,7 @@ public static partial class LuminPackExtensionGenerator
                 (NullableEmitter.GenerateJsonSerializeCode, NullableEmitter.GenerateJsonDeserializeCode);
             AppendBinaryFormatterExtension(sb, typeName, field, formatter, metaInfo);
             AppendJsonFormatterExtension(sb, typeName, field, jsonFormatter, metaInfo);
-            AppendCalculateFormatterExtension(sb, typeName, field, NullableEmitter.GenerateCalculateOffsetCode, metaInfo);
+            AppendRecordWidthTemplate(sb, typeName, field, NullableEmitter.GenerateMeasureRecordWidthCode, metaInfo);
             return;
         }
 
@@ -288,7 +272,7 @@ public static partial class LuminPackExtensionGenerator
         Action<LuminLocalFieldData, StringBuilder> evaluatorFormatter = EvaluatorEmitterRegistry.GetEmitter(typeName);
         if (evaluatorFormatter is not null)
         {
-            AppendCalculateFormatterExtension(sb, typeName, field, evaluatorFormatter, metaInfo);
+            AppendRecordWidthTemplate(sb, typeName, field, evaluatorFormatter, metaInfo);
         }
     }
 
@@ -336,34 +320,36 @@ public static partial class LuminPackExtensionGenerator
         {
             // One layout in every model: the same native copy an unmanaged tuple uses.
             AppendBinaryFormatterExtension(sb, typeName, field, (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode), metaInfo);
-            AppendCalculateFormatterExtension(sb, typeName, field, UnmanagedEmitter.GenerateCalculateOffsetCode, metaInfo);
+            AppendRecordWidthTemplate(sb, typeName, field, UnmanagedEmitter.GenerateMeasureRecordWidthCode, metaInfo);
             return;
         }
         AppendBinaryFormatterExtension(sb, typeName, field,
             ((_, builder) => PortableStructEmitter.AppendValue(builder, plan, "value", typeName, write: true),
              (_, builder) => PortableStructEmitter.AppendValue(builder, plan, "value", typeName, write: false)), metaInfo);
-        AppendCalculateFormatterExtension(sb, typeName, field,
+        AppendRecordWidthTemplate(sb, typeName, field,
             (_, builder) => builder.AppendLine("            evaluator += " + plan.WireSize + ";"), metaInfo);
     }
 
-    /// <summary>Builds the calculate formatter extension source from the supplied metadata.</summary>
+    /// <summary>Builds a concrete allocation-width template only for supported scalar and direct record shapes.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="typeName">The C# type name to use in generated source.</param>
     /// <param name="field">The metadata describing the field being processed.</param>
     /// <param name="formatter">The formatter used by this operation.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    private static void AppendCalculateFormatterExtension(
+    private static void AppendRecordWidthTemplate(
         StringBuilder sb,
         string typeName,
         LuminLocalFieldData field,
         Action<LuminLocalFieldData, StringBuilder> formatter,
         MetaInfo metaInfo)
     {
+        if (field.TypeSymbol == null || !(EmitterTypeTraits.IsDirectRecord(field.TypeSymbol) || EmitterTypeTraits.IsKnownScalar(field.TypeSymbol)))
+            return;
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine(metaInfo.IsNet8
-            ? "        public static void CalculateOffset(ref this global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + typeName + " value)"
-            : "        public static void CalculateOffset(ref this global::LuminPack.Core.LuminPackEvaluator evaluator, ref " + typeName + " value)");
+            ? "        public static void MeasureRecordWidth(ref this global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + typeName + " value)"
+            : "        public static void MeasureRecordWidth(ref this global::LuminPack.Core.LuminPackEvaluator evaluator, ref " + typeName + " value)");
         sb.AppendLine("        {");
         formatter(field, sb);
         sb.AppendLine("        }");

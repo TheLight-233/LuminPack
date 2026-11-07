@@ -9,6 +9,8 @@ LuminPack uses one automatic generation policy. No generation mode or `CompilerV
 - Unmarked types observed in unrelated code do not acquire serializer entries merely because they are public.
 - Convenience operations are selected by actual calls. Runtime-selected or opaque boundaries use registered fallback.
 
+The removed `Sizeof` and `CalculateOffset` APIs are not generated. Direct allocating writes retain internal, concrete `MeasureRecord` helpers only for supported record shapes; they are not a general size query or a registered fallback operation. Ordinary complex objects, Custom formatters and Unions do not acquire placeholder size methods.
+
 ## Static interception
 
 The generator package enables the `LuminPack` interceptor namespace automatically. With C# 11 or later and a compiler exposing versioned `GetInterceptableLocation`, the public facade binds a fixed generic signature set. Calls such as `Serialize(value)`, `Serialize<Player>(value)` and `Deserialize<Player>(bytes)` are intercepted into the existing concrete implementation. Each constructed signature shares one interceptor across its source locations. Internal state entries use unique payload names, and allocating/buffer/stream convenience entries live in separate `LuminEntry_<hash>` containers. Only used convenience families are emitted; formatter retention follows the automatic declaration and call graph described above.

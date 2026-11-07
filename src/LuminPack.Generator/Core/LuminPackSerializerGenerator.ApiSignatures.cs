@@ -168,7 +168,7 @@ public static partial class LuminPackSerializerGenerator
         string state = method?.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString();
         if (state == null || !(state.EndsWith("LuminPackWriter", StringComparison.Ordinal) || state.EndsWith("LuminPackReader", StringComparison.Ordinal) ||
             state.EndsWith("LuminPackEvaluator", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonWriter", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonReader", StringComparison.Ordinal) ||
-            method.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync" or "Register"))
+            method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync" or "Register"))
             yield break;
         string profile = "TLuminProfile";
         while (method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profile) == true)

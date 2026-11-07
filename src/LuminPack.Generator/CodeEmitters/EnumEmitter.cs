@@ -30,7 +30,7 @@ public static class EnumEmitter
     /// <summary>Appends statements that calculate the binary payload size.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData data, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            evaluator += global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">();");
     }

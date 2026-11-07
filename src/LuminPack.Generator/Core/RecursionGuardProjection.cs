@@ -96,7 +96,7 @@ internal sealed class RecursionGuardProjection : CSharpSyntaxRewriter
 {
     private static readonly HashSet<string> Roots = new(StringComparer.Ordinal)
     {
-        "RootWrite", "RootRead", "RootWriteUnion", "RootReadUnion", "RootWriteJson", "RootReadJson", "Sizeof",
+        "RootWrite", "RootRead", "RootWriteUnion", "RootReadUnion", "RootWriteJson", "RootReadJson", "MeasureRecord",
         "RootWriteCompressed", "RootReadCompressed", "RootReadFresh"
     };
 

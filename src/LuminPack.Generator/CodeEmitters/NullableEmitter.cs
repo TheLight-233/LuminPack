@@ -85,7 +85,7 @@ public static class NullableEmitter
     /// <summary>Appends statements that calculate the binary payload size.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData data, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData data, StringBuilder sb)
     {
         string elementType = GetElementType(data);
         sb.AppendLine($"            if (!value.HasValue)");
@@ -100,22 +100,22 @@ public static class NullableEmitter
         {
             if (isUnmanaged)
             {
-                AppendUnmanagedCalculateOffset(sb, elementType);
+                AppendUnmanagedMeasureRecordWidth(sb, elementType);
             }
             else
             {
-                AppendManagedCalculateOffset(sb, elementType);
+                AppendManagedMeasureRecordWidth(sb, elementType);
             }
             return;
         }
 
         sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
         sb.AppendLine($"            {{");
-        AppendUnmanagedCalculateOffset(sb, elementType, "    ");
+        AppendUnmanagedMeasureRecordWidth(sb, elementType, "    ");
         sb.AppendLine($"                return;");
         sb.AppendLine($"            }}");
         sb.AppendLine($"");
-        AppendManagedCalculateOffset(sb, elementType);
+        AppendManagedMeasureRecordWidth(sb, elementType);
     }
 
     /// <summary>Appends JSON writing statements for nullable values.</summary>
@@ -229,7 +229,7 @@ public static class NullableEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="elementType">The element type used by this operation.</param>
     /// <param name="indentSuffix">The indent suffix used by this operation.</param>
-    private static void AppendUnmanagedCalculateOffset(StringBuilder sb, string elementType, string indentSuffix = "")
+    private static void AppendUnmanagedMeasureRecordWidth(StringBuilder sb, string elementType, string indentSuffix = "")
     {
         sb.AppendLine($"            {indentSuffix}evaluator += Unsafe.SizeOf<{elementType}>();");
     }
@@ -237,9 +237,9 @@ public static class NullableEmitter
     /// <summary>Appends binary size evaluation statements for nullable values.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="elementType">The element type used by this operation.</param>
-    private static void AppendManagedCalculateOffset(StringBuilder sb, string elementType)
+    private static void AppendManagedMeasureRecordWidth(StringBuilder sb, string elementType)
     {
         sb.AppendLine($"            {elementType} val = value.Value;");
-        sb.AppendLine("            evaluator.CalculateOffset(ref val);");
+        sb.AppendLine("            evaluator.MeasureRecordWidth(ref val);");
     }
 }

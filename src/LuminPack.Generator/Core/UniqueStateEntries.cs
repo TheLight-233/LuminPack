@@ -45,7 +45,7 @@ internal static class UniqueStateEntries
     /// <param name="name">A method identifier.</param>
     /// <returns>Whether it is a binary, JSON or width operation.</returns>
     private static bool IsOperation(string name)
-        => name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof";
+        => name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "MeasureRecord";
 
     /// <summary>Rewrites statically identified state operations only.</summary>
     private sealed class Rewriter : CSharpSyntaxRewriter

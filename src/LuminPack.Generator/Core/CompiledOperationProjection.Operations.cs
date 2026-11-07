@@ -24,8 +24,8 @@ internal sealed partial class CompiledOperationProjection
         bool json = facade ? identifier.Contains("Json") : method.ParameterList.Parameters[0].Type.ToString().Contains("Json");
         if (facade)
             writer = identifier.StartsWith("Serialize", StringComparison.Ordinal);
-        string stateType = facade ? "LuminPack.Core.LuminPack" + (identifier == "Sizeof" ? "Evaluator" : json ? writer ? "JsonWriter" : "JsonReader" : writer ? "Writer" : "Reader") : method.ParameterList.Parameters[0].Type.ToString();
-        string stateName = facade ? identifier == "Sizeof" ? "evaluator" : writer ? "writer" : "reader" : method.ParameterList.Parameters[0].Identifier.ValueText;
+        string stateType = facade ? "LuminPack.Core.LuminPack" + (identifier == "MeasureRecord" ? "Evaluator" : json ? writer ? "JsonWriter" : "JsonReader" : writer ? "Writer" : "Reader") : method.ParameterList.Parameters[0].Type.ToString();
+        string stateName = facade ? identifier == "MeasureRecord" ? "evaluator" : writer ? "writer" : "reader" : method.ParameterList.Parameters[0].Identifier.ValueText;
         string profile = "TLuminProfile";
         var identifiers = new HashSet<string>(method.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).Select(token => token.ValueText), StringComparer.Ordinal);
         foreach (var ancestor in method.Ancestors().OfType<TypeDeclarationSyntax>())
@@ -68,7 +68,7 @@ internal sealed partial class CompiledOperationProjection
         SyntaxNode body = method.Body ?? (SyntaxNode)method.ExpressionBody;
         string facadePayload = facade ? method.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText == "value")?.Type.ToString() : null;
         bool missingCore = facadePayload != null && (!_types.TryGetValue(facadePayload.TrimEnd('?'), out var facadeType) ||
-            !(identifier == "Sizeof" ? LuminPackExtensionGenerator.CanRegisterCalculateFormatter(facadeType, _compilation) :
+            !(identifier == "MeasureRecord" ? LuminPackExtensionGenerator.SupportsRecordWidth(facadeType) :
                 LuminPackExtensionGenerator.CanRegisterFormatter(facadeType, _compilation, json)));
         body = new Body(profile, stateType, writer, stateName, dispatch,
             payloadGeneric ? facade ? method.TypeParameterList.Parameters[0].Identifier.ValueText : method.ParameterList.Parameters[1].Type.ToString() :

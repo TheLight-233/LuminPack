@@ -129,9 +129,9 @@ internal sealed partial class CompiledOperationProjection
                 stateType = "LuminPack.Core." + stateType;
             bool state = access.Expression.ToString() == _state || access.Expression is IdentifierNameSyntax receiver &&
                 receiver.Identifier.GetAnnotations(OperationTemplateRewriter.StateAnnotation).Any(annotation => annotation.Data == stateType);
-            if (state && !_dispatch && _payload != null && name is "WriteValue" or "ReadValue" or "CalculateOffset")
+            if (state && !_dispatch && _payload != null && name is "WriteValue" or "ReadValue" or "MeasureRecordWidth")
             {
-                string operation = name == "CalculateOffset" ? "Sizeof" : name == "WriteValue" ? json ? "SerializeJson" : "Serialize" : json ? "DeserializeJson" : "Deserialize";
+                string operation = name == "MeasureRecordWidth" ? "MeasureRecord" : name == "WriteValue" ? json ? "SerializeJson" : "Serialize" : json ? "DeserializeJson" : "Deserialize";
                 var forwarded = result.ArgumentList.Arguments.Insert(0, SyntaxFactory.Argument(access.Expression).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword)));
                 return result.WithExpression(SyntaxFactory.ParseExpression("global::LuminPack.LuminPackSerializer." + operation + "<" + _payload + ", " + _profile + ">"))
                     .WithArgumentList(result.ArgumentList.WithArguments(forwarded));
@@ -146,8 +146,7 @@ internal sealed partial class CompiledOperationProjection
                 (access.Expression.ToString().Contains("LuminPackSerializer") || formatter);
             if (formatter && name is "LuminPackJsonEncoding" or "LuminPackJsonReadBoundary")
                 serializer = true;
-            bool union = name.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) || name.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) ||
-                name.StartsWith("LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
+            bool union = name.StartsWith("LuminPackUnionSerializeJson_", StringComparison.Ordinal) || name.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal);
             bool boundary = union || name == "TryReadOrderedJsonProperty";
             if (!kernel && !serializer && !boundary)
                 return result;
@@ -192,7 +191,7 @@ internal sealed partial class CompiledOperationProjection
             {
                 _profile = enclosing; }
             if (!_dispatch || node.Expression is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } ||
-                access.Name.Identifier.ValueText is not ("SerializeJson" or "DeserializeJson" or "Serialize" or "Deserialize" or "Sizeof"))
+                access.Name.Identifier.ValueText is not ("SerializeJson" or "DeserializeJson" or "Serialize" or "Deserialize" or "MeasureRecord"))
                 return rewritten;
             return SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression("typeof(" + _profile + ") == typeof(global::LuminPack.Option.LuminPackDeclaredOptions)"),
                 SyntaxFactory.Block(node), SyntaxFactory.ElseClause(SyntaxFactory.Block(rewritten)));

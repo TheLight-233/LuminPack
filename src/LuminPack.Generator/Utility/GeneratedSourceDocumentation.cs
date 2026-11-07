@@ -150,7 +150,7 @@ internal static class GeneratedSourceDocumentation
         // Non-public payloads still expose convenience overloads to their consuming assembly.
         // Internal state forwarders and Union case entries are implementation details.
         string name = declaration.Identifier.ValueText;
-        return (name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof" or "SerializeAsync" or "DeserializeAsync") &&
+        return (name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync") &&
             declaration.ParameterList.Parameters.FirstOrDefault()?.Identifier.ValueText is not ("writer" or "reader" or "evaluator" or "state");
     }
 
@@ -297,8 +297,6 @@ internal static class GeneratedSourceDocumentation
         }
 
         string name = (method as MethodDeclarationSyntax)?.Identifier.ValueText ?? string.Empty;
-        if (name.Contains("CalculateOffset") || name.Contains("Sizeof"))
-            return "Calculates the binary payload size for the supplied value.";
         if (name.Contains("DeserializeJson") || name.Contains("ReadJson"))
             return "Reads the supplied value from its JSON representation.";
         if (name.Contains("SerializeJson") || name.Contains("WriteJson"))

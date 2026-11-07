@@ -95,7 +95,7 @@ public static partial class LuminPackSerializerGenerator
             {
                 sb.AppendLine("            var directEvaluator = new LuminPackEvaluator();");
                 sb.AppendLine("            var directValue = value;");
-                sb.AppendLine("            global::LuminPack.LuminPackSerializer.Sizeof(ref directEvaluator, ref directValue);");
+                sb.AppendLine("            global::LuminPack.LuminPackSerializer.MeasureRecord(ref directEvaluator, ref directValue);");
                 sb.AppendLine("            int directLength = directEvaluator.Value;");
             }
             // A fixed record is a few primitives wide; a plain array lets the JIT drop the large-array branch and null check.

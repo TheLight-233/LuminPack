@@ -105,6 +105,10 @@ internal sealed class SharedFacadeProjection
             if (method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call => call.Expression is SimpleNameSyntax name &&
                     name.Identifier.ValueText is "RootWriteExactInterface" or "SerializeInterfaceSlow"))
                 continue;
+            // Record allocation widths remain concrete implementation details, outside the shared operation contract.
+            if (method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call => call.Expression is MemberAccessExpressionSyntax access &&
+                    access.Name.Identifier.ValueText == "MeasureRecord"))
+                continue;
             string profile = method.TypeParameterList.Parameters[0].Identifier.ValueText;
             var normalizer = new NormalizeBody(type, profile, stateCalls);
             var body = (BlockSyntax)normalizer.Visit(method.Body);
@@ -137,10 +141,10 @@ internal sealed class SharedFacadeProjection
             var wrapper = method.WithModifiers(SyntaxFactory.TokenList(method.Modifiers.Where(token => !token.IsKind(SyntaxKind.AsyncKeyword))))
                 .WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{" + Environment.NewLine + invocation + Environment.NewLine + "}"));
             candidates.Add(new Candidate(key, method.Span.Start - Prefix.Length, method.Span.Length,
-                wrapper.WithoutLeadingTrivia().WithoutTrailingTrivia().NormalizeWhitespace().ToFullString(), DocumentHelper(helper)));
+                GeneratedSourceIndentation.At(wrapper.WithoutLeadingTrivia().WithoutTrailingTrivia().NormalizeWhitespace(), 8).TrimStart(), DocumentHelper(helper)));
         }
         // Opaque formatter shapes can already use the generic fallback. Preserve that exact choice in their adapter.
-        // Only a direct record's allocating write evaluates its exact width; the other four operations are always present.
+        // The shared contract contains only the four binary and JSON operations.
         return new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson" }.All(stateCalls.ContainsKey)
             ? new Contribution(candidates.ToArray(), BuildAdapter(type, adapterName, metadata.IsNet8, stateCalls))
             : new Contribution(Array.Empty<Candidate>(), string.Empty);
@@ -150,7 +154,7 @@ internal sealed class SharedFacadeProjection
     /// <param name="name">The generated operation name.</param>
     /// <returns>Whether the name belongs to a convenience operation.</returns>
     private static bool IsConvenience(string name)
-        => name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof" or "SerializeAsync" or "DeserializeAsync";
+        => name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync";
 
     /// <summary>Names private generated support deterministically without lossy type-name sanitization.</summary>
     /// <param name="prefix">The private member family.</param>
@@ -232,13 +236,13 @@ internal sealed class SharedFacadeProjection
     /// <param name="type">The exact or generic payload type.</param>
     /// <param name="profile">The adapter profile, or null for interface declarations.</param>
     /// <param name="scoped">Whether scoped parameter annotations are supported.</param>
-    /// <param name="stateCalls">The original concrete or fallback selection for each operation; an absent width is unsupported.</param>
+    /// <param name="stateCalls">The original concrete or fallback selection for each operation.</param>
     private static void AppendAdapterMethods(StringBuilder text, string type, string profile, bool scoped, IReadOnlyDictionary<string, bool> stateCalls)
     {
-        foreach (string operation in new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson", "Sizeof" })
+        foreach (string operation in new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson" })
         {
-            string adapter = operation == "Sizeof" ? "Size" : operation.Replace("Deserialize", "Read").Replace("Serialize", "Write");
-            string state = operation == "Sizeof" ? "LuminPackEvaluator" : "LuminPack" + (operation.EndsWith("Json", StringComparison.Ordinal) ? "Json" : "") +
+            string adapter = operation.Replace("Deserialize", "Read").Replace("Serialize", "Write");
+            string state = "LuminPack" + (operation.EndsWith("Json", StringComparison.Ordinal) ? "Json" : "") +
                 (operation.StartsWith("Deserialize", StringComparison.Ordinal) ? "Reader" : "Writer");
             string modifier = operation is "Serialize" or "SerializeJson" ? "in" : "ref";
             string scope = scoped ? "scoped " : "";
@@ -246,12 +250,9 @@ internal sealed class SharedFacadeProjection
                 text.AppendLine("[MethodImpl(MethodImplOptions.AggressiveInlining)]");
             text.Append(profile == null ? "" : "public ").Append("void ").Append(adapter).Append('(').Append(scope)
                 .Append("ref global::LuminPack.Core.").Append(state).Append(" state, ").Append(scope).Append(modifier).Append(' ').Append(type).Append(" value)");
-            bool fallback = false;
-            if (profile != null && !stateCalls.TryGetValue(operation, out fallback))
-                text.Append(" => ").Append(global::LuminPack.Code.Core.LuminPackExtensionGenerator.UnsupportedWidth.TrimEnd(';'));
-            else if (profile != null)
+            if (profile != null)
                 text.Append(" => global::LuminPack.LuminPackSerializer.").Append(operation).Append('<')
-                .Append(fallback ? type + ", " : "").Append(profile).Append(">(ref state, ").Append(modifier).Append(" value)");
+                .Append(stateCalls[operation] ? type + ", " : "").Append(profile).Append(">(ref state, ").Append(modifier).Append(" value)");
             text.AppendLine(";");
         }
     }
@@ -314,15 +315,14 @@ internal sealed class SharedFacadeProjection
                 node.ArgumentList.Arguments[1].Expression is not IdentifierNameSyntax value)
                 return result;
             string operation = access.Name.Identifier.ValueText;
-            string state = operation == "Sizeof" ? "evaluator" : operation is "Serialize" or "SerializeJson" ? "writer" : "reader";
+            string state = operation is "Serialize" or "SerializeJson" ? "writer" : "reader";
             string receiver = node.ArgumentList.Arguments[0].Expression.ToString();
             bool original = receiver == state && value.Identifier.ValueText == "value";
-            bool directRecord = operation == "Sizeof" && receiver == "directEvaluator" && value.Identifier.ValueText == "directValue" ||
-                operation == "Serialize" && receiver == "fallbackWriter" && value.Identifier.ValueText == "value";
-            if (!(original || directRecord) || operation is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof"))
+            bool directRecord = operation == "Serialize" && receiver == "fallbackWriter" && value.Identifier.ValueText == "value";
+            if (!(original || directRecord) || operation is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson"))
                 return result;
             _stateCalls[operation] = generic.TypeArgumentList.Arguments.Count == 2;
-            string adapter = operation == "Sizeof" ? "Size" : operation.Replace("Deserialize", "Read").Replace("Serialize", "Write");
+            string adapter = operation.Replace("Deserialize", "Read").Replace("Serialize", "Write");
             return result.WithExpression(SyntaxFactory.ParseExpression("default(" + Adapter + ")." + adapter).WithTriviaFrom(result.Expression));
         }
     }

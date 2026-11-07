@@ -43,10 +43,10 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="metaInfo">The consumer's reference-safety settings.</param>
     private static void AppendStateFallbacks(StringBuilder sb, MetaInfo metaInfo)
     {
-        foreach (var operation in new[] { "Serialize", "Deserialize", "Sizeof", "SerializeJson", "DeserializeJson" })
+        foreach (var operation in new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson" })
         {
             bool write = operation.StartsWith("Serialize", System.StringComparison.Ordinal);
-            string state = operation == "Sizeof" ? "Evaluator" : operation.EndsWith("Json", System.StringComparison.Ordinal)
+            string state = operation.EndsWith("Json", System.StringComparison.Ordinal)
                 ? write ? "JsonWriter" : "JsonReader" : write ? "Writer" : "Reader";
             string modifier = write ? "in" : "ref";
             sb.AppendLine("        /// <summary>Processes <typeparamref name=\"T\"/> using the supplied operation state.</summary>");
@@ -55,8 +55,7 @@ public static partial class LuminPackSerializerGenerator
             sb.AppendLine("        /// <param name=\"value\">The payload storage.</param>");
             sb.AppendLine("        /// <remarks>Requires an explicit or Custom formatter registration for the requested operation. Concrete overloads call generated roots directly.</remarks>");
             sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            // The exact-width evaluator only serves generated direct records, so its entry stays inside the assembly.
-            sb.Append(operation == "Sizeof" ? "        internal static void " : "        public static void ").Append(operation).Append("<T>(ref global::LuminPack.Core.LuminPack").Append(state)
+            sb.Append("        public static void ").Append(operation).Append("<T>(ref global::LuminPack.Core.LuminPack").Append(state)
                 .Append(" state, ").Append(metaInfo.IsNet8 ? "scoped " : string.Empty).Append(modifier).Append(" T value) => FormatterDispatch.")
                 .Append(operation).Append("(ref state, ").Append(modifier).AppendLine(" value);");
         }

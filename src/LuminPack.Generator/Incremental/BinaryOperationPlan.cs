@@ -258,7 +258,7 @@ internal sealed class BinaryOperationPlan
     /// <param name="name">The generated method name.</param>
     /// <returns>Whether the name denotes a supported binary operation.</returns>
     internal static bool IsOperation(string name) => name is "WriteValue" or "ReadValue" or "ReadFreshValue" or
-        "WriteValueWithCompress" or "ReadValueWithCompress" or "WritePolymorphismValue" or "ReadPolymorphismValue" or "CalculateOffset";
+        "WriteValueWithCompress" or "ReadValueWithCompress" or "WritePolymorphismValue" or "ReadPolymorphismValue" or "MeasureRecordWidth";
 
     /// <summary>Marks a compiler-created template identity so source member names with the same spelling remain untouched.</summary>
     /// <param name="name">The stable template name.</param>

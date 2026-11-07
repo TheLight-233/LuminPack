@@ -13,7 +13,7 @@ public static class PriorityQueueEmitter
     /// <summary>Evaluates the count and each independently formatted element and priority.</summary>
     /// <param name="fieldData">The priority queue metadata.</param>
     /// <param name="sb">The emitted statements.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            evaluator += 4;");
         sb.AppendLine("            if (value is null) return;");
@@ -21,8 +21,8 @@ public static class PriorityQueueEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                var element = pair.Element;");
         sb.AppendLine("                var priority = pair.Priority;");
-        sb.AppendLine("                evaluator.CalculateOffset(ref element);");
-        sb.AppendLine("                evaluator.CalculateOffset(ref priority);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref element);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref priority);");
         sb.AppendLine("            }");
     }
 

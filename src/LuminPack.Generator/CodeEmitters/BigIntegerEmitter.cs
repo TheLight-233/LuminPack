@@ -9,7 +9,7 @@ public static class BigIntegerEmitter
     /// <summary>Evaluates the signed little-endian byte record without serializing it.</summary>
     /// <param name="fieldData">The BigInteger metadata.</param>
     /// <param name="sb">The emitted statements.</param>
-    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("#if !UNITY_2021_2_OR_NEWER");
         sb.AppendLine("            evaluator += checked(4 + value.GetByteCount());");

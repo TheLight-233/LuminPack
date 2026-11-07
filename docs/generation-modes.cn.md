@@ -11,6 +11,8 @@ LuminPack 采用统一的自动生成规则，不需要选择生成档位，也�
 
 ## 静态拦截
 
+已移除的 `Sizeof` 和 `CalculateOffset` API 不再生成。直接分配结果数组的写入路径，仅为支持的记录形态保留内部具体类型 `MeasureRecord` 辅助方法；它不是通用求长接口，也不参与注册兜底。普通复杂对象、Custom 格式化器和 Union 不再生成求长占位方法。
+
 生成器包自动启用 `LuminPack` Interceptor 命名空间。在 C# 11 或更高版本、编译器提供带版本的 `GetInterceptableLocation` 时，公共门面使用固定数量的泛型签名。`Serialize(value)`、`Serialize<Player>(value)` 和 `Deserialize<Player>(bytes)` 等调用被拦截到既有具体实现。相同构造签名的多个源码位置共享一个 Interceptor。内部状态入口使用负载专属名称，分配数组、缓冲区和流等便捷入口位于独立的 `LuminEntry_<hash>` 容器。只保留实际使用的便捷 API 类别；格式化器保留范围遵循前述统一声明与调用图规则。
 
 `Serialize<TOptions>(value)` 这种仅指定配置类型的写法继续可用，只为使用它的负载生成兼容签名。配置类型参数可以保持开放：它选择编译期选项，不在运行时选择负载格式化器。每个实际使用的便捷操作保留既有的编译期配置方法体；默认调用由 Interceptor 直接传入声明配置，因此不再需要额外的默认配置转发方法。这里使用的是既有选项 struct，不是格式化器 Plan。

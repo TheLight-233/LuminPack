@@ -805,7 +805,7 @@ internal static class ReachabilityAnalysisCache
 
     private static readonly string[] FormatterMethodNames =
     {
-        "WriteValue", "ReadValue", "CalculateOffset",
+        "WriteValue", "ReadValue", "MeasureRecordWidth",
         "WriteValueWithCompress", "ReadValueWithCompress", "ReadFreshValue",
         "WritePolymorphismValue", "ReadPolymorphismValue",
     };

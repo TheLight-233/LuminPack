@@ -430,12 +430,12 @@ public static partial class LuminPackCodeGenerator
                 break;
             default:
                 // Materialize member/indexer expressions into a writable local. Overload
-                // resolution can then select an exact source-generated CalculateOffset
+                // resolution can then select an exact source-generated MeasureRecordWidth
                 // overload for closed types, while open generic fields retain the runtime
-                // CalculateOffset<T> fallback.
+                // MeasureRecordWidth<T> fallback.
                 sb.AppendLine(indentation + "{");
                 sb.AppendLine(indentation + "    var __luminPackOffsetValue = " + fieldPath + ";");
-                sb.AppendLine(indentation + "    evaluator.CalculateOffset<" + (field.TypeSymbol == null ? field.FullTypeName : FormatterTypeName.Get(field.TypeSymbol)) + ">(ref __luminPackOffsetValue);");
+                sb.AppendLine(indentation + "    evaluator.MeasureRecordWidth<" + (field.TypeSymbol == null ? field.FullTypeName : FormatterTypeName.Get(field.TypeSymbol)) + ">(ref __luminPackOffsetValue);");
                 sb.AppendLine(indentation + "}");
                 break;
         }
@@ -444,11 +444,11 @@ public static partial class LuminPackCodeGenerator
     /// <summary>Appends statements that calculate the binary payload size.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="stringBuilder">The builder receiving generated source code.</param>
-    public static void GenerateCalculateOffsetCode(LuminDataInfo data, StringBuilder stringBuilder)
+    public static void GenerateMeasureRecordWidthCode(LuminDataInfo data, StringBuilder stringBuilder)
     {
         if (PortableStructPlan.RequiresClosedDispatch(data.TypeSymbol))
         {
-            stringBuilder.AppendLine("            global::LuminPack.LuminPackSerializer.FormatterDispatch.Sizeof<" + FormatterTypeName.Get(data.TypeSymbol) + ">(ref evaluator, ref value);");
+            stringBuilder.AppendLine("            global::LuminPack.LuminPackSerializer.FormatterDispatch.MeasureRecord<" + FormatterTypeName.Get(data.TypeSymbol) + ">(ref evaluator, ref value);");
             return;
         }
         var portable = PortableStructPlan.TryCreate(data.TypeSymbol);

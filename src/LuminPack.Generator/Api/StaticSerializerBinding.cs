@@ -134,7 +134,7 @@ internal sealed partial class StaticSerializerBinding
     private static HashSet<string> RelevantInvocationNames(Compilation compilation)
     {
         var names = new HashSet<string>(StringComparer.Ordinal)
-        { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson", "SerializeAsync", "DeserializeAsync", "Sizeof", "Register", "Write", "Read" };
+        { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson", "SerializeAsync", "DeserializeAsync", "Register", "Write", "Read" };
         var callers = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var tree in compilation.SyntaxTrees)
             foreach (var call in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())

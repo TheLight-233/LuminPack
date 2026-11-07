@@ -13,7 +13,7 @@ public static class CollectionEvaluatorEmitter
     /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateArrayCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateArrayMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = ArrayEmitter.GetArrayElementTypeName(fieldData.TypeName);
         sb.AppendLine("            if (value is null)");
@@ -68,14 +68,14 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            evaluator += sizeof(int);");
         sb.AppendLine("            foreach (ref var item in value.AsSpan())");
         sb.AppendLine("            {");
-        sb.AppendLine("                evaluator.CalculateOffset(ref item);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref item);");
         sb.AppendLine("            }");
     }
 
     /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateEnumerableCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateEnumerableMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            if (value is null)");
@@ -109,14 +109,14 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                " + elementType + " current = item;");
         if (!rawElements || !AppendContiguousPayloadSize(fieldData, sb, "1"))
-            sb.AppendLine("                evaluator.CalculateOffset(ref current);");
+            sb.AppendLine("                evaluator.MeasureRecordWidth(ref current);");
         sb.AppendLine("            }");
     }
 
     /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateValueEnumerableCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateValueEnumerableMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            evaluator += sizeof(int);");
@@ -126,14 +126,14 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                " + elementType + " current = item;");
-        sb.AppendLine("                evaluator.CalculateOffset(ref current);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref current);");
         sb.AppendLine("            }");
     }
 
     /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateDictionaryCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateDictionaryMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         string valueType = CodeEmitterRegistry.GetSecondGeneric(fieldData.TypeName);
@@ -156,16 +156,16 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                " + keyType + " key = item.Key;");
-        sb.AppendLine("                evaluator.CalculateOffset(ref key);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref key);");
         sb.AppendLine("                " + valueType + " itemValue = item.Value;");
-        sb.AppendLine("                evaluator.CalculateOffset(ref itemValue);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref itemValue);");
         sb.AppendLine("            }");
     }
 
     /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateQueueCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    public static void GenerateQueueMeasureRecordWidthCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            if (value is null || value.Count == 0)");
@@ -180,7 +180,7 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                " + elementType + " current = item;");
-        sb.AppendLine("                evaluator.CalculateOffset(ref current);");
+        sb.AppendLine("                evaluator.MeasureRecordWidth(ref current);");
         sb.AppendLine("            }");
     }
 

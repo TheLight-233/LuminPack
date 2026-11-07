@@ -39,7 +39,6 @@ public static partial class LuminPackExtensionGenerator
         {
             new DispatchOperation("Serialize", "LuminPackWriter", "writer", "in", true, "WriteValue", "in", false),
             new DispatchOperation("Deserialize", "LuminPackReader", "reader", "ref", true, "ReadValue", "ref", false),
-            new DispatchOperation("Sizeof", "LuminPackEvaluator", "evaluator", "ref", true, null, "in", true),
             new DispatchOperation("SerializeJson", "LuminPackJsonWriter", "writer", "in", false, "WriteValueJson", "in", true),
             new DispatchOperation("DeserializeJson", "LuminPackJsonReader", "reader", "ref", false, "ReadValueJson", "ref", true)
         })
@@ -157,12 +156,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            private static void " + operation.Name + "Registered<T, TLuminProfile>" + signature);
         sb.AppendLine("                " + ProfileConstraint);
         sb.AppendLine("            {");
-        if (operation.Callback == null)
-        {
-            // Exact widths serve generated direct records only; registrations carry no width method.
-            sb.AppendLine("                " + UnsupportedWidth);
-        }
-        else if (!registry)
+        if (!registry)
         {
             sb.AppendLine("                " + MissingRegistration);
         }
@@ -194,7 +188,7 @@ public static partial class LuminPackExtensionGenerator
         /// <param name="parameter">The state parameter name.</param>
         /// <param name="keyword">The payload reference keyword of the generic entry.</param>
         /// <param name="binary">Whether this is a binary operation.</param>
-        /// <param name="callback">The registry entry member for this operation, or null when registrations cannot supply it.</param>
+        /// <param name="callback">The registry entry member for this operation.</param>
         /// <param name="callbackKeyword">The payload reference keyword of the registered delegate.</param>
         /// <param name="optionalCallback">Whether a registration may omit this operation.</param>
         internal DispatchOperation(string name, string state, string parameter, string keyword, bool binary, string callback, string callbackKeyword, bool optionalCallback)
@@ -219,7 +213,7 @@ public static partial class LuminPackExtensionGenerator
         internal string Keyword { get; }
         /// <summary>Gets whether this is a binary operation.</summary>
         internal bool Binary { get; }
-        /// <summary>Gets the registry entry member for this operation, or null when registrations cannot supply it.</summary>
+        /// <summary>Gets the registry entry member for this operation.</summary>
         internal string Callback { get; }
         /// <summary>Gets the payload reference keyword of the registered delegate.</summary>
         internal string CallbackKeyword { get; }

@@ -323,9 +323,8 @@ internal static class SerializerBinaryInliningRegression
         var bridges = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.Identifier.ValueText is "WriteValue" or "ReadValue" or "CalculateOffset" &&
                 method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal)).ToArray();
-        Require(bridges.Length == 1 && bridges.All(method => method.Identifier.ValueText == "CalculateOffset" &&
-                method.TypeParameterList?.Parameters.Count == 1 && method.ExpressionBody != null),
-            "Only the evaluator may retain its generic bridge; Writer and Reader must use canonical operations.");
+        Require(bridges.Length == 0,
+            "Obsolete evaluator, Writer or Reader generic bridges were generated.");
         // The property-name cache stays owned by the per-type Json_<Type> helper: it is declared
         // once for the whole compilation, never lifted and copied into each concrete entry.
         string[] generated = output.SyntaxTrees.Select(tree => tree.ToString()).ToArray();

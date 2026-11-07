@@ -192,7 +192,7 @@ public static partial class LuminPackExtensionGenerator
             sb.AppendLine();
         }
 
-        GenerateRootCalculateOffsetExtension(sb, data, typeName, metaInfo);
+        GenerateRootMeasureRecordWidthExtension(sb, data, typeName, metaInfo);
         if (data.generatorType == GeneratorType.VersionTolerant && !data.isUnion)
             LuminPackVersionTolerantCodeGenerator.GenerateSchema(data, sb, metaInfo);
     }
@@ -201,31 +201,33 @@ public static partial class LuminPackExtensionGenerator
     internal const string UnsupportedWidth =
         "global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotSupportedException(\"Exact binary widths are evaluated only for direct records.\");";
 
-    /// <summary>Builds the root calculate offset extension source from the supplied metadata.</summary>
+    /// <summary>Builds the internal allocation-width template for fixed records and their generic definitions.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="typeName">The C# type name to use in generated source.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    private static void GenerateRootCalculateOffsetExtension(
+    private static void GenerateRootMeasureRecordWidthExtension(
         StringBuilder sb,
         LuminDataInfo data,
         string typeName,
         MetaInfo metaInfo)
     {
+        if (!EmitterTypeTraits.IsFixedRecord(data.TypeSymbol) && !(data.isGeneric && !data.isUnion &&
+            data.generatorType is GeneratorType.Object or GeneratorType.VersionTolerant))
+            return;
         string genericParameters = data.isGeneric ? "<" + string.Join(", ", data.GenericParameters) + ">" : string.Empty;
         string nullable = data.isValueType ? string.Empty : "?";
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine("        public static void CalculateOffset" + genericParameters +
+        sb.AppendLine("        public static void MeasureRecordWidth" + genericParameters +
             "(ref this global::LuminPack.Core.LuminPackEvaluator evaluator, " +
             (metaInfo.IsNet8 ? "scoped ref " : "ref ") + typeName + nullable + " value)");
         AppendGenericConstraints(sb, data);
         sb.AppendLine("        {");
-        // Only fixed Object and fixed revision-2 version records can be direct records; other layouts keep a callable but
-        // unsupported width.
+        // Generic definitions are closed and filtered by the final projection before publication.
         var versionWidths = !data.isUnion && data.generatorType == GeneratorType.VersionTolerant ? VersionMetadataEncoder.Widths(data) : null;
         if (!data.isUnion && data.generatorType == GeneratorType.Object)
-            LuminPackCodeGenerator.GenerateCalculateOffsetCode(data, sb);
+            LuminPackCodeGenerator.GenerateMeasureRecordWidthCode(data, sb);
         else if (versionWidths != null && versionWidths.All(width => width is int value && value != 255))
         {
             if (!data.isValueType)
