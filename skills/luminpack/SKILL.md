@@ -9,6 +9,8 @@ LuminPack generates a dedicated binary and JSON formatter for every type at comp
 
 This skill is about using the library. It does not describe how to maintain the LuminPack repository.
 
+Generated models do not require a runtime plan or formatter witness supplied by the caller. Operation plans are internal source-generator data; they do not add a runtime API or dispatch layer.
+
 ## Quick start
 
 ```csharp

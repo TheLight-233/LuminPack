@@ -276,9 +276,9 @@ internal sealed class SafeReadProjection
             {
                 if (symbol.ReturnType.SpecialType == SpecialType.System_Boolean && result.ArgumentList.Arguments.Count == 1 &&
                     result.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
-                    return SyntaxFactory.ParseExpression(Policy + ".ReadBoolean(" + arguments[0] + ")").WithTriviaFrom(node);
+                    return result.WithExpression(SyntaxFactory.ParseExpression(Policy + ".ReadBoolean")).WithTriviaFrom(node);
                 if (symbol.Parameters.Length == 2 && symbol.Parameters[1].RefKind == RefKind.Out && symbol.Parameters[1].Type.SpecialType == SpecialType.System_Boolean)
-                    return SyntaxFactory.ParseExpression(Policy + ".ReadBoolean(" + string.Join(", ", arguments) + ")").WithTriviaFrom(node);
+                    return result.WithExpression(SyntaxFactory.ParseExpression(Policy + ".ReadBoolean")).WithTriviaFrom(node);
             }
             if (node.Expression is not MemberAccessExpressionSyntax access || name is "ReadUnaligned" or "TryReadStableStringKeys" ||
                 !strings && name is "ReadStrings" or "ReadStringRecord" ||
@@ -287,7 +287,7 @@ internal sealed class SafeReadProjection
             string readerName = access.Expression.ToString();
             if (readerName != _state && model.GetTypeInfo(access.Expression).Type?.ToDisplayString() != "LuminPack.Core.LuminPackReader")
                 return result;
-            string args = string.Join(", ", arguments);
+            string args = string.Join(", ", arguments.Select(argument => argument.NormalizeWhitespace().ToFullString()));
             string profile = access.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count > 0 ? generic.TypeArgumentList.Arguments.Last().ToString() : _owner._options.TypeName;
             bool profileCall = access.Name is GenericNameSyntax profileName && profileName.TypeArgumentList.Arguments.Last().ToString().IndexOf("Options", StringComparison.Ordinal) >= 0;
             string collection = Literal(input.Collection), text = Literal(input.String);

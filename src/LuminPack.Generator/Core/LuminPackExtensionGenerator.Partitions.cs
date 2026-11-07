@@ -86,7 +86,7 @@ public static partial class LuminPackExtensionGenerator
                 !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly) &&
                 jsonDefinitions.Add(FormatterTypeName.Get(external.OriginalDefinition)))
             {
-                string template = cache.Operations.Get(type, compilation, metadata).TemplateSource;
+                string template = cache.Operations.Get(type, compilation, metadata).Template?.NormalizeWhitespace().ToFullString();
                 if (template != null)
                     files.Add(cache.Files.Wrap("LuminPack.JsonSupport", FormatterTypeName.Get(external.OriginalDefinition),
                         string.Empty, template, string.Empty, () => JsonOperationTemplates.Support(template, metadata, compilation), metadata.ParseOptions));
@@ -113,11 +113,11 @@ public static partial class LuminPackExtensionGenerator
                     source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
                 }
                 else if (type is INamedTypeSymbol marked && analysis.IsAssemblyPackable(marked))
-                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
+                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).Template ??
                         GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
                 else if (type is INamedTypeSymbol { IsGenericType: true } named && analysis.IsPackable(named) &&
                     SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly))
-                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
+                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).Template ??
                         GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
                 else
                 {

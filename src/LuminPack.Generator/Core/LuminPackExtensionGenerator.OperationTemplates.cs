@@ -5,6 +5,8 @@ using System.Text;
 using LuminPack.SourceGenerator;
 using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.Code.Core;
 
@@ -16,7 +18,7 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="metadata">Current language and generation settings.</param>
     /// <param name="guardNestedReads">Whether an enclosing external root needs typed child guards.</param>
     /// <returns>Only this type's operations and the layout declarations required to bind them.</returns>
-    internal static string GenerateOperationTemplates(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool guardNestedReads = false)
+    internal static CompilationUnitSyntax GenerateOperationTemplates(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool guardNestedReads = false)
     {
         var body = new StringBuilder();
         string name = FormatterTypeName.Get(type);
@@ -52,7 +54,8 @@ public static partial class LuminPackExtensionGenerator
         bool ownsExternalHelper = type is INamedTypeSymbol external &&
             CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(external) &&
             !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly);
-        return projectJsonHelper ? JsonOperationTemplates.Prepare(source, metadata, ownsExternalHelper) : source;
+        var template = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetCompilationUnitRoot();
+        return projectJsonHelper ? JsonOperationTemplates.Prepare(template, ownsExternalHelper) : template;
     }
 
     /// <summary>Attaches runtime capabilities, canonical cursor dispatch and collection reuse facts to a built-in formatter operation.</summary>

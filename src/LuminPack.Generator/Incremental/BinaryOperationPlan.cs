@@ -130,7 +130,7 @@ internal sealed class BinaryOperationPlan
     internal readonly string TypeName;
     internal readonly ImmutableDictionary<string, BinaryOperation> Operations;
     internal readonly ImmutableArray<MemberDeclarationSyntax> Layouts;
-    internal readonly string TemplateSource;
+    internal readonly CompilationUnitSyntax Template;
     internal readonly int GuaranteedMaxBytes;
     internal readonly CompiledOptions Options;
 
@@ -138,15 +138,15 @@ internal sealed class BinaryOperationPlan
     /// <param name="typeName">The canonical closed formatter identity.</param>
     /// <param name="operations">Available normal and specialized binary operations.</param>
     /// <param name="layouts">Private storage mirrors required by these operations.</param>
-    /// <param name="templateSource">The already rendered template shared with state-overload projection.</param>
+    /// <param name="template">The immutable syntax shared with state-overload projection.</param>
     /// <param name="guaranteedMaxBytes">The explicit complete-record guarantee, or zero when absent.</param>
     /// <param name="options">The declaration's immutable compiled option profile.</param>
-    private BinaryOperationPlan(string typeName, ImmutableDictionary<string, BinaryOperation> operations, ImmutableArray<MemberDeclarationSyntax> layouts, string templateSource = null, int guaranteedMaxBytes = 0, CompiledOptions options = null)
+    private BinaryOperationPlan(string typeName, ImmutableDictionary<string, BinaryOperation> operations, ImmutableArray<MemberDeclarationSyntax> layouts, CompilationUnitSyntax template = null, int guaranteedMaxBytes = 0, CompiledOptions options = null)
     {
         TypeName = typeName;
         Operations = operations;
         Layouts = layouts;
-        TemplateSource = templateSource;
+        Template = template;
         GuaranteedMaxBytes = guaranteedMaxBytes;
         Options = options ?? CompiledOptions.Default; }
 
@@ -167,16 +167,16 @@ internal sealed class BinaryOperationPlan
             !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type))
             return new BinaryOperationPlan(name, empty, ImmutableArray<MemberDeclarationSyntax>.Empty);
 
-        string source = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata, input != null);
+        var template = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata, input != null);
         // Plans bind executable syntax. Caller-facing XML is completed after the final projection.
         var templateOptions = metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None);
-        var tree = CSharpSyntaxTree.ParseText(source, templateOptions);
+        var tree = CSharpSyntaxTree.Create(template, templateOptions);
         tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(tree.GetRoot())))), templateOptions);
         input ??= CompiledOptions.Resolve(type, compilation).Input is { Enabled: true } own ? own : null;
         if (input != null)
         {
-            var checkedRoot = SafeOperationProjection.Rewrite((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)tree.GetRoot().NormalizeWhitespace(), type, compilation, metadata, input);
-            source = checkedRoot.ToFullString();
+            var checkedRoot = SafeOperationProjection.Rewrite((CompilationUnitSyntax)tree.GetRoot(), type, compilation, metadata, input);
+            template = checkedRoot;
             tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(checkedRoot), templateOptions);
         }
         var binding = compilation.AddSyntaxTrees(tree);
@@ -248,7 +248,7 @@ internal sealed class BinaryOperationPlan
         var layoutRewriter = new OperationTemplateRewriter(model, layoutNames, new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default),
             new Dictionary<IMethodSymbol, string>(SymbolEqualityComparer.Default));
         return new BinaryOperationPlan(name, operations.ToImmutable(), layouts.Select(layout =>
-            (MemberDeclarationSyntax)new ActiveOperationSyntax().Visit(layoutRewriter.Visit(layout))).ToImmutableArray(), source,
+            (MemberDeclarationSyntax)new ActiveOperationSyntax().Visit(layoutRewriter.Visit(layout))).ToImmutableArray(), template,
             SourceGenerator.CodeEmitters.EmitterTypeTraits.TryGetBoundedMaxBytes(type, out int maximum) &&
             !(SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(type) &&
                 type is INamedTypeSymbol raw && TypeMetaChecker.CheckGeneratorType(raw) == LuminPack.Code.GeneratorType.Object) ? maximum : 0, CompiledOptions.Resolve(type, compilation));
@@ -385,6 +385,7 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     private readonly Dictionary<ISymbol, string> _layouts;
     private readonly Dictionary<ISymbol, string> _names;
     private readonly Dictionary<IMethodSymbol, string> _locals;
+    private readonly HashSet<string> _localNames;
     private readonly bool _scopeTemporaries;
     private readonly Dictionary<string, string> _typeArguments;
     private int _expressionHelpers;
@@ -408,6 +409,7 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         _layouts = layouts;
         _names = names;
         _locals = locals;
+        _localNames = new HashSet<string>(locals.Keys.Select(method => method.Name), StringComparer.Ordinal);
         _scopeTemporaries = scopeTemporaries;
         _typeArguments = typeArguments ?? new Dictionary<string, string>();
         _capacityWriter = capacityWriter;
@@ -451,7 +453,9 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         BinaryOperationCall slot = null;
         // Only local helper matching uses this invocation symbol. Formatter slots use the
         // receiver and payload types below, even when the invocation itself cannot bind.
-        var target = _locals.Count == 0 ? null : _model.GetSymbolInfo(call).Symbol as IMethodSymbol;
+        string calledName = InvocationName(call.Expression);
+        var target = _locals.Count == 0 || calledName != null && !_localNames.Contains(calledName)
+            ? null : _model.GetSymbolInfo(call).Symbol as IMethodSymbol;
         if (target != null && _locals.TryGetValue(target, out string local))
             slot = new BinaryOperationCall(string.Empty, local, false, true, call.ArgumentList.Arguments.Select(argument => CanAlias(argument.Expression)));
         else if (call.Expression is MemberAccessExpressionSyntax access && BinaryOperationPlan.IsOperation(access.Name.Identifier.ValueText))
@@ -576,7 +580,10 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
             return Visit(node.ArgumentList.Arguments[0].Expression);
         if (node.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" } && _model.GetConstantValue(node) is { HasValue: true, Value: string constant })
             return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(constant)).WithTriviaFrom(node);
-        if (_model.GetSymbolInfo(node).Symbol is IMethodSymbol { ReturnsByRef: true } method &&
+        string calledName = InvocationName(node.Expression);
+        var target = node.ArgumentList.Arguments.Count == 1 || calledName == null || calledName.StartsWith("ResolveCase_", StringComparison.Ordinal)
+            ? _model.GetSymbolInfo(node).Symbol as IMethodSymbol : null;
+        if (target is { ReturnsByRef: true } method &&
             method.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) &&
             method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is MethodDeclarationSyntax { ExpressionBody.Expression: RefExpressionSyntax expression } &&
             method.Parameters.Length == 1 && node.ArgumentList.Arguments.Count == 1)
@@ -585,7 +592,7 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
                 (ExpressionSyntax)Visit(node.ArgumentList.Arguments[0].Expression), typeArguments: _typeArguments).Visit(expression.Expression);
             return SyntaxFactory.ParenthesizedExpression(body).WithTriviaFrom(node);
         }
-        if (_model.GetSymbolInfo(node).Symbol is IMethodSymbol resolver && resolver.Name.StartsWith("ResolveCase_", StringComparison.Ordinal) &&
+        if (target is { } resolver && resolver.Name.StartsWith("ResolveCase_", StringComparison.Ordinal) &&
             resolver.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) && resolver.Parameters.Length == 1 &&
             resolver.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is MethodDeclarationSyntax { ExpressionBody: not null } declaration)
         {
@@ -596,6 +603,17 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         }
         return base.VisitInvocationExpression(node);
     }
+
+    /// <summary>Reads a call's spelled member name before requesting its semantic identity.</summary>
+    /// <param name="expression">The original invocation target.</param>
+    /// <returns>The member name, or null when syntax alone cannot exclude a candidate.</returns>
+    private static string InvocationName(ExpressionSyntax expression) => expression switch
+    {
+        SimpleNameSyntax name => name.Identifier.ValueText,
+        MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+        MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+        _ => null
+    };
 
     /// <summary>Recognizes the exact generated profile identity without matching user member names.</summary>
     /// <param name="node">A temporary generated identity invocation.</param>
@@ -611,7 +629,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
         var result = base.VisitObjectCreationExpression(node);
-        return _model.GetTypeInfo(node).Type?.ToDisplayString() == "LuminPack.Core.LuminPackWriter"
+        var type = _model.GetTypeInfo(node).Type;
+        return type?.Name == "LuminPackWriter" && type.ToDisplayString() == "LuminPack.Core.LuminPackWriter"
             ? result.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.WriterConstructionAnnotation)) : result;
     }
 
@@ -630,11 +649,12 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
             return base.VisitIdentifierName(node);
         var token = BinaryOperationPlan.Identity(name, node.Identifier);
         var state = symbol is IParameterSymbol parameterState ? parameterState.Type : (symbol as ILocalSymbol)?.Type;
-        string stateName = state?.ToDisplayString();
+        string stateName = state?.Name is "LuminPackWriter" or "LuminPackReader" or "LuminPackEvaluator" or "LuminPackJsonWriter" or "LuminPackJsonReader"
+            ? state.ToDisplayString() : null;
         if (stateName is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackEvaluator" or
             "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")
             token = token.WithAdditionalAnnotations(new SyntaxAnnotation(StateAnnotation, stateName));
-        if (state?.ToDisplayString() == "LuminPack.Core.LuminPackWriter")
+        if (stateName == "LuminPack.Core.LuminPackWriter")
             token = token.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.WriterAnnotation));
         return node.WithIdentifier(token);
     }

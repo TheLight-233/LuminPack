@@ -17,21 +17,19 @@ namespace LuminPack.Code.Core;
 internal static class JsonOperationTemplates
 {
     /// <summary>Projects one type's generated JSON helper into directly expandable operations.</summary>
-    /// <param name="source">This type's temporary formatter source.</param>
-    /// <param name="metadata">The consuming parse settings.</param>
+    /// <param name="root">This type's parsed formatter template.</param>
     /// <param name="retainHelper">Whether this output owns a helper unavailable from a source-declared root.</param>
     /// <returns>Direct JSON operations that reference the shared per-type helper members.</returns>
-    internal static string Prepare(string source, MetaInfo metadata, bool retainHelper)
+    internal static CompilationUnitSyntax Prepare(CompilationUnitSyntax root, bool retainHelper)
     {
-        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetRoot();
         var container = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
         if (container == null)
-            return source;
+            return root;
         var helper = container.Members.OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
         if (helper == null)
-            return source;
+            return root;
         // One generic helper is shared by every closed construction. CLR generic statics keep
         // each closed type's cache separate while the generated helper implementation is emitted once.
         string qualified = "global::LuminPack.Generated." + container.Identifier.ValueText + "." +
@@ -69,7 +67,7 @@ internal static class JsonOperationTemplates
             containerMembers.Add(((MethodDeclarationSyntax)rewriter.Visit(method))
                 .WithTypeParameterList(helper.TypeParameterList).WithConstraintClauses(helper.ConstraintClauses));
         }
-        return root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List(containerMembers))).ToFullString();
+        return root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List(containerMembers)));
     }
 
     /// <summary>Extracts the shared JSON cache from a completed operation template.</summary>

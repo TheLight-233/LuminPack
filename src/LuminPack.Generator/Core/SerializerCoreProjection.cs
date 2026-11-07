@@ -23,14 +23,26 @@ internal static class SerializerCoreProjection
     {
         if (string.IsNullOrEmpty(source))
             return source;
-        var tree = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None));
-        var root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(tree.GetCompilationUnitRoot()))));
-        tree = CSharpSyntaxTree.Create(root, metadata.ParseOptions);
+        return Project(CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetCompilationUnitRoot(),
+            compilation, metadata, plans, closedRoot);
+    }
+
+    /// <summary>Projects an existing immutable operation template without printing and reparsing it.</summary>
+    /// <param name="template">The formatter syntax retained by the operation plan.</param>
+    /// <param name="compilation">The unchanged consumer input compilation.</param>
+    /// <param name="metadata">Current language and generation settings.</param>
+    /// <param name="plans">Generator-instance dependency-guarded operation plans.</param>
+    /// <param name="closedRoot">An optional closed generic specialization of the root template.</param>
+    /// <returns>State overloads, shared dispatch, and per-type cache declarations.</returns>
+    internal static string Project(CompilationUnitSyntax template, Compilation compilation, MetaInfo metadata, BinaryOperationPlanCache plans, ITypeSymbol closedRoot = null)
+    {
+        var root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(template))));
+        var tree = CSharpSyntaxTree.Create(root, metadata.ParseOptions);
         root = tree.GetCompilationUnitRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
         if (container == null)
-            return source;
+            return template.ToFullString();
         SemanticModel model = null;
         var types = CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypesByName;
         var contexts = new Dictionary<string, BinaryEntryInlining>(StringComparer.Ordinal);
