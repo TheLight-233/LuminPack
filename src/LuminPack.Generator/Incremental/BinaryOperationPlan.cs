@@ -32,7 +32,7 @@ internal sealed class BinaryOperationPlanCache
             lock (_inputValues)
                 if (!_inputValues.TryGetValue(input.Identity, out values))
                     _inputValues.Add(input.Identity, values = new TypeEmissionCache());
-        return values.GetOrBuildValue(type, compilation, metadata, LuminPackGenerationTier.Full,
+        return values.GetOrBuildValue(type, compilation, metadata, LuminPackGenerationTier.Automatic,
             () => Current.GetValue(compilation, static _ => new CurrentPlans()).Get(type, compilation, metadata, input));
     }
 

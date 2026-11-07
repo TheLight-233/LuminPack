@@ -11,72 +11,17 @@ namespace LuminPack.Code.Core;
 
 #nullable enable
 
-/// <summary>Source-generator emission tier, from most conservative to most aggressive.</summary>
+/// <summary>The single automatic source-generation policy.</summary>
 public enum LuminPackGenerationTier
 {
-    /// <summary>Emit formatters for every type observed in the project.</summary>
-    Full = 0,
-
-    /// <summary>Reachable + keep public non-packable types (library-safe).</summary>
-    Medium = 1,
-
-    /// <summary>Reachable from <c>[LuminPackable]</c> member graphs and serializer call sites.</summary>
-    Light = 2,
-
-    /// <summary>Only types actually passed to <c>LuminPackSerializer.*</c> call sites (unused packables pruned).</summary>
-    Minimal = 3,
+    /// <summary>Retains declared model graphs and statically required closed operations.</summary>
+    Automatic = 0,
 }
 
-/// <summary>Provides lumin pack generation tier resolver functionality.</summary>
+/// <summary>Reads the independent generator registration policy.</summary>
 internal static class LuminPackGenerationTierResolver
 {
     private const string GeneratorOptionsAttr = "LuminPack.Attribute.LuminPackGeneratorOptionsAttribute";
-    private const string GenerationModeProperty = "build_property.LuminPackGenerationMode";
-
-    /// <summary>Maps the MSBuild property value (including legacy names) to a tier.</summary>
-    /// <param name="value">The value consumed or produced by this operation.</param>
-    /// <returns>The result of the operation.</returns>
-    internal static LuminPackGenerationTier FromProperty(string? value) => value switch
-    {
-        "Medium" or "Compatible" or "PrunePublic" => LuminPackGenerationTier.Medium,
-        "Light" or "Reachable" or "Prune" => LuminPackGenerationTier.Light,
-        "Minimal" => LuminPackGenerationTier.Minimal,
-        _ => LuminPackGenerationTier.Full,
-    };
-
-    /// <summary>Maps an assembly-level <c>[LuminPackGeneratorOptions]</c> attribute to a tier.</summary>
-    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
-    /// <returns>The result of the operation.</returns>
-    internal static LuminPackGenerationTier FromAssembly(Compilation compilation)
-    {
-        foreach (var attribute in compilation.Assembly.GetAttributes())
-        {
-            if (attribute.AttributeClass?.ToDisplayString() != GeneratorOptionsAttr)
-            {
-                continue;
-            }
-
-            foreach (var argument in attribute.ConstructorArguments)
-            {
-                int value = argument.Value switch
-                {
-                    byte b => b,
-                    int i => i,
-                    _ => -1
-                };
-                return value switch
-                {
-                    1 => LuminPackGenerationTier.Medium,
-                    2 => LuminPackGenerationTier.Light,
-                    3 => LuminPackGenerationTier.Minimal,
-                    _ => LuminPackGenerationTier.Full
-                };
-            }
-        }
-
-        return LuminPackGenerationTier.Full;
-    }
-
     /// <summary>Maps the optional <c>[LuminPackGeneratorOptions]</c> Register argument to a register mode.</summary>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <returns>The result of the operation.</returns>
@@ -89,9 +34,11 @@ internal static class LuminPackGenerationTierResolver
                 continue;
             }
 
-            if (attribute.ConstructorArguments.Length > 1)
+            foreach (var argument in attribute.ConstructorArguments)
             {
-                int value = attribute.ConstructorArguments[1].Value switch
+                if (argument.Type?.ToDisplayString() != "LuminPack.Attribute.LuminPackRegisterMode")
+                    continue;
+                int value = argument.Value switch
                 {
                     byte b => b,
                     int i => i,
@@ -108,7 +55,7 @@ internal static class LuminPackGenerationTierResolver
 }
 
 /// <summary>
-/// Prune-mode reachability.  Computes the set of no-owner types for which concrete formatter
+/// Automatic reachability.  Computes the set of no-owner types for which concrete formatter
 /// extensions must be emitted: payload types observed at <c>LuminPackSerializer.*</c> call sites,
 /// transitively closed through concrete instantiations of generic wrapper methods and generic
 /// containing types (e.g. <c>void Save&lt;T&gt;(T x) =&gt; Serialize(x)</c>), then closed over the
@@ -119,16 +66,15 @@ internal static class LuminPackGenerationTierResolver
 /// per-type generator, so this analysis only produces the no-owner complement.  Types which cannot
 /// be statically proven reachable from this compilation (reflection, cross-assembly, dynamic call
 /// sites) are intentionally excluded. Reachability emits concrete operations but never registers
-/// generic payload entry points: those require explicit or Custom registration in every tier.
+/// generic fallback entry points: those require explicit or Custom registration.
 /// </remarks>
 public sealed class ReachabilityAnalysis
 {
     private readonly ImmutableArray<ITypeSymbol> _reachableNoOwnerTypes;
     private readonly ImmutableArray<ITypeSymbol> _emittedTypes;
     private readonly ImmutableHashSet<ISymbol> _emittedPackableDefinitions;
-    private readonly LuminPackGenerationTier _tier;
 
-    /// <summary>Gets call-selected facade overloads for Light and Minimal generation.</summary>
+    /// <summary>Gets the concrete convenience operations selected by source calls.</summary>
     internal SerializerApiUsageAnalysis? ApiUsage { get; }
 
     /// <summary>Initializes a new instance of <c>ReachabilityAnalysis</c>.</summary>
@@ -144,7 +90,6 @@ public sealed class ReachabilityAnalysis
         ImmutableHashSet<ISymbol> emittedPackableDefinitions,
         SerializerApiUsageAnalysis? apiUsage = null)
     {
-        _tier = tier;
         _reachableNoOwnerTypes = reachableNoOwnerTypes;
         _emittedTypes = emittedTypes;
         _emittedPackableDefinitions = emittedPackableDefinitions;
@@ -163,14 +108,12 @@ public sealed class ReachabilityAnalysis
 
     /// <summary>
     /// Whether a <c>[LuminPackable]</c> type should be emitted by the per-type generator.
-    /// <see cref="LuminPackGenerationTier.Minimal"/> skips packables that are not reachable from any
-    /// serializer call site; the other tiers always emit every packable.
+    /// Declared model graphs are retained independently of source entry calls.
     /// </summary>
     /// <param name="packable">The packable used by this operation.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     internal bool ShouldEmitPackable(ITypeSymbol packable)
-        => _tier != LuminPackGenerationTier.Minimal ||
-           _emittedPackableDefinitions.Contains(packable.OriginalDefinition);
+        => _emittedPackableDefinitions.Contains(packable.OriginalDefinition);
 }
 
 /// <summary>Provides reachability analysis cache functionality.</summary>
@@ -182,7 +125,7 @@ internal static class ReachabilityAnalysisCache
     /// <summary>Provides holder functionality.</summary>
     private sealed class Holder
     {
-        private readonly Lazy<ReachabilityAnalysis>[] _byTier = new Lazy<ReachabilityAnalysis>[4];
+        private readonly Lazy<ReachabilityAnalysis>[] _byTier = new Lazy<ReachabilityAnalysis>[1];
 
         /// <summary>Obtains the requested value from the supplied input.</summary>
         /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
@@ -219,8 +162,7 @@ internal static class ReachabilityAnalysisCache
     {
         Interlocked.Increment(ref IncrementalGenerationMetrics.ReachabilityAnalyses);
         CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
-        var apiUsage = tier is LuminPackGenerationTier.Light or LuminPackGenerationTier.Minimal
-            ? SerializerApiUsageAnalysis.GetOrCreate(compilation) : null;
+        var apiUsage = SerializerApiUsageAnalysis.GetOrCreate(compilation);
 
         // Preserve every invocation in legacy order, reconstructing verified identities from
         // unchanged files with current symbols before slot matching and substitution.
@@ -276,6 +218,7 @@ internal static class ReachabilityAnalysisCache
             CollectPayload(compilation, payload, seeds, pending);
         }
 
+        var invocationIndex = IndexInvocations(invocations);
         while (pending.Count != 0)
         {
             TypeParamSlot slot = pending.Dequeue();
@@ -284,7 +227,7 @@ internal static class ReachabilityAnalysisCache
                 continue;
             }
 
-            foreach (IMethodSymbol? method in invocations)
+            foreach (IMethodSymbol method in MatchingInvocations(invocationIndex, slot))
             {
                 if (method is null || !slot.Matches(method))
                 {
@@ -311,78 +254,12 @@ internal static class ReachabilityAnalysisCache
             finalCandidates.Add(type);
         }
 
-        // Signature-based binding discovers roots on the first build, including a genuinely empty set.
-        bool minimalPrune = tier == LuminPackGenerationTier.Minimal && apiUsage?.RequiresConservativeRoots != true;
-        if (minimalPrune)
-        {
-            // Minimal: seed the emitted set from call-site reachable packables, then close over the
-            // member graphs until stable.  A packable that appears as a serialized member of an
-            // emitted packable must be emitted by its OWN per-type generator (the parent generator
-            // does not emit a concrete formatter for user packable members), otherwise the generic
-            // dispatch case for it would fall back to the generic method and recurse.  Base packable
-            // chains are kept too, because subclass formatters serialize inherited members.
-            bool changed = true;
-            var expandedCustomTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-            while (changed)
-            {
-                changed = false;
-
-                // User-written Custom callbacks can call Writer/Reader APIs for packable types
-                // that are not represented by fields. Keep those payloads in the owned graph so
-                // their concrete serializer operations and private-member layout helpers exist.
-                var customTypes = finalCandidates.OfType<INamedTypeSymbol>()
-                    .Where(LuminPackExtensionGenerator.IsCustomGeneratorType)
-                    .Where(type => expandedCustomTypes.Add(type.OriginalDefinition))
-                    .ToArray();
-                foreach (ITypeSymbol dependency in LuminPackExtensionGenerator.GetCustomFormatterDependencies(analysis, compilation, customTypes))
-                {
-                    int previousCount = finalCandidates.Count;
-                    ExpandType(compilation, dependency, finalCandidates, analysis);
-                    if (finalCandidates.Count != previousCount)
-                        changed = true;
-                }
-
-                foreach (ITypeSymbol ownedType in analysis.FormatterTypes)
-                {
-                    if (analysis.GetOwner(ownedType) is { } owner &&
-                        emittedPackableDefinitions.Contains(owner.OriginalDefinition))
-                    {
-                        ExpandType(compilation, ownedType, finalCandidates, analysis);
-                    }
-                }
-
-                foreach (ITypeSymbol type in finalCandidates)
-                {
-                    if (type is INamedTypeSymbol named &&
-                        analysis.IsPackable(named) &&
-                        emittedPackableDefinitions.Add(named.OriginalDefinition))
-                    {
-                        changed = true;
-                    }
-                }
-
-                AddBasePackableChain(compilation, emittedPackableDefinitions, analysis);
-            }
-        }
-        else
-        {
-            foreach (INamedTypeSymbol packable in analysis.PackableTypes)
-            {
-                emittedPackableDefinitions.Add(packable.OriginalDefinition);
-            }
-
-            // Expand the emitted packables' serialized member graphs.  The per-type generator emits
-            // formatter extensions for those owned types, so every no-owner member of an emitted
-            // graph must also be reachable to keep the dispatch set aligned with the emitted set.
-            foreach (ITypeSymbol ownedType in analysis.FormatterTypes.Where(analysis.HasOwner))
-            {
-                if (analysis.GetOwner(ownedType) is { } owner &&
-                    emittedPackableDefinitions.Contains(owner.OriginalDefinition))
-                {
-                    ExpandType(compilation, ownedType, finalCandidates, analysis);
-                }
-            }
-        }
+        // Model declarations own their formatter graphs even when this assembly has no entry call.
+        foreach (INamedTypeSymbol packable in analysis.PackableTypes)
+            emittedPackableDefinitions.Add(packable.OriginalDefinition);
+        foreach (ITypeSymbol ownedType in analysis.FormatterTypes.Where(analysis.HasOwner))
+            if (analysis.GetOwner(ownedType) is { } owner && emittedPackableDefinitions.Contains(owner.OriginalDefinition))
+                ExpandType(compilation, ownedType, finalCandidates, analysis);
 
         var reachableNoOwner = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         foreach (ITypeSymbol type in finalCandidates)
@@ -390,28 +267,6 @@ internal static class ReachabilityAnalysisCache
             if (IsReachableNoOwner(type, analysis) || IsPrunedOwnerMember(type, analysis, emittedPackableDefinitions))
             {
                 reachableNoOwner.Add(type);
-            }
-        }
-
-        if (tier == LuminPackGenerationTier.Medium)
-        {
-            // Medium tier: keep public non-packable types even when unreachable, because public
-            // types are conservative API surfaces that may be serialized across assembly boundaries
-            // or via reflection.
-            foreach (ITypeSymbol type in analysis.FormatterTypes)
-            {
-                if (analysis.HasOwner(type) ||
-                    LuminPackExtensionGenerator.ContainsTypeParameter(type) ||
-                    !LuminPackExtensionGenerator.IsAotVisible(type) ||
-                    !LuminPackExtensionGenerator.IsStaticFormatterCandidate(type, analysis))
-                {
-                    continue;
-                }
-
-                if (IsPubliclyAccessibleType(type))
-                {
-                    reachableNoOwner.Add(type);
-                }
             }
         }
 
@@ -455,12 +310,13 @@ internal static class ReachabilityAnalysisCache
         var visited = new HashSet<TypeParamSlot>();
         foreach (var payload in payloads)
             CollectPayload(compilation, payload, seeds, pending);
+        var invocationIndex = IndexInvocations(invocations);
         while (pending.Count != 0)
         {
             var slot = pending.Dequeue();
             if (!visited.Add(slot))
                 continue;
-            foreach (var method in invocations)
+            foreach (var method in MatchingInvocations(invocationIndex, slot))
             {
                 if (method == null || !slot.Matches(method))
                     continue;
@@ -470,14 +326,41 @@ internal static class ReachabilityAnalysisCache
         return seeds;
     }
 
-    /// <summary>Recognizes a member type of a packable that Minimal pruning does not emit, which a serializer call reaches by itself.</summary>
+    /// <summary>Indexes distinct method constructions once for upward generic substitution.</summary>
+    /// <param name="invocations">Source calls bound in the same compilation.</param>
+    /// <returns>Construction sets keyed by the original method and its enclosing type.</returns>
+    private static Dictionary<ISymbol, HashSet<IMethodSymbol>> IndexInvocations(IEnumerable<IMethodSymbol?> invocations)
+    {
+        var index = new Dictionary<ISymbol, HashSet<IMethodSymbol>>(SymbolEqualityComparer.Default);
+        foreach (var method in invocations)
+        {
+            if (method == null)
+                continue;
+            foreach (ISymbol key in new ISymbol[] { method.OriginalDefinition, method.ContainingType.OriginalDefinition })
+            {
+                if (!index.TryGetValue(key, out var methods))
+                    index[key] = methods = new HashSet<IMethodSymbol>(SymbolEqualityComparer.Default);
+                methods.Add(method);
+            }
+        }
+        return index;
+    }
+
+    /// <summary>Visits only constructions that can substitute the current type-parameter owner.</summary>
+    /// <param name="index">The compilation's method construction index.</param>
+    /// <param name="slot">The open payload and its owning definition.</param>
+    /// <returns>The matching constructions, or an empty sequence.</returns>
+    private static IEnumerable<IMethodSymbol> MatchingInvocations(Dictionary<ISymbol, HashSet<IMethodSymbol>> index, TypeParamSlot slot)
+        => index.TryGetValue((ISymbol)slot.OwnerMethod ?? slot.OwnerType, out var methods) ? methods : Enumerable.Empty<IMethodSymbol>();
+
+    /// <summary>Recognizes a reachable member whose owner is not emitted in this compilation.</summary>
     /// <param name="type">A reachable formatter type.</param>
     /// <param name="analysis">The compilation-local ownership index.</param>
     /// <param name="emittedPackables">The packable declarations whose own generator runs.</param>
     /// <returns>Whether nobody else emits this type's formatter, so the assembly-wide partition must.</returns>
     /// <remarks>
-    /// A member of a packable is normally emitted by that packable's generator. When the owner is pruned (for example
-    /// <c>int</c>, a field of an unused model, passed directly to <c>Serialize</c>), the call must still bind to its
+    /// A member of a packable is normally emitted by that packable's generator. When the owner is not emitted locally (for example
+    /// <c>int</c>, a field of a referenced model, passed directly to <c>Serialize</c>), the call must still bind to its
     /// concrete overload and formatter rather than fall through to a generic entry that has none.
     /// </remarks>
     private static bool IsPrunedOwnerMember(ITypeSymbol type, CompilationTypeAnalysis analysis, ISet<ITypeSymbol> emittedPackables)
@@ -573,7 +456,7 @@ internal static class ReachabilityAnalysisCache
     /// <summary>
     /// Expands a packable union root's member types so the generated union dispatch can reference
     /// them: the explicit <c>[LuminPackUnion]</c> attributes and the auto-discovered derived types.
-    /// This keeps union members reachable in <see cref="LuminPackGenerationTier.Minimal"/> even when
+    /// This keeps union members reachable in automatic generation even when
     /// they are never individually passed to a serializer call.
     /// </summary>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
@@ -1068,7 +951,7 @@ internal static class ReachabilityAnalysisCache
     /// <param name="type">The type or symbol to analyze.</param>
     /// <param name="map">The map used by this operation.</param>
     /// <returns>The result of the operation.</returns>
-    private static ITypeSymbol Substitute(
+    internal static ITypeSymbol Substitute(
         Compilation compilation,
         ITypeSymbol type,
         IReadOnlyDictionary<ITypeParameterSymbol, ITypeSymbol> map)

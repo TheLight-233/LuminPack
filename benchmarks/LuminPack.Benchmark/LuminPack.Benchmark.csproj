@@ -5,7 +5,6 @@
     <Nullable>enable</Nullable>
     <LangVersion>13</LangVersion>
     <TargetFramework>net10.0</TargetFramework>
-    <LuminPackGenerationMode>Light</LuminPackGenerationMode>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
@@ -13,7 +12,6 @@
     <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.15.6" />

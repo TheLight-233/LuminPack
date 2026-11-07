@@ -10,7 +10,11 @@ Install the `LuminPack` package with a NuGet workflow such as NuGetForUnity, or 
 
 1. Put the `netstandard2.1` `LuminPack.Core.dll` from the package and its dependencies under `Assets/Plugins`.
 2. Put `LuminPack.Generator.dll` under `Assets/RoslynAnalyzers` and give it the `RoslynAnalyzer` label in the Inspector.
-3. Declare one `[LuminPackable]` type and make sure the project compiles, which confirms that Unity runs the generator.
+3. Install `com.unity.nuget.mono-cecil` (1.11.4 or compatible). Copy the files from `src/LuminPack.ILPostProcessor/Core` and `src/LuminPack.ILPostProcessor/Unity` into one `Assets/LuminPack.CodeGen` directory, keeping `Unity.LuminPack.CodeGen.asmdef` with them.
+4. Add `-define:LUMINPACK_IL_REWRITE` to `Assets/csc.rsp`. Keep unsafe compilation enabled. The matching generator and postprocessor are installed together; the define alone does not perform rewriting.
+5. Declare one `[LuminPackable]` type and verify both `Serialize(value)` and a closed static `Save<T>` wrapper. Unity's postprocessor replaces their calls before Mono loading and IL2CPP conversion. Opaque targets retain registered fallback.
+
+From a repository checkout, `python .github/scripts/stage_unity_il.py /path/to/project` installs the postprocessor sources, Cecil dependency and compiler define without changing the runtime DLL installation. The build-only rewriter is not a runtime dependency. See [automatic generation](generation-modes.md) for source-wrapper boundaries, compiler capability selection and compatibility controls.
 
 On `netstandard2.1` the reader and writer cursors are native pointers. Generated entry points pin managed input for the whole call; low-level readers and writers you create over managed memory need that memory pinned for their whole lifetime.
 
@@ -43,4 +47,4 @@ Generated code uses no reflection, so serialization works under NativeAOT and fu
 
 `System.Type` is the exception: on .NET 8+, when dynamic code is not supported (NativeAOT), reading a non-null `Type` throws `PlatformNotSupportedException`. Writing a `Type` and reading `null` still work. Where dynamic code is available, types are resolved by name and their metadata must survive trimming.
 
-If you use `Full` generation with full trimming and never need dynamic code, set `<DynamicCodeSupport>false</DynamicCodeSupport>`. With dynamic code enabled, full trimming reports IL2057 for name-based `Type` resolution until you decide how to keep that metadata.
+With full trimming, if you never need dynamic code, set `<DynamicCodeSupport>false</DynamicCodeSupport>`. With dynamic code enabled, full trimming reports IL2057 for name-based `Type` resolution until you decide how to keep that metadata.

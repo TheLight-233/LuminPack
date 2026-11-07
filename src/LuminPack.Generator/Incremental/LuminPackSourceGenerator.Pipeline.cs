@@ -16,22 +16,19 @@ public sealed partial class LuminPackSourceGenerator
     /// <param name="context">The generator pipeline registration context.</param>
     /// <param name="types">Attributed types discovered by the legacy discovery stage.</param>
     /// <param name="metadata">Value-compared project generation settings.</param>
-    /// <param name="mode">The project-selected generation tier.</param>
     private static void InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
-        IncrementalValuesProvider<INamedTypeSymbol> types, IncrementalValueProvider<MetaInfo> metadata,
-        IncrementalValueProvider<LuminPackGenerationTier> mode)
+        IncrementalValuesProvider<INamedTypeSymbol> types, IncrementalValueProvider<MetaInfo> metadata)
     {
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
-        var inputs = types.Combine(context.CompilationProvider).Combine(metadata).Combine(mode)
+        var inputs = types.Combine(context.CompilationProvider).Combine(metadata)
             .Select((input, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var symbol = input.Left.Left.Left;
-                var compilation = input.Left.Left.Right;
-                var meta = input.Left.Right;
-                var tier = (LuminPackGenerationTier)Math.Max((int)input.Right, (int)LuminPackGenerationTierResolver.FromAssembly(compilation));
-                return cache.PrepareInput(symbol, compilation, meta, tier);
+                var symbol = input.Left.Left;
+                var compilation = input.Left.Right;
+                var meta = input.Right;
+                return cache.PrepareInput(symbol, compilation, meta, LuminPackGenerationTier.Automatic);
             })
             .WithTrackingName("LuminPack.Incremental.TypeInput");
         Func<INamedTypeSymbol, Compilation, MetaInfo, LuminPackGenerationTier, FrozenTypeEmission> analyze =
@@ -126,15 +123,14 @@ public sealed partial class LuminPackSourceGenerator
         name = name.Replace("<", "_").Replace('>', '_');
         string className = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
         var emptyLayouts = new FrozenLayoutGroup(className, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null);
-        if (data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) || data.generatorType == GeneratorType.Custom ||
-            tier == LuminPackGenerationTier.Minimal && !ReachabilityAnalysisCache.GetOrCreate(compilation, tier).ShouldEmitPackable(data.TypeSymbol))
+        if (data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) || data.generatorType == GeneratorType.Custom)
             return new FrozenTypeEmission(name, string.Empty, string.Empty, emptyLayouts, diagnostics);
 
         string extension = string.Empty;
         string union = string.Empty;
         try
         {
-            var emittedTypes = tier == LuminPackGenerationTier.Full ? null : ReachabilityAnalysisCache.GetOrCreate(compilation, tier);
+            var emittedTypes = ReachabilityAnalysisCache.GetOrCreate(compilation, tier);
             if (emittedTypes != null)
                 CompilationTypeAnalysisCache.GetOrCreate(compilation).IndexReachableTypes(emittedTypes.EmittedTypes
                     .Where(type => !LuminPackExtensionGenerator.ContainsTypeParameter(type)));

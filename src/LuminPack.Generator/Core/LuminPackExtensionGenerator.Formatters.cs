@@ -26,10 +26,8 @@ public static partial class LuminPackExtensionGenerator
     {
         CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
 
-        // Full mode lists every formatter type in the project.  Prune tiers list exactly the emitted
-        // set (emitted owned graphs plus the reachable no-owner complement); serializer entry
-        // overloads and closed Union operations must reference the types for which a
-        // concrete extension method is emitted.
+        // The automatic policy retains declaration graphs and call-selected unowned types.
+        // Serializer entries and closed Union operations reference exactly these concrete extensions.
         IEnumerable<ITypeSymbol> types = reachability is null
             ? analysis.FormatterTypes
             : reachability.EmittedTypes;
@@ -38,7 +36,7 @@ public static partial class LuminPackExtensionGenerator
         if (reachability is not null)
             analysis.IndexReachableTypes(types.Where(static type => !ContainsTypeParameter(type)));
 
-        // Full mode walks every distinct symbol, so distinct symbols that canonicalize to the
+        // Distinct symbols that canonicalize to the
         // same formatter name (native ints nint/IntPtr, nuint/UIntPtr, ValueTuple vs the
         // (a,b) syntax, or same-named types from different assemblies) must collapse to one
         // entry. Otherwise the LuminPackSerializer per-type overloads would emit identical

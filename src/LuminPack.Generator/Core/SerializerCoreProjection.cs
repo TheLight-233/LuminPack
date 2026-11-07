@@ -217,10 +217,13 @@ internal static class SerializerCoreProjection
         rewritten = GeneratedOperationScopes.RemoveEmptyScopes(rewritten);
         rewritten = new BinaryReadMemberProjection(types).Visit(rewritten);
         var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
+        var forwardingRoot = normalized;
+        if (InterceptionSupport.IsEnabled(metadata.ParseOptions))
+            normalized = UniqueStateEntries.Apply(normalized, compilation, metadata);
         normalized = normalized.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649, CS1591" + Environment.NewLine).AddRange(normalized.GetLeadingTrivia()));
         string result = LuminPackSerializerDocumentation.Enhance(normalized, closedRoot != null ? new[] { closedRoot } : contexts.Keys.Select(name => types[name]).ToArray(), compilation, metadata);
         if (closedRoot != null || contexts.Count == 1)
-            LazyForwardingTargets.Capture(result, closedRoot != null ? FormatterTypeName.Get(closedRoot) : contexts.Keys.Single(), normalized);
+            LazyForwardingTargets.Capture(result, closedRoot != null ? FormatterTypeName.Get(closedRoot) : contexts.Keys.Single(), forwardingRoot);
         return result;
     }
 

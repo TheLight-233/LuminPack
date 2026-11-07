@@ -54,14 +54,14 @@ internal static class SerializerSharedFacadeRegression
         }
     }
 
-    /// <summary>Exercises one target's complete and pruned facade generation.</summary>
+    /// <summary>Exercises one target's call-selected complete facade and removal of those calls.</summary>
     /// <param name="references">The current platform and runtime references.</param>
     /// <param name="modern">Whether scoped state APIs and modern async templates are selected.</param>
     private static void Verify(MetadataReference[] references, bool modern)
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Diagnose, preprocessorSymbols: modern
             ? ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"] : ["UNITY_2022_3_OR_NEWER"]);
-        var settings = CSharpSyntaxTree.ParseText("[assembly: LuminPack.Attribute.LuminPackGeneratorOptions(LuminPack.Attribute.LuminPackGenerationMode.Full)]", parse, "Settings.cs");
+        var settings = CSharpSyntaxTree.ParseText("[assembly: LuminPack.Attribute.LuminPackGeneratorOptions]", parse, "Settings.cs");
         var models = CSharpSyntaxTree.ParseText("""
             using System;
             using System.Buffers;
@@ -114,7 +114,20 @@ internal static class SerializerSharedFacadeRegression
                 }
             }
             """, parse, "Models.cs");
-        var input = CSharpCompilation.Create("SharedFacade_" + modern, [settings, models], references,
+        var selections = CSharpSyntaxTree.ParseText("using System; using System.IO; using System.Buffers; using LuminPack; using LuminPack.Utility; public static class SelectedApis {" +
+            string.Join("\n", new[] { "A", "B" }.Select(type => $$"""
+                public static void Select({{type}} value, LuminBufferWriter buffer, IBufferWriter<byte> output, Stream stream,
+                    ReadOnlySpan<byte> bytes, ReadOnlySpan<char> chars, ReadOnlySequence<byte> sequence, string json)
+                {
+                    LuminPackSerializer.Serialize(value); LuminPackSerializer.Serialize(value, buffer); LuminPackSerializer.Serialize(value, output);
+                    LuminPackSerializer.SerializeJson(value); LuminPackSerializer.SerializeJson(value, buffer); LuminPackSerializer.SerializeJson(value, output);
+                    LuminPackSerializer.Deserialize(bytes, ref value); LuminPackSerializer.Deserialize(buffer, ref value); LuminPackSerializer.Deserialize(sequence, ref value);
+                    LuminPackSerializer.DeserializeJson(json, ref value); LuminPackSerializer.DeserializeJson(bytes, ref value);
+                    LuminPackSerializer.DeserializeJson(chars, ref value); LuminPackSerializer.DeserializeJson(buffer, ref value);
+                    _ = LuminPackSerializer.SerializeAsync(stream, value); _ = LuminPackSerializer.DeserializeAsync(stream, value);
+                }
+                """)) + "}", parse, "Selections.cs");
+        var input = CSharpCompilation.Create("SharedFacade_" + modern, [settings, models, selections], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         var driver = NewDriver(parse).RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         CheckErrors(output, diagnostics);
@@ -155,7 +168,7 @@ internal static class SerializerSharedFacadeRegression
         context.LoadFromStream(image).GetType("Entry")!.GetMethod("Run")!.Invoke(null, null);
         context.Unload();
 
-        var minimal = input.ReplaceSyntaxTree(settings, CSharpSyntaxTree.ParseText(settings.ToString().Replace(".Full", ".Minimal", StringComparison.Ordinal), parse, "Settings.cs"));
+        var minimal = input.RemoveSyntaxTrees(selections);
         var retained = driver.RunGeneratorsAndUpdateCompilation(minimal, out var minimalOutput, out diagnostics);
         CheckErrors(minimalOutput, diagnostics);
         Require(Text(retained) == Text(NewDriver(parse).RunGenerators(minimal)), "Removing complete API roots retained stale shared support.");

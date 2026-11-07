@@ -107,7 +107,7 @@ Choose string encodings, JSON limits, portable 32/64-bit struct layouts. Untrust
 <td valign="top">
 
 ### 🪶 Small builds
-Generation modes trim the generated code down to the types you really serialize, keeping large projects fast to compile.
+Automatic generation retains declared model graphs and the concrete entries required by your calls. Modern compilers bind those entries through interceptors.
 
 </td>
 <td valign="top">
@@ -319,7 +319,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 | 📝 | [Version Tolerance & References](docs/versioning.md) | Evolving schemas, renamed members, shared objects and cycles |
 | ♻️ | [Reuse & Zero Allocation](docs/reuse.md) | Reading into existing objects, instance pools, output buffers |
 | 🔧 | [Compile-time Options](docs/options.md) | String encodings, option profiles, JSON limits, 32/64-bit struct layouts |
-| 🪶 | [Generation Modes](docs/generation-modes.md) | `Full`, `Medium`, `Light`, `Minimal` |
+| 🪶 | [Automatic Generation](docs/generation-modes.md) | Static interception, source wrappers and registered fallback |
 | ✍️ | [Custom Formatters](docs/custom-formatters.md) | Hand-written formats, `Register<T>`, low-level reader and writer |
 | 💡 | [IDE Code Fixes](docs/code-fixes.md) | Included quick actions for generator diagnostics and Fix All |
 | 🎮 | [Unity, IL2CPP & NativeAOT](docs/unity.md) | Unity setup, Burst, trimming |

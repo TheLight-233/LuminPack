@@ -6,11 +6,17 @@ using LuminPack.Option;
 using UnityEngine;
 
 [assembly: LuminPackOption(StructLayout = global::LuminPack.Attribute.LuminPackStructLayout.Packed)]
-[assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Full)]
+[assembly: LuminPackGeneratorOptions]
 
 /// <summary>Executes generated code in Unity Mono and the actual IL2CPP Player.</summary>
 public static class LuminPackSmoke
 {
+    /// <summary>Exercises source generic specialization before Unity's AOT pipeline.</summary>
+    /// <typeparam name="T">The closed payload selected by the caller.</typeparam>
+    /// <param name="value">The payload to serialize.</param>
+    /// <returns>The concrete payload bytes.</returns>
+    private static byte[] Save<T>(T value) => LuminPackSerializer.Serialize(value);
+
     /// <summary>Runs the same smoke graph in editor tests and the built Player.</summary>
     public static void Verify()
     {
@@ -25,6 +31,8 @@ public static class LuminPackSmoke
             Items = new List<UnityPortable> { new UnityPortable { Tag = 3, Value = 123456789012345 } }
         };
         byte[] bytes = LuminPackSerializer.Serialize(value);
+        if (LuminPackSerializer.Deserialize<UnityMessage>(Save(value)).Id != value.Id)
+            throw new InvalidOperationException("Unity static generic wrapper substitution failed.");
         UnityMessage copy = null;
         LuminPackSerializer.Deserialize(bytes, ref copy);
         UnityLeaf child = copy.Child;

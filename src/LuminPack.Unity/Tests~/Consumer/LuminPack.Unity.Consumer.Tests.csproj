@@ -5,14 +5,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <LuminPackGenerationMode>Minimal</LuminPackGenerationMode>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="LuminPack.Core"><HintPath>../../../LuminPack.Core/bin/Release/netstandard2.1/LuminPack.Core.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="LuminPack.Unity"><HintPath>../../bin/Release/netstandard2.1/LuminPack.Unity.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(UnityManagedPath)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Analyzer Include="../../../LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll" />
-    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
   </ItemGroup>
 </Project>

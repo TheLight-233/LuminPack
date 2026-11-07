@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)src/LuminPack.Generator/buildTransitive/LuminPack.Generator.props" />
   <PropertyGroup>
     <LuminPackUseSatori Condition="'$(LuminPackUseSatori)' == ''">true</LuminPackUseSatori>
     <_LuminPackSatoriCompilerProject>$(MSBuildThisFileDirectory)eng/SatoriCompiler/LuminPack.SatoriCompiler.csproj</_LuminPackSatoriCompilerProject>

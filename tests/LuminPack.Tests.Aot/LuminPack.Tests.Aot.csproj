@@ -7,7 +7,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LuminPackGenerationMode Condition="'$(LuminPackGenerationMode)' == ''">Minimal</LuminPackGenerationMode>
     <PublishTrimmed Condition="'$(LuminPackPublish)' == 'trim' Or '$(LuminPackPublish)' == 'aot'">true</PublishTrimmed>
     <PublishAot Condition="'$(LuminPackPublish)' == 'aot'">true</PublishAot>
     <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);LUMINPACK_NATIVE_AOT</DefineConstants>
@@ -24,7 +23,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../LuminPack.Tests/ConcreteReads.cs" Link="TestSupport/ConcreteReads.cs" />
-    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackPackageVersion)' == ''">
     <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />

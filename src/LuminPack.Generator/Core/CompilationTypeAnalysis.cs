@@ -428,7 +428,7 @@ internal static class CompilationTypeAnalysisCache
         ICollection<INamedTypeSymbol> packableTypes)
     {
         declaredTypes.Add(new ProjectTypeData(type));
-        // Custom types keep their owner role so Minimal-tier reachability still expands
+        // Custom types keep their owner role so automatic reachability still expands
         // their member graphs (their field types get shared formatter extensions); the
         // extension emission itself filters Custom types out (see
         // LuminPackExtensionGenerator.IsCustomGeneratorType).

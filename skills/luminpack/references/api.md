@@ -2,7 +2,7 @@
 
 ## Generated serializer
 
-The generator emits `LuminPack.LuminPackSerializer` into each consuming assembly. For a type `T` it has concrete overloads, plus generic ones (`<T>`) and profile ones (`<TOptions>` / `<T, TOptions>`) for every shape below. `TOptions` is a stateless profile struct (see Options).
+The generator emits `LuminPack.LuminPackSerializer` into each consuming assembly. Modern compilers bind generic signatures (`<T>` and `<T, TOptions>`) and intercept closed calls into existing concrete implementations; inference keeps ordinary `Serialize(value)` usage. Observed profile-only calls retain the `<TOptions>` spelling. Older hosts use build-time IL substitution into the same concrete entries when the package or Unity postprocessor is installed. `TOptions` is a stateless profile struct (see Options).
 
 Generated XML documents these directly callable facade APIs. Internal roots, state forwarders, dispatch slots and layout helpers omit XML; this does not remove their methods or change serialization behavior.
 
@@ -33,7 +33,7 @@ byte[] Serialize<LuminPackUtf8LengthOptions>(in T value);
 int    Deserialize<LuminPackUtf8LengthOptions>(ReadOnlySpan<byte> buffer, ref T value);
 ```
 
-Concrete overloads call the type's generated code directly. Generic payload overloads require explicit/Custom registrations, including for built-in and source-generated types. No generated fallback factory or type table exists. Under `Light`/`Minimal` only the overload shapes actually called are generated; an ungenerated shape can bind the registration-only generic form and fail if unregistered. Use concrete `Deserialize(bytes, ref value)` and `Serialize<TOptions>(concreteValue)` when registration is unnecessary.
+Intercepted calls and legacy concrete overloads call the type's generated code directly. Only calls remaining on generic fallback require explicit/Custom registrations, including for built-in and source-generated types. No generated fallback factory or type table exists. Generation automatically retains declared model graphs and used convenience families. With both compiler and IL integration disabled, explicit generic payload calls require registration; use concrete `Deserialize(bytes, ref value)` and `Serialize<TOptions>(concreteValue)` for direct roots. See [static interception](../../../docs/generation-modes.md#static-interception) for wrapper and compiler boundaries.
 
 Binary and JSON `ref` overloads fill compatible existing storage. JSON reuses object graphs, lists, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked identities; unchanged decoded strings retain their references. JSON `null` clears a reference and omitted members reset to `default` on an existing object. Reuse is not transactional. Immutable collection formatters retain their existing construction behavior.
 

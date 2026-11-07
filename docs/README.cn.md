@@ -107,7 +107,7 @@ string json = LuminPackSerializer.SerializeJson(player);     // 📜 同一个�
 <td valign="top">
 
 ### 🪶 构建轻量
-生成模式可以把生成代码裁剪到你真正序列化的类型，让大型项目依然编译飞快。
+自动生成保留模型声明图和调用所需的具体入口；现代编译器通过 Interceptor 绑定这些入口。
 
 </td>
 <td valign="top">
@@ -319,7 +319,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 | 📝 | [版本容忍与引用跟踪](versioning.cn.md) | 模型演进、成员重命名、共享对象与循环 |
 | ♻️ | [复用与零分配](reuse.cn.md) | 读入已有对象、实例池、输出缓冲区 |
 | 🔧 | [编译期选项](options.cn.md) | 字符串编码、选项配置、JSON 限制、32/64 位结构体布局 |
-| 🪶 | [生成模式](generation-modes.cn.md) | `Full`、`Medium`、`Light`、`Minimal` |
+| 🪶 | [自动生成](generation-modes.cn.md) | 静态拦截、源码包装方法与注册兜底 |
 | ✍️ | [自定义格式化器](custom-formatters.cn.md) | 手写格式、`Register<T>`、底层读写器 |
 | 💡 | [IDE 代码修复](code-fixes.cn.md) | 随包提供的生成器诊断快速修复与 Fix All |
 | 🎮 | [Unity、IL2CPP 与 NativeAOT](unity.cn.md) | Unity 配置、Burst、裁剪 |

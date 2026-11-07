@@ -259,60 +259,45 @@ public sealed class LuminPackCompressAttribute : System.Attribute
 {
 }
 
-/// <summary>Selects the source-generator emission strategy for an assembly.</summary>
+/// <summary>Legacy generation values retained for source and binary compatibility; all values are ignored.</summary>
+[System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
 public enum LuminPackGenerationMode : byte
 {
-    /// <summary>
-    /// Generates formatter extensions for every type observed in the project.  The default and the
-    /// most conservative option: any type can be serialized, but generated code is the largest.
-    /// </summary>
+    /// <summary>Legacy value; generation is automatic.</summary>
     Full = 0,
-
-    /// <summary>
-    /// Generates the reachable types plus always keeps <c>public</c> non-<c>[LuminPackable]</c> types.
-    /// Public types are conservative API surfaces (they may be serialized across assembly boundaries
-    /// or via reflection); <c>internal</c> / <c>private</c> types are strictly pruned.  Suitable for
-    /// library projects.
-    /// </summary>
+    /// <summary>Legacy value; generation is automatic.</summary>
     Medium = 1,
-
-    /// <summary>
-    /// Generates formatter extensions only for types reachable from <c>LuminPackSerializer.*</c> call sites
-    /// (including concrete instantiations of generic wrapper methods) and from every <c>[LuminPackable]</c>
-    /// member graph.  <c>[LuminPackable]</c> types are always kept even if never serialized.
-    /// </summary>
+    /// <summary>Legacy value; generation is automatic.</summary>
     Light = 2,
-
-    /// <summary>
-    /// The most aggressive tier.  Only types actually passed to <c>LuminPackSerializer.*</c> call sites
-    /// (and their transitively reachable graphs) are generated.  Even <c>[LuminPackable]</c> types that are
-    /// declared but never serialized in this assembly are pruned.  Use only when serialization happens
-    /// exclusively through static <c>LuminPackSerializer</c> calls in this assembly.
-    /// </summary>
+    /// <summary>Legacy value; generation is automatic.</summary>
     Minimal = 3,
 }
 
-/// <summary>
-/// Assembly-level option for the LuminPack source generators.
-/// <c>Prune</c> mode only emits formatter extensions that can actually be serialized from this assembly's roots
-/// and <c>LuminPackSerializer.*</c> call sites, and suppresses optional formatter variants (compress / fresh-read)
-/// that are not referenced. Runtime behavior is unchanged for reachable types.
-/// </summary>
+/// <summary>Controls registration API generation; formatter and entry retention are automatic.</summary>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false, Inherited = false)]
 public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
 {
-    /// <summary>Gets the mode.</summary>
+    /// <summary>Gets the legacy mode value, which no longer affects generation.</summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     public LuminPackGenerationMode Mode { get; }
 
-    /// <summary>Gets the register.</summary>
+    /// <summary>Gets the registration API policy.</summary>
     public LuminPackRegisterMode Register { get; }
 
-    /// <summary>Initializes a new instance of <c>LuminPackGeneratorOptionsAttribute</c>.</summary>
-    /// <param name="mode">The mode used by this operation.</param>
-    /// <param name="register">The register used by this operation.</param>
-    public LuminPackGeneratorOptionsAttribute(
-        LuminPackGenerationMode mode,
-        LuminPackRegisterMode register = LuminPackRegisterMode.Auto)
+    /// <summary>Selects registration support without a generation mode.</summary>
+    /// <param name="register">Whether generated method-pointer registration is available.</param>
+    public LuminPackGeneratorOptionsAttribute(LuminPackRegisterMode register = LuminPackRegisterMode.Auto)
+    {
+        Mode = LuminPackGenerationMode.Light;
+        Register = register;
+    }
+
+    /// <summary>Accepts legacy assembly declarations; the mode is ignored.</summary>
+    /// <param name="mode">The ignored legacy generation mode.</param>
+    /// <param name="register">Whether generated method-pointer registration is available.</param>
+    [Obsolete("Generation is automatic. Remove the mode argument and retain only the registration policy if needed.")]
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public LuminPackGeneratorOptionsAttribute(LuminPackGenerationMode mode, LuminPackRegisterMode register = LuminPackRegisterMode.Auto)
     {
         Mode = mode;
         Register = register;

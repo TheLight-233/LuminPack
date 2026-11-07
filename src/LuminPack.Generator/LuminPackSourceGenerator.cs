@@ -108,15 +108,7 @@ namespace LuminPack.SourceGenerator
                 .Select(static (symbol, _) => symbol!)
                 .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
 
-            var generationMode = context.AnalyzerConfigOptionsProvider
-                .Select(static (options, _) =>
-                {
-                    options.GlobalOptions.TryGetValue("build_property.LuminPackGenerationMode", out string? value);
-                    return LuminPackGenerationTierResolver.FromProperty(value);
-                })
-                .WithTrackingName("LuminPack.LuminPackable.0_GenerationMode");
-
-            InitializeTypePipeline(context, typeDeclarations, metaInfo, generationMode);
+            InitializeTypePipeline(context, typeDeclarations, metaInfo);
         }
     }
 }

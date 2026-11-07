@@ -1,6 +1,6 @@
 ---
 name: luminpack
-description: Write correct code that uses the LuminPack binary and JSON serializer for .NET and Unity. Covers [LuminPackable] models and attributes, the generated LuminPackSerializer API, ref reuse, Unions, version tolerance, reference tracking, compile-time options and profiles, struct layouts, generation modes, Custom formatters and registration.
+description: Write correct code that uses the LuminPack binary and JSON serializer for .NET and Unity. Covers [LuminPackable] models and attributes, the generated LuminPackSerializer API, ref reuse, Unions, version tolerance, reference tracking, compile-time options and profiles, struct layouts, automatic generation, Custom formatters and registration.
 ---
 
 # Using LuminPack
@@ -49,7 +49,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 - Group Union switches with `[LuminPackOption(WideTag = true, SingleImplementation = true)]` on the root class/interface only. These settings do not inherit or pin string profiles; legacy standalone markers remain compatible. `SingleImplementation` preserves Union framing and, without generated `Register` APIs, allows a direct call of the single sealed case. Union writes are tiered automatically (direct call, exact guards for one to four cases, one virtual call above that). `List<T>`, arrays and `ImmutableArray<T>` use the selected per-element dispatch in input order for fixed and variable payloads; this preserves wire bytes and requires no annotations. Collections always use their actual lengths.
 - There is **no runtime options object**. Options are `[LuminPackOption(...)]` declarations or a profile type argument such as `Serialize<LuminPackUtf8LengthOptions>(value)`.
 - `LuminBufferWriter` is an `IBufferWriter<byte>` over an `ArrayPool<byte>` rental: dispose it (or return it to its writer pool). Borrowed spans expire on growth, release or pool return. Writes into it append; reset with `ResetForReuse()` between independent records.
-- Generic payload APIs (`Serialize<T>`, `Deserialize<T>`, `<T, TOptions>` and `Save<T>` wrappers) require explicit/Custom registration even for built-in and generated types; missing operations throw `LuminPackException`. Concrete calls and `<TOptions>` concrete overloads bind Roots directly. With unsafe disabled or registration disabled, generic payload APIs have no generated fallback. Generic document policies use assembly defaults or the explicit profile.
+- On the modern interceptor backend, closed calls (`Serialize(value)`, `Serialize<T>`, `Deserialize<T>` and `<T, TOptions>`) bind existing concrete Roots. Safely relocatable static source wrappers can be specialized at closed calls. Opaque implementations, runtime-selected targets and unsupported wrappers use explicit/Custom registration; missing operations throw `LuminPackException`. No new Plan, reflection factory or delegate cache is introduced. Older Roslyn hosts and `LuminPackUseInterceptors=false` use the packaged IL postprocessor when `LuminPackUseIlRewriting` is enabled. Unity installs the shared rewriter through `Unity.LuminPack.CodeGen` and `LUMINPACK_IL_REWRITE` (see `docs/unity.md`); never add the define without the processor. Only disabling both integrations retains overload compatibility. IL rewriting runs before runtime/AOT, preserves portable symbols, validates exact stack types and requires the original key for signed assemblies. See [generation and fallback boundaries](../../docs/generation-modes.md#static-interception). Intercepted Roots retain declaration options; fallback document policies use assembly defaults or the explicit profile.
 - `Register` APIs take function pointers: the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and an `unsafe` block.
 - Reuse is not transactional: a failed read can leave members already updated.
 - The default binary UTF-16 length reader reuses a zero-based `string[,]` when both dimensions match. Aliases observe completed slots even if a later record fails its bounds or string quota. Other string profiles allocate a new matrix.
@@ -79,7 +79,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 | Hostile input | Checked reads are the default; add `[LuminPackOption(MaxInputBytes = ..., MaxCollectionLength = ..., MaxDepth = ...)]` limits on the root type or assembly |
 | Trusted data only | `[LuminPackOption(UntrustedData = false)]` restores unchecked reads |
 | Hand-written format | `[LuminPackable(GeneratorType.Custom)]` with static `Serialize`/`Deserialize` |
-| Smaller generated code | `<LuminPackGenerationMode>Light</LuminPackGenerationMode>` + `<CompilerVisibleProperty Include="LuminPackGenerationMode" />` |
+| Generated code selection | Automatic: declared model graphs plus statically required operations; no generation mode setting |
 | Pool instances | `[LuminPackPoolRent] static T Rent()` |
 
 For ordinary objects with `[LuminPackPoolRent]`, binary and JSON reads without `ref` also rent first and then reuse the rented instance's existing graph. Supplying a non-null target by `ref` skips the rent.
@@ -89,7 +89,7 @@ For ordinary objects with `[LuminPackPoolRent]`, binary and JSON reads without `
 - For collections of small strings, opt in with `[LuminPackOption(StringRecording = LuminPackStringRecording.VarInt)]` on the member/type/assembly, or use `LuminPackUtf16VarIntOptions` / `LuminPackUtf8VarIntOptions` as the operation profile. Both endpoints must match. This saves header bytes at a possible throughput cost; fixed `Length` remains the default. UTF-16 retains compact Latin-1, UTF-8 retains both length counts, and null stays distinct from empty. Collection count headers and JSON do not change. See [options](../../docs/options.md).
 
 - Don't pass `null!` targets expecting reuse; reuse needs an existing instance.
-- Don't rely on reflection- or `typeof`-driven serialization under `Light`/`Minimal`; those modes only keep statically reachable types.
+- Runtime-selected types and opaque calls require registered fallback. Generation is automatic; legacy mode settings are ignored.
 - Don't use `$type`, `$value`, `$id`, `$ref` as JSON member names.
 - `NaN`/infinity cannot be written to JSON.
 - `DateOnly`, `TimeOnly`, `Int128` and `UInt128` use JSON strings: round-trip dates/times and invariant decimal integers. Modern Core assets expose typed `LuminPackJsonWriter.Write` / `Write<TOptions>` overloads that avoid intermediate strings. Generated code selects them from the referenced Core API; older assets automatically retain their text conversion fallback.

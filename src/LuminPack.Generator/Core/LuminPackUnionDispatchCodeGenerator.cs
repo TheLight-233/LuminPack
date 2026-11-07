@@ -15,7 +15,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    /// <param name="emittedTypes">The closed operations retained by the current generation tier, or null for Full.</param>
+    /// <param name="emittedTypes">The automatically retained closed operations, or null for an unfiltered analysis view.</param>
     /// <returns>The generated members, or an empty string when union dispatch cannot be emitted.</returns>
     public static string Generate(LuminDataInfo data, Compilation compilation, MetaInfo metaInfo, IEnumerable<ITypeSymbol> emittedTypes = null)
     {

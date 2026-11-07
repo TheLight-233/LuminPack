@@ -105,8 +105,6 @@ internal sealed class TypeEmissionCache
         string dependencyGuard = owned + (union ? "\nunion:" + facts.UnionUniverse : string.Empty);
         if (outputVariant != null)
             dependencyGuard += "\noutput-variant:" + outputVariant;
-        if (tier == LuminPackGenerationTier.Minimal)
-            dependencyGuard += "\nminimal-emitted:" + ReachabilityAnalysisCache.GetOrCreate(compilation, tier).ShouldEmitPackable(type);
         lock (_gate)
         {
             if (_latestProjectIdentity != facts.Identity)

@@ -29,6 +29,11 @@ dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.cspro
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
 
+# Static entry backends, including real Roslyn 4.3 and the portable runtime
+dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.csproj -c Release -- --verify-interceptors
+dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true
+dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-il-rewriting
+
 # IDE code fixes: real diagnostics, cross-document edits and Fix All
 dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release
 

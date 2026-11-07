@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -11,6 +11,12 @@ var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
     .Split(Path.PathSeparator)
     .Select(static path => MetadataReference.CreateFromFile(path))
     .ToArray();
+
+if (args.Contains("--verify-il-rewriting", StringComparer.Ordinal))
+{
+    SerializerInterceptorRegression.Run(references, il: true);
+    return;
+}
 
 if (args.Contains("--verify-readonly-collection-builder", StringComparer.Ordinal))
 {
@@ -184,24 +190,12 @@ if (args.Contains("--verify-unity-nullable-merge-compatibility", StringComparer.
     return;
 }
 
-if (args.Contains("--verify-light-mode", StringComparer.Ordinal))
+if (args.Contains("--verify-automatic-generation", StringComparer.Ordinal))
 {
-    VerifyLightMode(references);
-    Console.WriteLine("Passed light-mode reachability, interprocedural propagation, and variant gating verification.");
-    return;
-}
-
-if (args.Contains("--verify-medium-mode", StringComparer.Ordinal))
-{
-    VerifyMediumMode(references);
-    Console.WriteLine("Passed medium-mode accessibility tiering verification.");
-    return;
-}
-
-if (args.Contains("--verify-minimal-mode", StringComparer.Ordinal))
-{
-    VerifyMinimalMode(references);
-    Console.WriteLine("Passed minimal-mode call-site-only pruning verification.");
+    VerifyAutomaticReachability(references);
+    VerifyUnreachableUnmarkedTypes(references);
+    VerifyDeclaredModelRetention(references);
+    Console.WriteLine("Passed automatic reachability, declaration retention and ignored legacy mode settings.");
     return;
 }
 
@@ -888,7 +882,7 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
 
 // <summary>Verifies verify light mode.</summary>
 // <param name="platformReferences">The platform references used by this operation.</param>
-static void VerifyLightMode(MetadataReference[] platformReferences)
+static void VerifyAutomaticReachability(MetadataReference[] platformReferences)
 {
     var parseOptions = CSharpParseOptions.Default
         .WithLanguageVersion(LanguageVersion.Preview)
@@ -1030,7 +1024,7 @@ static void VerifyLightMode(MetadataReference[] platformReferences)
 
 // <summary>Verifies verify medium mode.</summary>
 // <param name="platformReferences">The platform references used by this operation.</param>
-static void VerifyMediumMode(MetadataReference[] platformReferences)
+static void VerifyUnreachableUnmarkedTypes(MetadataReference[] platformReferences)
 {
     var parseOptions = CSharpParseOptions.Default
         .WithLanguageVersion(LanguageVersion.Preview)
@@ -1063,8 +1057,7 @@ static void VerifyMediumMode(MetadataReference[] platformReferences)
 
         [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Medium)]
 
-        // Public enum: a valid formatter candidate kept by the middle tier even though no call site
-        // reaches it (public types are conservative API surfaces).
+        // Public visibility alone does not root an unmarked, unused formatter.
         public enum PublicCandidate
         {
             A = 0,
@@ -1097,10 +1090,10 @@ static void VerifyMediumMode(MetadataReference[] platformReferences)
     var (output, generated) = RunPruneModeGenerators(input, parseOptions);
     AssertNoCompilationErrors(output, "medium mode closed graph", ignoreRoslyn43RefReadonlyMismatch: true);
 
-    if (!generated.Contains("global::PublicCandidate", StringComparison.Ordinal))
+    if (generated.Contains("global::PublicCandidate", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
-            "Medium mode did not keep the public non-packable type.");
+            "An ignored legacy mode retained an unreachable unmarked public type.");
     }
     if (generated.Contains("InternalCandidate", StringComparison.Ordinal))
     {
@@ -1111,7 +1104,7 @@ static void VerifyMediumMode(MetadataReference[] platformReferences)
 
 // <summary>Verifies verify minimal mode.</summary>
 // <param name="platformReferences">The platform references used by this operation.</param>
-static void VerifyMinimalMode(MetadataReference[] platformReferences)
+static void VerifyDeclaredModelRetention(MetadataReference[] platformReferences)
 {
     var parseOptions = CSharpParseOptions.Default
         .WithLanguageVersion(LanguageVersion.Preview)
@@ -1150,8 +1143,7 @@ static void VerifyMinimalMode(MetadataReference[] platformReferences)
             public int Value;
         }
 
-        // Declared [LuminPackable] but never serialized: minimal tier must prune it entirely,
-        // unlike Reachable which always keeps every packable.
+        // Model declarations retain their formatters even without a call in this assembly.
         [LuminPackable]
         public partial class UnusedPackable
         {
@@ -1193,10 +1185,10 @@ static void VerifyMinimalMode(MetadataReference[] platformReferences)
         throw new InvalidOperationException(
             "Minimal mode did not emit a [LuminPackable] type that is passed to a serializer call site.");
     }
-    if (generated.Contains("UnusedPackable", StringComparison.Ordinal))
+    if (!generated.Contains("UnusedPackable", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
-            "Minimal mode emitted a [LuminPackable] type that is never serialized.");
+            "An ignored legacy mode removed an independently declared model.");
     }
     if (!generated.Contains("global::UnionChild", StringComparison.Ordinal))
     {

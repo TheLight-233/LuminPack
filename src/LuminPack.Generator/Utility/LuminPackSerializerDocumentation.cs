@@ -145,6 +145,8 @@ internal static class LuminPackSerializerDocumentation
             }
             else if (method.TypeParameterList != null)
             {
+                if (InterceptionSupport.IsEnabled(metadata.ParseOptions))
+                    remarks.Add(new XElement("para", "Statically bound payload calls are redirected to their generated concrete entries during compilation or IL postprocessing. The registration requirements below apply only when a call cannot use a static entry."));
                 remarks.Add(new XElement("para", "Generic overload. The closed type argument ", new XElement("typeparamref", new XAttribute("name", "T")),
                     " selects an explicitly registered formatter. Register the required operations before calling this overload, including for built-in and source-generated types. Its member contract is determined by that registration; no concrete field layout is assumed by this overload."));
             }

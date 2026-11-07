@@ -1,49 +1,48 @@
-# 🪶 生成模式
+# 自动生成
 
 [English](generation-modes.md) · [返回 README](README.cn.md)
 
-默认情况下，生成器为它观察到的每个类型生成代码。大型项目可以把生成范围裁剪到真正会被序列化的类型，减小程序集体积、加快编译。
+LuminPack 采用统一的自动生成规则，不需要选择生成档位，也不需要配置 `CompilerVisibleProperty`。
 
-| 模式 | 生成的格式化器 | `LuminPackSerializer` 具体重载 |
-| --- | --- | --- |
-| `Full`（默认） | 所有观察到的类型。 | 每个保留类型的所有重载形态。 |
-| `Medium` | 可达类型，加上所有 `public` 类型（对类库更保守）。 | 所有重载形态。 |
-| `Light` | 从 `LuminPackSerializer.*` 调用点以及所有 `[LuminPackable]` 成员图可达的类型。 | 只生成实际调用到的重载形态。 |
-| `Minimal` | 只有从 `LuminPackSerializer.*` 调用点可达的类型。未使用的 `[LuminPackable]` 类型也会被裁掉。 | 只生成实际调用到的重载形态。 |
+- 每个 `[LuminPackable]` 声明保留自身格式化器及序列化成员图，即使声明程序集内没有调用。这样模型库仍可供其他程序集使用。
+- 序列化调用保留其所需的具体负载，包括闭合泛型包装方法、容器元素和 Union case。
+- 无关代码中观察到的未标记类型，不会仅因为是 public 就生成序列化入口。
+- 便捷操作按实际调用生成。运行时选择目标或不透明的边界使用注册兜底。
 
-可达性的起点：
+## 静态拦截
 
-- 每个 `LuminPackSerializer.*` 调用及其传入的类型；
-- 泛型包装方法：`void Save<T>(T x) => LuminPackSerializer.Serialize(x);` 以 `Save<Player>()` 调用时，`Player` 成为根；
-- 递归展开类型实参、数组元素和成员类型；
-- 可达 Union 根的所有 case。
+生成器包自动启用 `LuminPack` Interceptor 命名空间。在 C# 11 或更高版本、编译器提供带版本的 `GetInterceptableLocation` 时，公共门面使用固定数量的泛型签名。`Serialize(value)`、`Serialize<Player>(value)` 和 `Deserialize<Player>(bytes)` 等调用被拦截到既有具体实现。相同构造签名的多个源码位置共享一个 Interceptor。内部状态入口使用负载专属名称，分配数组、缓冲区和流等便捷入口位于独立的 `LuminEntry_<hash>` 容器。只保留实际使用的便捷 API 类别；格式化器保留范围遵循前述统一声明与调用图规则。
 
-## 选择模式
+`Serialize<TOptions>(value)` 这种仅指定配置类型的写法继续可用，只为使用它的负载生成兼容签名。配置类型参数可以保持开放：它选择编译期选项，不在运行时选择负载格式化器。每个实际使用的便捷操作保留既有的编译期配置方法体；默认调用由 Interceptor 直接传入声明配置，因此不再需要额外的默认配置转发方法。这里使用的是既有选项 struct，不是格式化器 Plan。
 
-使用 MSBuild 属性：
+对于 `static byte[] Save<T>(T value) => LuminPackSerializer.Serialize(value)` 这样的源码包装方法，可在闭合调用处拦截到具体方法体副本。调用图按方法和类型定义建立索引，关联的类型实参一起替换。嵌套静态包装方法和普通递归共享各自的具体方法体，并保留原来的重载选择、调用者信息常量和副作用。
+
+特化采用保守边界。实例或虚方法、引用程序集中的方法体、不可访问的依赖、显式静态初始化、异步或迭代器方法体、lambda 或局部函数、缩减形式的扩展调用、展开的 `params`，以及绑定依赖开放负载类型的运算符，均保留原路径。特化深度有上限。这些边界需要既有的[注册兜底](custom-formatters.cn.md#runtime-registration)；类型可达不会自动注册。静态路径和兜底都不增加 Runtime Plan、反射工厂或委托缓存。既有 Union 虚方法派发及泛型缓存槽位保持不变。
+
+生成器仍以 Roslyn 4.3 为依赖下限；只有编译器宿主的可选能力发现使用反射，不会把反射加入生成的序列化代码。可显式禁用编译器 Interceptor，改用已安装的 IL 后端：
 
 ```xml
 <PropertyGroup>
-  <LuminPackGenerationMode>Light</LuminPackGenerationMode>
+  <LuminPackUseInterceptors>false</LuminPackUseInterceptors>
 </PropertyGroup>
-<ItemGroup>
-  <CompilerVisibleProperty Include="LuminPackGenerationMode" />
-</ItemGroup>
 ```
 
-必须同时添加 `CompilerVisibleProperty`，生成器才能读到这个属性。
+NuGet 包同时安装 IL 后处理器。编译器不支持 Interceptor 时（包括 Roslyn 4.3 和 C# 9），生成器输出相同的具体入口及仅供构建使用的签名映射。MSBuild 在编译后、复制产物前替换匹配的本程序集静态 `call` 操作数。这条路径不需要生成具体公共重载，也不依赖 PDB 行号匹配；保留参数求值顺序，写入前校验参数和返回值的栈类型。Portable PDB 会同步保留；签名程序集需要原来的 `AssemblyOriginatorKeyFile`。不改写引用程序集、虚调用或方法组函数指针。
 
-或使用程序集特性：
+`LuminPackUseInterceptors=false` 且 `LuminPackUseIlRewriting` 保持启用时选择 IL 后端。同时关闭这两个属性才使用重载兼容后端。这些是编译接入开关，不是生成档位。直接安装 Analyzer DLL 时，需要自行安装相应接入。Unity 通过 `ILPostProcessor` 使用同一个改写器，参见 [Unity 安装步骤](unity.cn.md)。未安装后处理器时，不要定义 `LUMINPACK_IL_REWRITE`。
+
+## 注册与迁移
+
+注册仍是独立的策略：
 
 ```csharp
-[assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
+[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]
 ```
 
-两种方式同时存在时，取更激进的一档。特性的第二个参数 `LuminPackRegisterMode.Disabled` 还可以关闭生成的 `Register` API。
+默认在项目开启 unsafe 时允许方法指针注册。此设置不改变静态格式化器的选择。
 
-## 注意事项
+删除 MSBuild 中的 `LuminPackGenerationMode` 及对应的 `CompilerVisibleProperty`。删除程序集特性的档位参数，仅在需要时保留注册策略。旧的 `Full`、`Medium`、`Light`、`Minimal` 枚举值和构造函数作为已废弃的兼容写法保留，但全部被忽略；在旧编译器上也使用相同的自动保留规则。
 
-- `Light` 和 `Minimal` 只保留静态分析能够证明的具体 API 形态。需要为外部调用保留更多具体 API 时，使用 `Full` 或 `Medium`；绑定到泛型负载 API 的调用仍然需要注册。
-- `Minimal` 假定所有序列化都通过本程序集里的静态 `LuminPackSerializer` 调用完成，否则请使用 `Light`。
-- 裁剪不会改变数据格式或类型所用的格式化器，只决定哪些代码存在。
-- 每个泛型负载 `LuminPackSerializer` 调用都需要[注册](custom-formatters.cn.md#runtime-registration)，包括包装方法内的调用及已在生成范围内的类型。类型可达并不等于格式化器已注册。`Full` 和 `Medium` 保留更多具体 API，但不会提供自动泛型兜底。
+消费程序集应启用生成器，以建立自己的静态绑定。缺少可用元数据的引用实现、方法组和运行时选择的目标需要显式或 Custom 注册。类型可达不等于自动注册，缺少注册或操作时抛出 `LuminPackException`。
+
+生成策略不改变数据格式、Reader 检查、状态归属、复用或 Union 派发。被拦截的具体 Root 使用声明所属的选项；注册兜底的文档边界使用消费程序集默认配置或显式配置。

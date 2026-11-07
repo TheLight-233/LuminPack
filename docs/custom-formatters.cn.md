@@ -48,7 +48,7 @@ public sealed class MyVector
 <a id="runtime-registration"></a>
 ## 运行时注册
 
-`LuminPackSerializer.Register<T>` 为泛型入口注册静态方法指针。调用 `Serialize<T>`、`Deserialize<T>` 或 `Serialize<T, TOptions>` 等泛型负载 API 时，内置类型和源生成类型也需要注册。具体类型重载仍直接调用生成的 Root。注册需要 `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`。
+`LuminPackSerializer.Register<T>` 为泛型兜底入口注册静态方法指针。实现不透明或调用保持开放时需要注册，内置类型和源生成类型也不例外。现代 [Interceptor 后端](generation-modes.cn.md#静态拦截)可将闭合的泛型写法直接绑定到具体 Root，此时泛型写法不表示请求注册分发。旧编译器通过已安装的 IL 后端获得相同静态绑定；未安装任一种接入时，泛型负载 API 才仍需注册。注册需要 `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`。
 
 ```csharp
 static void Write(ref LuminPackWriter writer, in LegacyModel value)
@@ -90,7 +90,7 @@ unsafe { LuminPackSerializer.Register<Person>(&WritePerson, &ReadPerson); }
 
 
 - 同一类型重复注册会抛出 `ArgumentException`。
-- 已生成类型的具体重载从不查询注册表。泛型入口仅使用显式注册和 `Custom` 注册。缺少注册或所需操作时抛出 `LuminPackException`，不存在自动生成兜底。未启用 unsafe 或设置 `LuminPackRegisterMode.Disabled` 时，泛型负载操作无法使用 Register。泛型 JSON 边界和输入暂存使用调用程序集的默认选项或显式配置；注册回调负责自身表示以及声明特有的策略。
+- 具体 Root 和被拦截的调用从不查询注册表。泛型兜底方法体仅使用显式注册和 `Custom` 注册。缺少注册或所需操作时抛出 `LuminPackException`，不存在自动生成兜底。未启用 unsafe 或设置 `LuminPackRegisterMode.Disabled` 时，兜底操作无法使用 Register。兜底 JSON 边界和输入暂存使用调用程序集的默认选项或显式配置；注册回调负责自身表示以及声明特有的策略。被拦截的 Root 保留声明所属的策略。
 - 注册不持有强引用，加载在可回收 `AssemblyLoadContext` 中的插件仍然可以卸载。被注册的代码在可能被调用期间必须保持加载。
 
 ## 成员级格式化器

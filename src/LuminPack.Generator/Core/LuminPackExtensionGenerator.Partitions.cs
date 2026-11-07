@@ -16,7 +16,7 @@ public static partial class LuminPackExtensionGenerator
     /// <summary>Separates no-owner formatter bodies from generic dispatch and static registration.</summary>
     /// <param name="compilation">The current consuming compilation.</param>
     /// <param name="metadata">Current generation settings.</param>
-    /// <param name="reachability">The formatter roots, or null for Full.</param>
+    /// <param name="reachability">The formatter roots, or null for an unfiltered analysis view.</param>
     /// <param name="cache">Generator-instance type and dispatch contribution caches.</param>
     /// <param name="cancellationToken">Stops obsolete generation between complete formatter contributions.</param>
     /// <returns>Independently comparable partial extension files.</returns>
@@ -27,7 +27,7 @@ public static partial class LuminPackExtensionGenerator
     /// <summary>Emits formatter contributions and exposes their completed, symbol-free root facts.</summary>
     /// <param name="compilation">The current consuming compilation.</param>
     /// <param name="metadata">Current generation settings.</param>
-    /// <param name="reachability">The formatter roots, or null for Full.</param>
+    /// <param name="reachability">The formatter roots, or null for an unfiltered analysis view.</param>
     /// <param name="cache">Generator-instance type and dispatch contribution caches.</param>
     /// <param name="navigationTargets">Receives actual direct roots after the output batch completes.</param>
     /// <param name="cancellationToken">Stops obsolete generation between complete contributions.</param>
@@ -103,7 +103,7 @@ public static partial class LuminPackExtensionGenerator
         FrozenTypeEmission Fragment(ITypeSymbol type)
         {
             string name = FormatterTypeName.Get(type);
-            return cache.Fragments.GetOrBuild(type, compilation, metadata, LuminPackGenerationTier.Full, () =>
+            return cache.Fragments.GetOrBuild(type, compilation, metadata, LuminPackGenerationTier.Automatic, () =>
             {
                 var body = new StringBuilder();
                 string source;

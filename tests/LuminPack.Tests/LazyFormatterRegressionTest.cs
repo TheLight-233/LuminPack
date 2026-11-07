@@ -11,18 +11,22 @@ namespace LuminPackUnitTest;
 [Collection(nameof(RuntimeStateCollection))]
 public class LazyFormatterRegressionTest
 {
-    /// <summary>Concrete entries preserve declaration profiles while generic payload APIs require registration.</summary>
+    private readonly OpaqueSerializer _fallback = new();
+
+    /// <summary>Closed generic calls preserve declaration profiles while opaque calls require registration.</summary>
     [Fact]
     public void GenericEntriesPreserveDeclaredProfiles()
     {
         var value = new LazyProfileNode { Text = "\u00E9\u4E2D\uD83D\uDE00", Next = new LazyProfileNode { Text = "tail" } };
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize<LazyProfileNode>(value));
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.SerializeJson<LazyProfileNode>(value));
+        Assert.ThrowsAny<Exception>(() => _fallback.Serialize(value));
+        Assert.ThrowsAny<Exception>(() => _fallback.SerializeJson(value));
         byte[] bytes = LuminPackSerializer.Serialize(value);
+        Assert.Equal(bytes, LuminPackSerializer.Serialize<LazyProfileNode>(value));
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<LazyProfileNode>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.Text, copy.Text);
         Assert.Equal(value.Next.Text, copy.Next!.Text);
         string json = LuminPackSerializer.SerializeJson(value);
+        Assert.Equal(json, LuminPackSerializer.SerializeJson<LazyProfileNode>(value));
         Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.ReadJson<LazyProfileNode>(json, static (string concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Text);
         Assert.Equal(json, LuminPackSerializer.SerializeJson(value));
     }
@@ -39,21 +43,22 @@ public class LazyFormatterRegressionTest
 
     /// <summary>Manual registration invalidates an earlier missing lookup and leaves concrete roots unchanged.</summary>
     [Fact]
-    public unsafe void ManualRegistrationOverridesAWarmedGeneratedEntry()
+    public unsafe void ManualRegistrationOverridesFallbackAndLeavesStaticEntriesUnchanged()
     {
         var value = new LazyOverridePayload { Value = 17 };
         byte[] direct = LuminPackSerializer.Serialize(value);
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize<LazyOverridePayload>(value));
+        Assert.ThrowsAny<Exception>(() => _fallback.Serialize(value));
         nint key = LuminPackMarshal.GetMethodTable(typeof(LazyOverridePayload));
         Assert.False(LuminPackFormatterRegistry.TryGetValue(in key, out _));
         LuminPackFormatterRegistry.Register(typeof(LazyOverridePayload),
             (nint)(delegate*<ref LuminPackWriter, in LazyOverridePayload, void>)&WriteOverride,
             (nint)(delegate*<ref LuminPackReader, ref LazyOverridePayload, void>)&ReadOverride);
-        byte[] bytes = LuminPackSerializer.Serialize<LazyOverridePayload>(value);
+        byte[] bytes = _fallback.Serialize(value);
         Assert.Equal(BitConverter.GetBytes(99), bytes);
-        Assert.Equal(99, LuminPackSerializer.Deserialize<LazyOverridePayload>(bytes).Value);
+        Assert.Equal(99, _fallback.Deserialize<LazyOverridePayload>(bytes).Value);
         Assert.Equal(direct, LuminPackSerializer.Serialize(value));
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.SerializeJson<LazyOverridePayload>(value));
+        Assert.Equal(direct, LuminPackSerializer.Serialize<LazyOverridePayload>(value));
+        Assert.ThrowsAny<Exception>(() => _fallback.SerializeJson(value));
     }
 
     /// <summary>Checks complete concurrent publication, revision invalidation and collectible payload lifetime.</summary>
@@ -72,6 +77,28 @@ public class LazyFormatterRegressionTest
     {
         int marker = reader.Read<int>();
         value = new LazyOverridePayload { Value = marker };
+    }
+
+    /// <summary>Provides instance boundaries that deliberately retain registered generic dispatch.</summary>
+    private sealed class OpaqueSerializer
+    {
+        /// <summary>Writes through the registered binary operation.</summary>
+        /// <typeparam name="T">The runtime-selected payload type.</typeparam>
+        /// <param name="value">The payload.</param>
+        /// <returns>The registered representation.</returns>
+        internal byte[] Serialize<T>(T value) => LuminPackSerializer.Serialize(value);
+
+        /// <summary>Writes through the registered JSON operation.</summary>
+        /// <typeparam name="T">The runtime-selected payload type.</typeparam>
+        /// <param name="value">The payload.</param>
+        /// <returns>The registered JSON representation.</returns>
+        internal string SerializeJson<T>(T value) => LuminPackSerializer.SerializeJson(value);
+
+        /// <summary>Reads through the registered binary operation.</summary>
+        /// <typeparam name="T">The runtime-selected payload type.</typeparam>
+        /// <param name="bytes">The registered representation.</param>
+        /// <returns>The decoded payload.</returns>
+        internal T Deserialize<T>(ReadOnlySpan<byte> bytes) => LuminPackSerializer.Deserialize<T>(bytes);
     }
 
 }

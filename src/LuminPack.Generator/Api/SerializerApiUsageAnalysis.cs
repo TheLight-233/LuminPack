@@ -48,6 +48,16 @@ internal sealed class SerializerApiUsageAnalysis
     /// <param name="compilation">The compilation whose original symbols must be returned.</param>
     private SerializerApiUsageAnalysis(Compilation compilation)
     {
+        if (InterceptionSupport.IsEnabled(compilation))
+        {
+            var binding = StaticSerializerBinding.For(compilation);
+            Roots = binding.Roots;
+            foreach (var type in Roots)
+                _apis[FormatterTypeName.Get(type)] = binding.GetApis(type);
+            _conservative = false;
+            Key = binding.Key;
+            return;
+        }
         var options = compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions ?? CSharpParseOptions.Default;
         var metadata = new MetaInfo(options, options.LanguageVersion, options.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER"),
             options.PreprocessorSymbolNames.Contains("NET9_0_OR_GREATER"),

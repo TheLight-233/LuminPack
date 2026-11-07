@@ -69,6 +69,11 @@ try
         SerializerGenericOverloadRegression.VerifyRegisteredOnly(references);
         return 0;
     }
+    if (args is ["--verify-interceptors"])
+    {
+        SerializerInterceptorRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-immutable-scalar-set-reuse"])
     {
         SerializerImmutableScalarSetReuseRegression.Run(references);
@@ -428,6 +433,7 @@ try
     SerializerJsonEnumerableWriteRegression.RunDictionaryBoundaries(references);
     SerializerJsonEnumerableWriteRegression.RunDictionaryReads(references);
     SerializerCompiledOptionRegression.Run(references);
+    SerializerInterceptorRegression.Run(references);
     SerializerSpecialModeBoundaryRegression.Run(references);
     SerializerNamedVersionRegression.Run(references);
     SerializerDictionarySlotRegression.Run(references);

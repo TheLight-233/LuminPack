@@ -14,6 +14,32 @@ public static partial class LuminPackSerializerGenerator
 {
     private static readonly ConditionalWeakTable<object, ApiSignatureCache> ApiSignatures = new();
 
+    /// <summary>Creates the constant-size generic surface used before interceptor targets are generated.</summary>
+    /// <param name="metadata">The consumer's language and registration settings.</param>
+    /// <returns>Signature-only generic APIs, independent of the payload population.</returns>
+    internal static SyntaxTree GetInterceptionSignatures(MetaInfo metadata)
+    {
+        var body = new StringBuilder();
+        string previousAccess = _currentAccess;
+        _currentAccess = "public";
+        try
+        {
+            AppendGenericFallbacks(body, metadata, managedInput: false);
+            AppendCompressDecompress(body);
+            var source = new StringBuilder("using System; using System.Buffers; using System.IO; using System.Threading; using System.Threading.Tasks; " +
+                "using LuminPack.Core; using LuminPack.Option; using LuminPack.Utility; namespace LuminPack { public static partial class LuminPackSerializer {");
+            foreach (string signature in ReadSignatures(body.ToString(), metadata))
+                foreach (string variant in ProfileSignatures(signature, metadata))
+                    source.AppendLine(variant);
+            source.Append("} }");
+            return CSharpSyntaxTree.ParseText(source.ToString(), metadata.ParseOptions, "LuminPack.StaticSignatures.analysis.cs");
+        }
+        finally
+        {
+            _currentAccess = previousAccess;
+        }
+    }
+
     /// <summary>Reuses a body-free signature tree while every overload name and accessibility remains equal.</summary>
     /// <param name="compilation">The current input compilation.</param>
     /// <param name="metadata">All generation and parse settings affecting declarations.</param>

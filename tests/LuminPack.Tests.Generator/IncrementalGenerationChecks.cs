@@ -203,7 +203,7 @@ internal static class IncrementalGenerationChecks
     /// <param name="before">The initial compilation.</param>
     /// <param name="after">The edited compilation.</param>
     /// <param name="modelBuilds">The expected affected model count, when prescribed.</param>
-    /// <param name="expectedRoot">The only root expected from a resolved Minimal call.</param>
+    /// <param name="expectedRoot">The declaration reached by the updated source call.</param>
     /// <param name="requireFallback">Whether an unsupported unchanged file must be freshly observed.</param>
     private static void Verify(string name, CSharpCompilation before, CSharpCompilation after, long? modelBuilds = null,
         string? expectedRoot = null, bool requireFallback = false)
@@ -235,7 +235,7 @@ internal static class IncrementalGenerationChecks
         {
             Require(actual.ContainsKey("IncrementalChecks." + expectedRoot + ".Extension.g.cs"), name + ": expected root is absent.");
             string other = expectedRoot == "A" ? "B" : "A";
-            Require(!actual.ContainsKey("IncrementalChecks." + other + ".Extension.g.cs"), name + ": stale root was retained.");
+            Require(actual.ContainsKey("IncrementalChecks." + other + ".Extension.g.cs"), name + ": an independently declared model was removed.");
         }
         if (requireFallback)
             Require(delta["InvocationFileFallbacks"] > 0, name + ": unsupported invocation did not request fresh binding.");
@@ -250,9 +250,9 @@ internal static class IncrementalGenerationChecks
                 name + ": Roslyn did not cache the aggregate construction step.");
         }
         if (name == "new observed formatter")
-            Require(delta["AggregateBuilds"] == 1 && actual.Keys.Except(original.Keys, StringComparer.Ordinal)
+            Require(!actual.Keys.Except(original.Keys, StringComparer.Ordinal)
                 .Any(name => name.StartsWith("LuminPackSerializer.", StringComparison.Ordinal)),
-                name + ": a new formatter did not invalidate the aggregate input.");
+                name + ": observing an unrelated type created a serializer convenience entry.");
     }
 
     /// <summary>Checks stable diagnostic outputs and exact source trees with duplicate or empty paths.</summary>

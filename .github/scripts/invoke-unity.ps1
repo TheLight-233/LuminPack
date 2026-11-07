@@ -16,6 +16,8 @@ foreach ($assembly in @('LuminPack.Core.dll', 'System.Collections.Immutable.dll'
     Copy-Item -LiteralPath (Join-Path 'src/LuminPack.Core/bin/Release/netstandard2.1' $assembly) -Destination (Join-Path $projectPath 'Assets/Plugins')
 }
 Copy-Item -LiteralPath 'src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll' -Destination (Join-Path $projectPath 'Assets/Plugins')
+python .github/scripts/stage_unity_il.py $projectPath
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $editorInfo = [Diagnostics.ProcessStartInfo]::new($env:UNITY_EDITOR_PATH)
 $editorInfo.UseShellExecute = $false
 $editorInfo.CreateNoWindow = $true

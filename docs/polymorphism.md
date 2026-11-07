@@ -52,7 +52,7 @@ A Union root from a referenced assembly can be listed the same way. Local `parti
 
 ## Manual registration
 
-When the generator cannot see a case at all, register it at runtime. Registration passes static method pointers, so the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`; the generator only emits `Register` APIs when unsafe code is enabled. Disable them with `[assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Full, LuminPackRegisterMode.Disabled)]`.
+When the generator cannot see a case at all, register it at runtime. Registration passes static method pointers, so the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`; the generator only emits `Register` APIs when unsafe code is enabled. Disable them with `[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]`.
 
 The root's generated `Register<TCase>` takes a tag and four methods, written against the root type:
 

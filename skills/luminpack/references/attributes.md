@@ -13,7 +13,7 @@ All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Opti
 | `[LuminPackOption(SingleImplementation = true)]` | class/interface Union root | Promise one implementation everywhere; retains Union framing and, without generated `Register` APIs, lets the single sealed case be called directly. `[LuminPackSingleImplementation]` remains compatible. |
 | `[LuminPackBounded(maxBytes)]` | class, struct | Promise a maximum complete binary size; removes inner capacity checks. A wrong bound can overrun the buffer. |
 | `[LuminPackOption(...)]` | assembly, type, field, property | Compile-time options; see below. |
-| `[assembly: LuminPackGeneratorOptions(mode, register)]` | assembly | `LuminPackGenerationMode.Full/Medium/Light/Minimal`; `LuminPackRegisterMode.Auto/Disabled`. |
+| `[assembly: LuminPackGeneratorOptions(register)]` | assembly | `LuminPackRegisterMode.Auto/Disabled`. Generation is automatic; legacy mode arguments are ignored. |
 
 ## Members
 

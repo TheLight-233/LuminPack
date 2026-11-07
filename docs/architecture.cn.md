@@ -10,6 +10,7 @@
 | --- | --- |
 | `src/LuminPack.Core` | 运行时（NuGet 包 `LuminPack`，程序集 `LuminPack.Core`）：二进制和 JSON 读写器、直接分配写入使用的精确长度计算器、缓冲区、集合、布局转换、文本内核、压缩、ChaCha20-Poly1305、安全策略。目标框架 `netstandard2.1`、`net8.0` 到 `net11.0`。 |
 | `src/LuminPack.Generator` | 增量源代码生成器和分析器（`netstandard2.0`，Roslyn 4.3）。单独发布为一个包，运行时包 `LuminPack` 依赖它。 |
+| `src/LuminPack.ILPostProcessor` | 共享 Cecil 静态调用改写器、包内 MSBuild 任务及 Unity 编辑器适配。只在构建期间执行，Core 和生成的序列化代码不引用它。 |
 | `src/LuminPack.CodeFixes` | IDE 快速修复（`netstandard2.0`，C# Workspaces 4.3），合并到 `LuminPack.Generator` 包。生成器只有构建依赖，没有程序集引用；运行时和生成器均不引用 Workspaces。见[代码修复](code-fixes.cn.md)。 |
 | `src/LuminPack.Unity`、`src/LuminPack.Burst` | 可选的 Unity 值类型编解码，以及原生 Hook 表的 Burst 后端。 |
 | `src/LuminPack.Platforms` 及各适配包 | 共享适配层，以及 ASP.NET Core、Avalonia、Drawing、MAUI、MonoGame、SkiaSharp、WPF 的编解码。 |
@@ -86,7 +87,7 @@
 | `LuminPackExtensionGenerator.*` | 操作模板、JSON 辅助、派发片段。 |
 | `LuminPackSerializerGenerator.*` | 具体和泛型的 buffer、span、流、异步、JSON 和压缩 API。 |
 | `CodeEmitters/` | 每个标量或集合族一个 emitter。 |
-| `Api/` | `Light` 和 `Minimal` 使用的外观调用分析。 |
+| `Api/` | 共享静态绑定、包装方法特化以及编译器/IL 拦截映射。 |
 | 各类投影（`SerializerCoreProjection`、`BinaryCursorProjection`、`CompiledOperationProjection`、`RecursionGuardProjection`、`GeneratedOperationScopes` 等） | 改写完成的操作：状态归属、带检查的游标运算、配置传递、递归保护、可读的局部变量名。 |
 | `PortableStructPlan`、`PortableStructEmitter` | Packed 和 Tagged 结构体存储。 |
 | `Incremental/` | 冻结值、依赖守卫和缓存（`TypeEmissionCache`、`AggregateEmissionCache`、`SerializerFacadeCache`、`RegistrySourceCache`、`PartitionedSourceCache` 等）。 |
@@ -188,13 +189,15 @@ Observable JSON 读取器仅在实例为精确框架类型、已验证的集合�
 
 ### 生成的文件
 
-`LuminPackSerializer.g.cs` 存放共享泛型 API；每个类型的具体重载放在以哈希命名的 partial 文件中，其他类型变化时保持稳定。每个生成的程序集都拥有一个 public 的 `LuminPackSerializer`；生成的文件屏蔽 CS0436，使引用程序集中的同名类型被遮蔽。每个负载的根方法放在 `LuminRoots_<hash>` 容器中，这样每次调用的重载解析只需考察一个负载。生成代码对其他按负载划分的入口也保持这一点：操作绑定时已记录负载的推进调用直接指名该负载的 `Binary_<assembly>_<hash>` 扩展类，而不使用扩展方法形式；只转发到根方法的扩展直接调用根方法；具体类型的门面调用为其负载记录的根方法。`LuminPackSerializer` 的操作和 `Write`/`Read` 扩展保持原有名称和签名，供用户代码使用。
+`LuminPackSerializer.g.cs` 存放共享泛型 API。启用[静态拦截](generation-modes.cn.md#静态拦截)时，`StaticSerializerBinding` 绑定固定大小的签名树，记录编译器提供的调用位置，在 `LuminPack.Interceptors.g.cs` 中生成共享方法。仅指定配置的兼容写法只为实际使用的负载增加签名。具体便捷方法放在 `LuminEntry_<hash>` 容器中，状态转发方法使用负载专属名称。IL 后端输出相同入口及构建期签名映射，`LuminPack.ILPostProcessor` 在编译后替换本地调用。主动关闭两种接入时，兼容后端保留具体重载文件。每个生成的程序集都拥有 public 的 `LuminPackSerializer`，生成文件屏蔽 CS0436，以遮蔽引用程序集中的同名类型。Root 继续位于 `LuminRoots_<hash>` 容器中。负载已知的推进调用直接指名 `Binary_<assembly>_<hash>` 扩展类，转发扩展与便捷方法都调用已记录的同一个 Root。供用户使用的 `Write`/`Read` 扩展签名继续保留。不新增 Plan struct。
+
+源码静态包装方法通过反向调用图索引闭合，每个完整方法构造只复制一份方法体。迁移保留原有方法绑定与参数转换，固定调用者信息的默认常量，拒绝不支持或不可访问的方法体。兜底边界保留原源码与注册规则。编译上下文中的语义对象使用弱关联持有；聚合缓存标识包含拦截位置及所有特化方法体，包括嵌套依赖。Root 与便捷入口的标识不依赖源码位置。
 
 生成器把彼此独立的工作放到多个线程上执行：为全编译范围的类型索引逐文件观察语义；按源文件绑定 API 用法；在 Roslyn 的逐类型步骤按顺序读取结果之前，先分析发生变化的可打包类型；构建各负载的贡献代码；渲染、共享并重定向根调用各负载的 `LuminPackSerializer` 重载。带缓存的依赖事实在锁外计算，以先发布的结果为准。结果按原始顺序合并，因此输出与线程调度无关。在启用动态堆适配（DATAS，.NET 9 起编译服务器的默认设置）的 Server GC 下，这些工作保持串行执行，因为实测中并行分配会让生成明显变慢。
 
 私有共享门面辅助方法和适配器使用符合标识符规则的 26 字符 base-32 后缀，保留原有身份的全部 128 位。这样可以缩短生成源码及元数据中的名称，而不截断身份，也不改变 API 签名、操作方法体、文件标识或派发方式。
 
-泛型负载 API 仅调用已注册的方法指针。`LuminPack.Dispatch.Formatters.g.cs` 包含与负载类型列表无关的固定大小派发代码和程序集策略辅助方法；不再生成 `LuminPack.Dispatch.Lazy.g.cs`、每种负载的工厂或委托缓存。其缓存仅依赖程序集常量以及泛型暂存是否需要输入上限。具体 Root 及其 XML 导航信息独立于注册机制。
+泛型兜底方法体仅调用已注册的方法指针，被拦截的闭合泛型调用绕过这些方法体。`LuminPack.Dispatch.Formatters.g.cs` 包含与负载类型列表无关的固定大小派发代码和程序集策略辅助方法；不再生成 `LuminPack.Dispatch.Lazy.g.cs`、每种负载的工厂或委托缓存。其缓存仅依赖程序集常量以及泛型暂存是否需要输入上限。具体 Root 及其 XML 导航信息独立于注册机制。
 
 通过可达性分析发现的闭合泛型负载会在状态调用投影之前加入索引。生成代码对这些已知类型的调用绑定具体状态操作，不经过仅注册的泛型公共 API。泛型 Union 覆盖保留原有虚调用与缓存槽；已知闭合成员使用相同的线上标签并调用其闭合的具体操作。
 
@@ -223,7 +226,7 @@ Root 链接使用相对于所属序列化器的名称，避免在每个重载上
 | --- | --- |
 | `tests/LuminPack.Tests` | xUnit 运行时测试。`LuminPackTestArea` 选择 `All`（默认）、`Safety`、`Simd` 或 `Hooks`（带原生 Hook 探针的 `netstandard2.1` 资产）。 |
 | `tests/LuminPack.Tests.Codegen` | 使用 SDK 自带 Roslyn 的生成代码契约：XML 文档、机制、内联、Union 游标、复用、Union 集合、外部 Union、选项。 |
-| `tests/LuminPack.Tests.Generator` | 使用 Roslyn 4.3 的生成器流水线：并发、emitter 形态、裁剪模式、增量失效（`--verify-incremental`）。 |
+| `tests/LuminPack.Tests.Generator` | 使用 Roslyn 4.3 的生成器流水线：并发、emitter 形态、自动保留规则与旧档位迁移、增量失效（`--verify-incremental`）。 |
 | `tests/LuminPack.Tests.CodeFixes` | Roslyn 4.3 工作区检查：真实生成器诊断、源码修改、跨文档修复、构造函数选择、别名、注释和 Fix All。 |
 | `tests/LuminPack.Tests.Aot` | 裁剪/NativeAOT 冒烟程序和数据格式夹具（`--wire verify`）；加 `-p:LuminPackPackageVersion=<v>` 时改用打包好的 NuGet 包运行。 |
 | `tests/LuminPack.Tests.Platforms` | 平台适配契约，用 `LuminPackPlatform` 选择平台。 |

@@ -7,7 +7,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <LuminPackGenerationMode>Minimal</LuminPackGenerationMode>
     <LuminPackCorePath Condition="'$(LuminPackCorePath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Core/bin/Release/net8.0/LuminPack.Core.dll</LuminPackCorePath>
     <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll</LuminPackGeneratorPath>
   </PropertyGroup>
@@ -18,7 +17,6 @@
     <Compile Include="../../src/LuminPack.$(LuminPackPlatform)/Tests~/*.cs" />
     <Compile Include="../../src/LuminPack.Platforms/Tests~/CodecContract.cs" />
     <Analyzer Include="$(LuminPackGeneratorPath)" />
-    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackPlatform)' == 'AspNetCore'">
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

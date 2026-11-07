@@ -29,6 +29,11 @@ dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.cspro
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
 
+# 静态入口后端，包括真实 Roslyn 4.3 和可移植运行时
+dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.csproj -c Release -- --verify-interceptors
+dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true
+dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-il-rewriting
+
 # IDE 代码修复：真实诊断、跨文档修改和 Fix All
 dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release
 

@@ -52,7 +52,7 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 
 ## 手动注册
 
-如果生成器完全看不到某个 case，可以在运行时注册。注册传入的是静态方法指针，所以项目需要开启 `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`；只有开启 unsafe 时生成器才会生成 `Register` API。可以用 `[assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Full, LuminPackRegisterMode.Disabled)]` 关闭它们。
+如果生成器完全看不到某个 case，可以在运行时注册。注册传入的是静态方法指针，所以项目需要开启 `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`；只有开启 unsafe 时生成器才会生成 `Register` API。可以用 `[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]` 关闭它们。
 
 根类型上生成的 `Register<TCase>` 接收一个标签和四个方法，参数类型都是根类型：
 

@@ -74,7 +74,8 @@ namespace LuminPack
             /// <returns>The closed method pointer, or zero when the operation is absent.</returns>
             private static nint Find(string name, Type state)
             {
-                foreach (var method in TestStateMethods.Where(method => method.Name == name && method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1))
+                foreach (var method in TestStateMethods.Where(method => (method.Name == name || method.Name.StartsWith(name + "_", StringComparison.Ordinal)) &&
+                    method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1))
                 {
                     var parameters = method.GetParameters();
                     if (parameters.Length == 2 && parameters[0].ParameterType == state.MakeByRefType() &&

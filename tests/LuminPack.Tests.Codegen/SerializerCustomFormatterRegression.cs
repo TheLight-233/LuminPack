@@ -205,14 +205,8 @@ internal static class SerializerCustomFormatterRegression
                     .Select(method => method.ToString()).Take(10));
                 throw new InvalidOperationException("Custom state overloads must invoke the registry directly: " + stateMethods.Length + ". " + candidates);
             }
-            if (mode == "Minimal")
-            {
-                string dispatch = string.Join(Environment.NewLine, generatedSources
-                    .Where(file => file.HintName.StartsWith("LuminPack.Dispatch.", StringComparison.Ordinal))
-                    .Select(file => file.SourceText.ToString()));
-                if (dispatch.Contains("UnusedCallbackChild", StringComparison.Ordinal))
-                    throw new InvalidOperationException("An unreachable Custom callback dependency survived Minimal pruning.");
-            }
+            if (!generatedSources.Any(file => file.HintName.Contains("UnusedCallbackChild.Extension", StringComparison.Ordinal)))
+                throw new InvalidOperationException("Automatic generation removed a declared Custom callback dependency.");
             using var image = new MemoryStream();
             var emit = output.Emit(image);
             if (!emit.Success) throw new InvalidOperationException(string.Join(Environment.NewLine, emit.Diagnostics));

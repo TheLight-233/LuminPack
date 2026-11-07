@@ -232,7 +232,21 @@ internal static class SerializerDocumentationRegression
 
         var options = new CSharpParseOptions(LanguageVersion.Preview, documentationMode,
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET6_0_OR_GREATER", "NET7_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
-        var compilation = CSharpCompilation.Create("SerializerDocumentationRegression", [CSharpSyntaxTree.ParseText(source, options)], references,
+        string selections = "#pragma warning disable CS1591\nusing System; using System.IO; using System.Buffers; using System.Collections.Generic; using LuminPack; using LuminPack.Utility; public static class DocumentationCalls {" +
+            string.Join("\n", new[] { "DocumentationModel", "DocumentationBox<int>", "DocumentationRaw", "DocumentationEmpty", "DocumentationGuarded",
+                "DocumentationVersioned", "DocumentationReference", "KeyValuePair<int,string>", "List<string>", "Dictionary<string,int>", "int[]" }.Select(type => $$"""
+                public static void Select({{type}} value, LuminBufferWriter buffer, IBufferWriter<byte> output, Stream stream,
+                    ReadOnlySpan<byte> bytes, ReadOnlySpan<char> chars, ReadOnlySequence<byte> sequence, string json)
+                {
+                    LuminPackSerializer.Serialize(value); LuminPackSerializer.Serialize(value, buffer); LuminPackSerializer.Serialize(value, output);
+                    LuminPackSerializer.SerializeJson(value); LuminPackSerializer.SerializeJson(value, buffer); LuminPackSerializer.SerializeJson(value, output);
+                    LuminPackSerializer.Deserialize(bytes, ref value); LuminPackSerializer.Deserialize(buffer, ref value); LuminPackSerializer.Deserialize(sequence, ref value);
+                    LuminPackSerializer.DeserializeJson(json, ref value); LuminPackSerializer.DeserializeJson(bytes, ref value);
+                    LuminPackSerializer.DeserializeJson(chars, ref value); LuminPackSerializer.DeserializeJson(buffer, ref value);
+                    _ = LuminPackSerializer.SerializeAsync(stream, value); _ = LuminPackSerializer.DeserializeAsync(stream, value);
+                }
+                """)) + "}";
+        var compilation = CSharpCompilation.Create("SerializerDocumentationRegression", [CSharpSyntaxTree.ParseText(source, options), CSharpSyntaxTree.ParseText(selections, options)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
                 specificDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["CS1591"] = ReportDiagnostic.Error }));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(

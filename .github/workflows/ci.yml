@@ -110,6 +110,14 @@ jobs:
       - name: Incremental generation verification
         run: dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
 
+      - name: Automatic generation compatibility
+        run: dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-automatic-generation
+
+      - name: Roslyn 4.3 static IL rewriting
+        run: |
+          dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true
+          dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-il-rewriting
+
       - name: Code fix workspace regressions
         run: dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release
 
@@ -142,6 +150,8 @@ jobs:
           dotnet restore tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -p:LuminPackPackageVersion=0.0.0-ci --configfile $configPath --packages $cache
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release --no-restore -p:LuminPackPackageVersion=0.0.0-ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .github/scripts/verify-static-package.ps1 -Version 0.0.0-ci -Config $configPath -Cache $cache
 
       - name: Upload test results
         if: always()

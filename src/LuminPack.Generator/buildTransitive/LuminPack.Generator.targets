@@ -1,0 +1,12 @@
+<Project>
+  <UsingTask TaskName="LuminPack.Build.RewriteTask" AssemblyFile="$(MSBuildThisFileDirectory)../tools/LuminPack.ILPostProcessor.dll" />
+  <Target Name="LuminPackEnableIlRewriting" BeforeTargets="CoreCompile" Condition="'$(LuminPackUseIlRewriting)' == 'true'">
+    <PropertyGroup>
+      <DefineConstants>$(DefineConstants);LUMINPACK_IL_REWRITE</DefineConstants>
+    </PropertyGroup>
+  </Target>
+  <Target Name="LuminPackRewriteStaticCalls" AfterTargets="CoreCompile"
+          Condition="'$(LuminPackUseIlRewriting)' == 'true' and '$(DesignTimeBuild)' != 'true' and Exists('@(IntermediateAssembly)')">
+    <LuminPack.Build.RewriteTask AssemblyPath="@(IntermediateAssembly)" References="@(ReferencePath)" KeyFile="$(AssemblyOriginatorKeyFile)" />
+  </Target>
+</Project>

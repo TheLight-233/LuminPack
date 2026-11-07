@@ -215,7 +215,7 @@ internal static class SerializerAdvancingApiRegression
             }
             bool unused = methods.Any(method => method.Identifier.ValueText == "RootWriteJson" &&
                 method.ParameterList.Parameters.Last().Type?.ToString().TrimEnd('?') == "global::Unused");
-            if (unused != (tier != "Minimal")) throw new InvalidOperationException(tier + " changed annotated root retention.");
+            if (!unused) throw new InvalidOperationException("A legacy mode setting removed a declared model root.");
             using var image = new MemoryStream();
             var emit = output.Emit(image);
             if (!emit.Success) throw new InvalidOperationException(string.Join(Environment.NewLine, emit.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));

@@ -47,10 +47,9 @@ internal sealed class AggregateEmissionCache
         var observations = FileSemanticObservationCache.For(compilation);
         var custom = analysis.DeclaredTypes.Select(value => value.Symbol)
             .Where(LuminPackExtensionGenerator.IsCustomGeneratorType).ToArray();
-        var tier = (LuminPackGenerationTier)Math.Max((int)mode, (int)LuminPackGenerationTierResolver.FromAssembly(compilation));
         bool usesLuminPack = analysis.UsesLuminPack || SerializerApiUsageAnalysis.GetOrCreate(compilation).HasSerializerUsage;
-        var reachability = usesLuminPack && tier != LuminPackGenerationTier.Full
-            ? ReachabilityAnalysisCache.GetOrCreate(compilation, tier) : null;
+        var reachability = usesLuminPack
+            ? ReachabilityAnalysisCache.GetOrCreate(compilation, LuminPackGenerationTier.Automatic) : null;
         string key = CreateKey(compilation, analysis, custom, reachability, usesLuminPack);
         var guard = new Guard(observations.ProjectGuard, metadata, mode, key);
         lock (_gate)
@@ -82,7 +81,7 @@ internal sealed class AggregateEmissionCache
     /// <param name="compilation">The compilation supplying current identities.</param>
     /// <param name="analysis">The actual shared current semantic index.</param>
     /// <param name="custom">Custom formatter declarations in registry order.</param>
-    /// <param name="reachability">The current pruned emission sets, or null for Full.</param>
+    /// <param name="reachability">The current automatic emission sets, or null before usage is established.</param>
     /// <param name="usesLuminPack">Whether marked types or bound facade calls require serializer output.</param>
     /// <returns>A collision-free ordered key, or null to require fresh construction.</returns>
     private static string CreateKey(Compilation compilation, CompilationTypeAnalysis analysis,
@@ -108,6 +107,8 @@ internal sealed class AggregateEmissionCache
             return null;
         if (reachability?.ApiUsage != null)
             key.Append(reachability.ApiUsage.Key);
+        else if (InterceptionSupport.IsEnabled(compilation))
+            key.Append(StaticSerializerBinding.For(compilation).Key);
         return key.ToString();
     }
 

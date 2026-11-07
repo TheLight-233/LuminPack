@@ -31,13 +31,6 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                 return new MetaInfo(cs, cs.LanguageVersion, net8, net9_OR_GREATER, allowUnsafe, registerMode);
             }).WithComparer(MetaInfoValueComparer.Instance).WithTrackingName("LuminPack.Aggregate.MetaInfo");
 
-        var generationMode = context.AnalyzerConfigOptionsProvider
-            .Select(static (options, _) =>
-            {
-                options.GlobalOptions.TryGetValue("build_property.LuminPackGenerationMode", out string? value);
-                return LuminPackGenerationTierResolver.FromProperty(value);
-            });
-
         var serializerFragments = new SerializerFacadeCache();
         var invocationSupport = new InvocationSupportCache();
         var customRegistration = new SemanticContributionCache<FrozenCustomRegistration>();
@@ -46,8 +39,7 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
         var aggregateCache = new AggregateEmissionCache();
         var aggregateInputs = context.CompilationProvider
             .Combine(metaProvider)
-            .Combine(generationMode)
-            .Select((pair, _) => aggregateCache.PrepareInput(pair.Left.Left, pair.Left.Right, pair.Right))
+            .Select((pair, _) => aggregateCache.PrepareInput(pair.Left, pair.Right, LuminPackGenerationTier.Automatic))
             .WithTrackingName("LuminPack.Incremental.AggregateInput");
         var aggregateResults = aggregateInputs
             .Select((pair, cancellationToken) =>
@@ -59,7 +51,6 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                 var spc = new AggregateResultBuilder();
                 var compilation = pair.GetCompilation();
                 var meta = pair.Metadata;
-                var mode = pair.Mode;
 
                 // Unity auto-references managed plug-ins from every compilation. Merely
                 // finding LuminPack in metadata therefore is not evidence that the target
@@ -104,13 +95,7 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                         if (!string.IsNullOrEmpty(customCode))
                             spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", customCode);
                     }
-                    LuminPackGenerationTier propertyTier = mode;
-                    LuminPackGenerationTier assemblyTier = LuminPackGenerationTierResolver.FromAssembly(compilation);
-                    LuminPackGenerationTier effectiveTier = (LuminPackGenerationTier)Math.Max((int)propertyTier, (int)assemblyTier);
-
-                    ReachabilityAnalysis? reachability = effectiveTier != LuminPackGenerationTier.Full
-                        ? ReachabilityAnalysisCache.GetOrCreate(compilation, effectiveTier)
-                        : null;
+                    var reachability = ReachabilityAnalysisCache.GetOrCreate(compilation, LuminPackGenerationTier.Automatic);
 
                     foreach (var selected in LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation, reachability).OfType<INamedTypeSymbol>())
                         foreach (var diagnostic in ReferencedTypeMetadata.ValidatePropertyStorage(selected, compilation))
@@ -155,6 +140,13 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                     foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments,
                         cancellationToken, navigationTargets))
                         spc.AddSource(serializer.Name, GeneratedSourceLayout.Apply(serializer.Text));
+                    if (InterceptionSupport.IsEnabled(meta.ParseOptions))
+                    {
+                        string interceptors = StaticSerializerBinding.For(compilation).Emit(
+                            LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation, reachability));
+                        if (interceptors.Length != 0)
+                            spc.AddSource("LuminPack.Interceptors.g.cs", interceptors);
+                    }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
