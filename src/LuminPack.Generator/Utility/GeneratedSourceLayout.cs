@@ -14,6 +14,8 @@ namespace LuminPack.SourceGenerator;
 internal static partial class GeneratedSourceLayout
 {
     private const int MaxWidth = 140;
+    // An operand of a logical chain, such as one field-pair proof, reads best whole on its line.
+    private const int MaxChainOperandWidth = 200;
     private const string CommentMarker = "/// ";
     private static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Preview);
 
@@ -29,10 +31,12 @@ internal static partial class GeneratedSourceLayout
         if (!Enabled || string.IsNullOrEmpty(source))
             return source;
         source = Present(source, aliases);
-        if (!NeedsLayout(source))
-            return source;
         // A line of a multi-line literal is not a syntax fragment, so such a file keeps its code lines.
         bool wrapCode = !source.Contains("@\"") && !source.Contains("\"\"\"");
+        if (wrapCode)
+            source = SpaceLines(source);
+        if (!NeedsLayout(source))
+            return source;
         string newLine = source.Contains("\r\n") ? "\r\n" : "\n";
         string[] lines = source.Split('\n');
         var result = new StringBuilder(source.Length + source.Length / 8);
@@ -66,6 +70,67 @@ internal static partial class GeneratedSourceLayout
         }
         return result.ToString();
     }
+
+    /// <summary>Keeps one blank line between members and none at the edges of a block.</summary>
+    /// <param name="source">The complete generated source without multi-line literals.</param>
+    /// <returns>The source with collapsed blank lines, or the same string when nothing changes.</returns>
+    private static string SpaceLines(string source)
+    {
+        string newLine = source.Contains("\r\n") ? "\r\n" : "\n";
+        string[] lines = source.Split('\n');
+        var result = new StringBuilder(source.Length);
+        string previous = null;
+        bool changed = false;
+        for (int index = 0; index < lines.Length; index++)
+        {
+            string line = lines[index].TrimEnd('\r');
+            string trimmed = line.TrimStart();
+            if (trimmed.Length == 0)
+            {
+                string next = NextCode(lines, index + 1);
+                // A blank line is dropped after another blank line or an opening brace, and before a closing brace.
+                if (previous == null || previous.Length == 0 || previous.EndsWith("{", StringComparison.Ordinal) ||
+                    next == null || next.StartsWith("}", StringComparison.Ordinal))
+                {
+                    changed = true;
+                    continue;
+                }
+            }
+            else if (previous is { } last && last.TrimStart() == "}" && last.Length - 1 == line.Length - trimmed.Length && StartsMember(trimmed))
+            {
+                // A member that directly follows the closing brace of the previous member gets its separating line.
+                result.Append(newLine);
+                changed = true;
+            }
+            if (previous != null)
+                result.Append(newLine);
+            result.Append(line);
+            previous = trimmed.Length == 0 ? string.Empty : line;
+        }
+        return changed ? result.ToString() : source;
+    }
+
+    /// <summary>Finds the next nonblank line.</summary>
+    /// <param name="lines">The source lines.</param>
+    /// <param name="start">The first line to inspect.</param>
+    /// <returns>The trimmed line, or null at the end of the file.</returns>
+    private static string NextCode(string[] lines, int start)
+    {
+        for (int index = start; index < lines.Length; index++)
+        {
+            string trimmed = lines[index].Trim();
+            if (trimmed.Length != 0)
+                return trimmed;
+        }
+        return null;
+    }
+
+    /// <summary>Recognizes the first line of a member declaration.</summary>
+    /// <param name="trimmed">The line without indentation.</param>
+    /// <returns>Whether the line starts with an attribute, a documentation comment or a member modifier.</returns>
+    private static bool StartsMember(string trimmed)
+        => trimmed.StartsWith("[", StringComparison.Ordinal) || trimmed.StartsWith("///", StringComparison.Ordinal) || IsMemberStart(trimmed) ||
+            trimmed.StartsWith("static ", StringComparison.Ordinal);
 
     /// <summary>Checks without parsing whether any line exceeds the width or carries an attributed accessor.</summary>
     /// <param name="source">The complete generated source.</param>
@@ -143,14 +208,15 @@ internal static partial class GeneratedSourceLayout
             if (positions.Count == 0)
                 continue;
             int inner = indent + 4;
-            if (column + (positions[0] - range.Start) > MaxWidth)
+            int limit = node is BinaryExpressionSyntax ? MaxChainOperandWidth : MaxWidth;
+            if (column + (positions[0] - range.Start) > limit)
                 Wrap(root, TextSpan.FromBounds(range.Start, positions[0]), positions[0], column, indent, breaks);
             for (int i = 0; i < positions.Count; i++)
             {
                 breaks[positions[i]] = inner;
                 bool last = i + 1 == positions.Count;
                 int partEnd = last ? end : positions[i + 1];
-                if (inner + (partEnd - positions[i]) > MaxWidth)
+                if (inner + (partEnd - positions[i]) > limit)
                     Wrap(root, TextSpan.FromBounds(positions[i], last ? range.End : positions[i + 1]), partEnd, inner, inner, breaks);
             }
             return;

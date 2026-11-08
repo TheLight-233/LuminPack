@@ -64,10 +64,11 @@ internal static class UnionDispatchTierRegression
             "Fixed Union lists, arrays and immutable arrays must retain per-element dispatch.", collections);
 
         string ordinaryAliases = Generate(single, register: false);
-        Require(ordinaryAliases.Contains("using LPUnsafe = global::System.Runtime.CompilerServices.Unsafe;"),
+        Require(ordinaryAliases.Contains("using Unsafe = global::System.Runtime.CompilerServices.Unsafe;"),
             "A qualified compiler helper should use its generated alias.", ordinaryAliases);
-        string collision = Generate(single + "\npublic sealed class LPUnsafe { }", register: false);
-        Require(!collision.Contains("using LPUnsafe =") && collision.Contains("global::System.Runtime.CompilerServices.Unsafe.As<global::Only>"),
+        // A declaration in another namespace reserves the spelling without changing what unqualified generated names bind to.
+        string collision = Generate(single + "\nnamespace Other { public sealed class Unsafe { } }", register: false);
+        Require(!collision.Contains("using Unsafe =") && collision.Contains("global::System.Runtime.CompilerServices.Unsafe.As<global::Only>"),
             "A consumer declaration must reserve its spelling before aliases are added.", collision);
     }
 
