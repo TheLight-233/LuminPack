@@ -373,7 +373,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("                {");
             sb.AppendLine(!reuse || member.Type.IsValueType
                 ? $"                    {memberType} member = default!;"
-                : $"                    {memberType} member = (object?)value is {{ }} existing && existing.GetType() == typeof({memberType}) ? global::System.Runtime.CompilerServices.Unsafe.As<{memberType}>(existing) : default!;");
+                : $"                    {memberType} member = global::LuminPack.Code.LuminPackMarshal.AsExact<{memberType}>(value)!;");
             sb.AppendLine("                    reader.ReadPolymorphismValue(ref member);");
             sb.AppendLine(member.Type.IsValueType
                 ? $"                    value = ({classGlobalName})(object)member;"

@@ -54,7 +54,8 @@ public static partial class LuminPackExtensionGenerator
             var compatibility = GetUnionGenericCompatibility(data, member);
             sb.AppendLine("                case " + member.Id + ":");
             sb.AppendLine("                {");
-            if (!reuse && !member.Type.IsValueType && HasVariablePayload(member.Type))
+            if (!reuse && !member.Type.IsValueType && HasVariablePayload(member.Type) &&
+                !ReadsOwnUnionEntry(member.Type, data.TypeSymbol.ContainingAssembly))
             {
                 // A variable-size case body reads in its own method, so one Union switch expanded into a
                 // collection loop does not inline every case's string and collection reads into that loop.
@@ -66,7 +67,7 @@ public static partial class LuminPackExtensionGenerator
             }
             sb.AppendLine("                    " + memberType + " member = " + (!reuse || member.Type.IsValueType
                 ? "default!;"
-                : "(object?)value is { } existing && existing.GetType() == typeof(" + memberType + ") ? global::System.Runtime.CompilerServices.Unsafe.As<" + memberType + ">(existing) : default!;"));
+                : "global::LuminPack.Code.LuminPackMarshal.AsExact<" + memberType + ">(value)!;"));
             sb.AppendLine("                    reader.ReadPolymorphismValue(ref member);");
             sb.AppendLine(compatibility.RequiresCast
                 ? "                    value = (" + data.classFullName + ")(object)member;"
@@ -107,6 +108,18 @@ public static partial class LuminPackExtensionGenerator
             sb.AppendLine("            }");
         }
     }
+
+    /// <summary>Identifies a Union case whose read calls the case's own generated entry instead of copying its body.</summary>
+    /// <param name="type">The concrete case.</param>
+    /// <param name="assembly">The assembly whose generated serializer owns the entries.</param>
+    /// <returns>Whether the case is a closed, generated reference type of that assembly with a variable payload.</returns>
+    /// <remarks>Every Union switch that reaches such a case, in its root and in each collection of that root, then calls the same
+    /// body, and that entry is the call boundary an outlined case helper used to provide. A fixed payload stays expanded in the
+    /// switch: as calls, a switch of many small cases would exhaust a large root's inline budget and keep real calls.</remarks>
+    internal static bool ReadsOwnUnionEntry(ITypeSymbol type, IAssemblySymbol assembly)
+        => type is INamedTypeSymbol { IsReferenceType: true, IsAbstract: false, TypeKind: TypeKind.Class } named &&
+            SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, assembly) && !ContainsTypeParameter(named) &&
+            !IsCustomGeneratorType(named) && HasVariablePayload(named);
 
     /// <summary>Identifies a Union case whose payload contains a string, collection or other reference-typed member.</summary>
     /// <param name="type">The concrete case.</param>
@@ -203,7 +216,9 @@ public static partial class LuminPackExtensionGenerator
             var compatibility = GetUnionGenericCompatibility(data, member);
             sb.AppendLine("                    case " + member.Id + ":");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        " + memberType + " member = (object?)value is " + memberType + " existing && value!.GetType() == typeof(" + memberType + ") ? existing : default!;");
+            sb.AppendLine("                        " + memberType + " member = " + (member.Type.IsValueType
+                ? "(object?)value is " + memberType + " existing && value!.GetType() == typeof(" + memberType + ") ? existing : default!;"
+                : "global::LuminPack.Code.LuminPackMarshal.AsExact<" + memberType + ">(value)!;"));
             sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref member);");
             sb.AppendLine(compatibility.RequiresCast
                 ? "                        value = (" + data.classFullName + ")(object)member;"

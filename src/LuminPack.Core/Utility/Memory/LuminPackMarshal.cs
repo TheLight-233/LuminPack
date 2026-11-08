@@ -14,6 +14,16 @@ public static partial class LuminPackMarshal
     // List, Stack and Queue storage is reached through the offsets probed by LuminCollectionLayouts; see that type for the
     // probe and its fallback. The offsets are constants in optimized code, as the former compiled views' fields were.
 
+    /// <summary>Selects an existing Union value for reuse when its runtime type is exactly a case type.</summary>
+    /// <typeparam name="T">The concrete case type.</typeparam>
+    /// <param name="value">The existing Union value, or null.</param>
+    /// <returns>The value as <typeparamref name="T"/>, or null for null or any other runtime type, including a derived one.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static T? AsExact<T>(object? value)
+        where T : class
+        => value is not null && value.GetType() == typeof(T) ? Unsafe.As<T>(value) : null;
+
     /// <summary>Gets the array storage of memory whose owner is exactly an array of <typeparamref name="T"/>.</summary>
     /// <typeparam name="T">The element type.</typeparam>
     /// <param name="memory">The memory, including default.</param>

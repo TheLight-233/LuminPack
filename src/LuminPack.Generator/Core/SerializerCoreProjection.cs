@@ -179,6 +179,17 @@ internal static class SerializerCoreProjection
                         attribute.ArgumentList?.ToString().Contains("AggressiveInlining") != true))))
                     .Where(list => list.Attributes.Count != 0)));
             }
+            // A shared variable-payload Union case entry is the call boundary that each Union switch's outlined case helper
+            // used to provide, so every switch reaching the case calls one body instead of inlining or copying it.
+            if (state == "LuminPack.Core.LuminPackReader" && name == "DeserializeUnion" && type != null &&
+                LuminPackExtensionGenerator.ReadsOwnUnionEntry(type, compilation.Assembly))
+                method = method.WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Select(list =>
+                    list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
+                        !attribute.Name.ToString().EndsWith("MethodImpl", StringComparison.Ordinal)))))
+                    .Where(list => list.Attributes.Count != 0)).Add(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.Attribute(SyntaxFactory.ParseName("global::System.Runtime.CompilerServices.MethodImpl"),
+                            SyntaxFactory.AttributeArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.AttributeArgument(
+                                SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining")))))))));
             if (state == "LuminPack.Core.LuminPackWriter" && name is "Serialize" or "SerializeUnion")
                 method = method.WithBody(BinaryEntryCursorAliases.Rewrite(method.Body));
             if (state == "LuminPack.Core.LuminPackReader" && name is "Deserialize" or "DeserializeUnion")

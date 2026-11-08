@@ -531,8 +531,14 @@ internal sealed class BinaryEntryInlining
                 CompilationTypeAnalysisCache.GetOrCreate(_owner._compilation).IsPackable(nested) && !RecursiveTypeAnalysis.IsRecursive(nested, _owner._compilation) &&
                 // A nested entry with the same checks takes the trusted expansion instead.
                 !(plan.Operations.TryGetValue(slot.Operation, out var sameChecks) && _owner.OwnsActiveChecks(plan, sameChecks));
-            var expanded = outline || _sharedWriterSlots?.Contains(annotation.Data) == true ? null : _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
-                OutlinesNestedUserWrites(_plan.TypeName));
+            // A Union case reads through its own concrete entry instead of a copy in every Union switch that reaches it. With the
+            // active checks that entry is the same operation; with other checks, the root's one checked helper below freezes them.
+            // A trusted expansion calls the entry only when that entry is trusted too, so trusted code gains no checks.
+            bool unionCase = !slot.Local && slot.Operation == "ReadPolymorphismValue" &&
+                LuminPackExtensionGenerator.ReadsOwnUnionEntry(_owner.Resolve(slot.TypeName), _owner._compilation.Assembly) &&
+                (_owner.ActiveInput != null || !plan.Options.Input.Enabled);
+            var expanded = outline || unionCase || _sharedWriterSlots?.Contains(annotation.Data) == true ? null : _owner.Expand(plan, slot.Operation, arguments,
+                slot.Aliases, _stack, slot.OptionProfile, false, OutlinesNestedUserWrites(_plan.TypeName));
             if (expanded != null)
                 return expanded.WithTriviaFrom(node);
             if (checkedRead && slot.Operation == "ReadValue" && CheckedRawElement(plan.TypeName) is string element && arguments.Count == 2)
