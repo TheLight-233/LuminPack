@@ -45,12 +45,25 @@ internal sealed class NativeOffsetProjection : CSharpSyntaxRewriter
         var expression = offset.Expression;
         string value = expression.ToString();
         if (expression is LiteralExpressionSyntax or SizeOfExpressionSyntax or PrefixUnaryExpressionSyntax or CheckedExpressionSyntax ||
-            !expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any())
+            !expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any() || IsStorageWidth(expression))
             return call;
         string replacement = IsNative(expression) ? "unchecked(" + value + ")" : "unchecked((nint)(uint)(" + value + "))";
         return call.WithArgumentList(call.ArgumentList.WithArguments(call.ArgumentList.Arguments.Replace(offset,
             offset.WithExpression(SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(expression)))));
     }
+
+    /// <summary>Recognizes a packed offset built only from literals and storage sizes, which is a nonnegative constant.</summary>
+    /// <param name="expression">The complete offset expression.</param>
+    /// <returns>Whether the offset needs no zero extension.</returns>
+    private static bool IsStorageWidth(ExpressionSyntax expression) => expression switch
+    {
+        LiteralExpressionSyntax literal => literal.IsKind(SyntaxKind.NumericLiteralExpression),
+        ParenthesizedExpressionSyntax parenthesized => IsStorageWidth(parenthesized.Expression),
+        BinaryExpressionSyntax binary => binary.IsKind(SyntaxKind.AddExpression) && IsStorageWidth(binary.Left) && IsStorageWidth(binary.Right),
+        InvocationExpressionSyntax { ArgumentList.Arguments.Count: 0, Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: "SizeOf" } } sizeOf } =>
+            sizeOf.Expression.ToString().EndsWith("Unsafe", StringComparison.Ordinal),
+        _ => false
+    };
 
     /// <summary>Recognizes compiler-owned native arithmetic without inferring it from unrelated argument text.</summary>
     /// <param name="expression">The complete offset expression.</param>

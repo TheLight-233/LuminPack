@@ -306,9 +306,9 @@ internal static partial class SerializerCodegenPerformanceRegression
             fixedWriter.Body.ToString().Contains("LuminPackMarshal.CopyBlockUnaligned", StringComparison.Ordinal),
             "The proven adjacent-field copy is missing from its complete write operation.");
         Require(fixedReader.Body!.ToString().Contains("Unsafe.ByteOffset", StringComparison.Ordinal) &&
-            fixedReader.Body.ToString().Contains(".Read(ref fixedStorage", StringComparison.Ordinal),
+            fixedReader.Body.ToString().Contains(".Read(ref Unsafe.As<", StringComparison.Ordinal),
             "A constructed fixed object omitted its proven destination copy.");
-        Require(!unionReader.Body!.ToString().Contains("fixedStorage", StringComparison.Ordinal),
+        Require(!unionReader.Body!.ToString().Contains("ByteOffset", StringComparison.Ordinal),
             "A Union reader acquired an additional constructed-storage copy.");
         foreach (var entry in new[] { fixedWriter, fixedReader })
         {
@@ -378,8 +378,8 @@ internal static partial class SerializerCodegenPerformanceRegression
                 gate.Statement is BlockSyntax block && block.Statements[0].ToString().StartsWith("writer.Position =", StringComparison.Ordinal)),
                 "A fixed Union capacity reservation lost its size guard or cursor publication.");
         foreach (string name in new[] { "RootWrite", "RootRead" })
-            Require(!Root(name, "VolatileGroup").DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable =>
-                    variable.Identifier.ValueText == "fixedStorage" && variable.Initializer!.ToString().Contains(".Head", StringComparison.Ordinal)),
+            Require(!Root(name, "VolatileGroup").DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+                    call.Expression.ToString().EndsWith("ByteOffset", StringComparison.Ordinal) && call.ArgumentList.ToString().Contains(".Head", StringComparison.Ordinal)),
                 "A grouped memory copy bypassed a volatile field access.");
         var listReader = Root("RootRead", "ListGraph");
         Require(!listReader.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(member => member.Name.Identifier.ValueText == "IsValueType"),
@@ -639,7 +639,8 @@ internal static partial class SerializerCodegenPerformanceRegression
     private static void VerifyFixedReadPrechecks(MethodDeclarationSyntax method)
     {
         var cursors = method.DescendantNodes().OfType<LocalDeclarationStatementSyntax>()
-            .Where(statement => statement.Declaration.Variables.Any(variable => variable.Identifier.ValueText.Contains("fixedCursor", StringComparison.Ordinal))).ToArray();
+            .Where(statement => statement.Declaration.Type is RefTypeSyntax && statement.Declaration.Variables.Any(variable =>
+                variable.Identifier.ValueText.StartsWith("cursor", StringComparison.Ordinal))).ToArray();
         Require(cursors.Length != 0, "The fixed read regression lost its field-wise fallback.");
         foreach (var cursor in cursors)
         {

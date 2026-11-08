@@ -143,17 +143,20 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
                     continue;
                 return null;
             }
-            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" && name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add")
+            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" &&
+                name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add" or "WriteUnaligned")
                 continue;
-            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock")
+            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock" or "Write")
                 continue;
             return null;
         }
+        // The method's spellings are collected once; each chosen name is added so later names stay distinct.
+        var taken = new HashSet<string>(method.DescendantTokens().Select(token => token.ValueText), StringComparer.Ordinal);
         string Name(string basis)
         {
             string name = basis;
             int suffix = 2;
-            while (method.DescendantTokens().Any(token => token.ValueText == name))
+            while (!taken.Add(name))
                 name = basis + suffix++;
             return name;
         }
@@ -178,12 +181,88 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
             string.Join(" && ", profiles.Distinct().Select(Profile)));
         var excluded = SyntaxFactory.IfStatement(SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression,
             SyntaxFactory.ParenthesizedExpression(profileGate)), body.AddStatements(SyntaxFactory.ReturnStatement()));
+        var shared = SharedRecord(method, body, state, input, snapshot, nulls, captures, reserveStatement, profileGate, boundName,
+            boundExpression, removed, helperName, Name("WriteRecord"), Name("WriteChecked"));
+        if (shared != null)
+            return GeneratedOperationNames.MarkLocal(shared, boundName, "objectRecordBound");
         var guard = SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression(input + " is not null"), SyntaxFactory.Block(proof));
         var helper = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement(
             "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void " + helperName + "() {}");
         helper = helper.WithParameterList(method.ParameterList).WithBody(body);
         return GeneratedOperationNames.MarkLocal(method.WithBody(SyntaxFactory.Block(excluded, guard,
             SyntaxFactory.ParseStatement(helperName + "(ref " + state + ", " + input + ");"), helper)), boundName, "objectRecordBound");
+    }
+
+    /// <summary>Writes the record body once and reaches it from the proven, excluded-profile and cold paths.</summary>
+    /// <param name="method">The complete original operation.</param>
+    /// <param name="body">Its original body.</param>
+    /// <param name="state">The Writer parameter.</param>
+    /// <param name="input">The payload parameter.</param>
+    /// <param name="snapshot">The payload snapshot declaration.</param>
+    /// <param name="nulls">The null-marker branches.</param>
+    /// <param name="captures">The string member captures.</param>
+    /// <param name="reserve">The single complete record reservation.</param>
+    /// <param name="profileGate">The architecture and framework-profile proof.</param>
+    /// <param name="boundName">The proven bound local.</param>
+    /// <param name="bound">The widened complete bound.</param>
+    /// <param name="removed">The statements that the proven path discharges.</param>
+    /// <param name="coldName">The cold operation's name.</param>
+    /// <param name="recordName">The shared record body's name.</param>
+    /// <param name="checkedName">The reserving operation's name.</param>
+    /// <returns>The rewritten operation, or null when the body is not a prelude followed by one record and its publication.</returns>
+    /// <remarks>The record body is the proven path's statements; the reserving operation runs the original prelude, reserves,
+    /// publishes the cursor and continues in that body, which reloads it. Inline hints keep the excluded-profile path and the
+    /// proven path as straight-line code, while the cold path keeps its own frame.</remarks>
+    private static MethodDeclarationSyntax SharedRecord(MethodDeclarationSyntax method, BlockSyntax body, string state, string input,
+        LocalDeclarationStatementSyntax snapshot, IfStatementSyntax[] nulls, LocalDeclarationStatementSyntax[] captures,
+        ExpressionStatementSyntax reserve, ExpressionSyntax profileGate, string boundName, ExpressionSyntax bound,
+        HashSet<SyntaxNode> removed, string coldName, string recordName, string checkedName)
+    {
+        if (reserve.Expression is not AssignmentExpressionSyntax { Left: IdentifierNameSyntax cursor } ||
+            reserve.Parent is not BlockSyntax record)
+            return null;
+        // The record block must open with its captures and reservation, and must be a statement of the operation itself.
+        int reserved = record.Statements.IndexOf(reserve);
+        if (record.Statements.Take(reserved).Any(statement => !captures.Contains(statement)) || record.Parent != body)
+            return null;
+        int recordIndex = body.Statements.IndexOf(record);
+        var prelude = body.Statements.Take(recordIndex).ToList();
+        // The prelude runs once before the shared body, which declares the cursor again from the published state.
+        var cursorDeclaration = prelude.OfType<LocalDeclarationStatementSyntax>().SingleOrDefault(declaration =>
+            declaration.Declaration.Variables.Count == 1 && declaration.Declaration.Variables[0].Identifier.ValueText == cursor.Identifier.ValueText);
+        if (cursorDeclaration == null || prelude.Any(statement => statement != snapshot && statement != cursorDeclaration && !nulls.Contains(statement)))
+            return null;
+        string owner = snapshot.Declaration.Variables[0].Identifier.ValueText;
+        var payload = method.ParameterList.Parameters[1].Type.WithoutTrivia();
+        // A parameter built from syntax factories may carry no separating trivia between its modifiers.
+        string writer = method.ParameterList.Parameters[0].NormalizeWhitespace().ToString();
+        string arguments = string.Join(", ", new[] { "ref " + state, owner }.Concat(captures.Select(capture => capture.Declaration.Variables[0].Identifier.ValueText)));
+        string parameters = string.Join(", ", new[] { writer, payload + " " + owner }.Concat(captures.Select(capture => "string " + capture.Declaration.Variables[0].Identifier.ValueText)));
+        const string inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] ";
+        var recordBody = (BlockSyntax)new ProvenBody(removed).Visit(body);
+        var recordFunction = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement(inline + "static void " + recordName + "(" + parameters + ") {}");
+        recordFunction = recordFunction.WithBody(recordBody);
+        var reserving = new List<StatementSyntax>(prelude);
+        reserving.AddRange(captures);
+        reserving.Add(reserve);
+        reserving.Add(SyntaxFactory.ParseStatement(state + ".CommitRecords(ref " + cursor.Identifier.ValueText + ");"));
+        reserving.Add(SyntaxFactory.ParseStatement(recordName + "(" + arguments + ");"));
+        var reservingFunction = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement(inline + "static void " + checkedName + "() {}");
+        reservingFunction = reservingFunction.WithParameterList(method.ParameterList).WithBody(SyntaxFactory.Block(reserving));
+        var cold = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement(
+            "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void " +
+            coldName + "() {}");
+        cold = cold.WithParameterList(method.ParameterList).WithBody(SyntaxFactory.Block(SyntaxFactory.ParseStatement(checkedName + "(ref " + state + ", " + input + ");")));
+        var proof = new List<StatementSyntax> { snapshot };
+        proof.AddRange(captures);
+        proof.Add(SyntaxFactory.ParseStatement("long " + boundName + " = " + bound.WithoutTrivia() + ";"));
+        proof.Add(SyntaxFactory.ParseStatement("if (" + state + ".RecordRoom() >= " + boundName + ") { " + recordName + "(" + arguments + "); return; }"));
+        var excluded = SyntaxFactory.IfStatement(SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression,
+            SyntaxFactory.ParenthesizedExpression(profileGate)), SyntaxFactory.Block(
+                SyntaxFactory.ParseStatement(checkedName + "(ref " + state + ", " + input + ");"), SyntaxFactory.ReturnStatement()));
+        var guard = SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression(input + " is not null"), SyntaxFactory.Block(proof));
+        return method.WithBody(SyntaxFactory.Block(excluded, guard, SyntaxFactory.ParseStatement(coldName + "(ref " + state + ", " + input + ");"),
+            recordFunction, reservingFunction, cold));
     }
 
     /// <summary>Widens the complete positive bound before any checked-int arithmetic.</summary>
@@ -200,8 +279,12 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
         public override SyntaxNode VisitBinaryExpression(BinaryExpressionSyntax node)
         {
             var result = (BinaryExpressionSyntax)base.VisitBinaryExpression(node);
-            return result.IsKind(SyntaxKind.AddExpression) ? result.WithLeft(SyntaxFactory.CastExpression(
-                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.LongKeyword)), SyntaxFactory.ParenthesizedExpression(result.Left))) : result;
+            // The leftmost term of a sum is widened; each later addition then has a 64-bit left operand.
+            if (!result.IsKind(SyntaxKind.AddExpression) || result.Left is BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } ||
+                result.Left is LiteralExpressionSyntax { Token.Value: long })
+                return result;
+            return result.WithLeft(SyntaxFactory.CastExpression(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.LongKeyword)),
+                SyntaxFactory.ParenthesizedExpression(result.Left)));
         }
     }
 

@@ -154,37 +154,45 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             sb.AppendLine();
         }
 
-        AppendMethodAttribute(sb, padding);
-        AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{modifier}void LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
-        sb.AppendLine($"{padding}{{");
-        if (metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
-        {
-            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValue != null)");
-            sb.AppendLine($"{padding}    {{");
-            sb.AppendLine($"{padding}        {rootType} rootValue = this;");
-            sb.AppendLine($"{padding}        ((global::LuminPack.Code.LuminPackUnionWriteDelegate<{rootType}>)registration.WriteValue)(ref writer, ref rootValue);");
-            sb.AppendLine($"{padding}        return;");
-            sb.AppendLine($"{padding}    }}");
-        }
-        sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
-        sb.AppendLine($"{padding}}}");
+        AppendRootSlot(sb, padding, modifier, rootType, suffix, metaInfo, "LuminPackUnionSerialize_", "LuminPackWriter", "LuminPackUnionWriteDelegate", "WriteValue");
         sb.AppendLine();
+        AppendRootSlot(sb, padding, modifier, rootType, suffix, metaInfo, "LuminPackUnionSerializeJson_", "LuminPackJsonWriter", "LuminPackUnionJsonWriteDelegate", "WriteValueJson");
+    }
 
+    /// <summary>Emits a root's throwing or registered-member write slot.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="padding">The member indentation.</param>
+    /// <param name="modifier">The slot modifiers of the root kind.</param>
+    /// <param name="rootType">The fully qualified Union root.</param>
+    /// <param name="suffix">The root's slot suffix.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <param name="slot">The slot name prefix.</param>
+    /// <param name="state">The writer state type in <c>LuminPack.Core</c>.</param>
+    /// <param name="writeDelegate">The registered write delegate type in <c>LuminPack.Code</c>.</param>
+    /// <param name="operation">The registered formatter's write operation.</param>
+    /// <remarks>Each compiled profile copies this slot, so a registered member is written by one shared helper and every
+    /// profile slot stays a single call.</remarks>
+    private static void AppendRootSlot(StringBuilder sb, string padding, string modifier, string rootType, string suffix, MetaInfo metaInfo,
+        string slot, string state, string writeDelegate, string operation)
+    {
+        string helper = slot.Replace("LuminPackUnionSerialize", "LuminPackUnionWriteRegistered") + suffix;
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{modifier}void LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
+        sb.AppendLine($"{padding}{modifier}void {slot}{suffix}(ref global::LuminPack.Core.{state} writer)");
         sb.AppendLine($"{padding}{{");
-        if (metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
-        {
-            sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)this).GetType(), out var registration) && registration.WriteValueJson != null)");
-            sb.AppendLine($"{padding}    {{");
-            sb.AppendLine($"{padding}        {rootType} rootValue = this;");
-            sb.AppendLine($"{padding}        ((global::LuminPack.Code.LuminPackUnionJsonWriteDelegate<{rootType}>)registration.WriteValueJson)(ref writer, ref rootValue);");
-            sb.AppendLine($"{padding}        return;");
-            sb.AppendLine($"{padding}    }}");
-        }
-        sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
+        sb.AppendLine(metaInfo.RegisterMode == LuminPackRegisterMode.Disabled
+            ? $"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));"
+            : $"{padding}    {helper}(this, ref writer);");
+        sb.AppendLine($"{padding}}}");
+        if (metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
+            return;
+        sb.AppendLine();
+        sb.AppendLine($"{padding}private static void {helper}({rootType} value, ref global::LuminPack.Core.{state} writer)");
+        sb.AppendLine($"{padding}{{");
+        sb.AppendLine($"{padding}    if (LuminPackTryGetRegistered_{suffix}(((object)value).GetType(), out var registration) && registration.{operation} != null)");
+        sb.AppendLine($"{padding}        ((global::LuminPack.Code.{writeDelegate}<{rootType}>)registration.{operation})(ref writer, ref value);");
+        sb.AppendLine($"{padding}    else");
+        sb.AppendLine($"{padding}        global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)value).GetType(), typeof({rootType}));");
         sb.AppendLine($"{padding}}}");
     }
 

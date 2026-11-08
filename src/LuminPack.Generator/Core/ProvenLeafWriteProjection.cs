@@ -162,9 +162,10 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
                     return null;
                 continue;
             }
-            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" && name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add")
+            if (receiver is "Unsafe" or "global::System.Runtime.CompilerServices.Unsafe" &&
+                name is "As" or "AsRef" or "ByteOffset" or "SizeOf" or "Add" or "WriteUnaligned")
                 continue;
-            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock")
+            if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock" or "Write")
                 continue;
             return null;
         }
@@ -209,8 +210,12 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
         public override SyntaxNode VisitBinaryExpression(BinaryExpressionSyntax node)
         {
             var result = (BinaryExpressionSyntax)base.VisitBinaryExpression(node);
-            return result.IsKind(SyntaxKind.AddExpression) ? result.WithLeft(SyntaxFactory.CastExpression(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.LongKeyword)),
-                SyntaxFactory.ParenthesizedExpression(result.Left))) : result;
+            // The leftmost term of a sum is widened; each later addition then has a 64-bit left operand.
+            if (!result.IsKind(SyntaxKind.AddExpression) || result.Left is BinaryExpressionSyntax { RawKind: (int)SyntaxKind.AddExpression } ||
+                result.Left is LiteralExpressionSyntax { Token.Value: long })
+                return result;
+            return result.WithLeft(SyntaxFactory.CastExpression(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.LongKeyword)),
+                SyntaxFactory.ParenthesizedExpression(result.Left)));
         }
     }
 

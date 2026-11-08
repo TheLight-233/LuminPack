@@ -147,25 +147,20 @@ internal sealed class SafeReadProjection
             {
                 if (node.Statements[index] is not IfStatementSyntax batch || batch.Statement is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax copy } ||
                     copy.Expression is not MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Read" } read || copy.ArgumentList.Arguments.Count != 2 ||
-                    !copy.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) || copy.ArgumentList.Arguments[0].Expression is not IdentifierNameSyntax storage)
+                    !copy.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) || copy.ArgumentList.Arguments[0].Expression is not ExpressionSyntax storage)
                     continue;
                 var booleans = new List<string>();
                 var offsets = new List<int>();
-                // The batch's first field initializes its storage reference; the condition proves every following offset.
-                var declaration = node.Statements.Take(index).OfType<LocalDeclarationStatementSyntax>().Select(local => local.Declaration.Variables[0])
-                    .LastOrDefault(variable => variable.Identifier.ValueText == storage.Identifier.ValueText);
-                foreach (var cast in (declaration?.Initializer?.Value.DescendantNodesAndSelf() ?? Enumerable.Empty<SyntaxNode>()).OfType<InvocationExpressionSyntax>())
-                    if (BooleanStorage(cast) is string field)
-                    {
-                        booleans.Add(field);
-                        offsets.Add(0); }
-                foreach (var proof in batch.Condition.DescendantNodesAndSelf().OfType<BinaryExpressionSyntax>().Where(proof => proof.IsKind(SyntaxKind.EqualsExpression)))
+                // The field-wise branch reads every field of the batch at its packed offset from the captured cursor.
+                foreach (var load in (batch.Else?.Statement as BlockSyntax)?.Statements.OfType<ExpressionStatementSyntax>() ?? Enumerable.Empty<ExpressionStatementSyntax>())
                 {
-                    var cast = proof.Left.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>().Select(BooleanStorage).FirstOrDefault(field => field != null);
-                    if (cast == null)
+                    if (BooleanLoad(load) is not (string field, ExpressionSyntax location))
                         continue;
-                    booleans.Add(cast);
-                    offsets.Add(int.TryParse(new string(proof.Right.ToString().Where(char.IsDigit).ToArray()), NumberStyles.None, CultureInfo.InvariantCulture, out int value) ? value : -1);
+                    booleans.Add(field);
+                    offsets.Add(location is IdentifierNameSyntax ? 0 :
+                        location is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 2 } add &&
+                        add.ArgumentList.Arguments[1].Expression is LiteralExpressionSyntax literal &&
+                        int.TryParse(literal.Token.ValueText, NumberStyles.None, CultureInfo.InvariantCulture, out int value) ? value : -1);
                 }
                 if (booleans.Count == 0)
                     continue;
@@ -178,7 +173,7 @@ internal sealed class SafeReadProjection
                     {
                         int window = Math.Min(low, length - width);
                         ulong mask = offsets.Aggregate(0UL, (bits, value) => bits | 0xFEUL << (8 * (value - window)));
-                        windowed = Policy + ".ReadBatch(ref " + read.Expression + ", ref " + storage.Identifier.ValueText + ", " + Literal(length) + ", " + Literal(window) + ", 0x" +
+                        windowed = Policy + ".ReadBatch(ref " + read.Expression + ", ref " + storage.WithoutTrivia() + ", " + Literal(length) + ", " + Literal(window) + ", 0x" +
                             mask.ToString(width == 8 ? "X16" : "X8", CultureInfo.InvariantCulture) + (width == 8 ? "UL" : "U") + ");";
                     }
                 }
@@ -200,16 +195,16 @@ internal sealed class SafeReadProjection
             return result.WithStatements(SyntaxFactory.List(statements));
         }
 
-        /// <summary>Identifies a Boolean field reference reinterpreted as batch storage.</summary>
-        /// <param name="node">An original invocation.</param><returns>The referenced field expression, or null.</returns>
-        private string BooleanStorage(InvocationExpressionSyntax node)
+        /// <summary>Recognizes a field-wise Boolean load of a fixed batch.</summary>
+        /// <param name="statement">A statement of the batch's field-wise branch.</param>
+        /// <returns>The destination field and the input location, or null for any other statement.</returns>
+        private (string Field, ExpressionSyntax Location)? BooleanLoad(ExpressionStatementSyntax statement)
         {
-            if (node.Expression is not MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: "As", TypeArgumentList.Arguments.Count: 2 } } ||
-                node.ArgumentList.Arguments.Count != 1 || !node.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
+            if (statement.Expression is not AssignmentExpressionSyntax { Right: InvocationExpressionSyntax load } assignment ||
+                load.ArgumentList.Arguments.Count != 1 || !load.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ||
+                _owner._model.GetSymbolInfo(load).Symbol is not IMethodSymbol { ReturnType.SpecialType: SpecialType.System_Boolean })
                 return null;
-            return _owner._model.GetSymbolInfo(node).Symbol is IMethodSymbol { TypeArguments.Length: 2 } method &&
-                method.TypeArguments[0].SpecialType == SpecialType.System_Boolean && method.TypeArguments[1].SpecialType == SpecialType.System_Byte
-                ? node.ArgumentList.Arguments[0].Expression.ToString() : null;
+            return (assignment.Left.ToString(), load.ArgumentList.Arguments[0].Expression);
         }
 
         /// <summary>Reports a back reference to an object of another type as malformed input.</summary>

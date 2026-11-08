@@ -228,7 +228,11 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
                 ? state + ".Cursor += (uint)(__luminCount)"
                 : state + ".Cursor = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref " + state + ".Cursor, (nint)(uint)(__luminCount))");
             var placeholder = lowered.DescendantNodes().OfType<IdentifierNameSyntax>().Single(identifier => identifier.Identifier.ValueText == "__luminCount");
-            var advance = result.WithExpression(lowered.ReplaceNode(placeholder, SyntaxFactory.ParenthesizedExpression(count.WithoutTrivia())));
+            // A constant width needs no zero extension, so it stays a plain literal offset.
+            var advance = result.WithExpression(count is LiteralExpressionSyntax && !_pointer
+                ? SyntaxFactory.ParseExpression(state + ".Cursor = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref " + state + ".Cursor, " +
+                    count.WithoutTrivia() + ")")
+                : lowered.ReplaceNode(placeholder, SyntaxFactory.ParenthesizedExpression(count.WithoutTrivia())));
             var check = SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
                 SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, access.Expression,
                     SyntaxFactory.IdentifierName("EnsureReadable")),

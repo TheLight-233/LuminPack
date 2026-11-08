@@ -60,6 +60,9 @@ public static partial class LuminPackCodeGenerator
         {
             if (fresh || field.IsVolatile)
                 builder.AppendLine(indent + target + " = reader.ReadStringRecord((string?)null)!;");
+            else if (!field.isProperty)
+                // The by-reference read keeps an equal current string without storing it again.
+                builder.AppendLine(indent + "reader.ReadStringRecord(ref " + target + ");");
             else
             {
                 builder.AppendLine(indent + "{");

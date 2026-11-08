@@ -212,7 +212,12 @@ public static class LuminPackInputPolicy
     /// <param name="maximum">The frozen string limit in UTF-16 code units.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void ReadStringRecord<TOptions>(ref LuminPackReader reader, ref string? value, int maximum) where TOptions : struct, ILuminPackOptions
-        => value = ReadString<TOptions>(ref reader, value, maximum);
+    {
+        string? decoded = ReadString<TOptions>(ref reader, value, maximum);
+        // An equal record returns the current reference, which needs no store.
+        if (!ReferenceEquals(value, decoded))
+            value = decoded;
+    }
 
     /// <summary>Reads string slots with the frozen character limit, retaining unchanged references.</summary>
     /// <typeparam name="TOptions">The exact binary string profile.</typeparam>

@@ -484,7 +484,10 @@ namespace LuminPack.Core
         public void Read<TOptions>(ref string? value)
             where TOptions : struct, ILuminPackOptions
         {
-            value = Read<TOptions>(value);
+            string? decoded = Read<TOptions>(value);
+            // An equal record returns the current reference, which needs no store.
+            if (!ReferenceEquals(value, decoded))
+                value = decoded;
         }
 
         /// <summary>Reads a complete default-profile record without exposing an integer cursor.</summary>

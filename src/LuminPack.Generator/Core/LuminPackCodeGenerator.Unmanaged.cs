@@ -115,13 +115,13 @@ public static partial class LuminPackCodeGenerator
             for (int index = first + 1; index <= last; index++)
                 readWidth = AddUnmanagedFieldSize(readWidth, GetUnmanagedFieldSize(fields[index]));
             builder.AppendLine(indent + "{");
-            builder.AppendLine(indent + "    ref byte fixedCursor = ref reader.GetCurrentSpanReference();");
+            builder.AppendLine(indent + "    ref byte __cursor = ref reader.GetCurrentSpanReference();");
             // The checked Advance validates the complete group before the loads read the captured position.
             builder.AppendLine(indent + "    reader.Advance(" + readWidth + ");");
             string readOffset = "0";
             for (int index = first; index <= last; index++)
             {
-                string location = readOffset == "0" ? "fixedCursor" : "Unsafe.Add(ref fixedCursor, " + readOffset + ")";
+                string location = readOffset == "0" ? "__cursor" : "Unsafe.Add(ref __cursor, " + readOffset + ")";
                 builder.AppendLine(indent + "    " + FixedRead(location, storage(fields[index]), fields[index]));
                 readOffset = AddUnmanagedFieldSize(readOffset, GetUnmanagedFieldSize(fields[index]));
             }
@@ -129,55 +129,105 @@ public static partial class LuminPackCodeGenerator
             return true;
         }
         string Reference(LuminDataField field) => write ? "Unsafe.AsRef(in " + storage(field) + ")" : storage(field);
-        builder.AppendLine(indent + "{");
-        builder.AppendLine(indent + "    ref byte fixedStorage = ref Unsafe.As<" + GetGeneratedTypeName(fields[first]) + ", byte>(ref " + Reference(fields[first]) + ");");
-        var proofs = new List<string> { "Unsafe.SizeOf<global::System.IntPtr>() == 8" };
-        string length = GetUnmanagedFieldSize(fields[first]);
-        for (int index = first + 1; index <= last; index++)
-        {
-            proofs.Add("Unsafe.ByteOffset(ref fixedStorage, ref Unsafe.As<" + GetGeneratedTypeName(fields[index]) + ", byte>(ref " + Reference(fields[index]) + ")) == (nint)(" + length + ")");
-            length = AddUnmanagedFieldSize(length, GetUnmanagedFieldSize(fields[index]));
-        }
-        builder.AppendLine(indent + "    if (" + string.Join(" && ", proofs) + ")");
+        string length = FixedGroupWidth(fields, first, last);
+        string block = "Unsafe.As<" + GetGeneratedTypeName(fields[first]) + ", byte>(ref " + Reference(fields[first]) + ")";
         string state = write ? "writer" : "reader", operation = write ? "Write" : "Read";
-        builder.AppendLine(indent + "        " + state + "." + operation + "(ref fixedStorage, " + length + ");");
-        builder.AppendLine(indent + "    else");
-        builder.AppendLine(indent + "    {");
-        builder.AppendLine(indent + "        ref byte fixedCursor = ref " + state + ".GetCurrentSpanReference();");
-        // A read advances first: the checked Advance validates the group before the loads read the captured position.
-        if (!write)
-            builder.AppendLine(indent + "        reader.Advance(" + length + ");");
-        string offset = "0";
-        for (int index = first; index <= last; index++)
-        {
-            string location = offset == "0" ? "fixedCursor" : "Unsafe.Add(ref fixedCursor, " + offset + ")";
-            builder.AppendLine(indent + "        " + (write
-                ? FixedWrite(location, storage(fields[index]), fields[index])
-                : FixedRead(location, storage(fields[index]), fields[index])));
-            offset = AddUnmanagedFieldSize(offset, GetUnmanagedFieldSize(fields[index]));
-        }
+        builder.AppendLine(indent + "if (" + AdjacentFieldsProof(fields, first, last, storage, write) + ")");
+        builder.AppendLine(indent + "    " + state + "." + operation + "(ref " + block + ", " + length + ");");
+        builder.AppendLine(indent + "else");
+        builder.AppendLine(indent + "{");
+        builder.AppendLine(indent + "    ref byte __cursor = ref " + state + ".GetCurrentSpanReference();");
         if (write)
-            builder.AppendLine(indent + "        writer.Advance(" + length + ");");
-        builder.AppendLine(indent + "    }");
+        {
+            AppendFixedFieldStores(builder, fields, first, last, storage, "__cursor", indent + "    ");
+            builder.AppendLine(indent + "    writer.Advance(" + length + ");");
+        }
+        else
+        {
+            // A read advances first: the checked Advance validates the group before the loads read the captured position.
+            builder.AppendLine(indent + "    reader.Advance(" + length + ");");
+            string offset = "0";
+            for (int index = first; index <= last; index++)
+            {
+                string location = offset == "0" ? "__cursor" : "Unsafe.Add(ref __cursor, " + offset + ")";
+                builder.AppendLine(indent + "    " + FixedRead(location, storage(fields[index]), fields[index]));
+                offset = AddUnmanagedFieldSize(offset, GetUnmanagedFieldSize(fields[index]));
+            }
+        }
         builder.AppendLine(indent + "}");
         return true;
     }
 
-    /// <summary>Stores a fixed field without spending the enclosing root's native inlining budget.</summary>
+    /// <summary>Builds the 64-bit block-copy proof of a fixed run: every field starts where its predecessor ends.</summary>
+    /// <param name="fields">The ordered wire fields.</param>
+    /// <param name="first">The first field of the run.</param>
+    /// <param name="last">The last field of the run.</param>
+    /// <param name="storage">The field storage expression.</param>
+    /// <param name="write">Whether the storage is read-only source storage, which is addressed through <c>Unsafe.AsRef</c>.</param>
+    /// <returns>A condition with one adjacency term per field pair.</returns>
+    /// <remarks>Packed widths equal each storage type's size, so chaining the pairs is equivalent to checking every field's
+    /// actual offset from the first field against its packed offset. The terms use only JIT intrinsics: a helper call would
+    /// spend the root's inline budget, and a large root that exhausts it would evaluate the proof at run time and keep both
+    /// branches.</remarks>
+    internal static string AdjacentFieldsProof(List<LuminDataField> fields, int first, int last, Func<LuminDataField, string> storage, bool write)
+    {
+        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
+        string Address(LuminDataField field) => "ref " + unsafeType + ".As<" + GetGeneratedTypeName(field) + ", byte>(ref " +
+            (write ? unsafeType + ".AsRef(in " + storage(field) + ")" : storage(field)) + ")";
+        var proofs = new List<string> { unsafeType + ".SizeOf<global::System.IntPtr>() == 8" };
+        for (int index = first + 1; index <= last; index++)
+            proofs.Add(unsafeType + ".ByteOffset(" + Address(fields[index - 1]) + ", " + Address(fields[index]) + ") == " +
+                GetUnmanagedFieldSize(fields[index - 1]).Replace("Unsafe.", unsafeType + "."));
+        return string.Join(" && ", proofs);
+    }
+
+    /// <summary>Computes the packed width of a fixed run.</summary>
+    /// <param name="fields">The ordered wire fields.</param>
+    /// <param name="first">The first field of the run.</param>
+    /// <param name="last">The last field of the run.</param>
+    /// <returns>A constant or JIT-specializable width expression.</returns>
+    internal static string FixedGroupWidth(List<LuminDataField> fields, int first, int last)
+    {
+        string width = "0";
+        for (int index = first; index <= last; index++)
+            width = AddUnmanagedFieldSize(width, GetUnmanagedFieldSize(fields[index]));
+        return width;
+    }
+
+    /// <summary>Stores each field of a fixed run at its packed offset from a cursor, one statement per field.</summary>
+    /// <param name="builder">The operation builder.</param>
+    /// <param name="fields">The ordered wire fields.</param>
+    /// <param name="first">The first field of the run.</param>
+    /// <param name="last">The last field of the run.</param>
+    /// <param name="storage">The field storage expression.</param>
+    /// <param name="cursor">The output byte reference, which the caller advances by the run width afterwards.</param>
+    /// <param name="indent">The statement indentation.</param>
+    internal static void AppendFixedFieldStores(StringBuilder builder, List<LuminDataField> fields, int first, int last,
+        Func<LuminDataField, string> storage, string cursor, string indent)
+    {
+        string offset = "0";
+        for (int index = first; index <= last; index++)
+        {
+            string location = offset == "0" ? cursor : "global::System.Runtime.CompilerServices.Unsafe.Add(ref " + cursor + ", " + offset + ")";
+            builder.AppendLine(indent + FixedWrite(location, storage(fields[index]), fields[index]));
+            offset = AddUnmanagedFieldSize(offset, GetUnmanagedFieldSize(fields[index]));
+        }
+    }
+
+    /// <summary>Stores a fixed field at a reserved output location in one statement.</summary>
     /// <param name="location">The reserved output byte reference expression.</param>
     /// <param name="storage">The original source storage expression.</param>
     /// <param name="field">The field and its bound storage type.</param>
-    /// <returns>A typed store where allowed, retaining the original packed-view kernel for wider 32-bit storage.</returns>
+    /// <returns>A typed store for values of at most four bytes, otherwise the writer's architecture-aware fixed store, which
+    /// uses a typed store on 64-bit targets and the packed-view kernel for wider 32-bit storage.</returns>
     private static string FixedWrite(string location, string storage, LuminDataField field)
     {
-        string type = GetGeneratedTypeName(field);
-        string store = "Unsafe.WriteUnaligned(ref " + location + ", " + storage + ");";
-        if (field.TypeSymbol?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
+        var type = field.TypeSymbol is INamedTypeSymbol { TypeKind: TypeKind.Enum, EnumUnderlyingType: { } underlying } ? underlying : field.TypeSymbol;
+        if (type?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
             SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
             SpecialType.System_UInt32 or SpecialType.System_Single)
-            return store;
-        return "if (Unsafe.SizeOf<global::System.IntPtr>() == 8 || Unsafe.SizeOf<" + type + ">() <= 4) " + store +
-            " else global::LuminPack.Core.LuminPackWriter.Write(ref " + location + ", in " + storage + ");";
+            return "global::System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref " + location + ", " + storage + ");";
+        return "global::LuminPack.Core.LuminPackWriter.Write(ref " + location + ", in " + storage + ");";
     }
 
     /// <summary>Reads one field from an already validated fixed group through the reader's scalar kernel.</summary>

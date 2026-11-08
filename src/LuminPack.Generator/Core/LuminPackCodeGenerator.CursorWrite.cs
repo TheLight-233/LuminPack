@@ -199,29 +199,21 @@ public static partial class LuminPackCodeGenerator
     /// each field is stored at its packed offset through the architecture-aware fixed store.</remarks>
     internal static void AppendReservedFixedGroup(StringBuilder builder, List<LuminDataField> fields, int first, int last, Func<LuminDataField, string> Storage, string indent)
     {
-        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
         const string writerType = "global::LuminPack.Core.LuminPackWriter";
         if (first == last)
         {
             builder.AppendLine(indent + "__cursor = ref " + writerType + ".WriteReserved<" + GetGeneratedTypeName(fields[first]) + ">(ref __cursor, " + Storage(fields[first]) + ");");
             return;
         }
-        string suffix = first.ToString();
-        string Reference(LuminDataField member) => unsafeType + ".AsRef(in " + Storage(member) + ")";
-        string length = GetUnmanagedFieldSize(fields[first]);
-        var proofs = new List<string> { unsafeType + ".SizeOf<global::System.IntPtr>() == 8" };
-        for (int member = first + 1; member <= last; member++)
-        {
-            proofs.Add(unsafeType + ".ByteOffset(ref __fixed" + suffix + ", ref " + unsafeType + ".As<" + GetGeneratedTypeName(fields[member]) + ", byte>(ref " + Reference(fields[member]) + ")) == (nint)(" + length + ")");
-            length = AddUnmanagedFieldSize(length, GetUnmanagedFieldSize(fields[member]));
-        }
-        builder.AppendLine(indent + "ref byte __fixed" + suffix + " = ref " + unsafeType + ".As<" + GetGeneratedTypeName(fields[first]) + ", byte>(ref " + Reference(fields[first]) + ");");
-        builder.AppendLine(indent + "if (" + string.Join(" && ", proofs) + ")");
-        builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReservedBlock(ref __cursor, ref __fixed" + suffix + ", " + length + ");");
+        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
+        string width = FixedGroupWidth(fields, first, last);
+        string block = unsafeType + ".As<" + GetGeneratedTypeName(fields[first]) + ", byte>(ref " + unsafeType + ".AsRef(in " + Storage(fields[first]) + "))";
+        builder.AppendLine(indent + "if (" + AdjacentFieldsProof(fields, first, last, Storage, write: true) + ")");
+        builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReservedBlock(ref __cursor, ref " + block + ", " + width + ");");
         builder.AppendLine(indent + "else");
         builder.AppendLine(indent + "{");
-        for (int member = first; member <= last; member++)
-            builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved<" + GetGeneratedTypeName(fields[member]) + ">(ref __cursor, " + Storage(fields[member]) + ");");
+        AppendFixedFieldStores(builder, fields, first, last, Storage, "__cursor", indent + "    ");
+        builder.AppendLine(indent + "    __cursor = ref " + unsafeType + ".Add(ref __cursor, " + width + ");");
         builder.AppendLine(indent + "}");
     }
 
