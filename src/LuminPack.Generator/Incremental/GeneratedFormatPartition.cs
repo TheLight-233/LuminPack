@@ -25,6 +25,19 @@ internal sealed class GeneratedFormatPartition
         Json = json;
     }
 
+    /// <summary>Returns the nonempty format files with their existing hint names.</summary>
+    /// <param name="hintName">The hint name of the original contribution.</param>
+    /// <param name="binary">Whether to include binary and shared declarations.</param>
+    /// <param name="json">Whether to include JSON declarations.</param>
+    /// <returns>The requested files in format order.</returns>
+    internal IEnumerable<FrozenGeneratedSource> Files(string hintName, bool binary = true, bool json = true)
+    {
+        if (binary && Shared.Length != 0)
+            yield return new FrozenGeneratedSource(hintName, Shared);
+        if (json && Json.Length != 0)
+            yield return new FrozenGeneratedSource("LuminPackJson." + hintName, Json);
+    }
+
     /// <summary>Partitions one generated file once for both publishers.</summary>
     /// <param name="source">The completed formatter or serializer source.</param>
     /// <param name="options">The exact parse and preprocessing options.</param>

@@ -15,7 +15,9 @@ internal sealed class AggregateResultBuilder
     /// <summary>Records an unchanged legacy filename and complete source text.</summary>
     /// <param name="name">The existing generated hint name.</param>
     /// <param name="source">The complete generated source.</param>
-    internal void AddSource(string name, string source) => _files.Add(new FrozenGeneratedSource(name, source));
+    /// <param name="owner">The publisher or format pair for the contribution.</param>
+    internal void AddSource(string name, string source, GeneratorOutput owner = GeneratorOutput.Binary)
+        => _files.Add(new FrozenGeneratedSource(name, source, owner));
 
     /// <summary>Freezes a diagnostic while current semantic locations are available.</summary>
     /// <param name="diagnostic">The diagnostic to record.</param>
@@ -65,19 +67,24 @@ internal sealed class FrozenGeneratedSource : IEquatable<FrozenGeneratedSource>
 {
     internal readonly string Name;
     internal readonly string Text;
+    internal readonly GeneratorOutput Owner;
 
     /// <summary>Creates an individual source-output value.</summary>
     /// <param name="name">The existing generated hint name.</param>
     /// <param name="text">The exact complete source text.</param>
-    internal FrozenGeneratedSource(string name, string text)
+    /// <param name="owner">The publisher or format pair for the contribution.</param>
+    internal FrozenGeneratedSource(string name, string text, GeneratorOutput owner = GeneratorOutput.Binary)
     {
         Name = name;
-        Text = text; }
+        Text = text;
+        Owner = owner;
+    }
 
     /// <summary>Compares the filename and complete source.</summary>
     /// <param name="other">The previous file value.</param>
     /// <returns>Whether source production can remain cached.</returns>
-    public bool Equals(FrozenGeneratedSource other) => ReferenceEquals(this, other) || other != null && Name == other.Name && Text == other.Text;
+    public bool Equals(FrozenGeneratedSource other) => ReferenceEquals(this, other) || other != null &&
+        Name == other.Name && Text == other.Text && Owner == other.Owner;
 
     /// <summary>Compares an arbitrary object with this source.</summary>
     /// <param name="obj">The object to compare.</param>

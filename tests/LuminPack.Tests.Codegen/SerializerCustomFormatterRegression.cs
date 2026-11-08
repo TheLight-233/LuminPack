@@ -177,11 +177,15 @@ internal static class SerializerCustomFormatterRegression
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: false));
             GeneratorDriver driver = CSharpGeneratorDriver.Create(
-                [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+                [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator()],
+                parseOptions: parse);
             driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out _);
-            var generatedSources = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
-            var errors = output.GetDiagnostics().Concat(driver.GetRunResult().Diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error);
+            var result = driver.GetRunResult();
+            var generatedSources = result.Results.SelectMany(publisher => publisher.GeneratedSources).ToArray();
+            var errors = output.GetDiagnostics().Concat(result.Diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error);
             if (errors.Any()) throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
+            if (!result.Results[2].GeneratedSources.Any(file => file.HintName == "LuminPackCustomFormatterRegistry.g.cs"))
+                throw new InvalidOperationException("The formatter publisher did not emit the Custom registry.");
             var stateMethods = generatedSources
                 .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
                 .Where(method => method.TypeParameterList == null && method.ParameterList.Parameters.Count == 2 &&

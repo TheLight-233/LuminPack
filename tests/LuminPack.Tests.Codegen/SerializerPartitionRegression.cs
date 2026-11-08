@@ -31,20 +31,33 @@ internal static class SerializerPartitionRegression
         CheckErrors(initialOutput);
         var initialFiles = FacadeFiles(initial);
         var reversed = CSharpGeneratorDriver.Create(
-            [new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackSourceGenerator().AsSourceGenerator()],
+            [new LuminPackFormatterGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackSourceGenerator().AsSourceGenerator()],
             parseOptions: Parse).RunGeneratorsAndUpdateCompilation(input, out var reversedOutput, out _);
         CheckErrors(reversedOutput);
         Require(AllFiles(initial).OrderBy(pair => pair.Key).SequenceEqual(AllFiles(reversed).OrderBy(pair => pair.Key)),
             "Changing generator registration order changed the partitioned files.");
-        var modelFiles = initial.GetRunResult().Results.Single(result => result.GeneratedSources.Any(file => file.HintName == "LuminPackGen.A.g.cs"));
-        Require(modelFiles.GeneratedSources.All(file => !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal)),
-            "SourceGenerator files retained Extension suffixes.");
-        var jsonModel = initial.GetRunResult().Results.Single(result =>
-            result.GeneratedSources.Any(file => file.HintName == "LuminPackJson.LuminPackGen.A.g.cs"));
-        Require(!modelFiles.GeneratedSources.Single(file => file.HintName == "LuminPackGen.A.g.cs").SourceText.ToString()
+        var legacyDriver = CSharpGeneratorDriver.Create(
+            [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()],
+            parseOptions: Parse).RunGeneratorsAndUpdateCompilation(input, out var legacyDriverOutput, out _);
+        CheckErrors(legacyDriverOutput);
+        Require(AllFiles(initial).OrderBy(pair => pair.Key).SequenceEqual(AllFiles(legacyDriver).OrderBy(pair => pair.Key)),
+            "The compatibility generator pair changed the emitted files.");
+        var publishers = initial.GetRunResult().Results;
+        Require(publishers.Length == 3 &&
+            publishers[0].GeneratedSources.Any(file => file.HintName == "LuminPackSerializer.g.cs") &&
+            publishers[1].GeneratedSources.All(file => file.HintName.StartsWith("LuminPackJson.LuminPackSerializer.", StringComparison.Ordinal)),
+            "The serializer publishers did not own their respective facades.");
+        var modelFiles = publishers[2].GeneratedSources;
+        Require(modelFiles.Any(file => file.HintName == "LuminPack.Dispatch.Formatters.g.cs") &&
+            modelFiles.Any(file => file.HintName == "LuminPackJson.LuminPack.Dispatch.Formatters.g.cs") &&
+            modelFiles.Any(file => file.HintName == "LuminPack.FormatterBridges.g.cs") &&
+            modelFiles.Any(file => file.HintName.StartsWith("LuminPack.Formatter.", StringComparison.Ordinal)) &&
+            modelFiles.All(file => !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal)),
+            "Assembly-wide formatter and dispatch files did not belong to the formatter publisher.");
+        Require(!modelFiles.Single(file => file.HintName == "LuminPackGen.A.g.cs").SourceText.ToString()
                 .Contains("RootWriteJson", StringComparison.Ordinal) &&
-            jsonModel.GeneratedSources.Single(file => file.HintName == "LuminPackJson.LuminPackGen.A.g.cs").SourceText.ToString()
-                .Contains("RootWriteJson", StringComparison.Ordinal), "Model JSON roots were not moved to the JSON generator.");
+            modelFiles.Single(file => file.HintName == "LuminPackJson.LuminPackGen.A.g.cs").SourceText.ToString()
+                .Contains("RootWriteJson", StringComparison.Ordinal), "Both model formatter partitions must belong to the formatter publisher.");
         Require(initialFiles.ContainsKey("LuminPackSerializer.g.cs") && initialFiles.Count > 4, "Expected common support and independently named concrete files.");
         foreach (string name in initialFiles.Keys.Where(name => !name.EndsWith("LuminPackSerializer.g.cs", StringComparison.Ordinal)))
             Require(Regex.IsMatch(name, "^(LuminPackJson\\.)?LuminPackSerializer\\.[A-Za-z0-9_./]+\\.g\\.cs$") && !Regex.IsMatch(name, "[0-9a-f]{32}"),
@@ -311,10 +324,11 @@ internal static class SerializerPartitionRegression
         return compilation.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(tree.ToString().Replace(before, after, StringComparison.Ordinal), Parse, path));
     }
 
-    /// <summary>Creates an independent driver with production type and aggregate generators.</summary>
+    /// <summary>Creates an independent driver with all three production generators.</summary>
     /// <returns>A driver with tracked steps enabled.</returns>
     private static GeneratorDriver NewDriver() => CSharpGeneratorDriver.Create(
-        [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator()], parseOptions: Parse,
+        [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator()],
+        parseOptions: Parse,
         driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
 
     /// <summary>Requires compilable generated output.</summary>

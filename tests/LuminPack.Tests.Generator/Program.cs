@@ -83,7 +83,7 @@ static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var run = driver.RunGenerators(compilation).GetRunResult();
 
@@ -223,7 +223,7 @@ Parallel.For(0, CompilationCount, compilationIndex =>
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
 
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     driver = driver.RunGenerators(compilation);
     var runResult = driver.GetRunResult();
@@ -351,7 +351,7 @@ static void VerifyUnionPartialDiagnostic(MetadataReference[] references)
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var diagnostics = driver.RunGenerators(compilation)
         .GetRunResult()
@@ -482,7 +482,7 @@ static void VerifyUnionAutoDiscovery(MetadataReference[] references)
             string.Join(" | ", compilationErrors.Select(static diagnostic => diagnostic.ToString())));
     }
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
     var errors = result.Diagnostics
@@ -565,7 +565,7 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
     if (result.Exception is not null)
@@ -658,7 +658,7 @@ static void VerifySealedUnionDispatch(MetadataReference[] references)
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
     if (result.Exception is not null)
@@ -1243,7 +1243,7 @@ static (Compilation Output, string Generated) RunFormatterGenerators(
     CSharpParseOptions parseOptions)
 {
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
     var runResult = driver.GetRunResult();
@@ -1409,7 +1409,7 @@ static string[] RunMapGenerator(
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     return driver.RunGenerators(compilation)
         .GetRunResult()
@@ -1439,7 +1439,7 @@ static void AssertScopedEmission(
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var generatedSource = string.Join(
         Environment.NewLine,

@@ -6,53 +6,52 @@ using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator;
 
-/// <summary>Shares a prepared dependency version between the two publishers for the exact current compilation.</summary>
-internal sealed class CurrentSourceEmission<T> where T : class
+/// <summary>Shares an aggregate dependency version among the source publishers for the exact current compilation.</summary>
+internal sealed class CurrentSourceEmission
 {
-    private readonly ConditionalWeakTable<Compilation, Dictionary<string, List<(MetaInfo Metadata, bool Json, Lazy<T> Output)>>> _values = new();
+    private readonly ConditionalWeakTable<Compilation, List<(MetaInfo Metadata, GeneratorOutput Owners, Lazy<AggregateEmissionInput> Input)>> _values = new();
 
-    /// <summary>Prepares one dependency version while both publishers are processing the same input.</summary>
+    /// <summary>Prepares one dependency version while the publishers are processing the same input.</summary>
     /// <param name="compilation">The input compilation before either publisher adds its sources.</param>
-    /// <param name="name">The complete declaration identity, or the shared aggregate identity.</param>
     /// <param name="metadata">The exact generation settings.</param>
-    /// <param name="json">Which of the two publishers is requesting the contribution.</param>
+    /// <param name="owners">The source groups requested by the current publisher.</param>
     /// <param name="prepare">The original incremental cache lookup.</param>
     /// <returns>The dependency version to evaluate without retaining strong references to compiler inputs.</returns>
-    internal T Get(Compilation compilation, string name, MetaInfo metadata, bool json, Func<T> prepare)
+    internal AggregateEmissionInput Get(Compilation compilation, MetaInfo metadata, GeneratorOutput owners, Func<AggregateEmissionInput> prepare)
     {
         var values = _values.GetValue(compilation, static _ => new());
-        List<(MetaInfo Metadata, bool Json, Lazy<T> Output)> variants;
-        Lazy<T> output;
+        Lazy<AggregateEmissionInput> input;
         lock (values)
         {
-            if (!values.TryGetValue(name, out variants))
-                values.Add(name, variants = new());
-            int index = variants.FindIndex(value => MetaInfoValueComparer.Instance.Equals(value.Metadata, metadata));
-            if (index >= 0 && variants[index].Json != json)
+            int index = values.FindIndex(value => MetaInfoValueComparer.Instance.Equals(value.Metadata, metadata));
+            if (index >= 0 && (values[index].Owners & owners) == 0)
             {
-                output = variants[index].Output;
-                variants.RemoveAt(index);
-                if (variants.Count == 0)
-                    values.Remove(name);
+                var previous = values[index];
+                input = previous.Input;
+                var seen = previous.Owners | owners;
+                if (seen == GeneratorOutput.All)
+                    values.RemoveAt(index);
+                else
+                    values[index] = (previous.Metadata, seen, input);
             }
             else
             {
-                output = new Lazy<T>(prepare, LazyThreadSafetyMode.ExecutionAndPublication);
+                input = new Lazy<AggregateEmissionInput>(prepare, LazyThreadSafetyMode.ExecutionAndPublication);
                 if (index >= 0)
-                    variants[index] = (metadata, json, output);
+                    values[index] = (metadata, owners, input);
                 else
-                    variants.Add((metadata, json, output));
+                    values.Add((metadata, owners, input));
             }
         }
         try
         {
-            return output.Value;
+            return input.Value;
         }
         finally
         {
-            if (!output.IsValueCreated)
+            if (!input.IsValueCreated)
                 lock (values)
-                    variants.RemoveAll(value => ReferenceEquals(value.Output, output));
+                    values.RemoveAll(value => ReferenceEquals(value.Input, input));
         }
     }
 }

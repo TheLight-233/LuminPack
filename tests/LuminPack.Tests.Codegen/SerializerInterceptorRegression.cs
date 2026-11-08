@@ -182,7 +182,7 @@ internal static partial class SerializerInterceptorRegression
             references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new[]
         {
-            new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator()
+            new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator()
         }, parseOptions: options);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         var errors = diagnostics.Concat(output.GetDiagnostics()).Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();
@@ -206,8 +206,8 @@ internal static partial class SerializerInterceptorRegression
         if (intercept)
         {
             Require(generatedFiles.Any(file => file.HintName == "LuminPack.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
-            Require(generatedFiles.Any(file => file.HintName == "LuminPackGen.Union.UnionDispatch.g.cs"),
-                "The Union dispatch file did not use the LuminPackGen. prefix.");
+            Require(driver.GetRunResult().Results[2].GeneratedSources.Any(file => file.HintName == "LuminPackGen.Union.UnionDispatch.g.cs"),
+                "The formatter publisher did not emit the Union dispatch file.");
             Require(!outerMethods.Any(method => method.Identifier.ValueText == "Serialize" &&
                 method.TypeParameterList == null &&
                 method.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString() == "global::Payload"),

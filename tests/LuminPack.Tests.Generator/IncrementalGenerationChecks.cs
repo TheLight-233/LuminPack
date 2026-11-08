@@ -311,7 +311,8 @@ internal static class IncrementalGenerationChecks
     /// <summary>Creates both public generator entry points with the same input language settings.</summary>
     /// <returns>A fresh driver used as the source of truth for the edited compilation.</returns>
     private static GeneratorDriver NewDriver() => CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() }, parseOptions: ParseOptions,
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
+        parseOptions: ParseOptions,
         driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true));
 
     /// <summary>Replaces one input tree while retaining all other tree identities.</summary>

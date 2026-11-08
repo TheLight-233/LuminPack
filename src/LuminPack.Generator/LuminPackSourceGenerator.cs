@@ -1,16 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using LuminPack.Code;
 using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator
 {
-    /// <summary>Emits binary serializers and declarations shared with the JSON generator.</summary>
+    /// <summary>Emits the binary serializer facade and shared assembly support.</summary>
     [Generator(LanguageNames.CSharp)]
     public sealed partial class LuminPackSourceGenerator : IIncrementalGenerator
     {
@@ -74,12 +72,12 @@ namespace LuminPack.SourceGenerator
         /// <summary>Registers the incremental analysis and source production pipeline with Roslyn.</summary>
         /// <param name="context">The context used for analysis, source production, or initialization.</param>
         public void Initialize(IncrementalGeneratorInitializationContext context)
-            => InitializePipelines(context, json: false);
+            => InitializePipelines(context, GeneratorOutput.Binary);
 
-        /// <summary>Registers shared analysis with independent binary and JSON output publishers.</summary>
+        /// <summary>Registers shared analysis and the requested source publishers.</summary>
         /// <param name="context">The incremental initialization context.</param>
-        /// <param name="json">Whether this generator publishes JSON-only declarations.</param>
-        internal static void InitializePipelines(IncrementalGeneratorInitializationContext context, bool json)
+        /// <param name="outputs">The source groups owned by this publisher.</param>
+        internal static void InitializePipelines(IncrementalGeneratorInitializationContext context, GeneratorOutput outputs)
         {
             var parseOptionsInfo = context.ParseOptionsProvider.Select((parseOptions, _) =>
             {
@@ -107,15 +105,9 @@ namespace LuminPack.SourceGenerator
                 }).WithComparer(MetaInfoValueComparer.Instance).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
 
 
-            var typeDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
-                static (syntax, _) => GetTypeWithAttribute(syntax, LUMIN_PACKABLE_ATTRIBUTE))
-                .Where(static symbol => symbol != null)
-                .Select(static (symbol, _) => symbol!)
-                .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
-
-            InitializeTypePipeline(context, typeDeclarations, metaInfo, json);
-            InitializeAggregatePipeline(context, metaInfo, json);
+            if ((outputs & GeneratorOutput.Formatter) != 0)
+                LuminPackFormatterGenerator.InitializeTypePipeline(context, metaInfo);
+            InitializeAggregatePipeline(context, metaInfo, outputs);
         }
     }
 }

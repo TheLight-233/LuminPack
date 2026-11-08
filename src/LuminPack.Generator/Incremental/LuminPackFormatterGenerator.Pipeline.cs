@@ -7,23 +7,26 @@ using System.Threading;
 using LuminPack.Code;
 using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator;
 
-public sealed partial class LuminPackSourceGenerator
+public sealed partial class LuminPackFormatterGenerator
 {
-    private static readonly CurrentSourceEmission<TypeEmissionInput> CurrentTypes = new();
-
     /// <summary>Freezes semantic outputs before source-production equality checks.</summary>
     /// <param name="context">The generator pipeline registration context.</param>
-    /// <param name="types">Attributed types discovered by the legacy discovery stage.</param>
     /// <param name="metadata">Value-compared project generation settings.</param>
-    /// <param name="json">Whether to publish JSON operations instead of binary and shared source.</param>
-    private static void InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
-        IncrementalValuesProvider<INamedTypeSymbol> types, IncrementalValueProvider<MetaInfo> metadata, bool json)
+    internal static void InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
+        IncrementalValueProvider<MetaInfo> metadata)
     {
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
+        var types = context.SyntaxProvider.CreateSyntaxProvider(
+            static (node, _) => node is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
+            static (syntax, _) => LuminPackSourceGenerator.GetTypeWithAttribute(syntax, LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE))
+            .Where(static symbol => symbol != null)
+            .Select(static (symbol, _) => symbol!)
+            .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
         var inputs = types.Combine(context.CompilationProvider).Combine(metadata)
             .Select((input, cancellationToken) =>
             {
@@ -31,8 +34,7 @@ public sealed partial class LuminPackSourceGenerator
                 var symbol = input.Left.Left;
                 var compilation = input.Left.Right;
                 var meta = input.Right;
-                return CurrentTypes.Get(compilation, FormatterTypeName.Get(symbol), meta, json,
-                    () => cache.PrepareInput(symbol, compilation, meta, LuminPackGenerationTier.Automatic));
+                return cache.PrepareInput(symbol, compilation, meta, LuminPackGenerationTier.Automatic);
             })
             .WithTrackingName("LuminPack.Incremental.TypeInput");
         Func<INamedTypeSymbol, Compilation, MetaInfo, LuminPackGenerationTier, FrozenTypeEmission> analyze =
@@ -52,11 +54,10 @@ public sealed partial class LuminPackSourceGenerator
         var emissions = inputs.Combine(analyzed).Select((pair, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!json)
-                    Interlocked.Increment(ref IncrementalGenerationMetrics.PackableAnalysisTransforms);
+                Interlocked.Increment(ref IncrementalGenerationMetrics.PackableAnalysisTransforms);
                 return pair.Left.Evaluate(analyze);
             })
-            .WithTrackingName(json ? "LuminPack.Incremental.JsonTypeEmission" : "LuminPack.Incremental.TypeEmission");
+            .WithTrackingName("LuminPack.Incremental.TypeEmission");
 
         void Prepare(TypeEmissionInput input)
         {
@@ -70,20 +71,13 @@ public sealed partial class LuminPackSourceGenerator
             }
         }
 
-        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Select((value, _) =>
-        {
-            var partition = GeneratedFormatPartition.Get(value.Extension, value.Layouts.Options);
-            return json ? new FrozenGeneratedSource("LuminPackJson." + value.HintName + ".g.cs", partition.Json)
-                : new FrozenGeneratedSource(value.HintName + ".g.cs", partition.Shared);
-        }).Where(static file => file.Text.Length != 0);
+        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).SelectMany(static (value, _) =>
+            GeneratedFormatPartition.Get(value.Extension, value.Layouts.Options).Files(value.HintName + ".g.cs"));
         context.RegisterSourceOutput(sources, static (output, file) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
             output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
         });
-        if (json)
-            return;
-
         var unionSources = emissions.Where(static value => !string.IsNullOrEmpty(value.Union))
             .Select(static (value, _) => new FrozenGeneratedSource(value.HintName + ".UnionDispatch.g.cs", value.Union));
         context.RegisterSourceOutput(unionSources, static (output, file) =>
@@ -132,7 +126,7 @@ public sealed partial class LuminPackSourceGenerator
     /// <returns>The frozen source, diagnostic, and layout contributions.</returns>
     private static FrozenTypeEmission AnalyzeAndRender(INamedTypeSymbol symbol, Compilation compilation, MetaInfo metadata, LuminPackGenerationTier tier, BinaryOperationPlanCache operations)
     {
-        var data = CreateLuminDataInfo(symbol, compilation, metadata);
+        var data = LuminPackSourceGenerator.GetSerializationMetadata(symbol, compilation, metadata);
         var diagnostics = new List<Diagnostic>(data.Diagnostics);
         string name = data.classFullName ?? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         if (name.StartsWith("global::", StringComparison.Ordinal))

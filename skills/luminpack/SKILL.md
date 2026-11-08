@@ -13,7 +13,7 @@ Generated models do not require a runtime plan or formatter witness supplied by 
 
 Internal binary writes can share named static member kernels while keeping their existing wire layout and member profiles. Selection is automatic; do not introduce a generation-mode setting, require `default(TPlan)`, or call these internal helpers from user code. Keep using `LuminPackSerializer` and the supported Writer/Reader APIs.
 
-Generated model files use `LuminPackGen.<qualified type>.g.cs`. Aggregate files identify their serializer or formatter role and payload. JSON partitions add the `LuminPackJson.` prefix. File names have no hash or `Extension` suffix.
+`LuminPackSourceGenerator` publishes the binary facade and shared support. `LuminPackJsonGenerator` publishes the JSON facade. `LuminPackFormatterGenerator` publishes formatter code for both formats, including model files named `LuminPackGen.<qualified type>.g.cs`. JSON partitions add the `LuminPackJson.` prefix.
 
 ## Quick start
 

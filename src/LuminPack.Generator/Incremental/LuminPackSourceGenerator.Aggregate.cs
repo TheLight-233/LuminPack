@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using LuminPack.Code;
@@ -9,14 +10,14 @@ namespace LuminPack.SourceGenerator;
 
 public sealed partial class LuminPackSourceGenerator
 {
-    private static readonly CurrentSourceEmission<AggregateEmissionInput> CurrentAggregate = new();
+    private static readonly CurrentSourceEmission CurrentAggregate = new();
 
-    /// <summary>Registers assembly-wide support and publishes the files for one format.</summary>
+    /// <summary>Registers assembly-wide analysis and publishes the requested source groups.</summary>
     /// <param name="context">The incremental initialization context.</param>
     /// <param name="metaProvider">The shared project generation settings.</param>
-    /// <param name="json">Whether this publisher owns JSON-only declarations.</param>
+    /// <param name="outputs">The source groups owned by this publisher.</param>
     private static void InitializeAggregatePipeline(IncrementalGeneratorInitializationContext context,
-        IncrementalValueProvider<MetaInfo> metaProvider, bool json)
+        IncrementalValueProvider<MetaInfo> metaProvider, GeneratorOutput outputs)
     {
         var serializerFragments = new SerializerFacadeCache();
         var invocationSupport = new InvocationSupportCache();
@@ -26,7 +27,7 @@ public sealed partial class LuminPackSourceGenerator
         var aggregateCache = new AggregateEmissionCache();
         var aggregateInputs = context.CompilationProvider
             .Combine(metaProvider)
-            .Select((pair, _) => CurrentAggregate.Get(pair.Left, string.Empty, pair.Right, json,
+            .Select((pair, _) => CurrentAggregate.Get(pair.Left, pair.Right, outputs,
                 () => aggregateCache.PrepareInput(pair.Left, pair.Right, LuminPackGenerationTier.Automatic)))
             .WithTrackingName("LuminPack.Incremental.AggregateInput");
         var aggregateResults = aggregateInputs
@@ -34,17 +35,22 @@ public sealed partial class LuminPackSourceGenerator
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return pair.Evaluate(() => Build(pair, cancellationToken));
-            }).WithTrackingName(json ? "LuminPack.Incremental.JsonAggregateBatch" : "LuminPack.Incremental.AggregateBatch");
+            }).WithTrackingName(outputs switch
+            {
+                GeneratorOutput.Binary => "LuminPack.Incremental.AggregateBatch",
+                GeneratorOutput.Formatter => "LuminPack.Incremental.FormatterAggregateBatch",
+                _ => "LuminPack.Incremental.JsonAggregateBatch"
+            });
 
         var aggregateFiles = aggregateResults.Combine(metaProvider).SelectMany((result, _) =>
-            result.Left.Files.Select(file => SelectFile(file, result.Right, json)).Where(file => file != null))
+            result.Left.Files.SelectMany(file => SelectFiles(file, result.Right, outputs)))
             .WithTrackingName("LuminPack.Incremental.AggregateFiles");
         context.RegisterSourceOutput(aggregateFiles, static (output, file) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.AggregateFileOutputCallbacks);
             output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
         });
-        if (!json)
+        if ((outputs & GeneratorOutput.Binary) != 0)
         {
             var aggregateDiagnostics = aggregateResults.SelectMany(static (result, _) => result.Diagnostics);
             context.RegisterSourceOutput(aggregateDiagnostics.Combine(context.CompilationProvider), static (output, input) =>
@@ -102,7 +108,7 @@ public sealed partial class LuminPackSourceGenerator
                         return string.IsNullOrEmpty(raw) ? raw : GeneratedSourceDocumentation.Complete(raw, meta.ParseOptions);
                     });
                     if (!string.IsNullOrEmpty(customCode))
-                        spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", customCode);
+                        spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", customCode, GeneratorOutput.Formatter);
                 }
                 var reachability = ReachabilityAnalysisCache.GetOrCreate(compilation, LuminPackGenerationTier.Automatic);
 
@@ -144,11 +150,11 @@ public sealed partial class LuminPackSourceGenerator
                 var formatters = LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport,
                     out var navigationTargets, cancellationToken);
                 foreach (var formatter in formatters)
-                    spc.AddSource(formatter.Name, formatter.Text);
+                    spc.AddSource(formatter.Name, formatter.Text, GeneratorOutput.Formatter);
 
                 foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments,
                     cancellationToken, navigationTargets))
-                    spc.AddSource(serializer.Name, serializer.Text);
+                    spc.AddSource(serializer.Name, serializer.Text, GeneratorOutput.Binary | GeneratorOutput.Json);
                 if (InterceptionSupport.IsEnabled(meta.ParseOptions))
                 {
                     string interceptors = StaticSerializerBinding.For(compilation).Emit(
@@ -174,23 +180,28 @@ public sealed partial class LuminPackSourceGenerator
         }
     }
 
-    /// <summary>Assigns assembly-wide contributions to the binary, JSON, or shared publisher.</summary>
+    /// <summary>Selects the existing file partitions for the owner of an assembly-wide contribution.</summary>
     /// <param name="file">The original generated contribution.</param>
     /// <param name="metadata">The current language and preprocessor settings.</param>
-    /// <param name="json">Whether to select the JSON contribution.</param>
-    /// <returns>A generated file for the current publisher, or null if it has no contribution.</returns>
-    private static FrozenGeneratedSource SelectFile(FrozenGeneratedSource file, MetaInfo metadata, bool json)
+    /// <param name="outputs">The source groups owned by this publisher.</param>
+    /// <returns>The complete files to publish.</returns>
+    private static IEnumerable<FrozenGeneratedSource> SelectFiles(FrozenGeneratedSource file, MetaInfo metadata, GeneratorOutput outputs)
     {
-        if (file.Name.StartsWith("LuminPack.JsonSupport.", StringComparison.Ordinal))
-            return json ? file : null;
-        if (!file.Name.StartsWith("LuminPackSerializer.", StringComparison.Ordinal) &&
-            !file.Name.StartsWith("LuminPack.Formatter", StringComparison.Ordinal) &&
-            file.Name != "LuminPack.Dispatch.Formatters.g.cs")
-            return json ? null : file;
+        if ((file.Owner & outputs) == 0)
+            yield break;
+
+        bool formatter = file.Owner == GeneratorOutput.Formatter;
+        bool split = file.Owner == (GeneratorOutput.Binary | GeneratorOutput.Json) || formatter &&
+            (file.Name.StartsWith("LuminPack.Formatter", StringComparison.Ordinal) || file.Name == "LuminPack.Dispatch.Formatters.g.cs");
+        if (!split)
+        {
+            yield return file;
+            yield break;
+        }
 
         var partition = GeneratedFormatPartition.Get(file.Text, metadata.ParseOptions);
-        if (json)
-            return partition.Json.Length == 0 ? null : new FrozenGeneratedSource("LuminPackJson." + file.Name, partition.Json);
-        return partition.Shared.Length == 0 ? null : new FrozenGeneratedSource(file.Name, partition.Shared);
+        foreach (var part in partition.Files(file.Name, formatter || (outputs & GeneratorOutput.Binary) != 0,
+            formatter || (outputs & GeneratorOutput.Json) != 0))
+            yield return part;
     }
 }

@@ -13,7 +13,7 @@ namespace LuminPack.SourceGenerator
         /// <param name="context">The context used for analysis, source production, or initialization.</param>
         /// <param name="metadataName">The metadata name used by this operation.</param>
         /// <returns>The result of the operation.</returns>
-        private static INamedTypeSymbol? GetTypeWithAttribute(
+        internal static INamedTypeSymbol? GetTypeWithAttribute(
             GeneratorSyntaxContext context,
             string metadataName)
         {

@@ -53,7 +53,7 @@ internal sealed class AggregateEmissionInput : IEquatable<AggregateEmissionInput
         ? compilation
         : LuminPackExceptionHelper.ThrowInvalidOperationException<Compilation>("Active aggregate analysis inputs are unavailable.");
 
-    /// <summary>Renders the aggregate once for both publishers of this dependency version.</summary>
+    /// <summary>Renders the aggregate once for all publishers of this dependency version.</summary>
     /// <param name="build">The complete aggregate rendering operation.</param>
     /// <returns>The completed or newly rendered aggregate result.</returns>
     internal FrozenAggregateResult Evaluate(Func<FrozenAggregateResult> build)
