@@ -15,6 +15,8 @@ internal sealed class AggregateEmissionInput : IEquatable<AggregateEmissionInput
     internal readonly MetaInfo Metadata;
     internal readonly LuminPack.Code.Core.LuminPackGenerationTier Mode;
     internal readonly FrozenAggregateResult Completed;
+    private readonly object _gate = new();
+    private FrozenAggregateResult _evaluated;
 
     /// <summary>References a successfully completed version without retaining semantic objects.</summary>
     /// <param name="version">The identity assigned to the completed dependency version.</param>
@@ -50,6 +52,17 @@ internal sealed class AggregateEmissionInput : IEquatable<AggregateEmissionInput
     internal Compilation GetCompilation() => _compilation.TryGetTarget(out var compilation)
         ? compilation
         : LuminPackExceptionHelper.ThrowInvalidOperationException<Compilation>("Active aggregate analysis inputs are unavailable.");
+
+    /// <summary>Renders the aggregate once for both publishers of this dependency version.</summary>
+    /// <param name="build">The complete aggregate rendering operation.</param>
+    /// <returns>The completed or newly rendered aggregate result.</returns>
+    internal FrozenAggregateResult Evaluate(Func<FrozenAggregateResult> build)
+    {
+        if (Completed != null)
+            return Completed;
+        lock (_gate)
+            return _evaluated ??= build();
+    }
 
     /// <summary>Publishes a completed result after successful aggregate construction.</summary>
     /// <param name="result">The exact source and diagnostic values.</param>

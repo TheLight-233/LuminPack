@@ -30,7 +30,7 @@ internal static class LegacyProfileContainers
         var moved = rewritten.Members.OfType<MethodDeclarationSyntax>().Where(IsProfileBody).ToArray();
         var keep = rewritten.Members.Except(moved).ToList();
         var nested = SyntaxFactory.ClassDeclaration(entry).WithModifiers(SyntaxFactory.TokenList(
-                SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+                SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.PartialKeyword)))
             .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(moved.Select(method => method.WithModifiers(
                 SyntaxFactory.TokenList(method.Modifiers.Select(token => token.IsKind(SyntaxKind.PublicKeyword)
                     ? SyntaxFactory.Token(SyntaxKind.InternalKeyword) : token)))

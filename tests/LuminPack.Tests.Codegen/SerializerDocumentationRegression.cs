@@ -307,7 +307,7 @@ internal static class SerializerDocumentationRegression
                 Require(method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)), "Missing generated method documentation: " + method);
                 var documentation = ReadDocumentation(method);
                 Require(documentation.Elements("summary").Count() == 1 && !string.IsNullOrWhiteSpace(documentation.Element("summary")!.Value),
-                    "Generated method documentation must contain one meaningful summary: " + method.GetFirstToken());
+                    "Generated method documentation must contain one meaningful summary in " + file.HintName + ": " + method.ToFullString());
                 foreach (var parameter in method.ParameterList.Parameters)
                     Require(documentation.Elements("param").Count(element => (string?)element.Attribute("name") == parameter.Identifier.ValueText) == 1,
                         "Generated method documentation must describe each parameter exactly once: " + parameter);
@@ -338,7 +338,8 @@ internal static class SerializerDocumentationRegression
             }
         }
 
-        var serializerFiles = generated.Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal)).ToArray();
+        var serializerFiles = generated.Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal) ||
+            file.HintName.StartsWith("LuminPackJson.LuminPackSerializer.", StringComparison.Ordinal)).ToArray();
         string serializer = string.Join(Environment.NewLine, serializerFiles.Select(file => file.SourceText.ToString()));
         var methods = serializerFiles.SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse))
             .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).Where(IsUserApi).ToArray();
@@ -351,7 +352,7 @@ internal static class SerializerDocumentationRegression
         var modelOverloads = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } && method.TypeParameterList == null &&
             (method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::DocumentationModel") ||
              method.ReturnType.ToString().Contains("global::DocumentationModel", StringComparison.Ordinal))).ToArray();
-        Require(modelOverloads.Length >= 10, "Expected all concrete buffer, span, JSON, size, and asynchronous overloads.");
+        Require(modelOverloads.Length >= 10, "Expected the selected concrete buffer, span, JSON, and asynchronous overloads.");
         foreach (var overload in modelOverloads)
         {
             var documentation = ReadDocumentation(overload);

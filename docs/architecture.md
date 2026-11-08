@@ -75,8 +75,10 @@ Two incremental generators run in every consuming compilation:
 
 | Generator | Output |
 | --- | --- |
-| `LuminPackSourceGenerator` | Per-type formatter extensions, layout mirrors and private accessors, Union slots and overrides. |
-| `LuminPackAggregateGenerator` | The per-assembly `LuminPackSerializer` facade (shared generic APIs plus per-type concrete partials), generic dispatch, option profile declarations and the `Custom` formatter registry. |
+| `LuminPackSourceGenerator` | Binary formatter and facade members, layout mirrors and private accessors, Union slots and overrides, interceptors, compiled profiles and the `Custom` formatter registry. |
+| `LuminPackJsonGenerator` | JSON formatter and facade members and JSON support for referenced models. |
+
+Both publishers use the same formatter and call-site analysis. They share finished contributions for the current compilation and publish separate partial declarations. Union dispatch and registration declarations that bind both formats stay with the binary and shared publisher. Manually constructed Roslyn drivers can pair `LuminPackSourceGenerator` with `LuminPackJsonGenerator`. The original `LuminPackAggregateGenerator` type can stand in for the JSON publisher in an existing driver.
 
 Main components:
 
@@ -99,6 +101,8 @@ Main components:
 When an ordinary public-field root consists only of complete runtime record kernels and named members without a separate profile boundary, `SerializerCoreProjection` can lower the emitted write directly from the cached type metadata. It retains the original root/member methods, declaration options and final storage/cursor projections. Readers, JSON and more complex writes retain their existing checked operation pipeline. Member kernels remain eligible for aggressive inlining; a parent containing member calls leaves its root inline decision to the runtime even when extraction reduced its source call count. The allocating facade keeps `AllocateUninitializedArray` and its existing pool ownership and cleanup.
 
 SourceGenerator files use `LuminPackGen.Namespace.Model.g.cs`, with `LuminPackGen.Layouts.` for storage views and `.UnionDispatch.g.cs` for Union support. They do not use the `Extension` suffix. Aggregate files retain descriptive families such as `LuminPackSerializer.System.Int32.g.cs` and `LuminPack.Formatter.System.Collections.Generic.List_Of_System.Int32_End_.g.cs`. Hint names contain no hash suffix: namespace and generic/array structure remain readable, punctuation is escaped distinctly, and long identities use bounded directory components instead of truncation. Private generated symbol identities remain independent of filenames.
+
+JSON partitions add a `LuminPackJson.` prefix. Each publisher compares its own complete files before source output, so a change confined to a JSON method can leave the corresponding binary file cached.
 
 Framework field classification uses CLR metadata names, such as `System.DateOnly`, in `CodeEmitterTypeCatalog`. These names do not include the C# `global::` qualifier used in emitted source. The same catalog classifies direct fields, nullable values and collection elements before considering user-defined object constructors.
 

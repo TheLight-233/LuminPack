@@ -33,15 +33,20 @@ internal static class LuminPackSerializerDocumentation
     /// <param name="compilation">Current serialization metadata inputs.</param>
     /// <param name="metadata">Current generation settings.</param>
     /// <param name="navigationTargets">Actual roots for a concrete facade payload, when available.</param>
+    /// <param name="capturePartitions">Whether the two publishers will use this completed formatter syntax.</param>
     /// <returns>Rich XML comments and unchanged executable tokens.</returns>
     internal static string Enhance(CompilationUnitSyntax root, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata,
-        LazyForwardingTargets navigationTargets = null)
+        LazyForwardingTargets navigationTargets = null, bool capturePartitions = false)
     {
         var completed = (CompilationUnitSyntax)GeneratedSourceDocumentation.CompleteRoot(root);
         string source = completed.ToFullString();
         if (!completed.DescendantNodes(node => node is not BaseMethodDeclarationSyntax)
             .OfType<BaseMethodDeclarationSyntax>().Any(GeneratedSourceDocumentation.IsUserApi))
+        {
+            if (capturePartitions)
+                GeneratedFormatPartition.Capture(source, metadata.ParseOptions, completed);
             return source;
+        }
         return Enhance(completed, source, types, compilation, metadata, navigationTargets);
     }
 

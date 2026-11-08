@@ -72,7 +72,7 @@ public static partial class LuminPackSerializerGenerator
         foreach (var block in parts.Blocks)
         {
             string body = InterceptionSupport.IsEnabled(metadata.ParseOptions)
-                ? "        internal static class " + StaticSerializerBinding.EntryName(block.Key) + "\n        {\n" + block.Value + "\n        }\n"
+                ? "        internal static partial class " + StaticSerializerBinding.EntryName(block.Key) + "\n        {\n" + block.Value + "\n        }\n"
                 : block.Value;
             files.Add(cache.Files.Wrap("LuminPackSerializer", block.Key, typeHeader, body, footer));
         }

@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator
 {
-    /// <summary>Discovers packable types and emits formatter extensions, union dispatch, and shared layout mirrors.</summary>
+    /// <summary>Emits binary serializers and declarations shared with the JSON generator.</summary>
     [Generator(LanguageNames.CSharp)]
     public sealed partial class LuminPackSourceGenerator : IIncrementalGenerator
     {
@@ -74,6 +74,12 @@ namespace LuminPack.SourceGenerator
         /// <summary>Registers the incremental analysis and source production pipeline with Roslyn.</summary>
         /// <param name="context">The context used for analysis, source production, or initialization.</param>
         public void Initialize(IncrementalGeneratorInitializationContext context)
+            => InitializePipelines(context, json: false);
+
+        /// <summary>Registers shared analysis with independent binary and JSON output publishers.</summary>
+        /// <param name="context">The incremental initialization context.</param>
+        /// <param name="json">Whether this generator publishes JSON-only declarations.</param>
+        internal static void InitializePipelines(IncrementalGeneratorInitializationContext context, bool json)
         {
             var parseOptionsInfo = context.ParseOptionsProvider.Select((parseOptions, _) =>
             {
@@ -108,7 +114,8 @@ namespace LuminPack.SourceGenerator
                 .Select(static (symbol, _) => symbol!)
                 .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
 
-            InitializeTypePipeline(context, typeDeclarations, metaInfo);
+            InitializeTypePipeline(context, typeDeclarations, metaInfo, json);
+            InitializeAggregatePipeline(context, metaInfo, json);
         }
     }
 }

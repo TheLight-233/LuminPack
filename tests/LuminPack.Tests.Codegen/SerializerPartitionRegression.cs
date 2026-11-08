@@ -30,12 +30,24 @@ internal static class SerializerPartitionRegression
         var initial = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var initialOutput, out _);
         CheckErrors(initialOutput);
         var initialFiles = FacadeFiles(initial);
+        var reversed = CSharpGeneratorDriver.Create(
+            [new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackSourceGenerator().AsSourceGenerator()],
+            parseOptions: Parse).RunGeneratorsAndUpdateCompilation(input, out var reversedOutput, out _);
+        CheckErrors(reversedOutput);
+        Require(AllFiles(initial).OrderBy(pair => pair.Key).SequenceEqual(AllFiles(reversed).OrderBy(pair => pair.Key)),
+            "Changing generator registration order changed the partitioned files.");
         var modelFiles = initial.GetRunResult().Results.Single(result => result.GeneratedSources.Any(file => file.HintName == "LuminPackGen.A.g.cs"));
-        Require(modelFiles.GeneratedSources.All(file => file.HintName.StartsWith("LuminPackGen.", StringComparison.Ordinal) &&
-            !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal)), "SourceGenerator files lost their requested prefix or retained Extension suffixes.");
+        Require(modelFiles.GeneratedSources.All(file => !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal)),
+            "SourceGenerator files retained Extension suffixes.");
+        var jsonModel = initial.GetRunResult().Results.Single(result =>
+            result.GeneratedSources.Any(file => file.HintName == "LuminPackJson.LuminPackGen.A.g.cs"));
+        Require(!modelFiles.GeneratedSources.Single(file => file.HintName == "LuminPackGen.A.g.cs").SourceText.ToString()
+                .Contains("RootWriteJson", StringComparison.Ordinal) &&
+            jsonModel.GeneratedSources.Single(file => file.HintName == "LuminPackJson.LuminPackGen.A.g.cs").SourceText.ToString()
+                .Contains("RootWriteJson", StringComparison.Ordinal), "Model JSON roots were not moved to the JSON generator.");
         Require(initialFiles.ContainsKey("LuminPackSerializer.g.cs") && initialFiles.Count > 4, "Expected common support and independently named concrete files.");
-        foreach (string name in initialFiles.Keys.Where(name => name != "LuminPackSerializer.g.cs"))
-            Require(Regex.IsMatch(name, "^LuminPackSerializer\\.[A-Za-z0-9_./]+\\.g\\.cs$") && !Regex.IsMatch(name, "[0-9a-f]{32}"),
+        foreach (string name in initialFiles.Keys.Where(name => !name.EndsWith("LuminPackSerializer.g.cs", StringComparison.Ordinal)))
+            Require(Regex.IsMatch(name, "^(LuminPackJson\\.)?LuminPackSerializer\\.[A-Za-z0-9_./]+\\.g\\.cs$") && !Regex.IsMatch(name, "[0-9a-f]{32}"),
                 "A concrete filename does not expose a readable identity without hashes: " + name);
         Require(initialFiles.Values.All(text => text.Contains("public static partial class LuminPackSerializer", StringComparison.Ordinal)), "Facade files must share the same partial type.");
         Require(!initialFiles["LuminPackSerializer.g.cs"].Contains("global::A value", StringComparison.Ordinal), "Common facade support contains a concrete payload body.");
@@ -56,6 +68,13 @@ internal static class SerializerPartitionRegression
         VerifyEdit("unrelated body", input, Replace(input, "Utility.cs", "17", "18"), expectedFiles: 0, expectedFragments: 0);
         VerifyEdit("model initializer", input, Replace(input, "A.cs", "= 7", "= 8"), expectedFiles: 0, expectedFragments: 1);
         VerifyEdit("independent model member", input, Replace(input, "A.cs", "int Value", "int Renamed"), expectedFiles: 1, expectedFragments: 1);
+        var jsonCall = Replace(input, "Calls.cs", "Serialize(b);", "Serialize(b); LuminPack.LuminPackSerializer.SerializeJson(b);");
+        var jsonEdit = initial.RunGeneratorsAndUpdateCompilation(jsonCall, out var jsonOutput, out _);
+        CheckErrors(jsonOutput);
+        var jsonFacade = FacadeFiles(jsonEdit);
+        Require(initialFiles.All(pair => jsonFacade.GetValueOrDefault(pair.Key) == pair.Value) &&
+            jsonFacade.ContainsKey("LuminPackJson.LuminPackSerializer.B.g.cs"),
+            "Adding a JSON convenience changed an existing binary facade.");
         var added = input.AddSyntaxTrees(CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public sealed class Added { public int NewValue; }", Parse, "Added.cs"));
         var addition = NewDriver().RunGeneratorsAndUpdateCompilation(added, out var additionOutput, out _);
         CheckErrors(additionOutput);
@@ -149,14 +168,20 @@ internal static class SerializerPartitionRegression
             "Independent formatter and generic dispatch partitions were not emitted.");
         string legacy = GeneratedInvocation(input);
         var expected = MethodInventory([legacy]);
-        var actual = MethodInventory(original.Where(pair => pair.Key.StartsWith("LuminPack.Formatter.", StringComparison.Ordinal) ||
-            pair.Key.StartsWith("LuminPack.Dispatch.", StringComparison.Ordinal) || pair.Key == "LuminPack.FormatterBridges.g.cs").Select(pair => pair.Value));
+        var actual = MethodInventory(original.Where(pair =>
+        {
+            string name = pair.Key.Replace("LuminPackJson.", string.Empty, StringComparison.Ordinal);
+            return name.StartsWith("LuminPack.Formatter.", StringComparison.Ordinal) ||
+                name.StartsWith("LuminPack.Dispatch.", StringComparison.Ordinal) || name == "LuminPack.FormatterBridges.g.cs";
+        }).Select(pair => pair.Value));
         Require(expected.Count == actual.Count && expected.All(pair => actual.GetValueOrDefault(pair.Key) == pair.Value),
             "Formatter or generic dispatch partition changed executable method text: " + expected.Count + "/" + actual.Count + Environment.NewLine +
             string.Join(Environment.NewLine, expected.Where(pair => actual.GetValueOrDefault(pair.Key) != pair.Value)
                 .Select(pair => pair.Key + Environment.NewLine + Code(pair.Value) + Environment.NewLine + Code(actual.GetValueOrDefault(pair.Key))).Take(2)));
-        GeneratorDriver typeDriver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator()], parseOptions: Parse);
-        typeDriver.RunGeneratorsAndUpdateCompilation(input, out var legacyOutput, out _);
+        var legacyOutput = output.RemoveSyntaxTrees(output.SyntaxTrees.Where(tree =>
+            tree.FilePath.Contains("LuminPack.Formatter", StringComparison.Ordinal) ||
+            tree.FilePath.Contains("LuminPack.Dispatch.", StringComparison.Ordinal) ||
+            tree.FilePath.Contains("LuminPackSerializer.", StringComparison.Ordinal)));
         legacyOutput = legacyOutput.AddSyntaxTrees(CSharpSyntaxTree.ParseText(legacy, Parse),
             CSharpSyntaxTree.ParseText(LuminPackSerializerGenerator.GenerateSerializerClass(input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), Reachability(input)), Parse));
         CheckErrors(legacyOutput);
@@ -270,7 +295,8 @@ internal static class SerializerPartitionRegression
     /// <param name="driver">The completed generator driver.</param>
     /// <returns>Hint names mapped to exact source text.</returns>
     private static Dictionary<string, string> FacadeFiles(GeneratorDriver driver) => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
-        .Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal))
+        .Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal) ||
+            file.HintName.StartsWith("LuminPackJson.LuminPackSerializer.", StringComparison.Ordinal))
         .ToDictionary(file => file.HintName, file => file.SourceText.ToString(), StringComparer.Ordinal);
 
     /// <summary>Replaces one existing source file with a deterministic edited tree.</summary>
@@ -288,7 +314,7 @@ internal static class SerializerPartitionRegression
     /// <summary>Creates an independent driver with production type and aggregate generators.</summary>
     /// <returns>A driver with tracked steps enabled.</returns>
     private static GeneratorDriver NewDriver() => CSharpGeneratorDriver.Create(
-        [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: Parse,
+        [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator()], parseOptions: Parse,
         driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
 
     /// <summary>Requires compilable generated output.</summary>

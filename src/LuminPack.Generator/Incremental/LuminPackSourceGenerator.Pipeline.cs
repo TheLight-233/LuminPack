@@ -12,12 +12,15 @@ namespace LuminPack.SourceGenerator;
 
 public sealed partial class LuminPackSourceGenerator
 {
+    private static readonly CurrentSourceEmission<TypeEmissionInput> CurrentTypes = new();
+
     /// <summary>Freezes semantic outputs before source-production equality checks.</summary>
     /// <param name="context">The generator pipeline registration context.</param>
     /// <param name="types">Attributed types discovered by the legacy discovery stage.</param>
     /// <param name="metadata">Value-compared project generation settings.</param>
+    /// <param name="json">Whether to publish JSON operations instead of binary and shared source.</param>
     private static void InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
-        IncrementalValuesProvider<INamedTypeSymbol> types, IncrementalValueProvider<MetaInfo> metadata)
+        IncrementalValuesProvider<INamedTypeSymbol> types, IncrementalValueProvider<MetaInfo> metadata, bool json)
     {
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
@@ -28,7 +31,8 @@ public sealed partial class LuminPackSourceGenerator
                 var symbol = input.Left.Left;
                 var compilation = input.Left.Right;
                 var meta = input.Right;
-                return cache.PrepareInput(symbol, compilation, meta, LuminPackGenerationTier.Automatic);
+                return CurrentTypes.Get(compilation, FormatterTypeName.Get(symbol), meta, json,
+                    () => cache.PrepareInput(symbol, compilation, meta, LuminPackGenerationTier.Automatic));
             })
             .WithTrackingName("LuminPack.Incremental.TypeInput");
         Func<INamedTypeSymbol, Compilation, MetaInfo, LuminPackGenerationTier, FrozenTypeEmission> analyze =
@@ -48,10 +52,11 @@ public sealed partial class LuminPackSourceGenerator
         var emissions = inputs.Combine(analyzed).Select((pair, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Interlocked.Increment(ref IncrementalGenerationMetrics.PackableAnalysisTransforms);
+                if (!json)
+                    Interlocked.Increment(ref IncrementalGenerationMetrics.PackableAnalysisTransforms);
                 return pair.Left.Evaluate(analyze);
             })
-            .WithTrackingName("LuminPack.Incremental.TypeEmission");
+            .WithTrackingName(json ? "LuminPack.Incremental.JsonTypeEmission" : "LuminPack.Incremental.TypeEmission");
 
         void Prepare(TypeEmissionInput input)
         {
@@ -65,15 +70,27 @@ public sealed partial class LuminPackSourceGenerator
             }
         }
 
-        context.RegisterSourceOutput(emissions, static (output, value) =>
+        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Select((value, _) =>
+        {
+            var partition = GeneratedFormatPartition.Get(value.Extension, value.Layouts.Options);
+            return json ? new FrozenGeneratedSource("LuminPackJson." + value.HintName + ".g.cs", partition.Json)
+                : new FrozenGeneratedSource(value.HintName + ".g.cs", partition.Shared);
+        }).Where(static file => file.Text.Length != 0);
+        context.RegisterSourceOutput(sources, static (output, file) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
+            output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
+        });
+        if (json)
+            return;
+
+        var unionSources = emissions.Where(static value => !string.IsNullOrEmpty(value.Union))
+            .Select(static (value, _) => new FrozenGeneratedSource(value.HintName + ".UnionDispatch.g.cs", value.Union));
+        context.RegisterSourceOutput(unionSources, static (output, file) =>
+        {
             try
             {
-                if (!string.IsNullOrEmpty(value.Extension))
-                    output.AddSource(value.HintName + ".g.cs", GeneratedSourceLayout.Apply(value.Extension));
-                if (!string.IsNullOrEmpty(value.Union))
-                    output.AddSource(value.HintName + ".UnionDispatch.g.cs", GeneratedSourceLayout.Apply(value.Union));
+                output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
             }
             catch (Exception exception)
             {

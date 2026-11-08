@@ -1243,7 +1243,7 @@ static (Compilation Output, string Generated) RunFormatterGenerators(
     CSharpParseOptions parseOptions)
 {
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
     var runResult = driver.GetRunResult();
@@ -1409,12 +1409,13 @@ static string[] RunMapGenerator(
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackAggregateGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     return driver.RunGenerators(compilation)
         .GetRunResult()
-        .Results.Single()
-        .GeneratedSources
+        .Results.SelectMany(static result => result.GeneratedSources)
+        .Where(static generated => !generated.HintName.StartsWith("LuminPackGen.", StringComparison.Ordinal) &&
+            !generated.HintName.StartsWith("LuminPackJson.LuminPackGen.", StringComparison.Ordinal))
         .Select(static generated => generated.SourceText.ToString())
         .ToArray();
 }
@@ -1438,14 +1439,13 @@ static void AssertScopedEmission(
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var generatedSource = string.Join(
         Environment.NewLine,
         driver.RunGenerators(compilation)
             .GetRunResult()
-            .Results.Single()
-            .GeneratedSources
+            .Results.SelectMany(static result => result.GeneratedSources)
             .Select(static generated => generated.SourceText.ToString()));
     var emitsScoped = generatedSource.Contains("scoped ", StringComparison.Ordinal);
 

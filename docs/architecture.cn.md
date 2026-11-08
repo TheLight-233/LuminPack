@@ -75,8 +75,10 @@
 
 | 生成器 | 输出 |
 | --- | --- |
-| `LuminPackSourceGenerator` | 每个类型的格式化扩展、布局镜像和私有访问器、Union 槽位与 override。 |
-| `LuminPackAggregateGenerator` | 每个程序集的 `LuminPackSerializer` 外观（共享泛型 API 加上每个类型的具体重载 partial 文件）、泛型派发、选项配置声明以及 `Custom` 格式化器注册表。 |
+| `LuminPackSourceGenerator` | 二进制格式化器和门面成员、布局镜像与私有访问器、Union 槽位与 override、拦截器、编译期配置和 `Custom` 格式化器注册表。 |
+| `LuminPackJsonGenerator` | JSON 格式化器和门面成员，以及引用模型的 JSON 支持。 |
+
+两个发布器共用格式化器与调用点分析，在当前编译中共享已完成的生成结果，各自发布 partial 声明。横跨两种格式的 Union 派发和注册声明由二进制与共享发布器负责。手动创建 Roslyn 驱动时可配对使用 `LuminPackSourceGenerator` 与 `LuminPackJsonGenerator`。已有驱动也可继续用原来的 `LuminPackAggregateGenerator` 类型作为 JSON 发布器。
 
 主要组件：
 
@@ -99,6 +101,8 @@
 普通公开字段根对象若仅包含完整运行时记录内核和没有独立配置边界的具名成员，`SerializerCoreProjection` 可以直接使用缓存的类型元数据生成完整写入，保留原有根／成员方法、声明配置及最终存储／游标投影。读取、JSON 和更复杂的写入继续采用既有的检查和操作流水线。成员内核保留积极内联提示；包含成员调用的父对象，即使提取方法后源码调用数量变少，也由运行时决定根方法是否内联。分配型入口继续使用 `AllocateUninitializedArray`，保留缓冲池所有权和清理方式。
 
 SourceGenerator 的文件名使用 `LuminPackGen.Namespace.Model.g.cs`，存储视图使用 `LuminPackGen.Layouts.` 前缀，Union 支持使用 `.UnionDispatch.g.cs` 后缀，不再使用 `Extension` 后缀。聚合文件保留明确的类别，例如 `LuminPackSerializer.System.Int32.g.cs` 和 `LuminPack.Formatter.System.Collections.Generic.List_Of_System.Int32_End_.g.cs`。文件名不带哈希后缀：保留可读的命名空间及泛型／数组结构，明确转义不同标点，长身份拆成有长度上限的目录段而不截断。内部生成符号的身份仍独立于文件名。
+
+JSON 分片加上 `LuminPackJson.` 前缀。每个发布器在输出前独立比较完整文件，因此只影响 JSON 方法的改动可以继续复用对应的二进制文件。
 
 框架字段分类使用 `CodeEmitterTypeCatalog` 中的 CLR 元数据名称，例如 `System.DateOnly`，不包含生成的 C# 源码所用的 `global::` 限定符。直接字段、可空值和集合元素共用该目录，在考虑用户对象的构造函数之前完成分类。
 
