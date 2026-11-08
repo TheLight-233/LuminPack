@@ -44,6 +44,7 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="reuse">Whether an existing reference case can seed its payload.</param>
     private static void AppendUnionDeserializeSwitch(LuminDataInfo data, StringBuilder sb, MetaInfo metaInfo, bool reuse)
     {
+        sb.AppendLine("            // Union cases");
         sb.AppendLine("            switch (tag)");
         sb.AppendLine("            {");
         var outlined = new List<(LuminUnionMemberInfo Member, string Type, bool Cast)>();
@@ -142,6 +143,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("                value = default;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
+        sb.AppendLine("            // Union cases");
         sb.AppendLine("            switch (tag)");
         sb.AppendLine("            {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)
@@ -192,6 +194,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("                if (!reader.Read()) break;");
         sb.AppendLine("                if (property == 1) { tag = (ushort)reader.ReadInt(); continue; }");
         sb.AppendLine("                if (property != 2) { reader.Skip(); continue; }");
+        sb.AppendLine("                // Union cases");
         sb.AppendLine("                switch (tag)");
         sb.AppendLine("                {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)
@@ -263,6 +266,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("                if (!reader.Read()) break;");
         sb.AppendLine("                if (property == 1) { tag = (ushort)reader.ReadInt(); continue; }");
         sb.AppendLine("                if (property != 2) { reader.Skip(); continue; }");
+        sb.AppendLine("                // Union cases");
         sb.AppendLine("                switch (tag)");
         sb.AppendLine("                {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)

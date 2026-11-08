@@ -45,10 +45,10 @@ public sealed partial class LuminPackSourceGenerator
         var aggregateFiles = aggregateResults.Combine(metaProvider).SelectMany((result, _) =>
             result.Left.Files.SelectMany(file => SelectFiles(file, result.Right, outputs)))
             .WithTrackingName("LuminPack.Incremental.AggregateFiles");
-        context.RegisterSourceOutput(aggregateFiles, static (output, file) =>
+        context.RegisterSourceOutput(aggregateFiles.Combine(GeneratedSourceLayout.AvailableAliases(context)), static (output, input) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.AggregateFileOutputCallbacks);
-            output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
+            output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
         });
         if ((outputs & GeneratorOutput.Binary) != 0)
         {

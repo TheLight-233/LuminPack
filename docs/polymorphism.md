@@ -28,14 +28,16 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy is Circle
 - Generic cases are supported: an open case (`typeof(Case<>)`) covers the closed types actually used, and a closed case (`typeof(Case<int>)`) has priority over it.
 - On .NET 11, a C# `union` declaration marked `[LuminPackable]` is recognized as a Union root and uses the same wire format.
 
-Picking the right case is tiered at compile time, and the wire format is the same for every tier:
+For eligible local, non-generic abstract class roots, the generator selects the write tier once from the target framework and the root's declared cases. Every tier uses the same wire format.
 
-- **One case, no registration.** When `Register` APIs are not generated and no other assembly can add a case (the root is not externally visible, has no externally accessible constructor, or declares `SingleImplementation`), a root with one sealed case calls it directly.
-- **One to four cases.** Each case is tested exactly before the virtual call, which still serves registered and foreign cases.
-- **More cases.** A single virtual call.
-- **Collections.** `List<T>`, arrays and `ImmutableArray<T>` use the same per-element dispatch tiers in input order for fixed and variable payloads.
+| Target | Dispatch |
+| --- | --- |
+| Below .NET 8 | One exact type pattern `switch` covering every generated case. |
+| .NET 8 and later | Direct call for a closed single case, exact type pattern `switch` for two to four cases or an open single case, virtual call for five or more cases. |
 
-Use `[LuminPackOption(WideTag = true)]` to select wide tags. `[LuminPackOption(SingleImplementation = true)]` declares that a root has exactly one implementation everywhere; only use it when no other assembly can add a case. It retains the existing Union frame, and without registration it allows the direct call. The separate `[LuminPackWideTag]` and `[LuminPackSingleImplementation]` attributes remain compatible; see [Options](options.md#union-contract-switches).
+A direct call requires one sealed case, no other derived types in source, disabled registration and a root that other assemblies cannot extend. The pattern switch uses the existing virtual call for values outside its exact cases. Lists, arrays, immutable arrays and dictionaries follow the same tier for each element. Interface, generic and referenced roots retain their existing dispatch.
+
+Use `[LuminPackOption(WideTag = true)]` to select wide tags. `[LuminPackOption(SingleImplementation = true)]` declares that a root has exactly one implementation everywhere. Use it when no other assembly can add a case. It retains the existing Union frame and can enable the .NET 8 and later direct call when registration is disabled. The separate `[LuminPackWideTag]` and `[LuminPackSingleImplementation]` attributes remain compatible. See [Options](options.md#union-contract-switches).
 
 ## Types from referenced assemblies
 

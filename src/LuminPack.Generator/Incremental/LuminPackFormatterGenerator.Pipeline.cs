@@ -21,6 +21,7 @@ public sealed partial class LuminPackFormatterGenerator
     {
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
+        var aliases = GeneratedSourceLayout.AvailableAliases(context);
         var types = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => node is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
             static (syntax, _) => LuminPackSourceGenerator.GetTypeWithAttribute(syntax, LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE))
@@ -73,18 +74,18 @@ public sealed partial class LuminPackFormatterGenerator
 
         var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).SelectMany(static (value, _) =>
             GeneratedFormatPartition.Get(value.Extension, value.Layouts.Options).Files(value.HintName + ".g.cs"));
-        context.RegisterSourceOutput(sources, static (output, file) =>
+        context.RegisterSourceOutput(sources.Combine(aliases), static (output, input) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
-            output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
+            output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
         });
         var unionSources = emissions.Where(static value => !string.IsNullOrEmpty(value.Union))
             .Select(static (value, _) => new FrozenGeneratedSource(value.HintName + ".UnionDispatch.g.cs", value.Union));
-        context.RegisterSourceOutput(unionSources, static (output, file) =>
+        context.RegisterSourceOutput(unionSources.Combine(aliases), static (output, input) =>
         {
             try
             {
-                output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
+                output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
             }
             catch (Exception exception)
             {
@@ -106,10 +107,10 @@ public sealed partial class LuminPackFormatterGenerator
         var layouts = layoutGroups.Collect().Select((groups, _) => BuildLayoutFiles(groups, layoutCache))
             .WithTrackingName("LuminPack.Incremental.LayoutBatch");
         var layoutFiles = layouts.SelectMany(static (result, _) => result.Files).WithTrackingName("LuminPack.Incremental.LayoutFiles");
-        context.RegisterSourceOutput(layoutFiles, static (output, file) =>
+        context.RegisterSourceOutput(layoutFiles.Combine(aliases), static (output, input) =>
         {
             Interlocked.Increment(ref IncrementalGenerationMetrics.LayoutFileOutputCallbacks);
-            output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text));
+            output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
         });
         context.RegisterSourceOutput(layouts.SelectMany(static (result, _) => result.Diagnostics), static (output, diagnostic) =>
         {

@@ -257,6 +257,7 @@ public static partial class LuminPackExtensionGenerator
             field.UnionCursorCases = cursorPlan?.Ordered;
             if (cursorPlan != null)
             {
+                field.UnionWriteDispatch = UnionDispatchTierPlan.Get((INamedTypeSymbol)dictionary.TypeArguments[1], compilation);
                 var declared = CompiledOptions.Resolve(dictionary.TypeArguments[1], compilation, importedScope: false).UnionProfile(false);
                 field.UnionCursorEncoding = declared.Encoding;
                 field.UnionCursorRecording = declared.Recording;

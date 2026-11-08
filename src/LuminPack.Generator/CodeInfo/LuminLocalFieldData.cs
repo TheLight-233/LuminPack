@@ -96,6 +96,7 @@ public sealed class LuminLocalFieldData
     internal int UnionCursorRecording;
     /// <summary>Stores the fixed Union cursor cases and their narrow tags in tag order, tested before the cursor slot.</summary>
     internal System.Collections.Generic.List<(int Id, string Type)> UnionCursorCases;
+    internal global::LuminPack.Code.Core.UnionDispatchTierPlan UnionWriteDispatch;
     /// <summary>Whether decoding and comparing the fixed-width key can avoid all user callbacks.</summary>
     internal bool HasCallbackFreeDictionaryKey;
     /// <summary>Whether existing leaf values support in-place dictionary reads.</summary>

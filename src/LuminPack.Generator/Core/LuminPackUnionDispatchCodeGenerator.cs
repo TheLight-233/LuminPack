@@ -275,6 +275,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         }
 
         var suffix = GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
+        sb.AppendLine($"{padding}// Union cases");
         sb.AppendLine($"{padding}switch (LuminPackUnionDispatchSlot_{suffix})");
         sb.AppendLine($"{padding}{{");
         foreach (var member in members)
@@ -330,6 +331,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         sb.AppendLine($"{padding}private static int {resolverName}()");
         sb.AppendLine($"{padding}{{");
+        sb.AppendLine($"{padding}    // Union cases");
         sb.AppendLine($"{padding}    switch (typeof({currentType}))");
         sb.AppendLine($"{padding}    {{");
 

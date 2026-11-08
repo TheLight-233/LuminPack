@@ -253,10 +253,7 @@ public static partial class DictionaryEmitter
                 sb.AppendLine($"                    nextIndex += global::System.Runtime.CompilerServices.Unsafe.SizeOf<{keyType}>();");
                 sb.AppendLine($"                    {valueType} itemValue = entry.Value;");
                 sb.AppendLine("                    if (itemValue is null) { writer.GetSpanReference(nextIndex) = 255; nextIndex++; }");
-                // Approved exact fixed-case tests: each runs the body its case override runs; every other runtime type keeps the cursor slot.
-                foreach (var (id, caseType) in fieldData.UnionCursorCases ?? new System.Collections.Generic.List<(int Id, string Type)>())
-                    sb.AppendLine($"                    else if (itemValue.GetType() == typeof({caseType})) nextIndex = global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref writer, global::System.Runtime.CompilerServices.Unsafe.As<{caseType}>(itemValue), nextIndex, (byte){id});");
-                sb.AppendLine($"                    else nextIndex = itemValue.LuminPackUnionSerializeCursor_{fieldData.UnionCursorSuffix}(ref writer, nextIndex);");
+                fieldData.UnionWriteDispatch.AppendCursorDispatch(sb, "                    ", fieldData.UnionCursorSuffix, fieldData.UnionCursorCases);
             }
             else
             {

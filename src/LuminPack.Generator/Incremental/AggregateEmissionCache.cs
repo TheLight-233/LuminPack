@@ -51,7 +51,7 @@ internal sealed class AggregateEmissionCache
         var reachability = usesLuminPack
             ? ReachabilityAnalysisCache.GetOrCreate(compilation, LuminPackGenerationTier.Automatic) : null;
         string key = CreateKey(compilation, analysis, custom, reachability, usesLuminPack);
-        var guard = new Guard(observations.ProjectGuard, metadata, mode, key);
+        var guard = new Guard(observations.ProjectGuard, metadata, mode, key, UnionDispatchTierPlan.ClosureGuard(compilation, metadata));
         lock (_gate)
         {
             if (key != null && _previous != null && _previous.Dependencies.Matches(guard) &&
@@ -157,6 +157,7 @@ internal sealed class AggregateEmissionCache
         private readonly object _project;
         private readonly MetaInfo _metadata;
         private readonly LuminPackGenerationTier _mode;
+        private readonly string _unionClosure;
         internal readonly string Key;
 
         /// <summary>Freezes settings at the current semantic boundary.</summary>
@@ -164,19 +165,21 @@ internal sealed class AggregateEmissionCache
         /// <param name="metadata">Language and generation settings to snapshot.</param>
         /// <param name="mode">The requested generation tier.</param>
         /// <param name="key">The ordered semantic key, or null for unsupported inputs.</param>
-        internal Guard(object project, MetaInfo metadata, LuminPackGenerationTier mode, string key)
+        /// <param name="unionClosure">The source inheritance facts that affect direct Union dispatch.</param>
+        internal Guard(object project, MetaInfo metadata, LuminPackGenerationTier mode, string key, string unionClosure)
         {
             _project = project;
             _metadata = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8, metadata.IsNet9_OR_GREATER,
                 metadata.AllowUnsafe, metadata.RegisterMode) { IsForUnity = metadata.IsForUnity };
             _mode = mode;
             Key = key;
+            _unionClosure = unionClosure;
         }
 
         /// <summary>Checks every value that can affect aggregate source or diagnostic production.</summary>
         /// <param name="other">Current dependency facts.</param>
         /// <returns>Whether source-tree validation may reuse the completed version.</returns>
-        internal bool Matches(Guard other) => Key == other.Key && _mode == other._mode &&
+        internal bool Matches(Guard other) => Key == other.Key && _mode == other._mode && _unionClosure == other._unionClosure &&
             FileSemanticObservationCache.SameProjectGuard(_project, other._project) &&
             MetaInfoValueComparer.Instance.Equals(_metadata, other._metadata);
     }

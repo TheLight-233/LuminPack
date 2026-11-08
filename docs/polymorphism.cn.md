@@ -28,14 +28,16 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 - 支持泛型 case：开放泛型 case（`typeof(Case<>)`）覆盖实际用到的闭合类型，闭合 case（`typeof(Case<int>)`）优先于它。
 - 在 .NET 11 上，标了 `[LuminPackable]` 的 C# `union` 声明会被识别为 Union 根，使用相同的数据格式。
 
-选择 case 的方式在编译期分级，各级的线上格式完全相同：
+对符合条件的本地非泛型抽象类根，生成器根据目标框架和根上声明的 case 统一选择写入档位。各档位使用相同的线上格式。
 
-- **单个 case、无注册。** 未生成 `Register` API，且其他程序集无法再添加 case（根对外不可见、没有对外可访问的构造函数，或声明了 `SingleImplementation`）时，只有一个 sealed case 的根会直接调用它。
-- **1 到 4 个 case。** 先逐个做精确类型判断，再回到虚调用；虚调用继续服务注册的和外部的 case。
-- **更多 case。** 单次虚调用。
-- **集合。** `List<T>`、数组和 `ImmutableArray<T>` 对定长及变长负载都按输入顺序使用相同的逐元素分派层级。
+| 目标框架 | 分派 |
+| --- | --- |
+| 低于 .NET 8 | 一个精确类型模式 `switch` 覆盖所有生成的 case。 |
+| .NET 8 及以上 | 闭合单 case 直接调用，2 到 4 个 case 或开放单 case 用精确类型模式 `switch`，5 个及以上走虚槽。 |
 
-用 `[LuminPackOption(WideTag = true)]` 选择宽标签。`[LuminPackOption(SingleImplementation = true)]` 声明该根在所有程序集中只有一个实现；只有确定其他程序集不会再加 case 时才能使用。它保留既有 Union 帧，并在无注册时允许直接调用。独立的 `[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 特性保留兼容，参见[选项](options.cn.md#union-类型契约开关)。
+直调要求只有一个 sealed case、源码中无其他派生类型、未启用注册，且根无法被其他程序集扩展。精确类型模式之外的值走原虚槽。列表、数组、不可变数组和字典逐元素使用根选定的同一档位。接口根、泛型根和引用程序集中的根沿用原分派。
+
+用 `[LuminPackOption(WideTag = true)]` 选择宽标签。`[LuminPackOption(SingleImplementation = true)]` 声明该根在所有程序集中只有一个实现。只有确定其他程序集不会再加 case 时才使用。它保留既有 Union 帧，且在未启用注册时可让 .NET 8 及以上目标生成直调。独立的 `[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 特性保留兼容。参见[选项](options.cn.md#union-类型契约开关)。
 
 ## 引用程序集中的类型
 

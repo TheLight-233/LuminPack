@@ -101,10 +101,12 @@ public static class LuminPackUnionCodeGenerator
 
         if (!data.isGeneric)
         {
+            sb.AppendLine("            // Union cases");
             sb.AppendLine("            switch (ResolveCase_" + suffix + "(value.Value))");
         }
         else
         {
+            sb.AppendLine("            // Union cases");
             sb.AppendLine("            switch (ResolveCase_" + suffix + "<" + string.Join(", ", data.GenericParameters) + ">(value.Value))");
         }
         sb.AppendLine("            {");
@@ -166,6 +168,7 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        sb.AppendLine("            // Union cases");
         sb.AppendLine("            switch (tag)");
         sb.AppendLine("            {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)
@@ -207,10 +210,12 @@ public static class LuminPackUnionCodeGenerator
         string suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
         if (!data.isGeneric)
         {
+            sb.AppendLine("            // Union cases");
             sb.AppendLine("            switch (ResolveCase_" + suffix + "(value.Value))");
         }
         else
         {
+            sb.AppendLine("            // Union cases");
             sb.AppendLine("            switch (ResolveCase_" + suffix + "<" + string.Join(", ", data.GenericParameters) + ">(value.Value))");
         }
         sb.AppendLine("            {");
@@ -358,6 +363,7 @@ public static class LuminPackUnionCodeGenerator
     private static void AppendClassUnionDeserializeSwitch(LuminDataInfo data, StringBuilder sb, bool reuse)
     {
         string classGlobalName = data.classFullName;
+        sb.AppendLine("            // Union cases");
         sb.AppendLine("            switch (tag)");
         sb.AppendLine("            {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)

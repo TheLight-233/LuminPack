@@ -70,11 +70,18 @@ internal static class SerializerUnionCursorRegression
         }
         """;
 
-    /// <summary>Checks all pruning modes and the registration-free unsafe-disabled configuration.</summary>
+    /// <summary>Checks automatic retention through each compatibility mode and with unsafe disabled.</summary>
     /// <param name="references">Current platform and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
         VerifyCollectionDispatch(references);
+        var modern = Compilation(references, "Full", allowUnsafe: true, modern: true);
+        var modernDriver = Driver(modern: true).RunGeneratorsAndUpdateCompilation(modern, out var modernOutput, out _);
+        Require(!CursorSwitches(modernDriver).Any() &&
+            Generated(modernDriver).Contains("nextIndex = itemValue.LuminPackUnionSerializeCursor_", StringComparison.Ordinal),
+            "The modern seven-case dictionary must use its root's virtual cursor tier.");
+        Execute(modernOutput);
+
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var before = Compilation(references, mode, true);
@@ -127,9 +134,9 @@ internal static class SerializerUnionCursorRegression
                     Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CheckBuffer" } } check &&
                 assignment.Left.ToString() == check.ArgumentList.Arguments[0].Expression.ToString()),
                 "The dictionary must check and reuse its actual unpublished cursor rather than the stale shared index.");
-            VerifyCaseChain(Generated(driver), new[] { ("global::Fixed", 1) });
-            if (mode == "Minimal") Require(!cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText is "UnusedRoot" or "UnusedCase"),
-                "Minimal retained an unused Union cursor family.");
+            VerifyCursorPatterns(driver, new[] { ("global::Fixed", 1) });
+            Require(cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "UnusedRoot" }),
+                "Automatic generation must retain the formatter slots of a declared Union even without a local serializer call.");
             Execute(output);
 
             var leaf = before.SyntaxTrees.Single(tree => tree.FilePath == "Fixed.cs");
@@ -143,13 +150,13 @@ internal static class SerializerUnionCursorRegression
                 "The last fixed case became volatile but its root cursor protocol survived.");
             Execute(updated);
 
-            // Making a second case fixed must extend the exact-case chain in tag order, retained exactly like fresh generation.
+            // Making a second case fixed must reuse its cursor kernel in tag order, retained exactly like fresh generation.
             var root = before.SyntaxTrees.Single(tree => tree.FilePath == "Root.cs");
             var widened = before.ReplaceSyntaxTree(root, CSharpSyntaxTree.ParseText(root.ToString().Replace("[LuminPackInclude] private int Number = 7;", "public int Number = 7;"),
                 new CSharpParseOptions(LanguageVersion.CSharp13), "Root.cs"));
             var retainedWide = driver.RunGeneratorsAndUpdateCompilation(widened, out var widenedOutput, out diagnostics);
-            Require(Files(retainedWide).SequenceEqual(Files(Driver().RunGenerators(widened))), "A newly fixed case retained a stale exact-case chain.");
-            VerifyCaseChain(Generated(retainedWide), new[] { ("global::Fixed", 1), ("global::Private", 3) });
+            Require(Files(retainedWide).SequenceEqual(Files(Driver().RunGenerators(widened))), "A newly fixed case retained a stale cursor call.");
+            VerifyCursorPatterns(retainedWide, new[] { ("global::Fixed", 1), ("global::Private", 3) });
             Execute(widenedOutput);
 
             // The dictionary guard depends on the root's declared string profile across retained compilations.
@@ -164,7 +171,7 @@ internal static class SerializerUnionCursorRegression
         var safe = Driver().RunGeneratorsAndUpdateCompilation(Compilation(references, "Minimal", false), out var safeOutput, out _);
         Require(!safe.GetRunResult().Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), "Unsafe-disabled cursor generation failed.");
         Execute(safeOutput);
-        Console.WriteLine("Passed fixed Union cursor signatures, internal XML policy, large fixed growth, public/private/property/callback/versioned guards, exact-case call-site chains, wide/generic fallback, four pruning modes, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
+        Console.WriteLine("Passed fixed Union cursor signatures, internal XML policy, large fixed growth, case eligibility, modern virtual and portable pattern tiers, wide/generic fallback, automatic retention, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
     }
 
     /// <summary>Compiles modern fixed Union collections and verifies ordered per-element wire and round trips.</summary>
@@ -228,30 +235,33 @@ internal static class SerializerUnionCursorRegression
         }
     }
 
-    /// <summary>Checks the dictionary call site tests exactly the fixed cases in tag order before falling back to the cursor slot.</summary>
-    /// <param name="generated">The complete generated source.</param>
+    /// <summary>Checks that a portable dictionary applies its root's case patterns and uses the fixed kernel only for eligible cases.</summary>
+    /// <param name="driver">The completed generation.</param>
     /// <param name="cases">The expected fixed cases and their tags, in tag order.</param>
-    private static void VerifyCaseChain(string generated, (string Type, int Tag)[] cases)
+    private static void VerifyCursorPatterns(GeneratorDriver driver, (string Type, int Tag)[] cases)
     {
-        // Source expansion reflows statements and may rename locals, so compare normalized text with captured names.
-        string text = System.Text.RegularExpressions.Regex.Replace(generated, @"\s+", " ");
-        var slot = System.Text.RegularExpressions.Regex.Match(text, @"else nextIndex = (\w+)\.LuminPackUnionSerializeCursor_\w+\((?:ref )?(\w+), nextIndex\);");
-        Require(slot.Success, "The dictionary lost its cursor slot fallback.");
-        string value = slot.Groups[1].Value, state = slot.Groups[2].Value;
-        int start = text.LastIndexOf("if (" + value + " is null)", slot.Index, StringComparison.Ordinal);
-        Require(start >= 0, "The dictionary lost its null Union record.");
-        string chain = text.Substring(start, slot.Index - start);
-        int position = 0;
-        foreach (var (type, tag) in cases)
+        var switches = CursorSwitches(driver).ToArray();
+        Require(switches.Length != 0, "The dictionary lost its root patterns or its cursor slot fallback.");
+        foreach (var dispatch in switches)
         {
-            string test = "else if (" + value + ".GetType() == typeof(" + type + ")) nextIndex = global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref " + state +
-                ", global::System.Runtime.CompilerServices.Unsafe.As<" + type + ">(" + value + "), nextIndex, (byte)" + tag + ");";
-            int found = chain.IndexOf(test, position, StringComparison.Ordinal);
-            Require(found >= 0, "The exact-case chain lost or reordered " + type + ".");
-            position = found + test.Length;
+            Require(dispatch.Sections.Count == 8, "The portable cursor switch must use all seven cases and the virtual fallback.");
+            var fixedArms = dispatch.Sections.Where(section => section.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)).ToArray();
+            Require(fixedArms.Length == cases.Length, "A non-fixed case entered the fixed cursor kernel.");
+            for (int index = 0; index < cases.Length; index++)
+            {
+                var (type, tag) = cases[index];
+                Require(fixedArms[index].Labels.Single() is CasePatternSwitchLabelSyntax { Pattern: DeclarationPatternSyntax pattern } &&
+                    pattern.Type.ToString() == type && fixedArms[index].ToString().Contains("(byte)" + tag, StringComparison.Ordinal),
+                    "The cursor switch lost or reordered " + type + ".");
+            }
         }
-        Require(chain.Split("GetType() == typeof(").Length - 1 == cases.Length, "A non-fixed case entered the exact-case chain.");
     }
+
+    private static IEnumerable<SwitchStatementSyntax> CursorSwitches(GeneratorDriver driver)
+        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<SwitchStatementSyntax>())
+            .Where(node => node.Sections.Any(section => section.Labels.Any(label => label.IsKind(SyntaxKind.DefaultSwitchLabel)) &&
+                section.ToString().Contains("LuminPackUnionSerializeCursor_", StringComparison.Ordinal)));
 
     /// <summary>Concatenates every generated source for structural checks.</summary>
     /// <param name="driver">The completed generation.</param>
@@ -262,20 +272,25 @@ internal static class SerializerUnionCursorRegression
     /// <param name="references">Platform and runtime references.</param>
     /// <param name="mode">The actual generation mode.</param>
     /// <param name="allowUnsafe">Whether manual registration is available.</param>
+    /// <param name="modern">Whether the target enables the .NET 8 dispatch tiers.</param>
     /// <returns>The unchanged mixed Union fixture.</returns>
-    private static CSharpCompilation Compilation(MetadataReference[] references, string mode, bool allowUnsafe)
+    private static CSharpCompilation Compilation(MetadataReference[] references, string mode, bool allowUnsafe, bool modern = false)
         => TestCompilation.Create("UnionCursor_" + mode + "_" + Guid.NewGuid().ToString("N"), new[]
         {
-            CSharpSyntaxTree.ParseText(Source.Replace("MODE", mode), new CSharpParseOptions(LanguageVersion.CSharp13), "Root.cs"),
-            CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public sealed partial class Fixed : Root { public int Number; }", new CSharpParseOptions(LanguageVersion.CSharp13), "Fixed.cs")
+            CSharpSyntaxTree.ParseText(Source.Replace("MODE", mode), ParseOptions(modern), "Root.cs"),
+            CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public sealed partial class Fixed : Root { public int Number; }", ParseOptions(modern), "Fixed.cs")
         }, references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: allowUnsafe, optimizationLevel: OptimizationLevel.Release));
 
     /// <summary>Creates a fresh pair of incremental generators under the fixture's language version.</summary>
+    /// <param name="modern">Whether the target enables the .NET 8 dispatch tiers.</param>
     /// <returns>A driver that can be retained across a leaf edit.</returns>
-    private static GeneratorDriver Driver() => CSharpGeneratorDriver.Create(new[]
+    private static GeneratorDriver Driver(bool modern = false) => CSharpGeneratorDriver.Create(new[]
     {
         new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()
-    }, parseOptions: new CSharpParseOptions(LanguageVersion.CSharp13));
+    }, parseOptions: ParseOptions(modern));
+
+    private static CSharpParseOptions ParseOptions(bool modern)
+        => new(LanguageVersion.CSharp13, preprocessorSymbols: modern ? new[] { "NET8_0_OR_GREATER" } : null);
 
     /// <summary>Orders the exact generated files for retained-versus-fresh comparisons.</summary>
     /// <param name="driver">The completed generation.</param>

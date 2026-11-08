@@ -50,10 +50,14 @@ internal sealed partial class CompiledOperationProjection
         source.Append("public static void ").Append(method.Identifier.ValueText).Append("_Compiled<").Append(profileParameter).Append(">(ref ").Append(method.ParameterList.Parameters[0].Type).Append(" writer, ")
             .Append(rootName).Append(" value) where ").Append(profileParameter).AppendLine(" : struct, global::LuminPack.Option.ILuminPackOptions {");
         var tier = root != null ? UnionDispatchTierPlan.Get(root, _compilation) : null;
+        string SlotName(CompiledOptions profile) => method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
+        string Dispatch(string name) => tier?.Tier == UnionDispatchTier.Pattern
+            ? "{ " + name + "_Dispatch(ref writer, value); return; }"
+            : tier?.Dispatch(name) ?? "{ value." + name + "(ref writer); return; }";
         if (operation == "LuminPackUnionSerialize_" && HasCanonicalUnionProfiles(profiles))
             foreach (var profile in profiles)
             {
-                string name = method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
+                string name = SlotName(profile);
                 var identities = new List<string> { profile.TypeName, "global::LuminPack.Option.LuminPackFixedOptions<" + profile.TypeName + ">" };
                 if (profile.Encoding == 1 && profile.Recording == 0)
                     foreach (string alias in new[] { "LuminPackDefaultOptions", "LuminPackDeclaredOptions" })
@@ -63,18 +67,26 @@ internal sealed partial class CompiledOperationProjection
                         identities.Add("global::LuminPack.Option.LuminPackFixedOptions<" + type + ">");
                     }
                 source.Append("if (").Append(string.Join(" || ", identities.Select(type => "typeof(" + profileParameter + ") == typeof(" + type + ")")))
-                    .Append(") ").AppendLine(tier?.Dispatch(name) ?? "{ value." + name + "(ref writer); return; }");
+                    .Append(") ").AppendLine(Dispatch(name));
             }
         foreach (var profile in profiles)
         {
-            string name = method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
+            string name = SlotName(profile);
             source.Append("if (default(").Append(profileParameter).Append(").StringEncoding == (global::LuminPack.Option.LuminPackStringEncoding)").Append(profile.Encoding);
             if (!json)
                 source.Append(" && default(").Append(profileParameter).Append(").StringRecording == (global::LuminPack.Option.LuminPackStringRecording)").Append(profile.Recording);
-            source.Append(") ").AppendLine(tier?.Dispatch(name) ?? "{ value." + name + "(ref writer); return; }");
+            source.Append(") ").AppendLine(Dispatch(name));
         }
         source.AppendLine("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(\"The compiled profile has an invalid string encoding or recording mode.\"); }");
         members.Add(SyntaxFactory.ParseMemberDeclaration(source.ToString()).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+        if (tier?.Tier == UnionDispatchTier.Pattern)
+            foreach (var profile in profiles)
+            {
+                string name = SlotName(profile);
+                string helper = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] " +
+                    "private static void " + name + "_Dispatch(ref " + method.ParameterList.Parameters[0].Type + " writer, " + rootName + " value) " + tier.Dispatch(name);
+                members.Add(SyntaxFactory.ParseMemberDeclaration(helper).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+            }
     }
 
 

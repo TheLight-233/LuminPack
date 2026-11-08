@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -14,25 +16,24 @@ internal enum UnionDispatchTier
     /// <summary>The original single virtual call.</summary>
     Virtual,
 
-    /// <summary>Exact type tests for each generated case, then the original virtual call for every other type.</summary>
-    Guard,
+    /// <summary>Exact type patterns for the generated cases with a virtual fallback.</summary>
+    Pattern,
 
     /// <summary>A direct call of the only possible case's slot, without a type test.</summary>
     Direct,
 }
 
 /// <summary>
-/// Selects the tiered Union write dispatch: a direct call when exactly one case can exist and dynamic registration
-/// is not generated, exact type guards before the virtual fallback for one to four cases, and the original virtual
-/// call for larger Unions.
+/// Selects one write dispatch plan for each eligible local Union root and target framework.
 /// </summary>
 internal sealed class UnionDispatchTierPlan
 {
-    /// <summary>The largest case count that receives exact type guards.</summary>
-    internal const int MaximumGuardedCases = 4;
+    /// <summary>The largest case count that uses patterns on modern targets.</summary>
+    private const int MaximumModernPatternCases = 4;
 
     private static readonly UnionDispatchTierPlan VirtualPlan = new(UnionDispatchTier.Virtual, new List<(string, bool)>());
     private static readonly ConditionalWeakTable<Compilation, ConcurrentDictionary<INamedTypeSymbol, UnionDispatchTierPlan>> Cache = new();
+    private static readonly ConditionalWeakTable<Compilation, SourceClosure> Closures = new();
 
     /// <summary>The selected tier.</summary>
     internal readonly UnionDispatchTier Tier;
@@ -70,24 +71,26 @@ internal sealed class UnionDispatchTierPlan
     {
         var metadata = CreateMetadata(compilation);
         var data = LuminPackSourceGenerator.GetSerializationMetadata(root, compilation, metadata);
-        if (!data.isUnion || !data.CanGenerateUnionDispatch || data.UnionMembers.Count is 0 or > MaximumGuardedCases)
+        if (!data.isUnion || !data.CanGenerateUnionDispatch || data.UnionMembers.Count == 0 ||
+            metadata.IsNet8 && data.UnionMembers.Count > MaximumModernPatternCases)
             return VirtualPlan;
-        var types = new List<INamedTypeSymbol>();
+        var types = new List<INamedTypeSymbol>(data.UnionMembers.Count);
+        var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         foreach (var member in data.UnionMembers.OrderBy(member => member.Id))
         {
-            // Every guarded case must own the generated sealed override that the guard calls directly.
+            // Each pattern needs a concrete case with a generated slot that can be called on its exact type.
             if (member.Type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } type ||
                 !LuminPackUnionDispatchCodeGenerator.IsFastPathMember(data, member) ||
                 !LuminPackUnionDispatchUtilities.CanGeneratePartial(type, compilation) ||
-                types.Contains(type, SymbolEqualityComparer.Default))
+                !seen.Add(type))
                 return VirtualPlan;
             types.Add(type);
         }
         var cases = types.Select(type => (type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), type.IsSealed)).ToList();
-        bool registration = metadata.RegisterMode != LuminPackRegisterMode.Disabled;
-        if (!registration && types.Count == 1 && types[0].IsSealed && IsClosed(root, compilation) && HasOnlyDerivedType(root, types[0], compilation))
+        if (CanCallDirect(metadata) && types.Count == 1 && types[0].IsSealed && IsClosed(root, compilation) &&
+            !GetClosure(compilation).MultipleDescendants.Contains(root))
             return new UnionDispatchTierPlan(UnionDispatchTier.Direct, cases);
-        return new UnionDispatchTierPlan(UnionDispatchTier.Guard, cases);
+        return new UnionDispatchTierPlan(UnionDispatchTier.Pattern, cases);
     }
 
     /// <summary>Emits the selected dispatch of one compiled profile slot.</summary>
@@ -97,13 +100,71 @@ internal sealed class UnionDispatchTierPlan
     {
         if (Tier == UnionDispatchTier.Direct)
             return "{ global::System.Runtime.CompilerServices.Unsafe.As<" + Cases[0].Type + ">(value)." + slot + "(ref writer); return; }";
-        var source = new System.Text.StringBuilder("{ ");
-        if (Tier == UnionDispatchTier.Guard)
-            foreach (var (type, sealedType) in Cases)
-                // A sealed case's type test is exact; other cases compare the exact runtime type.
-                source.Append("if (").Append(sealedType ? "value is " + type : "value.GetType() == typeof(" + type + ")")
-                    .Append(") { global::System.Runtime.CompilerServices.Unsafe.As<").Append(type).Append(">(value).").Append(slot).Append("(ref writer); return; } ");
-        return source.Append("value.").Append(slot).Append("(ref writer); return; }").ToString();
+        string fallback = "value." + slot + "(ref writer); return;";
+        if (Tier == UnionDispatchTier.Virtual)
+            return "{ " + fallback + " }";
+        var source = new StringBuilder().AppendLine("{");
+        AppendPatternSwitch(source, "    ", "value", (_, value) => value + "." + slot + "(ref writer); return;", fallback);
+        return source.Append('}').ToString();
+    }
+
+    /// <summary>Applies the root's tier to the existing dense dictionary cursor protocol.</summary>
+    /// <param name="source">The dictionary operation receiving the dispatch.</param>
+    /// <param name="indent">The indentation of the case selection.</param>
+    /// <param name="suffix">The root's original cursor slot suffix.</param>
+    /// <param name="fixedCases">The exact cases eligible for the fixed cursor kernel, in tag order.</param>
+    internal void AppendCursorDispatch(StringBuilder source, string indent, string suffix, IReadOnlyList<(int Id, string Type)> fixedCases)
+    {
+        string VirtualCall(string value) => $"nextIndex = {value}.LuminPackUnionSerializeCursor_{suffix}(ref writer, nextIndex);";
+        if (Tier == UnionDispatchTier.Virtual)
+        {
+            source.Append(indent).Append("else ").AppendLine(VirtualCall("itemValue"));
+            return;
+        }
+
+        var tags = fixedCases.ToDictionary(item => item.Type, item => item.Id, StringComparer.Ordinal);
+        string CaseCall(string type, string value) => tags.TryGetValue(type, out int id)
+            ? $"nextIndex = global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref writer, {value}, nextIndex, (byte){id});"
+            : VirtualCall(value);
+
+        if (Tier == UnionDispatchTier.Direct)
+        {
+            string type = Cases[0].Type;
+            source.Append(indent).Append("else ").AppendLine(CaseCall(type, $"global::System.Runtime.CompilerServices.Unsafe.As<{type}>(itemValue)"));
+        }
+        else
+        {
+            source.Append(indent).AppendLine("else");
+            source.Append(indent).AppendLine("{");
+            AppendPatternSwitch(source, indent + "    ", "itemValue", (type, value) => CaseCall(type, value) + " break;",
+                VirtualCall("itemValue") + " break;");
+            source.Append(indent).AppendLine("}");
+        }
+    }
+
+    /// <summary>Writes the root's exact type cases in tag order before the original virtual fallback.</summary>
+    /// <param name="source">The generated operation.</param>
+    /// <param name="indent">The switch indentation.</param>
+    /// <param name="value">The already non-null root reference.</param>
+    /// <param name="writeCase">The typed payload call and control flow for a case.</param>
+    /// <param name="fallback">The original virtual call and control flow.</param>
+    private void AppendPatternSwitch(StringBuilder source, string indent, string value, Func<string, string, string> writeCase, string fallback)
+    {
+        source.Append(indent).AppendLine("// Union cases");
+        source.Append(indent).Append("switch (").Append(value).AppendLine(")");
+        source.Append(indent).AppendLine("{");
+        for (int index = 0; index < Cases.Count; index++)
+        {
+            var (type, sealedType) = Cases[index];
+            string variable = "caseValue" + index;
+            source.Append(indent).Append("    case ").Append(type).Append(' ').Append(variable);
+            if (!sealedType)
+                source.Append(" when ((object)").Append(value).Append(").GetType() == typeof(").Append(type).Append(')');
+            source.Append(": ").AppendLine(writeCase(type, variable));
+        }
+        source.Append(indent).AppendLine("    default:");
+        source.Append(indent).Append("        ").AppendLine(fallback);
+        source.Append(indent).AppendLine("}");
     }
 
     /// <summary>Checks that no other assembly can add a case to the root.</summary>
@@ -126,22 +187,39 @@ internal sealed class UnionDispatchTierPlan
             constructor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal));
     }
 
-    /// <summary>Checks that the case is the only type in this compilation deriving from the root.</summary>
-    /// <param name="root">The Union root.</param>
-    /// <param name="only">The single generated case.</param>
-    /// <param name="compilation">The current compilation.</param>
-    /// <returns>Whether no other source type derives from the root.</returns>
-    private static bool HasOnlyDerivedType(INamedTypeSymbol root, INamedTypeSymbol only, Compilation compilation)
+    /// <summary>Captures source inheritance facts that can change direct dispatch without editing the Union declarations.</summary>
+    /// <param name="compilation">The active compilation.</param>
+    /// <param name="metadata">The active target and registration settings.</param>
+    /// <returns>A stable description of the potentially open roots.</returns>
+    internal static string ClosureGuard(Compilation compilation, MetaInfo metadata = null) =>
+        CanCallDirect(metadata ?? CreateMetadata(compilation)) ? GetClosure(compilation).Guard : string.Empty;
+
+    private static bool CanCallDirect(MetaInfo metadata) =>
+        metadata.IsNet8 && metadata.RegisterMode == LuminPackRegisterMode.Disabled;
+
+    private static SourceClosure GetClosure(Compilation compilation) =>
+        Closures.GetValue(compilation, static current => new SourceClosure(current));
+
+    /// <summary>Indexes derived source types once, including types without a packable declaration.</summary>
+    private sealed class SourceClosure
     {
-        foreach (var symbol in compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type))
+        internal readonly HashSet<INamedTypeSymbol> MultipleDescendants = new(SymbolEqualityComparer.Default);
+        internal readonly string Guard;
+
+        internal SourceClosure(Compilation compilation)
         {
-            if (symbol is not INamedTypeSymbol type || SymbolEqualityComparer.Default.Equals(type, only))
-                continue;
-            for (var parent = type.BaseType; parent != null; parent = parent.BaseType)
-                if (SymbolEqualityComparer.Default.Equals(parent.OriginalDefinition, root))
-                    return false;
+            var analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
+            var roots = new HashSet<INamedTypeSymbol>(analysis.PackableTypes.Where(type =>
+                type is { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } &&
+                SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)), SymbolEqualityComparer.Default);
+            var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach (var declaration in analysis.DeclaredTypes)
+                for (var parent = declaration.Symbol.BaseType; parent != null; parent = parent.BaseType)
+                    if (roots.Contains(parent) && !seen.Add(parent))
+                        MultipleDescendants.Add(parent);
+            Guard = string.Join("\n", MultipleDescendants.Select(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .OrderBy(name => name, StringComparer.Ordinal));
         }
-        return true;
     }
 
     /// <summary>Creates the settings snapshot used by Union analysis outside a generator pipeline.</summary>

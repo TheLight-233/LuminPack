@@ -9,9 +9,9 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace LuminPack.SourceGenerator;
 
-/// <summary>Breaks generated lines at the publication boundary; only whitespace between tokens and XML comment text change.</summary>
-/// <remarks>Each long line is parsed alone because a complete parse of every output file costs a noticeable part of a generator run.</remarks>
-internal static class GeneratedSourceLayout
+/// <summary>Formats generated files at the publication boundary.</summary>
+/// <remarks>The line wrapper parses only long lines. Alias and case layout run only on files that use them.</remarks>
+internal static partial class GeneratedSourceLayout
 {
     private const int MaxWidth = 140;
     private const string CommentMarker = "/// ";
@@ -22,10 +22,14 @@ internal static class GeneratedSourceLayout
 
     /// <summary>Lays out one completed source file, returning the same string when no line needs a change.</summary>
     /// <param name="source">The complete generated source.</param>
-    /// <returns>The source with long lines and attributed accessors on separate lines.</returns>
-    internal static string Apply(string source)
+    /// <param name="aliases">The aliases available in the consuming compilation.</param>
+    /// <returns>The formatted source with compact Union case rows.</returns>
+    internal static string Apply(string source, int aliases)
     {
-        if (!Enabled || string.IsNullOrEmpty(source) || !NeedsLayout(source))
+        if (!Enabled || string.IsNullOrEmpty(source))
+            return source;
+        source = Present(source, aliases);
+        if (!NeedsLayout(source))
             return source;
         // A line of a multi-line literal is not a syntax fragment, so such a file keeps its code lines.
         bool wrapCode = !source.Contains("@\"") && !source.Contains("\"\"\"");
@@ -50,7 +54,8 @@ internal static class GeneratedSourceLayout
                 result.Append(padding).Append("    ").Append(accessor, 0, accessor.Length - 2).Append(newLine);
                 result.Append(padding).Append('}');
             }
-            else if (line.Length <= MaxWidth)
+            else if (line.Length <= MaxWidth || trimmed.StartsWith("case ", StringComparison.Ordinal) ||
+                trimmed.StartsWith("default(", StringComparison.Ordinal))
                 result.Append(line);
             else if (trimmed.StartsWith("///", StringComparison.Ordinal))
                 AppendDocumentation(result, line, indent, newLine);

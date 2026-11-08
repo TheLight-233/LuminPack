@@ -260,7 +260,8 @@ internal sealed class TypeEmissionCache
             }
             Ownership = ownership.ToDictionary(pair => pair.Key, pair => string.Join("\n", pair.Value.OrderBy(value => value, StringComparer.Ordinal)), StringComparer.Ordinal);
             _unionCandidates = analysis.FormatterTypes.OfType<INamedTypeSymbol>().ToArray();
-            UnionUniverse = string.Join("\n", _unionCandidates.Select(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ":" +
+            UnionUniverse = UnionDispatchTierPlan.ClosureGuard(compilation) + "\n" +
+                string.Join("\n", _unionCandidates.Select(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ":" +
                 type.BaseType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ":" +
                 string.Join(",", type.Interfaces.Select(@interface => @interface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))));
         }
