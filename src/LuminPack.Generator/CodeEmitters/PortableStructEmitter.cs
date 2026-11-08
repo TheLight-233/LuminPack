@@ -272,14 +272,19 @@ internal static class PortableStructEmitter
             sb.AppendLine("                reader.EnsureReadable(__portableIndex, " + plan.WireSize + ");");
         }
         sb.AppendLine("                ref byte __portableWire = ref " + state + ".GetSpanReference(__portableIndex);");
-        sb.AppendLine("                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)");
-        sb.AppendLine("                {");
-        AppendTransfer(sb, plan, value, sourceType, "__portableWire", "                    ", write, true);
-        sb.AppendLine("                }");
-        sb.AppendLine("                else");
-        sb.AppendLine("                {");
-        AppendTransfer(sb, plan, value, sourceType, "__portableWire", "                    ", write, false);
-        sb.AppendLine("                }");
+        if (write)
+        {
+            sb.AppendLine("                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)");
+            sb.AppendLine("                {");
+            AppendTransfer(sb, plan, value, sourceType, "__portableWire", "                    ", write, typed: true);
+            sb.AppendLine("                }");
+            sb.AppendLine("                else");
+            sb.AppendLine("                {");
+            AppendTransfer(sb, plan, value, sourceType, "__portableWire", "                    ", write, typed: false);
+            sb.AppendLine("                }");
+        }
+        else
+            AppendTransfer(sb, plan, value, sourceType, "__portableWire", "                ", write, typed: false);
         sb.AppendLine("                " + state + ".Advance(" + plan.WireSize + ");");
         sb.AppendLine("            }");
     }
@@ -416,12 +421,15 @@ internal static class PortableStructEmitter
                 : transfer + ".Unpack(ref __portableWire, " + length + ", ref __portableFirst);"));
             sb.AppendLine("            __portableWire = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __portableWire, (nint)__portableStart * " + plan.WireSize + ");");
         }
-        sb.AppendLine("            if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)");
-        AppendLoop(true);
-        sb.AppendLine("            else");
+        if (write)
+        {
+            sb.AppendLine("            if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)");
+            AppendLoop(true);
+            sb.AppendLine("            else");
+        }
         AppendLoop(false);
         sb.AppendLine("            " + state + ".Advance(checked(" + length + " * " + plan.WireSize + "));");
-        // The architecture decision stays outside the generated element loop.
+        // Writer architecture selection stays outside the generated element loop. Reads share the scalar kernel.
         void AppendLoop(bool typed)
         {
             sb.AppendLine("            {");
@@ -473,20 +481,12 @@ internal static class PortableStructEmitter
                 expression = offset + "Snapshot";
             }
             string address = "global::System.Runtime.CompilerServices.Unsafe.Add(ref " + target + ", " + position + ")";
-            if (typed)
-                sb.AppendLine(indent + (write
-                    ? "global::System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref " + address + ", " + expression + ");"
-                    : expression + " = global::System.Runtime.CompilerServices.Unsafe.ReadUnaligned<" + type + ">(ref " + address + ");"));
+            if (!write)
+                sb.AppendLine(indent + expression + " = global::LuminPack.Core.LuminPackReader.Read<" + type + ">(ref " + address + ");");
+            else if (typed)
+                sb.AppendLine(indent + "global::System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref " + address + ", " + expression + ");");
             else
-            {
-                // 32-bit execution keeps the established block-copy scalar cores.
-                sb.AppendLine(indent + (write
-                    ? "global::LuminPack.Core.LuminPackWriter.Write(ref " + address + ", " + expression + ");"
-                    : isVolatile ? "global::LuminPack.Core.LuminPackReader.Read(ref " + address + ", out " + type + " " + offset + "Value);"
-                    : "global::LuminPack.Core.LuminPackReader.Read(ref " + address + ", out " + expression + ");"));
-                if (isVolatile && !write)
-                    sb.AppendLine(indent + expression + " = " + offset + "Value;");
-            }
+                sb.AppendLine(indent + "global::LuminPack.Core.LuminPackWriter.Write(ref " + address + ", " + expression + ");");
             position += current.WireSize;
         }
     }

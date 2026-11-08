@@ -8,20 +8,14 @@ namespace LuminPack.Code.Core;
 
 public static partial class LuminPackCodeGenerator
 {
-    /// <summary>Reads one raw fixed field at the cursor and advances once, without relying on helper inlining.</summary>
+    /// <summary>Reads one raw fixed field through the reader's checked scalar operation.</summary>
     /// <param name="builder">The operation receiving the statements.</param>
     /// <param name="field">The raw unmanaged field contract.</param>
     /// <param name="target">The writable field storage.</param>
     /// <param name="indent">The statement indentation.</param>
     private static void AppendFixedFieldRead(StringBuilder builder, LuminDataField field, string target, string indent)
     {
-        // The checked Advance validates the complete field range before the cursor moves; the load then reads the
-        // captured position, so one range check covers both.
-        builder.AppendLine(indent + "{");
-        builder.AppendLine(indent + "    ref byte fixedCursor = ref reader.GetCurrentSpanReference();");
-        builder.AppendLine(indent + "    reader.Advance(" + GetUnmanagedFieldSize(field) + ");");
-        builder.AppendLine(indent + "    " + FixedRead("fixedCursor", target, field));
-        builder.AppendLine(indent + "}");
+        builder.AppendLine(indent + target + " = reader.Read<" + GetGeneratedTypeName(field) + ">();");
     }
 
     /// <summary>Resolves whether a nested type reads untrusted input under its own declarations.</summary>

@@ -114,9 +114,13 @@ internal static class SerializerSourcePresentationRegression
                 "An object, collection or Union root retained an internal local identity: " + root.Identifier + " " +
                 string.Join(", ", locals.Where(name => name.StartsWith("__", StringComparison.Ordinal))));
         }
-        Require(roots.Any(root => root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
-                .Any(variable => variable.Identifier.ValueText.StartsWith("scalarReadSource", StringComparison.Ordinal))),
-            "The presentation fixture omitted lowered pair scalar reads.");
+        var pairReads = roots.Where(root => root.Identifier.ValueText == "RootRead" &&
+            root.ParameterList.Parameters[1].Type!.ToString().Contains("KeyValuePair<long", StringComparison.Ordinal)).ToArray();
+        Require(pairReads.Any(root => root.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+                    output.GetSemanticModel(call.SyntaxTree).GetSymbolInfo(call).Symbol is IMethodSymbol { Name: "Read", TypeArguments.Length: 1 } read &&
+                    read.TypeArguments[0].SpecialType == SpecialType.System_Int64)) &&
+                pairReads.All(root => !root.ToString().Contains("ReadUnaligned", StringComparison.Ordinal)),
+            "Pair scalar reads must call the shared reader without expanding the architecture decision.");
         Require(roots.Any(root => root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
                 .Any(variable => variable.Identifier.ValueText == "boundedStart")),
             "The presentation fixture omitted the bounded-record starting position.");

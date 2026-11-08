@@ -331,7 +331,8 @@ internal static partial class SerializerCodegenPerformanceRegression
                 "Fixed copies lost their address proof or bypassed the scalar architecture core.");
         }
         var scalarLoads = unionReader.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
-            output.GetSemanticModel(call.SyntaxTree).GetSymbolInfo(call).Symbol is IMethodSymbol { Name: "ReadUnaligned", TypeArguments.Length: 1 } bound &&
+            output.GetSemanticModel(call.SyntaxTree).GetSymbolInfo(call).Symbol is IMethodSymbol { Name: "Read", TypeArguments.Length: 1 } bound &&
+            bound.ContainingType.ToDisplayString() == "LuminPack.Core.LuminPackReader" &&
             bound.TypeArguments[0].SpecialType == SpecialType.System_Int32).ToArray();
         Require(scalarLoads.Length != 0 && scalarLoads.All(call => !call.Ancestors().OfType<IfStatementSyntax>().Any(gate =>
             gate.Condition.ToString().Contains("SizeOf<int>() <= 4", StringComparison.Ordinal))),

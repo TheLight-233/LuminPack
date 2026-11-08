@@ -180,24 +180,13 @@ public static partial class LuminPackCodeGenerator
             " else global::LuminPack.Core.LuminPackWriter.Write(ref " + location + ", in " + storage + ");";
     }
 
-    /// <summary>Spells one fixed read, resolving proven small scalars before emitting the architecture fallback.</summary>
+    /// <summary>Reads one field from an already validated fixed group through the reader's scalar kernel.</summary>
     /// <param name="location">The fixed input byte reference expression.</param>
     /// <param name="storage">The writable destination storage.</param>
     /// <param name="field">The destination field and its bound storage type.</param>
-    /// <returns>A statement that uses typed unaligned access on 64-bit and for values of at most four bytes, and the
-    /// block copy for wider values on 32-bit.</returns>
-    /// <remarks>Large generated roots can exhaust the JIT's inlining limits; these intrinsics need no inlining.</remarks>
-    private static string FixedRead(string location, string storage, LuminDataField field)
-    {
-        string type = GetGeneratedTypeName(field);
-        string load = storage + " = Unsafe.ReadUnaligned<" + type + ">(ref " + location + ");";
-        if (field.TypeSymbol?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
-            SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
-            SpecialType.System_UInt32 or SpecialType.System_Single)
-            return load;
-        return "if (Unsafe.SizeOf<global::System.IntPtr>() == 8 || Unsafe.SizeOf<" + type + ">() <= 4) " + load + " " +
-            "else global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<" + type + ", byte>(ref " + storage + "), ref " + location + ", (uint)Unsafe.SizeOf<" + type + ">());";
-    }
+    /// <returns>The scalar read from the selected byte reference, leaving the group's cursor ownership to its caller.</returns>
+    private static string FixedRead(string location, string storage, LuminDataField field) =>
+        storage + " = global::LuminPack.Core.LuminPackReader.Read<" + GetGeneratedTypeName(field) + ">(ref " + location + ");";
 
     /// <summary>Builds a constant or JIT-specializable byte width without inferring a struct's layout.</summary>
     /// <param name="field">An already validated raw unmanaged field.</param>
