@@ -13,11 +13,28 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackSerializerGenerator
 {
     private static readonly ConditionalWeakTable<object, ApiSignatureCache> ApiSignatures = new();
+    private static readonly ConditionalWeakTable<CSharpParseOptions, Dictionary<(bool Net8, LuminPackRegisterMode RegisterMode), SyntaxTree>>
+        InterceptionSignatures = new();
 
     /// <summary>Creates the constant-size generic surface used before interceptor targets are generated.</summary>
     /// <param name="metadata">The consumer's language and registration settings.</param>
     /// <returns>Signature-only generic APIs, independent of the payload population.</returns>
     internal static SyntaxTree GetInterceptionSignatures(MetaInfo metadata)
+    {
+        var signatures = InterceptionSignatures.GetValue(metadata.ParseOptions, static _ => new());
+        var key = (metadata.IsNet8, metadata.RegisterMode);
+        lock (signatures)
+        {
+            if (!signatures.TryGetValue(key, out var tree))
+                signatures.Add(key, tree = CreateInterceptionSignatures(metadata));
+            return tree;
+        }
+    }
+
+    /// <summary>Renders one analysis-only static facade for a set of signature settings.</summary>
+    /// <param name="metadata">The consumer's language and registration settings.</param>
+    /// <returns>A symbol-free signature tree.</returns>
+    private static SyntaxTree CreateInterceptionSignatures(MetaInfo metadata)
     {
         var body = new StringBuilder();
         string previousAccess = _currentAccess;

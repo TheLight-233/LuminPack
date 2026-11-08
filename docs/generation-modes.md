@@ -13,6 +13,8 @@ The removed `Sizeof` and `CalculateOffset` APIs are not generated. Direct alloca
 
 ## Static interception
 
+Direct serializer calls select payload-specific convenience documentation. Concrete entries used only by specialized wrappers retain their executable bodies and share the generic facade documentation.
+
 The generator package enables the `LuminPack` interceptor namespace automatically. With C# 11 or later and a compiler exposing versioned `GetInterceptableLocation`, the public facade binds a fixed generic signature set. Calls such as `Serialize(value)`, `Serialize<Player>(value)` and `Deserialize<Player>(bytes)` are intercepted into the existing concrete implementation. Each constructed signature shares one interceptor across its source locations. Internal state entries use unique payload names, and allocating/buffer/stream convenience entries live in separate `LuminEntry_<hash>` containers. Only used convenience families are emitted; formatter retention follows the automatic declaration and call graph described above.
 
 Explicit profiles use both type arguments, for example `Serialize<Player, TOptions>(value)`. The profile argument can remain open: it selects compiled options without selecting a payload formatter at runtime. The generator does not emit payload-specific profile convenience overloads on the public facade. Each selected convenience operation retains its existing compiled-profile body; the interceptor supplies the declaration's profile directly for a default call. These are the existing options structs, not formatter Plans.

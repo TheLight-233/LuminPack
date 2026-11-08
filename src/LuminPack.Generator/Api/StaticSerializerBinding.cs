@@ -15,6 +15,7 @@ internal sealed partial class StaticSerializerBinding
 {
     private static readonly ConditionalWeakTable<Compilation, Lazy<StaticSerializerBinding>> Cache = new();
     private readonly Dictionary<string, SerializerApiKind> _apis = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SerializerApiKind> _directApis = new(StringComparer.Ordinal);
     private readonly List<BoundCall> _calls = new();
     private readonly Dictionary<string, IMethodSymbol> _operations = new(StringComparer.Ordinal);
     private readonly List<ITypeSymbol> _operationPayloads = new();
@@ -44,6 +45,12 @@ internal sealed partial class StaticSerializerBinding
     internal SerializerApiKind GetApis(ITypeSymbol type)
         => _apis.TryGetValue(FormatterTypeName.Get(type), out var apis) ? apis : SerializerApiKind.None;
 
+    /// <summary>Identifies the concrete overload families called directly in user source.</summary>
+    /// <param name="payload">The canonical closed payload name.</param>
+    /// <returns>The families that receive payload-specific documentation.</returns>
+    internal SerializerApiKind GetDirectApis(string payload)
+        => _directApis.TryGetValue(payload, out var apis) ? apis : SerializerApiKind.None;
+
     /// <summary>Names an isolated concrete convenience container.</summary>
     /// <param name="payload">The canonical concrete payload spelling.</param>
     /// <returns>A stable identifier independent of call locations.</returns>
@@ -68,11 +75,12 @@ internal sealed partial class StaticSerializerBinding
         var relevantNames = RelevantInvocationNames(compilation);
         foreach (var tree in compilation.SyntaxTrees)
         {
-            var model = _binding.GetSemanticModel(tree);
+            SemanticModel model = null;
             foreach (var call in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 if (!relevantNames.Contains(InvocationName(call)))
                     continue;
+                model ??= _binding.GetSemanticModel(tree);
                 if (call.Expression is MemberAccessExpressionSyntax stateCall && stateCall.Name.Identifier.ValueText is "Write" or "Read" &&
                     call.ArgumentList.Arguments.Count == 1 && model.GetTypeInfo(stateCall.Expression).Type?.ToDisplayString() is
                         "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")
@@ -101,6 +109,9 @@ internal sealed partial class StaticSerializerBinding
                     continue;
                 var bound = new BoundCall(call, method, payload, attribute);
                 _calls.Add(bound);
+                string name = FormatterTypeName.Get(payload);
+                _directApis.TryGetValue(name, out var directApis);
+                _directApis[name] = directApis | Family(method);
                 RequireOperation(method);
             }
         }

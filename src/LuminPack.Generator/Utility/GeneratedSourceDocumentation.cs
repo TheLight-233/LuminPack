@@ -12,6 +12,8 @@ namespace LuminPack.SourceGenerator;
 /// <summary>Documents caller-facing serializer APIs without retaining XML on generated implementation details.</summary>
 internal static class GeneratedSourceDocumentation
 {
+    internal static readonly SyntaxAnnotation ImplementationEntry = new("LuminPack.ImplementationEntry");
+
     /// <summary>Completes serializer API comments and removes internal implementation documentation.</summary>
     /// <param name="source">The complete source file to document.</param>
     /// <param name="options">The consuming compilation's language and conditional compilation options.</param>
@@ -140,7 +142,7 @@ internal static class GeneratedSourceDocumentation
     /// <returns>Whether caller-facing documentation belongs on the declaration.</returns>
     internal static bool IsUserApi(BaseMethodDeclarationSyntax method)
     {
-        if (method is not MethodDeclarationSyntax declaration ||
+        if (method is not MethodDeclarationSyntax declaration || method.HasAnnotation(ImplementationEntry) ||
             method.Parent is not ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer", Parent: BaseNamespaceDeclarationSyntax })
             return false;
         if (method.Modifiers.Any(SyntaxKind.PublicKeyword))

@@ -212,6 +212,16 @@ internal static partial class SerializerInterceptorRegression
                 method.TypeParameterList == null &&
                 method.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString() == "global::Payload"),
                 "A concrete allocating overload remained in the global facade.");
+            var writeEntries = generatedFiles.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+                .Where(method => method.Identifier.ValueText == "Serialize" &&
+                    method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("LuminEntry_", StringComparison.Ordinal))
+                .Where(method => method.ParameterList.Parameters.Count == 1).ToArray();
+            Require(writeEntries.Any(method => method.ParameterList.Parameters[0].Type?.ToString() == "global::Payload" &&
+                method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))),
+                "The directly selected payload entry lost its documentation.");
+            Require(writeEntries.Any(method => method.ParameterList.Parameters[0].Type?.ToString() is "int" or "global::System.Int32" &&
+                !method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))),
+                "A wrapper-only allocating entry retained payload-specific documentation.");
         }
         using var image = new MemoryStream();
         using var pdb = new MemoryStream();

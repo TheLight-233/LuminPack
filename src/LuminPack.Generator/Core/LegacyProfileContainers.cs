@@ -18,7 +18,8 @@ internal static class LegacyProfileContainers
     /// <returns>The same default entry points and their profile bodies in a nested container.</returns>
     internal static string Apply(string source, string payload, MetaInfo metadata)
     {
-        var root = CSharpSyntaxTree.ParseText("class Container {" + source + "}", metadata.ParseOptions).GetCompilationUnitRoot();
+        var root = CSharpSyntaxTree.ParseText("class Container {\n" + source + "}",
+            metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetCompilationUnitRoot();
         var container = root.Members.OfType<ClassDeclarationSyntax>().Single();
         var methods = container.Members.OfType<MethodDeclarationSyntax>().Where(IsProfileBody).ToArray();
         if (methods.Length == 0)
@@ -32,7 +33,10 @@ internal static class LegacyProfileContainers
                 SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
             .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(moved.Select(method => method.WithModifiers(
                 SyntaxFactory.TokenList(method.Modifiers.Select(token => token.IsKind(SyntaxKind.PublicKeyword)
-                    ? SyntaxFactory.Token(SyntaxKind.InternalKeyword) : token))))));
+                    ? SyntaxFactory.Token(SyntaxKind.InternalKeyword) : token)))
+                .WithLeadingTrivia(method.GetLeadingTrivia().Where(trivia =>
+                    !trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) &&
+                    !trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))))));
         keep.Add(nested);
         return string.Join("\n", keep.Select(member => GeneratedSourceIndentation.At(member.NormalizeWhitespace(), 8)));
     }

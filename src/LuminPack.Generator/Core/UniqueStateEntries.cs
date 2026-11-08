@@ -35,7 +35,8 @@ internal static class UniqueStateEntries
     /// <returns>The members with unique concrete state calls.</returns>
     internal static string Facade(string source, string payload, MetaInfo metadata)
     {
-        var root = CSharpSyntaxTree.ParseText("class Container {" + source + "}", metadata.ParseOptions).GetCompilationUnitRoot();
+        var root = CSharpSyntaxTree.ParseText("class Container {\n" + source + "}",
+            metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetCompilationUnitRoot();
         var rewritten = (CompilationUnitSyntax)new Rewriter(null, payload).Visit(root);
         return string.Join("\n", rewritten.Members.OfType<ClassDeclarationSyntax>().Single().Members
             .Select(member => GeneratedSourceIndentation.At(member, 12)));
