@@ -15,17 +15,7 @@ namespace LuminPack.SourceGenerator;
 /// <summary>Describes concrete serializer overloads using the formatter's actual serialization contract.</summary>
 internal static class LuminPackSerializerDocumentation
 {
-    /// <summary>Adds type links, member contracts, layout details, and overload usage to serializer XML comments.</summary>
-    /// <param name="source">The generated serializer facade.</param>
-    /// <param name="types">The concrete types for which overloads were emitted.</param>
-    /// <param name="compilation">The compilation supplying the member symbols.</param>
-    /// <param name="metadata">The consuming compilation's generation settings.</param>
-    /// <returns>The serializer source with expanded XML documentation and unchanged executable tokens.</returns>
-    internal static string Enhance(string source, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
-    {
-        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetCompilationUnitRoot();
-        return Enhance(root, types, compilation, metadata);
-    }
+
 
     /// <summary>Documents a projected state implementation without reparsing its complete method bodies.</summary>
     /// <param name="root">The normalized source with documentation parsing enabled.</param>

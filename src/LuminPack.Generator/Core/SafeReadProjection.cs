@@ -50,31 +50,6 @@ internal sealed class SafeReadProjection
             _booleans = Policy + ".CheckBooleans(";
     }
 
-    /// <summary>Finds untrusted declarations through serialized members, closing recursive paths once.</summary>
-    /// <param name="type">The concrete root.</param><param name="compilation">The consumer compilation.</param>
-    /// <param name="metadata">Generation settings.</param>
-    /// <returns>Whether this root's graph contains an untrusted boundary.</returns>
-    internal static bool ContainsPolicy(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
-    {
-        var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-        bool Visit(ITypeSymbol current)
-        {
-            if (current == null || !seen.Add(current))
-                return false;
-            if (CompiledOptions.Resolve(current, compilation).Input.Enabled)
-                return true;
-            if (current is IArrayTypeSymbol array)
-                return Visit(array.ElementType);
-            if (current is not INamedTypeSymbol named)
-                return false;
-            if (named.TypeArguments.Any(Visit))
-                return true;
-            if (!CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
-                return false;
-            return LuminPackSourceGenerator.GetSerializationMetadata(named, compilation, metadata).fields.Any(field => Visit(field.TypeSymbol));
-        }
-        return Visit(type);
-    }
 
     /// <summary>Checks the original complete read body.</summary>
     /// <param name="method">The unchanged typed read.</param>

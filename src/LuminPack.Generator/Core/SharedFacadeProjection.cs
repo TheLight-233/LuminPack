@@ -194,18 +194,6 @@ internal sealed class SharedFacadeProjection
         return method.NormalizeWhitespace().ToFullString();
     }
 
-    /// <summary>Describes a parameter retained from the original facade template.</summary>
-    /// <param name="name">The template parameter name.</param>
-    /// <returns>A description of the parameter's operation role.</returns>
-    private static string ParameterDescription(string name) => name switch
-    {
-        "value" => "The payload to write, evaluate or populate.",
-        "writerBuffer" => "The exclusively owned output buffer and operation state.",
-        "readerBuffer" => "The input buffer and its existing operation state.",
-        "stream" => "The stream retained by the caller.",
-        "cancellationToken" => "The cancellation token observed by the stream operation.",
-        _ => "The original input for this convenience operation."
-    };
 
     /// <summary>Builds the constrained, allocation-free adapter contract.</summary>
     /// <param name="scoped">Whether the target state APIs use scoped references.</param>

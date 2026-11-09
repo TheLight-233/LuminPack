@@ -310,17 +310,6 @@ public static partial class LuminPackCodeGenerator
         return false;
     }
 
-    /// <summary>Determines whether the supplied value has the string list classification.</summary>
-    /// <param name="field">The metadata describing the field being processed.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool IsStringList(LuminDataField field)
-    {
-        if (field.Type == LuminFiledType.List && field.GenericType.Count == 1)
-        {
-            return field.GenericType[0] == LuminGenericsType.String;
-        }
-        return false;
-    }
 
     /// <summary>Determines whether the supplied value has the exact managed array type classification.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>

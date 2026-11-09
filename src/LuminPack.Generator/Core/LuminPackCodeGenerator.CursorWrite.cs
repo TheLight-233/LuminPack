@@ -387,15 +387,6 @@ public static partial class LuminPackCodeGenerator
         builder.AppendLine(indent + "}");
     }
 
-    /// <summary>Spells a dictionary member's key and value types.</summary>
-    /// <param name="field">A raw-pair dictionary member.</param>
-    /// <returns>The fully qualified key and value type arguments.</returns>
-    private static string PairTypes(LuminDataField field)
-    {
-        var dictionary = (Microsoft.CodeAnalysis.INamedTypeSymbol)field.TypeSymbol;
-        return dictionary.TypeArguments[0].ToDisplayString(Microsoft.CodeAnalysis.SymbolDisplayFormat.FullyQualifiedFormat) + ", " +
-               dictionary.TypeArguments[1].ToDisplayString(Microsoft.CodeAnalysis.SymbolDisplayFormat.FullyQualifiedFormat);
-    }
 
     /// <summary>Accepts only elements the raw collection path copies as their native storage.</summary>
     /// <param name="element">The element type.</param>

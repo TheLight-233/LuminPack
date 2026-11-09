@@ -106,14 +106,6 @@ public sealed class ReachabilityAnalysis
     /// </summary>
     internal ImmutableArray<ITypeSymbol> EmittedTypes => _emittedTypes;
 
-    /// <summary>
-    /// Whether a <c>[LuminPackable]</c> type should be emitted by the per-type generator.
-    /// Declared model graphs are retained independently of source entry calls.
-    /// </summary>
-    /// <param name="packable">The packable used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    internal bool ShouldEmitPackable(ITypeSymbol packable)
-        => _emittedPackableDefinitions.Contains(packable.OriginalDefinition);
 }
 
 /// <summary>Provides reachability analysis cache functionality.</summary>
@@ -380,31 +372,6 @@ internal static class ReachabilityAnalysisCache
            LuminPackExtensionGenerator.IsAotVisible(type) &&
            LuminPackExtensionGenerator.IsStaticFormatterCandidate(type, analysis);
 
-    /// <summary>Determines whether the supplied value has the publicly accessible type classification.</summary>
-    /// <param name="type">The type or symbol to analyze.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool IsPubliclyAccessibleType(ITypeSymbol type)
-    {
-        INamedTypeSymbol? named = type switch
-        {
-            IArrayTypeSymbol array => array.ElementType as INamedTypeSymbol,
-            INamedTypeSymbol n => n,
-            _ => null
-        };
-        if (named is null)
-        {
-            return false;
-        }
-
-        for (INamedTypeSymbol? current = named; current is not null; current = current.ContainingType)
-        {
-            if (current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.NotApplicable))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
 
     /// <summary>Closes an operation over members, generic definitions, and Union dispatch dependencies.</summary>
     /// <param name="compilation">The original compilation that owns the payload symbols.</param>
@@ -706,41 +673,6 @@ internal static class ReachabilityAnalysisCache
         return false;
     }
 
-    /// <summary>
-    /// Adds the transitive base-type chain of every emitted packable to the emitted set.  Subclass
-    /// formatters serialize inherited base members and reference the base's local class structure, so
-    /// base packables must be emitted even when they are never serialized directly.
-    /// </summary>
-    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
-    /// <param name="definitions">The definitions used by this operation.</param>
-    /// <param name="analysis">The compilation-local packable type index.</param>
-    private static void AddBasePackableChain(Compilation compilation, ISet<ITypeSymbol> definitions, CompilationTypeAnalysis analysis)
-    {
-        var pending = new Queue<INamedTypeSymbol>();
-        foreach (ITypeSymbol definition in definitions)
-        {
-            if (definition is INamedTypeSymbol named)
-            {
-                pending.Enqueue(named);
-            }
-        }
-
-        while (pending.Count != 0)
-        {
-            INamedTypeSymbol current = pending.Dequeue();
-            for (INamedTypeSymbol? baseType = current.BaseType;
-                 baseType is not null && baseType.SpecialType != SpecialType.System_Object;
-                 baseType = baseType.BaseType)
-            {
-                INamedTypeSymbol baseDef = baseType.OriginalDefinition;
-                if (analysis.IsPackable(baseDef) &&
-                    definitions.Add(baseDef))
-                {
-                    pending.Enqueue(baseDef);
-                }
-            }
-        }
-    }
 
     /// <summary>Performs the expand packable members step for the current operation.</summary>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>

@@ -9,20 +9,6 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackExtensionGenerator
 {
 
-    /// <summary>Performs the enumerate formatter fields step for the current operation.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <returns>The result of the operation.</returns>
-    private static IEnumerable<LuminLocalFieldData> EnumerateFormatterFields(LuminDataInfo data)
-    {
-        HashSet<ITypeSymbol> visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-        foreach (LuminDataField field in data.fields)
-        {
-            foreach (LuminLocalFieldData formatterField in EnumerateFormatterFields(field.TypeSymbol, visited))
-            {
-                yield return formatterField;
-            }
-        }
-    }
 
     /// <summary>Performs the enumerate formatter fields step for the current operation.</summary>
     /// <param name="type">The type or symbol to analyze.</param>

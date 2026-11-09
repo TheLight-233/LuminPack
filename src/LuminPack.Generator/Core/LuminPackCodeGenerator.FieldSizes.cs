@@ -7,18 +7,6 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackCodeGenerator
 {
 
-    /// <summary>Obtains the serialize field length for the supplied input.</summary>
-    /// <param name="field">The metadata describing the field being processed.</param>
-    /// <param name="depth">The nesting depth used to distinguish generated local variables.</param>
-    /// <param name="stringRecordLength">The expression that yields the current string header length.</param>
-    /// <param name="multList">The prefix used to distinguish nested collection variables.</param>
-    /// <returns>The result of the operation.</returns>
-    private static string GetSerializeFieldLength(LuminDataField field, int depth, string stringRecordLength, string multList = "_")
-    {
-        if (field.Type == LuminFiledType.String && field.Options?.IsDeclared == true)
-            stringRecordLength = field.Options.HeaderLength.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return GetFieldLength(field, depth, multList, "writer").Replace("writer.StringRecordLength()", stringRecordLength);
-    }
 
     /// <summary>Obtains the field length for the supplied input.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>

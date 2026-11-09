@@ -9,36 +9,7 @@ namespace LuminPack.Code.Core;
 /// <summary>Encodes closed schema constants so modern readers compare static data with a known length.</summary>
 internal static class VersionMetadataEncoder
 {
-    /// <summary>Builds an exact constant length table for architecture-independent primitive field storage.</summary>
-    /// <param name="data">The complete member contract.</param>
-    /// <returns>The fixed VarInt table, or null when a field width requires runtime layout information.</returns>
-    internal static byte[] FixedLengths(LuminDataInfo data)
-    {
-        if (!LuminPackCodeGenerator.FindAllUnmanagedType(data.fields))
-            return null;
-        var lengths = new List<byte>();
-        foreach (var field in data.fields)
-        {
-            if (TypeIdentity(field.TypeSymbol) == null)
-                return null;
-            var type = field.TypeSymbol;
-            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
-                type = enumeration.EnumUnderlyingType;
-            int size = type.SpecialType switch
-            {
-                SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
-                SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 => 2,
-                SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
-                SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
-                SpecialType.System_Decimal => 16,
-                _ => 0
-            };
-            if (size == 0)
-                return null;
-            lengths.Add((byte)size);
-        }
-        return lengths.ToArray();
-    }
+
 
     /// <summary>Classifies each member's revision-2 payload: a constant raw width, 255 for a length-prefixed payload, or null for a raw width known only at run time.</summary>
     /// <param name="data">The complete member contract.</param>

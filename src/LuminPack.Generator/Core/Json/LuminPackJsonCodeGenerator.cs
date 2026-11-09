@@ -13,13 +13,7 @@ namespace LuminPack.Code.Core;
 /// <summary>Provides lumin pack json code generator functionality.</summary>
 public static class LuminPackJsonCodeGenerator
 {
-    /// <summary>Performs the compute utf8 hash step for the current operation.</summary>
-    /// <param name="str">The str used by this operation.</param>
-    /// <returns>The result of the operation.</returns>
-    internal unsafe static ulong ComputeUtf8Hash(string str)
-    {
-        return ComputeUtf8BytesHash(Encoding.UTF8.GetBytes(str));
-    }
+
 
     /// <summary>Hashes already encoded name bytes without allocating the same payload again.</summary>
     /// <param name="bytes">The complete UTF-8 encoding.</param>
@@ -1054,9 +1048,7 @@ public static class LuminPackJsonCodeGenerator
 /// <summary>Provides lumin pack json circle reference code generator functionality.</summary>
 public static class LuminPackJsonCircleReferenceCodeGenerator
 {
-    private const string JSON_ID_FIELD = "$id";
 
-    private const string JSON_REF_FIELD = "$ref";
 
     /// <summary>Builds the static utf8 fields for circle reference source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>

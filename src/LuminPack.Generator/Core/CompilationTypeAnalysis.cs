@@ -175,13 +175,6 @@ internal sealed class CompilationTypeAnalysis
     /// <summary>Gets the uses lumin pack.</summary>
     internal bool UsesLuminPack { get; }
 
-    /// <summary>Determines whether the supplied value has the owned by classification.</summary>
-    /// <param name="type">The type or symbol to analyze.</param>
-    /// <param name="owner">The owner used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    internal bool IsOwnedBy(ITypeSymbol type, INamedTypeSymbol owner)
-        => _formatterOwners.TryGetValue(type, out INamedTypeSymbol actual) &&
-           SymbolEqualityComparer.Default.Equals(actual, owner);
 
     /// <summary>Determines whether owner are present.</summary>
     /// <param name="type">The type or symbol to analyze.</param>
@@ -194,19 +187,6 @@ internal sealed class CompilationTypeAnalysis
     internal INamedTypeSymbol? GetOwner(ITypeSymbol type)
         => _formatterOwners.TryGetValue(type, out INamedTypeSymbol? owner) ? owner : null;
 
-    /// <summary>Determines whether the supplied value has the layout owned by classification.</summary>
-    /// <param name="type">The type or symbol to analyze.</param>
-    /// <param name="owner">The owner used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    internal bool IsLayoutOwnedBy(ITypeSymbol type, INamedTypeSymbol owner)
-        => _layoutOwners.TryGetValue(NormalizeLayoutType(type), out INamedTypeSymbol actual) &&
-           SymbolEqualityComparer.Default.Equals(actual, owner);
-
-    /// <summary>Performs the normalize layout type step for the current operation.</summary>
-    /// <param name="type">The type or symbol to analyze.</param>
-    /// <returns>The result of the operation.</returns>
-    private static ITypeSymbol NormalizeLayoutType(ITypeSymbol type)
-        => type is INamedTypeSymbol named ? named.OriginalDefinition : type;
 }
 
 /// <summary>Reusable structural facts for one source-declared type.</summary>

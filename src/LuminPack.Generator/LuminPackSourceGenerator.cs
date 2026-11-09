@@ -64,8 +64,7 @@ namespace LuminPack.SourceGenerator
         private static ISymbol _mainSymbol => _analysisState.MainSymbol;
         /// <summary>Gets the location.</summary>
         private static Location _location => _analysisState.Location;
-        /// <summary>Gets the metadata.</summary>
-        private static MetaInfo _metadata => _analysisState.Metadata;
+
         /// <summary>Gets the processed types.</summary>
         private static HashSet<INamedTypeSymbol> ProcessedTypes => _analysisState.ProcessedTypes;
 
