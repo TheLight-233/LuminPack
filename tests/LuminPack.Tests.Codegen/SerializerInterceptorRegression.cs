@@ -27,6 +27,8 @@ internal static partial class SerializerInterceptorRegression
             using LuminPack.Option;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)]
             [LuminPackable] public partial class Payload { public int Number; public string Text; }
+            [LuminPackable] public partial class StatePayload { public int Number; public string Text; }
+            [LuminPackable] public partial class RetainedPayload { public int Number; }
             [LuminPackable, LuminPackOption(UntrustedData = true, MaxDepth = 4)] public partial class StrictPayload { public int[] Values; }
             [LuminPackable, LuminPackUnion(3, typeof(UnionCase))] public abstract partial class Union { }
             [LuminPackable] public sealed partial class UnionCase : Union { public int Number; }
@@ -74,6 +76,38 @@ internal static partial class SerializerInterceptorRegression
                     => LuminPackSerializer.Serialize<T, TOptions>(value);
                 private static void Write(ref LuminPackWriter writer, in Payload value) => LuminPackSerializer.Serialize(ref writer, in value);
                 private static void Read(ref LuminPackReader reader, ref Payload value) => LuminPackSerializer.Deserialize(ref reader, ref value);
+                public static void Main() { }
+                #if INTERCEPTED
+                private static unsafe void CheckState(StatePayload value, byte[] expected)
+                {
+                    using var output = new global::LuminPack.Utility.LuminBufferWriter(true);
+                    var writer = new LuminPackWriter(output);
+                    LuminPackSerializer.Serialize<StatePayload, LuminPackUtf16LengthOptions>(ref writer, in value);
+                    if (!writer.GetSpan().SequenceEqual(expected)) throw new Exception("State write changed the binary payload.");
+                    ReadOnlySpan<byte> binary = expected;
+                    var reader = new LuminPackReader(ref binary, new LuminPackReaderOptionalState());
+                    StatePayload restored = null;
+                    LuminPackSerializer.Deserialize<StatePayload, LuminPackUtf16LengthOptions>(ref reader, ref restored);
+                    if (restored.Number != value.Number || restored.Text != value.Text) throw new Exception("State read changed the binary payload.");
+
+                    output.ResetCore();
+                    var jsonWriter = new LuminPackJsonWriter(output);
+                    LuminPackSerializer.SerializeJson<StatePayload, LuminPackUtf16LengthOptions>(ref jsonWriter, in value);
+                    var bytes = jsonWriter.GetSpan().ToArray();
+                    fixed (byte* pointer = bytes)
+                    {
+                        ReadOnlySpan<byte> input = new ReadOnlySpan<byte>(pointer, bytes.Length);
+                        var jsonReader = new LuminPackJsonReader(ref input, new LuminPackReaderOptionalState());
+                        restored = null;
+                        LuminPackSerializer.DeserializeJson<StatePayload, LuminPackUtf16LengthOptions>(ref jsonReader, ref restored);
+                        if (restored.Number != value.Number || restored.Text != value.Text) throw new Exception("JSON state did not round trip.");
+                    }
+                }
+                #endif
+                #if CLOSED_APP
+                private static void RetainEntry(ref LuminPackWriter writer, in RetainedPayload value)
+                    => LuminPackSerializer.Serialize_RetainedPayload(ref writer, in value);
+                #endif
                 #if !NO_REGISTER
                 public static unsafe void CheckFallback(Payload value, byte[] expected)
                 {
@@ -106,6 +140,7 @@ internal static partial class SerializerInterceptorRegression
                     LuminPackSerializer.Deserialize(listBytes, ref list);
                     if (list.Count != 1 || list[0].Number != 37) throw new Exception("Collection mismatch.");
                     #if INTERCEPTED
+                    CheckState(new StatePayload { Number = value.Number, Text = value.Text }, bytes);
                     if (LuminPackSerializer.Deserialize<Payload>(bytes).Number != 37) throw new Exception("Value read mismatch.");
                     if (LuminPackSerializer.Serialize<Payload>(value).Length != bytes.Length) throw new Exception("Explicit write mismatch.");
                     if (Convert.ToBase64String(LiteralSave(value)) != Convert.ToBase64String(bytes)) throw new Exception("Literal wrapper mismatch.");
@@ -155,6 +190,13 @@ internal static partial class SerializerInterceptorRegression
             "Automatic generation without an assembly setting changed the wire representation.");
         Require(baseline == Execute(references, source.Replace("LuminPackGenerationMode.Minimal", "LuminPackRegisterMode.Disabled"), true, register: false, il: il),
             "Disabling registration changed static interception.");
+        Require(baseline == Execute(references, source, true, il: il, application: true), "The closed application changed the wire representation.");
+        if (!il)
+        {
+            const string friend = "[assembly: InternalsVisibleTo(\"InterceptorFriend\")]";
+            Require(baseline == Execute(references, source.Replace("[LuminPackable] public partial class Payload", friend + "\n[LuminPackable] public partial class Payload"),
+                true, application: true, friend: true), "Friend access changed the wire representation.");
+        }
         VerifyIncremental(references, il);
         Console.WriteLine("Passed " + (il ? "C# 9 IL rewriting" : "compiler interception and incremental edits") + ": binary/JSON, wrappers, profiles, unions, async, registered fallback, direct-call IL and legacy wire equality.");
     }
@@ -165,8 +207,11 @@ internal static partial class SerializerInterceptorRegression
     /// <param name="intercept">Whether the compiler enables generated interception.</param>
     /// <param name="register">Whether this fixture exercises opaque registered calls.</param>
     /// <param name="il">Whether to use the installed IL backend.</param>
+    /// <param name="application">Whether to compile a console application.</param>
+    /// <param name="friend">Whether the application exposes internals to another assembly.</param>
     /// <returns>The fixture's wire digest.</returns>
-    private static string Execute(MetadataReference[] references, string source, bool intercept, bool register = true, bool il = false)
+    private static string Execute(MetadataReference[] references, string source, bool intercept, bool register = true, bool il = false,
+        bool application = false, bool friend = false)
     {
         var symbols = il ? new List<string> { "NETSTANDARD2_1" } : new List<string> { "NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER" };
         if (intercept)
@@ -175,11 +220,14 @@ internal static partial class SerializerInterceptorRegression
             symbols.Add("NO_REGISTER");
         if (il && intercept)
             symbols.Add("LUMINPACK_IL_REWRITE");
+        if (application)
+            symbols.Add("CLOSED_APP");
         var options = new CSharpParseOptions(il ? LanguageVersion.CSharp9 : LanguageVersion.Preview, DocumentationMode.Parse, preprocessorSymbols: symbols);
         if (intercept && !il)
             options = options.WithFeatures(new[] { new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack") });
         var input = CSharpCompilation.Create("InterceptorConsumer", new[] { CSharpSyntaxTree.ParseText(source, options, "Calls.cs", Encoding.UTF8) },
-            references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            references, new CSharpCompilationOptions(application ? OutputKind.ConsoleApplication : OutputKind.DynamicallyLinkedLibrary,
+                allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new[]
         {
             new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator()
@@ -206,6 +254,16 @@ internal static partial class SerializerInterceptorRegression
         if (intercept)
         {
             Require(generatedFiles.Any(file => file.HintName == "LuminPackGen.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
+            bool prune = application && !il && !friend;
+            string interceptors = generatedFiles.Single(file => file.HintName == "LuminPackGen.Interceptors.g.cs").SourceText.ToString();
+            foreach (string root in new[] { "RootWrite", "RootRead", "RootWriteJson", "RootReadJson" })
+                Require(interceptors.Contains("LuminRoots_StatePayload." + root + "<", StringComparison.Ordinal) == prune,
+                    "The state interceptor took the wrong path for " + root + ".");
+            Require(outerMethods.Any(method => method.Identifier.ValueText == "SerializeJson_StatePayload" && method.TypeParameterList != null) != prune,
+                "The unused profiled JSON state forwarder was emitted in the wrong compilation kind.");
+            if (application)
+                Require(outerMethods.Any(method => method.Identifier.ValueText == "Serialize_RetainedPayload" && method.TypeParameterList == null),
+                    "The source-referenced state entry was omitted.");
             Require(driver.GetRunResult().Results[0].GeneratedSources.Any(file => file.HintName == "LuminPackGen.Union.g.cs" &&
                 file.SourceText.ToString().Contains("override void LuminPackUnionSerialize_", StringComparison.Ordinal)),
                 "The binary publisher did not emit the Union dispatch slots with the type file.");

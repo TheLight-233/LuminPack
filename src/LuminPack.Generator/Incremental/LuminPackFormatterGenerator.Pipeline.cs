@@ -17,7 +17,8 @@ public sealed partial class LuminPackFormatterGenerator
     /// <param name="context">The generator pipeline registration context.</param>
     /// <param name="metadata">Value-compared project generation settings.</param>
     /// <param name="outputs">The source groups the publishing generator owns.</param>
-    internal static void InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
+    /// <returns>The completed type contributions before publication.</returns>
+    internal static IncrementalValuesProvider<FrozenTypeEmission> InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
         IncrementalValueProvider<MetaInfo> metadata, GeneratorOutput outputs)
     {
         var cache = new TypeEmissionCache();
@@ -75,30 +76,8 @@ public sealed partial class LuminPackFormatterGenerator
             }
         }
 
-        // The binary generator publishes a type's binary roots and Union slots, the JSON generator its JSON roots and slots,
-        // each as one file per type; layout mirrors and diagnostics stay with the formatter generator.
-        bool binary = (outputs & GeneratorOutput.Binary) != 0, json = (outputs & GeneratorOutput.Json) != 0;
-        if (binary || json)
-        {
-            // Operations the project never calls are left out of the published files.
-            var called = context.CompilationProvider.Select(static (compilation, _) => GeneratedOperationUsage.For(compilation));
-            var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Combine(called)
-                .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json, pair.Right.ForPayload(pair.Left.Payload)));
-            context.RegisterSourceOutput(sources.Combine(aliases), static (output, input) =>
-            {
-                Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
-                try
-                {
-                    output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
-                }
-                catch (Exception exception) when (exception is not OperationCanceledException)
-                {
-                    output.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratorFailure, Location.None, exception.GetType().FullName + ": " + exception.Message));
-                }
-            });
-        }
         if ((outputs & GeneratorOutput.Formatter) == 0)
-            return;
+            return emissions;
 
         // Exact weak tree handles let stable diagnostics remain independent of Compilation changes.
         var diagnostics = emissions.Select(static (value, _) => value.Diagnostics).Where(static values => !values.IsDefaultOrEmpty);
@@ -122,6 +101,38 @@ public sealed partial class LuminPackFormatterGenerator
         context.RegisterSourceOutput(layouts.SelectMany(static (result, _) => result.Diagnostics), static (output, diagnostic) =>
         {
             output.ReportDiagnostic(diagnostic.MaterializeSource());
+        });
+        return emissions;
+    }
+
+    /// <summary>Publishes the selected type roots and Union slots, one file per type and format.</summary>
+    /// <param name="context">The incremental generator context.</param>
+    /// <param name="emissions">The completed type contributions.</param>
+    /// <param name="called">The operations retained by the consumer.</param>
+    /// <param name="forwarding">The shared state forwarding decisions.</param>
+    /// <param name="outputs">The source groups owned by this publisher.</param>
+    internal static void PublishTypeFiles(IncrementalGeneratorInitializationContext context, IncrementalValuesProvider<FrozenTypeEmission> emissions,
+        IncrementalValueProvider<GeneratedOperationUsage> called, IncrementalValueProvider<StateForwardingPlan> forwarding, GeneratorOutput outputs)
+    {
+        bool binary = (outputs & GeneratorOutput.Binary) != 0, json = (outputs & GeneratorOutput.Json) != 0;
+        if (!binary && !json)
+            return;
+
+        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Combine(called)
+            .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json,
+                pair.Right.ForPayload(pair.Left.Payload)))
+            .Combine(forwarding).Select(static (pair, _) => pair.Right.Apply(pair.Left));
+        context.RegisterSourceOutput(sources.Combine(GeneratedSourceLayout.AvailableAliases(context)), static (output, input) =>
+        {
+            Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
+            try
+            {
+                output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                output.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratorFailure, Location.None, exception.GetType().FullName + ": " + exception.Message));
+            }
         });
     }
 

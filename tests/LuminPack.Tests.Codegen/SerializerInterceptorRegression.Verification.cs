@@ -121,26 +121,34 @@ internal static partial class SerializerInterceptorRegression
                 .WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         var enabled = parse;
         const string model = "using LuminPack.Attribute; [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)] " +
-            "[LuminPackable] public partial class Item { public int Value; }";
-        const string caller = "public static class Calls { public static byte[] Run(Item value) => Helpers.Save(value); }";
+            "[LuminPackable] public partial class Item { public int Value; } [LuminPackable] public partial class StateItem { public string Value; }";
+        const string caller = "using LuminPack; using LuminPack.Core; using LuminPack.Option; public static class Calls { public static void Main() { } " +
+            "public static byte[] Run(Item value) => Helpers.Save(value); " +
+            "public static void State(ref LuminPackWriter writer, in StateItem value) => LuminPackSerializer.Serialize<StateItem, LuminPackUtf16LengthOptions>(ref writer, in value); }";
+        const string directReference = "public static class KeepState { public static void Write(ref LuminPack.Core.LuminPackWriter writer, in StateItem value) " +
+            "=> LuminPack.LuminPackSerializer.Serialize_StateItem<LuminPack.Option.LuminPackUtf16LengthOptions>(ref writer, in value); }";
         const string wrappers = "public static class Helpers { public static int Count; public static byte[] Save<T>(T value) => Inner(value); " +
             "private static byte[] Inner<T>(T value) { Count += 1; return LuminPack.LuminPackSerializer.Serialize(value); } }";
         var input = CSharpCompilation.Create("InterceptorEdits", [Tree(model, "Models.cs"), Tree(caller, "Calls.cs"), Tree(wrappers, "Helpers.cs")], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            new CSharpCompilationOptions(il ? OutputKind.DynamicallyLinkedLibrary : OutputKind.ConsoleApplication, allowUnsafe: true));
         GeneratorDriver retained = Driver();
         string? previous = null;
-        foreach (int edit in Enumerable.Range(0, 5))
+        foreach (int edit in Enumerable.Range(0, il ? 5 : 7))
         {
             if (edit == 1)
                 input = input.ReplaceSyntaxTree(input.SyntaxTrees.Last(), Tree(wrappers.Replace("Count += 1", "Count += 2"), "Helpers.cs"));
             if (edit == 2)
                 input = input.ReplaceSyntaxTree(input.SyntaxTrees.ElementAt(1), Tree("\n\n" + caller, "Calls.cs"));
-            if (edit >= 3)
+            if (edit is 3 or 4)
             {
                 parse = edit == 4 ? enabled : il ? enabled.WithPreprocessorSymbols("NETSTANDARD2_1") : enabled.WithFeatures([]);
                 input = input.RemoveAllSyntaxTrees().AddSyntaxTrees(input.SyntaxTrees.Select(tree => tree.WithRootAndOptions(tree.GetRoot(), parse)));
                 retained = retained.WithUpdatedParseOptions(parse);
             }
+            if (edit == 5)
+                input = input.AddSyntaxTrees(Tree(directReference, "KeepState.cs"));
+            if (edit == 6)
+                input = input.RemoveSyntaxTrees(input.SyntaxTrees.Last());
             retained = retained.RunGeneratorsAndUpdateCompilation(input, out var output, out _);
             var fresh = Driver().RunGeneratorsAndUpdateCompilation(input, out _, out _);
             string snapshot = Sources(retained);
@@ -148,6 +156,9 @@ internal static partial class SerializerInterceptorRegression
             Require(previous == null || previous != snapshot || il && edit == 2, "An interception backend, location or nested wrapper body remained stale.");
             Require(!output.GetDiagnostics().Any(item => item.Severity == DiagnosticSeverity.Error),
                 "Incremental interception failed compilation: " + string.Join(Environment.NewLine, output.GetDiagnostics().Where(item => item.Severity == DiagnosticSeverity.Error)));
+            if (!il && edit >= 4)
+                Require(snapshot.Contains("void Serialize_StateItem<TLuminProfile>", StringComparison.Ordinal) == (edit == 5),
+                    "Incremental generation did not restore or omit the state forwarder after a source reference changed.");
             previous = snapshot;
         }
 
