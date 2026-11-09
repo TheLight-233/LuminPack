@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -13,6 +14,7 @@ namespace LuminPack.SourceGenerator;
 internal static class GeneratedSourceDocumentation
 {
     internal static readonly SyntaxAnnotation ImplementationEntry = new("LuminPack.ImplementationEntry");
+    private static readonly Regex SerializerClass = new(@"\bclass\s+LuminPackSerializer\b",RegexOptions.CultureInvariant);
 
     /// <summary>Completes serializer API comments and removes internal implementation documentation.</summary>
     /// <param name="source">The complete source file to document.</param>
@@ -20,6 +22,10 @@ internal static class GeneratedSourceDocumentation
     /// <returns>The unchanged executable source with documentation limited to serializer APIs.</returns>
     internal static string Complete(string source, CSharpParseOptions options)
     {
+        // Without documentation or a serializer class there is nothing to remove or document, and the parse would print the same text.
+        if (source.IndexOf("///", StringComparison.Ordinal) < 0 && source.IndexOf("/**", StringComparison.Ordinal) < 0 &&
+            !SerializerClass.IsMatch(source))
+            return "#pragma warning disable CS1591" + Environment.NewLine + source;
         var root = CSharpSyntaxTree.ParseText(source, options.WithDocumentationMode(DocumentationMode.None)).GetRoot();
         if (root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .Any(type => type.Identifier.ValueText == "LuminPackSerializer" && type.Parent is BaseNamespaceDeclarationSyntax))
