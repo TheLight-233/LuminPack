@@ -42,8 +42,10 @@ public sealed partial class LuminPackSourceGenerator
                 _ => "LuminPack.Incremental.JsonAggregateBatch"
             });
 
-        var aggregateFiles = aggregateResults.Combine(metaProvider).SelectMany((result, _) =>
-            JoinSameNames(result.Left.Files.SelectMany(file => SelectFiles(file, result.Right, outputs)), result.Right))
+        // Operations the project never calls are left out of the published files.
+        var called = context.CompilationProvider.Select(static (compilation, _) => GeneratedOperationUsage.For(compilation));
+        var aggregateFiles = aggregateResults.Combine(metaProvider).Combine(called).SelectMany((result, _) =>
+            JoinSameNames(result.Left.Left.Files.SelectMany(file => SelectFiles(file, result.Left.Right, outputs, result.Right)), result.Left.Right))
             .WithTrackingName("LuminPack.Incremental.AggregateFiles");
         context.RegisterSourceOutput(aggregateFiles.Combine(GeneratedSourceLayout.AvailableAliases(context)), static (output, input) =>
         {
@@ -216,11 +218,25 @@ public sealed partial class LuminPackSourceGenerator
     /// <param name="file">The original generated contribution.</param>
     /// <param name="metadata">The current language and preprocessor settings.</param>
     /// <param name="outputs">The source groups owned by this publisher.</param>
+    /// <param name="called">The operations the project calls.</param>
     /// <returns>The complete files to publish.</returns>
-    private static IEnumerable<FrozenGeneratedSource> SelectFiles(FrozenGeneratedSource file, MetaInfo metadata, GeneratorOutput outputs)
+    private static IEnumerable<FrozenGeneratedSource> SelectFiles(FrozenGeneratedSource file, MetaInfo metadata, GeneratorOutput outputs,
+        GeneratedOperations called)
     {
         if ((file.Owner & outputs) == 0)
             yield break;
+        // Registration, option and interception files serve every operation and stay whole.
+        if (called != GeneratedOperations.All && file.Name is not (GeneratedFileNames.Prefix + "Options.g.cs") and
+            not (GeneratedFileNames.Prefix + "CustomFormatterRegistry.g.cs") and not (GeneratedFileNames.Prefix + "Interceptors.g.cs"))
+        {
+            // The JSON part goes as a whole when the project calls no JSON operation; the method filter removes the rest.
+            var parts = GeneratedFormatPartition.Get(file.Text, metadata.ParseOptions);
+            bool jsonCalled = (called & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) != 0;
+            string text = jsonCalled ? file.Text : parts.Shared;
+            file = new FrozenGeneratedSource(file.Name, GeneratedOperationFilter.Apply(text, called, metadata.ParseOptions), file.Owner);
+            if (file.Text.Length == 0)
+                yield break;
+        }
 
         // The formatter generator publishes both formats of its files together; files of the binary and JSON generators split.
         if (file.Owner != (GeneratorOutput.Binary | GeneratorOutput.Json))

@@ -80,8 +80,10 @@ public sealed partial class LuminPackFormatterGenerator
         bool binary = (outputs & GeneratorOutput.Binary) != 0, json = (outputs & GeneratorOutput.Json) != 0;
         if (binary || json)
         {
-            var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension))
-                .SelectMany((value, _) => TypeFiles(value, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json));
+            // Operations the project never calls are left out of the published files.
+            var called = context.CompilationProvider.Select(static (compilation, _) => GeneratedOperationUsage.For(compilation));
+            var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Combine(called)
+                .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json, pair.Right));
             context.RegisterSourceOutput(sources.Combine(aliases), static (output, input) =>
             {
                 Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
@@ -203,16 +205,19 @@ public sealed partial class LuminPackFormatterGenerator
     /// <param name="json">Whether the publishing generator owns JSON code.</param>
     /// <param name="combined">Whether the publisher also owns other output, such as the compatibility generator that publishes
     /// JSON and formatter code together; its JSON file then carries a role so it cannot share a formatter file's name.</param>
+    /// <param name="called">The operations the project calls.</param>
     /// <returns>The files of the selected formats.</returns>
-    private static IEnumerable<FrozenGeneratedSource> TypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined)
+    private static IEnumerable<FrozenGeneratedSource> TypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined, GeneratedOperations called)
     {
+        // The binary part also holds the helpers both formats share, so only its operations are filtered out.
+        json &= (called & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) != 0;
         var options = value.Layouts.Options;
         var roots = GeneratedFormatPartition.Get(value.Extension, options);
         var union = string.IsNullOrEmpty(value.Union) ? null : GeneratedFormatPartition.Get(value.Union, options);
         string name = value.HintName + ".g.cs";
-        if (binary && GeneratedSourceMerge.Join(roots.Shared, union?.Shared, options) is { Length: > 0 } binaryText)
+        if (binary && GeneratedOperationFilter.Apply(GeneratedSourceMerge.Join(roots.Shared, union?.Shared, options), called, options) is { Length: > 0 } binaryText)
             yield return new FrozenGeneratedSource(name, binaryText);
-        if (json && GeneratedSourceMerge.Join(roots.Json, union?.Json, options) is { Length: > 0 } jsonText)
+        if (json && GeneratedOperationFilter.Apply(GeneratedSourceMerge.Join(roots.Json, union?.Json, options), called, options) is { Length: > 0 } jsonText)
             yield return new FrozenGeneratedSource(combined ? value.HintName + ".Json.g.cs" : name, jsonText);
     }
 

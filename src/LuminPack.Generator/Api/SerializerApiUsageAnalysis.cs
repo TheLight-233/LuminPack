@@ -19,6 +19,7 @@ internal sealed class SerializerApiUsageAnalysis
     private static readonly ConditionalWeakTable<Compilation, SerializerApiUsageAnalysis> Cache = new();
     private readonly Dictionary<string, SerializerApiKind> _apis = new(StringComparer.Ordinal);
     private bool _conservative;
+    private GeneratedOperations _operations;
 
     /// <summary>Gets formatter roots rebound to the original input compilation.</summary>
     internal IReadOnlyList<ITypeSymbol> Roots { get; }
@@ -28,6 +29,10 @@ internal sealed class SerializerApiUsageAnalysis
 
     /// <summary>Gets whether unresolved serializer expressions require conservative formatter retention.</summary>
     internal bool RequiresConservativeRoots => _conservative;
+
+    /// <summary>Gets the operations the project calls, through the facade, serializer states or generated extension methods.</summary>
+    /// <remarks>Unresolved serializer expressions and interception select every operation.</remarks>
+    internal GeneratedOperations Operations => _conservative ? GeneratedOperations.All : _operations;
 
     /// <summary>Gets the stable overload projection used by aggregate cache guards.</summary>
     internal string Key { get; }
@@ -55,6 +60,7 @@ internal sealed class SerializerApiUsageAnalysis
             foreach (var type in Roots)
                 _apis[FormatterTypeName.Get(type)] = binding.GetApis(type);
             _conservative = false;
+            _operations = GeneratedOperations.All;
             Key = binding.Key;
             return;
         }
@@ -85,6 +91,7 @@ internal sealed class SerializerApiUsageAnalysis
         foreach (var file in bound)
         {
             _conservative |= file.Conservative;
+            _operations |= file.Operations;
             invocations.AddRange(file.Methods);
             payloads.AddRange(file.StatePayloads);
             foreach (var method in file.Methods)
@@ -96,6 +103,7 @@ internal sealed class SerializerApiUsageAnalysis
             var bound = new List<IMethodSymbol>();
             var statePayloads = new List<ITypeSymbol>();
             bool conservative = false;
+            var operations = GeneratedOperations.None;
             var calls = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
             var previous = observations.Read(tree);
             SemanticModel? model = null;
@@ -110,6 +118,13 @@ internal sealed class SerializerApiUsageAnalysis
                     string receiver = model.GetTypeInfo(stateCall.Expression).Type?.ToDisplayString();
                     if (receiver is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")
                     {
+                        operations |= receiver switch
+                        {
+                            "LuminPack.Core.LuminPackWriter" => GeneratedOperations.BinaryWrite,
+                            "LuminPack.Core.LuminPackReader" => GeneratedOperations.BinaryRead,
+                            "LuminPack.Core.LuminPackJsonWriter" => GeneratedOperations.JsonWrite,
+                            _ => GeneratedOperations.JsonRead,
+                        };
                         var statePayload = model.GetTypeInfo(call.ArgumentList.Arguments[0].Expression).Type;
                         // Custom callbacks contribute dependencies only when their formatter is reachable.
                         var owner = model.GetEnclosingSymbol(call.SpanStart)?.ContainingType;
@@ -145,6 +160,9 @@ internal sealed class SerializerApiUsageAnalysis
             // Method groups are callable roots too. Let contextual delegate conversion select the overload.
             foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
             {
+                // Generated extension methods are callable directly, so naming one keeps every operation.
+                if (GeneratedOperationUsage.IsExtensionName(name.Identifier.ValueText))
+                    operations = GeneratedOperations.All;
                 ExpressionSyntax expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access : name;
                 if (expression.Parent is InvocationExpressionSyntax invocation && invocation.Expression == expression)
                     continue;
@@ -164,7 +182,7 @@ internal sealed class SerializerApiUsageAnalysis
                 else if (IsSerializerExpression(expression, model) && expression.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault()?.Expression.ToString() != "nameof")
                     conservative = true;
             }
-            return new SerializerApiFileMethods(bound.ToArray(), conservative, statePayloads.ToArray());
+            return new SerializerApiFileMethods(bound.ToArray(), conservative, statePayloads.ToArray(), operations);
         }
 
         var identities = new StableTypeIdentityFactory(bindingCompilation);
@@ -217,6 +235,7 @@ internal sealed class SerializerApiUsageAnalysis
     {
         if (method.ContainingType?.ToDisplayString() != SerializerName)
             return;
+        _operations |= GeneratedOperationUsage.Of(method.Name);
         var payload = method.Parameters.FirstOrDefault(parameter => parameter.Name == "value")?.Type
             ?? (method.IsGenericMethod && method.TypeArguments.Length != 0 ? method.TypeArguments[0] : null);
         if (payload == null)
