@@ -7,6 +7,7 @@ using System.Threading;
 using LuminPack.Code;
 using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator;
@@ -167,7 +168,10 @@ public sealed partial class LuminPackFormatterGenerator
                 CompilationTypeAnalysisCache.GetOrCreate(compilation).IndexReachableTypes(emittedTypes.EmittedTypes
                     .Where(type => !LuminPackExtensionGenerator.ContainsTypeParameter(type)));
             extension = LuminPackExtensionGenerator.CodeGenerator(data, metadata, compilation);
-            extension = SerializerCoreProjection.Project(extension, compilation, metadata, operations);
+            // The root's operation template starts from the same text, so the two share one parse.
+            if (!string.IsNullOrEmpty(extension))
+                extension = SerializerCoreProjection.Project(EmitterSyntax.Parse(compilation, extension,
+                    metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)), compilation, metadata, operations);
             union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata,
                 emittedTypes?.EmittedTypes) : string.Empty;
             if (!string.IsNullOrEmpty(union))
