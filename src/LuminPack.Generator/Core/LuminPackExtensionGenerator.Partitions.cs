@@ -13,16 +13,7 @@ namespace LuminPack.Code.Core;
 
 public static partial class LuminPackExtensionGenerator
 {
-    /// <summary>Separates no-owner formatter bodies from generic dispatch and static registration.</summary>
-    /// <param name="compilation">The current consuming compilation.</param>
-    /// <param name="metadata">Current generation settings.</param>
-    /// <param name="reachability">The formatter roots, or null for an unfiltered analysis view.</param>
-    /// <param name="cache">Generator-instance type and dispatch contribution caches.</param>
-    /// <param name="cancellationToken">Stops obsolete generation between complete formatter contributions.</param>
-    /// <returns>Independently comparable partial extension files.</returns>
-    internal static ImmutableArray<FrozenGeneratedSource> GenerateInvocationFiles(Compilation compilation, MetaInfo metadata,
-        ReachabilityAnalysis reachability, InvocationSupportCache cache, CancellationToken cancellationToken = default)
-        => GenerateInvocationFiles(compilation, metadata, reachability, cache, out _, cancellationToken);
+
 
     /// <summary>Emits formatter contributions and exposes their completed, symbol-free root facts.</summary>
     /// <param name="compilation">The current consuming compilation.</param>

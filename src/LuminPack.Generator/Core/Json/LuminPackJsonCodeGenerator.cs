@@ -348,17 +348,6 @@ public static class LuminPackJsonCodeGenerator
         };
     }
 
-    /// <summary>Builds the json methods source from the supplied metadata.</summary>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="classGlobalName">The class global name used by this operation.</param>
-    /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    public static void GenerateJsonMethods(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
-    {
-        GenerateJsonSerialize(sb, data, classGlobalName, metaInfo);
-        sb.AppendLine();
-        GenerateJsonDeserialize(sb, data, classGlobalName, metaInfo);
-    }
 
     /// <summary>Appends JSON serialization statements for the analyzed type.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>

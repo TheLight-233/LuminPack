@@ -221,10 +221,7 @@ internal sealed class ProjectTypeData
     internal INamedTypeSymbol BaseType { get; }
     /// <summary>Gets the interfaces.</summary>
     internal ImmutableArray<INamedTypeSymbol> Interfaces { get; }
-    /// <summary>Gets the fields.</summary>
-    internal ImmutableArray<IFieldSymbol> Fields => _fields.Value;
-    /// <summary>Gets the properties.</summary>
-    internal ImmutableArray<IPropertySymbol> Properties => _properties.Value;
+
 }
 
 /// <summary>Provides compilation type analysis cache functionality.</summary>

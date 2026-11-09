@@ -219,38 +219,6 @@ public static class TypeMetaChecker
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_INCLUDE);
     }
 
-    /// <summary>Attempts to check order attribute and reports whether it succeeded.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckOrderAttribute(IPropertySymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_ORDER);
-    }
-
-    /// <summary>Attempts to check order attribute and reports whether it succeeded.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckOrderAttribute(IFieldSymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_ORDER);
-    }
-
-    /// <summary>Attempts to check order attribute and reports whether it succeeded.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckOrderAttribute(ISymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_ORDER);
-    }
 
     /// <summary>Attempts to check compress attribute and reports whether it succeeded.</summary>
     /// <param name="property">The property used by this operation.</param>
@@ -274,16 +242,6 @@ public static class TypeMetaChecker
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_Compress);
     }
 
-    /// <summary>Attempts to check compress attribute and reports whether it succeeded.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckCompressAttribute(ISymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_Compress);
-    }
 
     /// <summary>Finds the and set order attribute in the supplied metadata.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
@@ -550,16 +508,6 @@ public static class TypeMetaChecker
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_ABLE);
     }
 
-    /// <summary>Attempts to check packable attribute and reports whether it succeeded.</summary>
-    /// <param name="field">The metadata describing the field being processed.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckPackableAttribute(ITypeSymbol field)
-    {
-        var attributeData = field.GetAttributes();
-
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_ABLE);
-    }
 
     /// <summary>Attempts to check union attribute and reports whether it succeeded.</summary>
     /// <param name="symbol">The type or symbol to analyze.</param>
@@ -591,15 +539,6 @@ public static class TypeMetaChecker
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_WIDE_TAG) || HasUnionOption(symbol, "WideTag");
     }
 
-    /// <summary>Attempts to check constructor has public and reports whether it succeeded.</summary>
-    /// <param name="symbol">The type or symbol to analyze.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckConstructorHasPublic(INamedTypeSymbol symbol)
-    {
-        return symbol.Constructors.Any(x => x.DeclaredAccessibility is Accessibility.Public);
-
-    }
 
     /// <summary>Attempts to check field struct is read only and reports whether it succeeded.</summary>
     /// <param name="symbol">The type or symbol to analyze.</param>
@@ -834,49 +773,6 @@ public static class TypeMetaChecker
         return "Local" + classFullName;
     }
 
-    /// <summary>Performs the build formatter class name step for the current operation.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <returns>The result of the operation.</returns>
-    public static string BuildFormatterClassName(LuminDataInfo data)
-    {
-        string classFullName = data.classFullName;
-
-        if (classFullName.StartsWith("global::"))
-        {
-            classFullName = classFullName.Substring(8);
-        }
-
-        classFullName = classFullName.Replace(".", "_").Replace('+', '_');
-
-        if (classFullName.Contains('<'))
-        {
-            classFullName = classFullName.Split('<').FirstOrDefault();
-        }
-
-        return classFullName + "Formatter";
-    }
-
-    /// <summary>Performs the build formatter class name step for the current operation.</summary>
-    /// <param name="fullName">The full name used by this operation.</param>
-    /// <returns>The result of the operation.</returns>
-    public static string BuildFormatterClassName(string fullName)
-    {
-        string classFullName = fullName;
-
-        if (classFullName.StartsWith("global::"))
-        {
-            classFullName = classFullName.Substring(8);
-        }
-
-        classFullName = classFullName.Replace(".", "_").Replace('+', '_');
-
-        if (classFullName.Contains('<'))
-        {
-            classFullName = classFullName.Split('<').FirstOrDefault();
-        }
-
-        return classFullName + "Formatter";
-    }
 
     /// <summary>
     /// Finds the pool-rental method annotated with LuminPackPoolRentAttribute.

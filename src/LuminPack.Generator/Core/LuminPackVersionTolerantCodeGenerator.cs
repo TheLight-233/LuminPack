@@ -264,10 +264,6 @@ public static class LuminPackVersionTolerantCodeGenerator
             : local + "." + field.Identifier + " = " + value + ";"));
     }
 
-    /// <summary>Appends binary serialization statements using fixed batches or the shared-state buffer.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb) => GenerateSerializeCode(data, sb, false);
 
     /// <summary>Emits the original record while selecting a supported cached fixed-prefix operation.</summary>
     /// <param name="data">The complete declared member contract.</param>
@@ -372,10 +368,6 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine(indent.Substring(4) + "}");
     }
 
-    /// <summary>Appends reads that map complete names, skip unknown payloads and retain reusable storage.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb) => GenerateDeserializeCode(data, sb, false);
 
     /// <summary>Appends binary deserialization statements, with a same-schema path that reads into the object like an ordinary record.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>

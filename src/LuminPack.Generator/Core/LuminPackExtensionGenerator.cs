@@ -37,23 +37,6 @@ public static partial class LuminPackExtensionGenerator
         return GenerateExtension(sb, GetExtensionClassName(compilation));
     }
 
-    /// <summary>Appends binary serialization statements for the analyzed type.</summary>
-    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
-    /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    /// <param name="reachability">The reachability used by this operation.</param>
-    /// <returns>The result of the operation.</returns>
-    public static string GenerateSerializerInvocationSupport(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
-    {
-        var files = GenerateInvocationFiles(compilation, metaInfo, reachability, new InvocationSupportCache());
-        var roots = files.Select(file => Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(file.Text, metaInfo.ParseOptions).GetCompilationUnitRoot()).ToArray();
-        var builder = new StringBuilder("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649" + Environment.NewLine);
-        foreach (string directive in roots.SelectMany(root => root.Usings).Select(directive => directive.ToString()).Distinct(StringComparer.Ordinal))
-            builder.AppendLine(directive);
-        foreach (var root in roots)
-            foreach (var member in root.Members)
-                builder.AppendLine(member.ToFullString());
-        return builder.ToString();
-    }
 
 
 

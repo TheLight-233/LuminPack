@@ -16,10 +16,7 @@ namespace LuminPack.SourceGenerator
         public const string LUMIN_PACKABLE_ATTRIBUTE = "LuminPack.Attribute.LuminPackableAttribute";
         /// <summary>Stores the lumin union attribute.</summary>
         public const string LUMIN_UNION_ATTRIBUTE = "LuminPack.Attribute.LuminPackUnionAttribute";
-        /// <summary>Stores the lumin generated namespace.</summary>
-        public const string LUMIN_GENERATED_NAMESPACE = "LuminPack.Generated";
-        /// <summary>Stores the lumin registers namespace.</summary>
-        public const string LUMIN_REGISTERS_NAMESPACE = "LuminPackRegisters";
+
 
         [ThreadStatic]
         private static AnalysisState _analysisState;

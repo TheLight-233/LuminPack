@@ -28,26 +28,6 @@ public static partial class LuminPackSerializerGenerator
     // A primitive-only generated object or raw enum whose exact width needs no traversal.
     [ThreadStatic] private static bool _currentFixedRecord;
 
-    /// <summary>Builds the serializer facade for the types reachable in the compilation.</summary>
-    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
-    /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    /// <param name="reachability">The reachability used by this operation.</param>
-    /// <returns>The result of the operation.</returns>
-    public static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
-        => GenerateSerializerClass(compilation, metaInfo, reachability, new SerializerFacadeCache());
-
-    /// <summary>Builds the legacy facade from independently cached concrete overload and XML fragments.</summary>
-    /// <param name="compilation">The compilation supplying current semantic facts.</param>
-    /// <param name="metaInfo">The current generation settings.</param>
-    /// <param name="reachability">The existing reachability filter.</param>
-    /// <param name="fragments">The generator-instance cache for concrete facade contributions.</param>
-    /// <returns>The exact legacy serializer source.</returns>
-    internal static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability, SerializerFacadeCache fragments)
-    {
-        var parts = BuildSerializerParts(compilation, metaInfo, reachability, fragments);
-        return fragments.Assemble(parts.Header, parts.Blocks.Select(block => block.Value).ToArray(), parts.Tail)
-            .Replace("    public static class LuminPackSerializer", "    public static partial class LuminPackSerializer");
-    }
 
     /// <summary>Emits common helpers and independently cached concrete partial declarations.</summary>
     /// <param name="compilation">The current consumer compilation.</param>

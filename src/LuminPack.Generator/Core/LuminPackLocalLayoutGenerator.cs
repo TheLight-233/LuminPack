@@ -118,22 +118,6 @@ public static class LuminPackLocalLayoutGenerator
         return false;
     }
 
-    /// <summary>
-    /// Local class name used when <em>referencing</em> the mirror (generic arguments preserved), matching
-    /// <c>TypeMetaChecker.BuildLocalClassName</c> for root types.
-    /// </summary>
-    /// <param name="type">The type or symbol to analyze.</param>
-    /// <returns>The result of the operation.</returns>
-    public static string GetLocalUsageName(ITypeSymbol type)
-    {
-        string fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        if (fullName.StartsWith("global::", StringComparison.Ordinal))
-        {
-            fullName = fullName.Substring(8);
-        }
-
-        return "Local" + fullName.Replace(".", "_").Replace('+', '_');
-    }
 
     /// <summary>
     /// Local class name used when <em>declaring</em> the mirror. Nested mirrors are emitted as plain

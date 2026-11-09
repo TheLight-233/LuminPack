@@ -17,12 +17,6 @@ internal static class LuminPackExceptionHelper
     public static void ThrowArgumentNullException(string paramName)
         => throw new ArgumentNullException(paramName);
 
-    /// <summary>Raises the exception for argument null exception.</summary>
-    /// <param name="paramName">The name of the parameter that failed validation.</param>
-    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    /// <returns>This method never returns a value.</returns>
-    public static T ThrowArgumentNullException<T>(string paramName)
-        => throw new ArgumentNullException(paramName);
 
 
     /// <summary>Raises the exception for invalid operation exception.</summary>
