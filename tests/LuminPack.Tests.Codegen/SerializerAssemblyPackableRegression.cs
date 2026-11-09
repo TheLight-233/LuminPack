@@ -251,7 +251,7 @@ internal static class SerializerAssemblyPackableRegression
             Require(!retainedOutput.GetDiagnostics().Concat(freshOutput.GetDiagnostics()).Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
                 "Changing an open assembly root to one closed construction produced invalid generated output.");
             Require(driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
-                .Any(file => file.HintName.StartsWith("LuminPackGen_ExternalLibrary_ExternalModel`1", StringComparison.Ordinal) &&
+                .Any(file => file.HintName.StartsWith("LuminPackGen.ExternalLibrary.ExternalModel`1", StringComparison.Ordinal) &&
                     file.SourceText.ToString().Contains("ExternalLibrary.ExternalModel<int>", StringComparison.Ordinal)),
                 "The external generic formatter operation was not generated in " + mode + ".");
 

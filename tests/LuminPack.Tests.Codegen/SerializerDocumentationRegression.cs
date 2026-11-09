@@ -74,7 +74,7 @@ internal static class SerializerDocumentationRegression
     /// <returns>A deterministic sequence of the collection's actual Root links.</returns>
     private static string CollectionNavigation(GeneratorDriver driver)
         => string.Join("|", driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
-            .Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen_LuminPackSerializer.g.cs"))
+            .Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen.LuminPackSerializer.g.cs"))
             .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).Where(IsUserApi)
             .Where(method => method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == "value" &&
                 parameter.Type?.ToString().Replace(" ", string.Empty, StringComparison.Ordinal) is
@@ -338,7 +338,7 @@ internal static class SerializerDocumentationRegression
             }
         }
 
-        var serializerFiles = generated.Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen_LuminPackSerializer.g.cs")).ToArray();
+        var serializerFiles = generated.Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen.LuminPackSerializer.g.cs")).ToArray();
         string serializer = string.Join(Environment.NewLine, serializerFiles.Select(file => file.SourceText.ToString()));
         var methods = serializerFiles.SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse))
             .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).Where(IsUserApi).ToArray();

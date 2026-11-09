@@ -44,27 +44,30 @@ internal static class SerializerPartitionRegression
             "The compatibility generator pair changed the emitted files.");
         var publishers = initial.GetRunResult().Results;
         Require(publishers.Length == 3 &&
-            publishers[0].GeneratedSources.Any(file => file.HintName == "LuminPackGen_LuminPackSerializer.g.cs") &&
+            publishers[0].GeneratedSources.Any(file => file.HintName == "LuminPackGen.LuminPackSerializer.g.cs") &&
             publishers[1].GeneratedSources.All(file => !file.HintName.EndsWith(".Layout.g.cs", StringComparison.Ordinal) &&
-                file.HintName != "LuminPackGen_FormatterDispatch.g.cs"),
+                file.HintName != "LuminPackGen.FormatterDispatch.g.cs"),
             "The serializer publishers did not own their respective facades.");
         var modelFiles = publishers[2].GeneratedSources;
-        Require(modelFiles.Count(file => file.HintName == "LuminPackGen_FormatterDispatch.g.cs") == 1 &&
-            modelFiles.Any(file => file.HintName == "LuminPackGen_FormatterBridges.g.cs") &&
-            modelFiles.Any(file => file.HintName == "LuminPackGen_System_Collections_Generic_List`1.g.cs") &&
-            modelFiles.All(file => !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal) && file.HintName != "LuminPackGen_A.g.cs"),
+        Require(modelFiles.Count(file => file.HintName == "LuminPackGen.FormatterDispatch.g.cs") == 1 &&
+            modelFiles.Any(file => file.HintName == "LuminPackGen.FormatterBridges.g.cs") &&
+            modelFiles.Any(file => file.HintName == "LuminPackGen.System.Collections.Generic.List`1.g.cs") &&
+            modelFiles.Count(file => file.HintName == "LuminPackGen.System.g.cs") == 1 &&
+            modelFiles.Count(file => file.HintName == "LuminPackGen.Array.g.cs") == 1 &&
+            modelFiles.All(file => file.HintName is not ("LuminPackGen.int.g.cs" or "LuminPackGen.long.g.cs" or "LuminPackGen.intArray.g.cs")) &&
+            modelFiles.All(file => !file.HintName.EndsWith(".Extension.g.cs", StringComparison.Ordinal) && file.HintName != "LuminPackGen.A.g.cs"),
             "Assembly-wide formatter and dispatch files did not belong to the formatter publisher.");
-        Require(!publishers[0].GeneratedSources.Single(file => file.HintName == "LuminPackGen_A.g.cs").SourceText.ToString()
+        Require(!publishers[0].GeneratedSources.Single(file => file.HintName == "LuminPackGen.A.g.cs").SourceText.ToString()
                 .Contains("RootWriteJson", StringComparison.Ordinal) &&
-            publishers[1].GeneratedSources.Where(file => file.HintName == "LuminPackGen_A.g.cs")
+            publishers[1].GeneratedSources.Where(file => file.HintName == "LuminPackGen.A.g.cs")
                 .All(file => file.SourceText.ToString().Contains("RootWriteJson", StringComparison.Ordinal)),
             "The binary and JSON publishers must each own their part of a model.");
-        Require(initialFiles.ContainsKey("LuminPackGen_LuminPackSerializer.g.cs") && initialFiles.Count > 4, "Expected common support and independently named concrete files.");
-        foreach (string name in initialFiles.Keys.Where(name => !name.EndsWith("LuminPackGen_LuminPackSerializer.g.cs", StringComparison.Ordinal)))
-            Require(Regex.IsMatch(name, "^(Json/)?LuminPackGen_[A-Za-z0-9_`]+\\.Api\\.g\\.cs$") && !Regex.IsMatch(name, "[0-9a-f]{16}"),
+        Require(initialFiles.ContainsKey("LuminPackGen.LuminPackSerializer.g.cs") && initialFiles.Count > 4, "Expected common support and independently named concrete files.");
+        foreach (string name in initialFiles.Keys.Where(name => !name.EndsWith("LuminPackGen.LuminPackSerializer.g.cs", StringComparison.Ordinal)))
+            Require(Regex.IsMatch(name, "^(Json/)?LuminPackGen[.][A-Za-z0-9_.`]+\\.Api\\.g\\.cs$") && !Regex.IsMatch(name, "[0-9a-f]{16}"),
                 "A concrete filename does not expose a readable identity without hashes: " + name);
         Require(initialFiles.Values.All(text => text.Contains("public static partial class LuminPackSerializer", StringComparison.Ordinal)), "Facade files must share the same partial type.");
-        Require(!initialFiles["LuminPackGen_LuminPackSerializer.g.cs"].Contains("global::A value", StringComparison.Ordinal), "Common facade support contains a concrete payload body.");
+        Require(!initialFiles["LuminPackGen.LuminPackSerializer.g.cs"].Contains("global::A value", StringComparison.Ordinal), "Common facade support contains a concrete payload body.");
 
         var metadata = new MetaInfo(Parse, Parse.LanguageVersion, true, true, true);
         string legacy = LuminPackSerializerGenerator.GenerateSerializerClass(input, metadata, Reachability(input));
@@ -75,8 +78,8 @@ internal static class SerializerPartitionRegression
             string.Join(Environment.NewLine, actualMethods.Where(pair => expectedMethods.GetValueOrDefault(pair.Key) != pair.Value)
                 .Select(pair => pair.Key + Environment.NewLine + Code(expectedMethods.GetValueOrDefault(pair.Key)) + Environment.NewLine + Code(pair.Value)).Take(2)));
         Require(PayloadFiles(initialFiles, "global::One.Same").Single() != PayloadFiles(initialFiles, "global::Two.Same").Single(), "Same simple names collided across namespaces.");
-        Require(PayloadFiles(initialFiles, "global::One.Same").Single().Contains("_One_Same.", StringComparison.Ordinal) &&
-            PayloadFiles(initialFiles, "global::Two.Same").Single().Contains("_Two_Same.", StringComparison.Ordinal),
+        Require(PayloadFiles(initialFiles, "global::One.Same").Single().Contains(".One.Same.", StringComparison.Ordinal) &&
+            PayloadFiles(initialFiles, "global::Two.Same").Single().Contains(".Two.Same.", StringComparison.Ordinal),
             "Partition names hide the declaring namespace and type.");
 
         VerifyEdit("unrelated body", input, Replace(input, "Utility.cs", "17", "18"), expectedFiles: 0, expectedFragments: 0);
@@ -87,7 +90,7 @@ internal static class SerializerPartitionRegression
         CheckErrors(jsonOutput);
         var jsonFacade = FacadeFiles(jsonEdit);
         Require(initialFiles.All(pair => jsonFacade.GetValueOrDefault(pair.Key) == pair.Value) &&
-            jsonFacade.ContainsKey("Json/LuminPackGen_B.Api.g.cs"),
+            jsonFacade.ContainsKey("Json/LuminPackGen.B.Api.g.cs"),
             "Adding a JSON convenience changed an existing binary facade.");
         var added = input.AddSyntaxTrees(CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public sealed class Added { public int NewValue; }", Parse, "Added.cs"));
         var addition = NewDriver().RunGeneratorsAndUpdateCompilation(added, out var additionOutput, out _);
@@ -105,19 +108,19 @@ internal static class SerializerPartitionRegression
         var create = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.PartitionedSourceCache")!
             .GetMethod("CreateHintName", BindingFlags.Static | BindingFlags.NonPublic)!;
         string Name(string identity) => (string)create.Invoke(null, ["LuminPackSerializer", identity])!;
-        Require((string)create.Invoke(null, ["LuminPackGen", "Namespace.Model"])! == "LuminPackGen_Namespace_Model.g.cs",
-            "A model filename did not use the LuminPackGen_ prefix.");
-        Require((string)create.Invoke(null, ["LuminPackGen.Layouts", "Namespace.Model"])! == "LuminPackGen_Namespace_Model.Layout.g.cs",
+        Require((string)create.Invoke(null, ["LuminPackGen", "Namespace.Model"])! == "LuminPackGen.Namespace.Model.g.cs",
+            "A model filename did not use the LuminPackGen. prefix.");
+        Require((string)create.Invoke(null, ["LuminPackGen.Layouts", "Namespace.Model"])! == "LuminPackGen.Namespace.Model.Layout.g.cs",
             "A layout filename did not carry its role.");
-        Require(Name("global::System.Int32") == "LuminPackGen_System_Int32.Api.g.cs", "A scalar filename retained an opaque suffix.");
+        Require(Name("global::System.Int32") == "LuminPackGen.System.Int32.Api.g.cs", "A scalar filename retained an opaque suffix.");
         string[] identities = ["One.Same", "Two.Same", "N.Box<System.Int32>", "N.Box<System.Int32, System.Int32>", "System.Int32[]", "System.Int32[,]", "System.Int32?"];
         Require(identities.Select(Name).Distinct(StringComparer.Ordinal).Count() == identities.Length, "Readable type names collided after punctuation encoding.");
-        Require(Name("N.Box<System.Int32>") == "LuminPackGen_N_Box`1.Api.g.cs" && Name("N.Box<N.Box<System.Int64>>") == Name("N.Box<System.Int32>"),
+        Require(Name("N.Box<System.Int32>") == "LuminPackGen.N.Box`1.Api.g.cs" && Name("N.Box<N.Box<System.Int64>>") == Name("N.Box<System.Int32>"),
             "Constructions of one generic definition did not share its file.");
         string prefix = string.Concat(Enumerable.Repeat("System.Collections.Generic.List<", 12));
         string suffix = new('>', 12);
         string first = Name(prefix + "One.Same" + suffix);
-        Require(first == "LuminPackGen_System_Collections_Generic_List`1.Api.g.cs", "A long generic identity did not use its definition name.");
+        Require(first == "LuminPackGen.System.Collections.Generic.List`1.Api.g.cs", "A long generic identity did not use its definition name.");
         Require(first == Name(prefix + "One.Same" + suffix), "A filename depends on generation order.");
     }
 
@@ -156,7 +159,7 @@ internal static class SerializerPartitionRegression
         var changed = AllFiles(driver);
         Require(layoutFiles.Count(pair => changed.GetValueOrDefault(pair.Key) != pair.Value) == 1 && ReadMetric("LayoutFileOutputCallbacks") - callbacks == 1,
             "A private-field edit republished unrelated or shared layout files.");
-        Require(before.Where(pair => pair.Key == "LuminPackGen_FormatterDispatch.g.cs").All(pair => changed.GetValueOrDefault(pair.Key) == pair.Value),
+        Require(before.Where(pair => pair.Key == "LuminPackGen.FormatterDispatch.g.cs").All(pair => changed.GetValueOrDefault(pair.Key) == pair.Value),
             "A private-field rename rewrote generic dispatch signatures or switches.");
         var fresh = AllFiles(NewDriver().RunGenerators(after));
         Require(changed.OrderBy(pair => pair.Key, StringComparer.Ordinal).SequenceEqual(fresh.OrderBy(pair => pair.Key, StringComparer.Ordinal)), "Layout partitions differ between retained and fresh generation.");
@@ -175,8 +178,8 @@ internal static class SerializerPartitionRegression
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
         CheckErrors(output);
         var original = AllFiles(driver);
-        Require(original.ContainsKey("LuminPackGen_Choice.g.cs") &&
-            original.Keys.Count(name => name == "LuminPackGen_FormatterDispatch.g.cs") == 1 &&
+        Require(original.ContainsKey("LuminPackGen.Choice.g.cs") &&
+            original.Keys.Count(name => name == "LuminPackGen.FormatterDispatch.g.cs") == 1 &&
             !original.ContainsKey("LuminPack.Dispatch.Lazy.g.cs") && !original.ContainsKey("LuminPack.SerializerInvocation.Extension.g.cs"),
             "Independent formatter and generic dispatch partitions were not emitted.");
         string legacy = GeneratedInvocation(input);
@@ -188,7 +191,7 @@ internal static class SerializerPartitionRegression
                 .Select(pair => pair.Key + Environment.NewLine + Code(pair.Value) + Environment.NewLine + Code(actual.GetValueOrDefault(pair.Key))).Take(2)));
         var legacyOutput = output.RemoveSyntaxTrees(output.SyntaxTrees.Where(tree =>
             tree.FilePath.Contains(nameof(LuminPackFormatterGenerator), StringComparison.Ordinal) && !tree.FilePath.EndsWith(".Layout.g.cs", StringComparison.Ordinal) ||
-            tree.FilePath.EndsWith(".Api.g.cs", StringComparison.Ordinal) || tree.FilePath.EndsWith("LuminPackGen_LuminPackSerializer.g.cs", StringComparison.Ordinal)));
+            tree.FilePath.EndsWith(".Api.g.cs", StringComparison.Ordinal) || tree.FilePath.EndsWith("LuminPackGen.LuminPackSerializer.g.cs", StringComparison.Ordinal)));
         legacyOutput = legacyOutput.AddSyntaxTrees(CSharpSyntaxTree.ParseText(legacy, Parse),
             CSharpSyntaxTree.ParseText(LuminPackSerializerGenerator.GenerateSerializerClass(input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), Reachability(input)), Parse));
         CheckErrors(legacyOutput);
@@ -198,7 +201,7 @@ internal static class SerializerPartitionRegression
         CheckErrors(output);
         var changed = AllFiles(driver);
         Require(ReadMetric("InvocationFormatterBuilds") - count == 1, "Enum edit rerendered unrelated no-owner formatter bodies.");
-        Require(original.Where(pair => pair.Key == "LuminPackGen_FormatterDispatch.g.cs").All(pair => changed.GetValueOrDefault(pair.Key) == pair.Value), "Enum member edit changed stable dispatch files.");
+        Require(original.Where(pair => pair.Key == "LuminPackGen.FormatterDispatch.g.cs").All(pair => changed.GetValueOrDefault(pair.Key) == pair.Value), "Enum member edit changed stable dispatch files.");
     }
 
     /// <summary>Builds documented legacy invocation source through the preserved public compatibility entry point.</summary>
@@ -253,7 +256,7 @@ internal static class SerializerPartitionRegression
         var actual = FacadeFiles(driver);
         Require(actual.Count == previous.Count && actual.Count(pair => previous.GetValueOrDefault(pair.Key) != pair.Value) == expectedFiles,
             name + ": changed an unrelated concrete facade file.");
-        Require(actual["LuminPackGen_LuminPackSerializer.g.cs"] == previous["LuminPackGen_LuminPackSerializer.g.cs"], name + ": common generic/helper support changed.");
+        Require(actual["LuminPackGen.LuminPackSerializer.g.cs"] == previous["LuminPackGen.LuminPackSerializer.g.cs"], name + ": common generic/helper support changed.");
         Require(ReadMetric("PartitionedFileBuilds") - filesBefore == expectedFiles, name + ": recopied unchanged facade bodies.");
         Require(ReadMetric("SerializerFragmentBuilds") - fragmentsBefore == expectedFragments, name + ": rerendered unrelated overload blocks, including arrays.");
         Require(ReadMetric("BinaryOperationPlanBuilds") - plansBefore == expectedFragments, name + ": rebuilt an unaffected binary operation template.");
@@ -310,7 +313,7 @@ internal static class SerializerPartitionRegression
     /// <param name="driver">The completed generator driver.</param>
     /// <returns>Hint names mapped to exact source text.</returns>
     private static Dictionary<string, string> FacadeFiles(GeneratorDriver driver) => AllFiles(driver)
-        .Where(pair => pair.Key.EndsWith(".Api.g.cs", StringComparison.Ordinal) || pair.Key.EndsWith("LuminPackGen_LuminPackSerializer.g.cs", StringComparison.Ordinal))
+        .Where(pair => pair.Key.EndsWith(".Api.g.cs", StringComparison.Ordinal) || pair.Key.EndsWith("LuminPackGen.LuminPackSerializer.g.cs", StringComparison.Ordinal))
         .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 
     /// <summary>Replaces one existing source file with a deterministic edited tree.</summary>

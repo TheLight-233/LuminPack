@@ -68,7 +68,7 @@ public static partial class LuminPackExtensionGenerator
             var fragment = fragments[position];
             if (!string.IsNullOrEmpty(fragment.Extension))
             {
-                files.Add(cache.Files.Wrap("LuminPack.Formatter", name, string.Empty, fragment.Extension, string.Empty));
+                files.Add(new FrozenGeneratedSource(GeneratedFileNames.Formatter(type, name), fragment.Extension));
                 rootTargets[name] = LazyForwardingTargets.Read(fragment.Extension, name);
             }
             if (type is INamedTypeSymbol union && union.IsAbstract && analysis.IsAssemblyPackable(union) &&

@@ -200,7 +200,7 @@ internal static class SerializerSharedFacadeRegression
     /// <param name="parse">The current parse settings.</param>
     /// <returns>The methods from all facade partitions.</returns>
     private static MethodDeclarationSyntax[] FacadeMethods(GeneratorDriver driver, CSharpParseOptions parse)
-        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen_LuminPackSerializer.g.cs"))
+        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen.LuminPackSerializer.g.cs"))
             .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
 
     /// <summary>Captures deterministic generated values for retained/fresh comparisons.</summary>

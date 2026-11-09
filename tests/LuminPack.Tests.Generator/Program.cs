@@ -252,7 +252,7 @@ Parallel.For(0, CompilationCount, compilationIndex =>
         .ToHashSet(StringComparer.Ordinal);
     for (var typeIndex = 0; typeIndex < ValidTypesPerCompilation; typeIndex++)
     {
-        var expectedHint = $"LuminPackGen_Case_{compilationIndex}_Model_{typeIndex}.g.cs";
+        var expectedHint = $"LuminPackGen.Case_{compilationIndex}.Model_{typeIndex}.g.cs";
         if (!generatedHints.Contains(expectedHint))
         {
             failures.Enqueue($"Compilation {compilationIndex} is missing {expectedHint}.");
@@ -260,8 +260,8 @@ Parallel.For(0, CompilationCount, compilationIndex =>
     }
 
     if (generatedHints.Any(hint =>
-            hint.StartsWith("LuminPackGen_Case_", StringComparison.Ordinal) &&
-            !hint.StartsWith($"LuminPackGen_Case_{compilationIndex}_", StringComparison.Ordinal)))
+            hint.StartsWith("LuminPackGen.Case_", StringComparison.Ordinal) &&
+            !hint.StartsWith($"LuminPackGen.Case_{compilationIndex}.", StringComparison.Ordinal)))
     {
         failures.Enqueue($"Compilation {compilationIndex} received generated source from another compilation.");
     }
@@ -1416,9 +1416,9 @@ static string[] RunMapGenerator(
         .GetRunResult()
         .Results.SelectMany(static result => result.GeneratedSources)
         .Where(static generated => !generated.HintName.EndsWith(".Layout.g.cs", StringComparison.Ordinal) &&
-            (generated.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || generated.HintName is "LuminPackGen_LuminPackSerializer.g.cs" or
-                "LuminPackGen_Interceptors.g.cs" or "LuminPackGen_FormatterBridges.g.cs" or "LuminPackGen_FormatterDispatch.g.cs" ||
-                generated.HintName.StartsWith("LuminPackGen_System_", StringComparison.Ordinal)))
+            (generated.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || generated.HintName is "LuminPackGen.LuminPackSerializer.g.cs" or
+                "LuminPackGen.Interceptors.g.cs" or "LuminPackGen.FormatterBridges.g.cs" or "LuminPackGen.FormatterDispatch.g.cs" ||
+                generated.HintName.StartsWith("LuminPackGen.System", StringComparison.Ordinal)))
         .Select(static generated => generated.SourceText.ToString())
         .ToArray();
 }

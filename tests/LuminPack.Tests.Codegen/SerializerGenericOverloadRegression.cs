@@ -295,7 +295,7 @@ internal static class SerializerGenericOverloadRegression
             var driver = Fresh().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
             var files = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
             Require(!files.Any(file => file.HintName == "LuminPack.Dispatch.Lazy.g.cs"), "The generated fallback table file remains.");
-            string dispatch = files.Single(file => file.HintName == "LuminPackGen_FormatterDispatch.g.cs").SourceText.ToString();
+            string dispatch = files.Single(file => file.HintName == "LuminPackGen.FormatterDispatch.g.cs").SourceText.ToString();
             Require(!dispatch.Contains("typeof(T) == typeof(", StringComparison.Ordinal) && !dispatch.Contains("Generated<", StringComparison.Ordinal) &&
                 !dispatch.Contains("SafeSerialize", StringComparison.Ordinal), "A generated payload factory or delegate cache remains.");
             var loaded = Assembly.Load(Emit(output));
@@ -376,7 +376,7 @@ internal static class SerializerGenericOverloadRegression
     /// <param name="driver">The completed generator driver.</param>
     /// <returns>Concrete generated facade methods.</returns>
     private static MethodDeclarationSyntax[] ConcreteMethods(GeneratorDriver driver)
-        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen_LuminPackSerializer.g.cs"))
+        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen.LuminPackSerializer.g.cs"))
             .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.Modifiers.Any(SyntaxKind.PublicKeyword) && method.TypeParameterList == null &&
                 method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() is "global::GenericPayload" or "global::UnusedPayload")).ToArray();

@@ -1,15 +1,16 @@
 using System.Text;
+using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Names generated files after the namespace and name of the declaration they serve.</summary>
-/// <remarks>A type file is <c>LuminPackGen_Namespace_Name.g.cs</c>. Generic arguments are not part of the name, so every
+/// <remarks>A type file is <c>LuminPackGen.Namespace.Name.g.cs</c>. Generic arguments are not part of the name, so every
 /// construction of one generic definition, such as <c>Dictionary&lt;int, string&gt;</c> and <c>Dictionary&lt;long, string&gt;</c>,
-/// shares <c>LuminPackGen_System_Collections_Generic_Dictionary`2.g.cs</c>, and the publisher joins them into one file. A
+/// shares <c>LuminPackGen.System.Collections.Generic.Dictionary`2.g.cs</c>, and the publisher joins them into one file. A
 /// second kind of file for the same declaration in the same generator carries a short role before the extension.</remarks>
 internal static class GeneratedFileNames
 {
-    internal const string Prefix = "LuminPackGen_";
+    internal const string Prefix = "LuminPackGen.";
 
     /// <summary>Names the file of one declaration.</summary>
     /// <param name="identity">The canonical type identity.</param>
@@ -18,6 +19,18 @@ internal static class GeneratedFileNames
     internal static string Type(string identity, string role = null)
         => Prefix + Mangle(identity) + (role == null ? string.Empty : "." + role) + ".g.cs";
 
+    /// <summary>Groups arrays and built-in scalars while keeping other formatter definitions separate.</summary>
+    /// <param name="type">The concrete formatter payload.</param>
+    /// <param name="identity">The canonical type identity.</param>
+    /// <returns>The publication name shared by related formatter contributions.</returns>
+    internal static string Formatter(ITypeSymbol type, string identity)
+        => type switch
+        {
+            IArrayTypeSymbol => Shared("Array"),
+            INamedTypeSymbol { Arity: 0, SpecialType: not SpecialType.None } => Shared("System"),
+            _ => Type(identity),
+        };
+
     /// <summary>Names an assembly-wide file.</summary>
     /// <param name="name">The file's role.</param>
     /// <returns>The hint name.</returns>
@@ -25,7 +38,7 @@ internal static class GeneratedFileNames
 
     /// <summary>Spells a type identity as its namespace and name with the generic arity in place of the arguments.</summary>
     /// <param name="identity">The canonical type identity, for example <c>global::System.Collections.Generic.List&lt;int&gt;</c>.</param>
-    /// <returns>The file-safe name, for example <c>System_Collections_Generic_List`1</c>.</returns>
+    /// <returns>The file-safe name, for example <c>System.Collections.Generic.List`1</c>.</returns>
     internal static string Mangle(string identity)
     {
         string text = identity.Replace("global::", string.Empty).Replace(" ", string.Empty);
@@ -70,7 +83,7 @@ internal static class GeneratedFileNames
             if (character == '?')
                 name.Append("Nullable");
             else if (character is '.' or '+')
-                name.Append('_');
+                name.Append('.');
             else if (char.IsLetterOrDigit(character) || character == '_')
                 name.Append(character);
             else

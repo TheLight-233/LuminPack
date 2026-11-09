@@ -137,8 +137,8 @@ internal static class IncrementalGenerationChecks
             "Partial or aliased attribute discovery reported a generator error.");
         var sources = Sources(driver);
         foreach (string name in new[] { "Model", "Record", "Value" })
-            Require(sources.ContainsKey("LuminPackGen_Discovery_" + name + ".g.cs"), "Attribute discovery omitted " + name + ".");
-        Require(!sources.ContainsKey("LuminPackGen_Discovery_Utility.g.cs"), "Unattributed utility entered the type pipeline.");
+            Require(sources.ContainsKey("LuminPackGen.Discovery." + name + ".g.cs"), "Attribute discovery omitted " + name + ".");
+        Require(!sources.ContainsKey("LuminPackGen.Discovery.Utility.g.cs"), "Unattributed utility entered the type pipeline.");
         Verify("partial storage changed", input, Replace(input, "Partial.cs", "long Other", "long Renamed"), 1);
         var removed = Replace(input, "Model.cs", "[Pack]", string.Empty);
         Verify("attribute removed", input, removed);
@@ -256,9 +256,9 @@ internal static class IncrementalGenerationChecks
         }
         if (expectedRoot != null)
         {
-            Require(actual.ContainsKey("LuminPackGen_IncrementalChecks_" + expectedRoot + ".g.cs"), name + ": expected root is absent.");
+            Require(actual.ContainsKey("LuminPackGen.IncrementalChecks." + expectedRoot + ".g.cs"), name + ": expected root is absent.");
             string other = expectedRoot == "A" ? "B" : "A";
-            Require(actual.ContainsKey("LuminPackGen_IncrementalChecks_" + other + ".g.cs"), name + ": an independently declared model was removed.");
+            Require(actual.ContainsKey("LuminPackGen.IncrementalChecks." + other + ".g.cs"), name + ": an independently declared model was removed.");
         }
         if (requireFallback)
             Require(delta["InvocationFileFallbacks"] > 0, name + ": unsupported invocation did not request fresh binding.");
@@ -274,7 +274,7 @@ internal static class IncrementalGenerationChecks
         }
         if (name == "new observed formatter")
             Require(!actual.Keys.Except(original.Keys, StringComparer.Ordinal)
-                .Any(name => (name.EndsWith(".Api.g.cs", StringComparison.Ordinal) || name == "LuminPackGen_LuminPackSerializer.g.cs")),
+                .Any(name => (name.EndsWith(".Api.g.cs", StringComparison.Ordinal) || name == "LuminPackGen.LuminPackSerializer.g.cs")),
                 name + ": observing an unrelated type created a serializer convenience entry.");
     }
 

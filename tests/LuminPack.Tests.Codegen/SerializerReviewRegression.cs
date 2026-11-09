@@ -81,7 +81,7 @@ internal static class SerializerReviewRegression
             var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
             CheckErrors(driver, output);
             foreach (var method in driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
-                .Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen_LuminPackSerializer.g.cs"))
+                .Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen.LuminPackSerializer.g.cs"))
                 .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
                 .Where(method => method.Identifier.ValueText == "Deserialize" && method.TypeParameterList == null &&
                     method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "ReadOnlySequence<byte>")))
@@ -136,7 +136,7 @@ internal static class SerializerReviewRegression
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
         CheckErrors(driver, output);
         var files = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
-        Require(files.Any(file => file.HintName == "LuminPackGen_StateOnly.g.cs"), "A direct state API failed to retain its Minimal payload root.");
+        Require(files.Any(file => file.HintName == "LuminPackGen.StateOnly.g.cs"), "A direct state API failed to retain its Minimal payload root.");
         Require(!files.Any(file => file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal)),
             "A state-only root restored unused concrete convenience overloads.");
     }
