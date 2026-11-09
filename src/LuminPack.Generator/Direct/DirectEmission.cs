@@ -77,13 +77,14 @@ internal static class DirectEmission
     /// <param name="json">Whether the JSON file is rendered, otherwise the binary file.</param>
     /// <param name="aliases">The aliases available in the consuming compilation.</param>
     /// <returns>The complete published file.</returns>
-    internal static string Render(DirectTypeModel model, bool json, int aliases)
+    /// <param name="operations">The operations the project calls; the members of the others are left out.</param>
+    internal static string Render(DirectTypeModel model, bool json, int aliases, LuminPack.Code.Core.GeneratedOperations operations)
     {
         var writer = new DirectWriter(aliases);
         if (json)
-            DirectJsonEmitter.Emit(model, writer);
+            DirectJsonEmitter.Emit(model, writer, operations);
         else
-            DirectBinaryEmitter.Emit(model, writer);
+            DirectBinaryEmitter.Emit(model, writer, operations);
         return GeneratedSourceLayout.LayOutLines(writer.Complete(json));
     }
 
@@ -126,6 +127,9 @@ internal sealed class DirectWriter
     /// <summary>Creates a writer for the consumer's available aliases.</summary>
     internal DirectWriter(int aliases) => _available = aliases;
 
+    /// <summary>Discards lines and alias uses while set, for the members of operations the project does not call.</summary>
+    internal bool Suppressed;
+
     /// <summary>Spells a helper type through its alias when the consumer leaves the alias available.</summary>
     /// <param name="alias">The alias name.</param>
     /// <returns>The alias or the fully qualified target.</returns>
@@ -134,7 +138,8 @@ internal sealed class DirectWriter
         int index = GeneratedSourceLayout.AliasIndex(alias);
         if ((_available & (1 << index)) == 0)
             return GeneratedSourceLayout.AliasTarget(index);
-        _used |= 1 << index;
+        if (!Suppressed)
+            _used |= 1 << index;
         return alias;
     }
 
@@ -154,6 +159,8 @@ internal sealed class DirectWriter
     /// <summary>Appends one line at the current indentation.</summary>
     internal void Line(string text)
     {
+        if (Suppressed)
+            return;
         if (_pendingBlank)
         {
             _body.Append(Environment.NewLine);
@@ -163,12 +170,17 @@ internal sealed class DirectWriter
     }
 
     /// <summary>Requests a blank line before the next line; a following closing brace drops it.</summary>
-    internal void Blank() => _pendingBlank = true;
+    internal void Blank()
+    {
+        if (!Suppressed)
+            _pendingBlank = true;
+    }
 
     /// <summary>Opens a brace block.</summary>
     internal void Open()
     {
-        _pendingBlank = false;
+        if (!Suppressed)
+            _pendingBlank = false;
         Line("{");
         _indent++;
     }
@@ -176,7 +188,8 @@ internal sealed class DirectWriter
     /// <summary>Closes a brace block, dropping a requested blank line.</summary>
     internal void Close(string suffix = "")
     {
-        _pendingBlank = false;
+        if (!Suppressed)
+            _pendingBlank = false;
         _indent--;
         Line("}" + suffix);
     }

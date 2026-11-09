@@ -17,8 +17,13 @@ internal static class DirectJsonEmitter
     private const string Profile = "TLuminProfile";
 
     /// <summary>Emits the complete JSON file body.</summary>
-    internal static void Emit(DirectTypeModel model, DirectWriter w)
+    /// <param name="model">The covered type.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="operations">The operations the project calls; see <see cref="DirectBinaryEmitter.Emit"/>.</param>
+    internal static void Emit(DirectTypeModel model, DirectWriter w, LuminPack.Code.Core.GeneratedOperations operations)
     {
+        bool writes = (operations & LuminPack.Code.Core.GeneratedOperations.JsonWrite) != 0;
+        bool reads = (operations & LuminPack.Code.Core.GeneratedOperations.JsonRead) != 0;
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         string jsonWriter = w.A("LuminPackJsonWriter"), jsonReader = w.A("LuminPackJsonReader"), options = w.A("ILuminPackOptions");
         string serializer = w.A("LuminPackSerializer"), standard = w.A("LuminPackUtf16LengthOptions");
@@ -32,6 +37,7 @@ internal static class DirectJsonEmitter
         w.Open();
         w.Line("internal static partial class " + container);
         w.Open();
+        w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + type + "? input)");
         w.Indented(() => w.Line(constraint));
@@ -39,27 +45,34 @@ internal static class DirectJsonEmitter
         WriteBody(model, w, helper);
         w.Close();
         w.Blank();
+        w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line("internal static void RootReadJson<" + Profile + ">(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         ReadBody(model, w, helper);
         w.Close();
+        w.Suppressed = false;
         w.Close();
         w.Blank();
+        w.Suppressed = !writes;
         Entry("SerializeJson", "(scoped ref " + jsonWriter + " writer, scoped in " + type + "? input)", "RootWriteJson", "ref writer, input");
+        w.Suppressed = !reads;
         Entry("DeserializeJson", "(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)", "RootReadJson", "ref reader, ref value");
+        w.Suppressed = false;
         w.Close();
         w.Blank();
 
         w.Line("internal static partial class " + model.Owner);
         w.Open();
+        w.Suppressed = !writes;
         w.Line(inline);
         w.Line("internal static void Write(this ref " + jsonWriter + " state, in " + type + "? value) => " + serializer + "." + container +
             ".RootWriteJson<" + standard + ">(ref state, value);");
         w.Line(inline);
         w.Line("internal static void Write<TOptions>(this ref " + jsonWriter + " state, in " + type + "? value)");
         w.Indented(() => w.Line("where TOptions : struct, " + options + " => " + serializer + "." + container + ".RootWriteJson<TOptions>(ref state, value);"));
+        w.Suppressed = !reads;
         foreach (string profile in new[] { standard, "TOptions" })
         {
             w.Line(inline);
@@ -74,6 +87,7 @@ internal static class DirectJsonEmitter
             w.Close();
             w.Blank();
         }
+        w.Suppressed = false;
         w.Close();
         w.Close();
         w.Blank();
@@ -84,7 +98,7 @@ internal static class DirectJsonEmitter
         w.Open();
         w.Line("internal static class " + model.JsonHelper);
         w.Open();
-        NameTables(model, w);
+        NameTables(model, w, reads);
         w.Close();
         w.Close();
         w.Close();
@@ -104,7 +118,7 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Spells a member's table entry, as the JSON name layout does.</summary>
-    private static string Member(DirectMember member) => member.Name;
+    private static string Member(DirectMember member) => LuminPackJsonCodeGenerator.MemberSuffix(member.Name);
 
     /// <summary>Encodes a little-endian 64-bit word of a literal's first or last eight bytes.</summary>
     private static (string First, string Last) Words(byte[] bytes)
@@ -412,7 +426,10 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Writes the nested name tables, the name lookups and the ordered-property reader.</summary>
-    private static void NameTables(DirectTypeModel model, DirectWriter w)
+    /// <param name="model">The covered type.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="reads">Whether the read-only lookups and the ordered-property reader are written.</param>
+    private static void NameTables(DirectTypeModel model, DirectWriter w, bool reads)
     {
         var members = model.Members;
         string method = w.MethodImpl("AggressiveInlining");
@@ -443,6 +460,7 @@ internal static class DirectJsonEmitter
             w.Close();
             w.Blank();
         }
+        w.Suppressed = !reads;
         foreach (bool utf8 in new[] { true, false })
         {
             Lookup(model, w, utf8);
@@ -476,6 +494,7 @@ internal static class DirectJsonEmitter
         w.Open();
         Lines(w, body);
         w.Close();
+        w.Suppressed = false;
     }
 
     /// <summary>Writes one encoding's name lookup: a length switch for up to eight names, otherwise a hash switch.</summary>

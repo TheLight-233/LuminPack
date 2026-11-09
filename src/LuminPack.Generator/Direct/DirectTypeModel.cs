@@ -152,16 +152,26 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             attributes[0].NamedArguments.Length != 0 ||
             attributes[0].ConstructorArguments.Any(argument => argument.Kind != TypedConstantKind.Enum || System.Convert.ToInt64(argument.Value, System.Globalization.CultureInfo.InvariantCulture) != 0))
             return DirectEmission.Reject<DirectTypeModel>("type attributes");
-        // Any other declared member, such as a method named like a callback or a property, keeps the original pipeline.
+        // Members without storage in the instance and without attributes, such as methods, computed properties and static
+        // fields, are never serialized. Any other declared member keeps the original pipeline.
         int fieldsDeclared = 0;
         foreach (var member in type.GetMembers())
         {
             if (member.IsImplicitlyDeclared)
                 continue;
-            if (member is not IFieldSymbol field || field.IsStatic || field.IsConst || field.IsReadOnly || field.IsVolatile ||
-                field.DeclaredAccessibility != Accessibility.Public || field.GetAttributes().Length != 0 || field.IsImplicitlyDeclared)
+            if (member.GetAttributes().Length != 0)
+                return DirectEmission.Reject<DirectTypeModel>("member attributes");
+            if (member is IFieldSymbol field)
+            {
+                if (field.IsStatic || field.IsConst)
+                    continue;
+                if (field.IsReadOnly || field.IsVolatile || field.DeclaredAccessibility != Accessibility.Public)
+                    return DirectEmission.Reject<DirectTypeModel>("declared field");
+                fieldsDeclared++;
+                continue;
+            }
+            if (!Unserialized(member))
                 return DirectEmission.Reject<DirectTypeModel>("declared member");
-            fieldsDeclared++;
         }
         if (fieldsDeclared != data.fields.Count)
             return DirectEmission.Reject<DirectTypeModel>("declared members");
@@ -174,7 +184,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // Strings without collections take the proven object write, which the direct emitter does not reproduce.
         if (members.Any(member => member.Kind == DirectMemberKind.Text) && members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
-        if (members.Select(member => member.Name).Distinct(StringComparer.Ordinal).Count() != members.Length)
+        // JSON read locals are named after the camel-cased member; the presentation renames a leading underscore or a clash.
+        if (members.Any(member => member.Name[0] == '_') ||
+            members.Select(member => char.ToLowerInvariant(member.Name[0]) + member.Name.Substring(1)).Distinct(StringComparer.Ordinal).Count() != members.Length)
             return DirectEmission.Reject<DirectTypeModel>("member names");
 
         string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -194,9 +206,26 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("unsafe code") != null;
         if (metadata.CSharpVersion <= LanguageVersion.CSharp10 || compilation is not CSharpCompilation)
             return DirectEmission.Reject<DirectTypeModel>("language version") != null;
-        if (GeneratedOperationUsage.IsClosed(compilation))
-            return DirectEmission.Reject<DirectTypeModel>("closed operation selection") != null;
         return DirectEmission.ProjectFacts(compilation) || DirectEmission.Reject<DirectTypeModel>("assembly attributes") != null;
+    }
+
+    /// <summary>Accepts a declared member that has no instance storage and is never serialized.</summary>
+    private static bool Unserialized(ISymbol member)
+    {
+        switch (member)
+        {
+            case IMethodSymbol method:
+                return method.MethodKind is MethodKind.Ordinary or MethodKind.StaticConstructor or MethodKind.PropertyGet or MethodKind.PropertySet or
+                    MethodKind.UserDefinedOperator or MethodKind.Conversion or MethodKind.Constructor && method.GetReturnTypeAttributes().Length == 0;
+            case IPropertySymbol property:
+                // An auto-property has a hidden backing field in the instance.
+                return property.IsStatic || property.IsIndexer || property.ContainingType.GetMembers().OfType<IFieldSymbol>()
+                    .All(field => !SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, property));
+            case INamedTypeSymbol:
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
@@ -204,7 +233,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     {
         if (field.IsPrivate || field.isProperty || field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 ||
             field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
-            field.Name.Contains("_") || !SyntaxFacts.IsValidIdentifier(field.Name) || field.Name.Any(c => c > 127))
+            !SyntaxFacts.IsValidIdentifier(field.Name) || field.Name.Any(c => c > 127))
             return DirectEmission.Reject<DirectMember>("member options");
         var symbol = field.TypeSymbol;
         if (Scalar(symbol, allowBoolean: true) is { } scalar)

@@ -243,23 +243,27 @@ public sealed partial class LuminPackFormatterGenerator
     /// <returns>The files of the selected formats.</returns>
     private static IEnumerable<FrozenGeneratedSource> TypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined, GeneratedOperations called)
     {
-        // A covered type renders its own files. Covered projects publish every operation, so no operation filter applies.
+        // A covered type renders its own files, leaving out the members of operations the project does not call.
         if (value.Direct is { } direct)
         {
+            // As in the original pipeline, a JSON file is published only for a called JSON operation.
+            if ((called & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) == 0)
+                json = false;
             if (DirectEmission.Mode == DirectEmissionMode.On)
             {
                 if (binary)
-                    yield return new FrozenGeneratedSource(value.HintName + ".g.cs", DirectEmission.Render(direct, false, GeneratedSourceLayout.AllAliases),
-                        aliases => DirectEmission.Render(direct, false, aliases), value.Payload);
+                    yield return new FrozenGeneratedSource(value.HintName + ".g.cs", DirectEmission.Render(direct, false, GeneratedSourceLayout.AllAliases, called),
+                        aliases => DirectEmission.Render(direct, false, aliases, called), value.Payload);
                 if (json)
                     yield return new FrozenGeneratedSource(combined ? value.HintName + ".Json.g.cs" : value.HintName + ".g.cs",
-                        DirectEmission.Render(direct, true, GeneratedSourceLayout.AllAliases), aliases => DirectEmission.Render(direct, true, aliases), value.Payload);
+                        DirectEmission.Render(direct, true, GeneratedSourceLayout.AllAliases, called), aliases => DirectEmission.Render(direct, true, aliases, called),
+                        value.Payload);
                 yield break;
             }
             foreach (var file in OriginalTypeFiles(value, binary, json, combined, called))
             {
                 bool jsonFile = !binary || file.Name.EndsWith(".Json.g.cs", StringComparison.Ordinal);
-                yield return new FrozenGeneratedSource(file.Name, file.Text, aliases => DirectEmission.Render(direct, jsonFile, aliases), file.Payload);
+                yield return new FrozenGeneratedSource(file.Name, file.Text, aliases => DirectEmission.Render(direct, jsonFile, aliases, called), file.Payload);
             }
             yield break;
         }

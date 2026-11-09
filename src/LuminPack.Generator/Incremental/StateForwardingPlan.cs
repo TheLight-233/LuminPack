@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using LuminPack.Code.Core;
+using LuminPack.SourceGenerator.Direct;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -60,6 +61,12 @@ internal sealed class StateForwardingPlan : IEquatable<StateForwardingPlan>
         {
             Inspect(type.Extension);
             Inspect(type.Union);
+            // A covered type's entries are inspected in their unfiltered rendering, spelled as the original text before presentation.
+            if (type.Direct != null && DirectEmission.Mode == DirectEmissionMode.On)
+            {
+                Inspect(DirectEmission.Render(type.Direct, false, 0, GeneratedOperations.All));
+                Inspect(DirectEmission.Render(type.Direct, true, 0, GeneratedOperations.All));
+            }
         }
         if (!declared.Values.Any(call => call != null))
             return Empty;
@@ -124,15 +131,33 @@ internal sealed class StateForwardingPlan : IEquatable<StateForwardingPlan>
             return _interceptors == null ? file : new FrozenGeneratedSource(file.Name, _interceptors, file.Owner, file.Payload);
         if (_omitted.Count == 0 || !MayContainStateNames(file.Text))
             return file;
-        var root = PublishedSyntax.Take(file.Text) ?? Parse(file.Text, _options);
+        // A covered type's file is filtered in each alias rendering it is published in.
+        if (file.Render is { } render)
+        {
+            string text = Omit(file.Text, published: false);
+            return ReferenceEquals(text, file.Text) ? file
+                : new FrozenGeneratedSource(file.Name, text, aliases => Omit(render(aliases), published: false), file.Payload);
+        }
+        string omitted = Omit(file.Text, published: true);
+        return ReferenceEquals(omitted, file.Text) ? file : new FrozenGeneratedSource(file.Name, omitted, file.Owner, file.Payload);
+    }
+
+    /// <summary>Removes the omitted forwarders from one text.</summary>
+    /// <param name="text">A complete generated file.</param>
+    /// <param name="published">Whether the text goes through the publication layout, which takes over its syntax.</param>
+    /// <returns>The same string instance when nothing is removed, otherwise the shortened text.</returns>
+    private string Omit(string text, bool published)
+    {
+        var root = (published ? PublishedSyntax.Take(text) : null) ?? Parse(text, _options);
         var removed = SerializerMethods(root).Where(method => _omitted.Contains(Key(method)) && ForwardingCall(method) != null).ToArray();
         if (removed.Length == 0)
         {
-            PublishedSyntax.Attach(file.Text, root);
-            return file;
+            if (published)
+                PublishedSyntax.Attach(text, root);
+            return text;
         }
         var forwarded = root.RemoveNodes(removed, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
-        return new FrozenGeneratedSource(file.Name, PublishedSyntax.Attach(forwarded.ToFullString(), forwarded), file.Owner, file.Payload);
+        return published ? PublishedSyntax.Attach(forwarded.ToFullString(), forwarded) : forwarded.ToFullString();
     }
 
     /// <summary>Finds a method that forwards only the original state and value to its own nested root.</summary>
