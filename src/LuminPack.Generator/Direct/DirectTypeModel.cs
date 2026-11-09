@@ -97,15 +97,21 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether the variable members are all strings, so the type has a named member write and its reserved record
     /// writes take the proven object path.</summary>
     internal readonly bool Proven;
+    /// <summary>Whether the type also has the named member write, which a proven type with a base type does not.</summary>
+    internal readonly bool MemberWrite;
+    /// <summary>Whether snapshot locals are camel-cased, as the bound operation pipeline names them for mirrored or derived types.</summary>
+    internal readonly bool CamelSnapshots;
     /// <summary>The root-private layout mirror that auto-property storage is reached through, or null for public fields.</summary>
     internal readonly string Mirror;
     /// <summary>The mirror's field declarations, such as <c>string? Name</c>, in storage order.</summary>
     internal readonly string[] MirrorFields;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
-        DirectMember[] members, bool proven, string mirror, string[] mirrorFields)
+        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived)
     {
         Proven = proven;
+        MemberWrite = proven && !derived;
+        CamelSnapshots = mirror != null || derived;
         Mirror = mirror;
         MirrorFields = mirrorFields;
         UniqueEntries = uniqueEntries;
@@ -123,7 +129,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <inheritdoc/>
     public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
-        UniqueEntries == other.UniqueEntries && Proven == other.Proven && Mirror == other.Mirror &&
+        UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
+        CamelSnapshots == other.CamelSnapshots && Mirror == other.Mirror &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
@@ -147,8 +154,6 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         var type = data.TypeSymbol;
         if (type == null || data.generatorType != GeneratorType.Object || data.isUnion || data.isGeneric || data.isValueType)
             return DirectEmission.Reject<DirectTypeModel>("type kind");
-        if (data.Parent != null)
-            return DirectEmission.Reject<DirectTypeModel>("base type");
         if (data.RentPoolMethod != null || data.callBackMethods.Count != 0 || data.enableBurst)
             return DirectEmission.Reject<DirectTypeModel>("callbacks, pool or burst");
         if (data.Diagnostics.Length != 0)
@@ -157,28 +162,41 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("member count");
         if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.IsStatic || type.IsRecord || type.IsGenericType ||
             type.ContainingType != null || type.DeclaredAccessibility != Accessibility.Public ||
-            type.BaseType?.SpecialType != SpecialType.System_Object || type.Interfaces.Length != 0)
+            type.Interfaces.Length != 0)
             return DirectEmission.Reject<DirectTypeModel>("type declaration");
+        // Base types contribute their fields after the type's own, and must be plain classes of the same assembly.
+        var levels = new System.Collections.Generic.List<INamedTypeSymbol> { type };
+        for (var level = type.BaseType; level != null && level.SpecialType != SpecialType.System_Object; level = level.BaseType)
+        {
+            if (level.TypeKind != TypeKind.Class || level.IsAbstract || level.IsStatic || level.IsRecord || level.IsGenericType ||
+                level.ContainingType != null || level.AllInterfaces.Length != 0 ||
+                !SymbolEqualityComparer.Default.Equals(level.ContainingAssembly, compilation.Assembly) ||
+                level.GetAttributes().Any(attribute => !PlainPackable(attribute)))
+                return DirectEmission.Reject<DirectTypeModel>("base type");
+            levels.Add(level);
+        }
+        bool derived = levels.Count > 1;
         if (type.InstanceConstructors.Length != 1 || type.InstanceConstructors[0].Parameters.Length != 0 ||
             type.InstanceConstructors[0].DeclaredAccessibility != Accessibility.Public)
             return DirectEmission.Reject<DirectTypeModel>("constructor");
         var attributes = type.GetAttributes();
-        if (attributes.Length != 1 || attributes[0].AttributeClass?.ToDisplayString() != LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE ||
-            attributes[0].NamedArguments.Length != 0 ||
-            attributes[0].ConstructorArguments.Any(argument => argument.Kind != TypedConstantKind.Enum || System.Convert.ToInt64(argument.Value, System.Globalization.CultureInfo.InvariantCulture) != 0))
+        if (attributes.Length != 1 || !PlainPackable(attributes[0]))
             return DirectEmission.Reject<DirectTypeModel>("type attributes");
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
         // fields, are never serialized. Any other declared member keeps the original pipeline.
         int fieldsDeclared = 0;
-        foreach (var member in type.GetMembers())
+        foreach (var member in levels.SelectMany(level => level.GetMembers()))
         {
+            // A base type's constructors only run as part of the type's own construction.
+            if (member is IMethodSymbol { MethodKind: MethodKind.Constructor } && !SymbolEqualityComparer.Default.Equals(member.ContainingType, type))
+                continue;
             if (member.IsImplicitlyDeclared)
                 continue;
             if (member.GetAttributes().Length != 0)
                 return DirectEmission.Reject<DirectTypeModel>("member attributes");
             // An auto-property is stored in its backing field, which the generated code reaches through the layout mirror.
             if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } auto &&
-                type.GetMembers().OfType<IFieldSymbol>().Any(backing => SymbolEqualityComparer.Default.Equals(backing.AssociatedSymbol, auto)))
+                auto.ContainingType.GetMembers().OfType<IFieldSymbol>().Any(backing => SymbolEqualityComparer.Default.Equals(backing.AssociatedSymbol, auto)))
             {
                 if (auto.GetMethod is not { DeclaredAccessibility: Accessibility.Public } || auto.SetMethod is not { DeclaredAccessibility: Accessibility.Public, IsInitOnly: false } ||
                     auto.GetMethod.GetAttributes().Length != 0 || auto.SetMethod.GetAttributes().Length != 0)
@@ -226,7 +244,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (mirrored)
         {
             // The mirror declares every instance field of the type in storage order, so it must hold exactly the members.
-            if (fresh || data.localFields.Count != members.Length ||
+            if (fresh || derived || data.localFields.Count != members.Length ||
                 data.localFields.Where((local, index) => local.Identifier != data.fields[index].Identifier).Any())
                 return DirectEmission.Reject<DirectTypeModel>("layout mirror");
             using (var hash = System.Security.Cryptography.SHA256.Create())
@@ -238,7 +256,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         }
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields);
+            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -252,6 +270,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("language version") != null;
         return DirectEmission.ProjectFacts(compilation) || DirectEmission.Reject<DirectTypeModel>("assembly attributes") != null;
     }
+
+    /// <summary>Accepts a plain <c>[LuminPackable]</c> attribute without arguments other than the default generation mode.</summary>
+    private static bool PlainPackable(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE && attribute.NamedArguments.Length == 0 &&
+            attribute.ConstructorArguments.All(argument => argument.Kind == TypedConstantKind.Enum &&
+                System.Convert.ToInt64(argument.Value, System.Globalization.CultureInfo.InvariantCulture) == 0);
 
     /// <summary>Accepts a declared member that has no instance storage and is never serialized.</summary>
     private static bool Unserialized(ISymbol member)

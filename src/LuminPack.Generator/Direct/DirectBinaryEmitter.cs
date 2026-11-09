@@ -52,7 +52,7 @@ internal static class DirectBinaryEmitter
         // Serialize entries; the root container follows the entry that carried the write body, which is the named member
         // write when the type has one.
         w.Suppressed = !writes;
-        if (model.Proven)
+        if (model.MemberWrite)
         {
             w.Line(w.Preserve);
             w.Line(inline);
@@ -78,7 +78,7 @@ internal static class DirectBinaryEmitter
         Roots();
         w.Blank();
         w.Suppressed = !writes;
-        if (model.Proven)
+        if (model.MemberWrite)
         {
             SerializeStandard();
             SerializeProfiled();
@@ -224,7 +224,7 @@ internal static class DirectBinaryEmitter
             w.Line("internal static partial class " + container);
             w.Open();
             w.Suppressed = !writes;
-            if (model.Proven)
+            if (model.MemberWrite)
             {
                 Method(MemberWriteBody(model, w), "RootWriteMember", true, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
                 w.Blank();
@@ -315,7 +315,7 @@ internal static class DirectBinaryEmitter
         string stem = model.Members[index].Name + "Snapshot";
         string chosen = model.Members[index].Name.All(char.IsLetter) && model.Members.All(member => member.Name != stem) ? stem : name;
         // Snapshots of mirrored members are named like role locals.
-        return model.Mirror == null ? chosen : char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
+        return !model.CamelSnapshots ? chosen : char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
     }
 
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
