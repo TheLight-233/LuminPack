@@ -153,7 +153,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return null;
         var type = data.TypeSymbol;
         if (type == null || data.generatorType != GeneratorType.Object || data.isUnion || data.isGeneric || data.isValueType)
-            return DirectEmission.Reject<DirectTypeModel>("type kind");
+            return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
+                data.isValueType ? "struct" : data.generatorType.ToString()));
         if (data.RentPoolMethod != null || data.callBackMethods.Count != 0 || data.enableBurst)
             return DirectEmission.Reject<DirectTypeModel>("callbacks, pool or burst");
         if (data.Diagnostics.Length != 0)
@@ -161,15 +162,16 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (data.fields.Count == 0 || data.fields.Count > 32)
             return DirectEmission.Reject<DirectTypeModel>("member count");
         if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.IsStatic || type.IsRecord || type.IsGenericType ||
-            type.ContainingType != null || type.DeclaredAccessibility != Accessibility.Public ||
-            type.Interfaces.Length != 0)
-            return DirectEmission.Reject<DirectTypeModel>("type declaration");
+            type.ContainingType is { IsGenericType: true } || !Reachable(type) || type.Interfaces.Length != 0)
+            return DirectEmission.Reject<DirectTypeModel>("type declaration: " + (type.TypeKind != TypeKind.Class ? "kind" : type.IsAbstract ? "abstract" :
+                type.IsStatic ? "static" : type.IsRecord ? "record" : type.IsGenericType ? "generic" : type.ContainingType != null && type.ContainingType.IsGenericType ? "nested in generic" :
+                !Reachable(type) ? "accessibility" : "interfaces"));
         // Base types contribute their fields after the type's own, and must be plain classes of the same assembly.
         var levels = new System.Collections.Generic.List<INamedTypeSymbol> { type };
         for (var level = type.BaseType; level != null && level.SpecialType != SpecialType.System_Object; level = level.BaseType)
         {
             if (level.TypeKind != TypeKind.Class || level.IsAbstract || level.IsStatic || level.IsRecord || level.IsGenericType ||
-                level.ContainingType != null || level.AllInterfaces.Length != 0 ||
+                level.ContainingType is { IsGenericType: true } || !Reachable(level) || level.AllInterfaces.Length != 0 ||
                 !SymbolEqualityComparer.Default.Equals(level.ContainingAssembly, compilation.Assembly) ||
                 level.GetAttributes().Any(attribute => !PlainPackable(attribute)))
                 return DirectEmission.Reject<DirectTypeModel>("base type");
@@ -271,6 +273,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         return DirectEmission.ProjectFacts(compilation) || DirectEmission.Reject<DirectTypeModel>("assembly attributes") != null;
     }
 
+    /// <summary>Accepts a public or internal type whose containing types are public or internal too.</summary>
+    private static bool Reachable(INamedTypeSymbol type)
+    {
+        for (var current = type; current != null; current = current.ContainingType)
+            if (current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal))
+                return false;
+        return true;
+    }
+
     /// <summary>Accepts a plain <c>[LuminPackable]</c> attribute without arguments other than the default generation mode.</summary>
     private static bool PlainPackable(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE && attribute.NamedArguments.Length == 0 &&
@@ -327,7 +338,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             field.Type is LuminFiledType.List)
             return new DirectMember(field.Name, DirectMemberKind.List, item.Keyword, "global::System.Collections.Generic.List<" + item.Keyword + ">", 0,
                 "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
-        return DirectEmission.Reject<DirectMember>("member type");
+        return DirectEmission.Reject<DirectMember>("member type: " + (symbol.NullableAnnotation == NullableAnnotation.Annotated ? "annotated " : string.Empty) +
+            (symbol.TypeKind == TypeKind.Enum ? "enum" : symbol is IArrayTypeSymbol ? "array" : symbol is INamedTypeSymbol { IsGenericType: true } generic ?
+                generic.OriginalDefinition.Name : symbol.SpecialType != SpecialType.None ? symbol.SpecialType.ToString() :
+                TypeMetaChecker.TryCheckPackableAttribute(symbol as INamedTypeSymbol) ? "packable " + symbol.TypeKind : symbol.TypeKind + " " + symbol.Name));
     }
 
     /// <summary>Spells a covered raw scalar.</summary>
