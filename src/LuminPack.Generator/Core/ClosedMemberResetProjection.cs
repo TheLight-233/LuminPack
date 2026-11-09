@@ -4,6 +4,7 @@ using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -12,7 +13,7 @@ namespace LuminPack.Code.Core;
 /// Once a closed specialization substitutes a concrete ordinary object for the member type, the member is read by that
 /// object's own expanded body, whose null rule is the ordinary object header: the member is cleared only when the next
 /// record is a null object, so a nonnull record refills the existing child. Other member types keep the reset.</remarks>
-internal sealed class ClosedMemberResetProjection : CSharpSyntaxRewriter
+internal sealed class ClosedMemberResetProjection : NodeRewriter
 {
     private const string Reset = "global::LuminPack.LuminPackSerializer.FormatterDispatch.LuminPackShouldResetMember";
     private readonly IReadOnlyDictionary<string, ITypeSymbol> _types;

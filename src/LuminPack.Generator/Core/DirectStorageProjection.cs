@@ -4,11 +4,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Eliminates storage views when every actual member access can use the original field.</summary>
-internal sealed class DirectStorageProjection : CSharpSyntaxRewriter
+internal sealed class DirectStorageProjection : NodeRewriter
 {
     private readonly Compilation _compilation;
     private readonly IReadOnlyDictionary<string, ITypeSymbol> _types;

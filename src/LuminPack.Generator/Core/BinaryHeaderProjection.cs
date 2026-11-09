@@ -4,11 +4,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Combines legacy header memory operations and their cursor advances into complete operations.</summary>
-internal sealed class BinaryHeaderProjection : CSharpSyntaxRewriter
+internal sealed class BinaryHeaderProjection : NodeRewriter
 {
     private readonly HashSet<string> _states;
 

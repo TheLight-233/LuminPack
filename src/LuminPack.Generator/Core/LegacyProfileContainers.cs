@@ -51,7 +51,7 @@ internal static class LegacyProfileContainers
             method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync";
 
     /// <summary>Retargets profile convenience calls while preserving state-entry calls.</summary>
-    private sealed class Calls : CSharpSyntaxRewriter
+    private sealed class Calls : NodeRewriter
     {
         private readonly HashSet<string> _names;
         private readonly string _entry;

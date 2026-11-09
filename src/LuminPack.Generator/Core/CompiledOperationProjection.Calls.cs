@@ -11,7 +11,7 @@ namespace LuminPack.SourceGenerator;
 internal sealed partial class CompiledOperationProjection
 {
     /// <summary>Selects document-generic kernels and preserves existing virtual and registry boundaries.</summary>
-    private sealed class Body : CSharpSyntaxRewriter
+    private sealed class Body : NodeRewriter
     {
         private string _profile;
         private readonly bool _writer;

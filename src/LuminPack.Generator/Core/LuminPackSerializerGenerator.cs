@@ -380,7 +380,7 @@ public static partial class LuminPackSerializerGenerator
     /// <remarks>The Serializer declares same-named operations for every payload, so each facade call made C# overload resolution
     /// examine all of them. The completed contribution recorded the single root each operation calls; calling it directly binds
     /// within the payload's root container and runs the same code.</remarks>
-    private sealed class FacadeRootCalls : CSharpSyntaxRewriter
+    private sealed class FacadeRootCalls : NodeRewriter
     {
         private readonly LazyForwardingTargets _targets;
 

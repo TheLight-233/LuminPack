@@ -4,11 +4,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Lowers absolute-position templates without exposing mutable integer storage from binary states.</summary>
-internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
+internal sealed class BinaryCursorProjection : NodeRewriter
 {
     private readonly bool _pointer;
     private readonly bool _allowUnsafe;
@@ -94,7 +95,7 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
     private static bool IsBinaryReader(string name) => name?.Replace("global::", string.Empty).Replace("LuminPack.Core.", string.Empty) is "LuminPackReader";
 
     /// <summary>Replaces compiler-owned aliases with the actual cursor position.</summary>
-    private sealed class Positions : CSharpSyntaxRewriter
+    private sealed class Positions : NodeRewriter
     {
         private readonly HashSet<string> _states;
         private readonly Dictionary<string, string> _aliases;
@@ -190,7 +191,7 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
     }
 
     /// <summary>Spells Reader fixed advances as checked cursor arithmetic after all statement-pattern projections.</summary>
-    private sealed class Advances : CSharpSyntaxRewriter
+    private sealed class Advances : NodeRewriter
     {
         private readonly HashSet<string> _readers;
         private readonly bool _pointer;
@@ -274,7 +275,7 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
     }
 
     /// <summary>Passes copied absolute offsets to legacy implementation kernels, without exposing state addresses.</summary>
-    private sealed class Arguments : CSharpSyntaxRewriter
+    private sealed class Arguments : NodeRewriter
     {
         private readonly HashSet<string> _states;
         private int _next;

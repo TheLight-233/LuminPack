@@ -23,9 +23,9 @@ internal static class UniqueStateEntries
     /// <returns>The same operation bodies under unique state names.</returns>
     internal static CompilationUnitSyntax Apply(CompilationUnitSyntax root, Compilation compilation, MetaInfo metadata)
     {
-        var tree = CSharpSyntaxTree.Create(root, metadata.ParseOptions);
+        var tree = GeneratedBinding.Tree(root, metadata.ParseOptions);
         var model = compilation.AddSyntaxTrees(tree).GetSemanticModel(tree);
-        return (CompilationUnitSyntax)new Rewriter(model, null).Visit(tree.GetRoot());
+        return (CompilationUnitSyntax)GeneratedBinding.Restore(new Rewriter(model, null).Visit(tree.GetRoot()));
     }
 
     /// <summary>Retargets a completed convenience block whose payload is already known.</summary>
@@ -49,7 +49,7 @@ internal static class UniqueStateEntries
         => name is "Serialize" or "SerializeMember" or "Deserialize" or "DeserializeUnion" or "SerializeJson" or "DeserializeJson" or "MeasureRecord";
 
     /// <summary>Rewrites statically identified state operations only.</summary>
-    private sealed class Rewriter : CSharpSyntaxRewriter
+    private sealed class Rewriter : NodeRewriter
     {
         private readonly SemanticModel _model;
         private readonly string _payload;
@@ -84,6 +84,17 @@ internal static class UniqueStateEntries
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
+            // The syntactic conditions come first, so only state-operation shapes are bound.
+            var candidate = node.Expression switch
+            {
+                MemberAccessExpressionSyntax access => access.Name,
+                SimpleNameSyntax simple => simple,
+                _ => null,
+            };
+            if (candidate == null || !IsOperation(candidate.Identifier.ValueText) ||
+                node.ArgumentList.Arguments.Count != 2 || !node.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ||
+                candidate is GenericNameSyntax { TypeArgumentList.Arguments.Count: > 1 })
+                return result;
             var name = node.Expression switch
             {
                 MemberAccessExpressionSyntax access when access.Expression.ToString() == "global::LuminPack.LuminPackSerializer" => access.Name,
@@ -91,9 +102,7 @@ internal static class UniqueStateEntries
                     method.ContainingType.ToDisplayString() == "LuminPack.LuminPackSerializer" => simple,
                 _ => null,
             };
-            if (name == null || !IsOperation(name.Identifier.ValueText) ||
-                node.ArgumentList.Arguments.Count != 2 || !node.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ||
-                name is GenericNameSyntax { TypeArgumentList.Arguments.Count: > 1 })
+            if (name == null)
                 return result;
             string payload = _payload;
             if (_model != null)

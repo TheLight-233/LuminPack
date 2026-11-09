@@ -4,11 +4,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Lowers fixed batches to the single-value memory core without emitting arity-specific runtime APIs.</summary>
-internal sealed class SequentialFixedProjection : CSharpSyntaxRewriter
+internal sealed class SequentialFixedProjection : NodeRewriter
 {
     private int _next;
 

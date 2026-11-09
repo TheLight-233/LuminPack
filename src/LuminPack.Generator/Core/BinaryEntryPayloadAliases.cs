@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -95,7 +96,7 @@ internal static class BinaryEntryPayloadAliases
             identifier.Parent is QualifiedNameSyntax or AliasQualifiedNameSyntax or NameColonSyntax);
 
     /// <summary>Substitutes only compiler-bound local uses, retaining user members with identical spellings.</summary>
-    private sealed class StableBindings : CSharpSyntaxRewriter
+    private sealed class StableBindings : NodeRewriter
     {
         private readonly Dictionary<string, ExpressionSyntax> _bindings;
 

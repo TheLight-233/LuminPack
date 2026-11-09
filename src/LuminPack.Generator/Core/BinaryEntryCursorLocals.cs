@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -16,7 +17,7 @@ internal static class BinaryEntryCursorLocals
     internal static SyntaxNode NormalizeRoot(SyntaxNode root) => new ExclusiveCursors(root).Visit(root);
 
     /// <summary>Rewrites only compiler-marked operation locals in sibling switch sections.</summary>
-    private sealed class ExclusiveCursors : CSharpSyntaxRewriter
+    private sealed class ExclusiveCursors : NodeRewriter
     {
         private readonly SyntaxNode _root;
         private HashSet<string> _names;

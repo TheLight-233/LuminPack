@@ -219,8 +219,8 @@ internal static class SerializerCoreProjection
             .AddMembers(container.WithMembers(SyntaxFactory.List(support))));
         var projected = root.WithMembers(SyntaxFactory.List(namespaces))
             .AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("global::LuminPack.Generated")));
-        var projectedTree = CSharpSyntaxTree.Create(projected, metadata.ParseOptions);
-        var rewritten = new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree), compilation).Visit(projectedTree.GetRoot());
+        var projectedTree = GeneratedBinding.Tree(projected, metadata.ParseOptions);
+        var rewritten = GeneratedBinding.Restore(new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree), compilation).Visit(projectedTree.GetRoot()));
         rewritten = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(closedRoot, compilation)).Visit(rewritten);
         rewritten = BinaryEntryLocalScopes.NormalizeRoot(rewritten);
         rewritten = GeneratedOperationScopes.Rewrite(rewritten);
@@ -286,8 +286,8 @@ internal static class SerializerCoreProjection
         var sourceRoot = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetCompilationUnitRoot()
             .AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("global::LuminPack")).NormalizeWhitespace()
                 .WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
-        var tree = CSharpSyntaxTree.Create(sourceRoot, metadata.ParseOptions);
-        var rewritten = new CallRewriter(compilation.AddSyntaxTrees(tree).GetSemanticModel(tree), compilation).Visit(tree.GetRoot());
+        var tree = GeneratedBinding.Tree(sourceRoot, metadata.ParseOptions);
+        var rewritten = GeneratedBinding.Restore(new CallRewriter(compilation.AddSyntaxTrees(tree).GetSemanticModel(tree), compilation).Visit(tree.GetRoot()));
         return new JsonValueProjection().Visit(new BinaryExtensionProjection.Calls().Visit(new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation)).Visit(rewritten))))))).ToFullString();
     }
 
@@ -339,7 +339,7 @@ internal static class SerializerCoreProjection
     };
 
     /// <summary>Changes calls only when their receiver or explicit first argument is a runtime state struct.</summary>
-    private sealed class CallRewriter : CSharpSyntaxRewriter
+    private sealed class CallRewriter : NodeRewriter
     {
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, OperationCatalog> Catalogs = new();
         private readonly SemanticModel _model;

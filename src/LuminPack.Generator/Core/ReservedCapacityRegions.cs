@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Removes container checks only within compiler-marked, completely reserved binary regions.</summary>
-internal sealed class ReservedCapacityRegions : CSharpSyntaxRewriter
+internal sealed class ReservedCapacityRegions : NodeRewriter
 {
     private int _reserved;
     private int _guaranteedMaxBytes;

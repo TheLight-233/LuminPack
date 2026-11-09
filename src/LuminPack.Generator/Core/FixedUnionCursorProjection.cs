@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -87,7 +88,7 @@ internal static class FixedUnionCursorProjection
     }
 
     /// <summary>Keeps fixed payload writes on the incoming local index without publishing Writer fields per member.</summary>
-    private sealed class AdvancingBody : CSharpSyntaxRewriter
+    private sealed class AdvancingBody : NodeRewriter
     {
         internal readonly string Writer;
 

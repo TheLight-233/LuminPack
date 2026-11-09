@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Substitutes closed type arguments without reclassifying the original generic wire operations.</summary>
-internal sealed class ClosedOperationTypes : CSharpSyntaxRewriter
+internal sealed class ClosedOperationTypes : NodeRewriter
 {
     private readonly IReadOnlyDictionary<string, string> _arguments;
 

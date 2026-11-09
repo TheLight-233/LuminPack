@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Specializes generated state calls using stateless compile-time option profiles.</summary>
-internal sealed class CompiledOptionProjection : CSharpSyntaxRewriter
+internal sealed class CompiledOptionProjection : NodeRewriter
 {
     private readonly CompiledOptions _options;
     private readonly string _state;
@@ -192,7 +192,7 @@ internal sealed class CompiledOptionFieldScope : IDisposable
     }
 
     /// <summary>Marks one member's existing formatter boundary without adding an execution-time configuration change.</summary>
-    private sealed class MemberCalls : CSharpSyntaxRewriter
+    private sealed class MemberCalls : NodeRewriter
     {
         private readonly string _profile;
         private readonly string _payload;

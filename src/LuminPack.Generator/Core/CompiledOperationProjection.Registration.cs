@@ -42,7 +42,7 @@ internal sealed partial class CompiledOperationProjection
     }
 
     /// <summary>Targets the closed-profile table without changing the original delegate registration signature.</summary>
-    private sealed class RegistryProfile : CSharpSyntaxRewriter
+    private sealed class RegistryProfile : NodeRewriter
     {
         private readonly string _profile;
         /// <summary>Captures the stateless profile parameter.</summary>

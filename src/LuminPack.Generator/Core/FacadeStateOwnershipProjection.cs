@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Marks an active convenience operation's reference state as leased while it stays in its thread's idle cache.</summary>
-internal sealed class FacadeStateOwnershipProjection : CSharpSyntaxRewriter
+internal sealed class FacadeStateOwnershipProjection : NodeRewriter
 {
     private Dictionary<string, string> _leases = new Dictionary<string, string>(StringComparer.Ordinal);
 

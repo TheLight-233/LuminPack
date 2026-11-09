@@ -269,7 +269,7 @@ internal static class GeneratedSourceDocumentation
     }
 
     /// <summary>Inserts XML trivia while avoiding traversal of unchanged executable bodies.</summary>
-    private sealed class DocumentationInserter : CSharpSyntaxRewriter
+    private sealed class DocumentationInserter : NodeRewriter
     {
         private readonly Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax> _methods;
 

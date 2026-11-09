@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -12,7 +13,7 @@ namespace LuminPack.Code.Core;
 /// that is not inlined exposes the complete local, so a loop containing such a call keeps the caller's state and
 /// only escape-free loops are localized, using the narrowest copy their accesses require.
 /// </remarks>
-internal sealed class RootStateLocalization : CSharpSyntaxRewriter
+internal sealed class RootStateLocalization : NodeRewriter
 {
     /// <summary>Statement count up to which a localized root is inlined into its forwarding shell.</summary>
     private const int InlineStatementLimit = 48;

@@ -3,11 +3,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Applies execution hints to scalar JSON read and write loops after state localization.</summary>
-internal sealed class JsonScalarLoopProjection : CSharpSyntaxRewriter
+internal sealed class JsonScalarLoopProjection : NodeRewriter
 {
     /// <summary>Retains small roots and isolates repeated floating-point parsers in call-heavy roots.</summary>
     /// <param name="node">A generated operation after scalar calls have their canonical typed form.</param>

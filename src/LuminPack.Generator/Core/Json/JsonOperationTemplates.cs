@@ -90,7 +90,7 @@ internal static class JsonOperationTemplates
     }
 
     /// <summary>Qualifies every reference to a helper-owned member with the helper's own type identity.</summary>
-    private sealed class MemberQualifier : CSharpSyntaxRewriter
+    private sealed class MemberQualifier : NodeRewriter
     {
         private readonly HashSet<string> _members;
         private readonly ExpressionSyntax _qualified;

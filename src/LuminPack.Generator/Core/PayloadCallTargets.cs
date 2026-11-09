@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -21,7 +22,7 @@ internal static class PayloadCallTargets
     internal static SyntaxNode Apply(SyntaxNode root, string container) => new Rewriter(container).Visit(root);
 
     /// <summary>Rewrites known-payload extension calls.</summary>
-    private sealed class Rewriter : CSharpSyntaxRewriter
+    private sealed class Rewriter : NodeRewriter
     {
         private readonly string _container;
 

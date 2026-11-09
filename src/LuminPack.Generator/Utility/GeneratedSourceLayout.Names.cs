@@ -225,7 +225,7 @@ internal static partial class GeneratedSourceLayout
     }
 
     /// <summary>Places the statements of removable blocks in their enclosing blocks.</summary>
-    private sealed class Flattening : CSharpSyntaxRewriter
+    private sealed class Flattening : NodeRewriter
     {
         private readonly HashSet<BlockSyntax> _removable;
 
@@ -349,7 +349,7 @@ internal static partial class GeneratedSourceLayout
     }
 
     /// <summary>Shortens only exact global-qualified helper names and whitespace-only Union arms.</summary>
-    private sealed class Presentation : CSharpSyntaxRewriter
+    private sealed class Presentation : NodeRewriter
     {
         private readonly int _available;
         private readonly bool _union;

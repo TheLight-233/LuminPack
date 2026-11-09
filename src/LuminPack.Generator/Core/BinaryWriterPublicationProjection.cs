@@ -4,11 +4,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Publishes managed binary Writer cursors without spending a scalar helper's inline budget.</summary>
-internal sealed class BinaryWriterPublicationProjection : CSharpSyntaxRewriter
+internal sealed class BinaryWriterPublicationProjection : NodeRewriter
 {
     private HashSet<string> _writers = new HashSet<string>(StringComparer.Ordinal);
 

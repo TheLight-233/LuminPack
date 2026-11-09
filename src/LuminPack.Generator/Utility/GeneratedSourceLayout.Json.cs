@@ -57,7 +57,7 @@ internal static partial class GeneratedSourceLayout
     }
 
     /// <summary>Renames the helpers and moves their table fields into nested classes.</summary>
-    private sealed class JsonNameRewriter : CSharpSyntaxRewriter
+    private sealed class JsonNameRewriter : NodeRewriter
     {
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
         {

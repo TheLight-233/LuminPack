@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Removes runtime configuration arguments while preserving operation-state ownership and cleanup.</summary>
-internal sealed class CompiledOptionApiProjection : CSharpSyntaxRewriter
+internal sealed class CompiledOptionApiProjection : NodeRewriter
 {
     private readonly CompiledOptions _options;
     private HashSet<string> _parameters = new HashSet<string>(StringComparer.Ordinal);

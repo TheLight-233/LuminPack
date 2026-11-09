@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Propagates compiled profiles through concrete, recursive and ordinary virtual operations.</summary>
-internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
+internal sealed partial class CompiledOperationProjection : NodeRewriter
 {
     private readonly Compilation _compilation;
     private readonly CompiledOptions _default;

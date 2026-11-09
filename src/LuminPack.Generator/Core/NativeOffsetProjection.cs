@@ -4,11 +4,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Zero-extends nonnegative generated storage offsets before native pointer arithmetic.</summary>
-internal sealed class NativeOffsetProjection : CSharpSyntaxRewriter
+internal sealed class NativeOffsetProjection : NodeRewriter
 {
     private HashSet<string> _nativeOffsets = new HashSet<string>(StringComparer.Ordinal);
 

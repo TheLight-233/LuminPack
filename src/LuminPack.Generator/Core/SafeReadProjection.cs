@@ -106,7 +106,7 @@ internal sealed class SafeReadProjection
     private static string Literal(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Completes successful original early returns of this operation.</summary>
-    private sealed class CompletedReturns : CSharpSyntaxRewriter
+    private sealed class CompletedReturns : NodeRewriter
     {
         private readonly string _completion;
         /// <summary>Captures the completion statements.</summary><param name="completion">The statements run before returning.</param>
@@ -123,7 +123,7 @@ internal sealed class SafeReadProjection
     }
 
     /// <summary>Redirects read kernels to checked adapters which call their existing implementations.</summary>
-    private sealed class Calls : CSharpSyntaxRewriter
+    private sealed class Calls : NodeRewriter
     {
         private readonly SafeReadProjection _owner;
         private readonly string _state;

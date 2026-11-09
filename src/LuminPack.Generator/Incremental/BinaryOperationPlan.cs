@@ -179,6 +179,7 @@ internal sealed class BinaryOperationPlan
             template = checkedRoot;
             tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(checkedRoot), templateOptions);
         }
+        tree = GeneratedBinding.Tree((CompilationUnitSyntax)tree.GetRoot(), templateOptions);
         var binding = compilation.AddSyntaxTrees(tree);
         var model = binding.GetSemanticModel(tree);
         var typeArguments = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -732,7 +733,7 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     }
 
     /// <summary>Substitutes the single accessor argument without adding a generated method call.</summary>
-    private sealed class AccessorSubstitution : CSharpSyntaxRewriter
+    private sealed class AccessorSubstitution : NodeRewriter
     {
         private readonly SemanticModel _model;
         private readonly Dictionary<ISymbol, string> _layouts;

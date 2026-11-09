@@ -147,7 +147,7 @@ internal static class BinaryExtensionProjection
     }
 
     /// <summary>Uses the public advancing vocabulary after all profile and dispatch decisions are complete.</summary>
-    internal sealed class Calls : CSharpSyntaxRewriter
+    internal sealed class Calls : NodeRewriter
     {
         private HashSet<string> _states;
 

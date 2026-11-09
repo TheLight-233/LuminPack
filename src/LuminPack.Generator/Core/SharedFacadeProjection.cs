@@ -258,7 +258,7 @@ internal sealed class SharedFacadeProjection
     }
 
     /// <summary>Normalizes only proven payload slots and exact concrete state calls in generated templates.</summary>
-    private sealed class NormalizeBody : CSharpSyntaxRewriter
+    private sealed class NormalizeBody : NodeRewriter
     {
         private readonly string _type;
         private readonly string _profile;

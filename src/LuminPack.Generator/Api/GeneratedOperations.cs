@@ -25,7 +25,8 @@ internal enum GeneratedOperations
 }
 
 /// <summary>Tracks the selected operation modules and the types each one needs.</summary>
-internal sealed class GeneratedOperationUsage
+/// <remarks>Value equality lets Roslyn keep every type's published files when an edit leaves the selection unchanged.</remarks>
+internal sealed class GeneratedOperationUsage : IEquatable<GeneratedOperationUsage>
 {
     private readonly Dictionary<string, GeneratedOperations> _payloads = new(StringComparer.Ordinal);
     private GeneratedOperations _wholeModules;
@@ -98,6 +99,27 @@ internal sealed class GeneratedOperationUsage
         }
         return usage;
     }
+
+    /// <summary>Compares the retained operations of every payload.</summary>
+    /// <param name="other">Another selection.</param>
+    /// <returns>Whether both selections publish the same operations.</returns>
+    public bool Equals(GeneratedOperationUsage other)
+    {
+        if (ReferenceEquals(this, other))
+            return true;
+        if (other == null || _wholeModules != other._wholeModules || Shared != other.Shared || _payloads.Count != other._payloads.Count)
+            return false;
+        foreach (var pair in _payloads)
+            if (!other._payloads.TryGetValue(pair.Key, out var operations) || operations != pair.Value)
+                return false;
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public override bool Equals(object obj) => Equals(obj as GeneratedOperationUsage);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ((int)_wholeModules * 31 + (int)Shared) * 31 + _payloads.Count;
 
     /// <summary>Reads the assembly's compile-time overrides.</summary>
     /// <param name="compilation">The consumer before generation.</param>

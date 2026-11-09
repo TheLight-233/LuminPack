@@ -4,11 +4,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Separates stable state entry signatures from the single execution body of each selected contract.</summary>
-internal sealed class RootOperationProjection : CSharpSyntaxRewriter
+internal sealed class RootOperationProjection : NodeRewriter
 {
     /// <summary>Resolves closed extension shells through the actual specialized forwarders rather than guessing root arity.</summary>
     /// <param name="node">The complete contribution after profile specialization.</param>
