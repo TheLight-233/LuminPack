@@ -33,6 +33,8 @@ internal static class DirectBinaryEmitter
         string writeUnion = genericWrite ? "RootWriteUnion<" + Profile + ">" : "RootWriteUnion";
         string readUnion = genericRead ? "RootReadUnion<" + Profile + ">" : "RootReadUnion";
         string inline = w.MethodImpl("AggressiveInlining");
+        // Interception gives every payload's state entries unique names; otherwise they are overloads.
+        string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
         // The Union extension entries spell the inlining option through the imported alias name.
         string polymorphic = "[" + w.Attribute("MethodImpl") + "(MethodImplOptions.AggressiveInlining)]";
 
@@ -44,7 +46,7 @@ internal static class DirectBinaryEmitter
         // Serialize entries; the root container follows the entry that carried the write body.
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Serialize_" + readable + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " + container + "." +
+        w.Line("internal static void Serialize" + suffix + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " + container + "." +
             (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref writer, input);");
         w.Blank();
         if (genericWrite)
@@ -61,12 +63,12 @@ internal static class DirectBinaryEmitter
         }
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize_" + readable + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " + container + "." +
+        w.Line("internal static void Deserialize" + suffix + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " + container + "." +
             (genericRead ? "RootRead<" + Standard() + ">" : "RootRead") + "(ref reader, ref value);");
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize_" + readable + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Line("internal static void Deserialize" + suffix + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(Constraint() + " => " + container + "." + readRoot + "(ref reader, ref value);"));
         w.Blank();
         w.Line(w.Preserve);
@@ -81,19 +83,19 @@ internal static class DirectBinaryEmitter
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeUnion_" + readable + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
-            (genericRead ? "DeserializeUnion_" + readable + "<" + Standard() + ">(ref reader, ref value);" : container + ".RootReadUnion(ref reader, ref value);"));
+        w.Line("internal static void DeserializeUnion" + suffix + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
+            (genericRead ? "DeserializeUnion" + suffix + "<" + Standard() + ">(ref reader, ref value);" : container + ".RootReadUnion(ref reader, ref value);"));
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeUnion_" + readable + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
-        w.Indented(() => w.Line(Constraint() + " => " + (genericRead ? container + "." + readUnion + "(ref reader, ref value);" : "DeserializeUnion_" + readable + "(ref reader, ref value);")));
+        w.Line("internal static void DeserializeUnion" + suffix + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Indented(() => w.Line(Constraint() + " => " + (genericRead ? container + "." + readUnion + "(ref reader, ref value);" : "DeserializeUnion" + suffix + "(ref reader, ref value);")));
         if (allFixed)
         {
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void MeasureRecord_" + readable + "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
+            w.Line("internal static void MeasureRecord" + suffix + "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
             w.Open();
             w.Line("if (value is null)");
             w.Open();
@@ -108,8 +110,8 @@ internal static class DirectBinaryEmitter
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void MeasureRecord_" + readable + "<" + Profile + ">(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
-            w.Indented(() => w.Line(Constraint() + " => MeasureRecord_" + readable + "(ref evaluator, ref value);"));
+            w.Line("internal static void MeasureRecord" + suffix + "<" + Profile + ">(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
+            w.Indented(() => w.Line(Constraint() + " => MeasureRecord" + suffix + "(ref evaluator, ref value);"));
         }
         w.Close();
         w.Blank();
@@ -146,7 +148,7 @@ internal static class DirectBinaryEmitter
         w.Line(w.Preserve);
         w.Line(polymorphic);
         w.Line("public static void ReadPolymorphismValue(ref this " + reader + " reader, scoped ref " + type + "? value) => " + Serializer() +
-            ".DeserializeUnion_" + readable + "(ref reader, ref value);");
+            ".DeserializeUnion" + suffix + "(ref reader, ref value);");
         w.Close();
         w.Close();
 
@@ -154,7 +156,7 @@ internal static class DirectBinaryEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void Serialize_" + readable + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
+            w.Line("internal static void Serialize" + suffix + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
             w.Indented(() => w.Line(Constraint() + " => " + container + "." + writeRoot + "(ref writer, input);"));
         }
 

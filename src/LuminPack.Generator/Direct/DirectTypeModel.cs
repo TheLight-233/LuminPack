@@ -86,11 +86,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string JsonHelper;
     /// <summary>Whether JSON reads assign members of the fresh or reused result directly.</summary>
     internal readonly bool FreshResult;
+    /// <summary>Whether interception gives the state entries payload-specific names, such as <c>Serialize_Model</c>.</summary>
+    internal readonly bool UniqueEntries;
     /// <summary>The serialized members in wire order.</summary>
     internal readonly DirectMember[] Members;
 
-    private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, DirectMember[] members)
+    private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
+        DirectMember[] members)
     {
+        UniqueEntries = uniqueEntries;
         GlobalName = globalName;
         Readable = readable;
         Extension = extension;
@@ -105,6 +109,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <inheritdoc/>
     public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
+        UniqueEntries == other.UniqueEntries &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
@@ -177,7 +182,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("type spelling");
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data), members);
+            LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data), InterceptionSupport.IsEnabled(metadata.ParseOptions), members);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -191,8 +196,6 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("language version") != null;
         if (GeneratedOperationUsage.IsClosed(compilation))
             return DirectEmission.Reject<DirectTypeModel>("closed operation selection") != null;
-        if (!InterceptionSupport.IsEnabled(metadata.ParseOptions))
-            return DirectEmission.Reject<DirectTypeModel>("interceptors") != null;
         return DirectEmission.ProjectFacts(compilation) || DirectEmission.Reject<DirectTypeModel>("assembly attributes") != null;
     }
 

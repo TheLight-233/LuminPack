@@ -47,8 +47,8 @@ internal static class DirectJsonEmitter
         w.Close();
         w.Close();
         w.Blank();
-        Entry("SerializeJson_", "(scoped ref " + jsonWriter + " writer, scoped in " + type + "? input)", "RootWriteJson", "ref writer, input");
-        Entry("DeserializeJson_", "(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)", "RootReadJson", "ref reader, ref value");
+        Entry("SerializeJson", "(scoped ref " + jsonWriter + " writer, scoped in " + type + "? input)", "RootWriteJson", "ref writer, input");
+        Entry("DeserializeJson", "(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)", "RootReadJson", "ref reader, ref value");
         w.Close();
         w.Blank();
 
@@ -93,11 +93,11 @@ internal static class DirectJsonEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + prefix + readable + parameters + " => " + container + "." + root + "<" + standard + ">(" + arguments + ");");
+            w.Line("internal static void " + prefix + (model.UniqueEntries ? "_" + readable : string.Empty) + parameters + " => " + container + "." + root + "<" + standard + ">(" + arguments + ");");
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + prefix + readable + "<" + Profile + ">" + parameters);
+            w.Line("internal static void " + prefix + (model.UniqueEntries ? "_" + readable : string.Empty) + "<" + Profile + ">" + parameters);
             w.Indented(() => w.Line(constraint + " => " + container + "." + root + "<" + Profile + ">(" + arguments + ");"));
             w.Blank();
         }
