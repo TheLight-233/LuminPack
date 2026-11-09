@@ -16,8 +16,9 @@ internal sealed class AggregateResultBuilder
     /// <param name="name">The existing generated hint name.</param>
     /// <param name="source">The complete generated source.</param>
     /// <param name="owner">The publisher or format pair for the contribution.</param>
-    internal void AddSource(string name, string source, GeneratorOutput owner = GeneratorOutput.Binary)
-        => _files.Add(new FrozenGeneratedSource(name, source, owner));
+    /// <param name="payload">The canonical payload identity, or null for shared support.</param>
+    internal void AddSource(string name, string source, GeneratorOutput owner = GeneratorOutput.Binary, string payload = null)
+        => _files.Add(new FrozenGeneratedSource(name, source, owner, payload));
 
     /// <summary>Freezes a diagnostic while current semantic locations are available.</summary>
     /// <param name="diagnostic">The diagnostic to record.</param>
@@ -68,23 +69,26 @@ internal sealed class FrozenGeneratedSource : IEquatable<FrozenGeneratedSource>
     internal readonly string Name;
     internal readonly string Text;
     internal readonly GeneratorOutput Owner;
+    internal readonly string Payload;
 
     /// <summary>Creates an individual source-output value.</summary>
     /// <param name="name">The existing generated hint name.</param>
     /// <param name="text">The exact complete source text.</param>
     /// <param name="owner">The publisher or format pair for the contribution.</param>
-    internal FrozenGeneratedSource(string name, string text, GeneratorOutput owner = GeneratorOutput.Binary)
+    /// <param name="payload">The canonical payload identity, or null for shared support.</param>
+    internal FrozenGeneratedSource(string name, string text, GeneratorOutput owner = GeneratorOutput.Binary, string payload = null)
     {
         Name = name;
         Text = text;
         Owner = owner;
+        Payload = payload;
     }
 
     /// <summary>Compares the filename and complete source.</summary>
     /// <param name="other">The previous file value.</param>
     /// <returns>Whether source production can remain cached.</returns>
     public bool Equals(FrozenGeneratedSource other) => ReferenceEquals(this, other) || other != null &&
-        Name == other.Name && Text == other.Text && Owner == other.Owner;
+        Name == other.Name && Text == other.Text && Owner == other.Owner && Payload == other.Payload;
 
     /// <summary>Compares an arbitrary object with this source.</summary>
     /// <param name="obj">The object to compare.</param>

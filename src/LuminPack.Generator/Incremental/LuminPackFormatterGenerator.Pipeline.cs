@@ -83,7 +83,7 @@ public sealed partial class LuminPackFormatterGenerator
             // Operations the project never calls are left out of the published files.
             var called = context.CompilationProvider.Select(static (compilation, _) => GeneratedOperationUsage.For(compilation));
             var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Combine(called)
-                .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json, pair.Right));
+                .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json, pair.Right.ForPayload(pair.Left.Payload)));
             context.RegisterSourceOutput(sources.Combine(aliases), static (output, input) =>
             {
                 Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
@@ -196,7 +196,7 @@ public sealed partial class LuminPackFormatterGenerator
         {
             layouts = new FrozenLayoutGroup(className, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), exception.GetType().FullName + ": " + exception.Message);
         }
-        return new FrozenTypeEmission(name, extension, union, layouts, diagnostics);
+        return new FrozenTypeEmission(name, extension, union, layouts, diagnostics, FormatterTypeName.Get(symbol));
     }
 
     /// <summary>Selects the binary or JSON part of a type's roots and Union slots as one file per format.</summary>

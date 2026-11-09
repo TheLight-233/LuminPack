@@ -68,7 +68,7 @@ public static partial class LuminPackExtensionGenerator
             var fragment = fragments[position];
             if (!string.IsNullOrEmpty(fragment.Extension))
             {
-                files.Add(new FrozenGeneratedSource(GeneratedFileNames.Formatter(type, name), fragment.Extension));
+                files.Add(new FrozenGeneratedSource(GeneratedFileNames.Formatter(type, name), fragment.Extension, payload: name));
                 rootTargets[name] = LazyForwardingTargets.Read(fragment.Extension, name);
             }
             if (type is INamedTypeSymbol union && union.IsAbstract && analysis.IsAssemblyPackable(union) &&
@@ -78,9 +78,13 @@ public static partial class LuminPackExtensionGenerator
                 var data = LuminPackSourceGenerator.GetSerializationMetadata(union.OriginalDefinition, compilation, metadata);
                 string unionSource = LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata, reachability?.EmittedTypes);
                 if (!string.IsNullOrEmpty(unionSource))
-                    files.Add(cache.Files.Wrap("LuminPack.Union", FormatterTypeName.Get(union.OriginalDefinition),
-                        string.Empty, unionSource, string.Empty, () => GeneratedSourceDocumentation.Complete(
-                            SerializerCoreProjection.RewriteCalls(unionSource, compilation, metadata), metadata.ParseOptions), metadata.ParseOptions));
+                {
+                    string identity = FormatterTypeName.Get(union.OriginalDefinition);
+                    var file = cache.Files.Wrap("LuminPack.Union", identity, string.Empty, unionSource, string.Empty,
+                        () => GeneratedSourceDocumentation.Complete(SerializerCoreProjection.RewriteCalls(unionSource, compilation, metadata),
+                            metadata.ParseOptions), metadata.ParseOptions);
+                    files.Add(new FrozenGeneratedSource(file.Name, file.Text, payload: identity));
+                }
             }
             if (type is INamedTypeSymbol external && analysis.IsAssemblyPackable(external) &&
                 !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly) &&
@@ -88,8 +92,12 @@ public static partial class LuminPackExtensionGenerator
             {
                 string template = cache.Operations.Get(type, compilation, metadata).Template?.NormalizeWhitespace().ToFullString();
                 if (template != null)
-                    files.Add(cache.Files.Wrap("LuminPack.JsonSupport", FormatterTypeName.Get(external.OriginalDefinition),
-                        string.Empty, template, string.Empty, () => JsonOperationTemplates.Support(template, metadata, compilation), metadata.ParseOptions));
+                {
+                    string identity = FormatterTypeName.Get(external.OriginalDefinition);
+                    var file = cache.Files.Wrap("LuminPack.JsonSupport", identity, string.Empty, template, string.Empty,
+                        () => JsonOperationTemplates.Support(template, metadata, compilation), metadata.ParseOptions);
+                    files.Add(new FrozenGeneratedSource(file.Name, file.Text, payload: identity));
+                }
             }
         }
 

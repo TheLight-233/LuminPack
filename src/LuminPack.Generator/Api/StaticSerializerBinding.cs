@@ -28,6 +28,12 @@ internal sealed partial class StaticSerializerBinding
     /// <summary>Gets closed payloads rebound to the original compilation.</summary>
     internal IReadOnlyList<ITypeSymbol> Roots { get; }
 
+    /// <summary>Gets the operation modules and payloads selected by the bound calls.</summary>
+    internal GeneratedOperationUsage OperationUsage { get; }
+
+    /// <summary>Gets whether source expressions could not bind to a known serializer signature.</summary>
+    internal bool RequiresConservativeRoots { get; }
+
     /// <summary>Gets the exact call-location and target projection used by incremental guards.</summary>
     internal string Key { get; }
 
@@ -73,6 +79,9 @@ internal sealed partial class StaticSerializerBinding
         _binding = compilation.AddSyntaxTrees(signatures);
         var payloads = new List<ITypeSymbol>();
         var invocations = new List<IMethodSymbol>();
+        var operationRoots = new List<(GeneratedOperations Operation, ITypeSymbol Payload)>();
+        var wholeModules = GeneratedOperations.None;
+        bool trackOperations = GeneratedOperationUsage.IsClosed(compilation);
         var sourceCalls = new List<SourceCall>();
         var relevantNames = RelevantInvocationNames(compilation);
         foreach (var tree in compilation.SyntaxTrees)
@@ -84,20 +93,33 @@ internal sealed partial class StaticSerializerBinding
                     continue;
                 model ??= _binding.GetSemanticModel(tree);
                 if (call.Expression is MemberAccessExpressionSyntax stateCall && stateCall.Name.Identifier.ValueText is "Write" or "Read" &&
-                    call.ArgumentList.Arguments.Count == 1 && model.GetTypeInfo(stateCall.Expression).Type?.ToDisplayString() is
-                        "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")
+                    call.ArgumentList.Arguments.Count == 1)
                 {
-                    var statePayload = model.GetTypeInfo(call.ArgumentList.Arguments[0].Expression).Type;
-                    if (statePayload != null)
-                        payloads.Add(statePayload);
+                    var operation = GeneratedOperationUsage.OfState(model.GetTypeInfo(stateCall.Expression).Type?.ToDisplayString());
+                    if (operation != GeneratedOperations.None)
+                    {
+                        if (trackOperations)
+                            wholeModules |= operation;
+                        var statePayload = model.GetTypeInfo(call.ArgumentList.Arguments[0].Expression).Type;
+                        if (statePayload != null)
+                            payloads.Add(statePayload);
+                    }
                 }
                 if (model.GetSymbolInfo(call).Symbol is not IMethodSymbol method)
+                {
+                    if (trackOperations && SerializerApiUsageAnalysis.IsSerializerExpression(call.Expression, model))
+                        RequiresConservativeRoots = true;
                     continue;
+                }
                 invocations.Add(method);
                 sourceCalls.Add(new SourceCall(call, method, model));
-                if (!IsSerializer(method) || method.Name == "Register" || method.TypeArguments.Length == 0)
+                if (!IsSerializer(method))
                     continue;
                 HasUsage = true;
+                if (trackOperations)
+                    ObserveOperation(method);
+                if (method.Name == "Register" || method.TypeArguments.Length == 0)
+                    continue;
                 ITypeSymbol payload = Payload(method);
                 payloads.Add(payload);
                 if (LuminPackExtensionGenerator.ContainsTypeParameter(payload) || payload.TypeKind == TypeKind.Error)
@@ -116,6 +138,36 @@ internal sealed partial class StaticSerializerBinding
                 _directApis[name] = directApis | Family(method);
                 RequireOperation(method);
             }
+            if (!trackOperations)
+                continue;
+            foreach (var name in tree.GetRoot().DescendantNodes().OfType<SimpleNameSyntax>())
+            {
+                if (GeneratedOperationUsage.IsExtensionName(name.Identifier.ValueText))
+                    wholeModules = GeneratedOperations.All;
+                if (!SerializerApiUsageAnalysis.IsApiName(name.Identifier.ValueText))
+                    continue;
+                ExpressionSyntax expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access : name;
+                if (expression.Parent is InvocationExpressionSyntax invocation && invocation.Expression == expression)
+                    continue;
+                model ??= _binding.GetSemanticModel(tree);
+                if (model.GetSymbolInfo(expression).Symbol is IMethodSymbol method && IsSerializer(method))
+                {
+                    HasUsage = true;
+                    ObserveOperation(method);
+                    if (SerializerApiUsageAnalysis.GetPayload(method) is { } payload)
+                        payloads.Add(payload);
+                }
+                else if (SerializerApiUsageAnalysis.IsSerializerExpression(expression, model))
+                {
+                    if (expression.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault()?.Expression.ToString() == "nameof")
+                    {
+                        HasUsage = true;
+                        wholeModules |= GeneratedOperationUsage.Of(name.Identifier.ValueText);
+                    }
+                    else
+                        RequiresConservativeRoots = true;
+                }
+            }
         }
         AnalyzeWrappers(sourceCalls);
         var identities = new StableTypeIdentityFactory(_binding);
@@ -129,6 +181,8 @@ internal sealed partial class StaticSerializerBinding
                 roots.Add(root);
         }
         Roots = roots.ToArray();
+        OperationUsage = GeneratedOperationUsage.Build(compilation, _binding, operationRoots, invocations,
+            RequiresConservativeRoots ? GeneratedOperations.All : wholeModules);
         var key = new StringBuilder("interceptors|");
         foreach (var call in _calls)
             key.Append(call.Attribute).Append('|').Append(call.Method.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).Append('|');
@@ -137,6 +191,16 @@ internal sealed partial class StaticSerializerBinding
         foreach (var wrapper in _wrappers.Values.Where(wrapper => wrapper.Valid).OrderBy(wrapper => wrapper.Key, StringComparer.Ordinal))
             key.Append(wrapper.Key).Append('|').Append(wrapper.Body.ToFullString()).Append('|');
         Key = key.ToString();
+
+        void ObserveOperation(IMethodSymbol method)
+        {
+            var operation = GeneratedOperationUsage.Of(method.Name);
+            var payload = SerializerApiUsageAnalysis.GetPayload(method);
+            if (payload == null || operation == GeneratedOperations.All)
+                wholeModules |= operation;
+            else
+                operationRoots.Add((operation, payload));
+        }
     }
 
     /// <summary>Filters unrelated invocations before requesting compiler overload binding.</summary>
@@ -145,7 +209,7 @@ internal sealed partial class StaticSerializerBinding
     private static HashSet<string> RelevantInvocationNames(Compilation compilation)
     {
         var names = new HashSet<string>(StringComparer.Ordinal)
-        { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson", "SerializeAsync", "DeserializeAsync", "Register", "Write", "Read" };
+        { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson", "SerializeAsync", "DeserializeAsync", "SerializeJsonAsync", "DeserializeJsonAsync", "Register", "Write", "Read" };
         var callers = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var tree in compilation.SyntaxTrees)
             foreach (var call in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())

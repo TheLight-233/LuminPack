@@ -19,20 +19,19 @@ internal sealed class SerializerApiUsageAnalysis
     private static readonly ConditionalWeakTable<Compilation, SerializerApiUsageAnalysis> Cache = new();
     private readonly Dictionary<string, SerializerApiKind> _apis = new(StringComparer.Ordinal);
     private bool _conservative;
-    private GeneratedOperations _operations;
+    private readonly bool _hasStaticUsage;
 
     /// <summary>Gets formatter roots rebound to the original input compilation.</summary>
     internal IReadOnlyList<ITypeSymbol> Roots { get; }
 
     /// <summary>Gets whether bound facade usage requires emission even without a marked model.</summary>
-    internal bool HasSerializerUsage => _apis.Count != 0 || Roots.Count != 0 || _conservative;
+    internal bool HasSerializerUsage => _hasStaticUsage || _apis.Count != 0 || Roots.Count != 0 || _conservative;
 
     /// <summary>Gets whether unresolved serializer expressions require conservative formatter retention.</summary>
     internal bool RequiresConservativeRoots => _conservative;
 
-    /// <summary>Gets the operations the project calls, through the facade, serializer states or generated extension methods.</summary>
-    /// <remarks>Unresolved serializer expressions and interception select every operation.</remarks>
-    internal GeneratedOperations Operations => _conservative ? GeneratedOperations.All : _operations;
+    /// <summary>Gets the operation modules and payloads selected by the bound calls.</summary>
+    internal GeneratedOperationUsage OperationUsage { get; }
 
     /// <summary>Gets the stable overload projection used by aggregate cache guards.</summary>
     internal string Key { get; }
@@ -57,10 +56,11 @@ internal sealed class SerializerApiUsageAnalysis
         {
             var binding = StaticSerializerBinding.For(compilation);
             Roots = binding.Roots;
+            _hasStaticUsage = binding.HasUsage;
             foreach (var type in Roots)
                 _apis[FormatterTypeName.Get(type)] = binding.GetApis(type);
-            _conservative = false;
-            _operations = GeneratedOperations.All;
+            _conservative = binding.RequiresConservativeRoots;
+            OperationUsage = binding.OperationUsage;
             Key = binding.Key;
             return;
         }
@@ -77,7 +77,9 @@ internal sealed class SerializerApiUsageAnalysis
         bindingCompilation = compilation.AddSyntaxTrees(signatures);
 
         var payloads = new List<ITypeSymbol>();
-        var invocations = new List<IMethodSymbol?>();
+        var invocations = new List<IMethodSymbol>();
+        var operationRoots = new List<(GeneratedOperations Operation, ITypeSymbol Payload)>();
+        var wholeModules = GeneratedOperations.None;
         var observations = InvocationFileObservationCache.For(compilation);
         var methodIdentities = new StableMethodIdentityFactory(compilation);
         var methods = new CurrentMethodResolver(bindingCompilation);
@@ -91,11 +93,25 @@ internal sealed class SerializerApiUsageAnalysis
         foreach (var file in bound)
         {
             _conservative |= file.Conservative;
-            _operations |= file.Operations;
+            wholeModules |= file.Operations;
             invocations.AddRange(file.Methods);
             payloads.AddRange(file.StatePayloads);
             foreach (var method in file.Methods)
-                Observe(method, signatures, kinds, payloads);
+            {
+                if (method.ContainingType?.ToDisplayString() != SerializerName)
+                    continue;
+                var operation = GeneratedOperationUsage.Of(method.Name);
+                var payload = GetPayload(method);
+                if (payload == null || operation == GeneratedOperations.All)
+                    wholeModules |= operation;
+                else
+                    operationRoots.Add((operation, payload));
+                if (payload != null)
+                {
+                    payloads.Add(payload);
+                    Observe(method, signatures, kinds, payload);
+                }
+            }
         }
 
         SerializerApiFileMethods BindFile(SyntaxTree tree)
@@ -115,16 +131,10 @@ internal sealed class SerializerApiUsageAnalysis
                     stateCall.Name.Identifier.ValueText is "Write" or "Read" && call.ArgumentList.Arguments.Count == 1)
                 {
                     model ??= bindingCompilation.GetSemanticModel(tree);
-                    string receiver = model.GetTypeInfo(stateCall.Expression).Type?.ToDisplayString();
-                    if (receiver is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")
+                    var operation = GeneratedOperationUsage.OfState(model.GetTypeInfo(stateCall.Expression).Type?.ToDisplayString());
+                    if (operation != GeneratedOperations.None)
                     {
-                        operations |= receiver switch
-                        {
-                            "LuminPack.Core.LuminPackWriter" => GeneratedOperations.BinaryWrite,
-                            "LuminPack.Core.LuminPackReader" => GeneratedOperations.BinaryRead,
-                            "LuminPack.Core.LuminPackJsonWriter" => GeneratedOperations.JsonWrite,
-                            _ => GeneratedOperations.JsonRead,
-                        };
+                        operations |= operation;
                         var statePayload = model.GetTypeInfo(call.ArgumentList.Arguments[0].Expression).Type;
                         // Custom callbacks contribute dependencies only when their formatter is reachable.
                         var owner = model.GetEnclosingSymbol(call.SpanStart)?.ContainingType;
@@ -179,8 +189,13 @@ internal sealed class SerializerApiUsageAnalysis
                 {
                     bound.Add(method);
                 }
-                else if (IsSerializerExpression(expression, model) && expression.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault()?.Expression.ToString() != "nameof")
-                    conservative = true;
+                else if (IsSerializerExpression(expression, model))
+                {
+                    if (expression.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault()?.Expression.ToString() == "nameof")
+                        operations |= GeneratedOperationUsage.Of(name.Identifier.ValueText);
+                    else
+                        conservative = true;
+                }
             }
             return new SerializerApiFileMethods(bound.ToArray(), conservative, statePayloads.ToArray(), operations);
         }
@@ -200,6 +215,8 @@ internal sealed class SerializerApiUsageAnalysis
                 _conservative = true;
         }
         Roots = roots.ToArray();
+        OperationUsage = GeneratedOperationUsage.Build(compilation, bindingCompilation, operationRoots, invocations,
+            _conservative ? GeneratedOperations.All : wholeModules);
         var key = new StringBuilder().Append(_conservative).Append('|');
         foreach (var pair in _apis.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             key.Append(pair.Key.Length).Append(':').Append(pair.Key).Append('=').Append((int)pair.Value).Append('|');
@@ -226,21 +243,13 @@ internal sealed class SerializerApiUsageAnalysis
         return names;
     }
 
-    /// <summary>Records a selected facade overload and its formatter payload.</summary>
+    /// <summary>Records a selected concrete facade overload.</summary>
     /// <param name="method">The method selected by C# overload resolution.</param>
     /// <param name="signatures">The temporary signature tree, when needed.</param>
     /// <param name="kinds">Concrete signature offsets.</param>
-    /// <param name="payloads">The current compilation's payload roots.</param>
-    private void Observe(IMethodSymbol method, SyntaxTree? signatures, Dictionary<int, SerializerApiKind> kinds, List<ITypeSymbol> payloads)
+    /// <param name="payload">The selected overload's formatter payload.</param>
+    private void Observe(IMethodSymbol method, SyntaxTree? signatures, Dictionary<int, SerializerApiKind> kinds, ITypeSymbol payload)
     {
-        if (method.ContainingType?.ToDisplayString() != SerializerName)
-            return;
-        _operations |= GeneratedOperationUsage.Of(method.Name);
-        var payload = method.Parameters.FirstOrDefault(parameter => parameter.Name == "value")?.Type
-            ?? (method.IsGenericMethod && method.TypeArguments.Length != 0 ? method.TypeArguments[0] : null);
-        if (payload == null)
-            return;
-        payloads.Add(payload);
         var declaration = method.DeclaringSyntaxReferences.FirstOrDefault(reference => reference.SyntaxTree == signatures);
         // Only concrete profile variants have a concrete signature identity. Generic
         // value-returning reads have no `value` parameter and must remain fallback roots.
@@ -252,11 +261,18 @@ internal sealed class SerializerApiUsageAnalysis
         _apis[name] = previous | apis;
     }
 
+    /// <summary>Identifies the payload of a bound serializer operation.</summary>
+    /// <param name="method">The selected facade overload.</param>
+    /// <returns>The value parameter type or the generic payload of a returning read.</returns>
+    internal static ITypeSymbol? GetPayload(IMethodSymbol method)
+        => method.Parameters.FirstOrDefault(parameter => parameter.Name == "value")?.Type
+            ?? (method.IsGenericMethod && method.TypeArguments.Length != 0 ? method.TypeArguments[0] : null);
+
     /// <summary>Recognizes serializer expressions including aliases and imported static methods.</summary>
     /// <param name="expression">An invocation target or method group.</param>
     /// <param name="model">The signature-aware semantic model.</param>
     /// <returns>Whether the expression refers to the serializer facade.</returns>
-    private static bool IsSerializerExpression(ExpressionSyntax expression, SemanticModel model)
+    internal static bool IsSerializerExpression(ExpressionSyntax expression, SemanticModel model)
     {
         var info = model.GetSymbolInfo(expression);
         if (info.Symbol is IMethodSymbol method && method.ContainingType?.ToDisplayString() == SerializerName)
@@ -274,7 +290,7 @@ internal sealed class SerializerApiUsageAnalysis
     /// <summary>Identifies serializer method names without interpreting parameter syntax.</summary>
     /// <param name="name">The source identifier.</param>
     /// <returns>Whether it names a serializer API family.</returns>
-    private static bool IsApiName(string name) => Family(name) != SerializerApiKind.None || name == "Register";
+    internal static bool IsApiName(string name) => Family(name) != SerializerApiKind.None || name == "Register";
 
     /// <summary>Conservatively maps existing source declarations to their complete overload family.</summary>
     /// <param name="name">The bound facade method name.</param>

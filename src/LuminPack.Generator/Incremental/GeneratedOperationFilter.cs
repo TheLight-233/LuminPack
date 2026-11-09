@@ -69,6 +69,8 @@ internal static class GeneratedOperationFilter
             // A method that takes two kinds of state is shared.
             return (states & (states - 1)) == 0 ? states : GeneratedOperations.None;
         string name = method.Identifier.ValueText;
+        if (name is "GetJsonPropertyIndexUtf8" or "GetJsonPropertyIndexUtf16")
+            return GeneratedOperations.JsonRead;
         if (name.StartsWith("SerializeJson", StringComparison.Ordinal))
             return GeneratedOperations.JsonWrite;
         if (name.StartsWith("DeserializeJson", StringComparison.Ordinal))
@@ -91,7 +93,7 @@ internal static class GeneratedOperationFilter
         int dot = text.LastIndexOf('.');
         return (dot < 0 ? text : text.Substring(dot + 1)) switch
         {
-            "LuminPackWriter" => GeneratedOperations.BinaryWrite,
+            "LuminPackWriter" or "LuminPackEvaluator" => GeneratedOperations.BinaryWrite,
             "LuminPackReader" => GeneratedOperations.BinaryRead,
             "LuminPackJsonWriter" => GeneratedOperations.JsonWrite,
             "LuminPackJsonReader" => GeneratedOperations.JsonRead,

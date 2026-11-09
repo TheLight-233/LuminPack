@@ -74,7 +74,8 @@ public static partial class LuminPackSerializerGenerator
             string body = InterceptionSupport.IsEnabled(metadata.ParseOptions)
                 ? "        internal static partial class " + StaticSerializerBinding.EntryName(block.Key) + "\n        {\n" + block.Value + "\n        }\n"
                 : block.Value;
-            files.Add(cache.Files.Wrap("LuminPackSerializer", block.Key, typeHeader, body, footer));
+            var file = cache.Files.Wrap("LuminPackSerializer", block.Key, typeHeader, body, footer);
+            files.Add(new FrozenGeneratedSource(file.Name, file.Text, payload: block.Key));
         }
         return files.MoveToImmutable();
     }

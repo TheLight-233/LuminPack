@@ -4,10 +4,27 @@
 
 LuminPack 采用统一的自动生成规则，不需要选择生成档位，也不需要配置 `CompilerVisibleProperty`。
 
-- 每个 `[LuminPackable]` 声明保留自身格式化器及序列化成员图，即使声明程序集内没有调用。这样模型库仍可供其他程序集使用。
+- 每个 `[LuminPackable]` 声明提供自己的序列化成员图。库为成员图保留四种操作，以便其他程序集使用模型。
 - 序列化调用保留其所需的具体负载，包括闭合泛型包装方法、容器元素和 Union case。
 - 无关代码中观察到的未标记类型，不会仅因为是 public 就生成序列化入口。
 - 便捷操作按实际调用生成。运行时选择目标或不透明的边界使用注册兜底。
+
+## 操作选择
+
+控制台或桌面应用程序，以及没有友元访问的 Unity `Assembly-CSharp` 和 `Assembly-CSharp-Editor`，按负载独立选择二进制写、二进制读、JSON 写和 JSON 读。只调用 `Serialize(player)` 时，保留 `Player` 及其依赖的成员图和 Union 图的二进制写入。另一个模型的 JSON 调用不会让 `Player` 生成 JSON。引用 LuminPack 运行库不影响这条规则。
+
+库或声明了 `InternalsVisibleTo` 的编译保留已发现模型图的四种操作，因为调用方可能在当前编译外。直接调用序列化状态时，会为已发现的负载保守地保留对应方向。注册、直接调用生成的格式化器扩展方法或无法解析的序列化表达式可能保留全部四种操作。
+
+对于引用程序集中的模型，在消费程序集声明 `[assembly: LuminPackable(typeof(ExternalModel))]`，让消费方的生成器分析该类型。如果某个操作是间接调用的，无法从源码推导，可以显式保留该模块：
+
+```csharp
+using LuminPack.Attribute;
+
+[assembly: LuminPackable(typeof(ExternalModel))]
+[assembly: LuminPackGeneratorOptions(ForceGenerateDeserializeJson = true)]
+```
+
+`LuminPackGeneratorOptions` 还提供 `ForceGenerateSerialize`、`ForceGenerateDeserialize` 和 `ForceGenerateSerializeJson`。四个属性默认均为 `false`，可独立启用，每个属性为程序集已发现的负载保留对应操作。具体便捷重载仍由绑定调用决定。运行时才选定的泛型调用在无法绑定具体入口时仍需要强类型注册。
 
 ## 静态拦截
 
@@ -15,7 +32,7 @@ LuminPack 采用统一的自动生成规则，不需要选择生成档位，也�
 
 已移除的 `Sizeof` 和 `CalculateOffset` API 不再生成。直接分配结果数组的写入路径，仅为支持的记录形态保留内部具体类型 `MeasureRecord` 辅助方法；它不是通用求长接口，也不参与注册兜底。普通复杂对象、Custom 格式化器和 Union 不再生成求长占位方法。
 
-生成器包自动启用 `LuminPack` Interceptor 命名空间。在 C# 11 或更高版本、编译器提供带版本的 `GetInterceptableLocation` 时，公共门面使用固定数量的泛型签名。`Serialize(value)`、`Serialize<Player>(value)` 和 `Deserialize<Player>(bytes)` 等调用被拦截到既有具体实现。相同构造签名的多个源码位置共享一个 Interceptor。内部状态入口使用负载专属名称，分配数组、缓冲区和流等便捷入口位于独立的 `LuminEntry_<hash>` 容器。只保留实际使用的便捷 API 类别；格式化器保留范围遵循前述统一声明与调用图规则。
+生成器包自动启用 `LuminPack` Interceptor 命名空间。在 C# 11 或更高版本、编译器提供带版本的 `GetInterceptableLocation` 时，公共门面使用固定数量的泛型签名。`Serialize(value)`、`Serialize<Player>(value)` 和 `Deserialize<Player>(bytes)` 等调用被拦截到既有具体实现。相同构造签名的多个源码位置共享一个 Interceptor。内部状态入口使用负载专属名称，分配数组、缓冲区和流等便捷入口位于独立的 `LuminEntry_<Type>` 容器。只保留实际使用的便捷 API 类别；格式化器保留范围遵循前述统一声明与调用图规则。
 
 显式配置使用两个类型参数，例如 `Serialize<Player, TOptions>(value)`。配置类型参数可以保持开放：它选择编译期选项，不在运行时选择负载格式化器。生成器不再为各负载类型生成公开的配置便捷重载。每个实际使用的便捷操作保留既有的编译期配置方法体，默认调用由 Interceptor 直接传入声明配置。这里使用的是既有选项 struct，不是格式化器 Plan。
 

@@ -12,6 +12,7 @@ namespace LuminPack.SourceGenerator;
 internal sealed class FrozenTypeEmission : IEquatable<FrozenTypeEmission>
 {
     internal readonly string HintName;
+    internal readonly string Payload;
     internal readonly string Extension;
     internal readonly string Union;
     internal readonly FrozenLayoutGroup Layouts;
@@ -23,9 +24,12 @@ internal sealed class FrozenTypeEmission : IEquatable<FrozenTypeEmission>
     /// <param name="union">The complete union source, if any.</param>
     /// <param name="layouts">Ordered, independently deduplicated layout fragments.</param>
     /// <param name="diagnostics">Diagnostics represented as stable values.</param>
-    internal FrozenTypeEmission(string hintName, string extension, string union, FrozenLayoutGroup layouts, IEnumerable<Diagnostic> diagnostics)
+    /// <param name="payload">The canonical type identity for operation selection.</param>
+    internal FrozenTypeEmission(string hintName, string extension, string union, FrozenLayoutGroup layouts, IEnumerable<Diagnostic> diagnostics,
+        string payload = null)
     {
         HintName = hintName;
+        Payload = payload;
         Extension = extension;
         Union = union;
         Layouts = layouts;
@@ -36,7 +40,7 @@ internal sealed class FrozenTypeEmission : IEquatable<FrozenTypeEmission>
     /// <param name="other">The previous emission plan.</param>
     /// <returns>Whether all observable outputs are equal.</returns>
     public bool Equals(FrozenTypeEmission other) => ReferenceEquals(this, other) || other != null &&
-        HintName == other.HintName && Extension == other.Extension && Union == other.Union && Layouts.Equals(other.Layouts) && Diagnostics.SequenceEqual(other.Diagnostics);
+        HintName == other.HintName && Payload == other.Payload && Extension == other.Extension && Union == other.Union && Layouts.Equals(other.Layouts) && Diagnostics.SequenceEqual(other.Diagnostics);
 
     /// <summary>Compares an arbitrary object with this emission plan.</summary>
     /// <param name="obj">The object to compare.</param>

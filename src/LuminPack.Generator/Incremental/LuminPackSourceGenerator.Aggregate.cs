@@ -45,7 +45,7 @@ public sealed partial class LuminPackSourceGenerator
         // Operations the project never calls are left out of the published files.
         var called = context.CompilationProvider.Select(static (compilation, _) => GeneratedOperationUsage.For(compilation));
         var aggregateFiles = aggregateResults.Combine(metaProvider).Combine(called).SelectMany((result, _) =>
-            JoinSameNames(result.Left.Left.Files.SelectMany(file => SelectFiles(file, result.Left.Right, outputs, result.Right)), result.Left.Right))
+            JoinSameNames(result.Left.Left.Files.SelectMany(file => SelectFiles(file, result.Left.Right, outputs, result.Right.ForPayload(file.Payload))), result.Left.Right))
             .WithTrackingName("LuminPack.Incremental.AggregateFiles");
         context.RegisterSourceOutput(aggregateFiles.Combine(GeneratedSourceLayout.AvailableAliases(context)), static (output, input) =>
         {
@@ -74,7 +74,8 @@ public sealed partial class LuminPackSourceGenerator
             // assembly uses it; emitting support there pollutes dependent assemblies
             // with duplicate extension overloads.
             if (!analysis.UsesLuminPack &&
-                !SerializerApiUsageAnalysis.GetOrCreate(compilation).HasSerializerUsage)
+                !SerializerApiUsageAnalysis.GetOrCreate(compilation).HasSerializerUsage &&
+                GeneratedOperationUsage.Forced(compilation) == GeneratedOperations.None)
                 return pair.Complete(spc.Freeze());
 
             try
@@ -152,11 +153,11 @@ public sealed partial class LuminPackSourceGenerator
                 var formatters = LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport,
                     out var navigationTargets, cancellationToken);
                 foreach (var formatter in formatters)
-                    spc.AddSource(formatter.Name, formatter.Text, GeneratorOutput.Formatter);
+                    spc.AddSource(formatter.Name, formatter.Text, GeneratorOutput.Formatter, formatter.Payload);
 
                 foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments,
                     cancellationToken, navigationTargets))
-                    spc.AddSource(serializer.Name, serializer.Text, GeneratorOutput.Binary | GeneratorOutput.Json);
+                    spc.AddSource(serializer.Name, serializer.Text, GeneratorOutput.Binary | GeneratorOutput.Json, serializer.Payload);
                 if (InterceptionSupport.IsEnabled(meta.ParseOptions))
                 {
                     string interceptors = StaticSerializerBinding.For(compilation).Emit(
@@ -207,9 +208,7 @@ public sealed partial class LuminPackSourceGenerator
                 yield return group[0];
                 continue;
             }
-            string text = group[0].Text;
-            for (int index = 1; index < group.Count; index++)
-                text = GeneratedSourceMerge.Join(text, group[index].Text, metadata.ParseOptions);
+            string text = GeneratedSourceMerge.Join(group.Select(file => file.Text), metadata.ParseOptions);
             yield return new FrozenGeneratedSource(name, text, group[0].Owner);
         }
     }

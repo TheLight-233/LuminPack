@@ -97,9 +97,105 @@ internal static class SerializerPartitionRegression
         CheckErrors(additionOutput);
         var additionFiles = FacadeFiles(addition);
         Require(initialFiles.All(pair => additionFiles.GetValueOrDefault(pair.Key) == pair.Value), "Adding a type renamed or rewrote an existing facade partition.");
+        VerifyOperationSelection(references);
         VerifyLayoutPartitions(references);
         VerifyFormatterPartitions(references);
         Console.WriteLine("Passed facade partition signatures/bodies, readable stable identities, arrays, independent edits, and unchanged existing files after type addition.");
+    }
+
+    /// <summary>Checks that unrelated models do not inherit one another's operation selections.</summary>
+    /// <param name="references">Platform and runtime references for the regression compilation.</param>
+    internal static void VerifyOperationSelection(MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using LuminPack;
+            using LuminPack.Attribute;
+            [assembly: LuminPackable(typeof(ExternalSelection.ExternalModel))]
+            namespace Selection
+            {
+                [LuminPackable] public sealed class BinaryModel { public BinaryChild[] Children = []; }
+                [LuminPackable] public sealed class BinaryChild { public string Name = "x"; }
+                [LuminPackable] public sealed class JsonModel { public int Id; }
+                [LuminPackable] public sealed class ReadModel { public string Name = "x"; }
+                [LuminPackable] public sealed class UnusedModel { public int Value; }
+                public static class Application
+                {
+                    public static void Main()
+                    {
+                        Save(new BinaryModel { Children = [new BinaryChild()] });
+                        _ = LuminPackSerializer.Serialize(new ExternalSelection.ExternalModel());
+                        Func<JsonModel, string> writeJson = LuminPackSerializer.SerializeJson<JsonModel>;
+                        _ = writeJson(new JsonModel());
+                        _ = LuminPackSerializer.Deserialize<ReadModel>(new byte[] { 0 });
+                    }
+
+                    private static void Save<T>(T value) => _ = LuminPackSerializer.Serialize(value);
+                }
+            }
+            """;
+        var external = CSharpCompilation.Create("ExternalSelection",
+            [CSharpSyntaxTree.ParseText("namespace ExternalSelection { public sealed class ExternalModel { public int Value; } }", Parse)],
+            references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)).ToMetadataReference();
+        var consumerReferences = references.Append(external);
+        foreach (var parse in new[]
+        {
+            Parse,
+            Parse.WithFeatures([new("InterceptorsNamespaces", "LuminPack")]),
+            Parse.WithPreprocessorSymbols(Parse.PreprocessorSymbolNames.Append("LUMINPACK_IL_REWRITE")),
+        })
+        {
+            var input = CSharpCompilation.Create("OperationSelection", [CSharpSyntaxTree.ParseText(source, parse, "Application.cs")], consumerReferences,
+                new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true));
+            var driver = CSharpGeneratorDriver.Create(
+                [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator()],
+                parseOptions: parse);
+            var first = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out _);
+            CheckErrors(output);
+            var files = AllFiles(first);
+            string binary = Model("BinaryModel");
+            string child = Model("BinaryChild");
+            string json = Model("JsonModel");
+            Require(binary.Contains("RootWrite", StringComparison.Ordinal) && child.Contains("RootWrite", StringComparison.Ordinal) &&
+                !binary.Contains("RootRead", StringComparison.Ordinal) && !binary.Contains("RootWriteJson", StringComparison.Ordinal) &&
+                !child.Contains("RootWriteJson", StringComparison.Ordinal),
+                "The binary write and its child must be kept independently of binary read and JSON.");
+            Require(json.Contains("RootWriteJson", StringComparison.Ordinal) && !json.Contains("RootRead", StringComparison.Ordinal) &&
+                !json.Contains("GetJsonPropertyIndex", StringComparison.Ordinal) && !Regex.IsMatch(json, @"\bRootWrite[<(]"),
+                "A JSON method group must keep only the JSON write for its payload.");
+            string read = Model("ReadModel");
+            Require(read.Contains("RootRead", StringComparison.Ordinal) && !read.Contains("RootWrite", StringComparison.Ordinal) &&
+                !read.Contains("RootReadJson", StringComparison.Ordinal), "A binary read retained a different operation.");
+            string imported = string.Join("\n", files.Where(pair =>
+                pair.Key.Contains("LuminPackGen.ExternalSelection.ExternalModel", StringComparison.Ordinal)).Select(pair => pair.Value));
+            Require(imported.Contains("RootWrite", StringComparison.Ordinal) && !imported.Contains("RootWriteJson", StringComparison.Ordinal) &&
+                !imported.Contains("RootRead", StringComparison.Ordinal), "An imported model did not follow its local call sites.");
+            Require(!Model("UnusedModel").Contains("RootWrite", StringComparison.Ordinal) &&
+                !Model("UnusedModel").Contains("RootRead", StringComparison.Ordinal),
+                "An unused model received an operation.");
+
+            var forced = input.AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+                "[assembly: LuminPack.Attribute.LuminPackGeneratorOptions(ForceGenerateDeserializeJson = true)]", parse, "Options.cs"));
+            var forcedRun = first.RunGeneratorsAndUpdateCompilation(forced, out var forcedOutput, out _);
+            CheckErrors(forcedOutput);
+            files = AllFiles(forcedRun);
+            Require(Model("BinaryModel").Contains("RootReadJson", StringComparison.Ordinal) &&
+                !Model("BinaryModel").Contains("RootWriteJson", StringComparison.Ordinal) &&
+                !Model("UnusedModel").Contains("RootRead(", StringComparison.Ordinal),
+                "Forcing JSON read retained the wrong operations.");
+
+            var library = input.WithOptions(input.Options.WithOutputKind(OutputKind.DynamicallyLinkedLibrary));
+            var libraryRun = first.RunGeneratorsAndUpdateCompilation(library, out var libraryOutput, out _);
+            CheckErrors(libraryOutput);
+            files = AllFiles(libraryRun);
+            Require(Model("UnusedModel").Contains("RootReadJson", StringComparison.Ordinal) &&
+                Model("UnusedModel").Contains("RootWrite", StringComparison.Ordinal),
+                "A library must keep operations for callers outside the compilation.");
+
+            string Model(string name) => string.Join("\n", files.Where(pair =>
+                pair.Key.EndsWith("LuminPackGen.Selection." + name + ".g.cs", StringComparison.Ordinal)).Select(pair => pair.Value));
+        }
+        Console.WriteLine("Passed independent operation selection, generic dependencies, JSON method groups, assembly overrides, and library retention.");
     }
 
     /// <summary>Checks readable names for colliding sanitized identities and deeply nested generic declarations.</summary>

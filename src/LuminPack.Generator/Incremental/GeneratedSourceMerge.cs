@@ -21,17 +21,39 @@ internal static class GeneratedSourceMerge
             return first ?? string.Empty;
         if (string.IsNullOrEmpty(first))
             return second;
+        return Join(new[] { first, second }, options);
+    }
+
+    /// <summary>Merges a group of nonempty generated units, parsing each fragment once.</summary>
+    /// <param name="sources">The fragments in publication order.</param>
+    /// <param name="options">The parse options of the consuming compilation.</param>
+    /// <returns>The complete generated file.</returns>
+    internal static string Join(IEnumerable<string> sources, CSharpParseOptions options)
+    {
+        using var input = sources.GetEnumerator();
+        if (!input.MoveNext())
+            return string.Empty;
+        string first = input.Current;
+        if (!input.MoveNext())
+            return first;
+
         var primary = SyntaxFactory.ParseCompilationUnit(first, options: options);
-        var appended = SyntaxFactory.ParseCompilationUnit(second, options: options);
         var seen = new HashSet<string>(primary.Usings.Select(directive => directive.WithoutTrivia().ToString()), StringComparer.Ordinal);
-        var usings = primary.Usings.AddRange(appended.Usings.Where(directive => seen.Add(directive.WithoutTrivia().ToString()))
-            .Select(directive => directive.WithLeadingTrivia().WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))));
-        // Generated units share the same header (nullable context and warning suppressions), so the appended unit's header
-        // is dropped and its first member starts on a new line.
-        var members = appended.Members;
-        if (members.Count != 0)
-            members = members.Replace(members[0], members[0].WithLeadingTrivia(new[] { SyntaxFactory.EndOfLine("\n") }
-                .Concat(members[0].GetLeadingTrivia().Where(trivia => !trivia.IsDirective && !trivia.IsKind(SyntaxKind.SingleLineCommentTrivia)))));
-        return primary.WithUsings(usings).WithMembers(primary.Members.AddRange(members)).ToFullString();
+        var usings = new List<UsingDirectiveSyntax>(primary.Usings);
+        var members = new List<MemberDeclarationSyntax>(primary.Members);
+        do
+        {
+            var appended = SyntaxFactory.ParseCompilationUnit(input.Current, options: options);
+            usings.AddRange(appended.Usings.Where(directive => seen.Add(directive.WithoutTrivia().ToString()))
+                .Select(directive => directive.WithLeadingTrivia().WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))));
+            var additions = appended.Members;
+            // Keep the first file's common header. The appended members start on a new line.
+            if (additions.Count != 0)
+                additions = additions.Replace(additions[0], additions[0].WithLeadingTrivia(new[] { SyntaxFactory.EndOfLine("\n") }
+                    .Concat(additions[0].GetLeadingTrivia().Where(trivia => !trivia.IsDirective && !trivia.IsKind(SyntaxKind.SingleLineCommentTrivia)))));
+            members.AddRange(additions);
+        }
+        while (input.MoveNext());
+        return primary.WithUsings(SyntaxFactory.List(usings)).WithMembers(SyntaxFactory.List(members)).ToFullString();
     }
 }

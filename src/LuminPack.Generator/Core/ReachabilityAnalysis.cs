@@ -406,6 +406,19 @@ internal static class ReachabilityAnalysisCache
         return true;
     }
 
+    /// <summary>Closes an operation over members, generic definitions, and Union dispatch dependencies.</summary>
+    /// <param name="compilation">The original compilation that owns the payload symbols.</param>
+    /// <param name="roots">The closed payloads observed for this operation.</param>
+    /// <returns>The types required by this operation.</returns>
+    internal static IEnumerable<ITypeSymbol> ExpandOperationTypes(Compilation compilation, IEnumerable<ITypeSymbol?> roots)
+    {
+        var analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
+        var types = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        foreach (var root in roots)
+            ExpandType(compilation, root, types, analysis, operation: true);
+        return types;
+    }
+
     /// <summary>
     /// Adds a type to the candidate set and recursively expands its type-argument graph (array
     /// elements, generic arguments, containing types) and, when it is a <c>[LuminPackable]</c> type,
@@ -415,7 +428,9 @@ internal static class ReachabilityAnalysisCache
     /// <param name="type">The type or symbol to analyze.</param>
     /// <param name="types">The types used by this operation.</param>
     /// <param name="analysis">The analysis used by this operation.</param>
-    private static void ExpandType(Compilation compilation, ITypeSymbol? type, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
+    /// <param name="operation">Whether to include dependencies of shared generic and virtual declarations.</param>
+    private static void ExpandType(Compilation compilation, ITypeSymbol? type, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis,
+        bool operation = false)
     {
         if (type is null || type.TypeKind == TypeKind.Error || type is ITypeParameterSymbol)
         {
@@ -430,24 +445,33 @@ internal static class ReachabilityAnalysisCache
         switch (type)
         {
             case IArrayTypeSymbol array:
-                ExpandType(compilation, array.ElementType, types, analysis);
+                ExpandType(compilation, array.ElementType, types, analysis, operation);
                 break;
             case INamedTypeSymbol named:
                 if (named.ContainingType is not null)
                 {
-                    ExpandType(compilation, named.ContainingType, types, analysis);
+                    ExpandType(compilation, named.ContainingType, types, analysis, operation);
                 }
                 foreach (ITypeSymbol argument in named.TypeArguments)
                 {
-                    ExpandType(compilation, argument, types, analysis);
+                    ExpandType(compilation, argument, types, analysis, operation);
                 }
                 foreach (var sequence in LuminPackExtensionGenerator.EnumerateLinqSequenceViews(named))
-                    ExpandType(compilation, sequence, types, analysis);
+                    ExpandType(compilation, sequence, types, analysis, operation);
 
                 if (analysis.IsPackable(named))
                 {
-                    ExpandPackableMembers(compilation, named, types, analysis);
-                    ExpandUnionMembers(compilation, named, types, analysis);
+                    if (operation)
+                    {
+                        ExpandType(compilation, named.OriginalDefinition, types, analysis, operation);
+                        for (var parent = named.BaseType; parent != null; parent = parent.BaseType)
+                            if (analysis.IsPackable(parent))
+                                ExpandType(compilation, parent, types, analysis, operation);
+                        foreach (var contract in named.AllInterfaces.Where(analysis.IsPackable))
+                            ExpandType(compilation, contract, types, analysis, operation);
+                    }
+                    ExpandPackableMembers(compilation, named, types, analysis, operation);
+                    ExpandUnionMembers(compilation, named, types, analysis, operation);
                 }
                 break;
         }
@@ -463,7 +487,9 @@ internal static class ReachabilityAnalysisCache
     /// <param name="packable">The packable used by this operation.</param>
     /// <param name="types">The types used by this operation.</param>
     /// <param name="analysis">The analysis used by this operation.</param>
-    private static void ExpandUnionMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
+    /// <param name="operation">Whether to include dependencies of shared generic and virtual declarations.</param>
+    private static void ExpandUnionMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types,
+        CompilationTypeAnalysis analysis, bool operation)
     {
         bool isLuminUnion = packable.TypeKind == TypeKind.Interface ||
                             packable.IsAbstract ||
@@ -483,7 +509,7 @@ internal static class ReachabilityAnalysisCache
                 {
                     if (argument.Value is INamedTypeSymbol member)
                     {
-                        ExpandType(compilation, CloseUnionMember(compilation, member, packable), types, analysis);
+                        ExpandType(compilation, CloseUnionMember(compilation, member, packable), types, analysis, operation);
                     }
                 }
             }
@@ -498,7 +524,7 @@ internal static class ReachabilityAnalysisCache
                 }
                 if (IsDerivedFrom(declared.Symbol, baseDef))
                 {
-                    ExpandType(compilation, CloseUnionMember(compilation, declared.Symbol, packable), types, analysis);
+                    ExpandType(compilation, CloseUnionMember(compilation, declared.Symbol, packable), types, analysis, operation);
                 }
             }
             return;
@@ -511,7 +537,7 @@ internal static class ReachabilityAnalysisCache
         {
             foreach (ITypeSymbol caseType in CollectCs11UnionCaseTypes(compilation, packable))
             {
-                ExpandType(compilation, caseType, types, analysis);
+                ExpandType(compilation, caseType, types, analysis, operation);
             }
         }
     }
@@ -721,12 +747,14 @@ internal static class ReachabilityAnalysisCache
     /// <param name="packable">The packable used by this operation.</param>
     /// <param name="types">The types used by this operation.</param>
     /// <param name="analysis">The analysis used by this operation.</param>
-    private static void ExpandPackableMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
+    /// <param name="operation">Whether to include dependencies of shared generic and virtual declarations.</param>
+    private static void ExpandPackableMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types,
+        CompilationTypeAnalysis analysis, bool operation)
     {
         bool external = analysis.IsAssemblyPackable(packable) && packable.DeclaringSyntaxReferences.Length == 0;
         var inspected = external ? ReferencedTypeMetadata.Resolve(packable, compilation) : packable;
         var members = inspected.GetMembers().AsEnumerable();
-        if (external)
+        if (external || operation)
             for (var parent = inspected.BaseType; parent != null &&
                  parent.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType); parent = parent.BaseType)
                 members = members.Concat(parent.GetMembers());
@@ -760,7 +788,7 @@ internal static class ReachabilityAnalysisCache
                 continue;
             }
 
-            ExpandType(compilation, memberType, types, analysis);
+            ExpandType(compilation, memberType, types, analysis, operation);
         }
     }
 

@@ -273,7 +273,7 @@ public enum LuminPackGenerationMode : byte
     Minimal = 3,
 }
 
-/// <summary>Controls registration API generation; formatter and entry retention are automatic.</summary>
+/// <summary>Controls registration and can retain specific operation modules independently of call analysis.</summary>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false, Inherited = false)]
 public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
 {
@@ -283,6 +283,18 @@ public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
 
     /// <summary>Gets the registration API policy.</summary>
     public LuminPackRegisterMode Register { get; }
+
+    /// <summary>Gets or sets whether to retain binary write code for every discovered payload.</summary>
+    public bool ForceGenerateSerialize { get; set; }
+
+    /// <summary>Gets or sets whether to retain binary read code for every discovered payload.</summary>
+    public bool ForceGenerateDeserialize { get; set; }
+
+    /// <summary>Gets or sets whether to retain JSON write code for every discovered payload.</summary>
+    public bool ForceGenerateSerializeJson { get; set; }
+
+    /// <summary>Gets or sets whether to retain JSON read code for every discovered payload.</summary>
+    public bool ForceGenerateDeserializeJson { get; set; }
 
     /// <summary>Selects registration support without a generation mode.</summary>
     /// <param name="register">Whether generated delegate registration is available.</param>

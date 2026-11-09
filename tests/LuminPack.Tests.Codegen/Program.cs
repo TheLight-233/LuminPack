@@ -296,6 +296,12 @@ try
         SerializerReviewRegression.VerifyStateRoots(references);
         return 0;
     }
+    if (args is ["--verify-operation-selection"])
+    {
+        SerializerPartitionRegression.VerifyOperationSelection(references);
+        return 0;
+    }
+
     if (args is ["--verify-partitions"])
     {
         SerializerPartitionRegression.Run(references);
