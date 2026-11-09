@@ -49,23 +49,42 @@ internal static class DirectBinaryEmitter
         w.Line("public static partial class LuminPackSerializer");
         w.Open();
 
-        // Serialize entries; the root container follows the entry that carried the write body.
+        // Serialize entries; the root container follows the entry that carried the write body, which is the named member
+        // write when the type has one.
         w.Suppressed = !writes;
-        w.Line(w.Preserve);
-        w.Line(inline);
-        w.Line("internal static void Serialize" + suffix + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " + container + "." +
-            (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref writer, input);");
-        w.Blank();
-        if (genericWrite)
+        if (model.Proven)
         {
-            SerializeProfiled();
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void SerializeMember" + suffix + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => SerializeMember" +
+                suffix + "<" + Standard() + ">(ref writer, in input);");
             w.Blank();
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void SerializeMember" + suffix + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
+            w.Indented(() => w.Line(Constraint() + " => " + container + ".RootWriteMember<" + Profile + ">(ref writer, input);"));
+            w.Blank();
+        }
+        else
+        {
+            SerializeStandard();
+            if (genericWrite)
+            {
+                SerializeProfiled();
+                w.Blank();
+            }
         }
         w.Suppressed = false;
         Roots();
         w.Blank();
         w.Suppressed = !writes;
-        if (!genericWrite)
+        if (model.Proven)
+        {
+            SerializeStandard();
+            SerializeProfiled();
+            w.Blank();
+        }
+        else if (!genericWrite)
         {
             SerializeProfiled();
             w.Blank();
@@ -172,6 +191,15 @@ internal static class DirectBinaryEmitter
         w.Close();
         w.Close();
 
+        void SerializeStandard()
+        {
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void Serialize" + suffix + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " + container + "." +
+                (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref writer, input);");
+            w.Blank();
+        }
+
         void SerializeProfiled()
         {
             w.Line(w.Preserve);
@@ -185,7 +213,14 @@ internal static class DirectBinaryEmitter
             w.Line("internal static partial class " + container);
             w.Open();
             w.Suppressed = !writes;
+            if (model.Proven)
+            {
+                Method(MemberWriteBody(model, w), "RootWriteMember", true, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
+                w.Blank();
+            }
             var write = WriteBody(model, w, union: false);
+            if (model.Proven)
+                write = ProvenWriteBody(model, w, write, union: false);
             Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", DirectInlining.Write(model, union: false) ? inline : null);
             w.Blank();
             w.Suppressed = !reads;
@@ -194,6 +229,9 @@ internal static class DirectBinaryEmitter
             w.Blank();
             w.Suppressed = !writes;
             var writeUnionBody = WriteBody(model, w, union: true);
+            // A lone record checks itself, so only a reserved record takes the proven path.
+            if (model.Proven && members.Length != 1)
+                writeUnionBody = ProvenWriteBody(model, w, writeUnionBody, union: true);
             Method(writeUnionBody, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
                 DirectInlining.Write(model, union: true) ? inline : null);
             w.Blank();
@@ -407,6 +445,144 @@ internal static class DirectBinaryEmitter
         return body;
     }
 
+    /// <summary>Builds the named member write: the original stream writes of an object nested in another record.</summary>
+    private static List<string> MemberWriteBody(DirectTypeModel model, DirectWriter w)
+    {
+        var members = model.Members;
+        var body = new List<string>
+        {
+            "var value = input;",
+            "if (value is null)",
+            "{",
+            "writer.Write((byte)255);",
+            "return;",
+            "}",
+            "",
+            "writer.Write((byte)" + members.Length.ToString(CultureInfo.InvariantCulture) + ");",
+        };
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (member.Kind == DirectMemberKind.Text)
+            {
+                body.Add("writer.Write<" + Profile + ">(value." + member.Name + ");");
+                continue;
+            }
+            int last = RunEnd(members, index);
+            if (last == index)
+            {
+                body.Add("writer.Write(value." + member.Name + ");");
+                continue;
+            }
+            int width = 0;
+            for (int item = index; item <= last; item++)
+                width += members[item].Size;
+            string widthText = width.ToString(CultureInfo.InvariantCulture);
+            body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true) + ")");
+            body.Add("\twriter.Write(ref " + Bytes(w, member, "value", readOnly: true) + ", " + widthText + ");");
+            body.Add("else");
+            body.Add("{");
+            body.Add("ref byte cursor = ref writer.Cursor;");
+            AddFixedStores(w, members, index, last, "cursor", body);
+            body.Add("writer.Advance(" + widthText + ");");
+            body.Add("}");
+            body.Add("");
+            index = last;
+        }
+        while (body[body.Count - 1].Length == 0)
+            body.RemoveAt(body.Count - 1);
+        return body;
+    }
+
+    /// <summary>Splits a reserved record write into the proven path: a record body reached directly when the record provably
+    /// fits, and through the original reservation on excluded profiles and in the cold path.</summary>
+    /// <param name="model">The covered type, whose variable members are strings.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="original">The reserved record write.</param>
+    /// <param name="union">Whether the record is a Union payload without the null marker and member count.</param>
+    /// <returns>The proven operation body.</returns>
+    private static List<string> ProvenWriteBody(DirectTypeModel model, DirectWriter w, List<string> original, bool union)
+    {
+        int cursorLine = original.IndexOf("ref byte cursor = ref writer.Cursor;");
+        int reserve = original.FindIndex(line => line.StartsWith("cursor = ref writer.ReserveRecord(", StringComparison.Ordinal));
+        var prelude = original.GetRange(0, cursorLine);
+        string comment = original[cursorLine + 1];
+        var captures = original.GetRange(cursorLine + 2, reserve - cursorLine - 2);
+        var record = original.GetRange(reserve + 1, original.Count - reserve - 1);
+        var names = new List<string>();
+        for (int index = 0; index < model.Members.Length; index++)
+            if (model.Members[index].Kind == DirectMemberKind.Text)
+                names.Add(Snapshot(model, index));
+        string type = model.GlobalName + "?";
+        string arguments = string.Join(", ", new[] { "ref writer", "value" }.Concat(names));
+        string unsafeName = w.A("Unsafe"), standard = w.A("LuminPackUtf16LengthOptions"), fallback = w.A("LuminPackDefaultOptions");
+        string profiles = "(typeof(" + Profile + ") == typeof(" + standard + ") || typeof(" + Profile + ") == typeof(" + fallback + ") || typeof(" + Profile +
+            ") == typeof(global::LuminPack.Option.LuminPackFixedOptions<" + standard + ">) || typeof(" + Profile +
+            ") == typeof(global::LuminPack.Option.LuminPackFixedOptions<" + fallback + ">))";
+        // The complete bound in 64-bit arithmetic; a string record is its length prefix and UTF-16 payload.
+        var terms = new List<string>();
+        if (!union)
+            terms.Add("1");
+        int text = 0;
+        foreach (var member in model.Members)
+        {
+            if (member.Kind != DirectMemberKind.Text)
+            {
+                terms.Add(member.Size.ToString(CultureInfo.InvariantCulture));
+                continue;
+            }
+            string name = names[text++];
+            terms.Add("(4L + (" + name + " is null ? 0L : (long)" + name + ".Length * 2))");
+        }
+        string bound = "(long)(" + terms[0] + ")" + string.Concat(terms.Skip(1).Select(term => " + " + term));
+        string inlineAttribute = w.MethodImpl("AggressiveInlining");
+
+        var body = new List<string>
+        {
+            "if (!(" + unsafeName + ".SizeOf<global::System.IntPtr>() == 8 && " + profiles + "))",
+            "{",
+            "WriteChecked(ref writer, input);",
+            "return;",
+            "}",
+            "",
+            "if (input is not null)",
+            "{",
+            "var value = input;",
+        };
+        body.AddRange(captures);
+        body.Add("long objectRecordBound = " + bound + ";");
+        body.Add("if (writer.RecordRoom() >= objectRecordBound)");
+        body.Add("{");
+        body.Add("WriteRecord(" + arguments + ");");
+        body.Add("return;");
+        body.Add("}");
+        body.Add("}");
+        body.Add("");
+        body.Add("WriteOriginalObject(ref writer, input);");
+        body.Add(inlineAttribute);
+        body.Add("static void WriteRecord(scoped ref LuminPackWriter writer, " + type + " value" + string.Concat(names.Select(name => ", string " + name)) + ")");
+        body.Add("{");
+        body.Add("ref byte cursor = ref writer.Cursor;");
+        body.Add(comment);
+        body.AddRange(record);
+        body.Add("}");
+        body.Add("");
+        body.Add(inlineAttribute);
+        body.Add("static void WriteChecked(scoped ref LuminPackWriter writer, " + type + " input)");
+        body.Add("{");
+        body.AddRange(prelude);
+        body.Add("ref byte cursor = ref writer.Cursor;");
+        body.AddRange(captures);
+        body.Add(original[reserve]);
+        body.Add("writer.Cursor = ref cursor;");
+        body.Add("WriteRecord(" + arguments + ");");
+        body.Add("}");
+        body.Add("");
+        body.Add(w.MethodImpl("NoInlining"));
+        body.Add("static void WriteOriginalObject(scoped ref LuminPackWriter writer, " + type + " input) => WriteChecked(ref writer, input);");
+        return body;
+    }
+
     /// <summary>Stores a run of fixed fields at their packed offsets from a cursor.</summary>
     private static void AddFixedStores(DirectWriter w, DirectMember[] members, int first, int last, string cursor, List<string> body)
     {
@@ -508,6 +684,20 @@ internal static class DirectBinaryEmitter
         while (body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         return body;
+    }
+
+    /// <summary>Whether the Booleans of a fixed run, if any, fit one batch mask.</summary>
+    internal static bool HasBatchMask(DirectMember[] members, int first, int last)
+    {
+        var offsets = new List<int>();
+        int width = 0;
+        for (int index = first; index <= last; index++)
+        {
+            if (members[index].IsBoolean)
+                offsets.Add(width);
+            width += members[index].Size;
+        }
+        return offsets.Count == 0 || BatchMask(offsets, width) != null;
     }
 
     /// <summary>Selects one four- or eight-byte window holding every Boolean of a batch and its rejection mask.</summary>

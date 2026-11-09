@@ -90,10 +90,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool UniqueEntries;
     /// <summary>The serialized members in wire order.</summary>
     internal readonly DirectMember[] Members;
+    /// <summary>Whether the variable members are all strings, so the type has a named member write and its reserved record
+    /// writes take the proven object path.</summary>
+    internal readonly bool Proven;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
-        DirectMember[] members)
+        DirectMember[] members, bool proven)
     {
+        Proven = proven;
         UniqueEntries = uniqueEntries;
         GlobalName = globalName;
         Readable = readable;
@@ -109,7 +113,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <inheritdoc/>
     public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
-        UniqueEntries == other.UniqueEntries &&
+        UniqueEntries == other.UniqueEntries && Proven == other.Proven &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
@@ -181,8 +185,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         for (int index = 0; index < members.Length; index++)
             if ((members[index] = Member(data.fields[index], extension)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
-        // Strings without collections take the proven object write, which the direct emitter does not reproduce.
-        if (members.Any(member => member.Kind == DirectMemberKind.Text) && members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text))
+        // Strings without collections take the named member write and the proven object write; both need the runtime's own profiles.
+        bool proven = members.Any(member => member.Kind == DirectMemberKind.Text) &&
+            members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
+        if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
         // JSON read locals are named after the camel-cased member; the presentation renames a leading underscore or a clash.
         if (members.Any(member => member.Name[0] == '_') ||
@@ -194,7 +200,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("type spelling");
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data), InterceptionSupport.IsEnabled(metadata.ParseOptions), members);
+            LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data), InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>

@@ -30,8 +30,16 @@ internal static class DirectInlining
     internal static bool Read(DirectTypeModel model)
     {
         int count = 1 + model.Members.Count(member => !member.IsFixed);
+        int first = 0;
         foreach (int run in Runs(model))
-            count += run == 1 ? 1 : 5 * run + 1;
+        {
+            while (!model.Members[first].IsFixed)
+                first++;
+            // A run whose Booleans fit no batch mask checks each Boolean after the block read.
+            count += run == 1 ? 1 : 5 * run + 1 + (DirectBinaryEmitter.HasBatchMask(model.Members, first, first + run - 1) ? 0 :
+                model.Members.Skip(first).Take(run).Count(member => member.IsBoolean));
+            first += run;
+        }
         return count <= Limit;
     }
 
