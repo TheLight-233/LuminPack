@@ -83,6 +83,8 @@ internal static class DirectEmission
         var writer = new DirectWriter(aliases);
         if (json)
             DirectJsonEmitter.Emit(model, writer, operations);
+        else if (model.IsStruct)
+            DirectStructEmitter.EmitRaw(model, writer, operations);
         else
             DirectBinaryEmitter.Emit(model, writer, operations);
         return GeneratedSourceLayout.LayOutLines(writer.Complete(json));

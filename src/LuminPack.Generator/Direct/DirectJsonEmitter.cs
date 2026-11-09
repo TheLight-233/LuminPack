@@ -30,6 +30,8 @@ internal static class DirectJsonEmitter
         string constraint = "where TLuminProfile : struct, " + options;
         string inline = w.MethodImpl("AggressiveInlining");
         string helper = "global::LuminPack.Generated." + model.Extension + "." + model.JsonHelper;
+        // A struct is passed by reference without a null annotation.
+        string nullable = model.IsStruct ? string.Empty : "?", input = model.IsStruct ? "scoped in " : string.Empty, pass = model.IsStruct ? "in " : string.Empty;
 
         w.Line("namespace LuminPack");
         w.Open();
@@ -39,7 +41,7 @@ internal static class DirectJsonEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(w.Preserve);
-        w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + type + "? input)");
+        w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + input + type + nullable + " input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         WriteBody(model, w, helper);
@@ -47,7 +49,7 @@ internal static class DirectJsonEmitter
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
-        w.Line("internal static void RootReadJson<" + Profile + ">(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)");
+        w.Line("internal static void RootReadJson<" + Profile + ">(scoped ref " + jsonReader + " reader, scoped ref " + type + nullable + " value)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         ReadBody(model, w, helper);
@@ -56,9 +58,9 @@ internal static class DirectJsonEmitter
         w.Close();
         w.Blank();
         w.Suppressed = !writes;
-        Entry("SerializeJson", "(scoped ref " + jsonWriter + " writer, scoped in " + type + "? input)", "RootWriteJson", "ref writer, input");
+        Entry("SerializeJson", "(scoped ref " + jsonWriter + " writer, scoped in " + type + nullable + " input)", "RootWriteJson", "ref writer, " + pass + "input");
         w.Suppressed = !reads;
-        Entry("DeserializeJson", "(scoped ref " + jsonReader + " reader, scoped ref " + type + "? value)", "RootReadJson", "ref reader, ref value");
+        Entry("DeserializeJson", "(scoped ref " + jsonReader + " reader, scoped ref " + type + nullable + " value)", "RootReadJson", "ref reader, ref value");
         w.Suppressed = false;
         w.Close();
         w.Blank();
@@ -67,16 +69,16 @@ internal static class DirectJsonEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(inline);
-        w.Line("internal static void Write(this ref " + jsonWriter + " state, in " + type + "? value) => " + serializer + "." + container +
-            ".RootWriteJson<" + standard + ">(ref state, value);");
+        w.Line("internal static void Write(this ref " + jsonWriter + " state, in " + type + nullable + " value) => " + serializer + "." + container +
+            ".RootWriteJson<" + standard + ">(ref state, " + pass + "value);");
         w.Line(inline);
-        w.Line("internal static void Write<TOptions>(this ref " + jsonWriter + " state, in " + type + "? value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + options + " => " + serializer + "." + container + ".RootWriteJson<TOptions>(ref state, value);"));
+        w.Line("internal static void Write<TOptions>(this ref " + jsonWriter + " state, in " + type + nullable + " value)");
+        w.Indented(() => w.Line("where TOptions : struct, " + options + " => " + serializer + "." + container + ".RootWriteJson<TOptions>(ref state, " + pass + "value);"));
         w.Suppressed = !reads;
         foreach (string profile in new[] { standard, "TOptions" })
         {
             w.Line(inline);
-            w.Line("internal static void Read" + (profile == "TOptions" ? "<TOptions>" : string.Empty) + "(this ref " + jsonReader + " state, ref " + type + "? value)");
+            w.Line("internal static void Read" + (profile == "TOptions" ? "<TOptions>" : string.Empty) + "(this ref " + jsonReader + " state, ref " + type + nullable + " value)");
             if (profile == "TOptions")
                 w.Indented(() => w.Line("where TOptions : struct, " + options));
             w.Open();
@@ -140,12 +142,15 @@ internal static class DirectJsonEmitter
     {
         var body = new List<string>();
         body.Add("var value = input;");
-        body.Add("if (value == null)");
-        body.Add("{");
-        body.Add("writer.WriteNull<" + Profile + ">();");
-        body.Add("return;");
-        body.Add("}");
-        body.Add("");
+        if (!model.IsStruct)
+        {
+            body.Add("if (value == null)");
+            body.Add("{");
+            body.Add("writer.WriteNull<" + Profile + ">();");
+            body.Add("return;");
+            body.Add("}");
+            body.Add("");
+        }
         // A mirrored type's storage is reached through its layout mirror.
         if (model.Mirror != null)
             body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
@@ -243,13 +248,18 @@ internal static class DirectJsonEmitter
         bool fresh = model.FreshResult;
         bool packed = members.Length >= 4;
         var body = new List<string>();
-        body.Add("if (reader.IsNull())");
-        body.Add("{");
-        body.Add("value = null;");
-        body.Add("return;");
-        body.Add("}");
-        body.Add("");
-        body.Add("bool reuseExisting = value is not null;");
+        if (model.IsStruct)
+            body.Add("bool reuseExisting = false;");
+        else
+        {
+            body.Add("if (reader.IsNull())");
+            body.Add("{");
+            body.Add("value = null;");
+            body.Add("return;");
+            body.Add("}");
+            body.Add("");
+            body.Add("bool reuseExisting = value is not null;");
+        }
         if (fresh)
         {
             body.Add("var result = reuseExisting ? value! : new " + model.GlobalName + "();");

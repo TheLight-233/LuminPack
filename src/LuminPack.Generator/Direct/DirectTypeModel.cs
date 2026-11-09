@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using LuminPack.Code;
 using LuminPack.Code.Core;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -101,14 +102,17 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool MemberWrite;
     /// <summary>Whether snapshot locals are camel-cased, as the bound operation pipeline names them for mirrored or derived types.</summary>
     internal readonly bool CamelSnapshots;
+    /// <summary>Whether the type is a raw unmanaged struct, written and read as one value.</summary>
+    internal readonly bool IsStruct;
     /// <summary>The root-private layout mirror that auto-property storage is reached through, or null for public fields.</summary>
     internal readonly string Mirror;
     /// <summary>The mirror's field declarations, such as <c>string? Name</c>, in storage order.</summary>
     internal readonly string[] MirrorFields;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
-        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived)
+        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct)
     {
+        IsStruct = isStruct;
         Proven = proven;
         MemberWrite = proven && !derived;
         CamelSnapshots = mirror != null || derived;
@@ -130,7 +134,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
         UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
-        CamelSnapshots == other.CamelSnapshots && Mirror == other.Mirror &&
+        CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && Mirror == other.Mirror &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
@@ -152,7 +156,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (!SupportedProject(compilation, metadata))
             return null;
         var type = data.TypeSymbol;
-        if (type == null || data.generatorType != GeneratorType.Object || data.isUnion || data.isGeneric || data.isValueType)
+        // A struct is covered when its storage is its wire layout (a raw unmanaged struct).
+        bool isStruct = data.isValueType && type != null && type.TypeKind == TypeKind.Struct && EmitterTypeTraits.CanUseUnmanagedSerialization(type);
+        if (type == null || data.generatorType != GeneratorType.Object || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
         if (data.RentPoolMethod != null || data.callBackMethods.Count != 0 || data.enableBurst)
@@ -161,14 +167,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("diagnostics");
         if (data.fields.Count == 0 || data.fields.Count > 32)
             return DirectEmission.Reject<DirectTypeModel>("member count");
-        if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.IsStatic || type.IsRecord || type.IsGenericType ||
+        if (type.TypeKind != (isStruct ? TypeKind.Struct : TypeKind.Class) || type.IsAbstract || type.IsStatic || type.IsRecord || type.IsGenericType ||
             type.ContainingType is { IsGenericType: true } || !Reachable(type) || type.Interfaces.Length != 0)
             return DirectEmission.Reject<DirectTypeModel>("type declaration: " + (type.TypeKind != TypeKind.Class ? "kind" : type.IsAbstract ? "abstract" :
                 type.IsStatic ? "static" : type.IsRecord ? "record" : type.IsGenericType ? "generic" : type.ContainingType != null && type.ContainingType.IsGenericType ? "nested in generic" :
                 !Reachable(type) ? "accessibility" : "interfaces"));
         // Base types contribute their fields after the type's own, and must be plain classes of the same assembly.
         var levels = new System.Collections.Generic.List<INamedTypeSymbol> { type };
-        for (var level = type.BaseType; level != null && level.SpecialType != SpecialType.System_Object; level = level.BaseType)
+        for (var level = type.BaseType; level != null && level.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType); level = level.BaseType)
         {
             if (level.TypeKind != TypeKind.Class || level.IsAbstract || level.IsStatic || level.IsRecord || level.IsGenericType ||
                 level.ContainingType is { IsGenericType: true } || !Reachable(level) || level.AllInterfaces.Length != 0 ||
@@ -228,6 +234,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
         // Strings without collections take the named member write and the proven object write; both need the runtime's own profiles.
         bool mirrored = data.fields.Any(field => field.isProperty);
+        if (isStruct && (mirrored || members.Any(member => !member.IsFixed)))
+            return DirectEmission.Reject<DirectTypeModel>("struct members");
         bool proven = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
             members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
@@ -258,7 +266,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         }
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived);
+            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
