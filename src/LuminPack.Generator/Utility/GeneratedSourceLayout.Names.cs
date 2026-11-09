@@ -94,9 +94,10 @@ internal static partial class GeneratedSourceLayout
 
     /// <summary>Applies aliases to qualified helper names and compacts explicitly marked Union switches.</summary>
     /// <param name="source">The completed generated source.</param>
+    /// <param name="published">The syntax the source was printed from, or null.</param>
     /// <param name="aliases">The aliases available in the consumer's declarations.</param>
     /// <returns>The same source with shorter bound names and compact case rows.</returns>
-    private static string Present(string source, int aliases)
+    private static string Present(string source, CompilationUnitSyntax published, int aliases)
     {
         bool union = source.IndexOf(UnionCases, StringComparison.Ordinal) >= 0;
         bool helpers = aliases != 0 && source.Contains("global::") && Aliases.Any(entry => source.Contains(entry.Target) ||
@@ -108,7 +109,7 @@ internal static partial class GeneratedSourceLayout
         if (!union && !helpers && !json && !numbered)
             return source;
 
-        var root = SyntaxFactory.ParseCompilationUnit(source, options: ParseOptions);
+        var root = Equivalent(source, published) ? published : SyntaxFactory.ParseCompilationUnit(source, options: ParseOptions);
         if (json)
             root = JsonNames(root);
         // An alias spells its target's simple name, so only a declaration of that name in this file can give it another meaning.
@@ -122,6 +123,18 @@ internal static partial class GeneratedSourceLayout
         var flat = Flatten(layout.AddUsings(rewritten));
         return Reindent(numbered ? PlainLocals(flat) : flat).ToFullString();
     }
+
+    /// <summary>Checks that published syntax reads as the layout's own parse of its text would.</summary>
+    /// <param name="source">The completed generated source.</param>
+    /// <param name="published">The syntax the source was printed from, or null.</param>
+    /// <returns>Whether the syntax can replace that parse.</returns>
+    /// <remarks>The layout parses without preprocessor symbols and with documentation comments. Published syntax was parsed with
+    /// the consumer's symbols, and a documentation comment parsed without documentation mode is a plain comment, so a file with a
+    /// conditional directive or such a comment is parsed again.</remarks>
+    private static bool Equivalent(string source, CompilationUnitSyntax published)
+        => published != null && source.IndexOf("#if", StringComparison.Ordinal) < 0 &&
+            (source.IndexOf("///", StringComparison.Ordinal) < 0 || !published.DescendantTrivia(descendIntoTrivia: false)
+                .Any(trivia => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) && trivia.ToString().StartsWith("///", StringComparison.Ordinal)));
 
     /// <summary>Removes bare nested blocks whose locals cannot meet another use of their names.</summary>
     /// <param name="root">The rewritten compilation unit.</param>

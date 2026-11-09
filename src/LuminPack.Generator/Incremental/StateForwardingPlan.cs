@@ -124,10 +124,15 @@ internal sealed class StateForwardingPlan : IEquatable<StateForwardingPlan>
             return _interceptors == null ? file : new FrozenGeneratedSource(file.Name, _interceptors, file.Owner, file.Payload);
         if (_omitted.Count == 0 || !MayContainStateNames(file.Text))
             return file;
-        var root = Parse(file.Text, _options);
+        var root = PublishedSyntax.Take(file.Text) ?? Parse(file.Text, _options);
         var removed = SerializerMethods(root).Where(method => _omitted.Contains(Key(method)) && ForwardingCall(method) != null).ToArray();
-        return removed.Length == 0 ? file : new FrozenGeneratedSource(file.Name,
-            root.RemoveNodes(removed, SyntaxRemoveOptions.KeepUnbalancedDirectives).ToFullString(), file.Owner, file.Payload);
+        if (removed.Length == 0)
+        {
+            PublishedSyntax.Attach(file.Text, root);
+            return file;
+        }
+        var forwarded = root.RemoveNodes(removed, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+        return new FrozenGeneratedSource(file.Name, PublishedSyntax.Attach(forwarded.ToFullString(), forwarded), file.Owner, file.Payload);
     }
 
     /// <summary>Finds a method that forwards only the original state and value to its own nested root.</summary>

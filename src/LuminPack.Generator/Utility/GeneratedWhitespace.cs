@@ -11,7 +11,9 @@ namespace LuminPack.SourceGenerator;
 /// <c>NormalizeWhitespace</c> finds the token that follows every token by walking the tree again, which made it the largest
 /// single cost of formatting a serializer unit. This rewriter lists the tokens once, decides each line break and separator
 /// from a token and its successor, and tracks indentation while it descends. It replaces only whitespace and line breaks;
-/// comments, directives, annotations and every other node and token are kept.
+/// comments, directives, annotations and every other node and token are kept. Trivia is placed where a parser of the printed
+/// text places it: a token's trailing trivia ends with its first line break, and the breaks of following blank lines lead the
+/// next token, so later stages can use the laid-out tree in place of a parse of its text.
 /// </remarks>
 internal sealed class GeneratedWhitespace : CSharpSyntaxRewriter
 {
@@ -23,9 +25,11 @@ internal sealed class GeneratedWhitespace : CSharpSyntaxRewriter
     private readonly List<SyntaxTrivia> _buffer = new List<SyntaxTrivia>();
     private readonly List<SyntaxTriviaList> _indentationLists = new List<SyntaxTriviaList>();
     private readonly SyntaxTriviaList _space = SyntaxFactory.TriviaList(SyntaxFactory.Space);
-    private readonly SyntaxTriviaList[] _breaks;
+    private readonly SyntaxTriviaList _lineBreak;
     private int _index;
     private bool _afterLineBreak = true;
+    // The line breaks of blank lines after a token, which a parser places in the next token's leading trivia.
+    private int _pendingBreaks;
 
     /// <summary>Lists the tokens of the unit and their relevant successors.</summary>
     /// <param name="root">The unit to lay out.</param>
@@ -46,7 +50,7 @@ internal sealed class GeneratedWhitespace : CSharpSyntaxRewriter
                 following = index;
         }
         _newLine = SyntaxFactory.EndOfLine(newLine);
-        _breaks = new[] { default, SyntaxFactory.TriviaList(_newLine), SyntaxFactory.TriviaList(_newLine, _newLine) };
+        _lineBreak = SyntaxFactory.TriviaList(_newLine);
         _depths.Push(0);
     }
 
@@ -195,12 +199,16 @@ internal sealed class GeneratedWhitespace : CSharpSyntaxRewriter
     private SyntaxTriviaList Leading(SyntaxTriviaList trivia, int depth, bool endOfFile)
     {
         bool lineStart = _afterLineBreak;
-        if (!Significant(trivia))
+        int pending = _pendingBreaks;
+        _pendingBreaks = 0;
+        if (!Significant(trivia) && pending == 0)
         {
             _afterLineBreak = false;
             return !endOfFile && lineStart && depth != 0 ? IndentationList(depth) : default;
         }
         _buffer.Clear();
+        for (int count = 0; count < pending; count++)
+            _buffer.Add(_newLine);
         foreach (var item in trivia)
         {
             if (item.IsKind(SyntaxKind.WhitespaceTrivia) || item.IsKind(SyntaxKind.EndOfLineTrivia))
@@ -254,7 +262,8 @@ internal sealed class GeneratedWhitespace : CSharpSyntaxRewriter
         if (!Significant(trivia))
         {
             _afterLineBreak = lineBreaks > 0;
-            return lineBreaks > 0 ? _breaks[lineBreaks] : separator ? _space : default;
+            _pendingBreaks = Math.Max(0, lineBreaks - 1);
+            return lineBreaks > 0 ? _lineBreak : separator ? _space : default;
         }
         _buffer.Clear();
         bool lineEnded = false;
@@ -269,11 +278,16 @@ internal sealed class GeneratedWhitespace : CSharpSyntaxRewriter
                 lineBreaks = Math.Max(lineBreaks, 1);
         }
         if (lineEnded)
+        {
             lineBreaks--;
+            // The trivia's own line break ends the trailing trivia.
+            _pendingBreaks = Math.Max(0, lineBreaks);
+            lineBreaks = 0;
+        }
         if (lineBreaks > 0)
         {
-            for (int count = 0; count < lineBreaks; count++)
-                _buffer.Add(_newLine);
+            _buffer.Add(_newLine);
+            _pendingBreaks = lineBreaks - 1;
             _afterLineBreak = true;
         }
         else

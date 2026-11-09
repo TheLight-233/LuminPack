@@ -28,9 +28,10 @@ internal static partial class GeneratedSourceLayout
     /// <returns>The formatted source with compact Union case rows.</returns>
     internal static string Apply(string source, int aliases)
     {
+        var root = PublishedSyntax.Take(source);
         if (!Enabled || string.IsNullOrEmpty(source))
             return source;
-        source = Present(source, aliases);
+        source = Present(source, root, aliases);
         // A line of a multi-line literal is not a syntax fragment, so such a file keeps its code lines.
         bool wrapCode = !source.Contains("@\"") && !source.Contains("\"\"\"");
         if (wrapCode)

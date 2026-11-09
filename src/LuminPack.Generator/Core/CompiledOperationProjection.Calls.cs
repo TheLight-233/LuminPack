@@ -63,7 +63,7 @@ internal sealed partial class CompiledOperationProjection
                 return SyntaxFactory.ParseExpression("default(" + _profile + ")").WithTriviaFrom(node);
             if (node.Expression is DefaultExpressionSyntax && node.Name.Identifier.ValueText is
                 "StringEncoding" or "StringRecording" or "MaxJsonDepth" or "ValidateJsonSyntax" or "StandardFormat")
-                return node.WithExpression(SyntaxFactory.DefaultExpression(SyntaxFactory.IdentifierName(_profile)));
+                return node.WithExpression(SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(_profile)));
             return base.VisitMemberAccessExpression(node);
         }
         /// <summary>Propagates profiles through kernels, concrete overloads, recursive calls and virtual Union slots.</summary>
@@ -169,7 +169,7 @@ internal sealed partial class CompiledOperationProjection
                 arguments = arguments.Add(SyntaxFactory.ParseTypeName(_payload));
             if (kernel && access.Name is GenericNameSyntax)
                 arguments = arguments.RemoveAt(0);
-            arguments = kernel ? arguments.Insert(0, SyntaxFactory.IdentifierName(_profile)) : arguments.Add(SyntaxFactory.IdentifierName(_profile));
+            arguments = kernel ? arguments.Insert(0, SyntaxFactory.ParseTypeName(_profile)) : arguments.Add(SyntaxFactory.ParseTypeName(_profile));
             result = result.WithExpression(access.WithName(SyntaxFactory.GenericName(access.Name.Identifier, SyntaxFactory.TypeArgumentList(arguments))));
             return result;
         }

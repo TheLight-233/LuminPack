@@ -37,13 +37,16 @@ internal static class GeneratedSourceMerge
         if (!input.MoveNext())
             return first;
 
-        var primary = SyntaxFactory.ParseCompilationUnit(first, options: options);
+        var primary = PublishedSyntax.Take(first) ?? SyntaxFactory.ParseCompilationUnit(first, options: options);
         var seen = new HashSet<string>(primary.Usings.Select(directive => directive.WithoutTrivia().ToString()), StringComparer.Ordinal);
         var usings = new List<UsingDirectiveSyntax>(primary.Usings);
         var members = new List<MemberDeclarationSyntax>(primary.Members);
         do
         {
-            var appended = SyntaxFactory.ParseCompilationUnit(input.Current, options: options);
+            var appended = PublishedSyntax.Take(input.Current);
+            // Whether a documentation comment counts as a comment below depends on the documentation mode it was parsed with.
+            if (appended == null || appended.Members.FirstOrDefault()?.GetLeadingTrivia().Any(IsDocumentation) == true)
+                appended = SyntaxFactory.ParseCompilationUnit(input.Current, options: options);
             usings.AddRange(appended.Usings.Where(directive => seen.Add(directive.WithoutTrivia().ToString()))
                 .Select(directive => directive.WithLeadingTrivia().WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"))));
             var additions = appended.Members;
@@ -54,6 +57,15 @@ internal static class GeneratedSourceMerge
             members.AddRange(additions);
         }
         while (input.MoveNext());
-        return primary.WithUsings(SyntaxFactory.List(usings)).WithMembers(SyntaxFactory.List(members)).ToFullString();
+        var joined = primary.WithUsings(SyntaxFactory.List(usings)).WithMembers(SyntaxFactory.List(members));
+        return PublishedSyntax.Attach(joined.ToFullString(), joined);
     }
+
+    /// <summary>Recognizes a documentation comment in either documentation mode.</summary>
+    /// <param name="trivia">Leading trivia of an appended member.</param>
+    /// <returns>Whether the trivia is or would parse as a documentation comment.</returns>
+    private static bool IsDocumentation(SyntaxTrivia trivia) => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+        trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia) ||
+        trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) && trivia.ToString().StartsWith("///", StringComparison.Ordinal) ||
+        trivia.IsKind(SyntaxKind.MultiLineCommentTrivia) && trivia.ToString().StartsWith("/**", StringComparison.Ordinal);
 }

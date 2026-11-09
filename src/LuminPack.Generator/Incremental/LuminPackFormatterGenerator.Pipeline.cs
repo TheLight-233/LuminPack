@@ -225,11 +225,17 @@ public sealed partial class LuminPackFormatterGenerator
     /// <returns>The files of the selected formats.</returns>
     private static IEnumerable<FrozenGeneratedSource> TypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined, GeneratedOperations called)
     {
-        // The binary part also holds the helpers both formats share, so only its operations are filtered out.
-        json &= (called & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) != 0;
         var options = value.Layouts.Options;
         var roots = GeneratedFormatPartition.Get(value.Extension, options);
         var union = string.IsNullOrEmpty(value.Union) ? null : GeneratedFormatPartition.Get(value.Union, options);
+        // The binary part also holds the helpers both formats share, so only its operations are filtered out.
+        if (json && (called & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) == 0)
+        {
+            // This publisher owns the JSON parts, so it releases their syntax although it publishes nothing.
+            PublishedSyntax.Take(roots.Json);
+            PublishedSyntax.Take(union?.Json);
+            json = false;
+        }
         string name = value.HintName + ".g.cs";
         if (binary && GeneratedOperationFilter.Apply(GeneratedSourceMerge.Join(roots.Shared, union?.Shared, options), called, options) is { Length: > 0 } binaryText)
             yield return new FrozenGeneratedSource(name, binaryText);

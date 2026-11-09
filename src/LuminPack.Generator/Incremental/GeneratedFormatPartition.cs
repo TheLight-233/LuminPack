@@ -57,23 +57,28 @@ internal sealed class GeneratedFormatPartition
     /// <summary>Copies only the namespace and partial type shells needed by each format.</summary>
     /// <param name="source">The complete generated contribution.</param>
     /// <param name="root">The syntax of the completed generated contribution.</param>
-    /// <returns>The source contribution split at declaration boundaries.</returns>
+    /// <returns>The source contribution split at declaration boundaries, each part carrying its syntax to its publisher.</returns>
     private static GeneratedFormatPartition Split(string source, CompilationUnitSyntax root)
     {
         if (source.IndexOf("Json", StringComparison.Ordinal) < 0)
-            return new GeneratedFormatPartition(source, string.Empty);
+            return new GeneratedFormatPartition(PublishedSyntax.Attach(source, root), string.Empty);
         if (source.IndexOf("#if", StringComparison.Ordinal) >= 0 &&
             root.DescendantTrivia().Any(trivia => trivia.GetStructure() is ConditionalDirectiveTriviaSyntax or EndIfDirectiveTriviaSyntax &&
                 !trivia.Token.Parent.AncestorsAndSelf().OfType<MethodDeclarationSyntax>().Any(method => method.Span.Contains(trivia.Span))))
-            return new GeneratedFormatPartition(source, string.Empty);
+            return new GeneratedFormatPartition(PublishedSyntax.Attach(source, root), string.Empty);
         var (shared, json) = Partition(root.Members);
         if (json.Count == 0)
-            return new GeneratedFormatPartition(source, string.Empty);
+            return new GeneratedFormatPartition(PublishedSyntax.Attach(source, root), string.Empty);
         var jsonRoot = root.WithMembers(json);
         if (shared.Count == 0)
-            return new GeneratedFormatPartition(string.Empty, jsonRoot.ToFullString());
-        return new GeneratedFormatPartition(root.WithMembers(shared).ToFullString(), jsonRoot.ToFullString());
+            return new GeneratedFormatPartition(string.Empty, Print(jsonRoot));
+        return new GeneratedFormatPartition(Print(root.WithMembers(shared)), Print(jsonRoot));
     }
+
+    /// <summary>Prints one format's part and attaches its syntax for the publisher.</summary>
+    /// <param name="root">The part's syntax.</param>
+    /// <returns>The part's text.</returns>
+    private static string Print(CompilationUnitSyntax root) => PublishedSyntax.Attach(root.ToFullString(), root);
 
     /// <summary>Separates members and recursively visits the generated partial containers.</summary>
     /// <param name="members">Members of the current namespace or generated type.</param>
