@@ -52,7 +52,8 @@ public static partial class LuminPackExtensionGenerator
             .OrderBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal).GroupBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .Select(group => group.First()).ToArray();
         string extension = GetExtensionClassName(compilation);
-        var files = ImmutableArray.CreateBuilder<FrozenGeneratedSource>();
+        var files = new List<FrozenGeneratedSource>();
+        var payloadTypes = new Dictionary<int, ITypeSymbol>();
         var rootTargets = new Dictionary<string, LazyForwardingTargets>(StringComparer.Ordinal);
         var jsonDefinitions = new HashSet<string>(StringComparer.Ordinal);
         var unionDefinitions = new HashSet<string>(StringComparer.Ordinal);
@@ -68,6 +69,7 @@ public static partial class LuminPackExtensionGenerator
             var fragment = fragments[position];
             if (!string.IsNullOrEmpty(fragment.Extension))
             {
+                payloadTypes.Add(files.Count, type);
                 files.Add(new FrozenGeneratedSource(GeneratedFileNames.Formatter(type, name), fragment.Extension, payload: name));
                 rootTargets[name] = LazyForwardingTargets.Read(fragment.Extension, name);
             }
@@ -102,11 +104,14 @@ public static partial class LuminPackExtensionGenerator
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        // Closed roots that differ only in unmanaged type arguments forward to one generic root.
+        UnmanagedRootSharing.Apply(files, payloadTypes, compilation, metadata, cache.Sharing);
+        cancellationToken.ThrowIfCancellationRequested();
         foreach (var part in DispatchFiles(compilation, metadata, cache))
             files.Add(part);
         files.Add(new FrozenGeneratedSource(GeneratedFileNames.Shared("FormatterBridges"), SerializerCoreProjection.Bridges(extension, metadata)));
         navigationTargets = rootTargets;
-        return files.ToImmutable();
+        return files.ToImmutableArray();
 
         FrozenTypeEmission Fragment(ITypeSymbol type)
         {
