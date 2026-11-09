@@ -1,0 +1,497 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+
+namespace LuminPack.SourceGenerator.Direct;
+
+/// <summary>Writes a covered type's binary roots, facade entries and extensions in their final published form.</summary>
+/// <remarks>The text is what the original pipeline publishes for these shapes: the cursor record write with one reservation,
+/// proven fixed-field blocks with their field-wise fallbacks, checked reads with Boolean batch masks, the root container, the
+/// state entries and the payload extensions. Lines longer than the layout width are wrapped by the publication formatter.</remarks>
+internal static class DirectBinaryEmitter
+{
+    private const string Profile = "TLuminProfile";
+    private const string Constraint = "where TLuminProfile : struct, ILuminPackOptions";
+
+    /// <summary>Emits the complete binary file body.</summary>
+    internal static void Emit(DirectTypeModel model, DirectWriter w)
+    {
+        var members = model.Members;
+        bool genericWrite = members.Any(member => member.Kind == DirectMemberKind.Text);
+        bool genericRead = members.Any(member => !member.IsFixed);
+        bool allFixed = !genericRead;
+        string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
+        // State parameters are spelled through the imported namespace; the other helper names are qualified until presentation.
+        const string writer = "LuminPackWriter", reader = "LuminPackReader";
+        string Options() => w.A("ILuminPackOptions");
+        string Serializer() => w.A("LuminPackSerializer");
+        string Standard() => w.A("LuminPackUtf16LengthOptions");
+        string Constraint() => "where TLuminProfile : struct, " + Options();
+        string writeRoot = genericWrite ? "RootWrite<" + Profile + ">" : "RootWrite";
+        string readRoot = genericRead ? "RootRead<" + Profile + ">" : "RootRead";
+        string writeUnion = genericWrite ? "RootWriteUnion<" + Profile + ">" : "RootWriteUnion";
+        string readUnion = genericRead ? "RootReadUnion<" + Profile + ">" : "RootReadUnion";
+        string inline = w.MethodImpl("AggressiveInlining");
+        // The Union extension entries spell the inlining option through the imported alias name.
+        string polymorphic = "[" + w.Attribute("MethodImpl") + "(MethodImplOptions.AggressiveInlining)]";
+
+        w.Line("namespace LuminPack");
+        w.Open();
+        w.Line("public static partial class LuminPackSerializer");
+        w.Open();
+
+        // Serialize entries; the root container follows the entry that carried the write body.
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void Serialize_" + readable + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " + container + "." +
+            (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref writer, input);");
+        w.Blank();
+        if (genericWrite)
+        {
+            SerializeProfiled();
+            w.Blank();
+        }
+        Roots();
+        w.Blank();
+        if (!genericWrite)
+        {
+            SerializeProfiled();
+            w.Blank();
+        }
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void Deserialize_" + readable + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " + container + "." +
+            (genericRead ? "RootRead<" + Standard() + ">" : "RootRead") + "(ref reader, ref value);");
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void Deserialize_" + readable + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Indented(() => w.Line(Constraint() + " => " + container + "." + readRoot + "(ref reader, ref value);"));
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void SerializeUnion(scoped ref " + writer + " writer, " + type + "? input) => " +
+            (genericWrite ? "SerializeUnion<" + Standard() + ">(ref writer, input);" : container + ".RootWriteUnion(ref writer, input);"));
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void SerializeUnion<" + Profile + ">(scoped ref " + writer + " writer, " + type + "? input)");
+        w.Indented(() => w.Line(Constraint() + " => " + (genericWrite ? container + "." + writeUnion + "(ref writer, input);" : "SerializeUnion(ref writer, input);")));
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void DeserializeUnion_" + readable + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
+            (genericRead ? "DeserializeUnion_" + readable + "<" + Standard() + ">(ref reader, ref value);" : container + ".RootReadUnion(ref reader, ref value);"));
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void DeserializeUnion_" + readable + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Indented(() => w.Line(Constraint() + " => " + (genericRead ? container + "." + readUnion + "(ref reader, ref value);" : "DeserializeUnion_" + readable + "(ref reader, ref value);")));
+        if (allFixed)
+        {
+            w.Blank();
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void MeasureRecord_" + readable + "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
+            w.Open();
+            w.Line("if (value is null)");
+            w.Open();
+            w.Line("evaluator.Add(1);");
+            w.Line("return;");
+            w.Close();
+            w.Blank();
+            w.Line("int totalLength = 1;");
+            w.Line("totalLength += " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ";");
+            w.Line("evaluator.Add(totalLength);");
+            w.Close();
+            w.Blank();
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void MeasureRecord_" + readable + "<" + Profile + ">(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
+            w.Indented(() => w.Line(Constraint() + " => MeasureRecord_" + readable + "(ref evaluator, ref value);"));
+        }
+        w.Close();
+        w.Blank();
+
+        // Payload extensions.
+        w.Line("internal static partial class " + model.Owner);
+        w.Open();
+        w.Line(inline);
+        w.Line("internal static void Write(this ref " + writer + " state, in " + type + "? value) => " + Serializer() + "." + container + "." +
+            (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref state, value);");
+        w.Line(inline);
+        w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)");
+        w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
+            (genericWrite ? "RootWrite<TOptions>" : "RootWrite") + "(ref state, value);"));
+        w.Line(inline);
+        w.Line("internal static void Read(this ref " + reader + " state, ref " + type + "? value) => " + Serializer() + "." + container + "." +
+            (genericRead ? "RootRead<" + Standard() + ">" : "RootRead") + "(ref state, ref value);");
+        w.Line(inline);
+        w.Line("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)");
+        w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
+            (genericRead ? "RootRead<TOptions>" : "RootRead") + "(ref state, ref value);"));
+        w.Close();
+        w.Close();
+        w.Blank();
+
+        w.Line("namespace LuminPack.Generated");
+        w.Open();
+        w.Line("internal static partial class " + model.Extension);
+        w.Open();
+        w.Line(w.Preserve);
+        w.Line(polymorphic);
+        w.Line("public static void WritePolymorphismValue(ref this " + writer + " writer, scoped in " + type + "? input) => " + Serializer() + ".SerializeUnion(ref writer, input);");
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(polymorphic);
+        w.Line("public static void ReadPolymorphismValue(ref this " + reader + " reader, scoped ref " + type + "? value) => " + Serializer() +
+            ".DeserializeUnion_" + readable + "(ref reader, ref value);");
+        w.Close();
+        w.Close();
+
+        void SerializeProfiled()
+        {
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void Serialize_" + readable + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
+            w.Indented(() => w.Line(Constraint() + " => " + container + "." + writeRoot + "(ref writer, input);"));
+        }
+
+        void Roots()
+        {
+            w.Line("internal static partial class " + container);
+            w.Open();
+            var write = WriteBody(model, w, union: false);
+            Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", DirectInlining.Write(model, union: false) ? inline : null);
+            w.Blank();
+            var read = ReadBody(model, w, union: false);
+            Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", DirectInlining.Read(model) ? inline : null);
+            w.Blank();
+            var writeUnionBody = WriteBody(model, w, union: true);
+            Method(writeUnionBody, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
+                DirectInlining.Write(model, union: true) ? inline : null);
+            w.Blank();
+            var readUnionBody = ReadBody(model, w, union: true);
+            Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
+                allFixed ? (DirectInlining.FixedUnionRead(model) ? inline : null) : w.MethodImpl("NoInlining"));
+            w.Close();
+        }
+
+        void Method(List<string> body, string name, bool generic, string parameters, string attribute)
+        {
+            w.Line(w.Preserve);
+            if (attribute != null)
+                w.Line(attribute);
+            w.Line("internal static void " + name + (generic ? "<" + Profile + ">" : string.Empty) + parameters);
+            if (generic)
+                w.Indented(() => w.Line(Constraint()));
+            w.Open();
+            foreach (string line in body)
+            {
+                if (line.Length == 0)
+                    w.Blank();
+                else if (line == "}")
+                    w.Close();
+                else if (line == "{")
+                    w.Open();
+                else if (line.StartsWith("\t", StringComparison.Ordinal))
+                    w.Indented(() => w.Line(line.Substring(1)));
+                else
+                    w.Line(line);
+            }
+            w.Close();
+        }
+    }
+
+    /// <summary>Spells an unaligned cursor position; a plain spelling was already short in the template and registers no alias.</summary>
+    private static string At(DirectWriter w, string cursor, int offset, bool plain = false)
+        => offset == 0 ? cursor : (plain ? "Unsafe" : w.A("Unsafe")) + ".Add(ref " + cursor + ", " + offset.ToString(CultureInfo.InvariantCulture) + ")";
+
+    /// <summary>Spells a member's storage reinterpreted as bytes for a block copy or proof; see <see cref="At"/> for plain spellings.</summary>
+    private static string Bytes(DirectWriter w, DirectMember member, string owner, bool readOnly, bool plain = false)
+        => (plain ? "Unsafe" : w.A("Unsafe")) + ".As<" + member.Scalar + ", byte>(ref " + (readOnly ? (plain ? "Unsafe" : w.A("Unsafe")) + ".AsRef(in " + owner + "." + member.Name + ")" : owner + "." + member.Name) + ")";
+
+    /// <summary>Spells the proof that a run of fixed fields is laid out contiguously on a 64-bit target.</summary>
+    private static string Proof(DirectWriter w, DirectMember[] members, int first, int last, string owner, bool readOnly)
+    {
+        var terms = new List<string> { w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" };
+        for (int index = first; index < last; index++)
+            terms.Add(w.A("Unsafe") + ".ByteOffset(ref " + Bytes(w, members[index], owner, readOnly) + ", ref " + Bytes(w, members[index + 1], owner, readOnly) +
+                ") == " + members[index].Size.ToString(CultureInfo.InvariantCulture));
+        return string.Join(" && ", terms);
+    }
+
+    /// <summary>Ends a run of consecutive fixed members.</summary>
+    private static int RunEnd(DirectMember[] members, int first)
+    {
+        int last = first;
+        while (last + 1 < members.Length && members[last + 1].IsFixed)
+            last++;
+        return last;
+    }
+
+    /// <summary>Spells the snapshot local of a variable member as the projected emitter names it.</summary>
+    private static string Snapshot(DirectTypeModel model, int index)
+    {
+        string name = model.Members[index].Name + "Snapshot" + index.ToString(CultureInfo.InvariantCulture);
+        // The presentation drops an expansion number from a purely alphabetic name whose base is otherwise unused.
+        string stem = model.Members[index].Name + "Snapshot";
+        return model.Members[index].Name.All(char.IsLetter) && model.Members.All(member => member.Name != stem) ? stem : name;
+    }
+
+    /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
+    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, bool union)
+    {
+        var members = model.Members;
+        var body = new List<string>();
+        string count = members.Length.ToString(CultureInfo.InvariantCulture);
+        body.Add("var value = input;");
+        if (!union)
+        {
+            body.Add("if (value is null)");
+            body.Add("{");
+            body.Add("writer.Cursor = (byte)255;");
+            body.Add("writer.Advance(1);");
+            body.Add("return;");
+            body.Add("}");
+            body.Add("");
+        }
+        if (members.All(member => member.IsFixed))
+        {
+            if (union)
+            {
+                string widths = string.Join(" + ", members.Select(member => member.Size.ToString(CultureInfo.InvariantCulture)));
+                body.Add("if (checked(3 + " + widths + ") > 4096)");
+                body.Add("\twriter.EnsureAdditionalCapacity(checked(" + widths + "));");
+            }
+            else
+            {
+                body.Add("writer.Cursor = (byte)" + count + ";");
+                body.Add("writer.Advance(1);");
+            }
+            if (members.Length == 1)
+            {
+                // A lone fixed member is not a contiguous group; the writer stores it directly.
+                body.Add("writer.Write(value." + members[0].Name + ");");
+                return body;
+            }
+            int width = members.Sum(member => member.Size);
+            body.Add("if (" + Proof(w, members, 0, members.Length - 1, "value", readOnly: true) + ")");
+            body.Add("\twriter.Write(ref " + Bytes(w, members[0], "value", readOnly: true, plain: true) + ", " + width.ToString(CultureInfo.InvariantCulture) + ");");
+            body.Add("else");
+            body.Add("{");
+            body.Add("ref byte cursor = ref writer.Cursor;");
+            AddFixedStores(w, members, 0, members.Length - 1, "cursor", body);
+            body.Add("writer.Advance(" + width.ToString(CultureInfo.InvariantCulture) + ");");
+            body.Add("}");
+            return body;
+        }
+
+        body.Add("ref byte cursor = ref writer.Cursor;");
+        body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
+        if (union && members.Length == 1)
+        {
+            // A lone record checks itself.
+            body.Add(members[0].Kind == DirectMemberKind.Text
+                ? "cursor = ref writer.WriteRecordString<" + Profile + ">(ref cursor, value." + members[0].Name + ");"
+                : "cursor = ref writer.WriteRecordSpan(ref cursor, value." + members[0].Name + ");");
+            body.Add("writer.Cursor = ref cursor;");
+            return body;
+        }
+        var terms = new List<string>();
+        if (!union)
+            terms.Add("1");
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            string snapshot = Snapshot(model, index);
+            if (member.Kind == DirectMemberKind.Fixed)
+                terms.Add(member.Size.ToString(CultureInfo.InvariantCulture));
+            else if (member.Kind == DirectMemberKind.Text)
+            {
+                body.Add("string " + snapshot + " = value." + member.Name + ";");
+                terms.Add("writer.RecordBound<" + Profile + ">(" + snapshot + ")");
+            }
+            else
+            {
+                body.Add("var " + snapshot + " = " + w.A("LuminPackWriter") + ".Capture(value." + member.Name + ");");
+                terms.Add(snapshot + ".Bound");
+            }
+        }
+        body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
+        if (!union)
+        {
+            body.Add("cursor = (byte)" + count + ";");
+            body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 1);");
+        }
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (member.IsFixed)
+            {
+                int last = RunEnd(members, index);
+                if (last == index)
+                {
+                    if (member.Size == 8)
+                    {
+                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8)");
+                        body.Add("{");
+                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
+                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
+                        body.Add("}");
+                        body.Add("else");
+                        body.Add("{");
+                        body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
+                        body.Add("}");
+                        body.Add("");
+                    }
+                    else
+                    {
+                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
+                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
+                    }
+                    continue;
+                }
+                int width = 0;
+                for (int item = index; item <= last; item++)
+                    width += members[item].Size;
+                body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true) + ")");
+                body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " + Bytes(w, member, "value", readOnly: true) + ", " +
+                    width.ToString(CultureInfo.InvariantCulture) + ");");
+                body.Add("else");
+                body.Add("{");
+                AddFixedStores(w, members, index, last, "cursor", body);
+                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width.ToString(CultureInfo.InvariantCulture) + ");");
+                body.Add("}");
+                body.Add("");
+                index = last;
+                continue;
+            }
+            body.Add("// Field: " + member.Name);
+            if (member.Kind == DirectMemberKind.Text)
+                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + Snapshot(model, index) + ");");
+            else
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index) + ");");
+        }
+        if (body[body.Count - 1].Length != 0)
+            body.Add("");
+        body.Add("writer.Cursor = ref cursor;");
+        return body;
+    }
+
+    /// <summary>Stores a run of fixed fields at their packed offsets from a cursor.</summary>
+    private static void AddFixedStores(DirectWriter w, DirectMember[] members, int first, int last, string cursor, List<string> body)
+    {
+        int offset = 0;
+        for (int index = first; index <= last; index++)
+        {
+            var member = members[index];
+            body.Add(member.Size == 8
+                ? w.A("LuminPackWriter") + ".Write(ref " + At(w, cursor, offset) + ", in value." + member.Name + ");"
+                : w.A("Unsafe") + ".WriteUnaligned(ref " + At(w, cursor, offset) + ", value." + member.Name + ");");
+            offset += member.Size;
+        }
+    }
+
+    /// <summary>Builds a root read body.</summary>
+    private static List<string> ReadBody(DirectTypeModel model, DirectWriter w, bool union)
+    {
+        var members = model.Members;
+        var body = new List<string>();
+        string Policy() => w.A("LuminPackInputPolicy");
+        // Without the null marker, the safe-read projection checks the first lone byte read as the object's member marker.
+        bool markerSeen = !union;
+        if (!union)
+        {
+            body.Add("if (" + Policy() + ".ReadNullMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + "))");
+            body.Add("\treturn;");
+        }
+        body.Add("var instance = value ??= new " + model.GlobalName + "();");
+        int cursors = 0;
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (member.IsFixed)
+            {
+                int last = RunEnd(members, index);
+                if (last == index)
+                {
+                    if (member.Scalar == "byte" && !markerSeen)
+                    {
+                        markerSeen = true;
+                        body.Add("instance." + member.Name + " = " + Policy() + ".ReadMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + ");");
+                    }
+                    else
+                        body.Add("instance." + member.Name + " = " + (member.IsBoolean ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
+                    continue;
+                }
+                int width = 0;
+                var offsets = new List<int>();
+                for (int item = index; item <= last; item++)
+                {
+                    if (members[item].IsBoolean)
+                        offsets.Add(width);
+                    width += members[item].Size;
+                }
+                string cursor = "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
+                string widthText = width.ToString(CultureInfo.InvariantCulture);
+                if (!union)
+                {
+                    body.Add("if (" + Proof(w, members, index, last, "instance", readOnly: false) + ")");
+                    string block = Bytes(w, member, "instance", readOnly: false, plain: true);
+                    if (offsets.Count == 0)
+                        body.Add("\treader.Read(ref " + block + ", " + widthText + ");");
+                    else if (BatchMask(offsets, width) is { } batch)
+                        body.Add("\t" + Policy() + ".ReadBatch(ref reader, ref " + block + ", " + widthText + ", " + batch + ");");
+                    else
+                    {
+                        body.Add("{");
+                        body.Add("reader.Read(ref " + block + ", " + widthText + ");");
+                        for (int item = index; item <= last; item++)
+                            if (members[item].IsBoolean)
+                                body.Add(Policy() + ".CheckBoolean(in instance." + members[item].Name + ");");
+                        body.Add("}");
+                    }
+                    body.Add("else");
+                    body.Add("{");
+                }
+                body.Add("ref byte " + cursor + " = ref reader.Cursor;");
+                body.Add("reader.EnsureReadable(" + widthText + ");");
+                body.Add("reader.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader.Cursor, " + widthText + ");");
+                int offset = 0;
+                for (int item = index; item <= last; item++)
+                {
+                    var field = members[item];
+                    body.Add("instance." + field.Name + " = " + (field.IsBoolean ? Policy() + ".ReadBoolean(ref " + At(w, cursor, offset, plain: true) + ");"
+                        : w.A("LuminPackReader") + ".Read<" + field.Scalar + ">(ref " + At(w, cursor, offset, plain: true) + ");"));
+                    offset += field.Size;
+                }
+                if (!union)
+                    body.Add("}");
+                body.Add("");
+                index = last;
+                continue;
+            }
+            if (member.Kind == DirectMemberKind.Text)
+                body.Add("reader.Read<" + Profile + ">(ref instance." + member.Name + ");");
+            else
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref instance." + member.Name + "!);");
+        }
+        while (body[body.Count - 1].Length == 0)
+            body.RemoveAt(body.Count - 1);
+        return body;
+    }
+
+    /// <summary>Selects one four- or eight-byte window holding every Boolean of a batch and its rejection mask.</summary>
+    private static string BatchMask(List<int> offsets, int length)
+    {
+        int low = offsets.Min(), high = offsets.Max();
+        int width = length >= 8 && high - low < 8 ? 8 : length >= 4 && high - low < 4 ? 4 : 0;
+        if (width == 0)
+            return null;
+        int window = Math.Min(low, length - width);
+        ulong mask = offsets.Aggregate(0UL, (bits, value) => bits | 0xFEUL << (8 * (value - window)));
+        return window.ToString(CultureInfo.InvariantCulture) + ", 0x" + mask.ToString(width == 8 ? "X16" : "X8", CultureInfo.InvariantCulture) + (width == 8 ? "UL" : "U");
+    }
+}

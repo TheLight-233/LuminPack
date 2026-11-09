@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using LuminPack.Code;
 using LuminPack.Code.Core;
+using LuminPack.SourceGenerator.Direct;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -120,7 +121,7 @@ public sealed partial class LuminPackFormatterGenerator
         if (!binary && !json)
             return;
 
-        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Combine(called)
+        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension) || value.Direct != null).Combine(called)
             .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json,
                 pair.Right.ForPayload(pair.Left.Payload)))
             .Combine(forwarding).Select(static (pair, _) => pair.Right.Apply(pair.Left));
@@ -129,7 +130,18 @@ public sealed partial class LuminPackFormatterGenerator
             Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
             try
             {
-                output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
+                var file = input.Left;
+                if (file.Render == null)
+                    output.AddSource(file.Name, GeneratedSourceLayout.Apply(file.Text, input.Right));
+                else if (DirectEmission.Mode == DirectEmissionMode.Verify)
+                {
+                    // The original output is published; the direct rendering is only compared with it.
+                    string original = GeneratedSourceLayout.Apply(file.Text, input.Right);
+                    output.AddSource(file.Name, original);
+                    DirectEmission.Compare(file.Name, original, file.Render(input.Right));
+                }
+                else
+                    output.AddSource(file.Name, input.Right == GeneratedSourceLayout.AllAliases ? file.Text : file.Render(input.Right));
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -161,28 +173,34 @@ public sealed partial class LuminPackFormatterGenerator
 
         string extension = string.Empty;
         string union = string.Empty;
+        DirectTypeModel direct = null;
         try
         {
             var emittedTypes = ReachabilityAnalysisCache.GetOrCreate(compilation, tier);
             if (emittedTypes != null)
                 CompilationTypeAnalysisCache.GetOrCreate(compilation).IndexReachableTypes(emittedTypes.EmittedTypes
                     .Where(type => !LuminPackExtensionGenerator.ContainsTypeParameter(type)));
-            extension = LuminPackExtensionGenerator.CodeGenerator(data, metadata, compilation);
-            // The root's operation template starts from the same text, so the two share one parse.
-            if (!string.IsNullOrEmpty(extension))
-                extension = SerializerCoreProjection.Project(EmitterSyntax.Parse(compilation, extension,
-                    metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)), compilation, metadata, operations);
-            union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata,
-                emittedTypes?.EmittedTypes) : string.Empty;
-            if (!string.IsNullOrEmpty(union))
-                union = SerializerCoreProjection.RewriteCalls(union, compilation, metadata);
-            if (!string.IsNullOrEmpty(extension))
+            // A covered type's files are rendered from its model at publication, without emitter text or projections.
+            direct = DirectTypeModel.TryCreate(data, compilation, metadata);
+            if (direct == null || DirectEmission.Mode != DirectEmissionMode.On)
             {
+                extension = LuminPackExtensionGenerator.CodeGenerator(data, metadata, compilation);
+                // The root's operation template starts from the same text, so the two share one parse.
+                if (!string.IsNullOrEmpty(extension))
+                    extension = SerializerCoreProjection.Project(EmitterSyntax.Parse(compilation, extension,
+                        metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)), compilation, metadata, operations);
+                union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata,
+                    emittedTypes?.EmittedTypes) : string.Empty;
                 if (!string.IsNullOrEmpty(union))
-                    union = GeneratedSourceDocumentation.Complete(union, metadata.ParseOptions);
+                    union = SerializerCoreProjection.RewriteCalls(union, compilation, metadata);
+                if (!string.IsNullOrEmpty(extension))
+                {
+                    if (!string.IsNullOrEmpty(union))
+                        union = GeneratedSourceDocumentation.Complete(union, metadata.ParseOptions);
+                }
+                else
+                    union = string.Empty;
             }
-            else
-                union = string.Empty;
         }
         catch (Exception exception)
         {
@@ -212,7 +230,7 @@ public sealed partial class LuminPackFormatterGenerator
         {
             layouts = new FrozenLayoutGroup(className, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), exception.GetType().FullName + ": " + exception.Message);
         }
-        return new FrozenTypeEmission(name, extension, union, layouts, diagnostics, FormatterTypeName.Get(symbol));
+        return new FrozenTypeEmission(name, extension, union, layouts, diagnostics, FormatterTypeName.Get(symbol), direct);
     }
 
     /// <summary>Selects the binary or JSON part of a type's roots and Union slots as one file per format.</summary>
@@ -224,6 +242,33 @@ public sealed partial class LuminPackFormatterGenerator
     /// <param name="called">The operations the project calls.</param>
     /// <returns>The files of the selected formats.</returns>
     private static IEnumerable<FrozenGeneratedSource> TypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined, GeneratedOperations called)
+    {
+        // A covered type renders its own files. Covered projects publish every operation, so no operation filter applies.
+        if (value.Direct is { } direct)
+        {
+            if (DirectEmission.Mode == DirectEmissionMode.On)
+            {
+                if (binary)
+                    yield return new FrozenGeneratedSource(value.HintName + ".g.cs", DirectEmission.Render(direct, false, GeneratedSourceLayout.AllAliases),
+                        aliases => DirectEmission.Render(direct, false, aliases), value.Payload);
+                if (json)
+                    yield return new FrozenGeneratedSource(combined ? value.HintName + ".Json.g.cs" : value.HintName + ".g.cs",
+                        DirectEmission.Render(direct, true, GeneratedSourceLayout.AllAliases), aliases => DirectEmission.Render(direct, true, aliases), value.Payload);
+                yield break;
+            }
+            foreach (var file in OriginalTypeFiles(value, binary, json, combined, called))
+            {
+                bool jsonFile = !binary || file.Name.EndsWith(".Json.g.cs", StringComparison.Ordinal);
+                yield return new FrozenGeneratedSource(file.Name, file.Text, aliases => DirectEmission.Render(direct, jsonFile, aliases), file.Payload);
+            }
+            yield break;
+        }
+        foreach (var file in OriginalTypeFiles(value, binary, json, combined, called))
+            yield return file;
+    }
+
+    /// <summary>Selects the binary or JSON part of a type's projected roots and Union slots.</summary>
+    private static IEnumerable<FrozenGeneratedSource> OriginalTypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined, GeneratedOperations called)
     {
         var options = value.Layouts.Options;
         var roots = GeneratedFormatPartition.Get(value.Extension, options);

@@ -18,7 +18,7 @@ public static class LuminPackJsonCodeGenerator
     /// <summary>Hashes already encoded name bytes without allocating the same payload again.</summary>
     /// <param name="bytes">The complete UTF-8 encoding.</param>
     /// <returns>The unchanged name hash.</returns>
-    private unsafe static ulong ComputeUtf8BytesHash(byte[] bytes)
+    internal unsafe static ulong ComputeUtf8BytesHash(byte[] bytes)
     {
         fixed (byte* input = bytes)
             return ComputeXxHash3(input, bytes.Length);
@@ -776,7 +776,7 @@ public static class LuminPackJsonCodeGenerator
     /// <summary>Performs the can deserialize directly into fresh result step for the current operation.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool CanDeserializeDirectlyIntoFreshResult(LuminDataInfo data)
+    internal static bool CanDeserializeDirectlyIntoFreshResult(LuminDataInfo data)
     {
         // JSON can omit members. Classes therefore retain the existing constructor and
         // initializer proof; otherwise assigning delayed private members would overwrite
