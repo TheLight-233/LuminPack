@@ -18,6 +18,8 @@ internal sealed partial class StaticSerializerBinding
     private readonly Dictionary<string, SerializerApiKind> _directApis = new(StringComparer.Ordinal);
     private readonly List<BoundCall> _calls = new();
     private readonly Dictionary<string, IMethodSymbol> _operations = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _interceptNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _usedInterceptNames = new(StringComparer.Ordinal);
     private readonly List<ITypeSymbol> _operationPayloads = new();
     private readonly Compilation _input;
     private Compilation _binding;
@@ -55,7 +57,7 @@ internal sealed partial class StaticSerializerBinding
     /// <param name="payload">The canonical concrete payload spelling.</param>
     /// <returns>A stable identifier independent of call locations.</returns>
     internal static string EntryName(string payload)
-        => "LuminEntry_" + RootContainerProjection.Hash(payload.Replace("global::", string.Empty).Replace(" ", string.Empty));
+        => "LuminEntry_" + ReadableTypeName.Of(payload);
 
     /// <summary>Analyzes calls against a constant-size signature tree.</summary>
     /// <param name="compilation">The original consumer compilation.</param>
@@ -188,7 +190,59 @@ internal sealed partial class StaticSerializerBinding
         string name = FormatterTypeName.Get(payload);
         _apis.TryGetValue(name, out var selected);
         _apis[name] = selected | Family(method);
-        return "Intercept_" + RootContainerProjection.Hash(key);
+        return InterceptName(key, method);
+    }
+
+    /// <summary>Names a specialized source wrapper after its method and closed arguments, such as <c>WrapperSave_ArmorItem</c>.</summary>
+    /// <param name="method">The closed source method.</param>
+    /// <returns>A name no other generated helper of this compilation uses; wrappers are created in source order.</returns>
+    private string WrapperName(IMethodSymbol method)
+    {
+        var arguments = method.ContainingType.TypeArguments.Concat(method.TypeArguments)
+            .Select(argument => ReadableTypeName.Of(FormatterTypeName.Get(argument))).ToArray();
+        string plain = "Wrapper" + method.Name + (arguments.Length == 0 ? string.Empty : "_" + string.Join("And", arguments));
+        string name = plain;
+        for (int number = 2; !_usedInterceptNames.Add(name); number++)
+            name = plain + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return name;
+    }
+
+    /// <summary>Names an operation's interception helper once, numbering a name that an equal C# signature already took.</summary>
+    /// <param name="key">The operation key.</param>
+    /// <param name="method">The closed facade operation.</param>
+    /// <returns>The helper name.</returns>
+    /// <remarks>Operations are required in source order, so the numbering is deterministic. Keys that C# does not tell apart,
+    /// such as tuples that differ only in element names, take the next number.</remarks>
+    private string InterceptName(string key, IMethodSymbol method)
+    {
+        if (_interceptNames.TryGetValue(key, out string name))
+            return name;
+        string plain = InterceptName(method);
+        name = plain;
+        for (int number = 2; !_usedInterceptNames.Add(name); number++)
+            name = plain + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _interceptNames.Add(key, name);
+        return name;
+    }
+
+    /// <summary>Names the interception helper of a closed facade operation after the operation and its payload.</summary>
+    /// <param name="method">The closed facade operation.</param>
+    /// <returns>A name such as <c>InterceptSerialize_ArmorItem</c>, or <c>InterceptSerialize_ArmorItem_Utf8Length</c> with an
+    /// explicit profile; operations that share a name differ in their parameters or arity.</returns>
+    private static string InterceptName(IMethodSymbol method)
+    {
+        var name = new System.Text.StringBuilder("Intercept").Append(method.Name).Append('_').Append(ReadableTypeName.Of(FormatterTypeName.Get(Payload(method))));
+        // The interception helper is generic over the same arguments, so each closed profile needs its own name.
+        foreach (var argument in method.TypeArguments.Skip(1))
+        {
+            string profile = ReadableTypeName.Of(FormatterTypeName.Get(argument));
+            if (profile.StartsWith("LuminPack", StringComparison.Ordinal) && profile.Length > "LuminPack".Length)
+                profile = profile.Substring("LuminPack".Length);
+            if (profile.EndsWith("Options", StringComparison.Ordinal) && profile.Length > "Options".Length)
+                profile = profile.Substring(0, profile.Length - "Options".Length);
+            name.Append('_').Append(profile);
+        }
+        return name.ToString();
     }
 
     /// <summary>Recognizes only the generated facade's ordinary methods.</summary>

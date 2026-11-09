@@ -40,7 +40,7 @@ internal static class RootContainerProjection
         if (containers.Count == 0)
             return root;
         foreach (string payload in containers.Keys.ToArray())
-            containers[payload] = ContainerPrefix + Hash(payload);
+            containers[payload] = ContainerPrefix + ReadableTypeName.Of(payload);
 
         // Every root call must name a payload whose roots move; otherwise the contribution keeps its original form.
         var calls = new Dictionary<InvocationExpressionSyntax, string>();
@@ -130,8 +130,8 @@ internal static class RootContainerProjection
     /// <returns>The payload key.</returns>
     internal static string PayloadKey(string type) => type.Replace("global::", string.Empty).Replace("?", string.Empty).Replace(" ", string.Empty);
 
-    /// <summary>Derives a stable container suffix from a payload key.</summary>
-    /// <param name="payload">The payload key.</param>
+    /// <summary>Derives a stable suffix from a key that is not a type, such as an interception signature.</summary>
+    /// <param name="payload">The key.</param>
     /// <returns>Sixteen hexadecimal digits of the key's 64-bit FNV-1a hash.</returns>
     internal static string Hash(string payload)
     {

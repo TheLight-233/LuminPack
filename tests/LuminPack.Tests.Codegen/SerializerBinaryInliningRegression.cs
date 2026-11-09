@@ -335,8 +335,8 @@ internal static class SerializerBinaryInliningRegression
         Require(generated.Sum(text => Regex.Matches(text, @"readonly byte\[\] _utf8_First\b").Count) == 1 &&
                 generated.Sum(text => Regex.Matches(text, @"readonly char\[\] _utf16_First\b").Count) == 1,
             "The shared JSON cache array for Payload.First was declared more than once across all generated files.");
-        Require(generated.Sum(text => Regex.Matches(text, @"_utf8Hash_First\b").Count) == 1,
-            "The shared JSON cache hash symbol for Payload.First must appear exactly once across all generated files.");
+        Require(generated.Sum(text => Regex.Matches(text, @"_utf8Hash_First\b").Count) == 0,
+            "The unused JSON hash constant for Payload.First must not be emitted.");
         if (Environment.GetEnvironmentVariable("LUMINPACK_MECHANISM_CAPTURE") is { Length: > 0 } capture)
         {
             Directory.CreateDirectory(capture);

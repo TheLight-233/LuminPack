@@ -1458,10 +1458,11 @@ static void AssertScopedEmission(
             $"{scenario} scoped emission mismatch. Expected {shouldEmitScoped}, got {emitsScoped}.");
     }
 
-    bool emitsLiteralPrefix = generatedSource.Contains(
-        "ReadOnlySpan<byte> _jsonPrefixUtf8_", StringComparison.Ordinal);
+    // The JSON heads of a model are grouped in its Utf8Head table, the prefixed head first.
+    bool emitsLiteralPrefix = System.Text.RegularExpressions.Regex.IsMatch(generatedSource,
+        @"class Utf8Head\s*\{\s*internal static (global::System\.)?ReadOnlySpan<byte> ");
     if (emitsLiteralPrefix != shouldEmitScoped ||
-        (!shouldEmitScoped && !generatedSource.Contains("readonly byte[] _jsonPrefixUtf8_", StringComparison.Ordinal)))
+        (!shouldEmitScoped && !System.Text.RegularExpressions.Regex.IsMatch(generatedSource, @"class Utf8Head\s*\{\s*internal static readonly byte\[\] ")))
     {
         throw new InvalidOperationException($"{scenario} JSON prefix storage does not match its language/target branch.");
     }

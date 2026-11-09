@@ -105,6 +105,8 @@
 
 每个发布器在输出前独立比较完整文件，因此只影响 JSON 方法的改动可以继续复用对应的二进制文件。同一次编译中，三个生成器共用每个模型的同一份渲染结果。
 
+以负载命名的成员使用负载的可读拼写（`ReadableTypeName`）：`Serialize_ArmorItem`、`LuminRoots_ListOfInt`、`Binary_<assembly>_DictionaryOfIntAndString`。拼写相同的负载（例如不同命名空间中的同名类型）在同一个 partial 容器中成为重载，因为这类成员都以负载作为参数。拦截辅助方法命名为 `Intercept<操作>_<类型>`，有显式配置时再加配置名；特化的源码包装方法命名为 `Wrapper<方法>_<类型参数>`；与已有名称 C# 签名相同的名称按源码顺序编号。Union 槽位名保持原有拼写，因为用户代码可能重写它们。排版阶段把每个模型的 JSON 名称表归入嵌套类，例如 `JsonNamespaceArmorItem.Utf8.ItemId` 和 `Utf8Head.ItemId`，并在方法不使用原名时去掉展开局部变量的编号。
+
 框架字段分类使用 `CodeEmitterTypeCatalog` 中的 CLR 元数据名称，例如 `System.DateOnly`，不包含生成的 C# 源码所用的 `global::` 限定符。直接字段、可空值和集合元素共用该目录，在考虑用户对象的构造函数之前完成分类。
 
 1. 分析类型的规范契约，冻结操作模板。
@@ -202,7 +204,7 @@ Observable JSON 读取器仅在实例为精确框架类型、已验证的集合�
 
 ### 生成的文件
 
-`LuminPackGen_LuminPackSerializer.g.cs` 存放共享泛型 API。启用[静态拦截](generation-modes.cn.md#静态拦截)时，`StaticSerializerBinding` 绑定固定大小的签名树，记录编译器提供的调用位置，在 `LuminPackGen_Interceptors.g.cs` 中生成共享方法。显式配置同时指定负载和选项类型，此路径不增加负载专属的配置重载。具体便捷方法放在 `LuminEntry_<hash>` 容器中，状态转发方法使用负载专属名称。IL 后端输出相同入口及构建期签名映射，`LuminPack.ILPostProcessor` 在编译后替换本地调用。主动关闭两种接入时，兼容后端保留具体重载文件。每个生成的程序集都拥有 public 的 `LuminPackSerializer`，生成文件屏蔽 CS0436，以遮蔽引用程序集中的同名类型。Root 继续位于 `LuminRoots_<hash>` 容器中。负载已知的推进调用直接指名 `Binary_<assembly>_<hash>` 扩展类，转发扩展与便捷方法都调用已记录的同一个 Root。供用户使用的 `Write`/`Read` 扩展签名继续保留。不新增 Plan struct。
+`LuminPackGen_LuminPackSerializer.g.cs` 存放共享泛型 API。启用[静态拦截](generation-modes.cn.md#静态拦截)时，`StaticSerializerBinding` 绑定固定大小的签名树，记录编译器提供的调用位置，在 `LuminPackGen_Interceptors.g.cs` 中生成共享方法。显式配置同时指定负载和选项类型，此路径不增加负载专属的配置重载。具体便捷方法放在 `LuminEntry_<Type>` 容器中，状态转发方法使用负载专属名称。IL 后端输出相同入口及构建期签名映射，`LuminPack.ILPostProcessor` 在编译后替换本地调用。主动关闭两种接入时，兼容后端保留具体重载文件。每个生成的程序集都拥有 public 的 `LuminPackSerializer`，生成文件屏蔽 CS0436，以遮蔽引用程序集中的同名类型。Root 继续位于 `LuminRoots_<Type>` 容器中。负载已知的推进调用直接指名 `Binary_<assembly>_<Type>` 扩展类，转发扩展与便捷方法都调用已记录的同一个 Root。供用户使用的 `Write`/`Read` 扩展签名继续保留。不新增 Plan struct。
 
 源码静态包装方法通过反向调用图索引闭合，每个完整方法构造只复制一份方法体。迁移保留原有方法绑定与参数转换，固定调用者信息的默认常量，拒绝不支持或不可访问的方法体。兜底边界保留原源码与注册规则。编译上下文中的语义对象使用弱关联持有；聚合缓存标识包含拦截位置及所有特化方法体，包括嵌套依赖。Root 与便捷入口的标识不依赖源码位置。
 

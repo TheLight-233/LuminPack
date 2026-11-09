@@ -19,7 +19,7 @@ internal static class BinaryExtensionProjection
     /// <param name="container">The assembly-specific extension container identity.</param>
     /// <param name="payload">The payload spelling.</param>
     /// <returns>The extension class name.</returns>
-    internal static string Owner(string container, string payload) => "Binary_" + container + "_" + RootContainerProjection.Hash(RootContainerProjection.PayloadKey(payload));
+    internal static string Owner(string container, string payload) => "Binary_" + container + "_" + ReadableTypeName.Of(RootContainerProjection.PayloadKey(payload));
 
     /// <summary>Creates thin default and compiled-profile operations for the concrete types in this contribution.</summary>
     /// <param name="container">The assembly-specific extension container identity.</param>

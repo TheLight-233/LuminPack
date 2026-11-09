@@ -27,8 +27,8 @@ internal static partial class SerializerInterceptorRegression
                 if (entry)
                     RequireColumn(type.GetFirstToken(), 8);
                 foreach (var method in type.Members.OfType<MethodDeclarationSyntax>().Where(method => entry ||
-                    method.Identifier.ValueText.StartsWith("Intercept_", StringComparison.Ordinal) ||
-                    method.Identifier.ValueText.StartsWith("Wrapper_", StringComparison.Ordinal)))
+                    method.Identifier.ValueText.StartsWith("Intercept", StringComparison.Ordinal) ||
+                    method.Identifier.ValueText.StartsWith("Wrapper", StringComparison.Ordinal)))
                 {
                     int column = entry ? 12 : 8;
                     RequireColumn(method.GetFirstToken(), column);
@@ -68,12 +68,12 @@ internal static partial class SerializerInterceptorRegression
         foreach (string name in new[] { "DirectWrite", "DirectRead", "DirectWrapper" })
         {
             var selected = CalledMethods(entry.GetMethod(name)!).Single(method => method.DeclaringType?.FullName == "LuminPack.LuminPackSerializer");
-            Require(!selected.IsGenericMethod && selected.Name.StartsWith(name == "DirectWrapper" ? "Wrapper_" : "Intercept_", StringComparison.Ordinal),
+            Require(!selected.IsGenericMethod && selected.Name.StartsWith(name == "DirectWrapper" ? "Wrapper" : "Intercept", StringComparison.Ordinal),
                 name + " retained a generic payload call in IL.");
             var target = CalledMethods(selected).Single();
             if (name == "DirectWrapper")
             {
-                Require(target.Name.StartsWith("Intercept_", StringComparison.Ordinal) && !target.IsGenericMethod,
+                Require(target.Name.StartsWith("Intercept", StringComparison.Ordinal) && !target.IsGenericMethod,
                     "A specialized wrapper retained payload dispatch in IL.");
                 target = CalledMethods(target).Single();
             }

@@ -38,6 +38,10 @@ internal static partial class GeneratedSourceLayout
         ("LuminPackDeclaredOptions", "global::LuminPack.Option.LuminPackDeclaredOptions"),
         ("LuminPackUtf16LengthOptions", "global::LuminPack.Option.LuminPackUtf16LengthOptions"),
         ("LuminPackUtf8LengthOptions", "global::LuminPack.Option.LuminPackUtf8LengthOptions"),
+        ("LuminPackUtf8TokenOptions", "global::LuminPack.Option.LuminPackUtf8TokenOptions"),
+        ("LuminPackUtf16TokenOptions", "global::LuminPack.Option.LuminPackUtf16TokenOptions"),
+        ("LuminPackUtf8VarIntOptions", "global::LuminPack.Option.LuminPackUtf8VarIntOptions"),
+        ("LuminPackUtf16VarIntOptions", "global::LuminPack.Option.LuminPackUtf16VarIntOptions"),
         ("LuminPackStringEncoding", "global::LuminPack.Option.LuminPackStringEncoding"),
         ("LuminPackStringRecording", "global::LuminPack.Option.LuminPackStringRecording"),
         ("LuminPackCode", "global::LuminPack.Code.LuminPackCode"),
@@ -99,10 +103,14 @@ internal static partial class GeneratedSourceLayout
             entry.Target.EndsWith("Attribute", StringComparison.Ordinal) &&
             source.Contains(entry.Target.Substring(0, entry.Target.Length - "Attribute".Length))) ||
             source.Contains(SystemObject);
-        if (!union && !helpers)
+        bool json = source.IndexOf(JsonHelper, StringComparison.Ordinal) >= 0;
+        bool numbered = AnyNumberedLocal.IsMatch(source);
+        if (!union && !helpers && !json && !numbered)
             return source;
 
         var root = SyntaxFactory.ParseCompilationUnit(source, options: ParseOptions);
+        if (json)
+            root = JsonNames(root);
         // An alias spells its target's simple name, so only a declaration of that name in this file can give it another meaning.
         if (helpers)
             foreach (var token in root.DescendantTokens())
@@ -111,7 +119,8 @@ internal static partial class GeneratedSourceLayout
                     aliases &= ~(1 << index);
         var layout = new Presentation(helpers ? aliases : 0, union);
         var rewritten = (CompilationUnitSyntax)layout.Visit(root);
-        return Reindent(Flatten(layout.AddUsings(rewritten))).ToFullString();
+        var flat = Flatten(layout.AddUsings(rewritten));
+        return Reindent(numbered ? PlainLocals(flat) : flat).ToFullString();
     }
 
     /// <summary>Removes bare nested blocks whose locals cannot meet another use of their names.</summary>

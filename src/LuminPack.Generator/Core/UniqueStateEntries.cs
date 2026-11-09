@@ -14,7 +14,7 @@ internal static class UniqueStateEntries
     /// <param name="payload">The exact payload spelling.</param>
     /// <returns>A payload-specific method name.</returns>
     internal static string Name(string operation, string payload)
-        => operation + "_" + RootContainerProjection.Hash(payload.Replace("global::", string.Empty).Replace(" ", string.Empty));
+        => operation + "_" + ReadableTypeName.Of(payload);
 
     /// <summary>Renames declarations and binds generated calls using their actual payload types.</summary>
     /// <param name="root">The fully projected operation contribution.</param>

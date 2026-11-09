@@ -171,8 +171,6 @@ public static class LuminPackJsonCodeGenerator
                 sb.Append((char)39).Append(EscapeChar(field.Name[part])).Append((char)39);
             }
             sb.AppendLine(" };");
-            sb.Append("        internal const ulong _utf8Hash_").Append(MemberSuffix(field.Name)).Append(" = ").Append(hash8).AppendLine("UL;");
-            sb.Append("        internal const ulong _utf16Hash_").Append(MemberSuffix(field.Name)).Append(" = ").Append(hash16).AppendLine("UL;");
         }
         if (aliases != 0)
             sb.AppendLine("        internal static class LuminPackOldNames {");
@@ -1069,20 +1067,12 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
         sb.AppendLine("        internal static readonly byte[] _utf8_id = new byte[] { " + text + " };");
         string text2 = string.Join(", ", "$id".Select((char c) => "'" + EscapeChar(c) + "'"));
         sb.AppendLine("        internal static readonly char[] _utf16_id = new char[] { " + text2 + " };");
-        ulong num = LuminPackJsonCodeGenerator.ComputeUtf8Hash("$id");
-        sb.AppendLine($"        internal const ulong _utf8Hash_id = {num}UL;");
-        ulong num2 = LuminPackJsonCodeGenerator.ComputeUtf16Hash("$id");
-        sb.AppendLine($"        internal const ulong _utf16Hash_id = {num2}UL;");
         sb.AppendLine();
         byte[] bytes2 = Encoding.UTF8.GetBytes("$ref");
         string text3 = string.Join(", ", bytes2.Select((byte b) => $"(byte){b}"));
         sb.AppendLine("        internal static readonly byte[] _utf8_ref = new byte[] { " + text3 + " };");
         string text4 = string.Join(", ", "$ref".Select((char c) => "'" + EscapeChar(c) + "'"));
         sb.AppendLine("        internal static readonly char[] _utf16_ref = new char[] { " + text4 + " };");
-        ulong num3 = LuminPackJsonCodeGenerator.ComputeUtf8Hash("$ref");
-        sb.AppendLine($"        internal const ulong _utf8Hash_ref = {num3}UL;");
-        ulong num4 = LuminPackJsonCodeGenerator.ComputeUtf16Hash("$ref");
-        sb.AppendLine($"        internal const ulong _utf16Hash_ref = {num4}UL;");
     }
 
     /// <summary>Performs the escape char step for the current operation.</summary>

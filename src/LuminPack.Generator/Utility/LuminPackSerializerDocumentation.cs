@@ -135,7 +135,7 @@ internal static class LuminPackSerializerDocumentation
                     string rootName = name.StartsWith("Deserialize", StringComparison.Ordinal) ? "RootRead" : "RootWrite";
                     if (name.Contains("Json"))
                         rootName += "Json";
-                    string container = RootContainerProjection.ContainerPrefix + RootContainerProjection.Hash(
+                    string container = RootContainerProjection.ContainerPrefix + ReadableTypeName.Of(
                         RootContainerProjection.PayloadKey(FormatterTypeName.Get(type)));
                     navigation = "global::LuminPack.LuminPackSerializer." + container + "." + rootName;
                 }

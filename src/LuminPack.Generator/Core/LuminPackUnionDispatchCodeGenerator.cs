@@ -112,7 +112,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             // Cross-assembly manual registration: derived types living in assemblies the generator
             // cannot see are registered at runtime by their MethodTable, so the throwing base slots
             // below can dispatch to the registered static methods instead.
-            sb.AppendLine($"{padding}private static readonly global::LuminPack.Code.LuminPackFormatterTable s_unionRegistry_{suffix} = new global::LuminPack.Code.LuminPackFormatterTable();");
+            sb.AppendLine($"{padding}private static readonly global::LuminPack.Code.LuminPackFormatterTable LuminPackUnionRegistry_{suffix} = new global::LuminPack.Code.LuminPackFormatterTable();");
             sb.AppendLine();
             sb.AppendLine($"{padding}[global::LuminPack.Attribute.Preserve]");
             sb.AppendLine($"{padding}public static void Register<TMember>(int tag,");
@@ -126,10 +126,10 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
                 sb.AppendLine($"{padding}    if ({string.Join(" || ", knownTags.Distinct().Select(tag => "tag == " + tag))}) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"This Union tag belongs to a generated case.\");");
             sb.AppendLine($"{padding}    if (!typeof({rootType}).IsAssignableFrom(typeof(TMember))) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"The registered member must implement or derive from the Union root.\");");
             sb.AppendLine($"{padding}    if (writeValue == null || readValue == null || writeValueJson == null || readValueJson == null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"All four Union operations are required.\");");
-            sb.AppendLine($"{padding}    lock (s_unionRegistry_{suffix})");
+            sb.AppendLine($"{padding}    lock (LuminPackUnionRegistry_{suffix})");
             sb.AppendLine($"{padding}    {{");
             sb.AppendLine($"{padding}        if (TryGetRegisteredFormatter(tag, out _)) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(\"This Union tag is already registered.\");");
-            sb.AppendLine($"{padding}        if (!s_unionRegistry_{suffix}.TryAdd(");
+            sb.AppendLine($"{padding}        if (!LuminPackUnionRegistry_{suffix}.TryAdd(");
             sb.AppendLine($"{padding}            typeof(TMember),");
             sb.AppendLine($"{padding}            new {entryType} {{ Tag = tag, WriteValue = writeValue, ReadValue = readValue, WriteValueJson = writeValueJson, ReadValueJson = readValueJson }}))");
             sb.AppendLine($"{padding}        {{");
@@ -141,15 +141,15 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             sb.AppendLine($"{padding}[global::LuminPack.Attribute.Preserve]");
             sb.AppendLine($"{padding}public static bool TryGetRegisteredFormatter(int tag, out {entryType} entry)");
             sb.AppendLine($"{padding}{{");
-            sb.AppendLine($"{padding}    lock (s_unionRegistry_{suffix})");
+            sb.AppendLine($"{padding}    lock (LuminPackUnionRegistry_{suffix})");
             sb.AppendLine($"{padding}    {{");
-            sb.AppendLine($"{padding}        return s_unionRegistry_{suffix}.TryGetTag(tag, out entry);");
+            sb.AppendLine($"{padding}        return LuminPackUnionRegistry_{suffix}.TryGetTag(tag, out entry);");
             sb.AppendLine($"{padding}    }}");
             sb.AppendLine($"{padding}}}");
             sb.AppendLine();
             sb.AppendLine($"{padding}private static bool LuminPackTryGetRegistered_{suffix}(global::System.Type type, out {entryType} entry)");
             sb.AppendLine($"{padding}{{");
-            sb.AppendLine($"{padding}    lock (s_unionRegistry_{suffix}) return s_unionRegistry_{suffix}.TryGetValue((nint)global::LuminPack.Code.LuminPackMarshal.GetMethodTable(type), out entry);");
+            sb.AppendLine($"{padding}    lock (LuminPackUnionRegistry_{suffix}) return LuminPackUnionRegistry_{suffix}.TryGetValue((nint)global::LuminPack.Code.LuminPackMarshal.GetMethodTable(type), out entry);");
             sb.AppendLine($"{padding}}}");
             sb.AppendLine();
         }
@@ -543,6 +543,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
     /// <returns>The result of the operation.</returns>
     internal static string GetSlotSuffix(INamedTypeSymbol root)
     {
+        // Slot names are a public override contract, so this spelling stays as it is.
         var identity = root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         uint hash = 2166136261;
         foreach (var character in identity)

@@ -100,7 +100,7 @@ internal sealed partial class StaticSerializerBinding
             method.TypeArguments.Any(argument => !_binding.IsSymbolAccessibleWithin(argument, _binding.Assembly)) ||
             method.Parameters.Any(parameter => !_binding.IsSymbolAccessibleWithin(parameter.Type, _binding.Assembly)))
             return null;
-        var wrapper = new Wrapper(key, method);
+        var wrapper = new Wrapper(key, method, WrapperName(method));
         _wrappers.Add(key, wrapper);
         var model = _binding.GetSemanticModel(syntax.SyntaxTree);
         var rewriter = new WrapperBody(this, wrapper, model, TypeArguments(method), depth);
@@ -149,8 +149,8 @@ internal sealed partial class StaticSerializerBinding
         foreach (var operation in _operations)
         {
             var method = operation.Value;
-            text.Append("internal static ").Append(TypeName(method.ReturnType)).Append(" Intercept_")
-                .Append(RootContainerProjection.Hash(operation.Key)).Append(GenericDeclaration(method)).Append('(')
+            text.Append("internal static ").Append(TypeName(method.ReturnType)).Append(' ')
+                .Append(InterceptName(operation.Key, method)).Append(GenericDeclaration(method)).Append('(')
                 .Append(string.Join(", ", method.Parameters.Select(Parameter))).Append(')').Append(GenericConstraints(method))
                 .AppendLine(" { throw null!; }");
         }
@@ -217,16 +217,18 @@ internal sealed partial class StaticSerializerBinding
         internal SyntaxNode Body;
         internal bool Valid = true;
 
-        /// <summary>Gets the unique generated wrapper method name.</summary>
-        internal string Name => "Wrapper_" + RootContainerProjection.Hash(Key);
+        /// <summary>The unique generated wrapper method name.</summary>
+        internal readonly string Name;
 
         /// <summary>Starts a specialization before visiting recursive calls.</summary>
         /// <param name="key">The full method construction identity.</param>
         /// <param name="method">The closed source method.</param>
-        internal Wrapper(string key, IMethodSymbol method)
+        /// <param name="name">The unique generated method name.</param>
+        internal Wrapper(string key, IMethodSymbol method, string name)
         {
             Key = key;
             Method = method;
+            Name = name;
         }
     }
 

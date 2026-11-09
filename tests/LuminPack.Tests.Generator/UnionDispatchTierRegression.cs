@@ -42,7 +42,7 @@ internal static class UnionDispatchTierRegression
         VerifyClosureEdit(single);
 
         string nonsealed = Compiled(Generate(single.Replace("sealed partial", "partial"), register: true), "Root");
-        Require(nonsealed.Contains("case global::Only caseValue0 when ((object)value).GetType() == typeof(global::Only):"),
+        Require(nonsealed.Contains("case global::Only caseValue when ((object)value).GetType() == typeof(global::Only):"),
             "An assignable subtype must pass through the existing virtual fallback.", nonsealed);
 
         string cases(int count) => "using LuminPack.Attribute;\n[LuminPackable] public abstract partial class Many { public int Id; }\n" +

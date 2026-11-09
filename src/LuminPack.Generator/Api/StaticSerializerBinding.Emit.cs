@@ -49,8 +49,8 @@ internal sealed partial class StaticSerializerBinding
             if (locations.TryGetValue(operation.Key, out var attributes))
                 foreach (var location in attributes)
                     text.Append("        ").AppendLine(location);
-            text.Append("        internal static ").Append(TypeName(method.ReturnType)).Append(" Intercept_")
-                .Append(RootContainerProjection.Hash(operation.Key)).Append(GenericDeclaration(method)).Append('(')
+            text.Append("        internal static ").Append(TypeName(method.ReturnType)).Append(' ')
+                .Append(InterceptName(operation.Key, method)).Append(GenericDeclaration(method)).Append('(')
                 .Append(string.Join(", ", method.Parameters.Select(Parameter))).Append(')').AppendLine(GenericConstraints(method));
             text.AppendLine("        {");
             AppendCall(text, method, Payload(method));
