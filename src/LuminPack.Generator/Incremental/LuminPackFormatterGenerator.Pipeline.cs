@@ -24,9 +24,10 @@ public sealed partial class LuminPackFormatterGenerator
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
         var aliases = GeneratedSourceLayout.AvailableAliases(context);
-        var types = context.SyntaxProvider.CreateSyntaxProvider(
-            static (node, _) => node is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
-            static (syntax, _) => LuminPackSourceGenerator.GetTypeWithAttribute(syntax, LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE))
+        // Roslyn's attribute index binds only declarations whose attribute names can match, instead of every attributed type.
+        var types = context.SyntaxProvider.ForAttributeWithMetadataName(LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE,
+            static (node, _) => node is TypeDeclarationSyntax,
+            static (syntax, _) => syntax.TargetSymbol as INamedTypeSymbol)
             .Where(static symbol => symbol != null)
             .Select(static (symbol, _) => symbol!)
             .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
