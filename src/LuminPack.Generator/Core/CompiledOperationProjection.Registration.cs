@@ -52,7 +52,7 @@ internal sealed partial class CompiledOperationProjection
         /// <param name="node">An original registration call.</param>
         /// <returns>The same call targeting the closed-profile table.</returns>
         public override SyntaxNode VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
-            => node.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry"
+            => SyntaxText.Is(node.Expression, "global::LuminPack.Code.LuminPackFormatterRegistry")
                 ? node.WithExpression(SyntaxFactory.ParseExpression("global::LuminPack.Code.LuminPackFormatterRegistry<" + _profile + ">")) : base.VisitMemberAccessExpression(node);
     }
 

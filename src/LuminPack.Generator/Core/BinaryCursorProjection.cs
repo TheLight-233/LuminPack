@@ -44,7 +44,7 @@ internal sealed class BinaryCursorProjection : NodeRewriter
         {
             if (descendant is ParameterSyntax parameter)
             {
-                string type = parameter.Type?.ToString();
+                string type = MayNameState(parameter.Type) ? parameter.Type.ToString() : null;
                 if (IsBinary(type))
                     states.Add(parameter.Identifier.ValueText);
                 if (IsBinaryReader(type))
@@ -52,8 +52,9 @@ internal sealed class BinaryCursorProjection : NodeRewriter
             }
             else if (descendant is VariableDeclaratorSyntax variable)
             {
-                string type = (variable.Parent as VariableDeclarationSyntax)?.Type.ToString();
-                if (IsBinary(type) || variable.Initializer?.Value is ObjectCreationExpressionSyntax creation && IsBinary(creation.Type.ToString()))
+                var declared = (variable.Parent as VariableDeclarationSyntax)?.Type;
+                string type = MayNameState(declared) ? declared.ToString() : null;
+                if (IsBinary(type) || variable.Initializer?.Value is ObjectCreationExpressionSyntax creation && MayNameState(creation.Type) && IsBinary(creation.Type.ToString()))
                     states.Add(variable.Identifier.ValueText);
                 if (IsBinaryReader(type))
                     readers.Add(variable.Identifier.ValueText);
@@ -82,6 +83,12 @@ internal sealed class BinaryCursorProjection : NodeRewriter
             result = result.WithModifiers(result.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
         return result;
     }
+
+    /// <summary>Rejects type spellings that cannot name a state before printing them.</summary>
+    /// <param name="type">A declared type, or null.</param>
+    /// <returns>False when the spelling cannot end with a state type name.</returns>
+    private static bool MayNameState(TypeSyntax type)
+        => type != null && type.GetLastToken().Text is "LuminPackWriter" or "LuminPackReader" or "LuminPackJsonWriter" or "LuminPackJsonReader";
 
     /// <summary>Recognizes the binary state family independently from source qualification.</summary>
     /// <param name="name">The emitted type spelling.</param>
@@ -155,23 +162,25 @@ internal sealed class BinaryCursorProjection : NodeRewriter
                     { Name.Identifier.ValueText: "Cursor" } cursorAccess && _states.Contains(cursorAccess.Expression.ToString()))
                 return SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" +
                     cursorAccess.Expression + ".Buffer), (nint)(uint)" + cursorAccess.Expression + ".Position)").WithTriviaFrom(node);
-            if (node.Expression is MemberAccessExpressionSyntax access && _states.Contains(access.Expression.ToString()) &&
-                access.Name.Identifier.ValueText is "GetCurrentSpanOffset" or "GetCurrentSpanIndex")
+            if (node.Expression is MemberAccessExpressionSyntax access &&
+                access.Name.Identifier.ValueText is "GetCurrentSpanOffset" or "GetCurrentSpanIndex" && _states.Contains(access.Expression.ToString()))
                 return SyntaxFactory.ParseExpression(access.Expression + ".Position").WithTriviaFrom(node);
             var rewritten = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            if (rewritten.Expression is MemberAccessExpressionSyntax current)
+            // Only these calls are lowered, so other receivers are never printed.
+            if (rewritten.Expression is MemberAccessExpressionSyntax current &&
+                current.Name.Identifier.ValueText is "GetCurrentSpanReference" or "GetSpanReference" or "FlushCurrentIndex" or "Write" or "Read")
             {
                 string state = current.Expression.ToString();
                 string name = current.Name.Identifier.ValueText;
-                string cursor = !_pointer ? state + ".Cursor" : _allowUnsafe
-                    ? "global::System.Runtime.CompilerServices.Unsafe.AsRef<byte>(" + state + ".Cursor)"
-                    : "global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" + state + ".Buffer), (nint)(uint)" + state + ".Position)";
                 if (_states.Contains(state))
                 {
                     if (name == "GetCurrentSpanReference" || name == "GetSpanReference" && rewritten.ArgumentList.Arguments.Count == 1 &&
                         rewritten.ArgumentList.Arguments[0].Expression.ToString() == state + ".Position")
                     {
                         UsedPointer |= _pointer && _allowUnsafe;
+                        string cursor = !_pointer ? state + ".Cursor" : _allowUnsafe
+                            ? "global::System.Runtime.CompilerServices.Unsafe.AsRef<byte>(" + state + ".Cursor)"
+                            : "global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" + state + ".Buffer), (nint)(uint)" + state + ".Position)";
                         return SyntaxFactory.ParseExpression(cursor).WithTriviaFrom(node);
                     }
                     if (name == "GetSpanReference" && rewritten.ArgumentList.Arguments.Count == 1)
@@ -323,7 +332,7 @@ internal sealed class BinaryCursorProjection : NodeRewriter
                 }
                 statements.Add(statement);
             }
-            return node.WithStatements(SyntaxFactory.List(statements));
+            return StatementLists.Rebuild(node, statements);
         }
     }
 }

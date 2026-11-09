@@ -368,7 +368,7 @@ internal sealed class RootStateLocalization : NodeRewriter
                 null, _type, _helpers, _used, true);
             return node.WithBody((BlockSyntax)shared.VisitBlock(node.Body));
         }
-        if (node.ReturnType.ToString() != "void")
+        if (!SyntaxText.Is(node.ReturnType, "void"))
             return node;
         var method = SyntaxFactory.MethodDeclaration(node.ReturnType, node.Identifier).WithParameterList(node.ParameterList)
             .WithTypeParameterList(node.TypeParameterList).WithConstraintClauses(node.ConstraintClauses).WithAttributeLists(node.AttributeLists).WithBody(node.Body);

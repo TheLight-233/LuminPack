@@ -49,7 +49,7 @@ internal sealed class BinaryHeaderProjection : NodeRewriter
             }
             statements.Add((StatementSyntax)Visit(original));
         }
-        return node.WithStatements(SyntaxFactory.List(statements));
+        return StatementLists.Rebuild(node, statements);
     }
 
     /// <summary>Identifies former nonadvancing header calls at the current cursor.</summary>

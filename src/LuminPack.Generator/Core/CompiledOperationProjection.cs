@@ -122,12 +122,12 @@ internal sealed partial class CompiledOperationProjection : NodeRewriter
     private static bool HasProfileWork(MethodDeclarationSyntax method) => method.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
         call.Expression is MemberAccessExpressionSyntax access &&
         (access.Name.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) ||
-         access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" && access.Name.Identifier.ValueText == "CheckInputProfile" ||
-         access.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" && access.Name.Identifier.ValueText == "TryReadStableStringKeys" ||
+         SyntaxText.Is(access.Expression, "global::LuminPack.Security.LuminPackInputPolicy") && access.Name.Identifier.ValueText == "CheckInputProfile" ||
+         SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackMarshal") && access.Name.Identifier.ValueText == "TryReadStableStringKeys" ||
          access.Name.Identifier.ValueText is "Serialize" or "SerializeMember" or "Deserialize" or "DeserializeUnion" or "MeasureRecord" ||
          // A version prefix stamps and compares the binary profile even when every member is raw.
          access.Name.Identifier.ValueText is "TryReadPrefix" or "WritePrefix" or "StorePrefix" ||
-         access.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry" ||
+         SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackFormatterRegistry") ||
          (CompiledOptionProjection.WriterMethods.Contains(access.Name.Identifier.ValueText) || CompiledOptionProjection.ReaderMethods.Contains(access.Name.Identifier.ValueText) ||
           CompiledOptionProjection.EvaluatorMethods.Contains(access.Name.Identifier.ValueText)) &&
          !(access.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments[0].ToString().Contains("LuminPackFixedOptions"))));

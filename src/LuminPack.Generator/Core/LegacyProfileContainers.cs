@@ -74,7 +74,7 @@ internal static class LegacyProfileContainers
             var name = node.Expression switch
             {
                 GenericNameSyntax simple => simple,
-                MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } access when access.Expression.ToString() == "global::LuminPack.LuminPackSerializer" => generic,
+                MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } access when SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") => generic,
                 _ => null
             };
             if (name == null || name.TypeArgumentList.Arguments.Count != 1 || !_names.Contains(name.Identifier.ValueText) ||

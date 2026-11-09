@@ -287,7 +287,7 @@ internal static class LuminPackSerializerDocumentation
             remarks.Add(new XElement("para", "Writes to the supplied IBufferWriter<byte> and advances it by the produced byte count; the destination remains caller-owned."));
         if (parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Modifiers.Any(SyntaxKind.RefKeyword)))
             remarks.Add(new XElement("para", "Populates the supplied value by reference; formatter-specific merge and reuse rules apply.",
-                method.ReturnType.ToString() == "void" ? string.Empty : " The return value reports consumed bytes" +
+                SyntaxText.Is(method.ReturnType, "void") ? string.Empty : " The return value reports consumed bytes" +
                     (json ? " in the selected UTF-8 or UTF-16 input representation, including any transcoding performed by a character-input overload" : string.Empty) + "."));
         if (method.Identifier.ValueText.Contains("Async"))
             remarks.Add(new XElement("para", "Reads or writes the caller-owned stream asynchronously; cancellation is observed through cancellationToken."));

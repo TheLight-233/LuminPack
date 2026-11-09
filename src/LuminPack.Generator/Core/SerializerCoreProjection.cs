@@ -435,7 +435,7 @@ internal static class SerializerCoreProjection
                 }
             }
             if (node.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SerializeUnion" } union &&
-                union.Expression.ToString() == "global::LuminPack.LuminPackSerializer")
+                SyntaxText.Is(union.Expression, "global::LuminPack.LuminPackSerializer"))
                 return WithoutUnionInputReference((InvocationExpressionSyntax)base.VisitInvocationExpression(node));
             if (node.Expression is not MemberAccessExpressionSyntax access || !BinaryOperationPlan.IsOperation(access.Name.Identifier.ValueText))
                 return base.VisitInvocationExpression(node);

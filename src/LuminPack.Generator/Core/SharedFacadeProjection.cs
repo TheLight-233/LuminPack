@@ -295,7 +295,7 @@ internal sealed class SharedFacadeProjection
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            if (node.Expression is not MemberAccessExpressionSyntax access || access.Expression.ToString() != "global::LuminPack.LuminPackSerializer" ||
+            if (node.Expression is not MemberAccessExpressionSyntax access || !SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") ||
                 access.Name is not GenericNameSyntax generic || generic.TypeArgumentList.Arguments.Count is not (1 or 2) ||
                 generic.TypeArgumentList.Arguments.Last().ToString() != _profile ||
                 generic.TypeArgumentList.Arguments.Count == 2 && generic.TypeArgumentList.Arguments[0].ToString() != _type ||

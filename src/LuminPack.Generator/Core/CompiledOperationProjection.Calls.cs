@@ -83,7 +83,7 @@ internal sealed partial class CompiledOperationProjection
             if (result.Expression is not MemberAccessExpressionSyntax access)
                 return result;
             string name = access.Name.Identifier.ValueText;
-            if (!_writer && !_stateType.Contains("Json") && access.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" &&
+            if (!_writer && !_stateType.Contains("Json") && SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackMarshal") &&
                 access.Name is GenericNameSyntax { Identifier.ValueText: "TryReadStableStringKeys" } stableKernel)
             {
                 var stableArguments = stableKernel.TypeArgumentList.Arguments;
@@ -93,7 +93,7 @@ internal sealed partial class CompiledOperationProjection
                     stableArguments.Replace(stableArguments[1], SyntaxFactory.ParseTypeName(_profile));
                 return result.WithExpression(access.WithName(stableKernel.WithTypeArgumentList(stableKernel.TypeArgumentList.WithArguments(stableArguments))));
             }
-            if (access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" &&
+            if (SyntaxText.Is(access.Expression, "global::LuminPack.Security.LuminPackInputPolicy") &&
                 name is "ReadString" or "ReadStrings" or "ReadJsonToken" or "ReadJsonValue" or "ReadJsonString" or "TryReadJsonProperty" or "TryReadOrderedJsonProperty" or "ReadStringRecord" or "ReadNextJsonFloat" or "RejectUnknownJson" or "ReadJsonNameUtf8" or "ReadJsonNameUtf16" &&
                 access.Name is GenericNameSyntax inputKernel)
             {
@@ -106,20 +106,20 @@ internal sealed partial class CompiledOperationProjection
                 access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } prefixKernel)
                 return result.WithExpression(access.WithName(prefixKernel.WithTypeArgumentList(prefixKernel.TypeArgumentList.WithArguments(
                     SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(_profile))))));
-            if (name == "CheckInputProfile" && access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" && access.Name is GenericNameSyntax profileCheck)
+            if (name == "CheckInputProfile" && SyntaxText.Is(access.Expression, "global::LuminPack.Security.LuminPackInputPolicy") && access.Name is GenericNameSyntax profileCheck)
                 return result.WithExpression(access.WithName(profileCheck.WithTypeArgumentList(profileCheck.TypeArgumentList.WithArguments(
                     profileCheck.TypeArgumentList.Arguments.Replace(profileCheck.TypeArgumentList.Arguments[0], SyntaxFactory.ParseTypeName(_profile))))));
-            if (name == "TryGetValue" && access.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry" &&
+            if (name == "TryGetValue" && SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackFormatterRegistry") &&
                 result.ArgumentList.Arguments.Count == 2 && result.ArgumentList.Arguments[0].Expression is InvocationExpressionSyntax key &&
                 key.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "GetMethodTable" } keyAccess &&
-                keyAccess.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" && key.ArgumentList.Arguments.Count == 1 &&
+                SyntaxText.Is(keyAccess.Expression, "global::LuminPack.Code.LuminPackMarshal") && key.ArgumentList.Arguments.Count == 1 &&
                 key.ArgumentList.Arguments[0].Expression is TypeOfExpressionSyntax payloadType)
                 return result.WithExpression(access.WithExpression(SyntaxFactory.ParseExpression("global::LuminPack.Code.LuminPackFormatterRegistry<" +
                     (_dispatch ? "global::LuminPack.Option.LuminPackFallbackOptions<" + _profile + ", " + _fallback + ">" : _profile) + ">"))
                     .WithName(SyntaxFactory.GenericName(SyntaxFactory.Identifier(_stateType.Contains("Json") ? "TryGetCachedJsonValue" : "TryGetCachedValue"),
                         SyntaxFactory.TypeArgumentList(SyntaxFactory.SingletonSeparatedList(payloadType.Type)))))
                     .WithArgumentList(result.ArgumentList.WithArguments(result.ArgumentList.Arguments.RemoveAt(0)));
-            if (name == "TryGetValue" && access.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry")
+            if (name == "TryGetValue" && SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackFormatterRegistry"))
                 return result.WithExpression(access.WithExpression(SyntaxFactory.ParseExpression("global::LuminPack.Code.LuminPackFormatterRegistry<" +
                     (_dispatch ? "global::LuminPack.Option.LuminPackFallbackOptions<" + _profile + ", " + _fallback + ">" : _profile) + ">"))
                     .WithName(SyntaxFactory.IdentifierName(_stateType.Contains("Json") ? "TryGetJsonValue" : "TryGetValue")));

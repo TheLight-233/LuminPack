@@ -97,7 +97,7 @@ internal static class UniqueStateEntries
                 return result;
             var name = node.Expression switch
             {
-                MemberAccessExpressionSyntax access when access.Expression.ToString() == "global::LuminPack.LuminPackSerializer" => access.Name,
+                MemberAccessExpressionSyntax access when SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") => access.Name,
                 SimpleNameSyntax simple when _model?.GetSymbolInfo(node).Symbol is IMethodSymbol method &&
                     method.ContainingType.ToDisplayString() == "LuminPack.LuminPackSerializer" => simple,
                 _ => null,

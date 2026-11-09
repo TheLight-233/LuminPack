@@ -81,10 +81,10 @@ internal sealed class StateForwardingPlan : IEquatable<StateForwardingPlan>
             foreach (var method in SerializerMethods(original))
             {
                 if (!method.Identifier.ValueText.StartsWith("Intercept", StringComparison.Ordinal) ||
-                    method.ReturnType.ToString() != "void" || method.ParameterList.Parameters.Count != 2 ||
+                    !SyntaxText.Is(method.ReturnType, "void") || method.ParameterList.Parameters.Count != 2 ||
                     method.Body?.Statements is not { Count: 1 } statements ||
                     statements[0] is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax call } ||
-                    call.Expression is not MemberAccessExpressionSyntax access || access.Expression.ToString() != "global::LuminPack.LuminPackSerializer" ||
+                    call.Expression is not MemberAccessExpressionSyntax access || !SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") ||
                     sourceNames.Contains(access.Name.Identifier.ValueText) || !declared.TryGetValue(Key(access.Name), out var target) || target == null)
                     continue;
                 if (DirectCall(call, access.Name, target) is { } direct)
@@ -137,7 +137,7 @@ internal sealed class StateForwardingPlan : IEquatable<StateForwardingPlan>
     {
         var parameters = method.ParameterList.Parameters;
         if (method.ContainsDirectives || method.ContainsDiagnostics || !method.Modifiers.Any(SyntaxKind.InternalKeyword) ||
-            !method.Modifiers.Any(SyntaxKind.StaticKeyword) || method.ReturnType.ToString() != "void" || parameters.Count != 2 ||
+            !method.Modifiers.Any(SyntaxKind.StaticKeyword) || !SyntaxText.Is(method.ReturnType, "void") || parameters.Count != 2 ||
             !parameters[0].Modifiers.Any(SyntaxKind.RefKeyword) ||
             (method.TypeParameterList is { } profiles && (profiles.Parameters.Count != 1 ||
                 profiles.Parameters[0].Identifier.ValueText != "TLuminProfile" ||
@@ -205,7 +205,7 @@ internal sealed class StateForwardingPlan : IEquatable<StateForwardingPlan>
     /// <param name="root">The generated compilation unit.</param>
     /// <returns>Direct members of the serializer's top-level partial declarations.</returns>
     private static IEnumerable<MethodDeclarationSyntax> SerializerMethods(CompilationUnitSyntax root)
-        => root.Members.OfType<NamespaceDeclarationSyntax>().Where(ns => ns.Name.ToString() == "LuminPack")
+        => root.Members.OfType<NamespaceDeclarationSyntax>().Where(ns => SyntaxText.Is(ns.Name, "LuminPack"))
             .SelectMany(ns => ns.Members.OfType<ClassDeclarationSyntax>()).Where(type => type.Identifier.ValueText == "LuminPackSerializer")
             .SelectMany(type => type.Members.OfType<MethodDeclarationSyntax>());
 

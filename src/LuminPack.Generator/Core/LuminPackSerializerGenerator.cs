@@ -387,7 +387,7 @@ public static partial class LuminPackSerializerGenerator
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            if (result.Expression is not MemberAccessExpressionSyntax access || access.Expression.ToString() != "global::LuminPack.LuminPackSerializer" ||
+            if (result.Expression is not MemberAccessExpressionSyntax access || !SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") ||
                 access.Name.Identifier.ValueText is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson") ||
                 access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: > 1 } || result.ArgumentList.Arguments.Count != 2 ||
                 result.ArgumentList.Arguments[0] is not { Expression: IdentifierNameSyntax state } first || !first.RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ||

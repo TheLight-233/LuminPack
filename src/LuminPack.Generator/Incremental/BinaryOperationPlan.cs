@@ -622,7 +622,7 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     private static bool IsOptionMarker(InvocationExpressionSyntax node) => node.Expression is MemberAccessExpressionSyntax
     {
         Name: GenericNameSyntax { TypeArgumentList.Arguments.Count: 2 }
-    } access && access.Expression.ToString() == "global::LuminPack.Code.LuminPackOptionScope";
+    } access && SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackOptionScope");
 
     /// <summary>Marks independent binary staging writers before semantic information is discarded.</summary>
     /// <param name="node">A generated state construction, including aliases of the runtime type.</param>

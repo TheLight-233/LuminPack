@@ -198,7 +198,7 @@ internal sealed class SafeReadProjection
         {
             if (_owner._members >= 0 && !_markerSeen && node.IsKind(SyntaxKind.EqualsExpression) && node.Right is LiteralExpressionSyntax { Token.ValueText: "255" } &&
                 node.Left is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.ValueText: "Read" } read } access } invocation &&
-                invocation.ArgumentList.Arguments.Count == 0 && read.TypeArgumentList.Arguments.Count == 1 && read.TypeArgumentList.Arguments[0].ToString() == "byte" &&
+                invocation.ArgumentList.Arguments.Count == 0 && read.TypeArgumentList.Arguments.Count == 1 && SyntaxText.Is(read.TypeArgumentList.Arguments[0], "byte") &&
                 (access.Expression.ToString() == _state || _owner._model.GetTypeInfo(access.Expression).Type?.ToDisplayString() == "LuminPack.Core.LuminPackReader"))
             {
                 _markerSeen = true;
@@ -229,7 +229,7 @@ internal sealed class SafeReadProjection
             // An unbounded limit is not checked at all, so those reads keep exactly their trusted call sites.
             bool strings = input.String != int.MaxValue, collections = input.Collection != int.MaxValue;
             if (strings && node.Expression is MemberAccessExpressionSyntax stableAccess && stableAccess.Name.Identifier.ValueText == "TryReadStableStringKeys" &&
-                stableAccess.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal")
+                SyntaxText.Is(stableAccess.Expression, "global::LuminPack.Code.LuminPackMarshal"))
                 // The bulk key kernel has no string limit; keep the per-element path.
                 return SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression).WithTriviaFrom(node);
             var model = _owner._model;
@@ -237,7 +237,7 @@ internal sealed class SafeReadProjection
             // A compressed payload's element count is not bounded by its input bytes; check its header before allocation.
             var arguments = result.ArgumentList.Arguments;
             if (collections && symbol is { IsStatic: true, Name: "Read" } && symbol.ContainingType?.ToDisplayString() == "LuminPack.Core.LuminPackReader" &&
-                arguments.Count >= 5 && arguments[3].Expression.ToString() == "true" && arguments[4].Expression.ToString() == "true")
+                arguments.Count >= 5 && SyntaxText.Is(arguments[3].Expression, "true") && SyntaxText.Is(arguments[4].Expression, "true"))
                 return result.WithArgumentList(result.ArgumentList.WithArguments(arguments.Replace(arguments[0], arguments[0].WithExpression(
                     SyntaxFactory.ParseExpression(Policy + ".CheckCompressedCount(" + arguments[0].Expression + ", " + Literal(_owner._input.Collection) + ")")))));
             // Boolean loads from validated input storage.
