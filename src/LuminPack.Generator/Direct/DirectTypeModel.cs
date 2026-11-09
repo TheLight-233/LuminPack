@@ -37,10 +37,14 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly string Formatter;
     /// <summary>The emitter's scalar classification.</summary>
     internal readonly LuminFiledType FieldType;
+    /// <summary>Whether the member is an auto-property, whose storage is reached through the type's layout mirror.</summary>
+    internal readonly bool Mirrored;
 
     /// <summary>Captures one member.</summary>
-    internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType)
+    internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
+        bool mirrored)
     {
+        Mirrored = mirrored;
         Name = name;
         Kind = kind;
         Scalar = scalar;
@@ -61,7 +65,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
 
     /// <inheritdoc/>
     public bool Equals(DirectMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
-        TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType;
+        TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored;
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectMember);
@@ -93,11 +97,17 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether the variable members are all strings, so the type has a named member write and its reserved record
     /// writes take the proven object path.</summary>
     internal readonly bool Proven;
+    /// <summary>The root-private layout mirror that auto-property storage is reached through, or null for public fields.</summary>
+    internal readonly string Mirror;
+    /// <summary>The mirror's field declarations, such as <c>string? Name</c>, in storage order.</summary>
+    internal readonly string[] MirrorFields;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
-        DirectMember[] members, bool proven)
+        DirectMember[] members, bool proven, string mirror, string[] mirrorFields)
     {
         Proven = proven;
+        Mirror = mirror;
+        MirrorFields = mirrorFields;
         UniqueEntries = uniqueEntries;
         GlobalName = globalName;
         Readable = readable;
@@ -113,7 +123,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <inheritdoc/>
     public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
-        UniqueEntries == other.UniqueEntries && Proven == other.Proven &&
+        UniqueEntries == other.UniqueEntries && Proven == other.Proven && Mirror == other.Mirror &&
+        (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
@@ -165,6 +176,16 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 continue;
             if (member.GetAttributes().Length != 0)
                 return DirectEmission.Reject<DirectTypeModel>("member attributes");
+            // An auto-property is stored in its backing field, which the generated code reaches through the layout mirror.
+            if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } auto &&
+                type.GetMembers().OfType<IFieldSymbol>().Any(backing => SymbolEqualityComparer.Default.Equals(backing.AssociatedSymbol, auto)))
+            {
+                if (auto.GetMethod is not { DeclaredAccessibility: Accessibility.Public } || auto.SetMethod is not { DeclaredAccessibility: Accessibility.Public, IsInitOnly: false } ||
+                    auto.GetMethod.GetAttributes().Length != 0 || auto.SetMethod.GetAttributes().Length != 0)
+                    return DirectEmission.Reject<DirectTypeModel>("declared property");
+                fieldsDeclared++;
+                continue;
+            }
             if (member is IFieldSymbol field)
             {
                 if (field.IsStatic || field.IsConst)
@@ -186,7 +207,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if ((members[index] = Member(data.fields[index], extension)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
         // Strings without collections take the named member write and the proven object write; both need the runtime's own profiles.
-        bool proven = members.Any(member => member.Kind == DirectMemberKind.Text) &&
+        bool mirrored = data.fields.Any(field => field.isProperty);
+        bool proven = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
             members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
@@ -198,9 +220,25 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         if (data.classFullName != null && data.classFullName != globalName && "global::" + data.classFullName != globalName)
             return DirectEmission.Reject<DirectTypeModel>("type spelling");
+        string mirror = null;
+        string[] mirrorFields = null;
+        bool fresh = LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data);
+        if (mirrored)
+        {
+            // The mirror declares every instance field of the type in storage order, so it must hold exactly the members.
+            if (fresh || data.localFields.Count != members.Length ||
+                data.localFields.Where((local, index) => local.Identifier != data.fields[index].Identifier).Any())
+                return DirectEmission.Reject<DirectTypeModel>("layout mirror");
+            using (var hash = System.Security.Cryptography.SHA256.Create())
+                mirror = "LuminLayout_" + string.Concat(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(FormatterTypeName.Get(type)))
+                    .Select(value => value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture))) + "_" +
+                    LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type) + "_" + TypeMetaChecker.BuildLocalMyClassName(data);
+            mirrorFields = data.localFields.Select(local => local.TypeName +
+                (LuminPackCodeGenerator.IsUnmanagedFiledType(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + local.Identifier).ToArray();
+        }
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data), InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven);
+            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -237,7 +275,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
     private static DirectMember Member(LuminDataField field, string extension)
     {
-        if (field.IsPrivate || field.isProperty || field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 ||
+        if (field.IsPrivate || field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 ||
             field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
             !SyntaxFacts.IsValidIdentifier(field.Name) || field.Name.Any(c => c > 127))
             return DirectEmission.Reject<DirectMember>("member options");
@@ -246,25 +284,25 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         {
             if (field.FieldType != LuminDataType.Value)
                 return DirectEmission.Reject<DirectMember>("fixed member");
-            return new DirectMember(field.Name, DirectMemberKind.Fixed, scalar.Keyword, scalar.Keyword, scalar.Size, null, field.Type);
+            return new DirectMember(field.Name, DirectMemberKind.Fixed, scalar.Keyword, scalar.Keyword, scalar.Size, null, field.Type, field.isProperty);
         }
         if (symbol.SpecialType == SpecialType.System_String)
         {
             if (field.Type != LuminFiledType.String || field.FieldType != LuminDataType.Reference)
                 return DirectEmission.Reject<DirectMember>("string member");
-            return new DirectMember(field.Name, DirectMemberKind.Text, "string", "string", 0, null, field.Type);
+            return new DirectMember(field.Name, DirectMemberKind.Text, "string", "string", 0, null, field.Type, field.isProperty);
         }
         string payload = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         if (symbol is IArrayTypeSymbol { Rank: 1 } array && Scalar(array.ElementType, allowBoolean: false) is { } element &&
             field.Type == LuminFiledType.Array && field.FieldType == LuminDataType.Reference)
             return new DirectMember(field.Name, DirectMemberKind.Array, element.Keyword, element.Keyword + "[]", 0,
-                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type);
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
         if (symbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
             list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" &&
             Scalar(list.TypeArguments[0], allowBoolean: false) is { } item && field.FieldType == LuminDataType.Reference &&
             field.Type is LuminFiledType.List)
             return new DirectMember(field.Name, DirectMemberKind.List, item.Keyword, "global::System.Collections.Generic.List<" + item.Keyword + ">", 0,
-                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type);
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
         return DirectEmission.Reject<DirectMember>("member type");
     }
 

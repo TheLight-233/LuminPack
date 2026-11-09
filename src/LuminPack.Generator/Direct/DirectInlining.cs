@@ -15,9 +15,11 @@ internal static class DirectInlining
     internal static bool Write(DirectTypeModel model, bool union)
     {
         var members = model.Members;
+        // A mirrored type also calls the mirror view of the read-only input: LuminPackMarshal.As and Unsafe.AsRef.
+        int mirror = model.Mirror == null ? 0 : 2;
         if (members.All(member => member.IsFixed))
-            return (union ? 1 : 2) + Group(members.Length) <= Limit;
-        int count = union ? 0 : 2;
+            return mirror + (union ? 1 : 2) + Group(members.Length) <= Limit;
+        int count = mirror + (union ? 0 : 2);
         count += members.Count(member => !member.IsFixed);   // snapshot capture or string bound
         count += members.Count(member => !member.IsFixed);   // reserved record store
         count += 2;                                          // reservation and commit
@@ -30,6 +32,9 @@ internal static class DirectInlining
     internal static bool Read(DirectTypeModel model)
     {
         int count = 1 + model.Members.Count(member => !member.IsFixed);
+        // A mirrored type also calls the mirror view, and a mirrored string compares the decoded instance.
+        if (model.Mirror != null)
+            count += 1 + model.Members.Count(member => member.Mirrored && member.Kind == DirectMemberKind.Text);
         int first = 0;
         foreach (int run in Runs(model))
         {

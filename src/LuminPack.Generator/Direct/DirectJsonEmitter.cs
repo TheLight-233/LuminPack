@@ -146,6 +146,9 @@ internal static class DirectJsonEmitter
         body.Add("return;");
         body.Add("}");
         body.Add("");
+        // A mirrored type's storage is reached through its layout mirror.
+        if (model.Mirror != null)
+            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
         body.Add("if (!writer.IsFirstElement)");
         body.Add("\twriter.WriteByteRaw<" + Profile + ">((byte)',');");
         body.Add("bool isUtf8 = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
@@ -156,8 +159,10 @@ internal static class DirectJsonEmitter
             string head = Head(model, index);
             string utf8 = helper + ".Utf8Head." + Member(member), utf16 = helper + ".Utf16Head." + Member(member);
             body.Add("// Field: " + member.Name);
+            string owner = member.Mirrored ? "local" : "value";
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(head);
-            if (member.FieldType is LuminFiledType.Int or LuminFiledType.UInt or LuminFiledType.Long or LuminFiledType.ULong &&
+            // The fused head-and-integer write applies to a directly named field only.
+            if (!member.Mirrored && member.FieldType is LuminFiledType.Int or LuminFiledType.UInt or LuminFiledType.Long or LuminFiledType.ULong &&
                 utf8Bytes.Length >= 8 && utf8Bytes.Length <= 16)
             {
                 var (first, last) = Words(utf8Bytes);
@@ -186,21 +191,21 @@ internal static class DirectJsonEmitter
             body.Add("writer.SetFirstElement(true);");
             if (member.IsFixed)
             {
-                body.Add("writer.Write<" + Profile + ">(value." + member.Name + ");");
+                body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
                 continue;
             }
-            body.Add("if (value." + member.Name + " == null)");
+            body.Add("if (" + owner + "." + member.Name + " == null)");
             body.Add("{");
             body.Add("writer.WriteNull<" + Profile + ">();");
             body.Add("}");
             body.Add("else");
             body.Add("{");
             if (member.Kind == DirectMemberKind.Text)
-                body.Add("writer.Write<" + Profile + ">(value." + member.Name + ");");
+                body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
             else
             {
                 string temp = temps++ == 0 ? "temp" : "temp" + temps.ToString(CultureInfo.InvariantCulture);
-                body.Add("var " + temp + " = value." + member.Name + ";");
+                body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
             }
             body.Add("}");
@@ -259,6 +264,8 @@ internal static class DirectJsonEmitter
             body.Add("// Temp vars");
             foreach (var member in members)
                 body.Add(member.TypeName + (member.IsFixed ? string.Empty : "?") + " " + Camel(member.Name) + "Temp = default;");
+            if (model.Mirror != null)
+                body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
         }
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
         body.Add("bool isUtf8 = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
@@ -302,7 +309,7 @@ internal static class DirectJsonEmitter
             else
             {
                 caseLines.Add("if (reuseExisting)");
-                caseLines.Add("\t" + target + " = value!." + member.Name + ";");
+                caseLines.Add("\t" + target + " = " + (model.Mirror == null ? "value!." : "reuseLocal.") + member.Name + ";");
             }
             if (member.IsFixed)
             {
@@ -347,16 +354,29 @@ internal static class DirectJsonEmitter
         {
             body.Add("if (!reuseExisting)");
             body.Add("{");
-            body.Add("value = new " + model.GlobalName + "()");
-            body.Add("{");
-            foreach (var member in members)
-                body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
-            body.Add("};");
+            // Public fields are set by the object initializer, mirrored members through the layout mirror afterwards.
+            if (members.All(member => member.Mirrored))
+                body.Add("value = new " + model.GlobalName + "();");
+            else
+            {
+                body.Add("value = new " + model.GlobalName + "()");
+                body.Add("{");
+                foreach (var member in members.Where(member => !member.Mirrored))
+                    body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
+                body.Add("};");
+            }
+            if (model.Mirror != null)
+            {
+                body.Add("// Assign private fields.");
+                body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                foreach (var member in members.Where(member => member.Mirrored))
+                    body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+            }
             body.Add("}");
             body.Add("else");
             body.Add("{");
             foreach (var member in members)
-                body.Add("value!." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                body.Add((model.Mirror == null ? "value!." : "reuseLocal.") + member.Name + " = " + Camel(member.Name) + "Temp!;");
             body.Add("}");
         }
 

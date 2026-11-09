@@ -146,6 +146,17 @@ internal static class DirectBinaryEmitter
             w.Indented(() => w.Line(Constraint() + " => MeasureRecord" + suffix + "(ref evaluator, ref value);"));
         }
         w.Suppressed = false;
+        if (model.Mirror != null)
+        {
+            // The root-private layout mirror that the operations reach auto-property storage through.
+            w.Blank();
+            w.Line(w.Preserve);
+            w.Line("private class " + model.Mirror);
+            w.Open();
+            foreach (string field in model.MirrorFields)
+                w.Line("internal " + field + ";");
+            w.Close();
+        }
         w.Close();
         w.Blank();
 
@@ -218,17 +229,17 @@ internal static class DirectBinaryEmitter
                 Method(MemberWriteBody(model, w), "RootWriteMember", true, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
                 w.Blank();
             }
-            var write = WriteBody(model, w, union: false);
+            var write = Mirrored(model, w, WriteBody(model, w, union: false), writes: true, union: false);
             if (model.Proven)
                 write = ProvenWriteBody(model, w, write, union: false);
             Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", DirectInlining.Write(model, union: false) ? inline : null);
             w.Blank();
             w.Suppressed = !reads;
-            var read = ReadBody(model, w, union: false);
+            var read = Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
             Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", DirectInlining.Read(model) ? inline : null);
             w.Blank();
             w.Suppressed = !writes;
-            var writeUnionBody = WriteBody(model, w, union: true);
+            var writeUnionBody = Mirrored(model, w, WriteBody(model, w, union: true), writes: true, union: true);
             // A lone record checks itself, so only a reserved record takes the proven path.
             if (model.Proven && members.Length != 1)
                 writeUnionBody = ProvenWriteBody(model, w, writeUnionBody, union: true);
@@ -236,7 +247,7 @@ internal static class DirectBinaryEmitter
                 DirectInlining.Write(model, union: true) ? inline : null);
             w.Blank();
             w.Suppressed = !reads;
-            var readUnionBody = ReadBody(model, w, union: true);
+            var readUnionBody = Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
             Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
                 allFixed ? (DirectInlining.FixedUnionRead(model) ? inline : null) : w.MethodImpl("NoInlining"));
             w.Suppressed = false;
@@ -302,7 +313,9 @@ internal static class DirectBinaryEmitter
         string name = model.Members[index].Name + "Snapshot" + index.ToString(CultureInfo.InvariantCulture);
         // The presentation drops an expansion number from a purely alphabetic name whose base is otherwise unused.
         string stem = model.Members[index].Name + "Snapshot";
-        return model.Members[index].Name.All(char.IsLetter) && model.Members.All(member => member.Name != stem) ? stem : name;
+        string chosen = model.Members[index].Name.All(char.IsLetter) && model.Members.All(member => member.Name != stem) ? stem : name;
+        // Snapshots of mirrored members are named like role locals.
+        return model.Mirror == null ? chosen : char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
     }
 
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
@@ -443,6 +456,28 @@ internal static class DirectBinaryEmitter
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
         return body;
+    }
+
+    /// <summary>Reaches a mirrored type's storage through its layout mirror: the mirror view is declared after the null handling
+    /// or the instance, and every member access goes through it.</summary>
+    private static List<string> Mirrored(DirectTypeModel model, DirectWriter w, List<string> body, bool writes, bool union)
+    {
+        if (model.Mirror == null)
+            return body;
+        // The template already spelled these helpers through imported namespaces, so they register no alias.
+        const string marshal = "LuminPackMarshal";
+        // Public fields stay named directly; only auto-property storage goes through the mirror.
+        string pattern = @"\b" + (writes ? "value" : "instance") + @"\.(" + string.Join("|", model.Members.Where(member => member.Mirrored)
+            .Select(member => System.Text.RegularExpressions.Regex.Escape(member.Name))) + @")\b";
+        var result = new List<string>(body.Count + 1);
+        foreach (string line in body)
+            result.Add(System.Text.RegularExpressions.Regex.Replace(line, pattern, "local.$1"));
+        if (writes)
+            result.Insert(union ? 1 : 8, "ref var local = ref " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref Unsafe.AsRef(in value));");
+        else
+            result.Insert(result.FindIndex(line => line.StartsWith("var instance = ", StringComparison.Ordinal)) + 1,
+                "var local = " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref instance);");
+        return result;
     }
 
     /// <summary>Builds the named member write: the original stream writes of an object nested in another record.</summary>
@@ -611,7 +646,7 @@ internal static class DirectBinaryEmitter
             body.Add("\treturn;");
         }
         body.Add("var instance = value ??= new " + model.GlobalName + "();");
-        int cursors = 0;
+        int cursors = 0, strings = 0;
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
@@ -676,11 +711,27 @@ internal static class DirectBinaryEmitter
                 index = last;
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == DirectMemberKind.Text && member.Mirrored)
+            {
+                string number = strings++ == 0 ? string.Empty : strings.ToString(CultureInfo.InvariantCulture);
+                // A mirrored string is assigned only when the decoded instance differs; it follows a fixed run directly.
+                if (body[body.Count - 1].Length == 0)
+                    body.RemoveAt(body.Count - 1);
+                body.Add("var currentString" + number + " = instance." + member.Name + ";");
+                body.Add("var decodedString" + number + " = reader.Read<" + Profile + ">(currentString" + number + ");");
+                body.Add("if (!object.ReferenceEquals(currentString" + number + ", decodedString" + number + "))");
+                body.Add("\tinstance." + member.Name + " = decodedString" + number + "!;");
+                body.Add("");
+            }
+            else if (member.Kind == DirectMemberKind.Text)
                 body.Add("reader.Read<" + Profile + ">(ref instance." + member.Name + ");");
             else
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref instance." + member.Name + "!);");
         }
+        // The presentation keeps no blank line between a mirrored string read and an unproven fixed run's cursor.
+        for (int index = body.Count - 2; index > 0; index--)
+            if (body[index].Length == 0 && body[index - 1].Contains(" = decodedString") && body[index + 1].StartsWith("ref byte ", StringComparison.Ordinal))
+                body.RemoveAt(index);
         while (body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         return body;
