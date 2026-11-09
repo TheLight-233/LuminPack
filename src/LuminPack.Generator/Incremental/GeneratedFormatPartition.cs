@@ -35,7 +35,8 @@ internal sealed class GeneratedFormatPartition
         if (binary && Shared.Length != 0)
             yield return new FrozenGeneratedSource(hintName, Shared);
         if (json && Json.Length != 0)
-            yield return new FrozenGeneratedSource("LuminPackJson." + hintName, Json);
+            // The JSON part is published by the JSON generator, so it keeps the same name.
+            yield return new FrozenGeneratedSource(hintName, Json);
     }
 
     /// <summary>Partitions one generated file once for both publishers.</summary>
@@ -129,9 +130,9 @@ internal sealed class GeneratedFormatPartition
         if (name is "SerializeJson" or "DeserializeJson" or "SerializeJsonCore" or "DeserializeJsonCore" or "RootWriteJson" or "RootReadJson" ||
             name.StartsWith("SerializeJson_", StringComparison.Ordinal) || name.StartsWith("DeserializeJson_", StringComparison.Ordinal))
             return true;
-        string state = method.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString();
-        return state is "LuminPackJsonWriter" or "LuminPackJsonReader" or
+        // A JSON state in any parameter marks a JSON operation, including helpers that take their value first.
+        return method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() is "LuminPackJsonWriter" or "LuminPackJsonReader" or
             "global::LuminPack.Core.LuminPackJsonWriter" or "global::LuminPack.Core.LuminPackJsonReader" or
-            "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader";
+            "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader");
     }
 }

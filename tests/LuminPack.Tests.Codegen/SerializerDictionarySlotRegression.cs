@@ -104,8 +104,8 @@ internal static class SerializerDictionarySlotRegression
             GeneratorDriver fresh = CSharpGeneratorDriver.Create(
                 [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
             fresh = fresh.RunGenerators(changed);
-            var actual = retained.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToDictionary(result => result.HintName, result => result.SourceText.ToString());
-            var expected = fresh.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToDictionary(result => result.HintName, result => result.SourceText.ToString());
+            var actual = retained.GetRunResult().Results.SelectMany(result => result.GeneratedSources.Select(file => (HintName: (result.Generator.GetGeneratorType().Name is "LuminPackJsonGenerator" or "LuminPackAggregateGenerator" ? "Json/" : "") + file.HintName, file.SourceText))).ToDictionary(file => file.HintName, file => file.SourceText.ToString());
+            var expected = fresh.GetRunResult().Results.SelectMany(result => result.GeneratedSources.Select(file => (HintName: (result.Generator.GetGeneratorType().Name is "LuminPackJsonGenerator" or "LuminPackAggregateGenerator" ? "Json/" : "") + file.HintName, file.SourceText))).ToDictionary(file => file.HintName, file => file.SourceText.ToString());
             Require(!actual.Values.Any(text => text.Contains("CollectionsMarshal.GetValueRefOrNullRef", StringComparison.Ordinal)), "Leaf edit retained an unsafe dictionary slot operation.");
             Require(actual.Count == expected.Count && actual.All(pair => expected.GetValueOrDefault(pair.Key) == pair.Value), "Retained dictionary eligibility differs from fresh generation.");
             retained = retained.RunGenerators(input);

@@ -43,7 +43,7 @@ public sealed partial class LuminPackSourceGenerator
             });
 
         var aggregateFiles = aggregateResults.Combine(metaProvider).SelectMany((result, _) =>
-            result.Left.Files.SelectMany(file => SelectFiles(file, result.Right, outputs)))
+            JoinSameNames(result.Left.Files.SelectMany(file => SelectFiles(file, result.Right, outputs)), result.Right))
             .WithTrackingName("LuminPack.Incremental.AggregateFiles");
         context.RegisterSourceOutput(aggregateFiles.Combine(GeneratedSourceLayout.AvailableAliases(context)), static (output, input) =>
         {
@@ -108,7 +108,7 @@ public sealed partial class LuminPackSourceGenerator
                         return string.IsNullOrEmpty(raw) ? raw : GeneratedSourceDocumentation.Complete(raw, meta.ParseOptions);
                     });
                     if (!string.IsNullOrEmpty(customCode))
-                        spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", customCode, GeneratorOutput.Formatter);
+                        spc.AddSource(GeneratedFileNames.Shared("CustomFormatterRegistry"), customCode, GeneratorOutput.Formatter);
                 }
                 var reachability = ReachabilityAnalysisCache.GetOrCreate(compilation, LuminPackGenerationTier.Automatic);
 
@@ -145,7 +145,7 @@ public sealed partial class LuminPackSourceGenerator
                 var optionDeclarations = optionProfiles.Values.SelectMany(profile => profile.Declarations()).GroupBy(pair => pair.Key, StringComparer.Ordinal)
                     .OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.First().Value).ToArray();
                 if (optionDeclarations.Length != 0)
-                    spc.AddSource("LuminPackOptions.g.cs", GeneratedSourceDocumentation.Complete(string.Join(Environment.NewLine, optionDeclarations), meta.ParseOptions));
+                    spc.AddSource(GeneratedFileNames.Shared("Options"), GeneratedSourceDocumentation.Complete(string.Join(Environment.NewLine, optionDeclarations), meta.ParseOptions));
 
                 var formatters = LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport,
                     out var navigationTargets, cancellationToken);
@@ -160,7 +160,7 @@ public sealed partial class LuminPackSourceGenerator
                     string interceptors = StaticSerializerBinding.For(compilation).Emit(
                         LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation, reachability));
                     if (interceptors.Length != 0)
-                        spc.AddSource("LuminPack.Interceptors.g.cs", interceptors);
+                        spc.AddSource(GeneratedFileNames.Shared("Interceptors"), interceptors);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -180,6 +180,38 @@ public sealed partial class LuminPackSourceGenerator
         }
     }
 
+    /// <summary>Joins the files that share one name, such as the constructions of one generic definition.</summary>
+    /// <param name="files">The selected files in publication order.</param>
+    /// <param name="metadata">The current language and preprocessor settings.</param>
+    /// <returns>One file per name, in the order of each name's first file.</returns>
+    private static IEnumerable<FrozenGeneratedSource> JoinSameNames(IEnumerable<FrozenGeneratedSource> files, MetaInfo metadata)
+    {
+        var order = new List<string>();
+        var texts = new Dictionary<string, List<FrozenGeneratedSource>>(StringComparer.Ordinal);
+        foreach (var file in files)
+        {
+            if (!texts.TryGetValue(file.Name, out var group))
+            {
+                texts.Add(file.Name, group = new List<FrozenGeneratedSource>());
+                order.Add(file.Name);
+            }
+            group.Add(file);
+        }
+        foreach (string name in order)
+        {
+            var group = texts[name];
+            if (group.Count == 1)
+            {
+                yield return group[0];
+                continue;
+            }
+            string text = group[0].Text;
+            for (int index = 1; index < group.Count; index++)
+                text = GeneratedSourceMerge.Join(text, group[index].Text, metadata.ParseOptions);
+            yield return new FrozenGeneratedSource(name, text, group[0].Owner);
+        }
+    }
+
     /// <summary>Selects the existing file partitions for the owner of an assembly-wide contribution.</summary>
     /// <param name="file">The original generated contribution.</param>
     /// <param name="metadata">The current language and preprocessor settings.</param>
@@ -190,18 +222,15 @@ public sealed partial class LuminPackSourceGenerator
         if ((file.Owner & outputs) == 0)
             yield break;
 
-        bool formatter = file.Owner == GeneratorOutput.Formatter;
-        bool split = file.Owner == (GeneratorOutput.Binary | GeneratorOutput.Json) || formatter &&
-            (file.Name.StartsWith("LuminPack.Formatter", StringComparison.Ordinal) || file.Name == "LuminPack.Dispatch.Formatters.g.cs");
-        if (!split)
+        // The formatter generator publishes both formats of its files together; files of the binary and JSON generators split.
+        if (file.Owner != (GeneratorOutput.Binary | GeneratorOutput.Json))
         {
             yield return file;
             yield break;
         }
 
         var partition = GeneratedFormatPartition.Get(file.Text, metadata.ParseOptions);
-        foreach (var part in partition.Files(file.Name, formatter || (outputs & GeneratorOutput.Binary) != 0,
-            formatter || (outputs & GeneratorOutput.Json) != 0))
+        foreach (var part in partition.Files(file.Name, (outputs & GeneratorOutput.Binary) != 0, (outputs & GeneratorOutput.Json) != 0))
             yield return part;
     }
 }

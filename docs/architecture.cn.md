@@ -101,9 +101,9 @@
 
 普通公开字段根对象若仅包含完整运行时记录内核和没有独立配置边界的具名成员，`SerializerCoreProjection` 可以直接使用缓存的类型元数据生成完整写入，保留原有根／成员方法、声明配置及最终存储／游标投影。读取、JSON 和更复杂的写入继续采用既有的检查和操作流水线。成员内核保留积极内联提示；包含成员调用的父对象，即使提取方法后源码调用数量变少，也由运行时决定根方法是否内联。分配型入口继续使用 `AllocateUninitializedArray`，保留缓冲池所有权和清理方式。
 
-模型格式化器文件使用 `LuminPackGen.Namespace.Model.g.cs`，存储视图使用 `LuminPackGen.Layouts.` 前缀，Union 支持使用 `.UnionDispatch.g.cs` 后缀。聚合文件保留明确的类别，例如 `LuminPackSerializer.System.Int32.g.cs` 和 `LuminPack.Formatter.System.Collections.Generic.List_Of_System.Int32_End_.g.cs`。文件名保留可读的命名空间和泛型或数组结构，分别转义不同标点，并将长身份拆成有长度上限的目录段。内部生成符号的身份独立于文件名。
+每个生成器为每个声明发布一个文件，命名为 `LuminPackGen_命名空间_名称.g.cs`。二进制生成器发布模型的二进制 Root 和 Union 槽位，JSON 生成器发布 JSON Root 和槽位，格式化器生成器发布框架类型和闭合泛型的格式化器、派发、桥接和存储视图。泛型参数写成参数个数，例如 ``LuminPackGen_System_Collections_Generic_Dictionary`2.g.cs``，因此同一泛型定义的所有构造共用一个文件，由发布器合并。同一生成器为同一声明发布的第二种文件带一个角色后缀：`LuminPackSerializer` 重载用 `.Api`，存储视图用 `.Layout`，同时发布 JSON 和格式化器的兼容生成器中 JSON 文件用 `.Json`。程序集级文件按角色命名，例如 `LuminPackGen_LuminPackSerializer.g.cs` 和 `LuminPackGen_FormatterDispatch.g.cs`。内部生成符号的身份独立于文件名。
 
-JSON 分片加上 `LuminPackJson.` 前缀。每个发布器在输出前独立比较完整文件，因此只影响 JSON 方法的改动可以继续复用对应的二进制文件。
+每个发布器在输出前独立比较完整文件，因此只影响 JSON 方法的改动可以继续复用对应的二进制文件。同一次编译中，三个生成器共用每个模型的同一份渲染结果。
 
 框架字段分类使用 `CodeEmitterTypeCatalog` 中的 CLR 元数据名称，例如 `System.DateOnly`，不包含生成的 C# 源码所用的 `global::` 限定符。直接字段、可空值和集合元素共用该目录，在考虑用户对象的构造函数之前完成分类。
 
@@ -202,7 +202,7 @@ Observable JSON 读取器仅在实例为精确框架类型、已验证的集合�
 
 ### 生成的文件
 
-`LuminPackSerializer.g.cs` 存放共享泛型 API。启用[静态拦截](generation-modes.cn.md#静态拦截)时，`StaticSerializerBinding` 绑定固定大小的签名树，记录编译器提供的调用位置，在 `LuminPack.Interceptors.g.cs` 中生成共享方法。显式配置同时指定负载和选项类型，此路径不增加负载专属的配置重载。具体便捷方法放在 `LuminEntry_<hash>` 容器中，状态转发方法使用负载专属名称。IL 后端输出相同入口及构建期签名映射，`LuminPack.ILPostProcessor` 在编译后替换本地调用。主动关闭两种接入时，兼容后端保留具体重载文件。每个生成的程序集都拥有 public 的 `LuminPackSerializer`，生成文件屏蔽 CS0436，以遮蔽引用程序集中的同名类型。Root 继续位于 `LuminRoots_<hash>` 容器中。负载已知的推进调用直接指名 `Binary_<assembly>_<hash>` 扩展类，转发扩展与便捷方法都调用已记录的同一个 Root。供用户使用的 `Write`/`Read` 扩展签名继续保留。不新增 Plan struct。
+`LuminPackGen_LuminPackSerializer.g.cs` 存放共享泛型 API。启用[静态拦截](generation-modes.cn.md#静态拦截)时，`StaticSerializerBinding` 绑定固定大小的签名树，记录编译器提供的调用位置，在 `LuminPackGen_Interceptors.g.cs` 中生成共享方法。显式配置同时指定负载和选项类型，此路径不增加负载专属的配置重载。具体便捷方法放在 `LuminEntry_<hash>` 容器中，状态转发方法使用负载专属名称。IL 后端输出相同入口及构建期签名映射，`LuminPack.ILPostProcessor` 在编译后替换本地调用。主动关闭两种接入时，兼容后端保留具体重载文件。每个生成的程序集都拥有 public 的 `LuminPackSerializer`，生成文件屏蔽 CS0436，以遮蔽引用程序集中的同名类型。Root 继续位于 `LuminRoots_<hash>` 容器中。负载已知的推进调用直接指名 `Binary_<assembly>_<hash>` 扩展类，转发扩展与便捷方法都调用已记录的同一个 Root。供用户使用的 `Write`/`Read` 扩展签名继续保留。不新增 Plan struct。
 
 源码静态包装方法通过反向调用图索引闭合，每个完整方法构造只复制一份方法体。迁移保留原有方法绑定与参数转换，固定调用者信息的默认常量，拒绝不支持或不可访问的方法体。兜底边界保留原源码与注册规则。编译上下文中的语义对象使用弱关联持有；聚合缓存标识包含拦截位置及所有特化方法体，包括嵌套依赖。Root 与便捷入口的标识不依赖源码位置。
 
@@ -210,7 +210,7 @@ Observable JSON 读取器仅在实例为精确框架类型、已验证的集合�
 
 私有共享门面辅助方法和适配器使用符合标识符规则的 26 字符 base-32 后缀，保留原有身份的全部 128 位。这样可以缩短生成源码及元数据中的名称，而不截断身份，也不改变 API 签名、操作方法体、文件标识或派发方式。
 
-泛型兜底方法体仅调用已注册的强类型委托，被拦截的闭合泛型调用绕过这些方法体。`LuminPack.Dispatch.Formatters.g.cs` 包含与负载类型列表无关的固定大小派发代码和程序集策略辅助方法；不再生成 `LuminPack.Dispatch.Lazy.g.cs`、每种负载的工厂或委托缓存。其缓存仅依赖程序集常量以及泛型暂存是否需要输入上限。具体 Root 及其 XML 导航信息独立于注册机制。
+泛型兜底方法体仅调用已注册的强类型委托，被拦截的闭合泛型调用绕过这些方法体。`LuminPackGen_FormatterDispatch.g.cs` 包含与负载类型列表无关的固定大小派发代码和程序集策略辅助方法；不再生成 `LuminPack.Dispatch.Lazy.g.cs`、每种负载的工厂或委托缓存。其缓存仅依赖程序集常量以及泛型暂存是否需要输入上限。具体 Root 及其 XML 导航信息独立于注册机制。
 
 通过可达性分析发现的闭合泛型负载会在状态调用投影之前加入索引。生成代码对这些已知类型的调用绑定具体状态操作，不经过仅注册的泛型公共 API。泛型 Union 覆盖保留原有虚调用与缓存槽；已知闭合成员使用相同的线上标签并调用其闭合的具体操作。
 

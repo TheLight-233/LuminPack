@@ -39,7 +39,7 @@ internal static class SerializerFormatterDispatchRegression
             var driver = CSharpGeneratorDriver.Create(generators, parseOptions: Parse).RunGeneratorsAndUpdateCompilation(input, out var output, out _);
             var sources = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
 
-            var dispatch = sources.Single(file => file.HintName == "LuminPack.Dispatch.Formatters.g.cs");
+            var dispatch = sources.Single(file => file.HintName == "LuminPackGen_FormatterDispatch.g.cs");
             var root = CSharpSyntaxTree.ParseText(dispatch.SourceText, Parse).GetRoot();
             Require(!root.DescendantNodes().OfType<SwitchStatementSyntax>().Any() && !root.DescendantNodes().OfType<SwitchExpressionSyntax>().Any(),
                 mode + ": the generic fallback regained a type-id switch.");
@@ -56,7 +56,7 @@ internal static class SerializerFormatterDispatchRegression
             if (mode != "Full")
             {
                 // A concrete scalar call must have its own typed entry beside the generic fallback.
-                var facades = sources.Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal))
+                var facades = sources.Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen_LuminPackSerializer.g.cs"))
                     .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
                     .Where(method => method.Modifiers.Any(SyntaxKind.PublicKeyword) && method.TypeParameterList == null && method.Identifier.ValueText == "Serialize" &&
                         method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() is "int" or "global::System.Int32")).ToArray();

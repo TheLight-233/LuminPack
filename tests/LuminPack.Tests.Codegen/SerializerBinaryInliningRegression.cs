@@ -255,7 +255,7 @@ internal static class SerializerBinaryInliningRegression
             string.Join(Environment.NewLine, output.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
         int inspected = 0;
         var seen = new List<string>();
-        foreach (var tree in output.SyntaxTrees.Where(tree => Path.GetFileName(tree.FilePath).StartsWith("LuminPackSerializer.", StringComparison.Ordinal)))
+        foreach (var tree in output.SyntaxTrees.Where(tree => (Path.GetFileName(tree.FilePath).EndsWith(".Api.g.cs", StringComparison.Ordinal) || Path.GetFileName(tree.FilePath) == "LuminPackGen_LuminPackSerializer.g.cs")))
         {
             var model = output.GetSemanticModel(tree);
             foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>

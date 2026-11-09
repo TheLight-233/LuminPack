@@ -65,7 +65,7 @@ internal sealed class TypeEmissionInput : IEquatable<TypeEmissionInput>
             if (!_type.TryGetTarget(out var type) || !_compilation.TryGetTarget(out var compilation))
                 return LuminPackExceptionHelper.ThrowInvalidOperationException<FrozenTypeEmission>("Active type analysis inputs are unavailable.");
             return _evaluated = _cache.GetOrBuild(type, compilation, _metadata, _tier,
-                () => build(type, compilation, _metadata, _tier), version: _version);
+                () => build(type, compilation, _metadata, _tier), serializerFragment: null, version: _version);
         }
     }
 

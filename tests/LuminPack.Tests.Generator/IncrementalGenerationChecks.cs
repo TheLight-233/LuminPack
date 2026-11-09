@@ -137,8 +137,8 @@ internal static class IncrementalGenerationChecks
             "Partial or aliased attribute discovery reported a generator error.");
         var sources = Sources(driver);
         foreach (string name in new[] { "Model", "Record", "Value" })
-            Require(sources.ContainsKey("LuminPackGen.Discovery." + name + ".g.cs"), "Attribute discovery omitted " + name + ".");
-        Require(!sources.ContainsKey("LuminPackGen.Discovery.Utility.g.cs"), "Unattributed utility entered the type pipeline.");
+            Require(sources.ContainsKey("LuminPackGen_Discovery_" + name + ".g.cs"), "Attribute discovery omitted " + name + ".");
+        Require(!sources.ContainsKey("LuminPackGen_Discovery_Utility.g.cs"), "Unattributed utility entered the type pipeline.");
         Verify("partial storage changed", input, Replace(input, "Partial.cs", "long Other", "long Renamed"), 1);
         var removed = Replace(input, "Model.cs", "[Pack]", string.Empty);
         Verify("attribute removed", input, removed);
@@ -243,19 +243,22 @@ internal static class IncrementalGenerationChecks
         Require(Diagnostics(retained).SequenceEqual(Diagnostics(fresh)), name + ": diagnostics changed.");
         if (modelBuilds.HasValue)
         {
-            Require(delta["PackableModelBuilds"] == modelBuilds.Value, name + ": unexpected number of models analyzed.");
-            Require(delta["PackableAnalysisTransforms"] == modelBuilds.Value, name + ": an unaffected analysis transform executed.");
+            Require(delta["PackableModelBuilds"] == modelBuilds.Value, name + ": unexpected number of models analyzed: " + delta["PackableModelBuilds"] + ".");
+            // The binary, JSON and formatter publishers each run the per-type step and share one analysis.
+            Require(delta["PackableAnalysisTransforms"] == modelBuilds.Value * 3, name + ": an unaffected analysis transform executed.");
+            // Each publisher tracks its own per-type step; every one reruns only the changed models.
             var steps = retained.GetRunResult().Results
-                .SelectMany(result => result.TrackedSteps.Where(pair => pair.Key == "LuminPack.Incremental.TypeEmission").SelectMany(pair => pair.Value))
-                .SelectMany(step => step.Outputs).ToArray();
-            Require(steps.Length > 0 && steps.Count(output => output.Reason != IncrementalStepRunReason.Cached) == modelBuilds.Value,
+                .Select(result => result.TrackedSteps.Where(pair => pair.Key == "LuminPack.Incremental.TypeEmission").SelectMany(pair => pair.Value)
+                    .SelectMany(step => step.Outputs).ToArray())
+                .Where(outputs => outputs.Length != 0).ToArray();
+            Require(steps.Length > 0 && steps.All(outputs => outputs.Count(output => output.Reason != IncrementalStepRunReason.Cached) == modelBuilds.Value),
                 name + ": Roslyn did not cache the unaffected analysis steps.");
         }
         if (expectedRoot != null)
         {
-            Require(actual.ContainsKey("LuminPackGen.IncrementalChecks." + expectedRoot + ".g.cs"), name + ": expected root is absent.");
+            Require(actual.ContainsKey("LuminPackGen_IncrementalChecks_" + expectedRoot + ".g.cs"), name + ": expected root is absent.");
             string other = expectedRoot == "A" ? "B" : "A";
-            Require(actual.ContainsKey("LuminPackGen.IncrementalChecks." + other + ".g.cs"), name + ": an independently declared model was removed.");
+            Require(actual.ContainsKey("LuminPackGen_IncrementalChecks_" + other + ".g.cs"), name + ": an independently declared model was removed.");
         }
         if (requireFallback)
             Require(delta["InvocationFileFallbacks"] > 0, name + ": unsupported invocation did not request fresh binding.");
@@ -271,7 +274,7 @@ internal static class IncrementalGenerationChecks
         }
         if (name == "new observed formatter")
             Require(!actual.Keys.Except(original.Keys, StringComparer.Ordinal)
-                .Any(name => name.StartsWith("LuminPackSerializer.", StringComparison.Ordinal)),
+                .Any(name => (name.EndsWith(".Api.g.cs", StringComparison.Ordinal) || name == "LuminPackGen_LuminPackSerializer.g.cs")),
                 name + ": observing an unrelated type created a serializer convenience entry.");
     }
 
@@ -340,7 +343,7 @@ internal static class IncrementalGenerationChecks
     /// <param name="driver">The completed generator driver.</param>
     /// <returns>Each generated source's stable fingerprint.</returns>
     private static Dictionary<string, string> Sources(GeneratorDriver driver) => driver.GetRunResult().Results
-        .SelectMany(result => result.GeneratedSources).ToDictionary(source => source.HintName,
+        .SelectMany(result => result.GeneratedSources.Select(file => (HintName: (result.Generator.GetGeneratorType().Name is "LuminPackJsonGenerator" or "LuminPackAggregateGenerator" ? "Json/" : "") + file.HintName, file.SourceText))).ToDictionary(source => source.HintName,
             source => (source.SourceText.Encoding?.WebName ?? "<null>") + ":" + Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(source.SourceText.ToString()))));
 

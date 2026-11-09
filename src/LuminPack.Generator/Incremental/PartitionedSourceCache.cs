@@ -54,6 +54,24 @@ internal sealed class PartitionedSourceCache
     /// <returns>A filesystem-safe name with bounded path components and an unabridged declaration identity.</returns>
     internal static string CreateHintName(string prefix, string identity)
     {
+        switch (prefix)
+        {
+            case "LuminPackGen":
+            case "LuminPack.Formatter":
+                return GeneratedFileNames.Type(identity);
+            case "LuminPackGen.Layouts":
+                return GeneratedFileNames.Type(identity, "Layout");
+            case "LuminPackSerializer":
+                return GeneratedFileNames.Type(identity, "Api");
+            case "LuminPackSerializer.Common":
+                return GeneratedFileNames.Shared("LuminPackSerializer");
+            case "LuminPack.Union":
+                return GeneratedFileNames.Type(identity, "Union");
+            case "LuminPack.JsonSupport":
+                return GeneratedFileNames.Type(identity, "JsonSupport");
+            case "LuminPack.Dispatch":
+                return GeneratedFileNames.Shared("FormatterDispatch");
+        }
         var label = new StringBuilder();
         foreach (char character in identity.Replace("global::", string.Empty))
         {

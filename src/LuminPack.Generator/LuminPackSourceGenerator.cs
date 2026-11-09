@@ -105,8 +105,7 @@ namespace LuminPack.SourceGenerator
                 }).WithComparer(MetaInfoValueComparer.Instance).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
 
 
-            if ((outputs & GeneratorOutput.Formatter) != 0)
-                LuminPackFormatterGenerator.InitializeTypePipeline(context, metaInfo);
+            LuminPackFormatterGenerator.InitializeTypePipeline(context, metaInfo, outputs);
             InitializeAggregatePipeline(context, metaInfo, outputs);
         }
     }

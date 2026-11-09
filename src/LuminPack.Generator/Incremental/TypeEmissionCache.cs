@@ -42,11 +42,12 @@ internal sealed class TypeEmissionCache
     /// <param name="metadata">The current immutable-in-practice generation settings.</param>
     /// <param name="tier">The effective generation tier.</param>
     /// <param name="build">The analysis and emission operation to run on a cache miss.</param>
-    /// <param name="serializerFragment">Whether the operation builds a concrete support fragment for separate execution accounting.</param>
+    /// <param name="serializerFragment">Whether the operation builds a concrete support fragment for separate execution accounting, or null
+    /// when the build counts its own work.</param>
     /// <param name="version">The prepared input version to publish after successful analysis, if present.</param>
     /// <param name="outputVariant">An additional immutable guard for selected facade overloads.</param>
     /// <returns>A semantic-object-free emission plan.</returns>
-    internal FrozenTypeEmission GetOrBuild(ITypeSymbol type, Compilation compilation, MetaInfo metadata, LuminPackGenerationTier tier, Func<FrozenTypeEmission> build, bool serializerFragment = false, object version = null, string outputVariant = null)
+    internal FrozenTypeEmission GetOrBuild(ITypeSymbol type, Compilation compilation, MetaInfo metadata, LuminPackGenerationTier tier, Func<FrozenTypeEmission> build, bool? serializerFragment = false, object version = null, string outputVariant = null)
         => GetOrBuildValue(type, compilation, metadata, tier, build, serializerFragment, version, outputVariant);
 
     /// <summary>Reuses a semantic-object-free operation value under the same complete dependency guards as type output.</summary>

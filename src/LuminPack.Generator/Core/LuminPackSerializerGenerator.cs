@@ -67,7 +67,7 @@ public static partial class LuminPackSerializerGenerator
         string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;
         var files = ImmutableArray.CreateBuilder<FrozenGeneratedSource>(parts.Blocks.Count + 1);
         var common = cache.Files.Wrap("LuminPackSerializer.Common", "common", parts.Header.Replace(declaration, partialDeclaration), parts.Tail, string.Empty);
-        files.Add(new FrozenGeneratedSource("LuminPackSerializer.g.cs", common.Text));
+        files.Add(new FrozenGeneratedSource(GeneratedFileNames.Shared("LuminPackSerializer"), common.Text));
         string typeHeader = parts.Prelude + partialDeclaration + Environment.NewLine + "    {" + Environment.NewLine;
         foreach (var block in parts.Blocks)
         {

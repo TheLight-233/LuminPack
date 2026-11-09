@@ -330,21 +330,22 @@ internal static class SerializerOperationCacheRegression
     /// <summary>Captures exact generated output values.</summary>
     /// <param name="driver">The completed driver.</param>
     /// <returns>Hint names and complete source text.</returns>
-    private static Dictionary<string, string> Files(GeneratorDriver driver) => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+    private static Dictionary<string, string> Files(GeneratorDriver driver) => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources.Select(file => (HintName: (result.Generator.GetGeneratorType().Name is "LuminPackJsonGenerator" or "LuminPackAggregateGenerator" ? "Json/" : "") + file.HintName, file.SourceText)))
         .ToDictionary(file => file.HintName, file => file.SourceText.ToString(), StringComparer.Ordinal);
 
     /// <summary>Finds a concrete payload's stable state implementation partition.</summary>
     /// <param name="files">Generated files.</param>
     /// <param name="type">The canonical payload type.</param>
     /// <returns>The concrete partition hint name.</returns>
-    private static string PayloadFile(Dictionary<string, string> files, string type) => files.Single(pair => pair.Key.StartsWith("LuminPackGen.", StringComparison.Ordinal) &&
+    private static string PayloadFile(Dictionary<string, string> files, string type) => files.Single(pair => pair.Key.StartsWith("LuminPackGen_", StringComparison.Ordinal) && !pair.Key.EndsWith(".Api.g.cs", StringComparison.Ordinal) &&
+        pair.Key != "LuminPackGen_LuminPackSerializer.g.cs" &&
         CSharpSyntaxTree.ParseText(pair.Value, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Any(method =>
             method.Identifier.ValueText == "Serialize" && method.TypeParameterList == null && method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == type))).Key;
 
     /// <summary>Finds the closed collection body that owns the embedded child contract.</summary>
     /// <param name="files">Generated partitions for this compilation.</param>
     /// <returns>The list formatter's stable partition hint.</returns>
-    private static string CollectionFile(Dictionary<string, string> files) => files.Single(pair => pair.Key.StartsWith("LuminPack.Formatter.", StringComparison.Ordinal) &&
+    private static string CollectionFile(Dictionary<string, string> files) => files.Single(pair => pair.Key.EndsWith("LuminPackGen_System_Collections_Generic_List`1.g.cs", StringComparison.Ordinal) &&
         CSharpSyntaxTree.ParseText(pair.Value, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Any(method =>
             method.Identifier.ValueText == "RootWrite" && method.ParameterList.Parameters.Count == 2 &&
             method.ParameterList.Parameters[1].Type?.ToString().TrimEnd('?') == "global::System.Collections.Generic.List<global::Child>")).Key;

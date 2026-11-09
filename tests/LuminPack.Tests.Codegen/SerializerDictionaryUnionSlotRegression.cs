@@ -151,7 +151,7 @@ internal static class SerializerDictionaryUnionSlotRegression
     /// <param name="driver">The completed generation.</param>
     /// <returns>The generated files.</returns>
     private static Dictionary<string, string> Sources(GeneratorDriver driver) =>
-        driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToDictionary(result => result.HintName, result => result.SourceText.ToString());
+        driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources.Select(file => (HintName: (result.Generator.GetGeneratorType().Name is "LuminPackJsonGenerator" or "LuminPackAggregateGenerator" ? "Json/" : "") + file.HintName, file.SourceText))).ToDictionary(file => file.HintName, file => file.SourceText.ToString());
 
     /// <summary>Reports an incorrect generated Union dictionary contract.</summary>
     /// <param name="condition">The required invariant.</param>

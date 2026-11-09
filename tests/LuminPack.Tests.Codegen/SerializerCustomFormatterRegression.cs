@@ -184,7 +184,7 @@ internal static class SerializerCustomFormatterRegression
             var generatedSources = result.Results.SelectMany(publisher => publisher.GeneratedSources).ToArray();
             var errors = output.GetDiagnostics().Concat(result.Diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error);
             if (errors.Any()) throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
-            if (!result.Results[2].GeneratedSources.Any(file => file.HintName == "LuminPackCustomFormatterRegistry.g.cs"))
+            if (!result.Results[2].GeneratedSources.Any(file => file.HintName == "LuminPackGen_CustomFormatterRegistry.g.cs"))
                 throw new InvalidOperationException("The formatter publisher did not emit the Custom registry.");
             var stateMethods = generatedSources
                 .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
@@ -210,7 +210,7 @@ internal static class SerializerCustomFormatterRegression
                     .Select(method => method.ToString()).Take(10));
                 throw new InvalidOperationException("Custom state overloads must invoke the registry directly: " + stateMethods.Length + ". " + candidates);
             }
-            if (!generatedSources.Any(file => file.HintName.Contains("LuminPackGen.UnusedCallbackChild.g.cs", StringComparison.Ordinal)))
+            if (!generatedSources.Any(file => file.HintName.Contains("LuminPackGen_UnusedCallbackChild.g.cs", StringComparison.Ordinal)))
                 throw new InvalidOperationException("Automatic generation removed a declared Custom callback dependency.");
             using var image = new MemoryStream();
             var emit = output.Emit(image);

@@ -16,8 +16,9 @@ public sealed partial class LuminPackFormatterGenerator
     /// <summary>Freezes semantic outputs before source-production equality checks.</summary>
     /// <param name="context">The generator pipeline registration context.</param>
     /// <param name="metadata">Value-compared project generation settings.</param>
+    /// <param name="outputs">The source groups the publishing generator owns.</param>
     internal static void InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
-        IncrementalValueProvider<MetaInfo> metadata)
+        IncrementalValueProvider<MetaInfo> metadata, GeneratorOutput outputs)
     {
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
@@ -38,8 +39,10 @@ public sealed partial class LuminPackFormatterGenerator
                 return cache.PrepareInput(symbol, compilation, meta, LuminPackGenerationTier.Automatic);
             })
             .WithTrackingName("LuminPack.Incremental.TypeInput");
+        // Each generator publishes its own part of the same rendering, which the first of them produces for the compilation.
         Func<INamedTypeSymbol, Compilation, MetaInfo, LuminPackGenerationTier, FrozenTypeEmission> analyze =
-            (symbol, compilation, meta, tier) => AnalyzeAndRender(symbol, compilation, meta, tier, operations);
+            (symbol, compilation, meta, tier) => SharedTypeEmissions.Get(compilation, symbol, meta, tier, outputs,
+                () => AnalyzeAndRender(symbol, compilation, meta, tier, operations));
         // Roslyn runs the per-type step below on one thread. Changed types are analyzed here on several threads first;
         // each result is published to the type cache, and the per-type step then reads it in pipeline order.
         // The batch value never changes, so unchanged types stay cached.
@@ -72,26 +75,28 @@ public sealed partial class LuminPackFormatterGenerator
             }
         }
 
-        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).SelectMany(static (value, _) =>
-            GeneratedFormatPartition.Get(value.Extension, value.Layouts.Options).Files(value.HintName + ".g.cs"));
-        context.RegisterSourceOutput(sources.Combine(aliases), static (output, input) =>
+        // The binary generator publishes a type's binary roots and Union slots, the JSON generator its JSON roots and slots,
+        // each as one file per type; layout mirrors and diagnostics stay with the formatter generator.
+        bool binary = (outputs & GeneratorOutput.Binary) != 0, json = (outputs & GeneratorOutput.Json) != 0;
+        if (binary || json)
         {
-            Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
-            output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
-        });
-        var unionSources = emissions.Where(static value => !string.IsNullOrEmpty(value.Union))
-            .Select(static (value, _) => new FrozenGeneratedSource(value.HintName + ".UnionDispatch.g.cs", value.Union));
-        context.RegisterSourceOutput(unionSources.Combine(aliases), static (output, input) =>
-        {
-            try
+            var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension))
+                .SelectMany((value, _) => TypeFiles(value, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json));
+            context.RegisterSourceOutput(sources.Combine(aliases), static (output, input) =>
             {
-                output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
-            }
-            catch (Exception exception)
-            {
-                output.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratorFailure, Location.None, exception.GetType().FullName + ": " + exception.Message));
-            }
-        });
+                Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
+                try
+                {
+                    output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    output.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratorFailure, Location.None, exception.GetType().FullName + ": " + exception.Message));
+                }
+            });
+        }
+        if ((outputs & GeneratorOutput.Formatter) == 0)
+            return;
 
         // Exact weak tree handles let stable diagnostics remain independent of Compilation changes.
         var diagnostics = emissions.Select(static (value, _) => value.Diagnostics).Where(static values => !values.IsDefaultOrEmpty);
@@ -190,6 +195,25 @@ public sealed partial class LuminPackFormatterGenerator
             layouts = new FrozenLayoutGroup(className, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), exception.GetType().FullName + ": " + exception.Message);
         }
         return new FrozenTypeEmission(name, extension, union, layouts, diagnostics);
+    }
+
+    /// <summary>Selects the binary or JSON part of a type's roots and Union slots as one file per format.</summary>
+    /// <param name="value">The shared type emission.</param>
+    /// <param name="binary">Whether the publishing generator owns binary code.</param>
+    /// <param name="json">Whether the publishing generator owns JSON code.</param>
+    /// <param name="combined">Whether the publisher also owns other output, such as the compatibility generator that publishes
+    /// JSON and formatter code together; its JSON file then carries a role so it cannot share a formatter file's name.</param>
+    /// <returns>The files of the selected formats.</returns>
+    private static IEnumerable<FrozenGeneratedSource> TypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined)
+    {
+        var options = value.Layouts.Options;
+        var roots = GeneratedFormatPartition.Get(value.Extension, options);
+        var union = string.IsNullOrEmpty(value.Union) ? null : GeneratedFormatPartition.Get(value.Union, options);
+        string name = value.HintName + ".g.cs";
+        if (binary && GeneratedSourceMerge.Join(roots.Shared, union?.Shared, options) is { Length: > 0 } binaryText)
+            yield return new FrozenGeneratedSource(name, binaryText);
+        if (json && GeneratedSourceMerge.Join(roots.Json, union?.Json, options) is { Length: > 0 } jsonText)
+            yield return new FrozenGeneratedSource(combined ? value.HintName + ".Json.g.cs" : name, jsonText);
     }
 
     /// <summary>Preserves first-registration layout selection while publishing declarations independently.</summary>

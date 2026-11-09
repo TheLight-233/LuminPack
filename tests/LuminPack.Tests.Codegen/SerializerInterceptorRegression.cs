@@ -205,9 +205,10 @@ internal static partial class SerializerInterceptorRegression
             "A payload-specific profile convenience overload remained in the global facade.");
         if (intercept)
         {
-            Require(generatedFiles.Any(file => file.HintName == "LuminPack.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
-            Require(driver.GetRunResult().Results[2].GeneratedSources.Any(file => file.HintName == "LuminPackGen.Union.UnionDispatch.g.cs"),
-                "The formatter publisher did not emit the Union dispatch file.");
+            Require(generatedFiles.Any(file => file.HintName == "LuminPackGen_Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
+            Require(driver.GetRunResult().Results[0].GeneratedSources.Any(file => file.HintName == "LuminPackGen_Union.g.cs" &&
+                file.SourceText.ToString().Contains("override void LuminPackUnionSerialize_", StringComparison.Ordinal)),
+                "The binary publisher did not emit the Union dispatch slots with the type file.");
             Require(!outerMethods.Any(method => method.Identifier.ValueText == "Serialize" &&
                 method.TypeParameterList == null &&
                 method.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString() == "global::Payload"),

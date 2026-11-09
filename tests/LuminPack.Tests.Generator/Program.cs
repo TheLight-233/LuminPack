@@ -83,7 +83,7 @@ static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var run = driver.RunGenerators(compilation).GetRunResult();
 
@@ -222,21 +222,21 @@ Parallel.For(0, CompilationCount, compilationIndex =>
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
 
+    // The binary publisher owns each model's file; the formatter publisher reports the type diagnostics.
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     driver = driver.RunGenerators(compilation);
     var runResult = driver.GetRunResult();
-    var result = runResult.Results.Single();
 
-    if (result.Exception is not null)
+    if (runResult.Results.FirstOrDefault(static item => item.Exception is not null).Exception is { } exception)
     {
-        failures.Enqueue($"Compilation {compilationIndex} generator exception: {result.Exception}");
+        failures.Enqueue($"Compilation {compilationIndex} generator exception: {exception}");
         return;
     }
 
     var ownInvalidName = $"Invalid_{compilationIndex}";
-    var errorDiagnostics = result.Diagnostics
+    var errorDiagnostics = runResult.Diagnostics
         .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
         .ToArray();
     if (errorDiagnostics.Length != 1 ||
@@ -247,12 +247,12 @@ Parallel.For(0, CompilationCount, compilationIndex =>
             string.Join(" | ", errorDiagnostics.Select(static diagnostic => diagnostic.ToString())));
     }
 
-    var generatedHints = result.GeneratedSources
+    var generatedHints = runResult.Results.SelectMany(static item => item.GeneratedSources)
         .Select(static generated => generated.HintName)
         .ToHashSet(StringComparer.Ordinal);
     for (var typeIndex = 0; typeIndex < ValidTypesPerCompilation; typeIndex++)
     {
-        var expectedHint = $"LuminPackGen.Case__{compilationIndex}.Model__{typeIndex}.g.cs";
+        var expectedHint = $"LuminPackGen_Case_{compilationIndex}_Model_{typeIndex}.g.cs";
         if (!generatedHints.Contains(expectedHint))
         {
             failures.Enqueue($"Compilation {compilationIndex} is missing {expectedHint}.");
@@ -260,8 +260,8 @@ Parallel.For(0, CompilationCount, compilationIndex =>
     }
 
     if (generatedHints.Any(hint =>
-            hint.Contains("Case__", StringComparison.Ordinal) &&
-            !hint.Contains($"Case__{compilationIndex}.", StringComparison.Ordinal)))
+            hint.StartsWith("LuminPackGen_Case_", StringComparison.Ordinal) &&
+            !hint.StartsWith($"LuminPackGen_Case_{compilationIndex}_", StringComparison.Ordinal)))
     {
         failures.Enqueue($"Compilation {compilationIndex} received generated source from another compilation.");
     }
@@ -482,10 +482,10 @@ static void VerifyUnionAutoDiscovery(MetadataReference[] references)
             string.Join(" | ", compilationErrors.Select(static diagnostic => diagnostic.ToString())));
     }
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
-    var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
-    var errors = result.Diagnostics
+    var run = driver.RunGenerators(compilation).GetRunResult();
+    var errors = run.Diagnostics
         .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
         .ToArray();
     if (errors.Length != 0)
@@ -495,7 +495,7 @@ static void VerifyUnionAutoDiscovery(MetadataReference[] references)
             string.Join(" | ", errors.Select(static diagnostic => diagnostic.ToString())));
     }
 
-    string messageSource = result.GeneratedSources
+    string messageSource = run.Results.SelectMany(static item => item.GeneratedSources)
         .Where(static generated => generated.HintName.Contains("IMessage.g.cs", StringComparison.Ordinal))
         .Select(static generated => generated.SourceText.ToString())
         .Single();
@@ -510,7 +510,7 @@ static void VerifyUnionAutoDiscovery(MetadataReference[] references)
         throw new InvalidOperationException("A local [LuminPackable] derived type was not auto-registered.");
     }
 
-    string genericRootSource = result.GeneratedSources
+    string genericRootSource = run.Results.SelectMany(static item => item.GeneratedSources)
         .Where(static generated => generated.HintName.Contains("IGenericMessage", StringComparison.Ordinal))
         .Select(static generated => generated.SourceText.ToString())
         .First(static generated => generated.Contains("ReadPolymorphismValue", StringComparison.Ordinal));
@@ -564,8 +564,9 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
         new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    // Union slots belong to the binary publisher's type files.
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
     if (result.Exception is not null)
@@ -574,9 +575,8 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
     }
 
     var generated = result.GeneratedSources
-        .FirstOrDefault(static item => item.HintName.EndsWith(".UnionDispatch.g.cs", StringComparison.Ordinal))
-        .SourceText?
-        .ToString();
+        .Select(static item => item.SourceText.ToString())
+        .FirstOrDefault(static text => text.Contains("LuminPackUnionDispatchSlot_", StringComparison.Ordinal));
     if (string.IsNullOrEmpty(generated))
     {
         throw new InvalidOperationException("The generic union dispatch source was not generated.");
@@ -657,8 +657,9 @@ static void VerifySealedUnionDispatch(MetadataReference[] references)
         new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    // Union slots belong to the binary publisher's type files.
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackFormatterGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
     if (result.Exception is not null)
@@ -669,8 +670,8 @@ static void VerifySealedUnionDispatch(MetadataReference[] references)
     var dispatch = string.Join(
         Environment.NewLine,
         result.GeneratedSources
-            .Where(static item => item.HintName.EndsWith(".UnionDispatch.g.cs", StringComparison.Ordinal))
-            .Select(static item => item.SourceText?.ToString() ?? string.Empty));
+            .Select(static item => item.SourceText?.ToString() ?? string.Empty)
+            .Where(static text => text.Contains("override void LuminPackUnionSerialize_", StringComparison.Ordinal)));
     if (!dispatch.Contains("internal sealed override void LuminPackUnionSerialize_", StringComparison.Ordinal))
     {
         throw new InvalidOperationException("A leaf class-union member did not emit a sealed dispatch override.");
@@ -1414,8 +1415,10 @@ static string[] RunMapGenerator(
     return driver.RunGenerators(compilation)
         .GetRunResult()
         .Results.SelectMany(static result => result.GeneratedSources)
-        .Where(static generated => !generated.HintName.StartsWith("LuminPackGen.", StringComparison.Ordinal) &&
-            !generated.HintName.StartsWith("LuminPackJson.LuminPackGen.", StringComparison.Ordinal))
+        .Where(static generated => !generated.HintName.EndsWith(".Layout.g.cs", StringComparison.Ordinal) &&
+            (generated.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || generated.HintName is "LuminPackGen_LuminPackSerializer.g.cs" or
+                "LuminPackGen_Interceptors.g.cs" or "LuminPackGen_FormatterBridges.g.cs" or "LuminPackGen_FormatterDispatch.g.cs" ||
+                generated.HintName.StartsWith("LuminPackGen_System_", StringComparison.Ordinal)))
         .Select(static generated => generated.SourceText.ToString())
         .ToArray();
 }

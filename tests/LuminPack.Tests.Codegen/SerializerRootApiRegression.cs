@@ -390,7 +390,7 @@ internal static class SerializerRootApiRegression
     /// <param name="payload">The payload's simple global type name.</param>
     /// <returns>Concrete overload declarations in generated order.</returns>
     private static MethodDeclarationSyntax[] Concrete(GeneratorDriver driver, string payload)
-        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal))
+        => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Where(file => (file.HintName.EndsWith(".Api.g.cs", StringComparison.Ordinal) || file.HintName == "LuminPackGen_LuminPackSerializer.g.cs"))
             .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } && method.TypeParameterList == null &&
                 method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::" + payload)).ToArray();
