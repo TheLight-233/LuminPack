@@ -102,17 +102,24 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool MemberWrite;
     /// <summary>Whether snapshot locals are camel-cased, as the bound operation pipeline names them for mirrored or derived types.</summary>
     internal readonly bool CamelSnapshots;
-    /// <summary>Whether the type is a raw unmanaged struct, written and read as one value.</summary>
+    /// <summary>Whether the type is a struct: raw unmanaged, written and read as one value, or portable (see <see cref="View"/>).</summary>
     internal readonly bool IsStruct;
+    /// <summary>The positional storage view of a portable struct, whose fields are copied one by one at packed wire offsets, or null.</summary>
+    internal readonly string View;
+    /// <summary>Whether the portable view is elided: every positional view name is also a field name of the struct, so the
+    /// original projection names the struct's fields directly (by name, not by position).</summary>
+    internal readonly bool ViewElided;
     /// <summary>The root-private layout mirror that auto-property storage is reached through, or null for public fields.</summary>
     internal readonly string Mirror;
     /// <summary>The mirror's field declarations, such as <c>string? Name</c>, in storage order.</summary>
     internal readonly string[] MirrorFields;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
-        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct)
+        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided)
     {
         IsStruct = isStruct;
+        View = view;
+        ViewElided = viewElided;
         Proven = proven;
         MemberWrite = proven && !derived;
         CamelSnapshots = mirror != null || derived;
@@ -134,7 +141,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
         UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
-        CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && Mirror == other.Mirror &&
+        CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
@@ -156,8 +163,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (!SupportedProject(compilation, metadata))
             return null;
         var type = data.TypeSymbol;
-        // A struct is covered when its storage is its wire layout (a raw unmanaged struct).
-        bool isStruct = data.isValueType && type != null && type.TypeKind == TypeKind.Struct && EmitterTypeTraits.CanUseUnmanagedSerialization(type);
+        // A struct is covered when its storage is its wire layout (a raw unmanaged struct), or when a portable plan copies its
+        // scalar fields one by one at packed offsets.
+        bool raw = data.isValueType && type != null && type.TypeKind == TypeKind.Struct && EmitterTypeTraits.CanUseUnmanagedSerialization(type);
+        var portable = data.isValueType && !raw && type != null && type.TypeKind == TypeKind.Struct && !PortableStructPlan.RequiresClosedDispatch(type)
+            ? PortableStructPlan.TryCreate(type) : null;
+        if (portable != null && (portable.Fields == null || portable.Children == null || portable.Children.Any(child => child.Fields != null) ||
+            portable.Fields.Any(field => field.IsVolatile) || type is INamedTypeSymbol { IsTupleType: true }))
+            portable = null;
+        bool isStruct = raw || portable != null;
         if (type == null || data.generatorType != GeneratorType.Object || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
@@ -264,9 +278,23 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             mirrorFields = data.localFields.Select(local => local.TypeName +
                 (LuminPackCodeGenerator.IsUnmanagedFiledType(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + local.Identifier).ToArray();
         }
+        string view = null;
+        bool viewElided = false;
+        if (portable != null)
+        {
+            // The plan's fields are the struct's fields in declaration order, as are the members.
+            if (portable.Fields.Length != members.Length || portable.Fields.Where((field, index) => field.Name != members[index].Name).Any())
+                return DirectEmission.Reject<DirectTypeModel>("portable struct");
+            using (var hash = System.Security.Cryptography.SHA256.Create())
+                view = "LuminLayout_" + string.Concat(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(FormatterTypeName.Get(type)))
+                    .Select(value => value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture))) + "_" +
+                    LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type) + "_LocalPortable" + LuminPackLocalLayoutGenerator.GetLocalDeclarationName(type);
+            var names = new System.Collections.Generic.HashSet<string>(members.Select(member => member.Name), StringComparer.Ordinal);
+            viewElided = Enumerable.Range(0, members.Length).All(index => names.Contains("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct);
+            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>

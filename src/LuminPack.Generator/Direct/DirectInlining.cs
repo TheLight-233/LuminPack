@@ -28,6 +28,17 @@ internal static class DirectInlining
         return count <= Limit;
     }
 
+    /// <summary>Whether a portable struct's write root keeps its aggressive inlining hint.</summary>
+    internal static bool PortableWrite(DirectTypeModel model) => PortableCount(model, write: true) <= Limit;
+
+    /// <summary>Whether a portable struct's read root keeps its aggressive inlining hint.</summary>
+    internal static bool PortableRead(DirectTypeModel model) => PortableCount(model, write: false) <= Limit;
+
+    /// <summary>Counts a portable struct operation's template calls: the span index and reference, the advance, the view
+    /// (marshal and address) per branch, and per field its offset and transfer in each branch; a read also checks the span and the advance.</summary>
+    private static int PortableCount(DirectTypeModel model, bool write)
+        => write ? 7 + 4 * model.Members.Length : 7 + 2 * model.Members.Length;
+
     /// <summary>Whether a root read keeps its aggressive inlining hint.</summary>
     internal static bool Read(DirectTypeModel model)
     {
