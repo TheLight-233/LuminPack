@@ -13,7 +13,7 @@ internal sealed partial class CompiledOperationProjection
     /// <summary>Retains declaration-owned registration and adds its existing closed-profile counterpart.</summary>
     /// <param name="members">The destination registration container.</param>
     /// <param name="method">The original typed delegate registration.</param>
-    private static void AppendRegistration(List<MemberDeclarationSyntax> members, MethodDeclarationSyntax method)
+    private void AppendRegistration(List<MemberDeclarationSyntax> members, MethodDeclarationSyntax method)
     {
         members.Add(method);
         var registration = method.WithTypeParameterList(method.TypeParameterList.AddParameters(SyntaxFactory.TypeParameter("TOptions")))
@@ -24,7 +24,7 @@ internal sealed partial class CompiledOperationProjection
         registration = profiled.IsEquivalentTo(registration) ? Forwarder(registration, method) : profiled;
         registration = registration.WithLeadingTrivia(registration.GetLeadingTrivia().AddRange(SyntaxFactory.ParseLeadingTrivia(
             "/// <typeparam name=\"TOptions\">The stateless profile used by these closed delegates.</typeparam>\n")));
-        members.Add(registration.NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+        members.Add(Normalize(registration).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
     }
 
     /// <summary>Forwards a profile overload whose body is identical to the original registration.</summary>

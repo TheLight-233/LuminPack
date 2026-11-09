@@ -56,7 +56,7 @@ internal sealed partial class CompiledOperationProjection
         var forwarded = method.WithBody(SyntaxFactory.Block(forward)).WithExpressionBody(null).WithSemicolonToken(default)
             .WithModifiers(SyntaxFactory.TokenList(method.Modifiers.Where(modifier => !modifier.IsKind(SyntaxKind.AsyncKeyword))));
         // Facades are normalized once after their input guards and storage lifetimes have been projected.
-        members.Add(fixedBody ? method : (facade ? forwarded : forwarded.NormalizeWhitespace())
+        members.Add(fixedBody ? method : (facade ? forwarded : Normalize(forwarded))
             .WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
 
         var parameters = (method.TypeParameterList?.Parameters ?? default).Add(SyntaxFactory.TypeParameter(profile));
@@ -86,6 +86,6 @@ internal sealed partial class CompiledOperationProjection
             generic = method.Body != null ? generic.WithBody((BlockSyntax)body) : generic.WithExpressionBody((ArrowExpressionClauseSyntax)body);
         generic = generic.WithLeadingTrivia(generic.GetLeadingTrivia().AddRange(SyntaxFactory.ParseLeadingTrivia(
             "/// <typeparam name=\"" + profile + "\">The stateless profile for this serialization operation.</typeparam>\n")));
-        members.Add((facade ? generic : generic.NormalizeWhitespace()).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+        members.Add((facade ? generic : Normalize(generic)).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
     }
 }

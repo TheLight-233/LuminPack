@@ -221,7 +221,7 @@ internal static class SerializerCoreProjection
             .AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("global::LuminPack.Generated")));
         var projectedTree = GeneratedBinding.Tree(projected, metadata.ParseOptions);
         var rewritten = GeneratedBinding.Restore(new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree), compilation).Visit(projectedTree.GetRoot()));
-        rewritten = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(closedRoot, compilation)).Visit(rewritten);
+        rewritten = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(closedRoot, compilation), normalizeMembers: false).Visit(rewritten);
         rewritten = BinaryEntryLocalScopes.NormalizeRoot(rewritten);
         rewritten = GeneratedOperationScopes.Rewrite(rewritten);
         rewritten = GeneratedOperationNames.Rewrite(rewritten);

@@ -14,17 +14,26 @@ internal sealed partial class CompiledOperationProjection : NodeRewriter
     private readonly Compilation _compilation;
     private readonly CompiledOptions _default;
     private readonly IReadOnlyDictionary<string, ITypeSymbol> _types;
+    private readonly bool _normalizeMembers;
     internal const string UnionRootAnnotation = "LuminPack.CompiledUnionRoot";
 
     /// <summary>Captures current type identities only for this syntax projection.</summary>
     /// <param name="compilation">The current consumer compilation.</param>
     /// <param name="fallback">The declaration profile for a facade or generic fallback.</param>
-    internal CompiledOperationProjection(Compilation compilation, CompiledOptions fallback)
+    /// <param name="normalizeMembers">Whether each projected member is formatted here; false when the caller formats the whole unit.</param>
+    internal CompiledOperationProjection(Compilation compilation, CompiledOptions fallback, bool normalizeMembers = true)
     {
         _compilation = compilation;
         _default = fallback;
+        _normalizeMembers = normalizeMembers;
         _types = CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypesByName;
     }
+
+    /// <summary>Formats one projected member unless the caller formats the whole unit afterwards.</summary>
+    /// <typeparam name="T">The member syntax type.</typeparam>
+    /// <param name="member">A member built from factory or reparsed syntax.</param>
+    /// <returns>The formatted member, or the same member when formatting is deferred.</returns>
+    private T Normalize<T>(T member) where T : SyntaxNode => _normalizeMembers ? member.NormalizeWhitespace() : member;
 
     /// <summary>Moves each complete operation body into a profile-generic operation, retaining thin declaration-default entries.</summary>
     /// <param name="node">A Serializer, dispatch, JSON cache or generated Union declaration.</param>

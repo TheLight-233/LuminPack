@@ -31,7 +31,7 @@ internal sealed partial class CompiledOperationProjection
             var body = new Body(profile.TypeName, method.ParameterList.Parameters[0].Type.ToString(), writer, state, false, null).Visit(method.Body ?? (SyntaxNode)method.ExpressionBody);
             var slot = method.WithIdentifier(SyntaxFactory.Identifier(name));
             slot = method.Body != null ? slot.WithBody((BlockSyntax)body) : slot.WithExpressionBody((ArrowExpressionClauseSyntax)body);
-            members.Add(slot.NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+            members.Add(Normalize(slot).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
         }
         if (method.Modifiers.Any(SyntaxKind.OverrideKeyword) || owner is not InterfaceDeclarationSyntax && !method.Modifiers.Any(SyntaxKind.VirtualKeyword))
             return;
@@ -78,14 +78,14 @@ internal sealed partial class CompiledOperationProjection
             source.Append(") ").AppendLine(Dispatch(name));
         }
         source.AppendLine("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(\"The compiled profile has an invalid string encoding or recording mode.\"); }");
-        members.Add(SyntaxFactory.ParseMemberDeclaration(source.ToString()).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+        members.Add(Normalize(SyntaxFactory.ParseMemberDeclaration(source.ToString())).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
         if (tier?.Tier == UnionDispatchTier.Pattern)
             foreach (var profile in profiles)
             {
                 string name = SlotName(profile);
                 string helper = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] " +
                     "private static void " + name + "_Dispatch(ref " + method.ParameterList.Parameters[0].Type + " writer, " + rootName + " value) " + tier.Dispatch(name);
-                members.Add(SyntaxFactory.ParseMemberDeclaration(helper).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+                members.Add(Normalize(SyntaxFactory.ParseMemberDeclaration(helper)).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
             }
     }
 
