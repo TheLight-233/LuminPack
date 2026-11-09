@@ -351,7 +351,7 @@ public static partial class LuminPackSerializerGenerator
         if (RequiresStationaryInput(compilation, metadata))
             root = (CompilationUnitSyntax)new PinnedReaderProjection(metadata.AllowUnsafe).Visit(root);
         root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(root);
-        root = root.NormalizeWhitespace("    ", Environment.NewLine).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine));
+        root = root.NormalizeGenerated(Environment.NewLine).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine));
         string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata, navigationTargets);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
     }

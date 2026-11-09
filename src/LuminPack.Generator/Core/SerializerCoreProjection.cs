@@ -253,7 +253,7 @@ internal static class SerializerCoreProjection
         rewritten = GeneratedOperationNames.RewriteReservedLocals(rewritten);
         rewritten = GeneratedOperationScopes.RemoveEmptyScopes(rewritten);
         rewritten = new BinaryReadMemberProjection(types).Visit(rewritten);
-        var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
+        var normalized = (CompilationUnitSyntax)rewritten.NormalizeGenerated(Environment.NewLine);
         var forwardingRoot = normalized;
         if (InterceptionSupport.IsEnabled(metadata.ParseOptions))
             normalized = UniqueStateEntries.Apply(normalized, compilation, metadata);

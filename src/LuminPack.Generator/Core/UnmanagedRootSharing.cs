@@ -254,7 +254,7 @@ internal static class UnmanagedRootSharing
                 .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(pair.Value)))));
         var shared = members[0].Root.WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(
             SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName("LuminPack")).AddMembers(serializer)))
-            .NormalizeWhitespace("    ", Environment.NewLine);
+            .NormalizeGenerated(Environment.NewLine);
         return new Result(rewritten, shared.ToFullString());
     }
 
@@ -701,6 +701,6 @@ internal static class UnmanagedRootSharing
         return root.WithAttributeLists(SyntaxFactory.List(attributes)).WithBody(null)
             .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(SyntaxFactory.InvocationExpression(target, arguments)))
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-            .NormalizeWhitespace("    ", Environment.NewLine).WithTriviaFrom(root);
+            .NormalizeGenerated(Environment.NewLine).WithTriviaFrom(root);
     }
 }

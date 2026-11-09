@@ -85,7 +85,7 @@ internal static class JsonOperationTemplates
                 type.Identifier.ValueText.StartsWith("Version_", StringComparison.Ordinal));
         var support = root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(helpers)));
         support = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation))
-            .Visit(support).NormalizeWhitespace("    ", Environment.NewLine);
+            .Visit(support).NormalizeGenerated(Environment.NewLine);
         return GeneratedSourceDocumentation.CompleteRoot(support).ToFullString();
     }
 
