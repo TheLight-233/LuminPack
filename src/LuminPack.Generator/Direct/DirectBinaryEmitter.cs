@@ -357,7 +357,8 @@ internal static partial class DirectBinaryEmitter
         void VersionRoots()
         {
             // The Union payload of a version-tolerant record is the record itself; only the inline hint follows the body size.
-            var write = VersionWriteBody(model, w);
+            // A mirrored record keeps its null handling in both bodies, so the mirror view is declared at the same position.
+            var write = Mirrored(model, w, VersionWriteBody(model, w), writes: true, union: false);
             string writeHint = VersionWriteInline(model) ? inline : null;
             w.Suppressed = !writes;
             Method(write, "RootWrite", true, "(scoped ref " + writer + " writer, " + type + "? input)", writeHint);
@@ -366,7 +367,8 @@ internal static partial class DirectBinaryEmitter
             Method(VersionReadBody(model, w), "RootRead", true, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", null);
             w.Blank();
             w.Suppressed = !writes;
-            Method(VersionWriteBody(model, w), "RootWriteUnion", true, "(scoped ref " + writer + " writer, " + type + "? input)", writeHint);
+            Method(Mirrored(model, w, VersionWriteBody(model, w), writes: true, union: false), "RootWriteUnion", true,
+                "(scoped ref " + writer + " writer, " + type + "? input)", writeHint);
             w.Blank();
             w.Suppressed = !reads;
             Method(VersionReadBody(model, w), "RootReadUnion", true, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",

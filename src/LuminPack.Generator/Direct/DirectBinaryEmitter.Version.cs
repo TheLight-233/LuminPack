@@ -56,7 +56,7 @@ internal sealed class DirectVersionSchema : IEquatable<DirectVersionSchema>
     /// <returns>The schema, or null when the record keeps the original pipeline.</returns>
     internal static DirectVersionSchema TryCreate(LuminDataInfo data, INamedTypeSymbol type, MetaInfo metadata, DirectMember[] members, bool derived, bool mirrored)
     {
-        if (derived || mirrored || data.isValueType || data.VersionSchemaType == null)
+        if (derived || data.isValueType || data.VersionSchemaType == null)
             return DirectEmission.Reject<DirectVersionSchema>("version tolerant: shape");
         if (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List || member.Raw))
             return DirectEmission.Reject<DirectVersionSchema>("version tolerant: members");
@@ -68,8 +68,6 @@ internal sealed class DirectVersionSchema : IEquatable<DirectVersionSchema>
         if (metadataBytes == null || widths.Any(width => width == null))
             return DirectEmission.Reject<DirectVersionSchema>("version tolerant: widths");
         var prefix = new byte[] { 251, 2, 0, (byte)data.fields.Count }.Concat(metadataBytes).Concat(widths.Select(width => (byte)width.Value)).ToArray();
-        if (prefix.Length < 8)
-            return DirectEmission.Reject<DirectVersionSchema>("version tolerant: widths");
         var entries = data.fields.Select(field =>
         {
             var aliases = new[] { field.Name }.Concat(field.OldNames).Where(alias => alias != field.SerializedName).Select(Literal).ToArray();
@@ -322,8 +320,9 @@ internal static partial class DirectBinaryEmitter
             index = last;
         }
         body.Add("}");
-        // A raw record of at most seven members returns its values; any other fills the caller's temporaries by reference.
-        bool returns = allRaw && members.Length <= 7;
+        // A raw record of at most seven members returns its values; any other, including an empty record, fills the caller's
+        // temporaries by reference or returns nothing.
+        bool returns = allRaw && members.Length is > 0 and <= 7;
         string assignment = !returns ? string.Empty : members.Length == 1 ? temps[0] + " = " : "(" + string.Join(", ", temps) + ") = ";
         body.Add("else");
         body.Add("\t" + assignment + "ReadEvolvedFields(ref reader, count, revision" + (returns ? string.Empty : string.Concat(temps.Select(temp => ", ref " + temp))) + ");");
@@ -399,17 +398,34 @@ internal static partial class DirectBinaryEmitter
         body.Add("var completedInstance = value;");
         body.Add("if (value is null)");
         body.Add("{");
-        body.Add("value = new " + model.GlobalName + "()");
-        body.Add("{");
-        for (int index = 0; index < members.Length; index++)
-            body.Add(members[index].Name + " = " + temps[index] + "!,");
-        body.Add("};");
+        bool mirroredMembers = model.Members.Any(member => member.Mirrored);
+        var initializer = members.Where(member => !member.Mirrored).ToArray();
+        if (initializer.Length == 0)
+            body.Add("value = new " + model.GlobalName + "();");
+        else
+        {
+            body.Add("value = new " + model.GlobalName + "()");
+            body.Add("{");
+            foreach (var member in initializer)
+                body.Add(member.Name + " = " + temps[System.Array.IndexOf(members, member)] + "!,");
+            body.Add("};");
+        }
+        if (mirroredMembers)
+        {
+            body.Add("// Assign private fields.");
+            body.Add("ref var local = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+            for (int index = 0; index < members.Length; index++)
+                if (members[index].Mirrored)
+                    body.Add("local." + members[index].Name + " = " + temps[index] + "!;");
+        }
         body.Add("completedInstance = value;");
         body.Add("}");
         body.Add("else");
         body.Add("{");
+        if (mirroredMembers)
+            body.Add("ref var reuseLocal = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref completedInstance!);");
         for (int index = 0; index < members.Length; index++)
-            body.Add("completedInstance!." + members[index].Name + " = " + temps[index] + "!;");
+            body.Add((members[index].Mirrored ? "reuseLocal." : "completedInstance!.") + members[index].Name + " = " + temps[index] + "!;");
         body.Add("}");
         return body;
     }
@@ -463,33 +479,38 @@ internal static partial class DirectBinaryEmitter
         w.Open();
         w.Line("if (Shortens && reader.TryReadVersionShort<TOptions>(Count, Fingerprint))");
         w.Indented(() => w.Line("return true;"));
-        w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
-        w.Indented(() => w.Line("return reader.TryReadVersionPrefix<TOptions>(Prefix);"));
-        w.Line("ref byte input = ref reader.PeekInput(" + length + ", out bool available);");
-        w.Line("if (!available)");
-        w.Indented(() => w.Line("return false;"));
-        var offsets = new List<int>();
-        for (int offset = 0; offset + 8 <= prefix.Length; offset += 8)
-            offsets.Add(offset);
-        if (prefix.Length % 8 != 0)
-            offsets.Add(prefix.Length - 8);
-        var terms = offsets.Select(offset =>
+        if (prefix.Length < 8)
+            w.Line("return reader.TryReadVersionPrefix<TOptions>(Prefix);");
+        else
         {
-            ulong word = 0;
-            for (int index = 7; index >= 0; index--)
-                word = word << 8 | prefix[offset + index];
-            string load = offset == 0 ? unsafeName + ".ReadUnaligned<ulong>(ref input)"
-                : unsafeName + ".ReadUnaligned<ulong>(ref " + unsafeName + ".Add(ref input, " + offset.ToString(CultureInfo.InvariantCulture) + "))";
-            string expected = "0x" + word.ToString("X16", CultureInfo.InvariantCulture) + "UL";
-            if (offset == 0)
-                expected = "(" + expected + " | " + profile + ")";
-            return "(" + load + " ^ " + expected + ")";
-        });
-        w.Line("if ((" + string.Join(" | ", terms) + ") != 0)");
-        w.Indented(() => w.Line("return false;"));
-        w.Line("reader.EnsureReadable(" + length + ");");
-        w.Line("reader.Cursor = ref " + unsafeName + ".Add(ref reader.Cursor, " + length + ");");
-        w.Line("return true;");
+            w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
+            w.Indented(() => w.Line("return reader.TryReadVersionPrefix<TOptions>(Prefix);"));
+            w.Line("ref byte input = ref reader.PeekInput(" + length + ", out bool available);");
+            w.Line("if (!available)");
+            w.Indented(() => w.Line("return false;"));
+            var offsets = new List<int>();
+            for (int offset = 0; offset + 8 <= prefix.Length; offset += 8)
+                offsets.Add(offset);
+            if (prefix.Length % 8 != 0)
+                offsets.Add(prefix.Length - 8);
+            var terms = offsets.Select(offset =>
+            {
+                ulong word = 0;
+                for (int index = 7; index >= 0; index--)
+                    word = word << 8 | prefix[offset + index];
+                string load = offset == 0 ? unsafeName + ".ReadUnaligned<ulong>(ref input)"
+                    : unsafeName + ".ReadUnaligned<ulong>(ref " + unsafeName + ".Add(ref input, " + offset.ToString(CultureInfo.InvariantCulture) + "))";
+                string expected = "0x" + word.ToString("X16", CultureInfo.InvariantCulture) + "UL";
+                if (offset == 0)
+                    expected = "(" + expected + " | " + profile + ")";
+                return "(" + load + " ^ " + expected + ")";
+            });
+            w.Line("if ((" + string.Join(" | ", terms) + ") != 0)");
+            w.Indented(() => w.Line("return false;"));
+            w.Line("reader.EnsureReadable(" + length + ");");
+            w.Line("reader.Cursor = ref " + unsafeName + ".Add(ref reader.Cursor, " + length + ");");
+            w.Line("return true;");
+        }
         w.Close();
         w.Blank();
 
@@ -504,16 +525,25 @@ internal static partial class DirectBinaryEmitter
         w.Line("return;");
         w.Close();
         w.Blank();
-        w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
-        w.Open();
-        w.Line("writer.WriteVersionPrefix<TOptions>(Prefix);");
-        w.Line("return;");
-        w.Close();
-        w.Blank();
-        w.Line("ref byte target = ref writer.ReservePrefix(" + length + ");");
-        PrefixWords(w, prefix, unsafeName, profile);
-        w.Close();
-        w.Blank();
+        if (prefix.Length < 8)
+        {
+            w.Line("writer.WriteVersionPrefix<TOptions>(Prefix);");
+            w.Close();
+            w.Blank();
+        }
+        else
+        {
+            w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
+            w.Open();
+            w.Line("writer.WriteVersionPrefix<TOptions>(Prefix);");
+            w.Line("return;");
+            w.Close();
+            w.Blank();
+            w.Line("ref byte target = ref writer.ReservePrefix(" + length + ");");
+            PrefixWords(w, prefix, unsafeName, profile);
+            w.Close();
+            w.Blank();
+        }
 
         // Prefix store into reserved record room, returning the stored byte count.
         w.Line(inline);
@@ -526,14 +556,22 @@ internal static partial class DirectBinaryEmitter
         w.Line("return 12;");
         w.Close();
         w.Blank();
-        w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
-        w.Open();
-        w.Line(writerName + ".StoreVersionPrefix<TOptions>(ref target, Prefix);");
-        w.Line("return Prefix.Length;");
-        w.Close();
-        w.Blank();
-        PrefixWords(w, prefix, unsafeName, profile);
-        w.Line("return " + length + ";");
+        if (prefix.Length < 8)
+        {
+            w.Line(writerName + ".StoreVersionPrefix<TOptions>(ref target, Prefix);");
+            w.Line("return Prefix.Length;");
+        }
+        else
+        {
+            w.Line("if (" + unsafeName + ".SizeOf<nint>() != 8)");
+            w.Open();
+            w.Line(writerName + ".StoreVersionPrefix<TOptions>(ref target, Prefix);");
+            w.Line("return Prefix.Length;");
+            w.Close();
+            w.Blank();
+            PrefixWords(w, prefix, unsafeName, profile);
+            w.Line("return " + length + ";");
+        }
         w.Close();
         w.Close();
     }
