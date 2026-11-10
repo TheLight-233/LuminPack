@@ -295,6 +295,9 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     private static void Sequence(CollectionMember member, GeneratorOptions options, List<SequenceOwnerFact> facts,
         List<string> scalars, ref SharedFormatterKind owners)
     {
+        // The analysis group also covers families whose owners are not ported yet.
+        if (!RenderModelFactory.IsSupportedSequence(member))
+            return;
         bool immutable = member.Kind == CollectionKind.Immutable;
         // A packable-class sequence publishes its own owner, whose write and read expand the element record in place.
         if (member.Nested != null)

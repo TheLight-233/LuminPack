@@ -203,6 +203,12 @@ match the legacy output after whitespace normalization (18/18 and 36/36). Every 
 one `Scalar_<Keyword>` owner file, and the sequence roots read raw storage without the profile; a
 Boolean sequence reads through its scalar owner and keeps the profile, as the legacy template does.
 
+The analysis groups every concurrent and immutable collection under one kind, so the render model
+checks the declared family before mapping a member: only `ConcurrentQueue<T>` and
+`ImmutableArray<T>` render, while `ImmutableQueue`, `ImmutableStack`, `ImmutableList`,
+`ImmutableHashSet`, `ConcurrentStack` and `ConcurrentBag` stay unmapped instead of borrowing the wrong
+storage protocol.
+
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
 `LuminPack027` and `LuminPack018` at the declarations, and the 220-payload corpus reports none. An
@@ -274,7 +280,7 @@ pipeline; P2 improves the product.
 
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `String` owner, the per-keyword scalar owners and the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for every raw scalar, `string` and string-bearing packable classes landed; other element shapes, the other concurrent/immutable families, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
+| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `String` owner, the per-keyword scalar owners and the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for every raw scalar, `string` and string-bearing packable classes landed; the other concurrent/immutable families are declared-family guarded and stay unmapped, and other element shapes, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
 | M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values; no shared dictionary owner is published yet | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
 | M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |

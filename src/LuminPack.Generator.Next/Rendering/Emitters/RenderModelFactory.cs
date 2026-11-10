@@ -366,6 +366,9 @@ internal static class RenderModelFactory
         // variant, or a packable element whose record body the owner expands in place.
         if (member.Kind is CollectionKind.Concurrent or CollectionKind.Immutable)
         {
+            // The analysis group also covers families this renderer does not reproduce yet.
+            if (!IsSupportedSequence(member))
+                return null;
             RenderMemberKind kind = member.Kind == CollectionKind.Concurrent
                 ? RenderMemberKind.ConcurrentQueue : RenderMemberKind.ImmutableArray;
             // A packable element carries its declared spelling in Scalar, so the nested model decides the shape first.
@@ -486,6 +489,31 @@ internal static class RenderModelFactory
         return new RenderMember(member.Name, member.Kind == CollectionKind.Immutable
                 ? RenderMemberKind.ImmutableArray : RenderMemberKind.ConcurrentQueue,
             member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored, nested: element, property: property);
+    }
+
+    /// <summary>Whether a concurrent or immutable sequence belongs to the families the sequence owners reproduce.</summary>
+    /// <param name="member">The sequence member.</param>
+    /// <returns>Whether the declared family is <c>ConcurrentQueue&lt;T&gt;</c> or <c>ImmutableArray&lt;T&gt;</c>.</returns>
+    /// <remarks>The analysis group covers every concurrent and immutable collection, while the shared owners currently cover only
+    /// the queue and the array; the other families stay unmapped instead of rendering with the wrong storage protocol.</remarks>
+    internal static bool IsSupportedSequence(CollectionMember member)
+    {
+        string family = SequenceFamily(member.DeclaredType);
+        return member.Kind == CollectionKind.Concurrent ? family == "ConcurrentQueue" :
+            member.Kind == CollectionKind.Immutable && family == "ImmutableArray";
+    }
+
+    /// <summary>Extracts the simple name of a declared sequence family.</summary>
+    /// <param name="declaredType">The declared spelling, such as <c>global::...ImmutableArray&lt;int&gt;</c>.</param>
+    /// <returns>The family name without namespace or type arguments.</returns>
+    private static string SequenceFamily(string declaredType)
+    {
+        string text = GeneratedNames.PayloadKey(declaredType);
+        int generic = text.IndexOf('<');
+        if (generic >= 0)
+            text = text.Substring(0, generic);
+        int dot = text.LastIndexOf('.');
+        return dot < 0 ? text : text.Substring(dot + 1);
     }
 
     /// <summary>Builds the render model of a sequence's payload element.</summary>
