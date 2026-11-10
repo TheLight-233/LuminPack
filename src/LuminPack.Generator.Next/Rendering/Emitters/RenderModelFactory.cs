@@ -24,6 +24,9 @@ internal static class RenderModelFactory
             return Union(union, options);
         if (model is CircleReferenceModel circle)
             return Circle(circle, options);
+        // A version-tolerant struct writes a schema prefix the struct roots do not reproduce yet.
+        if (model is StructModel { Versioned: true })
+            return null;
         bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null };
         // A struct with reference members keeps the record protocol: public fields of fixed scalars, strings and built-in
         // values only. Mirrored storage, construction, callbacks, rent, a version schema and a bound change that framing and
@@ -37,11 +40,15 @@ internal static class RenderModelFactory
         if (portable is not { Complete: true })
             portable = null;
         bool isStruct = raw || portable != null || managed;
-        if (!isStruct && model is not RecordModel { Versioned: false })
+        if (!isStruct && model is not RecordModel)
             return null;
         // The layout mirror reaches auto-property and included non-public storage. A record whose mirror could not be
         // reproduced exactly stays unmapped instead of emitting partial code.
         RecordModel? record = isStruct ? null : (RecordModel)model;
+        // A version-tolerant record renders only when its analysis produced the complete schema and rejected every shape the
+        // version emitter does not reproduce.
+        if (record is { Versioned: true } versionedRecord && (versionedRecord.Version == null || versionedRecord.Derived))
+            return null;
         string? mirror = record?.Mirror;
         if (record != null && mirror == null && record.Members.Any(member => member.Mirrored))
             return null;
@@ -74,7 +81,8 @@ internal static class RenderModelFactory
         bool viewElided = portableView != null && Enumerable.Range(0, members.Length)
             .All(index => names.Contains("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)), extension,
-            GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: isStruct,
+            GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)),
+            freshResult: isStruct || model is RecordModel { FreshResult: true },
             uniqueEntries: options.Interceptors, members, proven, mirror: mirror!, mirrorFields: record?.MirrorFields ?? null!,
             derived: model is RecordModel { Derived: true },
             isStruct, view: view!, viewElided, fixedUnionCase: record?.FixedUnionCase ?? false,
@@ -85,13 +93,20 @@ internal static class RenderModelFactory
                 _ => false,
             },
             constructorArguments: null, constructorMembers: null, memberWrite: memberWrite, net8: options.Net8,
-            utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: null!,
+            utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: Schema(record?.Version),
             referencePayload: model.Members.Any(item => item is not ScalarMember),
             layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
             trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView, mirrorOffsets: record?.MirrorOffsets,
             managedStruct: managed);
     }
+
+    /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>
+    /// <param name="schema">The analyzed schema, or null for an ordinary record.</param>
+    /// <returns>The emitter schema, or null.</returns>
+    private static VersionSchema? Schema(VersionSchemaModel? schema) => schema == null ? null :
+        new VersionSchema(schema.Schema, schema.Metadata, schema.Prefix, schema.FieldEntries, schema.TempTypes, schema.TypeNames,
+            schema.QualifiedTypes, schema.Layout, schema.LayoutFields, schema.OldNames);
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters
     /// reproduce.</summary>
@@ -297,8 +312,12 @@ internal static class RenderModelFactory
                     "global::LuminPack." + GeneratedNames.Owner(extension, scalar.Scalar), ScalarKind.Struct, mirrored,
                     raw: true, builtin: true, property: property);
             case ScalarMember scalar:
-                return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.Scalar, scalar.Scalar, scalar.Size, null!,
-                    FieldType(scalar.Scalar), mirrored, property: property);
+                // An enum is stored as its underlying scalar; the binary emitters spell the enum itself, JSON casts through
+                // the underlying keyword.
+                return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.EnumType ?? scalar.Scalar,
+                    scalar.EnumType ?? scalar.Scalar, scalar.Size, null!,
+                    scalar.EnumType != null ? ScalarKind.Enum : FieldType(scalar.Scalar), mirrored,
+                    underlying: scalar.Underlying, property: property);
             case TextMember:
                 return new RenderMember(member.Name, RenderMemberKind.Text, "string", "string", 0, null!, ScalarKind.String,
                     mirrored, property: property);

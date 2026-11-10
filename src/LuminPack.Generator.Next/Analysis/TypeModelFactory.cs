@@ -223,7 +223,15 @@ internal static class TypeModelFactory
                     string? mirror = null, mirrorLayout = null;
                     string[]? mirrorFields = null;
                     int[]? mirrorOffsets = null;
-                    if (members.Any(member => member.Mirrored))
+                    VersionSchemaModel? version = null;
+                    if (versioned)
+                    {
+                        version = TryVersionSchema(symbol, identity, members, policy, derived, issues);
+                        if (members.Any(member => member.Mirrored))
+                            TryVersionMirror(symbol, identity, members, issues,
+                                out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
+                    }
+                    else if (members.Any(member => member.Mirrored))
                         TryMirror(symbol, identity, versioned, derived, policy, members, issues,
                             out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
                     bool proven = !versioned && !derived && mirror == null && policy.Bound == null && Options.Net8 && Options.Unsafe &&
@@ -231,7 +239,8 @@ internal static class TypeModelFactory
                         members.All(member => member is ScalarMember or TextMember);
                     return new RecordModel(identity, accessibility, members, policy, constraints, versioned,
                         fixedUnionCase: !versioned && members.All(member => member is ScalarMember) && IsFixedUnionCase(symbol),
-                        derived, proven, RecordWidthSupported(symbol), mirror, mirrorFields, mirrorOffsets, mirrorLayout);
+                        derived, proven, RecordWidthSupported(symbol), CanDeserializeDirectlyIntoFreshResult(symbol, members),
+                        mirror, mirrorFields, mirrorOffsets, mirrorLayout, version);
                 }
             }
         }
@@ -344,7 +353,8 @@ internal static class TypeModelFactory
                     issues.Add("member '" + name + "' is a nullable or unsupported enum");
                     return null;
                 }
-                return new ScalarMember(name, storage, policy, underlying.Keyword, underlying.Size, raw: false, builtin: false);
+                return new ScalarMember(name, storage, policy, underlying.Keyword, underlying.Size, raw: false, builtin: false,
+                    enumType: type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), underlying: underlying.Keyword);
             }
             if (Scalar(type) is { } scalar)
                 return new ScalarMember(name, storage, policy, scalar.Keyword, scalar.Size, raw: false, builtin: false);
@@ -1334,6 +1344,39 @@ internal static class TypeModelFactory
                type.SpecialType == SpecialType.None && !type.IsTupleType && type.DeclaringSyntaxReferences.Length != 0 &&
                !type.IsGenericType && !IsPackable(type) && GenerationMode(type) != "Custom" && Opaque(type) == null;
 
+        /// <summary>Whether JSON can assign a fresh instance directly instead of staging members in temporaries.</summary>
+        /// <param name="symbol">The record declaration.</param>
+        /// <param name="members">The serialized members.</param>
+        /// <returns>Whether every level is a source class with an implicit parameterless constructor and no initializers.</returns>
+        private static bool CanDeserializeDirectlyIntoFreshResult(INamedTypeSymbol symbol, MemberModel[] members)
+        {
+            // Omitted JSON members keep constructor and initializer values, so only public storage without either can
+            // take the fresh-result path. Versioned records keep the same rule: their layout mirror does not stage members.
+            if (members.Length == 0 || members.Any(member => member.Mirrored))
+                return false;
+            for (var type = symbol; type != null && type.SpecialType != SpecialType.System_Object; type = type.BaseType)
+            {
+                if (type.TypeKind != TypeKind.Class || type.DeclaringSyntaxReferences.Length == 0)
+                    return false;
+                var constructors = type.InstanceConstructors;
+                if (constructors.Length != 1 || !constructors[0].IsImplicitlyDeclared || constructors[0].Parameters.Length != 0)
+                    return false;
+                foreach (var member in type.GetMembers())
+                {
+                    if (member.IsStatic || member.IsImplicitlyDeclared)
+                        continue;
+                    foreach (var reference in member.DeclaringSyntaxReferences)
+                    {
+                        var syntax = reference.GetSyntax();
+                        if (syntax is Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax { Initializer: not null } ||
+                            syntax is Microsoft.CodeAnalysis.CSharp.Syntax.PropertyDeclarationSyntax { Initializer: not null })
+                            return false;
+                    }
+                }
+            }
+            return true;
+        }
+
         /// <summary>Records whether a declaration is a supported fixed record, which gives it the <c>MeasureRecord</c> entry.</summary>
         /// <param name="symbol">The struct declaration.</param>
         /// <returns>Whether every instance member is a fixed-width primitive.</returns>
@@ -2206,6 +2249,451 @@ internal static class TypeModelFactory
             }
             return null;
         }
+
+        /// <summary>Computes the schema facts a version-tolerant class record writes and reads.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="identity">The payload's identity.</param>
+        /// <param name="members">The serialized members in wire order.</param>
+        /// <param name="policy">The effective wire policy.</param>
+        /// <param name="derived">Whether the record's base type contributes storage.</param>
+        /// <param name="issues">Receives the reason the schema is outside the modeled surface.</param>
+        /// <returns>The schema model, or null when the record keeps the original pipeline.</returns>
+        /// <remarks>Versioned structs, callbacks, pool rents, base payloads, generic definitions, bounds, non-default profiles and
+        /// every member shape the version emitter does not cover stay unmapped.</remarks>
+        private VersionSchemaModel? TryVersionSchema(INamedTypeSymbol type, TypeIdentity identity, MemberModel[] members,
+            WirePolicy policy, bool derived, List<string> issues)
+        {
+            if (derived || identity.IsGeneric)
+            {
+                issues.Add("a derived or generic version-tolerant record keeps its schema outside the direct emitters");
+                return null;
+            }
+            // Constant schema bytes are emitted as collection expressions, which the original emits on .NET 8 with C# 12.
+            if (!Options.Net8 || Options.CSharpVersion < 1200)
+            {
+                issues.Add("version tolerant: settings");
+                return null;
+            }
+            if (policy.Bound != null || !policy.Equals(WirePolicy.Default))
+            {
+                issues.Add("a bounded or non-default version-tolerant record keeps its schema outside the direct emitters");
+                return null;
+            }
+            if (Callbacks(type) || Rent(type) || SelectedConstructor(type))
+            {
+                issues.Add("a version-tolerant record with callbacks, a pool rent or a selected constructor keeps its schema outside the direct emitters");
+                return null;
+            }
+            if (!type.InstanceConstructors.Any(constructor => constructor.Parameters.Length == 0 &&
+                constructor.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public))
+            {
+                issues.Add("a version-tolerant record without a public parameterless constructor keeps its schema outside the direct emitters");
+                return null;
+            }
+            if (members.Length > 32)
+            {
+                issues.Add("member count: " + members.Length.ToString(CultureInfo.InvariantCulture));
+                return null;
+            }
+            // The analyzed serialized storage in declaration order; the schema's metadata table follows the wire order.
+            var storage = new List<ISymbol>();
+            foreach (ISymbol declared in OrderedStorageMembers(type))
+                if (TryStorage(declared, out _))
+                    storage.Add(declared);
+            if (storage.Count != members.Length)
+            {
+                issues.Add("version tolerant: shape");
+                return null;
+            }
+            for (int index = 0; index < members.Length; index++)
+                if (storage[index].Name != members[index].Name || Order(storage[index]) is uint declared && declared != (uint)index)
+                {
+                    issues.Add("version tolerant: member order");
+                    return null;
+                }
+            var locals = VersionLocals(type);
+            if (locals.Count != members.Length)
+            {
+                issues.Add("version tolerant: shape");
+                return null;
+            }
+
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            var oldNames = new string[members.Length][];
+            var fieldTypes = new int[members.Length];
+            var memberTypes = new ITypeSymbol[members.Length];
+            for (int index = 0; index < members.Length; index++)
+            {
+                ISymbol declared = storage[index];
+                ITypeSymbol memberType = declared is IFieldSymbol field ? field.Type : ((IPropertySymbol)declared).Type;
+                if (!SyntaxFacts.IsValidIdentifier(declared.Name) || declared.Name != Identifier(declared.Name) ||
+                    HasAttribute(declared, "LuminPack.Attribute.LuminPackCompressAttribute"))
+                {
+                    issues.Add("version tolerant: member options '" + declared.Name + "'");
+                    return null;
+                }
+                string?[] aliases = declared.GetAttributes()
+                    .Where(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")
+                    .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value as string)
+                    .ToArray();
+                if (aliases.Length != 0 && declared is not IFieldSymbol)
+                {
+                    issues.Add("version tolerant: member attributes '" + declared.Name + "'");
+                    return null;
+                }
+                foreach (string? name in new string?[] { declared.Name }.Concat(aliases))
+                {
+                    if (string.IsNullOrEmpty(name) || !names.Add(name!))
+                    {
+                        issues.Add("version tolerant: member names");
+                        return null;
+                    }
+                    try
+                    {
+                        new UTF8Encoding(false, true).GetByteCount(name!);
+                    }
+                    catch (EncoderFallbackException)
+                    {
+                        issues.Add("version tolerant: member names");
+                        return null;
+                    }
+                }
+                int? fieldType = VersionFieldType(memberType);
+                if (fieldType == null || !VersionMemberCovered(members[index], fieldType.Value))
+                {
+                    issues.Add("version tolerant: members '" + declared.Name + "'");
+                    return null;
+                }
+                oldNames[index] = aliases!;
+                fieldTypes[index] = fieldType.Value;
+                memberTypes[index] = memberType;
+            }
+
+            var metadata = new List<byte>();
+            var widths = new int[members.Length];
+            var entries = new string[members.Length];
+            var tempTypes = new string[members.Length];
+            var typeNames = new string[members.Length];
+            var qualifiedTypes = new string[members.Length];
+            for (int index = 0; index < members.Length; index++)
+            {
+                ITypeSymbol memberType = memberTypes[index];
+                string serialized = oldNames[index].Length == 0 ? members[index].Name : oldNames[index][0];
+                string? typeIdentity = VersionTypeIdentity(memberType);
+                if (typeIdentity == null)
+                {
+                    issues.Add("version tolerant: metadata '" + members[index].Name + "'");
+                    return null;
+                }
+                string representation = VersionRepresentation(fieldTypes[index], members[index].Policy);
+                AppendVersionLength(metadata, serialized);
+                AppendVersionLength(metadata, representation + (VersionIsDirectPrimitive(fieldTypes[index], memberType) ? string.Empty : typeIdentity));
+                widths[index] = VersionWidth(fieldTypes[index], memberType);
+                if (widths[index] == 0)
+                {
+                    issues.Add("version tolerant: widths");
+                    return null;
+                }
+                string[] aliasLiterals = new[] { members[index].Name }.Concat(oldNames[index]).Where(alias => alias != serialized)
+                    .Select(VersionLiteral).ToArray();
+                entries[index] = "new global::LuminPack.Core.LuminPackVersionField(" + VersionLiteral(serialized) + ", new string[] " +
+                    (aliasLiterals.Length == 0 ? "{ }" : "{ " + string.Join(", ", aliasLiterals) + " }") + ", typeof(" +
+                    memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "), " + VersionLiteral(representation) + "),";
+                var local = locals.FirstOrDefault(candidate => candidate.Name == members[index].Name);
+                if (local.Name == null)
+                {
+                    issues.Add("version tolerant: shape");
+                    return null;
+                }
+                tempTypes[index] = local.TypeName + (local.IsValue ? string.Empty : "?");
+                typeNames[index] = memberType is INamedTypeSymbol named ? named.ToDisplayString() : memberType.Name;
+                qualifiedTypes[index] = memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+            var prefix = new List<byte> { 251, 2, 0, (byte)members.Length };
+            prefix.AddRange(metadata);
+            foreach (int width in widths)
+                prefix.Add((byte)width);
+            string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            string schema = "global::LuminPack.Generated." + GeneratedNames.Extension(Options.AssemblyName) + ".Version_" +
+                GeneratedNames.Sanitize(globalName);
+            var layoutFields = locals.Select(local => local.TypeName +
+                (IsUnmanagedKeyword(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + Identifier(local.Name)).ToArray();
+            return new VersionSchemaModel(schema, metadata.ToArray(), prefix.ToArray(), entries, tempTypes, typeNames, qualifiedTypes,
+                VersionLayout(type), layoutFields, oldNames);
+        }
+
+        /// <summary>Builds the layout mirror a version-tolerant record declares for auto-property and included storage.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="identity">The payload's identity, which supplies the mirror's parameter list.</param>
+        /// <param name="members">The serialized members in wire order.</param>
+        /// <param name="issues">Receives the reason the mirror is outside the modeled surface.</param>
+        /// <param name="mirror">Receives the mirror declaration name, or null.</param>
+        /// <param name="mirrorFields">Receives the mirror declarations in storage order, or null.</param>
+        /// <param name="mirrorOffsets">Receives the explicit-layout offsets, or null.</param>
+        /// <param name="mirrorLayout">Receives the CLR layout attribute line, or null.</param>
+        private static void TryVersionMirror(INamedTypeSymbol type, TypeIdentity identity, MemberModel[] members, List<string> issues,
+            out string? mirror, out string[]? mirrorFields, out int[]? mirrorOffsets, out string? mirrorLayout)
+        {
+            mirror = null;
+            mirrorFields = null;
+            mirrorOffsets = null;
+            mirrorLayout = null;
+            MirrorFields(type, out string[]? fields, out int[]? offsets, out string? layout);
+            if (fields == null)
+            {
+                issues.Add("the layout mirror of '" + identity.DisplayName + "' cannot be reproduced");
+                return;
+            }
+            foreach (MemberModel member in members)
+            {
+                if (member.Storage == MemberStorage.AutoProperty && !PublicAutoProperty(type, member.Name))
+                {
+                    issues.Add("member '" + member.Name + "' has a non-public or attributed accessor");
+                    return;
+                }
+                if (!MirrorStorageContains(type, member.Name))
+                {
+                    issues.Add("member '" + member.Name + "' is not part of the reconstructed storage");
+                    return;
+                }
+            }
+            mirror = MirrorName(type, identity);
+            mirrorFields = fields;
+            mirrorOffsets = offsets;
+            mirrorLayout = layout;
+        }
+
+        /// <summary>Lists the instance storage fields of a version-tolerant record in declaration order.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <returns>Each storage member's name, fully qualified type and value-type fact.</returns>
+        private static List<(string Name, string TypeName, bool IsValue)> VersionLocals(INamedTypeSymbol type)
+        {
+            var locals = new List<(string Name, string TypeName, bool IsValue)>();
+            foreach (ISymbol member in OrderedStorageMembers(type))
+            {
+                if (member.IsImplicitlyDeclared || member.IsStatic)
+                    continue;
+                ITypeSymbol storage;
+                bool isValue;
+                if (member is IPropertySymbol property)
+                {
+                    if (!IsAutoProperty(property))
+                        continue;
+                    storage = property.Type;
+                    isValue = property.Type.IsValueType;
+                }
+                else if (member is IFieldSymbol field)
+                {
+                    storage = field.Type;
+                    isValue = field.Type.IsValueType;
+                }
+                else
+                    continue;
+                locals.Add((member.Name, storage.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), isValue));
+            }
+            return locals;
+        }
+
+        /// <summary>Spells the layout mirror name of the schema, which omits the type-parameter list.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <returns>The mirror declaration name.</returns>
+        private static string VersionLayout(INamedTypeSymbol type)
+        {
+            string formatted = FormatterTypeName(type);
+            string digest;
+            using (var hash = SHA256.Create())
+            {
+                digest = string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(formatted))
+                    .Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
+            }
+            string local = formatted.StartsWith("global::", StringComparison.Ordinal) ? formatted.Substring(8) : formatted;
+            local = local.Replace('.', '_').Replace('+', '_');
+            int generic = local.IndexOf('<');
+            if (generic >= 0)
+                local = local.Substring(0, generic);
+            return "LuminLayout_" + digest + "_" + PortableSlotSuffix(type) + "_Local" + local;
+        }
+
+        /// <summary>Whether a modeled member is one of the shapes the version emitter writes and reads.</summary>
+        /// <param name="member">The analyzed member.</param>
+        /// <param name="fieldType">The legacy schema classification of the member's type.</param>
+        /// <returns>Whether the version schema covers the member.</returns>
+        /// <remarks>The legacy direct model rejects every sequence member of a version-tolerant record, including a plain list,
+        /// so only fixed scalars, enums and strings are covered here.</remarks>
+        private static bool VersionMemberCovered(MemberModel member, int fieldType) => member switch
+        {
+            ScalarMember { Raw: false } scalar => scalar.EnumType != null ? fieldType == 14 : fieldType is >= 0 and <= 13,
+            TextMember => fieldType == 12,
+            _ => false,
+        };
+
+        /// <summary>Classifies a member's declared type with the legacy schema codes.</summary>
+        /// <param name="type">The declared member type.</param>
+        /// <returns>The classification, or null for a member the schema does not cover.</returns>
+        private static int? VersionFieldType(ITypeSymbol type)
+        {
+            switch (type.SpecialType)
+            {
+                case SpecialType.System_Int32: return 0;
+                case SpecialType.System_UInt32: return 1;
+                case SpecialType.System_Byte: return 2;
+                case SpecialType.System_SByte: return 3;
+                case SpecialType.System_Int16: return 4;
+                case SpecialType.System_UInt16: return 5;
+                case SpecialType.System_Int64: return 6;
+                case SpecialType.System_UInt64: return 7;
+                case SpecialType.System_Single: return 8;
+                case SpecialType.System_Double: return 9;
+                case SpecialType.System_Decimal: return 10;
+                case SpecialType.System_Char: return 11;
+                case SpecialType.System_String: return 12;
+                case SpecialType.System_Boolean: return 13;
+            }
+            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum })
+                return 14;
+            if (type is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
+                list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>")
+                return 17;
+            return null;
+        }
+
+        /// <summary>Whether the classification byte already identifies the exact primitive type.</summary>
+        /// <param name="fieldType">The legacy schema classification.</param>
+        /// <param name="type">The declared member type.</param>
+        /// <returns>Whether an additional type identity would repeat the same information.</returns>
+        private static bool VersionIsDirectPrimitive(int fieldType, ITypeSymbol type) => fieldType == type.SpecialType switch
+        {
+            SpecialType.System_Int32 => 0,
+            SpecialType.System_UInt32 => 1,
+            SpecialType.System_Byte => 2,
+            SpecialType.System_SByte => 3,
+            SpecialType.System_Int16 => 4,
+            SpecialType.System_UInt16 => 5,
+            SpecialType.System_Int64 => 6,
+            SpecialType.System_UInt64 => 7,
+            SpecialType.System_Single => 8,
+            SpecialType.System_Double => 9,
+            SpecialType.System_Decimal => 10,
+            SpecialType.System_Char => 11,
+            SpecialType.System_String => 12,
+            SpecialType.System_Boolean => 13,
+            _ => -1,
+        };
+
+        /// <summary>Builds the compact declaration-time wire classification byte.</summary>
+        /// <param name="fieldType">The legacy schema classification.</param>
+        /// <param name="policy">The member's resolved wire policy.</param>
+        /// <returns>The one-character representation string.</returns>
+        private static string VersionRepresentation(int fieldType, WirePolicy policy)
+        {
+            int encoding = policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1;
+            return new string((char)(fieldType | (encoding << 6) | ((int)policy.Strings.Recording << 7)), 1);
+        }
+
+        /// <summary>The revision-2 payload width of a member: a constant, 255 for a length-prefixed payload, or zero when unknown.</summary>
+        /// <param name="fieldType">The legacy schema classification.</param>
+        /// <param name="type">The declared member type.</param>
+        /// <returns>The width byte value, or zero for a width known only at run time.</returns>
+        private static int VersionWidth(int fieldType, ITypeSymbol type)
+        {
+            if (fieldType is 12 or 17)
+                return 255;
+            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum, EnumUnderlyingType: { } underlying })
+                type = underlying;
+            return type.SpecialType switch
+            {
+                SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
+                SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 => 2,
+                SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
+                SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
+                SpecialType.System_Decimal => 16,
+                _ => 0,
+            };
+        }
+
+        /// <summary>Normalizes a symbol using the runtime's assembly-independent primitive codes.</summary>
+        /// <param name="type">The declared member or generic argument.</param>
+        /// <returns>The exact identity, or null for an open type parameter.</returns>
+        private static string? VersionTypeIdentity(ITypeSymbol type)
+        {
+            string? primitive = type.SpecialType switch
+            {
+                SpecialType.System_Boolean => "b",
+                SpecialType.System_Byte => "u1",
+                SpecialType.System_SByte => "i1",
+                SpecialType.System_Int16 => "i2",
+                SpecialType.System_UInt16 => "u2",
+                SpecialType.System_Int32 => "i4",
+                SpecialType.System_UInt32 => "u4",
+                SpecialType.System_Int64 => "i8",
+                SpecialType.System_UInt64 => "u8",
+                SpecialType.System_Single => "f4",
+                SpecialType.System_Double => "f8",
+                SpecialType.System_Decimal => "d16",
+                SpecialType.System_Char => "c2",
+                SpecialType.System_String => "s",
+                SpecialType.System_Object => "o",
+                SpecialType.System_IntPtr => "ni",
+                SpecialType.System_UIntPtr => "nu",
+                SpecialType.System_DateTime => "dt",
+                _ => null,
+            };
+            if (primitive != null)
+                return "#" + primitive;
+            if (type is IArrayTypeSymbol array)
+            {
+                string? element = VersionTypeIdentity(array.ElementType);
+                return element == null ? null : element + "[" + new string(',', array.Rank - 1) + "]";
+            }
+            if (type is not INamedTypeSymbol named)
+                return null;
+            if (named.ContainingAssembly.Name is "System.Private.CoreLib" or "mscorlib" or "System.Runtime" or "netstandard")
+            {
+                string? known = named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) switch
+                {
+                    "global::System.Guid" => "g",
+                    "global::System.TimeSpan" => "ts",
+                    "global::System.DateTimeOffset" => "dto",
+                    _ => null,
+                };
+                if (known != null)
+                    return "#" + known;
+            }
+            var levels = new Stack<INamedTypeSymbol>();
+            for (INamedTypeSymbol? current = named; current != null; current = current.ContainingType)
+                levels.Push(current);
+            var namespaces = new Stack<string>();
+            for (INamespaceSymbol? current = named.ContainingNamespace; current != null && !current.IsGlobalNamespace;
+                current = current.ContainingNamespace)
+                namespaces.Push(current.MetadataName);
+            string ns = namespaces.Count == 0 ? string.Empty : string.Join(".", namespaces) + ".";
+            string name = "@" + ns + string.Join("+", levels.Select(level => level.MetadataName));
+            var arguments = levels.SelectMany(level => level.TypeArguments).Select(VersionTypeIdentity).ToArray();
+            if (arguments.Any(argument => argument == null))
+                return null;
+            return arguments.Length == 0 ? name : name + "<" + string.Join(";", arguments) + ";>";
+        }
+
+        /// <summary>Appends a UTF-8 metadata string with its unsigned base-128 length.</summary>
+        /// <param name="target">The table under construction.</param>
+        /// <param name="value">The exact metadata value.</param>
+        private static void AppendVersionLength(List<byte> target, string value)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(value);
+            int length = bytes.Length;
+            while (length >= 128)
+            {
+                target.Add((byte)(length | 128));
+                length >>= 7;
+            }
+            target.Add((byte)length);
+            target.AddRange(bytes);
+        }
+
+        /// <summary>Formats a value as a C# literal, as the schema field table spells its constants.</summary>
+        /// <param name="value">The value.</param>
+        /// <returns>The quoted literal.</returns>
+        private static string VersionLiteral(string value) => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, true);
 
         /// <summary>Builds the legacy layout mirror of a record whose serialized storage is not publicly nameable.</summary>
         /// <param name="type">The declared payload.</param>

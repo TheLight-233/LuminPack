@@ -81,7 +81,7 @@ internal sealed class VersionSchema : IEquatable<VersionSchema>
     }
 
     /// <inheritdoc/>
-    public bool Equals(VersionSchema? other) => other != null && Schema == other.Schema && Layout == other.Layout &&
+    public bool Equals(VersionSchema? other) => ReferenceEquals(this, other) || other != null && Schema == other.Schema && Layout == other.Layout &&
         Metadata.SequenceEqual(other.Metadata) && Prefix.SequenceEqual(other.Prefix) && FieldEntries.SequenceEqual(other.FieldEntries) &&
         TempTypes.SequenceEqual(other.TempTypes) && TypeNames.SequenceEqual(other.TypeNames) && QualifiedTypes.SequenceEqual(other.QualifiedTypes) &&
         LayoutFields.SequenceEqual(other.LayoutFields) && OldNames.Length == other.OldNames.Length &&

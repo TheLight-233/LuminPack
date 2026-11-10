@@ -67,21 +67,31 @@ internal sealed class ScalarMember : MemberModel
     /// <summary>Whether the scalar is a framework built-in with a generated JSON formatter.</summary>
     internal readonly bool Builtin;
 
+    /// <summary>The enum's fully qualified spelling when the member is an enum, otherwise null.</summary>
+    internal readonly string? EnumType;
+
+    /// <summary>The underlying scalar keyword of an enum member, otherwise null.</summary>
+    internal readonly string? Underlying;
+
     /// <summary>Captures a scalar member.</summary>
-    internal ScalarMember(string name, MemberStorage storage, WirePolicy policy, string scalar, int size, bool raw, bool builtin)
+    internal ScalarMember(string name, MemberStorage storage, WirePolicy policy, string scalar, int size, bool raw, bool builtin,
+        string? enumType = null, string? underlying = null)
         : base(name, storage, policy)
     {
         Builtin = builtin;
         Raw = raw;
         Size = size;
         Scalar = scalar;
+        EnumType = enumType;
+        Underlying = underlying;
     }
 
     /// <inheritdoc/>
     protected override bool EqualsCore(MemberModel other)
     {
         var member = (ScalarMember)other;
-        return Scalar == member.Scalar && Size == member.Size && Raw == member.Raw && Builtin == member.Builtin;
+        return Scalar == member.Scalar && Size == member.Size && Raw == member.Raw && Builtin == member.Builtin &&
+            EnumType == member.EnumType && Underlying == member.Underlying;
     }
 }
 

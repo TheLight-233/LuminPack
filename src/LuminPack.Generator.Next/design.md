@@ -6,9 +6,10 @@ records, raw and portable structs, collections, dictionaries, circle references 
 Model equality has reference fast paths, one analysis session is shared per compilation and reused
 across nested payloads, referenced-type invalidation is verified, and a same-run benchmark harness
 compares the Next and legacy generators. Non-derived class records with auto-properties or included
-non-public fields render through the legacy layout mirror, and fixed records publish the legacy
-measurement entry. Shared formatter/facade publication and version-tolerant rendering remain on the
-migration plan.
+non-public fields render through the legacy layout mirror, fixed records publish the legacy measurement
+entry, and version-tolerant class records render their schema prefix and name tables. Shared formatter
+publication, versioned structs, constructors, callbacks, pool rent and the original-pipeline special
+types remain on the migration plan.
 
 ## 1. Design philosophy
 
@@ -148,7 +149,13 @@ properties, included private and readonly fields) renders 5/5 as ten files with 
 Parity against the legacy direct output matched 9/10 files before the record-width fix; the only
 mismatch was the missing `MeasureRecord` entry, which the record model now carries. Managed structs of
 public fixed scalars, strings and built-in values render as record bodies; derived records, mirrored or
-constructed managed structs, callbacks, rent and versioned records stay unmapped.
+constructed managed structs, callbacks and rent stay unmapped.
+
+A five-record version-tolerant corpus (scalar/string, old name, mirrored, enum and empty) renders 5/5.
+Binary output is 5/5 identical to the legacy direct output. JSON initially differed in three files only
+because the fresh-result read path was not modeled; records now compute the legacy fresh-result
+condition, so the adapter selects the same `var result = reuseExisting ? ...` body. Versioned structs,
+callbacks, rent, generic, bounded and non-default profiles stay unmapped.
 
 All 220 corpus payloads now render, and fixed Union cases publish their own `SerializeUnionAt` cursor
 entries. The generated trees are still not fully self-contained: collection members and circle string
@@ -220,7 +227,7 @@ pipeline; P2 improves the product.
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
 | M-05 | Circle-reference model facts: mirror, slots, guards, reference ids | Model + Rendering | M-06 | Circle payloads generate and compile | P0 |
 | M-06 | Layout mirror: mirror name, field list and explicit offsets for auto-properties and included fields | Model + Rendering | — | Auto-property and included-private payloads generate and compile | P1 |
-| M-07 | Version-tolerant schema: metadata encoder, prefix, field entries, old names, layout | Analysis + Rendering | — | Versioned records generate the same schema as the old pipeline | P1 |
+| M-07 | Version-tolerant schema: class records and their metadata encoder, prefix, field entries, old names and layout landed; versioned structs, callbacks, rent, generic, bounded and non-default profiles remain | Analysis + Rendering | — | Versioned class records generate the same schema as the old pipeline; remaining version shapes match | P1 |
 | M-08 | Callbacks, selected constructors, pool rent and reuse | Analysis + Rendering | M-06 | Callback, constructor and pooled types generate | P1 |
 | M-09 | Shared publication: serializer facades, formatter dispatch, registration, layout files | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
 | M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Old and Next output are byte-identical on the corpus | P1 |

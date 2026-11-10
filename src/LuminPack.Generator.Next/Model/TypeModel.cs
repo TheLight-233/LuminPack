@@ -77,6 +77,70 @@ internal abstract class TypeModel : IEquatable<TypeModel>
         => ReferenceEquals(left, right) || left.Length == right.Length && System.Linq.Enumerable.SequenceEqual(left, right);
 }
 
+/// <summary>The version-tolerant schema facts an emitted record depends on, reduced to strings and bytes.</summary>
+internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
+{
+    /// <summary>The qualified schema class, such as <c>global::LuminPack.Generated.LuminPackExtensions_App.Version_global_N_Model</c>.</summary>
+    internal readonly string Schema;
+
+    /// <summary>The constant member metadata.</summary>
+    internal readonly byte[] Metadata;
+
+    /// <summary>The constant revision-2 prefix with a zero profile byte.</summary>
+    internal readonly byte[] Prefix;
+
+    /// <summary>The field table entries, one <c>new LuminPackVersionField(...)</c> per member.</summary>
+    internal readonly string[] FieldEntries;
+
+    /// <summary>The declared types of the read temporaries, per member.</summary>
+    internal readonly string[] TempTypes;
+
+    /// <summary>The analyzed type names of the members.</summary>
+    internal readonly string[] TypeNames;
+
+    /// <summary>The fully qualified member types.</summary>
+    internal readonly string[] QualifiedTypes;
+
+    /// <summary>The root-private layout mirror every version-tolerant record declares.</summary>
+    internal readonly string Layout;
+
+    /// <summary>The mirror's field declarations in storage order.</summary>
+    internal readonly string[] LayoutFields;
+
+    /// <summary>The former names of each member, which JSON reads accept.</summary>
+    internal readonly string[][] OldNames;
+
+    /// <summary>Captures a version schema.</summary>
+    internal VersionSchemaModel(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes,
+        string[] typeNames, string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames)
+    {
+        OldNames = oldNames;
+        Schema = schema;
+        Metadata = metadata;
+        Prefix = prefix;
+        FieldEntries = fieldEntries;
+        TempTypes = tempTypes;
+        TypeNames = typeNames;
+        QualifiedTypes = qualifiedTypes;
+        Layout = layout;
+        LayoutFields = layoutFields;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(VersionSchemaModel? other) => ReferenceEquals(this, other) || other != null && Schema == other.Schema &&
+        Layout == other.Layout && Metadata.SequenceEqual(other.Metadata) && Prefix.SequenceEqual(other.Prefix) &&
+        FieldEntries.SequenceEqual(other.FieldEntries) && TempTypes.SequenceEqual(other.TempTypes) &&
+        TypeNames.SequenceEqual(other.TypeNames) && QualifiedTypes.SequenceEqual(other.QualifiedTypes) &&
+        LayoutFields.SequenceEqual(other.LayoutFields) && OldNames.Length == other.OldNames.Length &&
+        OldNames.Zip(other.OldNames, (left, right) => left.SequenceEqual(right)).All(same => same);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as VersionSchemaModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Schema.GetHashCode();
+}
+
 /// <summary>An ordinary class record, optionally version-tolerant.</summary>
 internal sealed class RecordModel : TypeModel
 {
@@ -95,6 +159,10 @@ internal sealed class RecordModel : TypeModel
     /// <summary>Whether the declaration is a supported fixed record, which gives it the <c>MeasureRecord</c> entry.</summary>
     internal readonly bool RecordWidth;
 
+    /// <summary>Whether JSON reads assign a fresh instance directly, which requires public storage and an implicit
+    /// parameterless construction path at every level.</summary>
+    internal readonly bool FreshResult;
+
     /// <summary>The root-private layout mirror that auto-property and included non-public storage is reached through, or null
     /// when every serialized member is a publicly nameable field.</summary>
     internal readonly string? Mirror;
@@ -108,14 +176,18 @@ internal sealed class RecordModel : TypeModel
     /// <summary>The CLR layout attribute line of the storage mirror, or null.</summary>
     internal readonly string? MirrorLayout;
 
+    /// <summary>The version-tolerant schema of the record, or null for an ordinary record.</summary>
+    internal readonly VersionSchemaModel? Version;
+
     /// <summary>Captures a record.</summary>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
-        bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, string? mirror, string[]? mirrorFields,
-        int[]? mirrorOffsets, string? mirrorLayout)
+        bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
+        string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
         FixedUnionCase = fixedUnionCase;
         RecordWidth = recordWidth;
+        FreshResult = freshResult;
         Proven = proven;
         Derived = derived;
         Versioned = versioned;
@@ -123,14 +195,16 @@ internal sealed class RecordModel : TypeModel
         MirrorFields = mirrorFields;
         MirrorOffsets = mirrorOffsets;
         MirrorLayout = mirrorLayout;
+        Version = version;
     }
 
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
         other is RecordModel record && base.Equals(other) && Versioned == record.Versioned &&
         FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
-        Proven == record.Proven && RecordWidth == record.RecordWidth && Mirror == record.Mirror &&
-        MirrorLayout == record.MirrorLayout &&
+        Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
+        Mirror == record.Mirror &&
+        MirrorLayout == record.MirrorLayout && Equals(Version, record.Version) &&
         (ReferenceEquals(MirrorFields, record.MirrorFields) || MirrorFields != null && record.MirrorFields != null &&
             Enumerable.SequenceEqual(MirrorFields, record.MirrorFields)) &&
         (ReferenceEquals(MirrorOffsets, record.MirrorOffsets) || MirrorOffsets != null && record.MirrorOffsets != null &&
