@@ -23,6 +23,9 @@ internal enum DirectMemberKind : byte
     Dictionary,
     /// <summary>A packable class of this assembly whose members are written inline in the parent record.</summary>
     Object,
+    /// <summary>A member whose declared type is one of the containing definition's type parameters, written by the generic
+    /// serializer itself.</summary>
+    Parameter,
 }
 
 /// <summary>The stored entry shape of a dictionary member and the text its kernel spells.</summary>
@@ -104,12 +107,15 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly bool Property;
     /// <summary>The entry shape of a dictionary member, or null.</summary>
     internal readonly DirectDictionary Dictionary;
+    /// <summary>Whether a type-parameter member's parameter is constrained to a value type, whose read assigns no reset guard.</summary>
+    internal readonly bool ValueTypeParameter;
 
     /// <summary>Captures one member.</summary>
     internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null, bool formatterCall = false,
-        bool property = false, DirectDictionary dictionary = null)
+        bool property = false, DirectDictionary dictionary = null, bool valueTypeParameter = false)
     {
+        ValueTypeParameter = valueTypeParameter;
         Dictionary = dictionary;
         Property = property;
         FormatterCall = formatterCall;
@@ -146,7 +152,8 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     public bool Equals(DirectMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored &&
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
-        Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Nested, other.Nested);
+        Property == other.Property && Equals(Dictionary, other.Dictionary) && ValueTypeParameter == other.ValueTypeParameter &&
+        Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectMember);
@@ -194,7 +201,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null);
     /// <summary>Whether a member is a write segment of its own: an inline object, a string list or a formatter-call array.</summary>
     private static bool Segment(DirectMember member) => member.Kind == DirectMemberKind.Object || InlineBlock(member) ||
-        member.Kind == DirectMemberKind.Array && member.FormatterCall;
+        member.Kind == DirectMemberKind.Array && member.FormatterCall || member.Kind == DirectMemberKind.Parameter;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
@@ -206,7 +213,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal bool InlineObject => Members.Any(member => InlineBlock(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall);
     /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
     /// generic.</summary>
-    internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||
+    internal bool ProfilePayload => Members.Any(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.Parameter ||
         member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload) ||
         member.Kind == DirectMemberKind.Dictionary && (member.Dictionary.KeyText || member.Dictionary.ValueText) ||
         member.Kind == DirectMemberKind.Array && member.FormatterCall ||
@@ -310,6 +317,23 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether each exact tier case is sealed, which needs no exact runtime type test.</summary>
     internal readonly bool[] UnionTierSealed;
 
+    /// <summary>The names of the definition's type parameters, in declaration order, or empty for a closed type.</summary>
+    internal readonly string[] TypeParameters;
+    /// <summary>The definition's constraint clauses, each spelled as <c>where T : class</c>, in declaration order.</summary>
+    internal readonly string[] TypeConstraints;
+
+    /// <summary>The angle-bracketed type-parameter list of method and mirror declarations, or an empty string for a closed type.</summary>
+    internal string TypeParameterList => TypeParameters.Length == 0 ? string.Empty : "<" + string.Join(", ", TypeParameters) + ">";
+
+    /// <summary>Spells a method's type-argument list: the definition's parameters, then the given operation tokens.</summary>
+    /// <param name="extra">The profile or options parameter that follows the definition's own parameters.</param>
+    /// <returns>The angle-bracketed argument list, or an empty string for a closed type without extras.</returns>
+    internal string TypeArguments(params string[] extra) => extra.Length == 0 ? TypeParameterList :
+        "<" + string.Join(", ", TypeParameters.Concat(extra)) + ">";
+
+    /// <summary>The joined constraint clauses, without trailing text, or an empty string.</summary>
+    internal string TypeConstraintText => string.Join(" ", TypeConstraints);
+
     /// <summary>Whether any serialization callback runs, which keeps the type out of the named member write.</summary>
     internal bool HasCallbacks => WriteBefore.Length != 0 || WriteAfter.Length != 0 || ReadBefore.Length != 0 || ReadAfter.Length != 0;
 
@@ -323,8 +347,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         DirectUnionSlot[] unionBinarySlots = null, DirectUnionSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
-        DirectPortableView portableView = null)
+        DirectPortableView portableView = null, string[] typeParameters = null, string[] typeConstraints = null)
     {
+        TypeConstraints = typeConstraints ?? System.Array.Empty<string>();
+        TypeParameters = typeParameters ?? System.Array.Empty<string>();
         PortableView = portableView;
         ManagedStruct = managedStruct;
         CircleGuarded = circleGuarded;
@@ -404,7 +430,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         UnionTier == other.UnionTier && Same(UnionChain, other.UnionChain) && Same(UnionTierCases, other.UnionTierCases) &&
         Same(UnionTierSealed, other.UnionTierSealed) && Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
         Circle == other.Circle && CircleGuarded == other.CircleGuarded &&
-        Same(UnionCases, other.UnionCases) &&
+        Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
@@ -475,9 +501,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // A version-tolerant struct writes a schema prefix and revisions, which the struct roots do not reproduce yet.
         if (isStruct && versioned)
             return DirectEmission.Reject<DirectTypeModel>("versioned struct");
-        if (type == null || data.generatorType != GeneratorType.Object && !versioned && !circle || data.isUnion || data.isGeneric ||
+        // A generic value type closes over a portable or formatter-dispatch contract, a version-tolerant definition keeps its
+        // own schema and name tables, and the circle roots spell their own storage protocol, so all three keep the original
+        // pipeline for now.
+        if (data.isGeneric && (data.isValueType || versioned || circle))
+            return DirectEmission.Reject<DirectTypeModel>("type kind: generic " +
+                (data.isValueType ? "struct" : versioned ? "version tolerant" : "circle"));
+        if (type == null || data.generatorType != GeneratorType.Object && !versioned && !circle || data.isUnion ||
             data.isValueType && !isStruct)
-            return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
+            return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
         // Callbacks and pool rents shape the binary roots; a version-tolerant root without callbacks covers a plain rent,
         // while a rent returning by reference needs its own storage protocol and is not modeled yet.
@@ -488,11 +520,16 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("diagnostics");
         if (data.fields.Count > 32)
             return DirectEmission.Reject<DirectTypeModel>("member count: " + data.fields.Count);
-        if (type.TypeKind != (isStruct ? TypeKind.Struct : TypeKind.Class) || type.IsAbstract || type.IsStatic || type.IsGenericType ||
+        if (type.TypeKind != (isStruct ? TypeKind.Struct : TypeKind.Class) || type.IsAbstract || type.IsStatic ||
             type.ContainingType is { IsGenericType: true } || !Reachable(type))
             return DirectEmission.Reject<DirectTypeModel>("type declaration: " + (type.TypeKind != TypeKind.Class ? "kind" : type.IsAbstract ? "abstract" :
-                type.IsStatic ? "static" : type.IsGenericType ? "generic" : type.ContainingType != null && type.ContainingType.IsGenericType ? "nested in generic" :
+                type.IsStatic ? "static" : type.ContainingType != null && type.ContainingType.IsGenericType ? "nested in generic" :
                 "accessibility"));
+        // The definition's own parameters and constraints are spelled on every generic member, exactly as the original
+        // templates append them before the profile constraint.
+        string[] typeParameters = data.GenericParameters.Count == 0 ? null : data.GenericParameters.ToArray();
+        string[] typeConstraints = ConstraintClauses(data);
+        string parameterList = typeParameters == null ? string.Empty : "<" + string.Join(", ", typeParameters) + ">";
         // Base types contribute their fields after the type's own, and must be plain or abstract classes of the same assembly. A Union
         // base's case list only shapes the base's own dispatch file, never the files of its cases.
         var levels = new System.Collections.Generic.List<INamedTypeSymbol> { type };
@@ -595,14 +632,16 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("declared members: " + fieldsDeclared + "/" + data.fields.Count);
 
         string extension = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
+        var memberParameters = typeParameters == null ? null : new System.Collections.Generic.HashSet<string>(typeParameters, StringComparer.Ordinal);
         var members = new DirectMember[data.fields.Count];
         for (int index = 0; index < members.Length; index++)
             if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned, circle, type,
-                data.fields[index].IsPrivate, portable != null)) == null)
+                data.fields[index].IsPrivate, portable != null, memberParameters)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
-        // The constructed read stores each member in a temporary local, which fixed scalars, strings and built-in values spell.
-        if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text) &&
-            !(member.Raw && member.Builtin)))
+        // The constructed read stores each member in a temporary local, which fixed scalars, strings, built-in values and
+        // type parameters spell.
+        if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or
+            DirectMemberKind.Parameter) && !(member.Raw && member.Builtin)))
             return DirectEmission.Reject<DirectTypeModel>("constructor members");
         // A reference-tracked record covers fixed scalars of at most four bytes, strings and other reference-tracked records.
         // Collections, raw struct widths, slot gaps and oversized tables change its table protocol and keep the original pipeline.
@@ -678,7 +717,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             using (var hash = System.Security.Cryptography.SHA256.Create())
                 mirror = "LuminLayout_" + string.Concat(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(FormatterTypeName.Get(type)))
                     .Select(value => value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture))) + "_" +
-                    LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type) + "_" + TypeMetaChecker.BuildLocalMyClassName(data);
+                    LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type) + "_" + TypeMetaChecker.BuildLocalMyClassName(data) + parameterList;
             mirrorFields = data.localFields.Select(local => (local.TypeSymbol is IArrayTypeSymbol { Rank: > 1 } multi
                 ? MultiDimensionalName(multi) : local.TypeName) +
                 (LuminPackCodeGenerator.IsUnmanagedFiledType(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + local.Identifier).ToArray();
@@ -718,7 +757,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             {
                 if (member.IsStatic || member.IsImplicitlyDeclared)
                     continue;
-                if (member is IFieldSymbol field && !field.Type.IsUnmanagedType || member is IPropertySymbol { IsIndexer: false } property && !property.Type.IsUnmanagedType)
+                // A type parameter is written and read by one call, so it never needs the outlined Union read.
+                if (member is IFieldSymbol field && field.Type is not ITypeParameterSymbol && !field.Type.IsUnmanagedType ||
+                    member is IPropertySymbol { IsIndexer: false } property && property.Type is not ITypeParameterSymbol && !property.Type.IsUnmanagedType)
                 {
                     referencePayload = true;
                     break;
@@ -747,15 +788,46 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 default: readAfter.Add(call); break;
             }
         }
+        // Unique state-entry names are skipped for a payload containing a type parameter, whose entries stay overloads.
+        bool unique = InterceptionSupport.IsEnabled(metadata.ParseOptions) && !data.isGeneric;
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
+            fresh, unique, members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
             members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
             strings && !derived && !versioned && data.callBackMethods.Count == 0 && bounded == null && !isStruct, metadata.IsNet8,
             metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
             referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray(),
             selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded,
             circle: circle, circleGuarded: circle && RecursiveTypeAnalysis.IsRecursive(type),
-            managedStruct: managedStruct, portableView: portableView);
+            managedStruct: managedStruct, portableView: portableView,
+            typeParameters: typeParameters, typeConstraints: typeConstraints);
+    }
+
+    /// <summary>Spells the definition's constraint clauses in the order the original templates append them.</summary>
+    /// <param name="data">The analyzed type.</param>
+    /// <returns>One <c>where</c> clause per constrained parameter, or empty.</returns>
+    private static string[] ConstraintClauses(LuminDataInfo data)
+    {
+        var clauses = new System.Collections.Generic.List<string>();
+        foreach (GenericParameterConstraint constraint in data.GenericConstraints)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (constraint.IsUnmanaged)
+                parts.Add("unmanaged");
+            if (constraint.IsClass)
+                parts.Add("class");
+            if (constraint.IsStruct)
+                parts.Add("struct");
+            if (constraint.IsNotNull)
+                parts.Add("notnull");
+            parts.AddRange(constraint.Constraints);
+            if (constraint.HasNewConstructor)
+                parts.Add("new()");
+            if (constraint.HasDefault)
+                parts.Add("default");
+            if (parts.Count != 0)
+                clauses.Add("where " + constraint.ParameterName + " : " + string.Join(", ", parts));
+        }
+        return clauses.ToArray();
     }
 
     /// <summary>Models a polymorphic Union root: its declared cases, compiled profile slots and dispatch tier, when every case
@@ -1146,7 +1218,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
 
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
     private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata, bool versioned = false,
-        bool circle = false, INamedTypeSymbol owner = null, bool mirroredStorage = false, bool volatileStorage = false)
+        bool circle = false, INamedTypeSymbol owner = null, bool mirroredStorage = false, bool volatileStorage = false,
+        System.Collections.Generic.HashSet<string> typeParameters = null)
     {
         if (field.IsPrivate && !mirroredStorage || field.IsVolatile && !volatileStorage || field.IsCompress || field.OldNames.Length != 0 && !versioned ||
             field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
@@ -1157,6 +1230,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         var symbol = field.TypeSymbol;
         // Included protected and private storage is reached through the layout mirror, as auto-property storage is.
         bool mirrored = field.isProperty || field.IsPrivate;
+        // A member declared as one of the definition's own type parameters is written and read by the generic serializer.
+        if (symbol is ITypeParameterSymbol parameter)
+        {
+            if (typeParameters == null || !typeParameters.Contains(parameter.Name))
+                return DirectEmission.Reject<DirectMember>("member type: foreign parameter " + parameter.Name);
+            return new DirectMember(field.Name, DirectMemberKind.Parameter, parameter.Name, parameter.Name, 0, null, field.Type, field.isProperty,
+                valueTypeParameter: parameter.HasValueTypeConstraint);
+        }
         if (Scalar(symbol, allowBoolean: true) is { } scalar)
         {
             if (field.FieldType != LuminDataType.Value)
