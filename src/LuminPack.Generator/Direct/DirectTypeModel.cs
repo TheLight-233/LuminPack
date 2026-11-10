@@ -764,17 +764,20 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return new DirectMember(field.Name, DirectMemberKind.Object, spelling, spelling, 0,
                 "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, field.isProperty, nested: nested);
         }
-        // DateTime and Guid have a fixed native width and a generated formatter for the JSON form.
-        if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Struct, IsGenericType: false } &&
-            symbol.NullableAnnotation != NullableAnnotation.Annotated &&
-            (symbol.SpecialType == SpecialType.System_DateTime || symbol.ToDisplayString() == "global::System.Guid"))
+        // DateTime, DateTimeOffset, TimeSpan and Guid have a runtime native width and a generated formatter for the JSON
+        // form.
+        string builtinSpelling = symbol is INamedTypeSymbol { TypeKind: TypeKind.Struct, IsGenericType: false } &&
+            symbol.NullableAnnotation != NullableAnnotation.Annotated ? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) : null;
+        if (symbol.SpecialType == SpecialType.System_DateTime ||
+            builtinSpelling is "global::System.Guid" or "global::System.DateTimeOffset" or "global::System.TimeSpan")
         {
             // The catalog marks a built-in formatter type as "other"; its native width still joins fixed runs.
             if (field.FieldType != LuminDataType.Value || field.Type is not (LuminFiledType.Struct or LuminFiledType.Other))
                 return DirectEmission.Reject<DirectMember>("built-in struct member");
-            string spelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            return new DirectMember(field.Name, DirectMemberKind.Fixed, spelling, spelling, 0,
-                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, field.isProperty, raw: true, builtin: true);
+            return new DirectMember(field.Name, DirectMemberKind.Fixed, builtinSpelling ?? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                builtinSpelling ?? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, builtinSpelling ?? symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                field.Type, field.isProperty, raw: true, builtin: true);
         }
         if (symbol.SpecialType == SpecialType.System_String)
         {
@@ -849,6 +852,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             SpecialType.System_Int64 => ("long", 8),
             SpecialType.System_UInt64 => ("ulong", 8),
             SpecialType.System_Double => ("double", 8),
+            // Decimal is a sixteen-byte unmanaged scalar; the writer stores it through its reserved overload.
+            SpecialType.System_Decimal => ("decimal", 16),
             _ => null,
         };
     }

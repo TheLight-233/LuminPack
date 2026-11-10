@@ -647,7 +647,7 @@ internal static partial class DirectBinaryEmitter
                 int last = RunEnd(members, index);
                 if (last == index)
                 {
-                    if (member.Size == 8 || member.Raw)
+                    if (member.Size >= 8 || member.Raw)
                     {
                         // A raw framework struct keeps its aligned store on 64-bit targets and its checked reserved
                         // store otherwise; an eight-byte scalar uses the same split without the size test.
@@ -1025,7 +1025,7 @@ internal static partial class DirectBinaryEmitter
                 int last = RunEnd(members, index);
                 if (last == index)
                 {
-                    if (member.Size == 8 || member.Raw)
+                    if (member.Size >= 8 || member.Raw)
                     {
                         body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" +
                             (member.Raw ? " || " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">() <= 4" : string.Empty) + ")");
@@ -1131,7 +1131,7 @@ internal static partial class DirectBinaryEmitter
                     end = last;
                 if (end == index)
                 {
-                    if (member.Size == 8 || member.Raw)
+                    if (member.Size >= 8 || member.Raw)
                     {
                         // A raw framework struct keeps its aligned store on 64-bit targets and its checked reserved store
                         // otherwise; an eight-byte scalar uses the same split without the size test.
@@ -1598,7 +1598,7 @@ internal static partial class DirectBinaryEmitter
         for (int index = first; index <= last; index++)
         {
             var member = members[index];
-            body.Add(member.Size == 8 || member.Raw
+            body.Add(member.Size >= 8 || member.Raw
                 ? w.A("LuminPackWriter") + ".Write(ref " + At(w, cursor, offset) + ", in " + owner + "." + member.Name + ");"
                 : w.A("Unsafe") + ".WriteUnaligned(ref " + At(w, cursor, offset) + ", " + owner + "." + member.Name + ");");
             offset = Add(offset, member.Width);
