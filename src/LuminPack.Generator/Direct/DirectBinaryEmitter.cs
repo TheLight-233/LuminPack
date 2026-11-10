@@ -201,12 +201,16 @@ internal static partial class DirectBinaryEmitter
         w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
             (genericWrite ? "RootWrite<TOptions>" : "RootWrite") + "(ref state, value);"));
         w.Suppressed = !reads;
-        if (model.Version != null)
+        // A version-tolerant record and a type built by its selected constructor read through an isolated copy of the reader
+        // state, so a failure leaves the caller's state untouched.
+        if (model.Version != null || !model.IsStruct && model.ConstructorArguments != null)
         {
             // A version-tolerant record reads through an isolated copy of the reader state.
-            IsolatedRead("internal static void Read(this ref " + reader + " state, ref " + type + "? value)", null, Standard());
+            IsolatedRead("internal static void Read(this ref " + reader + " state, ref " + type + "? value)", null,
+                genericRead ? Standard() : null);
             w.Blank();
-            IsolatedRead("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)", "where TOptions : struct, " + Options(), "TOptions");
+            IsolatedRead("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)", "where TOptions : struct, " + Options(),
+                genericRead ? "TOptions" : null);
         }
         else
         {
@@ -255,7 +259,7 @@ internal static partial class DirectBinaryEmitter
             w.Open();
             w.Line(reader + " isolated = default;");
             w.Line("state.CopyTo(ref isolated);");
-            w.Line(Serializer() + "." + container + ".RootRead<" + profile + ">(ref isolated, ref value);");
+            w.Line(Serializer() + "." + container + ".RootRead" + (profile == null ? string.Empty : "<" + profile + ">") + "(ref isolated, ref value);");
             w.Line("isolated.CopyTo(ref state);");
             w.Close();
         }
@@ -1204,9 +1208,109 @@ internal static partial class DirectBinaryEmitter
         }
     }
 
+    /// <summary>Builds the read body of a type whose selected constructor takes parameters: temporary locals hold the decoded
+    /// values, an existing instance reads in place, and a fresh one is constructed with its arguments and remaining fields.</summary>
+    private static List<string> ConstructedReadBody(DirectTypeModel model, DirectWriter w, bool union)
+    {
+        var members = model.Members;
+        string policy = w.A("LuminPackInputPolicy");
+        var body = new List<string> { "// Declare locals to hold the field values." };
+        foreach (var member in members)
+            body.Add(TempType(member) + " " + Camel(member.Name) + "Temp = default !;");
+        if (!union)
+        {
+            body.Add("if (" + policy + ".ReadNullMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + "))");
+            body.Add("{");
+            body.Add("return;");
+            body.Add("}");
+            body.Add("");
+        }
+        body.Add("if (value is not null)");
+        body.Add("{");
+        body.Add("ReadExisting(ref reader, value);");
+        body.Add("return;");
+        body.Add("}");
+        body.Add("");
+        body.Add(w.MethodImpl("NoInlining"));
+        body.Add("static void ReadExisting(ref " + w.A("LuminPackReader") + " reader2, " + model.GlobalName + "? value2)");
+        body.Add("{");
+        if (model.Mirror != null)
+            body.Add("ref var reuseLocal = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value2!);");
+        for (int index = 0; index < members.Length; index++)
+            AddConstructedReadExisting(body, members[index], index + 1 < members.Length);
+        body.Add("}");
+        body.Add("");
+        foreach (var member in members)
+            body.Add(Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
+        body.Add("// Construct the object and populate its members.");
+        string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
+            name == null ? "default" : Camel(name) + "Temp!"));
+        string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
+        var initialized = members.Where(member => !member.Mirrored &&
+            (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
+        if (initialized.Length == 0)
+            body.Add(construction + ";");
+        else
+        {
+            body.Add(construction);
+            body.Add("{");
+            foreach (var member in initialized)
+                body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
+            body.Add("};");
+        }
+        var mirrored = model.Mirror == null ? Array.Empty<DirectMember>() : members.Where(member => member.Mirrored &&
+            (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
+        if (mirrored.Length != 0)
+        {
+            body.Add("// Assign private fields.");
+            body.Add("ref var local = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+            foreach (var member in mirrored)
+                body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+        }
+        return body;
+    }
+
+    /// <summary>Reads one member in place for the constructed read's existing-instance path.</summary>
+    private static void AddConstructedReadExisting(List<string> body, DirectMember member, bool hasNext)
+    {
+        string owner = member.Mirrored ? "reuseLocal" : "value2!";
+        if (member.Kind == DirectMemberKind.Text && member.Mirrored)
+        {
+            body.Add("var currentString = " + owner + "." + member.Name + ";");
+            body.Add("var decodedString = reader2.Read<" + Profile + ">(currentString);");
+            body.Add("if (!object.ReferenceEquals(currentString, decodedString))");
+            body.Add("\t" + owner + "." + member.Name + " = decodedString!;");
+            if (hasNext)
+                body.Add("");
+            return;
+        }
+        if (member.Kind == DirectMemberKind.Text)
+        {
+            body.Add("reader2.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
+            return;
+        }
+        body.Add(owner + "." + member.Name + " = " + FixedOrTextRead(member, "reader2") + ";");
+    }
+
+    /// <summary>Spells a fixed or string member's read from the given reader expression.</summary>
+    private static string FixedOrTextRead(DirectMember member, string reader) =>
+        member.Kind == DirectMemberKind.Text ? reader + ".Read<" + Profile + ">((string? )null)!" :
+        member.IsBoolean ? "LuminPackInputPolicy.ReadBoolean(ref " + reader + ")" :
+        reader + ".Read<" + member.Scalar + ">()";
+
+    /// <summary>Spells the temporary local type of one member, as the constructed read declares it.</summary>
+    private static string TempType(DirectMember member) => member.Kind == DirectMemberKind.Text ? "string?" : member.TypeName;
+
+    /// <summary>Spells a member's temporary local with the leading letter in lower case.</summary>
+    private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
+
     /// <summary>Builds a root read body.</summary>
     private static List<string> ReadBody(DirectTypeModel model, DirectWriter w, bool union)
     {
+        // A selected constructor builds the instance from temporary locals; a raw struct's arguments only reach its JSON
+        // read, so the binary body keeps the struct paths.
+        if (!model.IsStruct && model.ConstructorArguments != null)
+            return ConstructedReadBody(model, w, union);
         // A mixed record reads with the stream protocol: the inline objects keep their markers, so the reserved write
         // segments change nothing about the order and shape of the reads.
         if (model.StreamRecord || model.MixedRecord)

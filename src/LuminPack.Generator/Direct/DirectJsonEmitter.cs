@@ -322,7 +322,7 @@ internal static class DirectJsonEmitter
 
     /// <summary>The reused value's member access: a struct read through its selected constructor reaches it without the
     /// null-forgiving operator.</summary>
-    private static string Value(DirectTypeModel model) => model.ConstructorArguments == null ? "value!." : "value.";
+    private static string Value(DirectTypeModel model) => model.IsStruct ? "value." : "value!.";
 
     /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
     /// of more than sixteen calls stays behind its formatter's call.</summary>

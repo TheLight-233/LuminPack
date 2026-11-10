@@ -287,10 +287,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("diagnostics");
         if (data.fields.Count > 32)
             return DirectEmission.Reject<DirectTypeModel>("member count: " + data.fields.Count);
-        if (type.TypeKind != (isStruct ? TypeKind.Struct : TypeKind.Class) || type.IsAbstract || type.IsStatic || type.IsRecord || type.IsGenericType ||
+        if (type.TypeKind != (isStruct ? TypeKind.Struct : TypeKind.Class) || type.IsAbstract || type.IsStatic || type.IsGenericType ||
             type.ContainingType is { IsGenericType: true } || !Reachable(type))
             return DirectEmission.Reject<DirectTypeModel>("type declaration: " + (type.TypeKind != TypeKind.Class ? "kind" : type.IsAbstract ? "abstract" :
-                type.IsStatic ? "static" : type.IsRecord ? "record" : type.IsGenericType ? "generic" : type.ContainingType != null && type.ContainingType.IsGenericType ? "nested in generic" :
+                type.IsStatic ? "static" : type.IsGenericType ? "generic" : type.ContainingType != null && type.ContainingType.IsGenericType ? "nested in generic" :
                 "accessibility"));
         // Base types contribute their fields after the type's own, and must be plain or abstract classes of the same assembly. A Union
         // base's case list only shapes the base's own dispatch file, never the files of its cases.
@@ -306,13 +306,17 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             levels.Add(level);
         }
         bool derived = levels.Count > 1;
-        // A raw struct is copied as one value, so its constructors only reach its JSON read, which constructs a fresh value with the
-        // selected constructor.
-        if (!raw && (type.InstanceConstructors.Length != 1 || type.InstanceConstructors[0].Parameters.Length != 0 ||
-            type.InstanceConstructors[0].DeclaredAccessibility != Accessibility.Public))
+        // A selected constructor with parameters builds the instance from temporary locals on read; otherwise the type needs
+        // one public parameterless constructor, as the generated roots create it with new T(). A record also declares its
+        // protected copy constructor, which never runs here.
+        bool selectedConstructor = data.SelectedConstructor is { Parameters.Count: > 0 };
+        var publicConstructors = type.InstanceConstructors.Where(ctor => ctor.DeclaredAccessibility == Accessibility.Public).ToArray();
+        if (!raw && !selectedConstructor && (publicConstructors.Length != 1 || publicConstructors[0].Parameters.Length != 0))
             return DirectEmission.Reject<DirectTypeModel>("constructor: " + type.InstanceConstructors.Length + " " +
                 string.Join("+", type.InstanceConstructors.Select(item => item.Parameters.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) +
                     item.DeclaredAccessibility.ToString())));
+        // The constructed read stores each member in a temporary local, so it is limited after the members are reduced.
+        var constructedMembers = !raw && selectedConstructor;
         var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !StructLayoutOption(attribute) && !StructLayoutAttribute(attribute)).ToArray();
         if (attributes.Length != 1 || !(versioned ? VersionedPackable(attributes[0]) : PlainPackable(attributes[0])))
             return DirectEmission.Reject<DirectTypeModel>("type attributes: " + string.Join("+", attributes.Select(attribute =>
@@ -332,7 +336,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 continue;
             if (member.GetAttributes().Any(attribute => !Foreign(attribute) &&
                     !(member is IMethodSymbol { MethodKind: MethodKind.Ordinary } && attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.MethodImplAttribute") &&
-                    !(raw && member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
+                    !(member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
                     !(member is IFieldSymbol or IPropertySymbol && attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOrderAttribute" or "LuminPack.Attribute.LuminPackIgnoreAttribute") &&
                     !(versioned && member is IFieldSymbol && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")))
                 return DirectEmission.Reject<DirectTypeModel>("member attributes: " + member.Name + " [" + string.Join("+",
@@ -375,6 +379,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         for (int index = 0; index < members.Length; index++)
             if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
+        // The constructed read stores each member in a temporary local, which only fixed scalars and strings spell today.
+        if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text)))
+            return DirectEmission.Reject<DirectTypeModel>("constructor members");
         // A local case of an abstract packable base whose payload is raw fixed storage writes through the fixed Union cursor protocol.
         bool fixedUnionCase = !isStruct && members.All(member => member.IsFixed) && FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata);
         // Raw struct members are covered in fixed Union case records of at least two fields without Booleans, whose batch masks need
@@ -439,8 +446,6 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string[] arguments = null, constructed = null;
         if (data.SelectedConstructor is { Parameters.Count: > 0 } selected)
         {
-            if (!raw)
-                return DirectEmission.Reject<DirectTypeModel>("constructor");
             arguments = selected.Parameters.Select(parameter => members.Any(member => member.Name == parameter.MatchingFieldName)
                 ? parameter.MatchingFieldName : null).ToArray();
             constructed = selected.Parameters.Select(parameter => parameter.MatchingFieldName).Where(name => name != null).ToArray();
