@@ -109,12 +109,23 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly DirectDictionary Dictionary;
     /// <summary>Whether a type-parameter member's parameter is constrained to a value type, whose read assigns no reset guard.</summary>
     internal readonly bool ValueTypeParameter;
+    /// <summary>Whether the member's declared type is the parameter itself rather than a type that contains it, whose reset guard
+    /// tests the runtime type instead of a null object marker.</summary>
+    internal readonly bool BareParameter;
+    /// <summary>Whether a payload member of a reference type is preceded by a null object marker, whose read resets the member.</summary>
+    internal readonly bool NullObjectGuard;
+    /// <summary>Whether the member's declared type is a reference type, whose temporary local carries the nullable annotation.</summary>
+    internal readonly bool ReferencePayload;
 
     /// <summary>Captures one member.</summary>
     internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null, bool formatterCall = false,
-        bool property = false, DirectDictionary dictionary = null, bool valueTypeParameter = false)
+        bool property = false, DirectDictionary dictionary = null, bool valueTypeParameter = false, bool bareParameter = false,
+        bool nullObjectGuard = false, bool referencePayload = false)
     {
+        ReferencePayload = referencePayload;
+        NullObjectGuard = nullObjectGuard;
+        BareParameter = bareParameter;
         ValueTypeParameter = valueTypeParameter;
         Dictionary = dictionary;
         Property = property;
@@ -153,6 +164,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored &&
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && ValueTypeParameter == other.ValueTypeParameter &&
+        BareParameter == other.BareParameter && NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload &&
         Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
@@ -501,10 +513,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // A version-tolerant struct writes a schema prefix and revisions, which the struct roots do not reproduce yet.
         if (isStruct && versioned)
             return DirectEmission.Reject<DirectTypeModel>("versioned struct");
-        // A generic value type closes over a portable or formatter-dispatch contract, a version-tolerant definition keeps its
-        // own schema and name tables, and the circle roots spell their own storage protocol, so all three keep the original
-        // pipeline for now.
-        if (data.isGeneric && (data.isValueType || versioned || circle))
+        // A raw or portable generic value type closes over a formatter-dispatch contract, a version-tolerant definition keeps
+        // its own schema and name tables, and the circle roots spell their own storage protocol, so those keep the original
+        // pipeline. A managed generic struct writes the record protocol and is covered.
+        if (data.isGeneric && (versioned || circle || data.isValueType && !managedStruct))
             return DirectEmission.Reject<DirectTypeModel>("type kind: generic " +
                 (data.isValueType ? "struct" : versioned ? "version tolerant" : "circle"));
         if (type == null || data.generatorType != GeneratorType.Object && !versioned && !circle || data.isUnion ||
@@ -535,8 +547,11 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         var levels = new System.Collections.Generic.List<INamedTypeSymbol> { type };
         for (var level = type.BaseType; level != null && level.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType); level = level.BaseType)
         {
-            if (level.TypeKind != TypeKind.Class || level.IsStatic || level.IsRecord || level.IsGenericType ||
+            // A generic base is covered only when it closes over the derived definition's own type parameters, so every member
+            // keeps the type-parameter spelling the generic templates repeat.
+            if (level.TypeKind != TypeKind.Class || level.IsStatic || level.IsRecord ||
                 level.ContainingType is { IsGenericType: true } || !Reachable(level) ||
+                level.IsGenericType && !OwnParameters(level, type) ||
                 !SymbolEqualityComparer.Default.Equals(level.ContainingAssembly, compilation.Assembly) ||
                 level.GetAttributes().Any(attribute => !PlainPackable(attribute) && !Foreign(attribute) && !UnionCase(attribute) && !JsonPolymorphism(attribute) &&
                     !StructLayoutAttribute(attribute) && !(_unionCase > 0 && OptionAttribute(attribute))))
@@ -669,14 +684,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // circle-reference payload always declares its storage mirror.
         bool mirrored = circle || data.fields.Any(field => field.isProperty || field.IsPrivate);
         // A raw struct copies its complete storage; a portable struct transfers only fixed fields; a managed struct records
-        // fixed scalars, strings and built-in values until inline objects and collections join it.
+        // fixed scalars, strings, built-in values and type-parameter payloads until inline objects and collections join it.
         if (isStruct)
         {
             if (raw && members.Any(member => !member.IsFixed))
                 return DirectEmission.Reject<DirectTypeModel>("struct members");
             if (portable != null && members.Any(member => !member.IsFixed))
                 return DirectEmission.Reject<DirectTypeModel>("struct members");
-            if (managedStruct && members.Any(member => !member.IsFixed && member.Kind != DirectMemberKind.Text || member.Raw && !member.Builtin))
+            if (managedStruct && members.Any(member => !member.IsFixed && member.Kind is not (DirectMemberKind.Text or DirectMemberKind.Parameter) ||
+                member.Raw && !member.Builtin))
                 return DirectEmission.Reject<DirectTypeModel>("struct members");
         }
         bool strings = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
@@ -828,6 +844,40 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 clauses.Add("where " + constraint.ParameterName + " : " + string.Join(", ", parts));
         }
         return clauses.ToArray();
+    }
+
+    /// <summary>Whether a constructed generic base closes only over the derived definition's own type parameters.</summary>
+    /// <param name="level">The constructed base type.</param>
+    /// <param name="type">The derived definition.</param>
+    /// <returns>Whether every base argument is one of the derived definition's parameters.</returns>
+    private static bool OwnParameters(INamedTypeSymbol level, INamedTypeSymbol type)
+    {
+        if (!level.IsGenericType || level.TypeArguments.Length != level.OriginalDefinition.TypeParameters.Length)
+            return false;
+        foreach (var argument in level.TypeArguments)
+            if (argument is not ITypeParameterSymbol parameter ||
+                !type.TypeParameters.Any(own => SymbolEqualityComparer.Default.Equals(own, parameter)))
+                return false;
+        return true;
+    }
+
+    /// <summary>Whether a member type mentions one of the given type parameters, including inside arrays and generic arguments.</summary>
+    /// <param name="symbol">The declared member type.</param>
+    /// <param name="typeParameters">The definition's own parameter names.</param>
+    /// <returns>Whether the type contains one of the parameters.</returns>
+    private static bool ContainsParameter(ITypeSymbol symbol, System.Collections.Generic.HashSet<string> typeParameters)
+    {
+        switch (symbol)
+        {
+            case ITypeParameterSymbol parameter:
+                return typeParameters.Contains(parameter.Name);
+            case IArrayTypeSymbol array:
+                return ContainsParameter(array.ElementType, typeParameters);
+            case INamedTypeSymbol named:
+                return named.TypeArguments.Any(argument => ContainsParameter(argument, typeParameters));
+            default:
+                return false;
+        }
     }
 
     /// <summary>Models a polymorphic Union root: its declared cases, compiled profile slots and dispatch tier, when every case
@@ -1235,8 +1285,18 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         {
             if (typeParameters == null || !typeParameters.Contains(parameter.Name))
                 return DirectEmission.Reject<DirectMember>("member type: foreign parameter " + parameter.Name);
-            return new DirectMember(field.Name, DirectMemberKind.Parameter, parameter.Name, parameter.Name, 0, null, field.Type, field.isProperty,
-                valueTypeParameter: parameter.HasValueTypeConstraint);
+            return new DirectMember(field.Name, DirectMemberKind.Parameter, parameter.Name, parameter.Name, 0, null, field.Type, mirrored,
+                valueTypeParameter: parameter.HasValueTypeConstraint, bareParameter: true, referencePayload: parameter.IsReferenceType);
+        }
+        // A member whose declared type contains one of the definition's own type parameters is written and read by the
+        // generic serializer itself, with the containing type as the payload spelling. An ordinary packable object payload
+        // peeks at a null object marker before its read, while a collection owns its own null handling.
+        if (typeParameters != null && ContainsParameter(symbol, typeParameters))
+        {
+            string spelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return new DirectMember(field.Name, DirectMemberKind.Parameter, spelling, spelling, 0, null, field.Type, mirrored,
+                nullObjectGuard: symbol is INamedTypeSymbol { TypeKind: TypeKind.Class } payloadType && EmitterTypeTraits.UsesOrdinaryObjectHeader(payloadType),
+                referencePayload: symbol.IsReferenceType);
         }
         if (Scalar(symbol, allowBoolean: true) is { } scalar)
         {

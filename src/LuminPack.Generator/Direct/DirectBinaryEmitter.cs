@@ -1409,6 +1409,31 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Spells a type-parameter member's payload call: its own parameter, then the operation's profile.</summary>
     private static string MemberArguments(DirectMember member, string profile) => "<" + member.Scalar + ", " + profile + ">";
 
+    /// <summary>Adds the reset guard of a generic payload member, which depends on what its declared type is.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The payload member.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="reader">The reader expression the payload call reads from.</param>
+    /// <param name="target">The destination storage expression.</param>
+    private static void AddParameterReset(List<string> body, DirectMember member, DirectWriter w, string reader, string target)
+    {
+        // A bare parameter may hold a value or a reference, so the runtime formatter decides whether the member is reset.
+        if (member.BareParameter)
+        {
+            if (!member.ValueTypeParameter)
+            {
+                body.Add("if (" + w.A("LuminPackSerializer") + ".FormatterDispatch.LuminPackShouldResetMember<" + member.Scalar + ">(ref " + reader + "))");
+                body.Add("\t" + target + " = default !;");
+            }
+        }
+        // A reference payload writes a null object marker the read peeks at, while a collection owns its own null handling.
+        else if (member.NullObjectGuard)
+        {
+            body.Add("if (" + reader + ".PeekIsNullObject())");
+            body.Add("\t" + target + " = default !;");
+        }
+    }
+
     /// <summary>Spells an inline object's local the way the template numbers its depth-suffixed role local.</summary>
     private static string InlineName(Dictionary<string, int> names, string role, int depth)
     {
@@ -1817,11 +1842,7 @@ internal static partial class DirectBinaryEmitter
         }
         if (member.Kind == DirectMemberKind.Parameter)
         {
-            if (!member.ValueTypeParameter)
-            {
-                body.Add("if (" + w.A("LuminPackSerializer") + ".FormatterDispatch.LuminPackShouldResetMember<" + member.Scalar + ">(ref reader2))");
-                body.Add("\t" + owner + "." + member.Name + " = default !;");
-            }
+            AddParameterReset(body, member, w, "reader2", owner + "." + member.Name);
             body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
@@ -1835,7 +1856,8 @@ internal static partial class DirectBinaryEmitter
         reader + ".Read<" + member.Scalar + ">()";
 
     /// <summary>Spells the temporary local type of one member, as the constructed read declares it.</summary>
-    private static string TempType(DirectMember member) => member.Kind == DirectMemberKind.Text ? "string?" : member.TypeName;
+    private static string TempType(DirectMember member) => member.Kind == DirectMemberKind.Text ? "string?" :
+        member.Kind == DirectMemberKind.Parameter && member.ReferencePayload ? member.TypeName + "?" : member.TypeName;
 
     /// <summary>Spells a member's temporary local with the leading letter in lower case.</summary>
     private static string Camel(string name) => DirectEmission.LocalName(name);
@@ -2058,11 +2080,7 @@ internal static partial class DirectBinaryEmitter
             // parameter may hold a reference.
             if (member.Kind == DirectMemberKind.Parameter)
             {
-                if (!member.ValueTypeParameter)
-                {
-                    body.Add("if (" + w.A("LuminPackSerializer") + ".FormatterDispatch.LuminPackShouldResetMember<" + member.Scalar + ">(ref reader))");
-                    body.Add("\t" + owner + "." + member.Name + " = default !;");
-                }
+                AddParameterReset(body, member, w, "reader", owner + "." + member.Name);
                 body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }

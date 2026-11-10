@@ -418,12 +418,17 @@ internal static class DirectJsonEmitter
         var body = new List<string>();
         if (model.IsStruct)
         {
-            // A struct reuses its existing storage when any reference member is already set.
+            // A struct reuses its existing storage when any reference member is already set. A type parameter may hold a
+            // reference, so its check keeps a runtime value-type test.
             var referenced = members.Where(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.Object or
-                DirectMemberKind.Array or DirectMemberKind.List).ToArray();
+                DirectMemberKind.Array or DirectMemberKind.List || member.Kind == DirectMemberKind.Parameter).ToArray();
             body.Add("bool reuseExisting = " + (referenced.Length == 0 ? "false" : string.Join(" || ", referenced.Select(member =>
+                (member.Kind == DirectMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter
+                    ? "(!typeof(" + member.Scalar + ").IsValueType && (object? )"
+                    : string.Empty) +
                 (member.Mirrored ? "LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value)." : "value.") +
-                member.Name + " is not null"))) + ";");
+                member.Name + " is not null" +
+                (member.Kind == DirectMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter ? ")" : string.Empty))) + ";");
         }
         else
         {
@@ -462,7 +467,8 @@ internal static class DirectJsonEmitter
         {
             body.Add("// Temp vars");
             foreach (var member in members)
-                body.Add(member.TypeName + (member.IsFixed || member.Kind == DirectMemberKind.Parameter ? string.Empty : "?") + " " + Camel(member.Name) + "Temp = default;");
+                body.Add(member.TypeName + (member.IsFixed || member.Kind == DirectMemberKind.Parameter && !member.ReferencePayload ? string.Empty : "?") +
+                    " " + Camel(member.Name) + "Temp = default;");
             if (model.Mirror != null && members.Any(member => member.Mirrored))
                 body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                     (model.IsStruct ? "value" : "value!") + ");");
