@@ -195,7 +195,7 @@ internal static partial class DirectBinaryEmitter
         w.Suppressed = !writes;
         // A payload whose write body contains an element loop advances through an isolated copy of the writer state, so a
         // failure leaves the caller's state untouched.
-        if (model.ElementList)
+        if (model.ElementList || model.HasDictionary)
         {
             IsolatedWrite("internal static void Write(this ref " + writer + " state, in " + type + "? value)", null,
                 genericWrite ? Standard() : null);
@@ -312,7 +312,8 @@ internal static partial class DirectBinaryEmitter
         // mixed record counts its inline objects' expanded bodies structurally, because their member runs, not their call
         // sites, decide the budget. A member write stays a call boundary whose callee keeps its own budget, so the runtime
         // sizes the entry instead, and any record that calls one keeps no inline hint.
-        string WriteHint(List<string> body, bool union) => (model.StreamRecord || model.MixedRecord) &&
+        string WriteHint(List<string> body, bool union) => model.HasDictionary ? null :
+            (model.StreamRecord || model.MixedRecord) &&
             !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) &&
             !body.Any(line => line.StartsWith("for (", StringComparison.Ordinal))
             ? ((model.StreamRecord ? DirectCalls.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
@@ -584,6 +585,14 @@ internal static partial class DirectBinaryEmitter
             body.Add("}");
             if (bounded)
                 body.Add("");
+            AddBoundExit(body, model, union);
+            return body;
+        }
+        // Dictionary members write at a cursor local with fused entry kernels, which also sets the record header and commits
+        // once around every inline block between them.
+        if (model.HasDictionary)
+        {
+            DictionaryWriteBody(model, w, union, body);
             AddBoundExit(body, model, union);
             return body;
         }
@@ -1086,12 +1095,15 @@ internal static partial class DirectBinaryEmitter
             body.Add("cursor = ref writer.WriteRecord(ref cursor, value." + member.Name + ");");
         else if (member.Kind == DirectMemberKind.Text)
             body.Add("cursor = ref writer.WriteRecordString<" + Profile + ">(ref cursor, value." + member.Name + ");");
+        else if (member.Kind == DirectMemberKind.Dictionary)
+            body.Add("cursor = ref writer.WriteRecordPairs(ref cursor, value." + member.Name + ");");
         else
             body.Add("cursor = ref writer.WriteRecordSpan(ref cursor, value." + member.Name + ");");
     }
 
     /// <summary>Writes a span of a mixed record through one reservation, optionally including the record header byte.</summary>
-    private static void AddReservedSegment(DirectTypeModel model, DirectWriter w, List<string> body, int first, int last, bool header)
+    private static void AddReservedSegment(DirectTypeModel model, DirectWriter w, List<string> body, int first, int last, bool header,
+        bool? camel = null)
     {
         var members = model.Members;
         var names = new List<string>();
@@ -1104,7 +1116,7 @@ internal static partial class DirectBinaryEmitter
         for (int index = first; index <= last; index++)
         {
             var member = members[index];
-            string snapshot = Snapshot(model, index, camel: model.InlineObject);
+            string snapshot = Snapshot(model, index, camel: camel ?? model.InlineObject);
             if (member.Kind == DirectMemberKind.Fixed)
                 terms.Add(member.Width);
             else if (member.Kind == DirectMemberKind.Text)
@@ -1171,10 +1183,13 @@ internal static partial class DirectBinaryEmitter
                 continue;
             }
             body.Add("// Field: " + member.Name);
+            string written = Snapshot(model, index, camel: camel ?? model.InlineObject);
             if (member.Kind == DirectMemberKind.Text)
-                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + Snapshot(model, index, camel: model.InlineObject) + ");");
+                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + written + ");");
+            else if (member.Kind == DirectMemberKind.Dictionary)
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved(ref cursor, " + written + ");");
             else
-                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.InlineObject) + ");");
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + written + ");");
         }
         if (body[body.Count - 1].Length != 0)
             body.Add("");
@@ -1227,6 +1242,14 @@ internal static partial class DirectBinaryEmitter
                 // An inline object leaves a blank line before a following field unless that field opens another inline object;
                 // a named member write stays a plain call and keeps no blank, as the old body's continue does.
                 if (!member.Nested.MemberWrite && index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                    body.Add("");
+                continue;
+            }
+            // A fused dictionary inside an inline object writes its original operation in place.
+            if (member.Kind == DirectMemberKind.Dictionary)
+            {
+                AddDictionaryInline(body, model, member, owner, w, names, ref ends);
+                if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
                     body.Add("");
                 continue;
             }
@@ -1817,8 +1840,15 @@ internal static partial class DirectBinaryEmitter
             else if (member.Kind == DirectMemberKind.Text)
                 // Included non-public fields pass their mirror storage by reference, as public fields do.
                 body.Add("reader.Read<" + Profile + ">(ref instance." + member.Name + ");");
+            else if (member.Kind == DirectMemberKind.Array && member.Scalar == "bool")
+                body.Add(Policy() + ".ReadBooleans(ref reader, ref instance." + member.Name + "!);");
             else
+            {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref instance." + member.Name + "!);");
+                // A Boolean list carries unmanaged values, so an untrusted read still checks the decoded bytes.
+                if (member.Kind == DirectMemberKind.List && member.Scalar == "bool")
+                    body.Add(Policy() + ".CheckBooleans(instance." + member.Name + "!);");
+            }
         }
         // The presentation keeps no blank line between a mirrored string read and an unproven fixed run's cursor.
         for (int index = body.Count - 2; index > 0; index--)
@@ -1826,7 +1856,21 @@ internal static partial class DirectBinaryEmitter
                 body.RemoveAt(index);
         while (body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
+        RenameCheckedReadInstance(body, model, union);
         return body;
+    }
+
+    /// <summary>Renames the instance local of a read root whose Boolean collection takes the checked completion. The
+    /// untrusted-read projection inlines that root under its entry prefix, which the published file keeps as the role
+    /// name.</summary>
+    private static void RenameCheckedReadInstance(List<string> body, DirectTypeModel model, bool union)
+    {
+        if (!model.BooleanCollection)
+            return;
+        string name = union ? "lp1_v2" : "lp0_v2";
+        var pattern = new System.Text.RegularExpressions.Regex(@"\binstance\b");
+        for (int index = 0; index < body.Count; index++)
+            body[index] = pattern.Replace(body[index], name);
     }
 
     /// <summary>Builds a stream record's read body: the null marker, then every member, with inline objects reading their own
@@ -1847,6 +1891,7 @@ internal static partial class DirectBinaryEmitter
         while (body.Count != 0 && body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         ReduceInlineNames(body);
+        RenameCheckedReadInstance(body, model, union);
         return body;
     }
 
@@ -1904,10 +1949,23 @@ internal static partial class DirectBinaryEmitter
                 body.Add("reader.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
                 continue;
             }
+            // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.
+            if (member.Kind == DirectMemberKind.Dictionary)
+            {
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                continue;
+            }
             // An array or list member reads through its generated formatter, which keeps its own framing and profile.
             if (member.Kind is DirectMemberKind.Array or DirectMemberKind.List)
             {
-                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                if (member.Kind == DirectMemberKind.Array && member.Scalar == "bool")
+                    body.Add(Policy() + ".ReadBooleans(ref reader, ref " + owner + "." + member.Name + "!);");
+                else
+                {
+                    body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                    if (member.Kind == DirectMemberKind.List && member.Scalar == "bool")
+                        body.Add(Policy() + ".CheckBooleans(" + owner + "." + member.Name + "!);");
+                }
                 continue;
             }
             int last = RunEnd(members, index);
