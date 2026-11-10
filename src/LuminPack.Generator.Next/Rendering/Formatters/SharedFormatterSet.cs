@@ -32,13 +32,13 @@ internal enum SharedFormatterKind
     ImmutableArrayOfString = 32,
 }
 
-/// <summary>One concurrent-queue or immutable-array owner the compilation must publish.</summary>
+/// <summary>One concurrent-queue, immutable-array or immutable-stack owner the compilation must publish.</summary>
 /// <remarks>A scalar element carries its keyword and a packable element carries its value-equal render model, which the owner
 /// expands in place. The fact never retains a symbol, a syntax node or a compilation.</remarks>
 internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
 {
-    /// <summary>Whether the sequence is an <c>ImmutableArray&lt;T&gt;</c> rather than a <c>ConcurrentQueue&lt;T&gt;</c>.</summary>
-    internal readonly bool Immutable;
+    /// <summary>The declared sequence family, which selects the owner template.</summary>
+    internal readonly SequenceFamily Family;
 
     /// <summary>The declared sequence spelling, such as <c>global::...ConcurrentQueue&lt;long&gt;</c>.</summary>
     internal readonly string DeclaredType;
@@ -49,32 +49,32 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
     /// <summary>The packable element's render model, or null when the element is a raw scalar.</summary>
     internal readonly PayloadRenderModel? Element;
 
-    private SequenceOwnerFact(bool immutable, string declaredType, string? scalar, PayloadRenderModel? element)
+    private SequenceOwnerFact(SequenceFamily family, string declaredType, string? scalar, PayloadRenderModel? element)
     {
         Element = element;
         Scalar = scalar;
         DeclaredType = declaredType;
-        Immutable = immutable;
+        Family = family;
     }
 
     /// <summary>Captures a sequence of a raw scalar element.</summary>
-    /// <param name="immutable">Whether the sequence is an immutable array.</param>
+    /// <param name="family">The declared sequence family.</param>
     /// <param name="declaredType">The declared sequence spelling.</param>
     /// <param name="scalar">The raw scalar element keyword.</param>
     /// <returns>The sequence owner fact.</returns>
-    internal static SequenceOwnerFact ForScalar(bool immutable, string declaredType, string scalar)
-        => new SequenceOwnerFact(immutable, declaredType, scalar, null);
+    internal static SequenceOwnerFact ForScalar(SequenceFamily family, string declaredType, string scalar)
+        => new SequenceOwnerFact(family, declaredType, scalar, null);
 
     /// <summary>Captures a sequence of a packable class element.</summary>
-    /// <param name="immutable">Whether the sequence is an immutable array.</param>
+    /// <param name="family">The declared sequence family.</param>
     /// <param name="declaredType">The declared sequence spelling.</param>
     /// <param name="element">The element's render model.</param>
     /// <returns>The sequence owner fact.</returns>
-    internal static SequenceOwnerFact ForPayload(bool immutable, string declaredType, PayloadRenderModel element)
-        => new SequenceOwnerFact(immutable, declaredType, null, element);
+    internal static SequenceOwnerFact ForPayload(SequenceFamily family, string declaredType, PayloadRenderModel element)
+        => new SequenceOwnerFact(family, declaredType, null, element);
 
     /// <inheritdoc/>
-    public bool Equals(SequenceOwnerFact other) => Immutable == other.Immutable && DeclaredType == other.DeclaredType &&
+    public bool Equals(SequenceOwnerFact other) => Family == other.Family && DeclaredType == other.DeclaredType &&
         Scalar == other.Scalar && Equals(Element, other.Element);
 
     /// <inheritdoc/>
@@ -82,7 +82,7 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
 
     /// <inheritdoc/>
     public override int GetHashCode() => (DeclaredType == null ? 0 : DeclaredType.GetHashCode()) ^
-        (Scalar == null ? 0 : Scalar.GetHashCode()) ^ (Element == null ? 0 : Element.GetHashCode()) ^ (Immutable ? 1 << 21 : 0);
+        (Scalar == null ? 0 : Scalar.GetHashCode()) ^ (Element == null ? 0 : Element.GetHashCode()) ^ ((int)Family + 1) << 21;
 }
 
 /// <summary>The value-equal publication decision for the shared formatter owners.</summary>
@@ -295,26 +295,26 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     private static void Sequence(CollectionMember member, GeneratorOptions options, List<SequenceOwnerFact> facts,
         List<string> scalars, ref SharedFormatterKind owners)
     {
-        // The analysis group also covers families whose owners are not ported yet.
-        if (!RenderModelFactory.IsSupportedSequence(member))
+        // The analysis group also covers families whose owners are not ported yet, and the stack covers scalars only.
+        if (RenderModelFactory.SupportedFamily(member) is not { } family)
             return;
-        bool immutable = member.Kind == CollectionKind.Immutable;
         // A packable-class sequence publishes its own owner, whose write and read expand the element record in place.
         if (member.Nested != null)
         {
             if (RenderModelFactory.SequenceElement(member.Nested, options) is { } element)
-                facts.Add(SequenceOwnerFact.ForPayload(immutable, member.DeclaredType, element));
+                facts.Add(SequenceOwnerFact.ForPayload(family, member.DeclaredType, element));
             return;
         }
         if (member.Scalar == "string")
         {
             // The string variants have their own templates and transfer elements through the shared string owner.
-            owners |= immutable ? SharedFormatterKind.ImmutableArrayOfString : SharedFormatterKind.ConcurrentQueueOfString;
+            owners |= family == SequenceFamily.ImmutableArray
+                ? SharedFormatterKind.ImmutableArrayOfString : SharedFormatterKind.ConcurrentQueueOfString;
             return;
         }
         if (member.Scalar != null)
         {
-            facts.Add(SequenceOwnerFact.ForScalar(immutable, member.DeclaredType, member.Scalar));
+            facts.Add(SequenceOwnerFact.ForScalar(family, member.DeclaredType, member.Scalar));
             AddScalar(scalars, member.Scalar);
         }
     }

@@ -367,13 +367,18 @@ internal static class RenderModelFactory
         if (member.Kind is CollectionKind.Concurrent or CollectionKind.Immutable)
         {
             // The analysis group also covers families this renderer does not reproduce yet.
-            if (!IsSupportedSequence(member))
+            SequenceFamily? family = SupportedFamily(member);
+            if (family == null)
                 return null;
-            RenderMemberKind kind = member.Kind == CollectionKind.Concurrent
-                ? RenderMemberKind.ConcurrentQueue : RenderMemberKind.ImmutableArray;
+            RenderMemberKind kind = family switch
+            {
+                SequenceFamily.ConcurrentQueue => RenderMemberKind.ConcurrentQueue,
+                SequenceFamily.ImmutableStack => RenderMemberKind.ImmutableStack,
+                _ => RenderMemberKind.ImmutableArray,
+            };
             // A packable element carries its declared spelling in Scalar, so the nested model decides the shape first.
             if (member.Nested != null)
-                return PayloadElement(member, formatter, mirrored, property, options);
+                return PayloadElement(member, family.Value, formatter, mirrored, property, options);
             return member.Scalar == null ? null :
                 new RenderMember(member.Name, kind, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property);
@@ -475,38 +480,54 @@ internal static class RenderModelFactory
 
     /// <summary>Maps a payload-element concurrent or immutable sequence onto the emitter's sequence shape.</summary>
     /// <param name="member">The sequence member, whose nested model is the element payload.</param>
+    /// <param name="family">The declared sequence family.</param>
     /// <param name="formatter">The sequence's generated formatter owner.</param>
     /// <param name="mirrored">Whether the member is reached through the layout mirror.</param>
     /// <param name="property">Whether the member is an auto-property.</param>
     /// <param name="options">The project facts, which decide whether the element payload is covered.</param>
     /// <returns>The render member, or null when the element's record body is outside the direct emitters.</returns>
-    private static RenderMember? PayloadElement(CollectionMember member, string formatter, bool mirrored, bool property,
-        GeneratorOptions options)
+    private static RenderMember? PayloadElement(CollectionMember member, SequenceFamily family, string formatter, bool mirrored,
+        bool property, GeneratorOptions options)
     {
         PayloadRenderModel? element = SequenceElement(member.Nested, options);
         if (element == null)
             return null;
-        return new RenderMember(member.Name, member.Kind == CollectionKind.Immutable
-                ? RenderMemberKind.ImmutableArray : RenderMemberKind.ConcurrentQueue,
-            member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored, nested: element, property: property);
+        RenderMemberKind kind = family == SequenceFamily.ConcurrentQueue
+            ? RenderMemberKind.ConcurrentQueue : family == SequenceFamily.ImmutableArray
+                ? RenderMemberKind.ImmutableArray : RenderMemberKind.ImmutableStack;
+        return new RenderMember(member.Name, kind, member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored,
+            nested: element, property: property);
+    }
+
+    /// <summary>Resolves the sequence family a concurrent or immutable member declares.</summary>
+    /// <param name="member">The sequence member.</param>
+    /// <returns>The supported family, or null when the declared family, element form or string element is not reproduced.</returns>
+    /// <remarks>The analysis group covers every concurrent and immutable collection, while the shared owners currently cover the
+    /// queue, the array and the stack; the other families stay unmapped instead of rendering with the wrong storage protocol.
+    /// A stack currently supports raw scalar elements only, so its string and packable elements stay unmapped.</remarks>
+    internal static SequenceFamily? SupportedFamily(CollectionMember member)
+    {
+        string family = SequenceFamilyName(member.DeclaredType);
+        if (member.Kind == CollectionKind.Concurrent)
+            return family == "ConcurrentQueue" ? SequenceFamily.ConcurrentQueue : null;
+        if (member.Kind != CollectionKind.Immutable)
+            return null;
+        if (family == "ImmutableArray")
+            return SequenceFamily.ImmutableArray;
+        if (family == "ImmutableStack" && member.Nested == null && member.Scalar != null && member.Scalar != "string")
+            return SequenceFamily.ImmutableStack;
+        return null;
     }
 
     /// <summary>Whether a concurrent or immutable sequence belongs to the families the sequence owners reproduce.</summary>
     /// <param name="member">The sequence member.</param>
-    /// <returns>Whether the declared family is <c>ConcurrentQueue&lt;T&gt;</c> or <c>ImmutableArray&lt;T&gt;</c>.</returns>
-    /// <remarks>The analysis group covers every concurrent and immutable collection, while the shared owners currently cover only
-    /// the queue and the array; the other families stay unmapped instead of rendering with the wrong storage protocol.</remarks>
-    internal static bool IsSupportedSequence(CollectionMember member)
-    {
-        string family = SequenceFamily(member.DeclaredType);
-        return member.Kind == CollectionKind.Concurrent ? family == "ConcurrentQueue" :
-            member.Kind == CollectionKind.Immutable && family == "ImmutableArray";
-    }
+    /// <returns>Whether the declared family is supported for the member's element form.</returns>
+    internal static bool IsSupportedSequence(CollectionMember member) => SupportedFamily(member) != null;
 
     /// <summary>Extracts the simple name of a declared sequence family.</summary>
     /// <param name="declaredType">The declared spelling, such as <c>global::...ImmutableArray&lt;int&gt;</c>.</param>
     /// <returns>The family name without namespace or type arguments.</returns>
-    private static string SequenceFamily(string declaredType)
+    private static string SequenceFamilyName(string declaredType)
     {
         string text = GeneratedNames.PayloadKey(declaredType);
         int generic = text.IndexOf('<');

@@ -45,13 +45,25 @@ internal static class SharedFormatterPublisher
             {
                 string hint = SequenceHint(fact);
                 if (fact.Element != null)
-                    production.AddSource(hint, fact.Immutable
-                        ? ImmutableArrayPayloadOwnerFile.Render(set, fact)
-                        : ConcurrentQueuePayloadOwnerFile.Render(set, fact));
-                else if (fact.Immutable)
-                    production.AddSource(hint, ImmutableArrayOwnerFile.Render(set, fact));
-                else
-                    production.AddSource(hint, ConcurrentQueueOwnerFile.Render(set, fact));
+                {
+                    if (fact.Family == SequenceFamily.ConcurrentQueue)
+                        production.AddSource(hint, ConcurrentQueuePayloadOwnerFile.Render(set, fact));
+                    else if (fact.Family == SequenceFamily.ImmutableArray)
+                        production.AddSource(hint, ImmutableArrayPayloadOwnerFile.Render(set, fact));
+                    continue;
+                }
+                switch (fact.Family)
+                {
+                    case SequenceFamily.ConcurrentQueue:
+                        production.AddSource(hint, ConcurrentQueueOwnerFile.Render(set, fact));
+                        break;
+                    case SequenceFamily.ImmutableArray:
+                        production.AddSource(hint, ImmutableArrayOwnerFile.Render(set, fact));
+                        break;
+                    case SequenceFamily.ImmutableStack:
+                        production.AddSource(hint, ImmutableStackOwnerFile.Render(set, fact));
+                        break;
+                }
             }
     }
 

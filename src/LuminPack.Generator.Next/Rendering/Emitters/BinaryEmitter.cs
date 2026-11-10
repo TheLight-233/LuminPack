@@ -968,13 +968,13 @@ internal static partial class BinaryEmitter
                 index++;
                 continue;
             }
-            // A concurrent queue or immutable array writes its counted or span payload in place.
-            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray)
+            // A concurrent queue or immutable stack writes its counted enumeration in place.
+            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableArray)
             {
-                if (member.Kind == RenderMemberKind.ConcurrentQueue)
-                    AddConcurrentQueueWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
-                else
+                if (member.Kind == RenderMemberKind.ImmutableArray)
                     AddImmutableArrayWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
+                else
+                    AddCountedSequenceWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
                 continue;
             }
@@ -1049,10 +1049,10 @@ internal static partial class BinaryEmitter
         body.Add("}");
     }
 
-    /// <summary>Expands a concurrent-queue member's shared write body in place: the null collection header, then the counted
-    /// enumeration of the queue.</summary>
+    /// <summary>Expands a counted sequence member's shared write body in place: the null collection header, then the counted
+    /// enumeration of the queue or stack.</summary>
     /// <param name="body">The body lines.</param>
-    /// <param name="member">The queue member.</param>
+    /// <param name="member">The queue or stack member.</param>
     /// <param name="owner">The expression holding the record being written.</param>
     /// <param name="w">The file writer.</param>
     /// <param name="names">The occurrence counters of the inline locals of this method.</param>
@@ -1060,7 +1060,7 @@ internal static partial class BinaryEmitter
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="spans">The span counter shared by the whole method.</param>
     /// <param name="depth">The inline nesting depth the element body continues.</param>
-    private static void AddConcurrentQueueWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
+    private static void AddCountedSequenceWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         string local = RoleName(names, "value");
@@ -1692,10 +1692,10 @@ internal static partial class BinaryEmitter
                 AddCultureInfoWrite(body, member, owner, w, names, ref ends);
                 continue;
             }
-            // A concurrent queue writes its counted enumeration in place and reads through its shared owner.
-            if (member.Kind == RenderMemberKind.ConcurrentQueue)
+            // A concurrent queue or immutable stack writes its counted enumeration in place and reads through its shared owner.
+            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack)
             {
-                AddConcurrentQueueWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
+                AddCountedSequenceWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                 continue;
             }
             // An immutable array writes its default marker or its storage span in place and reads through its shared owner.
@@ -1830,7 +1830,7 @@ internal static partial class BinaryEmitter
     private static bool IsInlineSegment(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
-            RenderMemberKind.ImmutableArray;
+            RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(RenderMember member) =>
@@ -2522,8 +2522,9 @@ internal static partial class BinaryEmitter
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
-            // A concurrent queue or immutable array reads through its shared formatter owner, which frames its own null record.
-            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray)
+            // A concurrent queue, immutable array or immutable stack reads through its shared formatter owner, which frames
+            // its own null record.
+            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
