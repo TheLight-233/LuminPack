@@ -129,6 +129,15 @@ internal static class DirectEmission
     internal static string Render(DirectTypeModel model, bool json, int aliases, LuminPack.Code.Core.GeneratedOperations operations)
     {
         var writer = new DirectWriter(aliases) { Scoped = model.Net8 };
+        if (model.UnionRoot)
+        {
+            if (json)
+                DirectUnionEmitter.EmitJson(model, writer, operations);
+            else
+                DirectUnionEmitter.EmitBinary(model, writer, operations);
+            // A Union file compacts its short case rows and spells canonical names through the aliases at presentation.
+            return GeneratedSourceLayout.Apply(writer.Complete(json), aliases);
+        }
         if (json)
             DirectJsonEmitter.Emit(model, writer, operations);
         else if (model.IsStruct)
@@ -183,6 +192,9 @@ internal sealed class DirectWriter
     /// <summary>Whether state and payload parameters keep their <c>scoped</c> modifier, which the operations declare from .NET 8 on.</summary>
     internal bool Scoped = true;
 
+    /// <summary>The current indentation depth of the lines the writer appends.</summary>
+    internal int Indent => _indent;
+
     private static readonly System.Text.RegularExpressions.Regex ScopedModifier = new(@"\bscoped (?=(ref|in) )");
 
     /// <summary>Spells a helper type through its alias when the consumer leaves the alias available.</summary>
@@ -224,6 +236,20 @@ internal sealed class DirectWriter
         if (!Scoped && text.Contains("scoped "))
             text = ScopedModifier.Replace(text, string.Empty);
         _body.Append(' ', _indent * 4).Append(text).Append(Environment.NewLine);
+    }
+
+    /// <summary>Appends one line without the current indentation, for a statement whose original layout keeps its own column.</summary>
+    /// <param name="text">The complete line.</param>
+    internal void Raw(string text)
+    {
+        if (Suppressed)
+            return;
+        if (_pendingBlank)
+        {
+            _body.Append(Environment.NewLine);
+            _pendingBlank = false;
+        }
+        _body.Append(text).Append(Environment.NewLine);
     }
 
     /// <summary>Requests a blank line before the next line; a following closing brace drops it.</summary>

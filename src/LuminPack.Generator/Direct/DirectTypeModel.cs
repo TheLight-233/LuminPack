@@ -204,6 +204,40 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string[] WriteBefore = System.Array.Empty<string>(), WriteAfter = System.Array.Empty<string>(),
         ReadBefore = System.Array.Empty<string>(), ReadAfter = System.Array.Empty<string>();
 
+    /// <summary>Whether this is a Union root, whose file is the root operations plus the virtual dispatch, registration and
+    /// per-case slots rather than a record or struct payload.</summary>
+    internal readonly bool UnionRoot;
+    /// <summary>Whether the Union root is an interface, whose slots are implicit interface members and have no dispatch tier.</summary>
+    internal readonly bool UnionInterface;
+    /// <summary>The canonical Union slot suffix.</summary>
+    internal readonly string UnionSuffix;
+    /// <summary>The declared cases in tag order.</summary>
+    internal readonly DirectUnionCase[] UnionCases;
+    /// <summary>Whether a fixed case gives the root the returning cursor protocol.</summary>
+    internal readonly bool UnionCursor;
+    /// <summary>Whether the binary read root takes the operation's profile, because some case entry does.</summary>
+    internal readonly bool UnionReadGeneric;
+    /// <summary>The partial declarations from the outermost containing type to the root.</summary>
+    internal readonly string[] UnionChain;
+    /// <summary>The root's namespace, or null in the global namespace.</summary>
+    internal readonly string UnionNamespace;
+    /// <summary>The compiled binary profile slots in profile order.</summary>
+    internal readonly DirectUnionSlot[] UnionBinarySlots;
+    /// <summary>The compiled JSON profile slots in profile order.</summary>
+    internal readonly DirectUnionSlot[] UnionJsonSlots;
+    /// <summary>Whether the exact canonical profile shortcuts can bind the referenced runtime's profiles.</summary>
+    internal readonly bool UnionCanonical;
+    /// <summary>The imported string options type of the declared binary profile, which the non-generic entries pass.</summary>
+    internal readonly string UnionStandardBinary;
+    /// <summary>The imported string options type of the declared JSON profile.</summary>
+    internal readonly string UnionStandardJson;
+    /// <summary>The selected compiled-slot dispatch tier: zero virtual, one exact patterns, two direct.</summary>
+    internal readonly int UnionTier;
+    /// <summary>The exact case types of a pattern or direct tier, in tag order.</summary>
+    internal readonly string[] UnionTierCases;
+    /// <summary>Whether each exact tier case is sealed, which needs no exact runtime type test.</summary>
+    internal readonly bool[] UnionTierSealed;
+
     /// <summary>Whether any serialization callback runs, which keeps the type out of the named member write.</summary>
     internal bool HasCallbacks => WriteBefore.Length != 0 || WriteAfter.Length != 0 || ReadBefore.Length != 0 || ReadAfter.Length != 0;
 
@@ -211,8 +245,29 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
         DirectVersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
-        string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null, int? bounded = null)
+        string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null, int? bounded = null,
+        bool unionRoot = false, bool unionInterface = false, string unionSuffix = null, DirectUnionCase[] unionCases = null,
+        bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null,
+        DirectUnionSlot[] unionBinarySlots = null, DirectUnionSlot[] unionJsonSlots = null, bool unionCanonical = false,
+        string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
+        bool[] unionTierSealed = null)
     {
+        UnionTierSealed = unionTierSealed;
+        UnionTierCases = unionTierCases;
+        UnionTier = unionTier;
+        UnionStandardJson = unionStandardJson;
+        UnionStandardBinary = unionStandardBinary;
+        UnionCanonical = unionCanonical;
+        UnionJsonSlots = unionJsonSlots;
+        UnionBinarySlots = unionBinarySlots;
+        UnionNamespace = unionNamespace;
+        UnionChain = unionChain;
+        UnionReadGeneric = unionReadGeneric;
+        UnionCursor = unionCursor;
+        UnionCases = unionCases;
+        UnionSuffix = unionSuffix;
+        UnionInterface = unionInterface;
+        UnionRoot = unionRoot;
         Bounded = bounded;
         Version = version;
         ReferencePayload = referencePayload;
@@ -265,13 +320,19 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         Same(DeclaredOrder, other.DeclaredOrder) && Bounded == other.Bounded &&
         Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && Equals(Version, other.Version) &&
         ReferencePayload == other.ReferencePayload && LayoutAttribute == other.LayoutAttribute &&
+        UnionRoot == other.UnionRoot && UnionInterface == other.UnionInterface && UnionSuffix == other.UnionSuffix &&
+        UnionCursor == other.UnionCursor && UnionReadGeneric == other.UnionReadGeneric && UnionNamespace == other.UnionNamespace &&
+        UnionCanonical == other.UnionCanonical && UnionStandardBinary == other.UnionStandardBinary && UnionStandardJson == other.UnionStandardJson &&
+        UnionTier == other.UnionTier && Same(UnionChain, other.UnionChain) && Same(UnionTierCases, other.UnionTierCases) &&
+        Same(UnionTierSealed, other.UnionTierSealed) && Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
+        Same(UnionCases, other.UnionCases) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectTypeModel);
 
-    private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && left.SequenceEqual(right);
+    private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T> => left == null ? right == null : right != null && left.SequenceEqual(right);
 
     /// <inheritdoc/>
     public override int GetHashCode() => GlobalName.GetHashCode();
@@ -279,6 +340,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>How many models the current thread is building, which stops a cycle of inline objects from recursing forever.</summary>
     [ThreadStatic]
     private static int _depth;
+
+    /// <summary>How many Union case models the current thread is building, whose bases may declare wire profile options.</summary>
+    [ThreadStatic]
+    private static int _unionCase;
 
     /// <summary>Models a type when its complete binary and JSON roots belong to a shape the direct emitters cover.</summary>
     /// <param name="data">The analyzed type.</param>
@@ -311,6 +376,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     {
         if (!SupportedProject(compilation, metadata))
             return null;
+        if (data.isUnion)
+            return data.isValueType ? DirectEmission.Reject<DirectTypeModel>("union value type") : CreateUnion(data, compilation, metadata);
         var type = data.TypeSymbol;
         // A struct is covered when its storage is its wire layout (a raw unmanaged struct), or when a portable plan copies its
         // scalar fields one by one at packed offsets.
@@ -348,7 +415,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 level.ContainingType is { IsGenericType: true } || !Reachable(level) ||
                 !SymbolEqualityComparer.Default.Equals(level.ContainingAssembly, compilation.Assembly) ||
                 level.GetAttributes().Any(attribute => !PlainPackable(attribute) && !Foreign(attribute) && !UnionCase(attribute) && !JsonPolymorphism(attribute) &&
-                    !StructLayoutAttribute(attribute)))
+                    !StructLayoutAttribute(attribute) && !(_unionCase > 0 && OptionAttribute(attribute))))
                 return DirectEmission.Reject<DirectTypeModel>("base type: " + level.ToDisplayString());
             levels.Add(level);
         }
@@ -559,6 +626,201 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded);
     }
 
+    /// <summary>Models a polymorphic Union root: its declared cases, compiled profile slots and dispatch tier, when every case
+    /// either owns a generated read entry or is a fixed local class this pipeline can expand.</summary>
+    /// <param name="data">The analyzed Union root.</param>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <param name="metadata">The project generation settings.</param>
+    /// <returns>The model, or null when the root keeps the original pipeline.</returns>
+    private static DirectTypeModel CreateUnion(LuminDataInfo data, Compilation compilation, MetaInfo metadata)
+    {
+        var type = data.TypeSymbol;
+        if (metadata.RegisterMode == LuminPackRegisterMode.Disabled)
+            return DirectEmission.Reject<DirectTypeModel>("union registration");
+        if (!metadata.IsNet8 || metadata.CSharpVersion <= LanguageVersion.CSharp10)
+            return DirectEmission.Reject<DirectTypeModel>("union project");
+        if (type == null || data.isGeneric || type.IsGenericType || type.ContainingType is { IsGenericType: true })
+            return DirectEmission.Reject<DirectTypeModel>("union generic");
+        if (type.TypeKind is not (TypeKind.Class or TypeKind.Interface) || type.TypeKind == TypeKind.Class && !type.IsAbstract)
+            return DirectEmission.Reject<DirectTypeModel>("union declaration: " + type.TypeKind);
+        if (!Reachable(type))
+            return DirectEmission.Reject<DirectTypeModel>("union accessibility");
+        if (!data.CanGenerateUnionDispatch || data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
+            return DirectEmission.Reject<DirectTypeModel>("union dispatch");
+        if (data.IsWideTag || data.UnionMembers.Any(member => member.Id >= 250))
+            return DirectEmission.Reject<DirectTypeModel>("union wide tag");
+        if (data.callBackMethods.Count != 0 || data.RentPoolMethod != null)
+            return DirectEmission.Reject<DirectTypeModel>("union callbacks or pool");
+        if (data.UnionMembers.Count == 0)
+            return DirectEmission.Reject<DirectTypeModel>("union cases");
+        string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (data.classFullName != null && data.classFullName != globalName && "global::" + data.classFullName != globalName)
+            return DirectEmission.Reject<DirectTypeModel>("union spelling");
+        var declaredBinary = CompiledOptions.Resolve(type, compilation).UnionProfile(false);
+        var declaredJson = CompiledOptions.Resolve(type, compilation).UnionProfile(true);
+        if (!CanonicalUnionProfile(declaredBinary) || !CanonicalUnionProfile(declaredJson))
+            return DirectEmission.Reject<DirectTypeModel>("union declared profile");
+        var cursor = FixedUnionCursorPlan.GetRoot(type, compilation, metadata);
+        var cases = new DirectUnionCase[data.UnionMembers.Count];
+        bool readGeneric = false;
+        for (int index = 0; index < cases.Length; index++)
+        {
+            var member = data.UnionMembers[index];
+            var caseType = member.Type;
+            if (caseType == null || !member.CanGenerateDispatch || caseType.TypeKind != TypeKind.Class || caseType.IsAbstract ||
+                caseType.IsGenericType || caseType.IsUnboundGenericType || !Reachable(caseType))
+                return DirectEmission.Reject<DirectTypeModel>("union case: " + (caseType?.Name ?? "none"));
+            if (Cases(cases, caseType))
+                return DirectEmission.Reject<DirectTypeModel>("union duplicate case: " + caseType.Name);
+            bool ownEntry = LuminPackExtensionGenerator.ReadsOwnUnionEntry(caseType, compilation.Assembly);
+            DirectTypeModel caseModel;
+            _unionCase++;
+            try
+            {
+                caseModel = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(caseType, compilation, metadata), compilation, metadata);
+            }
+            finally
+            {
+                _unionCase--;
+            }
+            bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
+            if (!ownEntry && (caseModel == null || caseModel.UnionRoot || caseModel.IsStruct || caseModel.Mirror != null ||
+                caseModel.Version != null || caseModel.ConstructorArguments != null || caseModel.Members.Length == 0 ||
+                !caseModel.Members.All(item => item.IsFixed)))
+                return DirectEmission.Reject<DirectTypeModel>("union case read: " + caseType.Name);
+            readGeneric |= caseReadGeneric;
+            string caseName = caseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            bool sealedCase = type.TypeKind == TypeKind.Class && !HasDerivedCase(data, caseType.OriginalDefinition);
+            var caseChain = new System.Collections.Generic.List<string>();
+            for (var current = caseType; current != null; current = current.ContainingType)
+                caseChain.Insert(0, UnionDeclaration(current));
+            cases[index] = new DirectUnionCase(member.Id, caseName, ownEntry, caseReadGeneric, sealedCase,
+                cursor?.Contains(caseType) == true, caseModel, ReadableTypeName.Of(RootContainerProjection.PayloadKey(caseName)), caseChain.ToArray(),
+                caseType.ContainingNamespace == null || caseType.ContainingNamespace.IsGlobalNamespace ? null : caseType.ContainingNamespace.ToDisplayString());
+        }
+        var tier = UnionDispatchTierPlan.Get(type, compilation);
+        var tierCases = tier.Cases.Select(item => item.Type).ToArray();
+        var tierSealed = tier.Cases.Select(item => item.Sealed).ToArray();
+        var chain = new System.Collections.Generic.List<string>();
+        for (var current = type; current != null; current = current.ContainingType)
+            chain.Insert(0, UnionDeclaration(current));
+        string extension = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
+        string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
+        return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
+            false, InterceptionSupport.IsEnabled(metadata.ParseOptions), System.Array.Empty<DirectMember>(), false, null, null, false, false,
+            null, false, false, false, null, null, false, metadata.IsNet8, metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10,
+            null, false, null, unionRoot: true, unionInterface: type.TypeKind == TypeKind.Interface,
+            unionSuffix: LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type), unionCases: cases, unionCursor: cursor != null,
+            unionReadGeneric: readGeneric, unionChain: chain.ToArray(),
+            unionNamespace: type.ContainingNamespace == null || type.ContainingNamespace.IsGlobalNamespace ? null : type.ContainingNamespace.ToDisplayString(),
+            unionBinarySlots: UnionSlots(false, declaredBinary), unionJsonSlots: UnionSlots(true, declaredJson),
+            unionCanonical: CanonicalUnionProfiles(compilation, false),
+            unionStandardBinary: UnionProfileAlias(declaredBinary.Encoding, declaredBinary.Recording),
+            unionStandardJson: UnionProfileAlias(declaredBinary.Encoding, declaredBinary.Recording),
+            unionTier: (int)tier.Tier, unionTierCases: tierCases, unionTierSealed: tierSealed);
+    }
+
+    /// <summary>Whether the case list already holds a type.</summary>
+    private static bool Cases(DirectUnionCase[] cases, INamedTypeSymbol type)
+    {
+        string name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        foreach (var item in cases)
+            if (item != null && item.Type == name)
+                return true;
+        return false;
+    }
+
+    /// <summary>Whether another declared case derives from or implements the case definition.</summary>
+    private static bool HasDerivedCase(LuminDataInfo data, INamedTypeSymbol definition)
+    {
+        foreach (var member in data.UnionMembers)
+        {
+            if (SymbolEqualityComparer.Default.Equals(member.Type.OriginalDefinition, definition))
+                continue;
+            if (UnionRootMatch(member.Type, definition) != null)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Finds the base or interface of a case that is the given root definition, as the original slot decisions do.</summary>
+    private static INamedTypeSymbol UnionRootMatch(INamedTypeSymbol member, INamedTypeSymbol root)
+    {
+        if (root.TypeKind == TypeKind.Class)
+        {
+            for (var current = member.BaseType; current != null; current = current.BaseType)
+                if (SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, root))
+                    return current;
+            return null;
+        }
+        foreach (var current in member.AllInterfaces)
+            if (SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, root))
+                return current;
+        return null;
+    }
+
+    /// <summary>Whether a case's binary read entry takes the operation's profile.</summary>
+    private static bool NeedsReadProfile(DirectTypeModel model) => model.Version != null || model.ProfilePayload || model.InlineArray ||
+        model.InlineList || model.Members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object));
+
+    /// <summary>Accepts only the standard wire format with the trusted input policy, whose string options type has an alias.</summary>
+    private static bool CanonicalUnionProfile(CompiledOptions profile) => profile.Format == 'G' && profile.Precision == byte.MaxValue &&
+        profile.Depth == 1024 && !profile.Strict && !profile.Input.Enabled && profile.Encoding is 0 or 1 && profile.Recording is >= 0 and <= 2;
+
+    /// <summary>The imported string options type of a profile.</summary>
+    private static string UnionProfileAlias(int encoding, int recording) => recording switch
+    {
+        1 => encoding == 0 ? "LuminPackUtf8TokenOptions" : "LuminPackUtf16TokenOptions",
+        2 => encoding == 0 ? "LuminPackUtf8VarIntOptions" : "LuminPackUtf16VarIntOptions",
+        _ => encoding == 0 ? "LuminPackUtf8LengthOptions" : "LuminPackUtf16LengthOptions",
+    };
+
+    /// <summary>Lists the compiled slots of one format in profile order.</summary>
+    private static DirectUnionSlot[] UnionSlots(bool json, CompiledOptions declared)
+    {
+        var slots = new System.Collections.Generic.List<DirectUnionSlot>();
+        foreach (var profile in CompiledOptions.UnionProfiles(json))
+            slots.Add(new DirectUnionSlot(profile.Identity == declared.Identity ? string.Empty : "_Options_" + profile.Identity,
+                UnionProfileAlias(profile.Encoding, profile.Recording), profile.Identity, profile.Encoding, profile.Recording));
+        return slots.ToArray();
+    }
+
+    /// <summary>Whether the referenced runtime exposes every canonical profile, as the exact slot shortcuts require.</summary>
+    private static bool CanonicalUnionProfiles(Compilation compilation, bool json)
+    {
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        if (writer == null || SymbolEqualityComparer.Default.Equals(writer.ContainingAssembly, compilation.Assembly) ||
+            writer.GetMembers("Cursor").OfType<IFieldSymbol>().Any(field => field.Type is IPointerTypeSymbol) ||
+            compilation.SyntaxTrees.Any(tree => tree.Options is CSharpParseOptions parse &&
+                parse.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal))))
+            return false;
+        var names = new System.Collections.Generic.List<string>();
+        foreach (var profile in CompiledOptions.UnionProfiles(json))
+            names.Add(profile.TypeName.Replace("global::", string.Empty));
+        names.Add("LuminPack.Option.LuminPackFixedOptions`1");
+        names.Add("LuminPack.Option.LuminPackDefaultOptions");
+        names.Add("LuminPack.Option.LuminPackDeclaredOptions");
+        return names.All(name => compilation.GetTypeByMetadataName(name) is { } symbol &&
+            SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, writer.ContainingAssembly));
+    }
+
+    /// <summary>Spells one partial declaration of the root's containing chain.</summary>
+    private static string UnionDeclaration(INamedTypeSymbol type)
+    {
+        string accessibility = type.DeclaredAccessibility switch
+        {
+            Accessibility.Public => "public ",
+            Accessibility.Internal => "internal ",
+            Accessibility.Private => "private ",
+            Accessibility.Protected => "protected ",
+            Accessibility.ProtectedAndInternal => "private protected ",
+            Accessibility.ProtectedOrInternal => "protected internal ",
+            _ => string.Empty,
+        };
+        string name = SyntaxFacts.GetKeywordKind(type.Name) == SyntaxKind.None ? type.Name : "@" + type.Name;
+        return accessibility + "partial " + (type.TypeKind == TypeKind.Interface ? "interface " : "class ") + name;
+    }
+
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
     private static bool SupportedProject(Compilation compilation, MetaInfo metadata)
     {
@@ -657,6 +919,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     private static bool StructLayoutOption(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute" && attribute.ConstructorArguments.Length == 0 &&
             attribute.NamedArguments.Length == 1 && attribute.NamedArguments[0].Key == "StructLayout";
+
+    /// <summary>Accepts a wire profile declaration, which only shapes the declared Union case's own roots.</summary>
+    private static bool OptionAttribute(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute";
 
     /// <summary>Accepts the CLR struct layout attribute, which describes storage that the emitters read from the type itself.</summary>
     private static bool StructLayoutAttribute(AttributeData attribute)
