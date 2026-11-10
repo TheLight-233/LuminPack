@@ -385,10 +385,14 @@ internal static class RenderModelFactory
                 Owns(member.DeclaredType, extension, ConcurrentQueueOfString):
                 return new RenderMember(member.Name, RenderMemberKind.ConcurrentQueue, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property);
+            case CollectionKind.Concurrent when member.Nested != null:
+                return PayloadElement(member, formatter, mirrored, property, options);
             case CollectionKind.Immutable when Owns(member.DeclaredType, extension, ImmutableArrayOfInt) ||
                 Owns(member.DeclaredType, extension, ImmutableArrayOfString):
                 return new RenderMember(member.Name, RenderMemberKind.ImmutableArray, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property);
+            case CollectionKind.Immutable when member.Nested != null:
+                return PayloadElement(member, formatter, mirrored, property, options);
             case CollectionKind.List:
             case CollectionKind.NestedList:
                 // A list of key/value pairs writes each pair's key and value in one checkable loop.
@@ -470,6 +474,39 @@ internal static class RenderModelFactory
         element.Members.All(member => !member.Mirrored && !(member.Kind == RenderMemberKind.Dictionary && member.Dictionary.Pair) &&
             member.Kind is RenderMemberKind.Fixed or RenderMemberKind.Text or RenderMemberKind.Object or RenderMemberKind.Array or
                 RenderMemberKind.List or RenderMemberKind.Dictionary);
+
+    /// <summary>Maps a payload-element concurrent or immutable sequence onto the emitter's sequence shape.</summary>
+    /// <param name="member">The sequence member, whose nested model is the element payload.</param>
+    /// <param name="formatter">The sequence's generated formatter owner.</param>
+    /// <param name="mirrored">Whether the member is reached through the layout mirror.</param>
+    /// <param name="property">Whether the member is an auto-property.</param>
+    /// <param name="options">The project facts, which decide whether the element payload is covered.</param>
+    /// <returns>The render member, or null when the element's record body is outside the direct emitters.</returns>
+    private static RenderMember? PayloadElement(CollectionMember member, string formatter, bool mirrored, bool property,
+        GeneratorOptions options)
+    {
+        PayloadRenderModel? element = SequenceElement(member.Nested, options);
+        if (element == null)
+            return null;
+        return new RenderMember(member.Name, member.Kind == CollectionKind.Immutable
+                ? RenderMemberKind.ImmutableArray : RenderMemberKind.ConcurrentQueue,
+            member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored, nested: element, property: property);
+    }
+
+    /// <summary>Builds the render model of a sequence's payload element.</summary>
+    /// <param name="nested">The element's normalized model, or null.</param>
+    /// <param name="options">The project facts.</param>
+    /// <returns>The element render model, or null when the element's record body is not expanded by a sequence owner.</returns>
+    /// <remarks>A sequence owner writes its elements in place with the reservation template, so only a covered element whose
+    /// members are fixed fields and strings is reproduced; a nested object or collection element keeps the original pipeline.</remarks>
+    internal static PayloadRenderModel? SequenceElement(TypeModel? nested, GeneratorOptions options)
+    {
+        PayloadRenderModel? element = Element(nested, options);
+        if (element == null || !element.ProfilePayload ||
+            !element.Members.All(member => member.Kind is RenderMemberKind.Fixed or RenderMemberKind.Text))
+            return null;
+        return element;
+    }
 
     /// <summary>Whether a declared sequence names the shared formatter owner the renderers publish.</summary>
     /// <param name="declaredType">The declared sequence spelling.</param>

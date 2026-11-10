@@ -39,11 +39,58 @@ internal enum SharedFormatterKind
 
     /// <summary>The <c>System.Collections.Immutable.ImmutableArray&lt;string&gt;</c> roots and owner class.</summary>
     ImmutableArrayOfString = 256,
+
+    /// <summary>A <c>System.Collections.Concurrent.ConcurrentQueue&lt;T&gt;</c> of a packable class whose write and read
+    /// expand the element's record body.</summary>
+    ConcurrentQueueOfPayload = 512,
+
+    /// <summary>A <c>System.Collections.Immutable.ImmutableArray&lt;T&gt;</c> of a packable class whose write and read
+    /// expand the element's record body.</summary>
+    ImmutableArrayOfPayload = 1024,
+}
+
+/// <summary>One payload-element sequence owner the compilation must publish.</summary>
+/// <remarks>The fact carries the element's value-equal render model, which the owner renderer expands in place. It never
+/// retains a symbol, a syntax node or a compilation.</remarks>
+internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
+{
+    /// <summary>Whether the sequence is an <c>ImmutableArray&lt;T&gt;</c> rather than a <c>ConcurrentQueue&lt;T&gt;</c>.</summary>
+    internal readonly bool Immutable;
+
+    /// <summary>The declared sequence spelling, such as <c>global::...ConcurrentQueue&lt;global::N.Item&gt;</c>.</summary>
+    internal readonly string DeclaredType;
+
+    /// <summary>The element's render model, whose record body the owner expands in place.</summary>
+    internal readonly PayloadRenderModel Element;
+
+    /// <summary>Captures one payload-element sequence owner.</summary>
+    /// <param name="immutable">Whether the sequence is an immutable array.</param>
+    /// <param name="declaredType">The declared sequence spelling.</param>
+    /// <param name="element">The element's render model.</param>
+    internal SequenceOwnerFact(bool immutable, string declaredType, PayloadRenderModel element)
+    {
+        Immutable = immutable;
+        DeclaredType = declaredType;
+        Element = element;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(SequenceOwnerFact other) => Immutable == other.Immutable && DeclaredType == other.DeclaredType &&
+        Element.Equals(other.Element);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => obj is SequenceOwnerFact other && Equals(other);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (DeclaredType == null ? 0 : DeclaredType.GetHashCode()) ^
+        (Element == null ? 0 : Element.GetHashCode()) ^ (Immutable ? 1 << 21 : 0);
 }
 
 /// <summary>The value-equal publication decision for the shared formatter owners.</summary>
 /// <remarks>The set aggregates the owner flags of every complete payload model; the flags are order-independent, so the
-/// same payloads always produce the same files regardless of the order the provider collected them in.</remarks>
+/// same payloads always produce the same files regardless of the order the provider collected them in. A payload-element
+/// sequence owner also carries its element's render model, keyed by the declared sequence spelling and kept sorted, so the
+/// decision stays value-equal and order-independent.</remarks>
 internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
 {
     private const string IntArrayType = "int[]";
@@ -65,8 +112,13 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <summary>Whether the referenced runtime exposes the culture-info cache the shared owner resolves names through.</summary>
     internal readonly bool CultureInfoReuse;
 
-    private SharedFormatterSet(string extension, SharedFormatterKind owners, int availableAliases, bool cultureInfoReuse)
+    /// <summary>The payload-element sequence owners, sorted by declared sequence spelling.</summary>
+    internal readonly SequenceOwnerFact[] SequenceOwners;
+
+    private SharedFormatterSet(string extension, SharedFormatterKind owners, int availableAliases, bool cultureInfoReuse,
+        SequenceOwnerFact[] sequenceOwners)
     {
+        SequenceOwners = sequenceOwners;
         CultureInfoReuse = cultureInfoReuse;
         AvailableAliases = availableAliases;
         Owners = owners;
@@ -88,7 +140,8 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         string extension = Extension ?? GeneratedNames.Extension(options.AssemblyName);
         int aliases = Extension == null ? options.AvailableAliases : AvailableAliases;
         bool cultureInfoReuse = CultureInfoReuse;
-        SharedFormatterKind owners = Owners | Required(model, extension, ref cultureInfoReuse);
+        var facts = new List<SequenceOwnerFact>(SequenceOwners ?? System.Array.Empty<SequenceOwnerFact>());
+        SharedFormatterKind owners = Owners | Required(model, extension, options, facts, ref cultureInfoReuse);
         // The array, list and sequence JSON roots transfer their elements through the shared scalar owner.
         if ((owners & (SharedFormatterKind.IntArray | SharedFormatterKind.ListOfInt | SharedFormatterKind.ConcurrentQueueOfInt |
             SharedFormatterKind.ImmutableArrayOfInt)) != 0)
@@ -96,31 +149,57 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         // A string-element sequence transfers its elements through the shared string owner instead.
         if ((owners & (SharedFormatterKind.ConcurrentQueueOfString | SharedFormatterKind.ImmutableArrayOfString)) != 0)
             owners |= SharedFormatterKind.String;
-        return new SharedFormatterSet(extension, owners, aliases, cultureInfoReuse);
+        SequenceOwnerFact[] sequenceOwners = facts.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal)
+            .ToArray();
+        return new SharedFormatterSet(extension, owners, aliases, cultureInfoReuse, sequenceOwners);
     }
 
     /// <inheritdoc/>
     public bool Equals(SharedFormatterSet other) => Extension == other.Extension && Owners == other.Owners &&
-        AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse;
+        AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse &&
+        SameFacts(SequenceOwners, other.SequenceOwners);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is SharedFormatterSet other && Equals(other);
 
     /// <inheritdoc/>
-    public override int GetHashCode() => (Extension == null ? 0 : Extension.GetHashCode()) ^ (int)Owners ^ AvailableAliases ^
-        (CultureInfoReuse ? 1 << 20 : 0);
+    public override int GetHashCode()
+    {
+        int hash = (Extension == null ? 0 : Extension.GetHashCode()) ^ (int)Owners ^ AvailableAliases ^
+            (CultureInfoReuse ? 1 << 20 : 0);
+        // The fact hashes combine with XOR, so the sorted fact order never changes the result.
+        if (SequenceOwners != null)
+            for (int index = 0; index < SequenceOwners.Length; index++)
+                hash ^= SequenceOwners[index].GetHashCode();
+        return hash;
+    }
 
-    private static SharedFormatterKind Required(TypeModel model, string extension, ref bool cultureInfoReuse)
+    private static bool SameFacts(SequenceOwnerFact[] left, SequenceOwnerFact[] right)
+    {
+        if (left == null || left.Length == 0)
+            return right == null || right.Length == 0;
+        if (right == null || left.Length != right.Length)
+            return false;
+        for (int index = 0; index < left.Length; index++)
+            if (!left[index].Equals(right[index]))
+                return false;
+        return true;
+    }
+
+    private static SharedFormatterKind Required(TypeModel model, string extension, GeneratorOptions options,
+        List<SequenceOwnerFact> facts, ref bool cultureInfoReuse)
     {
         SharedFormatterKind owners = SharedFormatterKind.None;
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        Walk(model, extension, GeneratedNames.Owner(extension, IntArrayType), GeneratedNames.Owner(extension, ListOfIntType),
+        Walk(model, extension, options, facts, GeneratedNames.Owner(extension, IntArrayType), GeneratedNames.Owner(extension, ListOfIntType),
             ref owners, ref cultureInfoReuse, visited);
         return owners;
     }
 
-    private static void Walk(TypeModel model, string extension, string intArrayOwner, string listOfIntOwner,
-        ref SharedFormatterKind owners, ref bool cultureInfoReuse, HashSet<string> visited)
+    private static void Walk(TypeModel model, string extension, GeneratorOptions options, List<SequenceOwnerFact> facts,
+        string intArrayOwner, string listOfIntOwner, ref SharedFormatterKind owners, ref bool cultureInfoReuse, HashSet<string> visited)
     {
         if (!visited.Add(model.Identity.GlobalName))
             return;
@@ -140,14 +219,14 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                     cultureInfoReuse |= culture.CanReuse;
                     break;
                 case CollectionMember collection:
-                    Collect(collection, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
+                    Collect(collection, extension, options, facts, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
                     break;
                 case DictionaryMember { KeyText: true }:
                 case DictionaryMember { ValueText: true }:
                     owners |= SharedFormatterKind.String;
                     break;
                 case PayloadMember { Nested: { } nested }:
-                    Walk(nested, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
+                    Walk(nested, extension, options, facts, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
                     break;
             }
         }
@@ -157,7 +236,7 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         if (model is UnionModel union)
             for (int index = 0; index < union.Cases.Length; index++)
                 if (union.Cases[index].Model is { } item)
-                    Walk(item, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
+                    Walk(item, extension, options, facts, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
     }
 
     /// <summary>Whether the direct record renderer covers a payload that declares a culture-info member.</summary>
@@ -166,8 +245,8 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     private static bool CultureInfoRenders(TypeModel model) => model is RecordModel { Versioned: false } record &&
         !record.Members.Any(member => member is DictionaryMember);
 
-    private static void Collect(CollectionMember member, string extension, string intArrayOwner, string listOfIntOwner,
-        ref SharedFormatterKind owners, ref bool cultureInfoReuse, HashSet<string> visited)
+    private static void Collect(CollectionMember member, string extension, GeneratorOptions options, List<SequenceOwnerFact> facts,
+        string intArrayOwner, string listOfIntOwner, ref SharedFormatterKind owners, ref bool cultureInfoReuse, HashSet<string> visited)
     {
         if (member.Kind == CollectionKind.Array &&
             GeneratedNames.Owner(extension, member.DeclaredType) == intArrayOwner)
@@ -187,7 +266,15 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         else if (member.Kind == CollectionKind.Immutable &&
             GeneratedNames.Owner(extension, member.DeclaredType) == GeneratedNames.Owner(extension, ImmutableArrayOfStringType))
             owners |= SharedFormatterKind.ImmutableArrayOfString;
+        else if (member.Kind is CollectionKind.Concurrent or CollectionKind.Immutable &&
+            RenderModelFactory.SequenceElement(member.Nested, options) is { } element)
+        {
+            // A packable-class sequence publishes its own owner, whose write and read expand the element record in place.
+            bool immutable = member.Kind == CollectionKind.Immutable;
+            owners |= immutable ? SharedFormatterKind.ImmutableArrayOfPayload : SharedFormatterKind.ConcurrentQueueOfPayload;
+            facts.Add(new SequenceOwnerFact(immutable, member.DeclaredType, element));
+        }
         if (member.Nested is { } nested)
-            Walk(nested, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
+            Walk(nested, extension, options, facts, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
     }
 }

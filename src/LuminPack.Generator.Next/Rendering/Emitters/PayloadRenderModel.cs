@@ -294,7 +294,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind == RenderMemberKind.NestedList && member.Nested.ProfilePayload ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind == RenderMemberKind.CultureInfo ||
-        (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray && member.Scalar == "string") ||
+        (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray &&
+            (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload)) ||
         member.Kind == RenderMemberKind.Object && member.Nested.ProfilePayload);
 
     /// <summary>An array inside an inline object calls its generated formatter with the operation's profile, which makes the
@@ -308,6 +309,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>Whether the write body contains an element loop or expands an inline object that does, which leaves native
     /// inlining to the runtime.</summary>
     internal bool ElementList => Members.Any(member => member.Kind == RenderMemberKind.List && member.Nested != null ||
+        member.Kind == RenderMemberKind.ImmutableArray && member.Nested != null ||
         member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary or
             RenderMemberKind.ConcurrentQueue ||

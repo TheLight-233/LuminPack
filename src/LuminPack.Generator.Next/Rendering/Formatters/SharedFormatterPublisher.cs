@@ -1,3 +1,4 @@
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -43,5 +44,21 @@ internal static class SharedFormatterPublisher
             production.AddSource(ConcurrentQueueOfStringHint, ConcurrentQueueStringOwnerFile.Render(set));
         if ((set.Owners & SharedFormatterKind.ImmutableArrayOfString) != 0)
             production.AddSource(ImmutableArrayOfStringHint, ImmutableArrayStringOwnerFile.Render(set));
+        // A packable-class sequence publishes one owner per closed sequence type, keyed by its declared spelling.
+        if (set.SequenceOwners != null)
+            foreach (SequenceOwnerFact fact in set.SequenceOwners)
+            {
+                string hint = SequenceHint(fact);
+                if (fact.Immutable)
+                    production.AddSource(hint, ImmutableArrayPayloadOwnerFile.Render(set, fact));
+                else
+                    production.AddSource(hint, ConcurrentQueuePayloadOwnerFile.Render(set, fact));
+            }
     }
+
+    /// <summary>Names the hint of a payload-element sequence owner.</summary>
+    /// <param name="fact">The sequence owner fact.</param>
+    /// <returns>The hint name, unique per closed sequence type.</returns>
+    private static string SequenceHint(SequenceOwnerFact fact) => "LuminPack.SharedFormatters/Sequence_" +
+        ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)) + ".g.cs";
 }

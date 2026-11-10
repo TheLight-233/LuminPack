@@ -516,6 +516,15 @@ internal static class TypeModelFactory
             // A concurrent or immutable sequence of strings transfers its elements through the shared string owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
+            // A concurrent or immutable sequence of packable classes expands each element's record body through the sequence owner.
+            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && LocalPackableClass(item) is { } sequenceElement)
+            {
+                TypeModel? nested = ElementModel(sequenceElement, depth, issues, path, name);
+                if (nested == null)
+                    return new CollectionMember(name, storage, policy, declared, kind, element);
+                return new CollectionMember(name, storage, policy, declared, kind, element,
+                    scalar: sequenceElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested);
+            }
             if (kind is not (CollectionKind.List or CollectionKind.NestedList))
                 return new CollectionMember(name, storage, policy, declared, kind, element);
 

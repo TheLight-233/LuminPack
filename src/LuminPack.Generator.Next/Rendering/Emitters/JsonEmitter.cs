@@ -350,6 +350,34 @@ internal static class JsonEmitter
         return body;
     }
 
+    /// <summary>Expands one sequence element's JSON write body in place, as the sequence owner writes it.</summary>
+    /// <param name="element">The element's render model.</param>
+    /// <param name="local">The loop local holding the element.</param>
+    /// <param name="exit">The exit label the element's null branch jumps to.</param>
+    /// <param name="w">The file writer.</param>
+    /// <returns>The expanded element lines.</returns>
+    internal static List<string> SequenceElementWrite(PayloadRenderModel element, string local, string exit, CodeWriter w)
+    {
+        // The root method already holds the collection value and the operation input, so the element copies take input2
+        // and value2, while its own UTF-8 flag keeps the plain name inside the nested block.
+        var names = new JsonTable();
+        names.Next("value");
+        names.Next("input");
+        string temp = names.Next("temp"), input = names.Next("input");
+        var body = new List<string>
+        {
+            "var " + temp + " = " + local + ";",
+            "{",
+            "ref readonly " + element.GlobalName + " " + input + " = ref " + temp + ";",
+        };
+        string helper = "global::LuminPack.Generated." + element.Extension + "." + element.JsonHelper;
+        body.AddRange(WriteBody(element, w, helper, names, expand: true, inputName: input, exit: exit));
+        body.Add(exit + ":");
+        body.Add(";");
+        body.Add("}");
+        return body;
+    }
+
     /// <summary>Copies a declared struct member's write body in place: a struct value is read-only, has no null branch and
     /// needs no exit label.</summary>
     private static void ExpandStruct(List<string> body, RenderMember member, string owner, CodeWriter w, JsonTable names)

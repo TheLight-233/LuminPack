@@ -972,9 +972,9 @@ internal static partial class BinaryEmitter
             if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray)
             {
                 if (member.Kind == RenderMemberKind.ConcurrentQueue)
-                    AddConcurrentQueueWrite(body, member, "value", w, names, ref ends);
+                    AddConcurrentQueueWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 else
-                    AddImmutableArrayWrite(body, member, "value", w, names, ref ends);
+                    AddImmutableArrayWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
                 continue;
             }
@@ -1057,10 +1057,20 @@ internal static partial class BinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="names">The occurrence counters of the inline locals of this method.</param>
     /// <param name="ends">The exit-label counter shared by the whole method.</param>
-    private static void AddConcurrentQueueWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
-        Dictionary<string, int> names, ref int ends)
+    /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    /// <param name="spans">The span counter shared by the whole method.</param>
+    /// <param name="depth">The inline nesting depth the element body continues.</param>
+    private static void AddConcurrentQueueWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         string local = RoleName(names, "value");
+        // A payload element claims its null exit before the collection's own, as the sequence template numbers them.
+        string elementExit = null;
+        if (member.Nested != null)
+        {
+            elementExit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+            ends++;
+        }
         string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
         ends++;
         body.Add("{");
@@ -1076,9 +1086,17 @@ internal static partial class BinaryEmitter
         body.Add("int count = 0;");
         body.Add("foreach (var item in " + local + ")");
         body.Add("{");
+        if (member.Nested != null)
+        {
+            // A packable element expands its whole record body in place through the isolated state.
+            body.Add("writer.CheckBuffer();");
+            body.Add("count++;");
+            body.Add("var v = item;");
+            AddSequenceElementWrite(body, member.Nested, "v", elementExit, "writer", depth, w, names, ref ends, ref cursors, ref spans);
+        }
         // A string element writes through the operation's profile, whose own store checks the buffer; a raw element keeps
         // the explicit check the unchecked span store does not perform.
-        if (member.Scalar == "string")
+        else if (member.Scalar == "string")
         {
             string element = RoleName(names, "value");
             body.Add("count++;");
@@ -1110,10 +1128,20 @@ internal static partial class BinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="names">The occurrence counters of the inline locals of this method.</param>
     /// <param name="ends">The exit-label counter shared by the whole method.</param>
-    private static void AddImmutableArrayWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
-        Dictionary<string, int> names, ref int ends)
+    /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    /// <param name="spans">The span counter shared by the whole method.</param>
+    /// <param name="depth">The inline nesting depth the element body continues.</param>
+    private static void AddImmutableArrayWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         string local = RoleName(names, "value");
+        // A payload element claims its null exit before the collection's own, as the sequence template numbers them.
+        string elementExit = null;
+        if (member.Nested != null)
+        {
+            elementExit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+            ends++;
+        }
         string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
         ends++;
         body.Add("{");
@@ -1125,8 +1153,22 @@ internal static partial class BinaryEmitter
         body.Add("writer.Advance(4);");
         body.Add("goto " + exit + ";");
         body.Add("}");
+        if (member.Nested != null)
+        {
+            // A packable element expands its whole record body in place through the isolated state.
+            body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = " + local + ".AsSpan();");
+            body.Add("writer.EnsureAdditionalCapacity(4);");
+            body.Add("writer.Write(items.Length);");
+            body.Add("for (int i = 0; i < items.Length; i++)");
+            body.Add("{");
+            body.Add("writer.CheckBuffer();");
+            AddSequenceElementWrite(body, member.Nested, "items[i]!", elementExit, "writer", depth, w, names, ref ends, ref cursors, ref spans);
+            body.Add("}");
+            body.Add("");
+            body.Add("writer.CheckBuffer();");
+        }
         // A string span writes its element count and the records through one profiled call; a raw span stores in place.
-        if (member.Scalar == "string")
+        else if (member.Scalar == "string")
         {
             body.Add("global::System.ReadOnlySpan<string> items = " + local + ".AsSpan();");
             body.Add("writer.EnsureAdditionalCapacity(4);");
@@ -1250,43 +1292,45 @@ internal static partial class BinaryEmitter
     /// <param name="ends">The exit label counter shared by the whole method.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="spans">The span counter shared by the whole method.</param>
+    /// <param name="state">The writer state the expanded body advances: the record's <c>writer</c>, or the isolated
+    /// <c>operationState</c> a sequence owner writes through.</param>
     private static void AddElementWrite(List<string> body, PayloadRenderModel element, string owner, int depth, CodeWriter w,
-        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans, string state = "writer")
     {
         var members = element.Members;
         string count = members.Length.ToString(CultureInfo.InvariantCulture);
         if (members.All(member => member.IsFixed))
         {
-            body.Add("writer.Cursor = (byte)" + count + ";");
-            body.Add("writer.Advance(1);");
+            body.Add(state + ".Cursor = (byte)" + count + ";");
+            body.Add(state + ".Advance(1);");
             if (members.Length == 1)
             {
-                body.Add("writer.Write(" + owner + "." + members[0].Name + ");");
+                body.Add(state + ".Write(" + owner + "." + members[0].Name + ");");
                 return;
             }
             string width = Width(members, 0, members.Length - 1);
             body.Add("if (" + Proof(w, members, 0, members.Length - 1, owner, readOnly: true) + ")");
-            body.Add("\twriter.Write(ref " + Bytes(w, members[0], owner, readOnly: true) + ", " + width + ");");
+            body.Add("\t" + state + ".Write(ref " + Bytes(w, members[0], owner, readOnly: true) + ", " + width + ");");
             body.Add("else");
             body.Add("{");
             string cursor = CursorName(ref cursors);
-            body.Add("ref byte " + cursor + " = ref writer.Cursor;");
+            body.Add("ref byte " + cursor + " = ref " + state + ".Cursor;");
             AddFixedStores(w, members, 0, members.Length - 1, cursor, body, owner);
-            body.Add("writer.Advance(" + width + ");");
+            body.Add(state + ".Advance(" + width + ");");
             body.Add("}");
             body.Add("");
             return;
         }
         if (element.StreamRecord)
         {
-            body.Add("writer.Cursor = (byte)" + count + ";");
-            body.Add("writer.Advance(1);");
+            body.Add(state + ".Cursor = (byte)" + count + ";");
+            body.Add(state + ".Advance(1);");
             AddStreamWrite(body, element, owner, depth, w, names, ref ends, ref cursors, ref spans);
             return;
         }
         // The element reserves its record as a whole; its members keep the member order of the template.
         string elementCursor = CursorName(ref cursors);
-        body.Add("ref byte " + elementCursor + " = ref writer.Cursor;");
+        body.Add("ref byte " + elementCursor + " = ref " + state + ".Cursor;");
         body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
         var terms = new List<string> { "1" };
         for (int index = 0; index < members.Length; index++)
@@ -1298,7 +1342,7 @@ internal static partial class BinaryEmitter
             else if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = " + owner + "." + member.Name + ";");
-                terms.Add("writer.RecordBound<" + Profile + ">(" + snapshot + ")");
+                terms.Add(state + ".RecordBound<" + Profile + ">(" + snapshot + ")");
             }
             else
             {
@@ -1306,7 +1350,7 @@ internal static partial class BinaryEmitter
                 terms.Add(snapshot + ".Bound");
             }
         }
-        body.Add(elementCursor + " = ref writer.ReserveRecord(ref " + elementCursor + ", checked(" + string.Join(" + ", terms) + "));");
+        body.Add(elementCursor + " = ref " + state + ".ReserveRecord(ref " + elementCursor + ", checked(" + string.Join(" + ", terms) + "));");
         body.Add(elementCursor + " = (byte)" + count + ";");
         body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", 1);");
         for (int index = 0; index < members.Length; index++)
@@ -1354,13 +1398,76 @@ internal static partial class BinaryEmitter
             }
             body.Add("// Field: " + member.Name);
             if (member.Kind == RenderMemberKind.Text)
-                body.Add(elementCursor + " = ref writer.WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
+                body.Add(elementCursor + " = ref " + state + ".WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
             else
                 body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
         }
         if (body[body.Count - 1].Length != 0)
             body.Add("");
-        body.Add("writer.Cursor = ref " + elementCursor + ";");
+        body.Add(state + ".Cursor = ref " + elementCursor + ";");
+    }
+
+    /// <summary>Expands one sequence element in place: the element local, its null marker and the element's record body.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="element">The element's render model.</param>
+    /// <param name="source">The expression the element is read from.</param>
+    /// <param name="elementExit">The exit label of the element's null marker.</param>
+    /// <param name="state">The writer state the element body advances.</param>
+    /// <param name="depth">The inline nesting depth of the element body.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit label counter shared by the whole method.</param>
+    /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    /// <param name="spans">The span counter shared by the whole method.</param>
+    internal static void AddSequenceElementWrite(List<string> body, PayloadRenderModel element, string source, string elementExit,
+        string state, int depth, CodeWriter w, Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+    {
+        string input = RoleName(names, "input");
+        string value = RoleName(names, "value");
+        body.Add("{");
+        body.Add("ref readonly " + element.GlobalName + " " + input + " = ref " + source + ";");
+        body.Add("var " + value + " = " + input + ";");
+        body.Add("if (" + value + " is null)");
+        body.Add("{");
+        body.Add(state + ".Cursor = (byte)255;");
+        body.Add(state + ".Advance(1);");
+        body.Add("goto " + elementExit + ";");
+        body.Add("}");
+        body.Add("");
+        AddElementWrite(body, element, value, depth, w, names, ref ends, ref cursors, ref spans, state);
+        body.Add(elementExit + ":");
+        body.Add("\t;");
+        body.Add("}");
+    }
+
+    /// <summary>Expands one sequence element's read in place: the element's null marker and its record body.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="element">The element's render model.</param>
+    /// <param name="local">The element local the record body fills.</param>
+    /// <param name="reference">The declaration that binds the element local inside the block, or null when the caller already
+    /// declared it.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    /// <param name="strings">The mirrored string local counter shared by the whole method.</param>
+    /// <param name="ends">The exit label counter shared by the whole method.</param>
+    internal static void AddSequenceElementRead(List<string> body, PayloadRenderModel element, string local, string reference,
+        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends)
+    {
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        string instance = RoleName(names, "instance");
+        body.Add("{");
+        if (reference != null)
+            body.Add(reference);
+        body.Add("if (" + w.A("LuminPackInputPolicy") + ".ReadNullMarker(ref reader, " +
+            element.Members.Length.ToString(CultureInfo.InvariantCulture) + "))");
+        body.Add("\tgoto " + exit + ";");
+        body.Add("var " + instance + " = " + local + " ??= " + NewInstance(element) + ";");
+        AddStreamRead(body, element, instance, 0, prove: true, markerSeen: true, w, names, ref cursors, ref strings, ref ends);
+        body.Add(exit + ":");
+        body.Add("\t;");
+        body.Add("}");
     }
 
     /// <summary>Spells the method-wide cursor local: the first is <c>cursor</c>, the following ones carry their ordinal.</summary>
@@ -1578,13 +1685,13 @@ internal static partial class BinaryEmitter
             // A concurrent queue writes its counted enumeration in place and reads through its shared owner.
             if (member.Kind == RenderMemberKind.ConcurrentQueue)
             {
-                AddConcurrentQueueWrite(body, member, owner, w, names, ref ends);
+                AddConcurrentQueueWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                 continue;
             }
             // An immutable array writes its default marker or its storage span in place and reads through its shared owner.
             if (member.Kind == RenderMemberKind.ImmutableArray)
             {
-                AddImmutableArrayWrite(body, member, owner, w, names, ref ends);
+                AddImmutableArrayWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                 continue;
             }
             // A list inside a stream record or an inline object expands its generated null header and payload in place, whose
