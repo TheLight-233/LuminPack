@@ -316,9 +316,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (type == null || data.generatorType != GeneratorType.Object && !versioned || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
-        // Callbacks and pool rents shape the binary roots; the version-tolerant roots keep their own body and callbacks there
-        // are not modeled yet.
-        if (data.enableBurst || versioned && (data.RentPoolMethod != null || data.callBackMethods.Count != 0))
+        // Callbacks and pool rents shape the binary roots; a version-tolerant root without callbacks covers a plain rent,
+        // while a rent returning by reference needs its own storage protocol and is not modeled yet.
+        if (data.enableBurst || data.RentPoolMethod is { ReturnsByRef: true } ||
+            versioned && data.callBackMethods.Count != 0)
             return DirectEmission.Reject<DirectTypeModel>("callbacks, pool or burst");
         if (data.Diagnostics.Length != 0)
             return DirectEmission.Reject<DirectTypeModel>("diagnostics");

@@ -400,7 +400,17 @@ internal static partial class DirectBinaryEmitter
         body.Add("{");
         bool mirroredMembers = model.Members.Any(member => member.Mirrored);
         var initializer = members.Where(member => !member.Mirrored).ToArray();
-        if (initializer.Length == 0)
+        if (model.Rent != null)
+        {
+            // A rented instance is populated field by field, mirrored members through the layout mirror.
+            body.Add("value = " + model.Rent + ";");
+            body.Add("// Populate every field on the pooled instance.");
+            if (mirroredMembers)
+                body.Add("ref var local = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+            for (int index = 0; index < members.Length; index++)
+                body.Add((members[index].Mirrored ? "local." : "value!.") + members[index].Name + " = " + temps[index] + "!;");
+        }
+        else if (initializer.Length == 0)
             body.Add("value = new " + model.GlobalName + "();");
         else
         {
@@ -410,7 +420,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add(member.Name + " = " + temps[System.Array.IndexOf(members, member)] + "!,");
             body.Add("};");
         }
-        if (mirroredMembers)
+        if (model.Rent == null && mirroredMembers)
         {
             body.Add("// Assign private fields.");
             body.Add("ref var local = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
