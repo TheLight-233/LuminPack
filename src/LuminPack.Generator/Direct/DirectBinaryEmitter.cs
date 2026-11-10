@@ -25,10 +25,10 @@ internal static partial class DirectBinaryEmitter
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
         var members = model.Members;
         // Version-tolerant roots always take the operation's profile, and so does a string anywhere in an inline object below.
-        bool genericWrite = model.Version != null || model.ProfilePayload;
+        bool genericWrite = model.Version != null || model.ProfilePayload || model.InlineArray;
         // A fixed member or an inline object of fixed members needs no profile; anything else, including a string in an inline
         // object, does.
-        bool genericRead = model.Version != null || model.ProfilePayload ||
+        bool genericRead = model.Version != null || model.ProfilePayload || model.InlineArray ||
             members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object));
         bool allFixed = members.All(member => member.IsFixed);
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
@@ -667,6 +667,12 @@ internal static partial class DirectBinaryEmitter
                     body.Add("");
                 continue;
             }
+            // An array member writes through its generated formatter, which keeps its own framing and profile.
+            if (member.Kind == DirectMemberKind.Array)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                continue;
+            }
             int last = RunEnd(members, index);
             if (last == index)
             {
@@ -1124,7 +1130,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add("else");
                 body.Add("{");
                 body.Add("var " + name + " = " + owner + "." + member.Name + " ?? new " + member.Nested.GlobalName + "();");
-                AddStreamRead(body, member.Nested, name, depth + 1, prove, true, w, names, ref cursors);
+                AddStreamRead(body, member.Nested, name, depth + 1, prove, markerSeen, w, names, ref cursors);
                 body.Add(owner + "." + member.Name + " = " + name + ";");
                 body.Add("}");
                 body.Add("");
@@ -1133,6 +1139,12 @@ internal static partial class DirectBinaryEmitter
             if (member.Kind == DirectMemberKind.Text)
             {
                 body.Add("reader.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
+                continue;
+            }
+            // An array member reads through the same generated formatter its write calls.
+            if (member.Kind == DirectMemberKind.Array)
+            {
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             int last = RunEnd(members, index);
