@@ -26,8 +26,9 @@ internal static partial class DirectBinaryEmitter
         var members = model.Members;
         // Version-tolerant roots always take the operation's profile.
         bool genericWrite = model.Version != null || members.Any(member => member.Kind == DirectMemberKind.Text);
-        bool genericRead = model.Version != null || members.Any(member => !member.IsFixed);
-        bool allFixed = !genericRead;
+        // An inline object member is stored by the profile-free stream protocol, so it does not make a root generic.
+        bool genericRead = model.Version != null || members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object));
+        bool allFixed = members.All(member => member.IsFixed);
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         // State parameters are spelled through the imported namespace; the other helper names are qualified until presentation.
         const string writer = "LuminPackWriter", reader = "LuminPackReader";
@@ -274,6 +275,15 @@ internal static partial class DirectBinaryEmitter
             w.Indented(() => w.Line(Constraint() + " => " + container + "." + writeRoot + "(ref writer, input);"));
         }
 
+        // A stream record's body is already the lowered statement text, so the call budget is counted from it directly.
+        string WriteHint(List<string> body, bool union) => model.StreamRecord
+            ? (DirectCalls.Count(body) <= 16 ? inline : null)
+            : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null);
+
+        string ReadHint(List<string> body) => model.StreamRecord
+            ? (DirectCalls.Count(body) <= 16 ? inline : null)
+            : (DirectInlining.Read(model, Sizes(body)) ? inline : null);
+
         void Roots()
         {
             w.Line("internal static partial class " + container);
@@ -293,12 +303,12 @@ internal static partial class DirectBinaryEmitter
             if (model.Proven)
                 write = ProvenWriteBody(model, w, write, union: false);
             Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
-                DirectInlining.Write(model, union: false, Sizes(write)) ? inline : null);
+                WriteHint(write, union: false));
             w.Blank();
             w.Suppressed = !reads;
             var read = Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
             Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                DirectInlining.Read(model, Sizes(read)) ? inline : null);
+                ReadHint(read));
             w.Blank();
             w.Suppressed = !writes;
             if (model.FixedUnionCase)
@@ -316,7 +326,7 @@ internal static partial class DirectBinaryEmitter
                 if (model.Proven && members.Length != 1)
                     writeUnionBody = ProvenWriteBody(model, w, writeUnionBody, union: true);
                 Method(writeUnionBody, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
-                    DirectInlining.Write(model, union: true, Sizes(writeUnionBody)) ? inline : null);
+                    WriteHint(writeUnionBody, union: true));
             }
             w.Blank();
             w.Suppressed = !reads;
@@ -506,6 +516,10 @@ internal static partial class DirectBinaryEmitter
             body.Add("}");
             return body;
         }
+        // An inline object member needs no reservation, so the record writes its member count and then each member, with
+        // every inline object writing its own count and members in place.
+        if (model.StreamRecord)
+            return StreamWriteBody(model, w, union, body);
 
         body.Add("ref byte cursor = ref writer.Cursor;");
         body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
@@ -598,6 +612,103 @@ internal static partial class DirectBinaryEmitter
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
         return body;
+    }
+
+    /// <summary>Builds a stream record's write body: the member count, then every member, with inline objects writing their own
+    /// count and members in place.</summary>
+    private static List<string> StreamWriteBody(DirectTypeModel model, DirectWriter w, bool union, List<string> body)
+    {
+        if (!union)
+        {
+            body.Add("writer.Cursor = (byte)" + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
+            body.Add("writer.Advance(1);");
+        }
+        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal));
+        ReduceInlineNames(body);
+        return body;
+    }
+
+    /// <summary>Writes the members of a stream record or of one of its inline objects.</summary>
+    private static void AddStreamWrite(List<string> body, DirectTypeModel model, string owner, int depth, DirectWriter w,
+        Dictionary<string, int> names)
+    {
+        var members = model.Members;
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (member.Kind == DirectMemberKind.Object)
+            {
+                string name = InlineName(names, "inlineValue", depth);
+                body.Add("var " + name + " = " + owner + "." + member.Name + ";");
+                body.Add("if (" + name + " is null)");
+                body.Add("{");
+                body.Add("writer.Cursor = (byte)255;");
+                body.Add("writer.Advance(1);");
+                body.Add("}");
+                body.Add("else");
+                body.Add("{");
+                body.Add("writer.Cursor = (byte)" + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
+                body.Add("writer.Advance(1);");
+                AddStreamWrite(body, member.Nested, name, depth + 1, w, names);
+                body.Add("}");
+                // An inline object leaves a blank line before a following fixed field, as the original template does.
+                if (index + 1 < members.Length && members[index + 1].IsFixed)
+                    body.Add("");
+                continue;
+            }
+            int last = RunEnd(members, index);
+            if (last == index)
+            {
+                body.Add("writer.Write(" + owner + "." + member.Name + ");");
+                continue;
+            }
+            string width = Width(members, index, last);
+            body.Add("if (" + Proof(w, members, index, last, owner, readOnly: true) + ")");
+            body.Add("\twriter.Write(ref " + Bytes(w, members[index], owner, readOnly: true) + ", " + width + ");");
+            body.Add("else");
+            body.Add("{");
+            body.Add("ref byte cursor = ref writer.Cursor;");
+            AddFixedStores(w, members, index, last, "cursor", body, owner);
+            body.Add("writer.Advance(" + width + ");");
+            body.Add("}");
+            index = last;
+        }
+    }
+
+    /// <summary>Spells an inline object's local the way the template numbers its depth-suffixed role local.</summary>
+    private static string InlineName(Dictionary<string, int> names, string role, int depth)
+    {
+        string raw = role + depth.ToString(CultureInfo.InvariantCulture);
+        int count = names.TryGetValue(raw, out int seen) ? seen + 1 : 1;
+        names[raw] = count;
+        return count == 1 ? raw : raw + count.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Drops the depth suffix of an inline local whose purely alphabetic stem is otherwise unused, as the presentation
+    /// does.</summary>
+    private static void ReduceInlineNames(List<string> body)
+    {
+        var pattern = new System.Text.RegularExpressions.Regex(@"\b(inlineValue|inlineRead)\d+\b");
+        var order = new List<string>();
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string line in body)
+            foreach (System.Text.RegularExpressions.Match match in pattern.Matches(line))
+                if (names.Add(match.Value))
+                    order.Add(match.Value);
+        // The first name that can claim a stem takes it; a later name whose stem is already taken keeps its digits.
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        var replacements = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string name in order)
+        {
+            string stem = new string(name.TakeWhile(char.IsLetter).ToArray());
+            if (stem != name && !names.Contains(stem) && claimed.Add(stem))
+                replacements.Add(name, stem);
+        }
+        if (replacements.Count == 0)
+            return;
+        pattern = new System.Text.RegularExpressions.Regex(@"\b(" + string.Join("|", replacements.Keys) + @")\b");
+        for (int index = 0; index < body.Count; index++)
+            body[index] = pattern.Replace(body[index], match => replacements[match.Value]);
     }
 
     /// <summary>Turns an all-fixed Union write into the returning cursor kernel of a fixed Union case, as the fixed Union cursor
@@ -829,14 +940,18 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Stores a run of fixed fields at their packed offsets from a cursor.</summary>
     private static void AddFixedStores(DirectWriter w, DirectMember[] members, int first, int last, string cursor, List<string> body)
+        => AddFixedStores(w, members, first, last, cursor, body, "value");
+
+    /// <summary>Stores a run of fixed fields of one record, which may be an inline object, at their packed offsets from a cursor.</summary>
+    private static void AddFixedStores(DirectWriter w, DirectMember[] members, int first, int last, string cursor, List<string> body, string owner)
     {
         string offset = "0";
         for (int index = first; index <= last; index++)
         {
             var member = members[index];
             body.Add(member.Size == 8 || member.Raw
-                ? w.A("LuminPackWriter") + ".Write(ref " + At(w, cursor, offset) + ", in value." + member.Name + ");"
-                : w.A("Unsafe") + ".WriteUnaligned(ref " + At(w, cursor, offset) + ", value." + member.Name + ");");
+                ? w.A("LuminPackWriter") + ".Write(ref " + At(w, cursor, offset) + ", in " + owner + "." + member.Name + ");"
+                : w.A("Unsafe") + ".WriteUnaligned(ref " + At(w, cursor, offset) + ", " + owner + "." + member.Name + ");");
             offset = Add(offset, member.Width);
         }
     }
@@ -844,6 +959,8 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Builds a root read body.</summary>
     private static List<string> ReadBody(DirectTypeModel model, DirectWriter w, bool union)
     {
+        if (model.StreamRecord)
+            return StreamReadBody(model, w, union);
         var members = model.Members;
         var body = new List<string>();
         string Policy() => w.A("LuminPackInputPolicy");
@@ -947,6 +1064,124 @@ internal static partial class DirectBinaryEmitter
         while (body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         return body;
+    }
+
+    /// <summary>Builds a stream record's read body: the null marker, then every member, with inline objects reading their own
+    /// marker and members in place.</summary>
+    private static List<string> StreamReadBody(DirectTypeModel model, DirectWriter w, bool union)
+    {
+        var members = model.Members;
+        var body = new List<string>();
+        string Policy() => w.A("LuminPackInputPolicy");
+        if (!union)
+        {
+            body.Add("if (" + Policy() + ".ReadNullMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + "))");
+            body.Add("\treturn;");
+        }
+        body.Add("var instance = value ??= new " + model.GlobalName + "();");
+        int cursors = 0;
+        AddStreamRead(body, model, "instance", 0, !union, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors);
+        while (body.Count != 0 && body[body.Count - 1].Length == 0)
+            body.RemoveAt(body.Count - 1);
+        ReduceInlineNames(body);
+        return body;
+    }
+
+    /// <summary>Reads the members of a stream record or of one of its inline objects.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="model">The record read at this depth.</param>
+    /// <param name="owner">The expression holding the record being filled.</param>
+    /// <param name="depth">The inline nesting depth, which names the inline locals.</param>
+    /// <param name="prove">Whether a contiguous fixed run is proven on a 64-bit target; a Union payload reads it without proof.</param>
+    /// <param name="markerSeen">Whether the member count was already consumed, which makes a lone leading byte a plain value.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    private static void AddStreamRead(List<string> body, DirectTypeModel model, string owner, int depth, bool prove, bool markerSeen,
+        DirectWriter w, Dictionary<string, int> names, ref int cursors)
+    {
+        var members = model.Members;
+        string Policy() => w.A("LuminPackInputPolicy");
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (member.Kind == DirectMemberKind.Object)
+            {
+                string name = InlineName(names, "inlineRead", depth);
+                body.Add("if (" + Policy() + ".ReadNullMarker(ref reader, " + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + "))");
+                body.Add("\t" + owner + "." + member.Name + " = default !;");
+                body.Add("else");
+                body.Add("{");
+                body.Add("var " + name + " = " + owner + "." + member.Name + " ?? new " + member.Nested.GlobalName + "();");
+                AddStreamRead(body, member.Nested, name, depth + 1, prove, true, w, names, ref cursors);
+                body.Add(owner + "." + member.Name + " = " + name + ";");
+                body.Add("}");
+                body.Add("");
+                continue;
+            }
+            int last = RunEnd(members, index);
+            if (last == index)
+            {
+                if (member.Scalar == "byte" && !markerSeen)
+                {
+                    markerSeen = true;
+                    body.Add(owner + "." + member.Name + " = " + Policy() + ".ReadMarker(ref reader, " +
+                        members.Length.ToString(CultureInfo.InvariantCulture) + ");");
+                }
+                else
+                    body.Add(owner + "." + member.Name + " = " + (member.IsBoolean ? Policy() + ".ReadBoolean(ref reader);" :
+                        "reader.Read<" + member.Scalar + ">();"));
+                continue;
+            }
+            int width = 0;
+            var offsets = new List<int>();
+            for (int item = index; item <= last; item++)
+            {
+                if (members[item].IsBoolean)
+                    offsets.Add(width);
+                width += members[item].Size;
+            }
+            string cursor = "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
+            string widthText = Width(members, index, last);
+            // A runtime-sized advance is spelled as the unsigned native offset of the cursor projection.
+            string advance = int.TryParse(widthText, NumberStyles.None, CultureInfo.InvariantCulture, out _) ? widthText
+                : "unchecked((nint)(uint)((" + widthText + ")))";
+            if (prove)
+            {
+                body.Add("if (" + Proof(w, members, index, last, owner, readOnly: false) + ")");
+                string block = Bytes(w, member, owner, readOnly: false, plain: true);
+                if (offsets.Count == 0)
+                    body.Add("\treader.Read(ref " + block + ", " + widthText + ");");
+                else if (BatchMask(offsets, width) is { } batch)
+                    body.Add("\t" + Policy() + ".ReadBatch(ref reader, ref " + block + ", " + widthText + ", " + batch + ");");
+                else
+                {
+                    body.Add("{");
+                    body.Add("reader.Read(ref " + block + ", " + widthText + ");");
+                    for (int item = index; item <= last; item++)
+                        if (members[item].IsBoolean)
+                            body.Add(Policy() + ".CheckBoolean(in " + owner + "." + members[item].Name + ");");
+                    body.Add("}");
+                }
+                body.Add("else");
+                body.Add("{");
+            }
+            body.Add("ref byte " + cursor + " = ref reader.Cursor;");
+            body.Add("reader.EnsureReadable(" + widthText + ");");
+            body.Add("reader.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader.Cursor, " + advance + ");");
+            string offset = "0";
+            for (int item = index; item <= last; item++)
+            {
+                var field = members[item];
+                body.Add(owner + "." + field.Name + " = " + (field.IsBoolean ? Policy() + ".ReadBoolean(ref " + At(w, cursor, offset, plain: true) + ");"
+                    : w.A("LuminPackReader") + ".Read<" + field.Scalar + ">(ref " + At(w, cursor, offset, plain: true) + ");"));
+                offset = Add(offset, field.Width);
+            }
+            if (prove)
+                body.Add("}");
+            body.Add("");
+            index = last;
+        }
     }
 
     /// <summary>Whether the Booleans of a fixed run, if any, fit one batch mask.</summary>

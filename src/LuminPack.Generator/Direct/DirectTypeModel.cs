@@ -19,6 +19,8 @@ internal enum DirectMemberKind : byte
     Array,
     /// <summary>A raw <c>List&lt;T&gt;</c> of unmanaged scalars.</summary>
     List,
+    /// <summary>A packable class of this assembly whose members are written inline in the parent record.</summary>
+    Object,
 }
 
 /// <summary>One serialized member of a model-direct type, reduced to the facts its emitted text depends on.</summary>
@@ -47,11 +49,15 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly bool Raw;
     /// <summary>Whether <see cref="Raw"/> names a built-in framework struct with a fixed native width rather than a user declaration.</summary>
     internal readonly bool Builtin;
+    /// <summary>The inline model of a packable class member, whose members the parent record stores without a separate record
+    /// header, or null.</summary>
+    internal readonly DirectTypeModel Nested;
 
     /// <summary>Captures one member.</summary>
     internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
-        bool mirrored, string underlying = null, bool raw = false, bool builtin = false)
+        bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null)
     {
+        Nested = nested;
         Raw = raw;
         Builtin = builtin;
         Underlying = underlying;
@@ -80,7 +86,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     /// <inheritdoc/>
     public bool Equals(DirectMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored &&
-        Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin;
+        Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectMember);
@@ -118,6 +124,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool CamelSnapshots;
     /// <summary>Whether the type is a struct: raw unmanaged, written and read as one value, or portable (see <see cref="View"/>).</summary>
     internal readonly bool IsStruct;
+    /// <summary>Whether a member is an inline object, which selects the stream record protocol instead of the reserved one.</summary>
+    internal bool StreamRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object);
     /// <summary>The positional storage view of a portable struct, whose fields are copied one by one at packed wire offsets, or null.</summary>
     internal readonly string View;
     /// <summary>Whether the portable view is elided: every positional view name is also a field name of the struct, so the
@@ -203,6 +211,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <inheritdoc/>
     public override int GetHashCode() => GlobalName.GetHashCode();
 
+    /// <summary>How many models the current thread is building, which stops a cycle of inline objects from recursing forever.</summary>
+    [ThreadStatic]
+    private static int _depth;
+
     /// <summary>Models a type when its complete binary and JSON roots belong to a shape the direct emitters cover.</summary>
     /// <param name="data">The analyzed type.</param>
     /// <param name="compilation">The consumer compilation.</param>
@@ -214,6 +226,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return null;
         string traced = data.classFullName ?? data.TypeSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? "?";
         DirectEmission.Enter(traced);
+        _depth++;
         try
         {
             var model = Create(data, compilation, metadata);
@@ -223,6 +236,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         }
         finally
         {
+            _depth--;
             DirectEmission.Exit();
         }
     }
@@ -361,6 +375,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (members.Any(member => member.Name[0] == '_') ||
             members.Select(member => char.ToLowerInvariant(member.Name[0]) + member.Name.Substring(1)).Distinct(StringComparer.Ordinal).Count() != members.Length)
             return DirectEmission.Reject<DirectTypeModel>("member names");
+        // Inline object members keep the stream record protocol: a marker holding the member count, then each member in
+        // order. That shape is only emitted for a plain class record of fixed scalars and other inline objects.
+        bool objects = members.Any(member => member.Kind == DirectMemberKind.Object);
+        if (objects && (mirrored || versioned || derived || isStruct ||
+            members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object))))
+            return DirectEmission.Reject<DirectTypeModel>("nested object record");
 
         string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         if (data.classFullName != null && data.classFullName != globalName && "global::" + data.classFullName != globalName)
@@ -559,6 +579,27 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             string spelling = rawStruct.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return new DirectMember(field.Name, DirectMemberKind.Fixed, spelling, spelling, 0,
                 "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, field.isProperty, raw: true);
+        }
+        // A packable class of this assembly with analyzed fields is stored inline: the parent record writes its members
+        // directly after a marker holding their count. Versioned, mirrored, constructed and pooled children change that
+        // record shape, and a child with a string or collection keeps the original pipeline.
+        if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } objectType && symbol.SpecialType == SpecialType.None &&
+            symbol.NullableAnnotation != NullableAnnotation.Annotated && objectType.ContainingType == null &&
+            SymbolEqualityComparer.Default.Equals(objectType.ContainingAssembly, compilation.Assembly) &&
+            TypeMetaChecker.TryCheckPackableAttribute(objectType) && field.Type == LuminFiledType.Class &&
+            field.FieldType == LuminDataType.Reference && field.ClassFields.Count != 0 && field.RentPoolMethod == null &&
+            (field.SelectedConstructor == null || field.SelectedConstructor.Parameters.Count == 0))
+        {
+            if (_depth > 8)
+                return DirectEmission.Reject<DirectMember>("nested object depth");
+            var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(objectType, compilation, metadata), compilation, metadata);
+            if (nested == null || nested.IsStruct || nested.Mirror != null || nested.Version != null || nested.Proven ||
+                nested.ConstructorArguments != null || nested.Members.Length == 0 ||
+                !nested.Members.All(item => item.Kind is DirectMemberKind.Fixed or DirectMemberKind.Object))
+                return DirectEmission.Reject<DirectMember>("nested object member");
+            string spelling = objectType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return new DirectMember(field.Name, DirectMemberKind.Object, spelling, spelling, 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, field.isProperty, nested: nested);
         }
         // DateTime and Guid have a fixed native width and a generated formatter for the JSON form.
         if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Struct, IsGenericType: false } &&

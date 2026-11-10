@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -44,7 +45,10 @@ internal static class DirectJsonEmitter
         w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + input + type + nullable + " input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
-        Lines(w, WriteBody(model, w, helper));
+        var names = new JsonNames();
+        var writeBody = WriteBody(model, w, helper, names);
+        JsonNames.Resolve(writeBody);
+        Lines(w, writeBody);
         w.Close();
         w.Blank();
         w.Suppressed = !reads;
@@ -137,17 +141,72 @@ internal static class DirectJsonEmitter
     /// <summary>The complete property head of a member, including its leading brace or separator.</summary>
     private static string Head(DirectTypeModel model, int index) => (index == 0 ? "{" : ",") + "\"" + model.Members[index].Name + "\":";
 
-    /// <summary>Builds the JSON write body.</summary>
-    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, string helper)
+    /// <summary>Names the locals and exit labels of one JSON write method.</summary>
+    /// <remarks>An inline object copies the child's whole write body into the parent method, so every repeated role takes the
+    /// occurrence count as a suffix and every copied return becomes a jump to a label placed where the copy closes.</remarks>
+    private sealed class JsonNames
     {
+        private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
+        private int _tokens;
+
+        /// <summary>The next occurrence of a role-named local.</summary>
+        internal string Next(string role)
+        {
+            int count = _counts.TryGetValue(role, out int seen) ? seen + 1 : 1;
+            _counts[role] = count;
+            return count == 1 ? role : role + count.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Reserves the placeholder of one inline object's exit label.</summary>
+        internal string Token() => "\u0004" + (_tokens++).ToString(CultureInfo.InvariantCulture) + "\u0004";
+
+        /// <summary>Numbers the exit labels in the order the finished body closes them, which is the post-order the original
+        /// inline expansion numbers them in, and replaces their placeholders.</summary>
+        internal static void Resolve(List<string> body)
+        {
+            var labels = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (string line in body)
+            {
+                if (line.Length == 0 || line[0] != '\u0004')
+                    continue;
+                int end = line.IndexOf('\u0004', 1);
+                if (end < 0)
+                    continue;
+                string token = line.Substring(0, end + 1);
+                if (!labels.ContainsKey(token))
+                    labels.Add(token, "end" + labels.Count.ToString(CultureInfo.InvariantCulture));
+            }
+            if (labels.Count == 0)
+                return;
+            for (int index = 0; index < body.Count; index++)
+                if (body[index].IndexOf('\u0004') >= 0)
+                    foreach (var pair in labels)
+                        body[index] = body[index].Replace(pair.Key, pair.Value);
+        }
+    }
+
+    /// <summary>Builds the JSON write body.</summary>
+    /// <param name="model">The record whose members are written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="helper">The JSON name-table helper of the record.</param>
+    /// <param name="names">The shared local names of the enclosing root method, or null for a standalone body.</param>
+    /// <param name="expand">Whether a small inline object member copies the child's write body into this one instead of calling its
+    /// formatter; the inline budget of the original pipeline is measured on the copy that keeps the call.</param>
+    /// <param name="inputName">The already named input parameter of an inline object copy, or null.</param>
+    /// <param name="exit">The placeholder an inline object copy jumps to instead of returning, or null for a root.</param>
+    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, string helper, JsonNames names = null, bool expand = true,
+        string inputName = null, string exit = null)
+    {
+        names ??= new JsonNames();
+        string value = names.Next("value"), input = inputName ?? names.Next("input"), isUtf8 = names.Next("isUtf8");
         var body = new List<string>();
-        body.Add("var value = input;");
+        body.Add("var " + value + " = " + input + ";");
         if (!model.IsStruct)
         {
-            body.Add("if (value == null)");
+            body.Add("if (" + value + " == null)");
             body.Add("{");
             body.Add("writer.WriteNull<" + Profile + ">();");
-            body.Add("return;");
+            body.Add(exit == null ? "return;" : "goto " + exit + ";");
             body.Add("}");
             body.Add("");
         }
@@ -159,41 +218,40 @@ internal static class DirectJsonEmitter
         }
         // A mirrored type's storage is reached through its layout mirror.
         if (model.Mirror != null)
-            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value + "!);");
         body.Add("if (!writer.IsFirstElement)");
         body.Add("\twriter.WriteByteRaw<" + Profile + ">((byte)',');");
-        body.Add("bool isUtf8 = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
-        int temps = 0;
+        body.Add("bool " + isUtf8 + " = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
         for (int index = 0; index < model.Members.Length; index++)
         {
             var member = model.Members[index];
             string head = Head(model, index);
             string utf8 = helper + ".Utf8Head." + Member(member), utf16 = helper + ".Utf16Head." + Member(member);
             body.Add("// Field: " + member.Name);
-            string owner = member.Mirrored ? "local" : "value";
+            string owner = member.Mirrored ? "local" : value;
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(head);
             // The fused head-and-integer write applies to a directly named field only.
             if (model.Net8 && !member.Mirrored && member.FieldType is LuminFiledType.Int or LuminFiledType.UInt or LuminFiledType.Long or LuminFiledType.ULong &&
                 utf8Bytes.Length >= 8 && utf8Bytes.Length <= 16)
             {
                 var (first, last) = Words(utf8Bytes);
-                body.Add("if (isUtf8 && global::System.BitConverter.IsLittleEndian)");
+                body.Add("if (" + isUtf8 + " && global::System.BitConverter.IsLittleEndian)");
                 body.Add("\twriter.WriteGeneratedInteger<" + Profile + ">(" + first + ", " + last + ", " + utf8Bytes.Length.ToString(CultureInfo.InvariantCulture) +
-                    ", value." + member.Name + ");");
+                    ", " + owner + "." + member.Name + ");");
                 body.Add("else");
                 body.Add("{");
-                body.Add("if (isUtf8)");
+                body.Add("if (" + isUtf8 + ")");
                 body.Add("\twriter.WriteRaw(" + utf8 + ");");
                 body.Add("else");
                 if (Literal(model, body, head, utf16, utf8: false))
                     body.Add("");
                 body.Add("writer.SetFirstElement(true);");
-                body.Add("writer.Write<" + Profile + ">(value." + member.Name + ");");
+                body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
                 body.Add("}");
                 body.Add("");
                 continue;
             }
-            body.Add("if (isUtf8)");
+            body.Add("if (" + isUtf8 + ")");
             Literal(model, body, head, utf8, utf8: true);
             body.Add("else");
             bool block = Literal(model, body, head, utf16, utf8: false);
@@ -203,7 +261,7 @@ internal static class DirectJsonEmitter
             if (member.Raw)
             {
                 // A raw struct is written by its binary formatter owner from a copy, without a null branch.
-                string temp = temps++ == 0 ? "temp" : "temp" + temps.ToString(CultureInfo.InvariantCulture);
+                string temp = names.Next("temp");
                 body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
                 body.Add("");
@@ -220,11 +278,13 @@ internal static class DirectJsonEmitter
             body.Add("}");
             body.Add("else");
             body.Add("{");
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == DirectMemberKind.Object && expand && WriteCalls(member.Nested) <= 16)
+                Expand(body, member, owner, w, names);
+            else if (member.Kind == DirectMemberKind.Text)
                 body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
             else
             {
-                string temp = temps++ == 0 ? "temp" : "temp" + temps.ToString(CultureInfo.InvariantCulture);
+                string temp = names.Next("temp");
                 body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
             }
@@ -233,6 +293,21 @@ internal static class DirectJsonEmitter
         }
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
         return body;
+    }
+
+    /// <summary>Copies an inline object's write body into its parent's method, renaming its locals and turning its return into a
+    /// jump to a label placed where the copy closes.</summary>
+    private static void Expand(List<string> body, DirectMember member, string owner, DirectWriter w, JsonNames names)
+    {
+        string temp = names.Next("temp"), input = names.Next("input"), token = names.Token();
+        body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
+        body.Add("{");
+        body.Add("ref readonly " + member.Nested.GlobalName + " " + input + " = ref " + temp + ";");
+        string helper = "global::LuminPack.Generated." + member.Nested.Extension + "." + member.Nested.JsonHelper;
+        body.AddRange(WriteBody(member.Nested, w, helper, names, expand: true, inputName: input, exit: token));
+        body.Add(token + ":");
+        body.Add("\t;");
+        body.Add("}");
     }
 
     /// <summary>Lists the former names of the members, in member order, as the original name tables number them.</summary>
@@ -251,7 +326,7 @@ internal static class DirectJsonEmitter
 
     /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
     /// of more than sixteen calls stays behind its formatter's call.</summary>
-    internal static int WriteCalls(DirectTypeModel model) => DirectCalls.Count(WriteBody(model, new DirectWriter(-1), model.JsonHelper));
+    internal static int WriteCalls(DirectTypeModel model) => DirectCalls.Count(WriteBody(model, new DirectWriter(-1), model.JsonHelper, expand: false));
 
     /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes on .NET 8 or later, otherwise as
     /// its raw span.</summary>
