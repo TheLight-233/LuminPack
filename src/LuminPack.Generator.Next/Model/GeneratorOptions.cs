@@ -33,9 +33,18 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>The alias mask the consumer leaves available.</summary>
     internal readonly int AvailableAliases;
 
+    /// <summary>The consuming assembly name, used by generated container and formatter names.</summary>
+    internal readonly string AssemblyName;
+
+    /// <summary>Whether the consumer enables interception, which gives entries payload-specific names.</summary>
+    internal readonly bool Interceptors;
+
     /// <summary>Captures the project facts.</summary>
-    internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases)
+    internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
+        string assemblyName, bool interceptors)
     {
+        Interceptors = interceptors;
+        AssemblyName = assemblyName;
         AvailableAliases = availableAliases;
         RegisterMode = registerMode;
         Unity = unity;
@@ -46,7 +55,8 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
 
     /// <inheritdoc/>
     public bool Equals(GeneratorOptions? other) => other != null && Net8 == other.Net8 && CSharpVersion == other.CSharpVersion &&
-        Unsafe == other.Unsafe && Unity == other.Unity && RegisterMode == other.RegisterMode && AvailableAliases == other.AvailableAliases;
+        Unsafe == other.Unsafe && Unity == other.Unity && RegisterMode == other.RegisterMode && AvailableAliases == other.AvailableAliases &&
+        AssemblyName == other.AssemblyName && Interceptors == other.Interceptors;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as GeneratorOptions);

@@ -1,0 +1,255 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+
+/// <summary>Entry points of the model-direct emission that the Next pipeline owns.</summary>
+/// <remarks>The emitters below this boundary consume only <see cref="DirectTypeModel"/> values; no Roslyn symbol, legacy
+/// analysis object or old generator service participates. Union and reference-tracked payloads keep their placeholders until
+/// their model facts are ported.</remarks>
+internal static class DirectEmission
+{
+    /// <summary>Renders one format of a covered payload.</summary>
+    /// <param name="model">The render model.</param>
+    /// <param name="json">Whether the JSON file is rendered, otherwise the binary file.</param>
+    /// <param name="aliases">The aliases available in the consuming compilation.</param>
+    /// <param name="operations">The operations the project calls.</param>
+    /// <returns>The complete published file, or an empty string when this renderer does not cover the payload yet.</returns>
+    internal static string Render(DirectTypeModel model, bool json, int aliases, GeneratedOperations operations)
+    {
+        if (model.UnionRoot || model.Circle)
+            return string.Empty;
+        var writer = new DirectWriter(aliases) { Scoped = model.Net8 };
+        if (json)
+            DirectJsonEmitter.Emit(model, writer, operations);
+        else if (model.IsStruct)
+            DirectStructEmitter.Emit(model, writer, operations);
+        else
+            DirectBinaryEmitter.Emit(model, writer, operations);
+        return DirectLayout.LayOutLines(writer.Complete(json));
+    }
+
+    /// <summary>Records why a type keeps the original pipeline.</summary>
+    /// <param name="check">The name of the failed check.</param>
+    /// <returns>Null, for the caller to return.</returns>
+    internal static T? Reject<T>(string check) where T : class => null;
+
+    /// <summary>Spells a member's read or snapshot local: leading underscores are dropped and the first letter is lower-cased.</summary>
+    /// <param name="name">The member name.</param>
+    /// <returns>The local stem.</returns>
+    internal static string LocalName(string name)
+    {
+        string trimmed = name.TrimStart('_');
+        return trimmed.Length == 0 ? name : char.ToLowerInvariant(trimmed[0]) + trimmed.Substring(1);
+    }
+}
+
+/// <summary>Builds one direct file line by line in the publication layout.</summary>
+internal sealed class DirectWriter
+{
+    private readonly StringBuilder _body = new StringBuilder(16384);
+    private readonly int _available;
+    private int _used;
+    private int _indent;
+    private bool _pendingBlank;
+
+    /// <summary>Creates a writer for the consumer's available aliases.</summary>
+    /// <param name="aliases">The alias mask.</param>
+    internal DirectWriter(int aliases) => _available = aliases < 0 ? int.MaxValue : aliases;
+
+    /// <summary>Discards lines and alias uses while set, for the members of operations the project does not call.</summary>
+    internal bool Suppressed;
+
+    /// <summary>Whether state and payload parameters keep their <c>scoped</c> modifier.</summary>
+    internal bool Scoped = true;
+
+    /// <summary>The current indentation depth of the lines the writer appends.</summary>
+    internal int Indent => _indent;
+
+    private static readonly Regex ScopedModifier = new(@"\bscoped (?=(ref|in) )");
+
+    /// <summary>Spells a helper type through its alias when the consumer leaves the alias available.</summary>
+    /// <param name="alias">The alias name.</param>
+    /// <returns>The alias or the fully qualified target.</returns>
+    internal string A(string alias)
+    {
+        int index = DirectLayout.AliasIndex(alias);
+        if ((_available & (1 << index)) == 0)
+            return DirectLayout.AliasTarget(index);
+        if (!Suppressed)
+            _used |= 1 << index;
+        return alias;
+    }
+
+    /// <summary>Spells an attribute through its alias, as <c>@Preserve</c>, or its qualified name without the suffix.</summary>
+    /// <param name="alias">The alias name.</param>
+    /// <returns>The attribute spelling.</returns>
+    internal string Attribute(string alias)
+    {
+        string name = A(alias);
+        return name == alias ? "@" + alias : name.EndsWith("Attribute", StringComparison.Ordinal) ? name.Substring(0, name.Length - 9) : name;
+    }
+
+    /// <summary>The <c>[Preserve]</c> attribute line.</summary>
+    internal string Preserve => "[" + Attribute("Preserve") + "]";
+
+    /// <summary>The <c>[MethodImpl(option)]</c> attribute line.</summary>
+    /// <param name="option">The method implementation option.</param>
+    /// <returns>The attribute line.</returns>
+    internal string MethodImpl(string option) => "[" + Attribute("MethodImpl") + "(" + A("MethodImplOptions") + "." + option + ")]";
+
+    /// <summary>Appends one line at the current indentation.</summary>
+    /// <param name="text">The line.</param>
+    internal void Line(string text)
+    {
+        if (Suppressed)
+            return;
+        if (_pendingBlank)
+        {
+            _body.Append(Environment.NewLine);
+            _pendingBlank = false;
+        }
+        if (!Scoped && text.Contains("scoped "))
+            text = ScopedModifier.Replace(text, string.Empty);
+        _body.Append(' ', _indent * 4).Append(text).Append(Environment.NewLine);
+    }
+
+    /// <summary>Appends one line without the current indentation.</summary>
+    /// <param name="text">The complete line.</param>
+    internal void Raw(string text)
+    {
+        if (Suppressed)
+            return;
+        if (_pendingBlank)
+        {
+            _body.Append(Environment.NewLine);
+            _pendingBlank = false;
+        }
+        _body.Append(text).Append(Environment.NewLine);
+    }
+
+    /// <summary>Requests a blank line before the next line; a following closing brace drops it.</summary>
+    internal void Blank()
+    {
+        if (!Suppressed)
+            _pendingBlank = true;
+    }
+
+    /// <summary>Appends a blank line at once, which a following opening brace keeps.</summary>
+    internal void HardBlank()
+    {
+        if (Suppressed)
+            return;
+        _pendingBlank = false;
+        _body.Append(Environment.NewLine);
+    }
+
+    /// <summary>Opens a brace block.</summary>
+    internal void Open()
+    {
+        if (!Suppressed)
+            _pendingBlank = false;
+        Line("{");
+        _indent++;
+    }
+
+    /// <summary>Closes a brace block, dropping a requested blank line.</summary>
+    /// <param name="suffix">Text appended after the closing brace.</param>
+    internal void Close(string suffix = "")
+    {
+        if (!Suppressed)
+            _pendingBlank = false;
+        _indent--;
+        Line("}" + suffix);
+    }
+
+    /// <summary>Runs an action one level deeper without braces.</summary>
+    /// <param name="body">The body.</param>
+    internal void Indented(Action body)
+    {
+        _indent++;
+        body();
+        _indent--;
+    }
+
+    /// <summary>Prefixes the fixed file header and the used aliases.</summary>
+    /// <param name="json">Whether the JSON file's header is written.</param>
+    /// <returns>The file text before line wrapping.</returns>
+    internal string Complete(bool json)
+    {
+        var header = new StringBuilder(_body.Length + 2048);
+        string newLine = Environment.NewLine;
+        header.Append("#nullable enable annotations").Append(newLine);
+        header.Append("#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649, CS1591").Append(newLine);
+        foreach (string space in new[] { "System", "System.Collections.Generic", "System.Runtime.CompilerServices", "System.Runtime.InteropServices",
+            "System.Threading.Tasks", "LuminPack", "LuminPack.Code", "LuminPack.Core", "LuminPack.Utility", "LuminPack.Attribute", "LuminPack.Generated" })
+            header.Append("using global::").Append(space).Append(';').Append(newLine);
+        for (int index = 0; index < DirectLayout.AliasCount; index++)
+            if ((_used & (1 << index)) != 0)
+                header.Append("using ").Append(DirectLayout.AliasName(index)).Append(" = ").Append(DirectLayout.AliasTarget(index))
+                    .Append(';').Append(newLine);
+        header.Append(newLine);
+        int end = _body.Length;
+        while (end > 0 && (_body[end - 1] == '\n' || _body[end - 1] == '\r'))
+            end--;
+        return header.Append(_body.ToString(0, end)).ToString();
+    }
+}
+
+/// <summary>Counts call sites in emitted statements the way the inlining policy counts invocation syntax.</summary>
+internal static class DirectCalls
+{
+    private static readonly HashSet<string> NotCalls = new(StringComparer.Ordinal)
+    {
+        "if", "while", "for", "foreach", "switch", "return", "typeof", "default", "checked", "unchecked", "sizeof", "nameof", "using", "lock",
+        "catch", "when", "new", "in", "out", "ref", "is", "not", "and", "or", "else", "case", "throw", "await", "where", "base", "this",
+    };
+
+    /// <summary>Counts invocations: an identifier or generic name directly followed by an argument list.</summary>
+    /// <param name="lines">Statements of one body.</param>
+    /// <returns>The number of invocation expressions.</returns>
+    internal static int Count(IEnumerable<string> lines)
+    {
+        int count = 0;
+        foreach (string line in lines)
+        {
+            string text = line.TrimStart();
+            if (text.StartsWith("//", StringComparison.Ordinal))
+                continue;
+            for (int index = 0; index < text.Length; index++)
+            {
+                if (text[index] != '(' || index == 0)
+                    continue;
+                int end = index;
+                if (text[end - 1] == '>')
+                {
+                    int depth = 0;
+                    for (end--; end >= 0; end--)
+                    {
+                        if (text[end] == '>') depth++;
+                        else if (text[end] == '<' && --depth == 0) break;
+                    }
+                    if (end <= 0)
+                        continue;
+                }
+                int start = end;
+                while (start > 0 && (char.IsLetterOrDigit(text[start - 1]) || text[start - 1] == '_'))
+                    start--;
+                if (start == end || char.IsDigit(text[start]))
+                    continue;
+                if (NotCalls.Contains(text.Substring(start, end - start)))
+                    continue;
+                int qualified = start;
+                while (qualified > 0 && (char.IsLetterOrDigit(text[qualified - 1]) || text[qualified - 1] is '_' or '.' or ':'))
+                    qualified--;
+                string before = text.Substring(0, qualified).TrimEnd();
+                if (before.EndsWith("new", StringComparison.Ordinal) && (before.Length == 3 || !char.IsLetterOrDigit(before[before.Length - 4])))
+                    continue;
+                count++;
+            }
+        }
+        return count;
+    }
+}

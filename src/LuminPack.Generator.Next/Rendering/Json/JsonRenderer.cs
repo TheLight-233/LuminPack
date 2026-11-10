@@ -1,8 +1,11 @@
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Direct;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Json;
 
-/// <summary>Renders JSON roots and name tables from a model.</summary>
+/// <summary>Renders JSON roots and extensions from a model.</summary>
+/// <remarks>Ordinary records go through the direct JSON emitter. Payload kinds whose rendering facts are not modeled yet
+/// emit nothing.</remarks>
 internal sealed class JsonRenderer : IRenderer
 {
     /// <summary>The shared renderer.</summary>
@@ -13,32 +16,17 @@ internal sealed class JsonRenderer : IRenderer
     {
         RecordModel record => Record(record, context),
         StructModel structModel => Struct(structModel, context),
-        CircleReferenceModel circle => Circle(circle, context),
-        UnionModel union => Union(union, context),
         _ => string.Empty,
     };
 
-    private static string Record(RecordModel model, RenderContext context)
-    {
-        // TODO: object write/read, name tables and the fresh/reuse split.
-        return string.Empty;
-    }
+    private static string Record(RecordModel model, RenderContext context) => Emit(model, context);
 
-    private static string Struct(StructModel model, RenderContext context)
-    {
-        // TODO: struct write/read and fresh mirror assignment.
-        return string.Empty;
-    }
+    private static string Struct(StructModel model, RenderContext context) => Emit(model, context);
 
-    private static string Circle(CircleReferenceModel model, RenderContext context)
+    private static string Emit(TypeModel model, RenderContext context)
     {
-        // TODO: identifier and reference properties beside the member names.
-        return string.Empty;
-    }
-
-    private static string Union(UnionModel model, RenderContext context)
-    {
-        // TODO: the Union JSON dispatch and per-case arms.
-        return string.Empty;
+        DirectTypeModel? direct = DirectModelFactory.Create(model, context.Options);
+        return direct == null ? string.Empty : DirectEmission.Render(direct, json: true, context.Options.AvailableAliases,
+            (GeneratedOperations)(int)context.Operations);
     }
 }

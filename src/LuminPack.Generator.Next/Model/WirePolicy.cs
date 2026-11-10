@@ -81,8 +81,10 @@ internal sealed class StringProfile : IEquatable<StringProfile>
 /// <summary>The wire policy that applies to a type or to one member declaration.</summary>
 internal sealed class WirePolicy : IEquatable<WirePolicy>
 {
-    /// <summary>The default trusted policy, which applies when a declaration states no options.</summary>
-    internal static readonly WirePolicy Default = new WirePolicy(InputPolicy.Trusted,
+    /// <summary>The default hostile-input policy, which applies when a declaration states no options.</summary>
+    /// <remarks>Generated reads check object markers, Boolean domains and declared limits unless a declaration opts out
+    /// with <c>UntrustedData = false</c>. This matches the runtime default that the legacy pipeline compiled.</remarks>
+    internal static readonly WirePolicy Default = new WirePolicy(InputPolicy.Untrusted,
         new StringProfile('G', byte.MaxValue, 1024, strict: false, StringEncoding.Utf16, StringRecording.Length), null, false);
 
     /// <summary>The input policy.</summary>
