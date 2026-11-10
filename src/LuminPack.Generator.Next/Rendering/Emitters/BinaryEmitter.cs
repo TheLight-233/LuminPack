@@ -961,6 +961,13 @@ internal static partial class BinaryEmitter
                 index++;
                 continue;
             }
+            // A culture-info member expands the shared owner's write body in place, as the legacy direct record does.
+            if (member.Kind == RenderMemberKind.CultureInfo)
+            {
+                AddCultureInfoWrite(body, member, "value", w, names, ref ends);
+                index++;
+                continue;
+            }
             int last = index;
             while (last + 1 < members.Length && !IsInlineSegment(members[last + 1]))
                 last++;
@@ -999,6 +1006,36 @@ internal static partial class BinaryEmitter
         body.Add("writer.Cursor = (byte)" + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
         body.Add("writer.Advance(1);");
         AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends, ref cursors, ref spans);
+        body.Add("}");
+    }
+
+    /// <summary>Expands a culture-info member's shared write body in place: the null/object header and the name string record.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The culture-info member.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit-label counter shared by the whole method.</param>
+    private static void AddCultureInfoWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
+        Dictionary<string, int> names, ref int ends)
+    {
+        string local = RoleName(names, "value");
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + " == null)");
+        body.Add("{");
+        body.Add("writer.Cursor = " + w.A("LuminPackCode") + ".NullObject;");
+        body.Add("writer.Advance(1);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add("");
+        body.Add("writer.Cursor = unchecked((byte)(0));");
+        body.Add("writer.Advance(1);");
+        body.Add("writer.Write<" + Profile + ">(" + local + ".Name);");
+        body.Add(exit + ":");
+        body.Add("\t;");
         body.Add("}");
     }
 
@@ -1426,6 +1463,12 @@ internal static partial class BinaryEmitter
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
+            // A culture-info member expands the shared owner's write body in place, as the legacy direct record does.
+            if (member.Kind == RenderMemberKind.CultureInfo)
+            {
+                AddCultureInfoWrite(body, member, owner, w, names, ref ends);
+                continue;
+            }
             // A list inside a stream record or an inline object expands its generated null header and payload in place, whose
             // failure exits through a method-wide label. A string list separates itself from the member that follows it, while
             // a scalar list keeps the presentation's own blank rule.
@@ -1551,7 +1594,7 @@ internal static partial class BinaryEmitter
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     private static bool IsInlineSegment(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind == RenderMemberKind.Parameter;
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(RenderMember member) =>
@@ -2233,6 +2276,12 @@ internal static partial class BinaryEmitter
             }
             // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.
             if (member.Kind == RenderMemberKind.Dictionary)
+            {
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                continue;
+            }
+            // A culture-info member reads through its shared formatter owner, which handles its own null marker.
+            if (member.Kind == RenderMemberKind.CultureInfo)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;

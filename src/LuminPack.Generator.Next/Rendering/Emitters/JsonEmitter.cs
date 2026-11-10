@@ -313,6 +313,15 @@ internal static class JsonEmitter
                 body.Add("");
                 continue;
             }
+            if (member.Kind == RenderMemberKind.CultureInfo)
+            {
+                // The owner frames the null value itself, so the member copies its storage and calls the owner directly.
+                string temp = names.Next("temp");
+                body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
+                body.Add("");
+                continue;
+            }
             if (member.IsFixed)
             {
                 body.Add("writer.Write<" + Profile + ">(" + (member.Underlying != null ? "(" + member.Underlying + ")" : string.Empty) + owner + "." + member.Name + ");");
@@ -532,6 +541,11 @@ internal static class JsonEmitter
                 caseLines.Add("break;");
             }
             else if (member.Raw)
+            {
+                caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
+                caseLines.Add("break;");
+            }
+            else if (member.Kind == RenderMemberKind.CultureInfo)
             {
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("break;");

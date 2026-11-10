@@ -108,6 +108,40 @@ internal sealed class TextMember : MemberModel
     protected override bool EqualsCore(MemberModel other) => true;
 }
 
+/// <summary>A culture-info member, written and read through its shared generated formatter owner.</summary>
+internal sealed class CultureInfoMember : MemberModel
+{
+    /// <summary>The fully qualified spelling of the declared culture type.</summary>
+    internal readonly string Declared;
+
+    /// <summary>Whether the declaration admits null.</summary>
+    internal readonly bool Nullable;
+
+    /// <summary>Whether the member is an auto-property whose storage is reached through the layout mirror.</summary>
+    internal readonly bool Property;
+
+    /// <summary>Whether the referenced runtime exposes <c>LuminPack.Code.LuminPackCultureInfoCache</c>.</summary>
+    internal readonly bool CanReuse;
+
+    /// <summary>Captures a culture-info member.</summary>
+    internal CultureInfoMember(string name, MemberStorage storage, WirePolicy policy, string declared, bool nullable, bool property,
+        bool canReuse)
+        : base(name, storage, policy)
+    {
+        CanReuse = canReuse;
+        Property = property;
+        Nullable = nullable;
+        Declared = declared;
+    }
+
+    /// <inheritdoc/>
+    protected override bool EqualsCore(MemberModel other)
+    {
+        var member = (CultureInfoMember)other;
+        return Declared == member.Declared && Nullable == member.Nullable && Property == member.Property && CanReuse == member.CanReuse;
+    }
+}
+
 /// <summary>How an inline payload member is framed.</summary>
 internal enum PayloadShape
 {

@@ -49,11 +49,18 @@ internal static class RenderModelFactory
         // version emitter does not reproduce.
         if (record is { Versioned: true } versionedRecord && (versionedRecord.Version == null || versionedRecord.Derived))
             return null;
+        // The version-tolerant body writes its own member schema and does not reproduce the shared culture owner call.
+        if (record is { Versioned: true } && model.Members.Any(member => member is CultureInfoMember))
+            return PayloadEmitter.Reject<PayloadRenderModel>("versioned culture info member");
         string? mirror = record?.Mirror;
         if (record != null && mirror == null && record.Members.Any(member => member.Mirrored))
             return null;
         if (portable != null && !portable.Fields.All(field => field.Leaves.Length != 0))
             return null;
+        // The dictionary write path owns its member loop and cannot frame a culture-info member, so that record stays with
+        // the original pipeline instead of emitting a partial body.
+        if (model.Members.Any(member => member is CultureInfoMember) && model.Members.Any(member => member is DictionaryMember))
+            return PayloadEmitter.Reject<PayloadRenderModel>("culture info beside a dictionary member");
         string extension = GeneratedNames.Extension(options.AssemblyName);
         var members = new RenderMember[model.Members.Length];
         for (int index = 0; index < members.Length; index++)
@@ -333,6 +340,10 @@ internal static class RenderModelFactory
             case TextMember:
                 return new RenderMember(member.Name, RenderMemberKind.Text, "string", "string", 0, null!, ScalarKind.String,
                     mirrored, property: property);
+            case CultureInfoMember culture:
+                return new RenderMember(culture.Name, RenderMemberKind.CultureInfo, culture.Declared, culture.Declared, 0,
+                    "global::LuminPack." + GeneratedNames.Owner(extension, culture.Declared), ScalarKind.Other, mirrored,
+                    property: property);
             case CollectionMember collection:
                 return Collection(collection, extension, options);
             case DictionaryMember dictionary:

@@ -11,8 +11,9 @@ entry, version-tolerant class records render their schema prefix and name tables
 with selected constructors, serialization callbacks or a static pool rent render those mechanisms.
 The corpus now publishes its IntArray, ListOfInt, String and Int shared formatter owners, so its
 generated trees compile without the legacy generator. Other collection, scalar and dictionary owners, the serializer
-facade, versioned structs, the remaining constructor/callback/pool shapes, the original-pipeline
-special types and analysis diagnostics remain on the migration plan.
+facade, versioned structs, the remaining constructor/callback/pool shapes, the remaining special
+framework types (immutable, concurrent and other original-pipeline families) and analysis diagnostics
+remain on the migration plan. CultureInfo is supported end-to-end as the special-type pilot.
 
 ## 1. Design philosophy
 
@@ -166,6 +167,13 @@ pool rent, combinations and mirrored variants) renders 7/7; binary and JSON are 
 legacy direct output. Ref-returning rent, constructed collection or payload members, trusted
 constructed records and derived pooled records stay unmapped.
 
+A one-type CultureInfo corpus renders three files (binary record, JSON record and the shared owner)
+with zero compile errors. The binary record, JSON record and CultureInfo owner are identical to the
+legacy original-pipeline output after whitespace and assembly-name normalization. The binary member
+write keeps the legacy inline block, while reads and JSON use the shared owner. Managed structs and
+versioned records containing CultureInfo, dictionaries mixing CultureInfo, and CultureInfo arrays or
+keyed collections stay unmapped.
+
 All 220 corpus payloads now render, fixed Union cases publish their own `SerializeUnionAt` cursor
 entries, and the collected payload set publishes the corpus's four shared formatter owners. The corpus
 therefore compiles with the Next generator alone. Other collection element types, scalar and built-in
@@ -238,7 +246,7 @@ pipeline; P2 improves the product.
 | M-06 | Layout mirror: mirror name, field list and explicit offsets for auto-properties and included fields | Model + Rendering | — | Auto-property and included-private payloads generate and compile | P1 |
 | M-07 | Version-tolerant schema: class records and their metadata encoder, prefix, field entries, old names and layout landed; versioned structs, callbacks, rent, generic, bounded and non-default profiles remain | Analysis + Rendering | — | Versioned class records generate the same schema as the old pipeline; remaining version shapes match | P1 |
 | M-08 | Callbacks, selected constructors and pool rent landed for class records; ref-returning rent, constructed collection/payload members, trusted constructed records, derived pooled records and versioned callbacks remain | Analysis + Rendering | M-06 | Callback, constructor and pooled types generate | P1 |
-| M-09 | Shared publication: the corpus formatter owners are published; serializer facades, formatter dispatch, registration and layout files remain | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
+| M-09 | Shared publication: the corpus formatter owners and the CultureInfo owner are published; serializer facades, formatter dispatch, registration and layout files remain | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
 | M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Old and Next output are byte-identical on the corpus | P1 |
 | M-11 | Declared string profiles, input limits and member-scope profiles | Analysis + Rendering | M-09 | Member and type profile declarations generate correctly | P1 |
 | M-12 | Diagnostics and analyzers for unsupported members, layouts, options and Union cases | Analysis | — | Diagnostics are reported at the declaration, not in generated code | P2 |
@@ -250,6 +258,7 @@ pipeline; P2 improves the product.
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
 | M-19 | Untrusted-input fuzzing and one-exception contract | Analysis + Runtime | M-09 | Crafted inputs cannot crash, over-allocate or instantiate undeclared types | P2 |
 | M-20 | JSON name and layout parity with the old pipeline | Rendering | M-10 | JSON payload files are byte-identical on the corpus | P2 |
+| M-21 | Special framework types: CultureInfo landed; immutable and concurrent collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
 
 ## 6. Decisions and constraints
 

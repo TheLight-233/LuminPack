@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -23,6 +24,9 @@ internal enum SharedFormatterKind
 
     /// <summary>The <c>int</c> roots and owner class.</summary>
     Int = 8,
+
+    /// <summary>The <c>System.Globalization.CultureInfo</c> roots and owner class.</summary>
+    CultureInfo = 16,
 }
 
 /// <summary>The value-equal publication decision for the shared formatter owners.</summary>
@@ -42,8 +46,12 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <summary>The alias mask the consuming project leaves available.</summary>
     internal readonly int AvailableAliases;
 
-    private SharedFormatterSet(string extension, SharedFormatterKind owners, int availableAliases)
+    /// <summary>Whether the referenced runtime exposes the culture-info cache the shared owner resolves names through.</summary>
+    internal readonly bool CultureInfoReuse;
+
+    private SharedFormatterSet(string extension, SharedFormatterKind owners, int availableAliases, bool cultureInfoReuse)
     {
+        CultureInfoReuse = cultureInfoReuse;
         AvailableAliases = availableAliases;
         Owners = owners;
         Extension = extension;
@@ -63,34 +71,36 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     {
         string extension = Extension ?? GeneratedNames.Extension(options.AssemblyName);
         int aliases = Extension == null ? options.AvailableAliases : AvailableAliases;
-        SharedFormatterKind owners = Owners | Required(model, extension);
+        bool cultureInfoReuse = CultureInfoReuse;
+        SharedFormatterKind owners = Owners | Required(model, extension, ref cultureInfoReuse);
         // The array and list JSON roots transfer their elements through the shared scalar owner.
         if ((owners & (SharedFormatterKind.IntArray | SharedFormatterKind.ListOfInt)) != 0)
             owners |= SharedFormatterKind.Int;
-        return new SharedFormatterSet(extension, owners, aliases);
+        return new SharedFormatterSet(extension, owners, aliases, cultureInfoReuse);
     }
 
     /// <inheritdoc/>
     public bool Equals(SharedFormatterSet other) => Extension == other.Extension && Owners == other.Owners &&
-        AvailableAliases == other.AvailableAliases;
+        AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is SharedFormatterSet other && Equals(other);
 
     /// <inheritdoc/>
-    public override int GetHashCode() => (Extension == null ? 0 : Extension.GetHashCode()) ^ (int)Owners ^ AvailableAliases;
+    public override int GetHashCode() => (Extension == null ? 0 : Extension.GetHashCode()) ^ (int)Owners ^ AvailableAliases ^
+        (CultureInfoReuse ? 1 << 20 : 0);
 
-    private static SharedFormatterKind Required(TypeModel model, string extension)
+    private static SharedFormatterKind Required(TypeModel model, string extension, ref bool cultureInfoReuse)
     {
         SharedFormatterKind owners = SharedFormatterKind.None;
         var visited = new HashSet<string>(StringComparer.Ordinal);
         Walk(model, extension, GeneratedNames.Owner(extension, IntArrayType), GeneratedNames.Owner(extension, ListOfIntType),
-            ref owners, visited);
+            ref owners, ref cultureInfoReuse, visited);
         return owners;
     }
 
     private static void Walk(TypeModel model, string extension, string intArrayOwner, string listOfIntOwner,
-        ref SharedFormatterKind owners, HashSet<string> visited)
+        ref SharedFormatterKind owners, ref bool cultureInfoReuse, HashSet<string> visited)
     {
         if (!visited.Add(model.Identity.GlobalName))
             return;
@@ -103,15 +113,21 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                 case TextMember:
                     text = true;
                     break;
+                // The culture owner is published only when the payload that declares the member actually renders; a
+                // managed struct, a versioned record or a record beside a dictionary keeps the original pipeline.
+                case CultureInfoMember culture when CultureInfoRenders(model):
+                    owners |= SharedFormatterKind.CultureInfo;
+                    cultureInfoReuse |= culture.CanReuse;
+                    break;
                 case CollectionMember collection:
-                    Collect(collection, extension, intArrayOwner, listOfIntOwner, ref owners, visited);
+                    Collect(collection, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
                     break;
                 case DictionaryMember { KeyText: true }:
                 case DictionaryMember { ValueText: true }:
                     owners |= SharedFormatterKind.String;
                     break;
                 case PayloadMember { Nested: { } nested }:
-                    Walk(nested, extension, intArrayOwner, listOfIntOwner, ref owners, visited);
+                    Walk(nested, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
                     break;
             }
         }
@@ -121,11 +137,17 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         if (model is UnionModel union)
             for (int index = 0; index < union.Cases.Length; index++)
                 if (union.Cases[index].Model is { } item)
-                    Walk(item, extension, intArrayOwner, listOfIntOwner, ref owners, visited);
+                    Walk(item, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
     }
 
+    /// <summary>Whether the direct record renderer covers a payload that declares a culture-info member.</summary>
+    /// <param name="model">The payload that declares the member.</param>
+    /// <returns>Whether the payload renders with the shared culture-info owner.</returns>
+    private static bool CultureInfoRenders(TypeModel model) => model is RecordModel { Versioned: false } record &&
+        !record.Members.Any(member => member is DictionaryMember);
+
     private static void Collect(CollectionMember member, string extension, string intArrayOwner, string listOfIntOwner,
-        ref SharedFormatterKind owners, HashSet<string> visited)
+        ref SharedFormatterKind owners, ref bool cultureInfoReuse, HashSet<string> visited)
     {
         if (member.Kind == CollectionKind.Array &&
             GeneratedNames.Owner(extension, member.DeclaredType) == intArrayOwner)
@@ -134,6 +156,6 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
             GeneratedNames.Owner(extension, member.DeclaredType) == listOfIntOwner)
             owners |= SharedFormatterKind.ListOfInt;
         if (member.Nested is { } nested)
-            Walk(nested, extension, intArrayOwner, listOfIntOwner, ref owners, visited);
+            Walk(nested, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
     }
 }

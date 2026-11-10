@@ -33,6 +33,8 @@ internal enum RenderMemberKind : byte
     /// <summary>A member whose declared type is one of the containing definition's type parameters, written by the generic
     /// serializer itself.</summary>
     Parameter,
+    /// <summary>A culture-info member, written and read through its shared generated formatter owner.</summary>
+    CultureInfo,
 }
 
 /// <summary>The entry shape of a sorted or paired collection member.</summary>
@@ -268,7 +270,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
-        member.Kind == RenderMemberKind.Parameter;
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
@@ -286,6 +288,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind is RenderMemberKind.SortedList or RenderMemberKind.PairList && member.Collection.ValueText ||
         member.Kind == RenderMemberKind.NestedList && member.Nested.ProfilePayload ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
+        member.Kind == RenderMemberKind.CultureInfo ||
         member.Kind == RenderMemberKind.Object && member.Nested.ProfilePayload);
 
     /// <summary>An array inside an inline object calls its generated formatter with the operation's profile, which makes the

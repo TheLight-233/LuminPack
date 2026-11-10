@@ -64,6 +64,7 @@ internal static class TypeModelFactory
         private readonly Compilation _compilation;
         private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
         private readonly object _gate = new object();
+        private bool? _canReuseCultureInfo;
 
         internal Session(Compilation compilation, GeneratorOptions options)
         {
@@ -79,6 +80,25 @@ internal static class TypeModelFactory
         /// <param name="depth">The number of nested payload expansions already entered.</param>
         /// <returns>The analysis result.</returns>
         internal ModelResult Create(INamedTypeSymbol symbol, int depth) => Analyze(symbol, depth, new Path());
+
+        /// <summary>Whether the referenced runtime exposes the validated culture-info cache the shared owner uses.</summary>
+        private bool CanReuseCultureInfo => _canReuseCultureInfo ??= CultureInfoCacheAvailable();
+
+        /// <summary>Checks the cache declaration the generated owner resolves names through.</summary>
+        /// <returns>Whether <c>LuminPack.Code.LuminPackCultureInfoCache.Name</c> and <c>ResolveCulture</c> are public.</returns>
+        private bool CultureInfoCacheAvailable()
+        {
+            INamedTypeSymbol? cache = _compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCultureInfoCache");
+            return cache?.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public &&
+                cache.GetMembers("Name").OfType<IPropertySymbol>().Any(property => property.IsStatic &&
+                    property.GetMethod?.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public &&
+                    property.Type.SpecialType == SpecialType.System_String) &&
+                cache.GetMembers("ResolveCulture").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 0 &&
+                    method.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public &&
+                    method.ReturnType.ToDisplayString() == "System.Globalization.CultureInfo" &&
+                    method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                    method.Parameters[0].Type.SpecialType == SpecialType.System_String);
+        }
 
         /// <summary>Returns a completed model when one exists, otherwise analyzes one payload and records it.</summary>
         /// <param name="symbol">The declared payload type.</param>
@@ -408,8 +428,19 @@ internal static class TypeModelFactory
                 return new ScalarMember(name, storage, policy, builtin, 0, raw: true, builtin: true);
             if (type.SpecialType == SpecialType.System_String)
                 return new TextMember(name, storage, policy);
+            if (IsCultureInfo(type))
+                return new CultureInfoMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty, CanReuseCultureInfo);
             if (type is IArrayTypeSymbol array)
+            {
+                // No shared owner frames an array of culture values, and a payload-long formatter is not published.
+                if (IsCultureInfo(array.ElementType))
+                {
+                    issues.Add("member '" + name + "' is a CultureInfo array, which has no shared formatter owner");
+                    return null;
+                }
                 return ArrayMember(name, storage, policy, array);
+            }
 
             if (type is INamedTypeSymbol named)
             {
@@ -419,7 +450,15 @@ internal static class TypeModelFactory
                     return null;
                 }
                 if (DictionaryKind(named) is { } dictionaryKind)
+                {
+                    // No shared owner frames a keyed collection of culture values.
+                    if (named.TypeArguments.Any(IsCultureInfo))
+                    {
+                        issues.Add("member '" + name + "' is a keyed collection of CultureInfo, which has no shared formatter owner");
+                        return null;
+                    }
                     return DictionaryMember(name, storage, policy, named, dictionaryKind);
+                }
                 if (SequenceKind(named) is { } collectionKind)
                     return SequenceMemberModel(name, storage, policy, named, collectionKind, depth, issues, path);
                 if (named.TypeKind is TypeKind.Class or TypeKind.Struct)
@@ -3268,6 +3307,13 @@ internal static class TypeModelFactory
     /// <returns>Whether the type admits null through <see cref="Nullable{T}"/>.</returns>
     private static bool IsNullableValueType(ITypeSymbol type)
         => type is INamedTypeSymbol named && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+
+    /// <summary>Recognizes the framework culture type the shared formatter owner writes.</summary>
+    /// <param name="type">The declared member type.</param>
+    /// <returns>Whether the declaration is <c>System.Globalization.CultureInfo</c>.</returns>
+    private static bool IsCultureInfo(ITypeSymbol type)
+        => type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } named &&
+           named.ContainingNamespace.ToDisplayString() == "System.Globalization" && named.Name == "CultureInfo";
 
     /// <summary>Spells a covered fixed scalar.</summary>
     /// <param name="type">The member or leaf type.</param>
