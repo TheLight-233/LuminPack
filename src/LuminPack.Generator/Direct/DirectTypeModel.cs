@@ -165,13 +165,17 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly bool NullObjectGuard;
     /// <summary>Whether the member's declared type is a reference type, whose temporary local carries the nullable annotation.</summary>
     internal readonly bool ReferencePayload;
+    /// <summary>The imported string options type a member-level declaration owns, or null when the member inherits the
+    /// containing record's profile.</summary>
+    internal readonly string ScopeProfile;
 
     /// <summary>Captures one member.</summary>
     internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null, bool formatterCall = false,
         bool property = false, DirectDictionary dictionary = null, DirectCollection collection = null, bool valueTypeParameter = false,
-        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false)
+        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null)
     {
+        ScopeProfile = scopeProfile;
         ReferencePayload = referencePayload;
         NullObjectGuard = nullObjectGuard;
         BareParameter = bareParameter;
@@ -215,7 +219,8 @@ internal sealed class DirectMember : IEquatable<DirectMember>
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
-        NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload && Equals(Nested, other.Nested);
+        NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload &&
+        ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectMember);
@@ -350,6 +355,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly int? Bounded;
     /// <summary>Whether the type is reference-tracked: its record carries a slot table and an object reference id.</summary>
     internal readonly bool Circle;
+    /// <summary>Whether a declaration disables hostile-input handling for this type's roots, whose reads then keep the plain
+    /// marker, batch and Boolean checks of the trusted template.</summary>
+    internal readonly bool Trusted;
+    /// <summary>The imported string options type a type-level declaration owns, or null when the roots take the operation's
+    /// profile. Its member writes also fix the record's string operations to that profile.</summary>
+    internal readonly string DeclaredProfile;
     /// <summary>Whether a reference-tracked type participates in a reference cycle, so its roots guard the stack.</summary>
     internal readonly bool CircleGuarded;
     /// <summary>The serialization callbacks, spelled as statements of the write or read root, in declaration order.</summary>
@@ -424,8 +435,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         DirectPortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
-        string[] typeConstraints = null)
+        string[] typeConstraints = null, bool trusted = false, string declaredProfile = null)
     {
+        DeclaredProfile = declaredProfile;
+        Trusted = trusted;
         TypeConstraints = typeConstraints ?? System.Array.Empty<string>();
         TypeParameters = typeParameters ?? System.Array.Empty<string>();
         MirrorOffsets = mirrorOffsets;
@@ -498,7 +511,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         Equals(PortableView, other.PortableView) && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
         Rent == other.Rent && Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
-        Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter) &&
+        Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter) && Trusted == other.Trusted &&
+        DeclaredProfile == other.DeclaredProfile &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
         Same(DeclaredOrder, other.DeclaredOrder) && Bounded == other.Bounded &&
         Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && Equals(Version, other.Version) &&
@@ -651,6 +665,30 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (!PackableAttributes(attributes, versioned, circle, out int? bounded))
             return DirectEmission.Reject<DirectTypeModel>("type attributes: " + string.Join("+", attributes.Select(attribute =>
                 attribute.AttributeClass?.Name + "(" + attribute.ConstructorArguments.Length + "," + attribute.NamedArguments.Length + ")")));
+        // The resolved declaration selects the input policy and, when it owns a wire profile, the string operations of this
+        // type. Only the simple string profiles are modeled: a format, depth or syntax declaration composes a profile type
+        // that the direct emitters do not spell yet.
+        var options = CompiledOptions.Resolve(type, compilation);
+        bool trusted = !options.Input.Enabled;
+        string declaredProfile = null;
+        if (options.IsDeclared)
+        {
+            if (!(options.Format == 'G' && options.Precision == byte.MaxValue && options.Depth == 1024 && !options.Strict))
+                return DirectEmission.Reject<DirectTypeModel>("declared profile");
+            declaredProfile = StringOptionsName(options);
+        }
+        // The safe-read projection bakes declared collection, string and depth limits into its checks; the direct read bodies
+        // keep the unbounded policy alone.
+        if (options.Input.Enabled && (options.Input.Collection != int.MaxValue || options.Input.String != int.MaxValue ||
+            options.Input.Depth != int.MaxValue))
+            return DirectEmission.Reject<DirectTypeModel>("input limits");
+        // The constructed read keeps the projected checked assignments, which are not modeled with a declared policy.
+        if ((trusted || declaredProfile != null) && data.SelectedConstructor is { Parameters.Count: > 0 })
+            return DirectEmission.Reject<DirectTypeModel>("option constructor");
+        // Reference tracking, version tolerance and struct roots keep their own read templates; only the record roots model
+        // the trusted marker, batch and Boolean spellings.
+        if (trusted && (circle || versioned || isStruct || derived))
+            return DirectEmission.Reject<DirectTypeModel>("option storage");
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
         // fields, are never serialized. Any other declared member keeps the original pipeline.
         int fieldsDeclared = 0;
@@ -727,13 +765,27 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         var members = new DirectMember[data.fields.Count];
         for (int index = 0; index < members.Length; index++)
             if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned, circle, type,
-                data.fields[index].IsPrivate, portable != null, memberParameters)) == null)
+                data.fields[index].IsPrivate, portable != null, memberParameters, options)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
         // The constructed read stores each member in a temporary local, which fixed scalars, strings, built-in values and
         // type parameters spell.
         if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or
             DirectMemberKind.Parameter) && !(member.Raw && member.Builtin)))
             return DirectEmission.Reject<DirectTypeModel>("constructor members");
+        // A type-level wire profile is modeled only for a record whose members are scalars and strings, which fixes every
+        // string operation to the declaration. A profile-owned member beside it keeps the original pipeline.
+        if (declaredProfile != null &&
+            (members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text) || member.Raw) ||
+            members.Any(member => member.ScopeProfile != null) || versioned || circle || derived || bounded != null || isStruct))
+            return DirectEmission.Reject<DirectTypeModel>("declared profile members");
+        // A member-level profile is modeled on a mixed record only: its leading reserving members are split at each profile
+        // boundary, which the mixed write body reproduces. Strings are the only operations a member declaration specializes.
+        bool scopedMembers = members.Any(member => member.ScopeProfile != null);
+        bool mixedRecord = members.Any(Segment) && !members.All(member => member.IsFixed || Segment(member));
+        if (scopedMembers && (declaredProfile != null || versioned || circle || derived || bounded != null || isStruct || !mixedRecord ||
+            members.Any(member => member.ScopeProfile != null && member.Kind != DirectMemberKind.Text) ||
+            members.Any(member => member.Kind is DirectMemberKind.Object or DirectMemberKind.Dictionary || member.Raw)))
+            return DirectEmission.Reject<DirectTypeModel>("member profile record");
         // A reference-tracked record covers fixed scalars of at most four bytes, strings and other reference-tracked records.
         // Collections, raw struct widths, slot gaps and oversized tables change its table protocol and keep the original pipeline.
         if (circle && (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List or
@@ -783,6 +835,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             data.callBackMethods.Count == 0 && bounded == null;
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
+        bool memberWrite = strings && !derived && !versioned && data.callBackMethods.Count == 0 && bounded == null && !isStruct;
+        // A type-level profile fixes the record's own string operations, so its roots only repeat the named member write.
+        if (declaredProfile != null && (!proven || !memberWrite))
+            return DirectEmission.Reject<DirectTypeModel>("declared profile write");
         // JSON read locals drop a leading underscore; two members that would share one local cannot be told apart. A bounded
         // record stages such a member through a projection-owned placeholder whose spelled name is not modeled yet.
         if (bounded != null && members.Any(member => member.Name[0] == '_') ||
@@ -892,13 +948,13 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
             fresh, unique, members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
             members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
-            strings && !derived && !versioned && data.callBackMethods.Count == 0 && bounded == null && !isStruct, metadata.IsNet8,
+            memberWrite, metadata.IsNet8,
             metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
             referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray(),
             selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded,
             circle: circle, circleGuarded: circle && RecursiveTypeAnalysis.IsRecursive(type),
             managedStruct: managedStruct, portableView: portableView, mirrorOffsets: mirrorOffsets,
-            typeParameters: typeParameters, typeConstraints: typeConstraints);
+            typeParameters: typeParameters, typeConstraints: typeConstraints, trusted: trusted, declaredProfile: declaredProfile);
     }
 
     /// <summary>Spells the definition's constraint clauses in the order the original templates append them.</summary>
@@ -1235,6 +1291,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             }
             if (ExplicitTrustedInput(attribute))
                 continue;
+            if (OptionDeclaration(attribute))
+                continue;
             if (BoundedAttribute(attribute, out int maxBytes))
             {
                 if (bounded != null)
@@ -1263,6 +1321,33 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute" &&
             attribute.ConstructorArguments.Length == 0 && attribute.NamedArguments.Length == 1 &&
             attribute.NamedArguments[0].Key == "UntrustedData" && attribute.NamedArguments[0].Value.Value is true;
+
+    /// <summary>Accepts a <c>[LuminPackOption]</c> declaration that selects only a wire profile or an input policy; the
+    /// resolved profile is validated after the members are modeled.</summary>
+    private static bool OptionDeclaration(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute" &&
+            attribute.ConstructorArguments.Length == 0 && attribute.NamedArguments.All(argument => argument.Key is "UntrustedData" or
+                "StringEncoding" or "StringRecording" or "MaxJsonDepth" or "ValidateJsonSyntax" or "StandardFormat" or "MaxInputBytes" or
+                "MaxDecompressedBytes" or "MaxAllocationBytes" or "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or
+                "MaxDepth" or "MaxReadWork");
+
+    /// <summary>Whether two resolved profiles select the same wire and input behavior.</summary>
+    private static bool SameProfile(CompiledOptions left, CompiledOptions right) =>
+        right != null && (ReferenceEquals(left, right) || left.Identity == right.Identity);
+
+    /// <summary>Names the imported string options type of a simple resolved profile.</summary>
+    private static string StringOptionsName(CompiledOptions options)
+    {
+        if (options.Recording == 2)
+            return options.Encoding == 0 ? "LuminPackUtf8VarIntOptions" : "LuminPackUtf16VarIntOptions";
+        return options.Mode switch
+        {
+            0 => "LuminPackUtf8TokenOptions",
+            1 => "LuminPackUtf8LengthOptions",
+            2 => "LuminPackUtf16TokenOptions",
+            _ => "LuminPackUtf16LengthOptions",
+        };
+    }
 
     /// <summary>Accepts an attribute of another library, such as another serializer's <c>[Key(0)]</c>, which the analysis never reads:
     /// its class name does not start with LuminPack, and its outermost namespace is not LuminPack, System, Microsoft or Unity.</summary>
@@ -1357,13 +1442,25 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     }
 
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
+    /// <param name="ownerOptions">The containing type's resolved profile, which a member inherits when it declares nothing.</param>
     private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata, bool versioned = false,
         bool circle = false, INamedTypeSymbol owner = null, bool mirroredStorage = false, bool volatileStorage = false,
-        System.Collections.Generic.HashSet<string> typeParameters = null)
+        System.Collections.Generic.HashSet<string> typeParameters = null, CompiledOptions ownerOptions = null)
     {
+        // A member-level declaration specializes that member's string operations; an inherited declaration repeats the
+        // containing type's profile and needs no separate boundary.
+        string scopeProfile = null;
+        if (field.Options?.IsDeclared == true && !SameProfile(field.Options, ownerOptions))
+        {
+            if (field.Type != LuminFiledType.String ||
+                !(field.Options.Format == 'G' && field.Options.Precision == byte.MaxValue && field.Options.Depth == 1024 && !field.Options.Strict) ||
+                field.Options.Input.Enabled && (field.Options.Input.Collection != int.MaxValue || field.Options.Input.String != int.MaxValue ||
+                    field.Options.Input.Depth != int.MaxValue))
+                return DirectEmission.Reject<DirectMember>("member profile: " + field.Name);
+            scopeProfile = StringOptionsName(field.Options);
+        }
         if (field.IsPrivate && !mirroredStorage || field.IsVolatile && !volatileStorage || field.IsCompress || field.OldNames.Length != 0 && !versioned ||
-            field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
-            !SyntaxFacts.IsValidIdentifier(field.Name))
+            field.TypeSymbol == null || field.Identifier != field.Name || !SyntaxFacts.IsValidIdentifier(field.Name))
             return DirectEmission.Reject<DirectMember>("member options: " + field.Name + " private=" + field.IsPrivate + " volatile=" + field.IsVolatile +
                 " compress=" + field.IsCompress + " old=" + field.OldNames.Length + " declaredOptions=" + (field.Options?.IsDeclared ?? false) +
                 " symbol=" + (field.TypeSymbol != null) + " identifier=" + (field.Identifier == field.Name) + " valid=" + SyntaxFacts.IsValidIdentifier(field.Name));
@@ -1497,7 +1594,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         {
             if (field.Type != LuminFiledType.String || field.FieldType != LuminDataType.Reference)
                 return DirectEmission.Reject<DirectMember>("string member");
-            return new DirectMember(field.Name, DirectMemberKind.Text, "string", "string", 0, null, field.Type, mirrored, property: field.isProperty);
+            return new DirectMember(field.Name, DirectMemberKind.Text, "string", "string", 0, null, field.Type, mirrored, property: field.isProperty,
+                scopeProfile: scopeProfile);
         }
         string payload = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         // A multi-dimensional array keeps its generated formatter for the write, the read and the JSON form; the declared

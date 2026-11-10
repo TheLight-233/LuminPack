@@ -27,7 +27,7 @@ internal static class DirectJsonEmitter
         bool reads = (operations & LuminPack.Code.Core.GeneratedOperations.JsonRead) != 0;
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         string jsonWriter = w.A("LuminPackJsonWriter"), jsonReader = w.A("LuminPackJsonReader"), options = w.A("ILuminPackOptions");
-        string serializer = w.A("LuminPackSerializer"), standard = w.A("LuminPackUtf16LengthOptions");
+        string serializer = w.A("LuminPackSerializer"), standard = model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : w.A("LuminPackUtf16LengthOptions");
         string constraint = "where TLuminProfile : struct, " + options;
         // Every method of a generic definition repeats its type parameters first, then the operation's profile.
         string Arguments(params string[] extra) => model.TypeArguments(extra);
