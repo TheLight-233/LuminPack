@@ -292,7 +292,8 @@ internal static partial class DirectBinaryEmitter
 
         string ReadHint(List<string> body) => model.StreamRecord || model.MixedRecord
             ? (DirectCalls.Count(body) <= 16 ? inline : null)
-            : (DirectInlining.Read(model, Sizes(body)) ? inline : null);
+            : (model.ConstructorArguments != null ? (DirectInlining.ConstructedRead(model) ? inline : null)
+                : (DirectInlining.Read(model, Sizes(body)) ? inline : null));
 
         void Roots()
         {
@@ -1332,7 +1333,10 @@ internal static partial class DirectBinaryEmitter
         var members = model.Members;
         string policy = w.A("LuminPackInputPolicy");
         var body = new List<string> { "// Declare locals to hold the field values." };
-        foreach (var member in members)
+        // The constructed read declares its temporaries in declaration order, while the wire order drives the decodes.
+        var declared = model.DeclaredOrder == null ? members : model.DeclaredOrder
+            .Select(name => System.Array.Find(members, member => member.Name == name)).Where(member => member != null).ToArray();
+        foreach (var member in declared)
             body.Add(TempType(member) + " " + Camel(member.Name) + "Temp = default !;");
         if (!union)
         {

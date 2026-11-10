@@ -177,6 +177,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string[] ConstructorArguments;
     /// <summary>The members the selected constructor sets, which the object initializer leaves out.</summary>
     internal readonly string[] ConstructorMembers;
+    /// <summary>The member names in declaration order, which the constructed read declares its temporaries in, or null.</summary>
+    internal readonly string[] DeclaredOrder;
     /// <summary>Whether the project targets .NET 8 or later, whose operations take <c>scoped</c> state and write generated JSON
     /// literals.</summary>
     internal readonly bool Net8;
@@ -201,12 +203,13 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
         DirectVersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
-        string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null)
+        string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null)
     {
         Version = version;
         ReferencePayload = referencePayload;
         LayoutAttribute = layoutAttribute;
         Rent = rent;
+        DeclaredOrder = declaredOrder;
         if (writeBefore != null)
             WriteBefore = writeBefore;
         if (writeAfter != null)
@@ -250,6 +253,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         Rent == other.Rent && Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
         Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter) &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
+        Same(DeclaredOrder, other.DeclaredOrder) &&
         Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && Equals(Version, other.Version) &&
         ReferencePayload == other.ReferencePayload && LayoutAttribute == other.LayoutAttribute &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
@@ -457,9 +461,11 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // A pooled type declares a mirror even for public fields, which its JSON read uses when it reuses an instance.
         if (mirrored || data.RentPoolMethod != null)
         {
-            // The mirror declares every instance field of the type in storage order, so it must hold exactly the members.
+            // The mirror declares every instance field of the type in storage order, so it must hold exactly the members;
+            // LuminPackOrder may reorder the wire members independently of that storage order.
             if (fresh || derived || data.localFields.Count != members.Length ||
-                data.localFields.Where((local, index) => local.Identifier != data.fields[index].Identifier).Any())
+                data.localFields.Select(local => local.Identifier).OrderBy(name => name, StringComparer.Ordinal)
+                    .SequenceEqual(members.Select(member => member.Name).OrderBy(name => name, StringComparer.Ordinal)) == false)
                 return DirectEmission.Reject<DirectTypeModel>("layout mirror");
             using (var hash = System.Security.Cryptography.SHA256.Create())
                 mirror = "LuminLayout_" + string.Concat(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(FormatterTypeName.Get(type)))
@@ -534,7 +540,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
             strings && !derived && !versioned && data.callBackMethods.Count == 0, metadata.IsNet8,
             metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
-            referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray());
+            referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray(),
+            selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>

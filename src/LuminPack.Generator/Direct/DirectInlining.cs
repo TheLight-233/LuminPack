@@ -89,7 +89,15 @@ internal static class DirectInlining
     private static int PortableCount(DirectTypeModel model, bool write)
         => write ? 7 + 4 * model.Members.Length : 7 + 2 * model.Members.Length;
 
+    /// <summary>Whether a constructed read keeps its aggressive inlining hint: the null marker, the existing-instance call,
+    /// one decode per member and the mirror views of both construction branches.</summary>
+    /// <param name="model">The covered type.</param>
+    internal static bool ConstructedRead(DirectTypeModel model)
+        => 2 + model.Members.Length + (model.Mirror == null ? 0 : 2) <= Limit;
+
     /// <summary>Whether a root read keeps its aggressive inlining hint.</summary>
+    /// <param name="model">The covered type.</param>
+    /// <param name="sizes">The runtime-size calls of raw struct widths in the body.</param>
     internal static bool Read(DirectTypeModel model, int sizes)
     {
         int count = 1 + sizes + model.Members.Count(member => !member.IsFixed);
