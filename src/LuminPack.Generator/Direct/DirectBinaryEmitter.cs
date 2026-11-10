@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -521,14 +521,21 @@ internal static partial class DirectBinaryEmitter
         var members = model.Members;
         var body = new List<string>();
         string count = members.Length.ToString(CultureInfo.InvariantCulture);
+        bool bounded = model.Bounded != null;
         body.Add("var value = input;");
+        if (bounded)
+        {
+            // A bounded record reserves its complete guarantee once and asserts it where every exit meets.
+            body.Add("int boundedStart = writer.Position;");
+            body.Add("writer.EnsureAdditionalCapacity(" + model.Bounded.Value.ToString(CultureInfo.InvariantCulture) + ");");
+        }
         if (!union)
         {
             body.Add("if (value is null)");
             body.Add("{");
             body.Add("writer.Cursor = (byte)255;");
             body.Add("writer.Advance(1);");
-            body.Add("return;");
+            body.Add(bounded ? "goto end0;" : "return;");
             body.Add("}");
             body.Add("");
         }
@@ -540,6 +547,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add("writer.Cursor = (byte)0;");
                 body.Add("writer.Advance(1);");
             }
+            AddBoundExit(body, model, union);
             return body;
         }
         if (members.All(member => member.IsFixed))
@@ -548,7 +556,7 @@ internal static partial class DirectBinaryEmitter
             {
                 string widths = string.Join(" + ", members.Select(member => member.Width));
                 body.Add("if (checked(3 + " + widths + ") > 4096)");
-                body.Add("\twriter.EnsureAdditionalCapacity(checked(" + widths + "));");
+                body.Add("\t" + (bounded ? ";" : "writer.EnsureAdditionalCapacity(checked(" + widths + "));"));
             }
             else
             {
@@ -559,6 +567,7 @@ internal static partial class DirectBinaryEmitter
             {
                 // A lone fixed member is not a contiguous group; the writer stores it directly.
                 body.Add("writer.Write(value." + members[0].Name + ");");
+                AddBoundExit(body, model, union);
                 return body;
             }
             string width = Width(members, 0, members.Length - 1);
@@ -570,16 +579,27 @@ internal static partial class DirectBinaryEmitter
             AddFixedStores(w, members, 0, members.Length - 1, "cursor", body);
             body.Add("writer.Advance(" + width + ");");
             body.Add("}");
+            if (bounded)
+                body.Add("");
+            AddBoundExit(body, model, union);
             return body;
         }
         // An inline object member needs no reservation, so the record writes its member count and then each member, with
         // every inline object writing its own count and members in place.
         if (model.StreamRecord)
-            return StreamWriteBody(model, w, union, body);
+        {
+            StreamWriteBody(model, w, union, body);
+            AddBoundExit(body, model, union);
+            return body;
+        }
         // Inline objects and reserving members alternate: the leading members share the header's reservation, each object
         // writes in place, and every following run reserves on its own.
         if (model.MixedRecord)
-            return MixedWriteBody(model, w, union, body);
+        {
+            MixedWriteBody(model, w, union, body);
+            AddBoundExit(body, model, union);
+            return body;
+        }
 
         body.Add("ref byte cursor = ref writer.Cursor;");
         body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
@@ -590,6 +610,7 @@ internal static partial class DirectBinaryEmitter
                 ? "cursor = ref writer.WriteRecordString<" + Profile + ">(ref cursor, value." + members[0].Name + ");"
                 : "cursor = ref writer.WriteRecordSpan(ref cursor, value." + members[0].Name + ");");
             body.Add("writer.Cursor = ref cursor;");
+            AddBoundExit(body, model, union);
             return body;
         }
         var terms = new List<string>();
@@ -598,7 +619,7 @@ internal static partial class DirectBinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            string snapshot = Snapshot(model, index, camel: model.HasCallbacks);
+            string snapshot = Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null);
             if (member.Kind == DirectMemberKind.Fixed)
                 terms.Add(member.Width);
             else if (member.Kind == DirectMemberKind.Text)
@@ -664,14 +685,35 @@ internal static partial class DirectBinaryEmitter
             }
             body.Add("// Field: " + member.Name);
             if (member.Kind == DirectMemberKind.Text)
-                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks) + ");");
+                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
             else
-                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks) + ");");
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
         }
         if (body[body.Count - 1].Length != 0)
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
+        if (model.Bounded != null)
+            body.Add("");
+        AddBoundExit(body, model, union);
         return body;
+    }
+
+    /// <summary>Closes a bounded write root: the null exit label, the completed-length assertion and the commit.</summary>
+    private static void AddBoundExit(List<string> body, DirectTypeModel model, bool union)
+    {
+        if (model.Bounded == null)
+            return;
+        string bound = model.Bounded.Value.ToString(CultureInfo.InvariantCulture);
+        if (!union)
+        {
+            // Only the root write's null check jumps here; the Union payload has no null branch.
+            body.Add("end0:");
+            body.Add("\t;");
+        }
+        body.Add("global::System.Diagnostics.Debug.Assert(");
+        body.Add("\twriter.Position - boundedStart <= " + bound + ",");
+        body.Add("\t\"The LuminPackBounded complete-record guarantee was violated.\");");
+        body.Add("writer.CompleteReservedRecord();");
     }
 
     /// <summary>Spells instance creation for a read: the pool rent call of a pooled type, or its parameterless constructor.</summary>
@@ -684,6 +726,9 @@ internal static partial class DirectBinaryEmitter
             return body;
         var result = new List<string>(body.Count + before.Length + after.Length);
         int anchor = body.FindIndex(line => line.StartsWith("var value = input;", StringComparison.Ordinal));
+        // A bounded root runs its callbacks after reserving the guarantee, as the completed-buffer lifecycle requires.
+        if (anchor >= 0 && anchor + 1 < body.Count && body[anchor + 1].StartsWith("int boundedStart", StringComparison.Ordinal))
+            anchor += 2;
         for (int index = 0; index < body.Count; index++)
         {
             result.Add(body[index]);
@@ -1471,7 +1516,7 @@ internal static partial class DirectBinaryEmitter
         var names = new List<string>();
         for (int index = 0; index < model.Members.Length; index++)
             if (model.Members[index].Kind == DirectMemberKind.Text)
-                names.Add(Snapshot(model, index, camel: model.HasCallbacks));
+                names.Add(Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null));
         string type = model.GlobalName + "?";
         string arguments = string.Join(", ", new[] { "ref writer", "value" }.Concat(names));
         string unsafeName = w.A("Unsafe"), standard = w.A("LuminPackUtf16LengthOptions"), fallback = w.A("LuminPackDefaultOptions");

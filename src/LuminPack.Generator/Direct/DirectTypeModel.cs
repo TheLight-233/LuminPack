@@ -197,6 +197,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string LayoutAttribute;
     /// <summary>The static pool rent call of a pooled type, such as <c>global::T.Rent()</c>, or null.</summary>
     internal readonly string Rent;
+    /// <summary>The complete-record byte bound a <c>[LuminPackBounded]</c> declaration guarantees, which the write roots reserve
+    /// once and assert, or null.</summary>
+    internal readonly int? Bounded;
     /// <summary>The serialization callbacks, spelled as statements of the write or read root, in declaration order.</summary>
     internal readonly string[] WriteBefore = System.Array.Empty<string>(), WriteAfter = System.Array.Empty<string>(),
         ReadBefore = System.Array.Empty<string>(), ReadAfter = System.Array.Empty<string>();
@@ -208,8 +211,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
         DirectVersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
-        string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null)
+        string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null, int? bounded = null)
     {
+        Bounded = bounded;
         Version = version;
         ReferencePayload = referencePayload;
         LayoutAttribute = layoutAttribute;
@@ -258,7 +262,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         Rent == other.Rent && Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
         Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter) &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
-        Same(DeclaredOrder, other.DeclaredOrder) &&
+        Same(DeclaredOrder, other.DeclaredOrder) && Bounded == other.Bounded &&
         Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && Equals(Version, other.Version) &&
         ReferencePayload == other.ReferencePayload && LayoutAttribute == other.LayoutAttribute &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
@@ -361,7 +365,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // The constructed read stores each member in a temporary local, so it is limited after the members are reduced.
         var constructedMembers = !raw && selectedConstructor;
         var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !StructLayoutOption(attribute) && !StructLayoutAttribute(attribute)).ToArray();
-        if (!PackableAttributes(attributes, versioned))
+        if (!PackableAttributes(attributes, versioned, out int? bounded))
             return DirectEmission.Reject<DirectTypeModel>("type attributes: " + string.Join("+", attributes.Select(attribute =>
                 attribute.AttributeClass?.Name + "(" + attribute.ConstructorArguments.Length + "," + attribute.NamedArguments.Length + ")")));
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
@@ -429,6 +433,11 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // The constructed read stores each member in a temporary local, which only fixed scalars and strings spell today.
         if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text)))
             return DirectEmission.Reject<DirectTypeModel>("constructor members");
+        // A bounded write reserves the complete record once; the version-tolerant template reserves per member instead, and
+        // a list or inline object owns exit labels and its own capacity handling.
+        if (bounded != null && (versioned || isStruct || members.Any(member => member.Kind is DirectMemberKind.Object or DirectMemberKind.List ||
+            member.Kind == DirectMemberKind.Array && member.FormatterCall)))
+            return DirectEmission.Reject<DirectTypeModel>("bounded record");
         // A local case of an abstract packable base whose payload is raw fixed storage writes through the fixed Union cursor protocol.
         bool fixedUnionCase = !isStruct && members.All(member => member.IsFixed) && FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata);
         // Raw struct members are covered in fixed Union case records of at least two fields without Booleans, whose batch masks need
@@ -444,7 +453,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // The proven object write needs .NET 8, unsafe code and a non-Unity project, as ProvenObjectWriteProjection checks.
         bool unity = metadata.IsForUnity || metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal));
         bool proven = strings && !versioned && metadata.IsNet8 && metadata.AllowUnsafe && !unity &&
-            data.callBackMethods.Count == 0;
+            data.callBackMethods.Count == 0 && bounded == null;
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
         // JSON read locals are named after the camel-cased member; the presentation renames a leading underscore or a clash.
@@ -544,10 +553,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
             fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
             members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
-            strings && !derived && !versioned && data.callBackMethods.Count == 0, metadata.IsNet8,
+            strings && !derived && !versioned && data.callBackMethods.Count == 0 && bounded == null, metadata.IsNet8,
             metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
             referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray(),
-            selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null);
+            selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -575,11 +584,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             attribute.ConstructorArguments.All(argument => argument.Kind == TypedConstantKind.Enum &&
                 System.Convert.ToInt64(argument.Value, System.Globalization.CultureInfo.InvariantCulture) == 0);
 
-    /// <summary>Accepts the packable attribute of the generation mode plus an explicit default input policy, whose generated
-    /// roots are identical to an undeclared trusted declaration.</summary>
-    private static bool PackableAttributes(AttributeData[] attributes, bool versioned)
+    /// <summary>Accepts the packable attribute of the generation mode, an explicit default input policy and a complete-record
+    /// byte bound, which only changes the write roots' reservation.</summary>
+    private static bool PackableAttributes(AttributeData[] attributes, bool versioned, out int? bounded)
     {
         bool packable = false;
+        bounded = null;
         foreach (var attribute in attributes)
         {
             if (versioned ? VersionedPackable(attribute) : PlainPackable(attribute))
@@ -591,9 +601,27 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             }
             if (ExplicitTrustedInput(attribute))
                 continue;
+            if (BoundedAttribute(attribute, out int maxBytes))
+            {
+                if (bounded != null)
+                    return false;
+                bounded = maxBytes;
+                continue;
+            }
             return false;
         }
         return packable;
+    }
+
+    /// <summary>Reads a positive <c>[LuminPackBounded(maxBytes)]</c> guarantee, which the write roots reserve once.</summary>
+    private static bool BoundedAttribute(AttributeData attribute, out int maxBytes)
+    {
+        maxBytes = 0;
+        if (attribute.AttributeClass?.ToDisplayString() != "LuminPack.Attribute.LuminPackBoundedAttribute" || attribute.NamedArguments.Length != 0 ||
+            attribute.ConstructorArguments.Length != 1 || attribute.ConstructorArguments[0].Value is not int value || value <= 0)
+            return false;
+        maxBytes = value;
+        return true;
     }
 
     /// <summary>Accepts <c>[LuminPackOption(UntrustedData = true)]</c>, which restates the default input policy.</summary>

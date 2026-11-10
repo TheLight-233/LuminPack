@@ -20,15 +20,17 @@ internal static class DirectInlining
         var members = model.Members;
         // A mirrored type also calls the mirror view of the read-only input: LuminPackMarshal.As and Unsafe.AsRef.
         int mirror = model.Mirror == null ? 0 : 2;
+        // A bounded root reserves its complete guarantee, then asserts and commits at every exit.
+        int bounded = model.Bounded == null ? 0 : 3;
         if (members.All(member => member.IsFixed))
-            return mirror + (union ? 1 : 2) + Group(members.Length) + sizes <= Limit;
+            return mirror + (union ? 1 : 2) + Group(members.Length) + sizes + bounded <= Limit;
         int count = mirror + (union ? 0 : 2);
         count += members.Count(member => !member.IsFixed);   // snapshot capture or string bound
         count += members.Count(member => !member.IsFixed);   // reserved record store
         count += 2;                                          // reservation and commit
         foreach (int run in Runs(model))
             count += run == 1 ? 1 : Group(run);
-        return count + sizes <= Limit;
+        return count + sizes + bounded <= Limit;
     }
 
     /// <summary>Whether a mixed record's write root keeps its aggressive inlining hint. The record expands its inline objects
