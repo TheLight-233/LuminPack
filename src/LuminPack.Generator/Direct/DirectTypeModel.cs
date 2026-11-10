@@ -651,7 +651,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // A raw unmanaged packable struct of this assembly joins fixed runs at its runtime size.
         if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Struct, IsGenericType: false } rawStruct && symbol.SpecialType == SpecialType.None &&
             symbol.NullableAnnotation != NullableAnnotation.Annotated && EmitterTypeTraits.CanUseUnmanagedSerialization(rawStruct) &&
-            TypeMetaChecker.TryCheckPackableAttribute(rawStruct) && rawStruct.ContainingType == null &&
+            TypeMetaChecker.TryCheckPackableAttribute(rawStruct) &&
             SymbolEqualityComparer.Default.Equals(rawStruct.ContainingAssembly, compilation.Assembly) &&
             LuminPackCodeGenerator.IsMergeableField(field))
         {
@@ -671,7 +671,6 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // record shape. A child with strings writes through its named member operation when every member is a fixed scalar
         // or a string; otherwise its strings write inline with the parent's profile.
         if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } objectType && symbol.SpecialType == SpecialType.None &&
-            objectType.ContainingType == null &&
             SymbolEqualityComparer.Default.Equals(objectType.ContainingAssembly, compilation.Assembly) &&
             TypeMetaChecker.TryCheckPackableAttribute(objectType) && field.Type == LuminFiledType.Class &&
             field.FieldType == LuminDataType.Reference && field.ClassFields.Count != 0 &&
