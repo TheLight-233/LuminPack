@@ -1104,6 +1104,16 @@ internal static partial class BinaryEmitter
             body.Add("ref readonly string " + element + " = ref v;");
             body.Add("writer.Write<" + Profile + ">(" + element + ");");
         }
+        // A Boolean element writes through a read-only alias, as the legacy element write does.
+        else if (member.Scalar == "bool")
+        {
+            string element = RoleName(names, "value");
+            body.Add("writer.CheckBuffer();");
+            body.Add("count++;");
+            body.Add("var v = item;");
+            body.Add("ref readonly bool " + element + " = ref v;");
+            body.Add("writer.Write(in " + element + ");");
+        }
         else
         {
             body.Add("writer.CheckBuffer();");

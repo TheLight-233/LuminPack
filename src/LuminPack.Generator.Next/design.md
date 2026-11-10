@@ -196,6 +196,13 @@ writes through an isolated operation state and reads without reader isolation, w
 array reserves its header and expands one element per span slot. Elements with nested objects,
 collections or no string member stay unmapped, as do the remaining concurrent and immutable families.
 
+The scalar sequence owners are parameterized by element keyword rather than fixed to `int`: a corpus of
+`long`, `double` and `Boolean` elements in both families, and a second corpus covering `byte`, `sbyte`,
+`short`, `ushort`, `char`, `uint`, `ulong`, `float` and `decimal`, render with zero compile errors and
+match the legacy output after whitespace normalization (18/18 and 36/36). Every raw scalar element owns
+one `Scalar_<Keyword>` owner file, and the sequence roots read raw storage without the profile; a
+Boolean sequence reads through its scalar owner and keeps the profile, as the legacy template does.
+
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
 `LuminPack027` and `LuminPack018` at the declarations, and the 220-payload corpus reports none. An
@@ -267,7 +274,7 @@ pipeline; P2 improves the product.
 
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `Int`/`String` owners and the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for `int`, `string` and string-bearing packable classes landed; other element shapes, the other concurrent/immutable families, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
+| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `String` owner, the per-keyword scalar owners and the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for every raw scalar, `string` and string-bearing packable classes landed; other element shapes, the other concurrent/immutable families, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
 | M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values; no shared dictionary owner is published yet | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
 | M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
@@ -287,7 +294,7 @@ pipeline; P2 improves the product.
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
 | M-19 | Untrusted-input fuzzing and one-exception contract | Analysis + Runtime | M-09 | Crafted inputs cannot crash, over-allocate or instantiate undeclared types | P2 |
 | M-20 | JSON name and layout parity with the old pipeline | Rendering | M-10 | JSON payload files are byte-identical on the corpus | P2 |
-| M-21 | Special framework types: CultureInfo and the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for `int`, `string` and string-bearing packable classes landed; the remaining element shapes, the other concurrent and immutable collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
+| M-21 | Special framework types: CultureInfo and the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for every raw scalar, `string` and string-bearing packable classes landed; the remaining element shapes, the other concurrent and immutable collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
 
 ## 6. Decisions and constraints
 

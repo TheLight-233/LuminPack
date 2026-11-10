@@ -2,18 +2,18 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
-/// <summary>Renders the shared binary and JSON formatter owner of <c>System.Collections.Concurrent.ConcurrentQueue&lt;int&gt;</c>.</summary>
+/// <summary>Renders the shared binary and JSON formatter owner of one closed <c>ConcurrentQueue&lt;T&gt;</c> of raw scalars.</summary>
 /// <remarks>The members mirror the legacy formatter generator's concurrent-queue roots and extension methods. The binary write
 /// counts the live enumeration, the binary read fills a fresh queue from pooled storage, and both JSON roots transfer their
-/// elements through the shared scalar owner, which is published with this file.</remarks>
+/// elements through the shared scalar owner. A Boolean element reads through its scalar owner, while every other scalar reads
+/// its raw storage.</remarks>
 internal static class ConcurrentQueueOwnerFile
 {
-    private const string Queue = "global::System.Collections.Concurrent.ConcurrentQueue<int>";
-
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
+    /// <param name="fact">The closed sequence owner.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set)
+    internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact)
     {
         var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
@@ -31,7 +31,14 @@ internal static class ConcurrentQueueOwnerFile
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
-        string owner = "Binary_" + extension + "_ConcurrentQueueOfInt";
+        string scalar = fact.Scalar!;
+        string readable = ReadableTypeName.Of(scalar);
+        string queue = fact.DeclaredType;
+        string roots = "LuminRoots_ConcurrentQueueOf" + readable;
+        string elementOwner = "global::LuminPack.Binary_" + extension + "_" + readable;
+        string owner = "Binary_" + extension + "_ConcurrentQueueOf" + readable;
+        // A Boolean element validates through its scalar owner, so its read root takes the operation profile.
+        bool ownerRead = scalar == "bool";
 
         w.Line("namespace LuminPack");
         w.Open();
@@ -40,20 +47,20 @@ internal static class ConcurrentQueueOwnerFile
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void Serialize_ConcurrentQueueOfInt(");
+        w.Line("internal static void Serialize_ConcurrentQueueOf" + readable + "(");
         w.Line("    scoped ref " + writer + " writer,");
-        w.Line("    scoped in " + Queue + " input)");
-        w.Line("        => LuminRoots_ConcurrentQueueOfInt.RootWrite(ref writer, input);");
+        w.Line("    scoped in " + queue + " input)");
+        w.Line("        => " + roots + ".RootWrite(ref writer, input);");
         w.Blank();
 
-        w.Line("internal static partial class LuminRoots_ConcurrentQueueOfInt");
+        w.Line("internal static partial class " + roots);
         w.Open();
 
         w.Line(preserve);
         w.Line(w.MethodImpl("NoInlining"));
         w.Line("internal static void RootWrite(");
         w.Line("    scoped ref " + writer + " writer,");
-        w.Line("    " + Queue + " input)");
+        w.Line("    " + queue + " input)");
         w.Open();
         w.Line(writer + " operationState = default;");
         w.Line("writer.CopyTo(ref operationState);");
@@ -72,7 +79,13 @@ internal static class ConcurrentQueueOwnerFile
         w.Line("operationState.CheckBuffer();");
         w.Line("count++;");
         w.Line("var v = item;");
-        w.Line("operationState.Write(in v);");
+        if (ownerRead)
+        {
+            w.Line("ref readonly " + scalar + " value2 = ref v;");
+            w.Line("operationState.Write(in value2);");
+        }
+        else
+            w.Line("operationState.Write(in v);");
         w.Close();
         w.Blank();
         w.Line("operationState.EndCollection(countPosition, count);");
@@ -86,13 +99,15 @@ internal static class ConcurrentQueueOwnerFile
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void RootRead(");
+        w.Line("internal static void RootRead" + (ownerRead ? "<TLuminProfile>" : string.Empty) + "(");
         w.Line("    scoped ref " + reader + " reader,");
-        w.Line("    scoped ref " + Queue + " value)");
+        w.Line("    scoped ref " + queue + " value)");
+        if (ownerRead)
+            w.Line("    where TLuminProfile : struct, " + options);
         w.Open();
         w.Line(reader + " operationState = default;");
         w.Line("reader.CopyTo(ref operationState);");
-        w.Line("int length = operationState.ReadLength(" + memory + ".SizeOf<int>());");
+        w.Line("int length = operationState.ReadLength(" + memory + ".SizeOf<" + scalar + ">());");
         w.Line("if (length < 0)");
         w.Open();
         w.Line("value = null;");
@@ -101,13 +116,13 @@ internal static class ConcurrentQueueOwnerFile
         w.Blank();
         w.Line("if (value is null)");
         w.Open();
-        w.Line("var pooled = global::System.Buffers.ArrayPool<int>.Shared.Rent(length);");
+        w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
         w.Line("try");
         w.Open();
-        w.Line("global::System.Span<int> items = " + marshal + ".CreateSpan<int>(");
+        w.Line("global::System.Span<" + scalar + "> items = " + marshal + ".CreateSpan<" + scalar + ">(");
         w.Indented(() =>
         {
-            w.Line("ref " + memory + ".As<byte, int>(ref operationState.Cursor),");
+            w.Line("ref " + memory + ".As<byte, " + scalar + ">(ref operationState.Cursor),");
             w.Line("0);");
         });
         w.Line("items = pooled.AsSpan(0, length);");
@@ -117,26 +132,26 @@ internal static class ConcurrentQueueOwnerFile
             w.Line("operationState.Read(");
             w.Indented(() =>
             {
-                w.Line("ref " + memory + ".As<int, byte>(ref " + marshal + ".GetReference(items)),");
-                w.Line("unchecked(length * " + memory + ".SizeOf<int>()));");
+                w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
+                w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
             });
         });
         w.Blank();
-        w.Line("value = new " + Queue + "(length == pooled.Length");
+        w.Line("value = new " + queue + "(length == pooled.Length");
         w.Indented(() =>
         {
-            w.Line("? (global::System.Collections.Generic.IEnumerable<int>)pooled");
+            w.Line("? (global::System.Collections.Generic.IEnumerable<" + scalar + ">)pooled");
             w.Line(": length == 0");
             w.Indented(() =>
             {
-                w.Line("? (global::System.Collections.Generic.IEnumerable<int>)global::System.Array.Empty<int>()");
-                w.Line(": new global::System.ArraySegment<int>(pooled, 0, length));");
+                w.Line("? (global::System.Collections.Generic.IEnumerable<" + scalar + ">)global::System.Array.Empty<" + scalar + ">()");
+                w.Line(": new global::System.ArraySegment<" + scalar + ">(pooled, 0, length));");
             });
         });
         w.Close();
         w.Line("finally");
         w.Open();
-        w.Line("global::System.Buffers.ArrayPool<int>.Shared.Return(pooled, false);");
+        w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(pooled, false);");
         w.Close();
         w.Blank();
         w.Line("goto operationComplete_RootRead;");
@@ -145,8 +160,11 @@ internal static class ConcurrentQueueOwnerFile
         w.Line("value.Clear();");
         w.Line("for (int i = 0; i < length; i++)");
         w.Open();
-        w.Line("int v = default !;");
-        w.Line("operationState.Read(ref v);");
+        w.Line(scalar + " v = default !;");
+        if (ownerRead)
+            w.Line(elementOwner + ".Read<TLuminProfile>(ref operationState, ref v);");
+        else
+            w.Line("operationState.Read(ref v);");
         w.Line("value.Enqueue(v);");
         w.Close();
         w.Blank();
@@ -159,7 +177,7 @@ internal static class ConcurrentQueueOwnerFile
         w.Line(preserve);
         w.Line("internal static void RootWriteJson<TLuminProfile>(");
         w.Line("    scoped ref " + jsonWriter + " writer,");
-        w.Line("    " + Queue + " input)");
+        w.Line("    " + queue + " input)");
         w.Line("    where TLuminProfile : struct, " + options);
         w.Open();
         w.Line("var value = input;");
@@ -185,7 +203,7 @@ internal static class ConcurrentQueueOwnerFile
         w.Line("    isFirst = false;");
         w.Line("writer.SetFirstElement(true);");
         w.Line("var temp = item;");
-        w.Line("global::LuminPack.Binary_" + extension + "_Int.Write<TLuminProfile>(ref writer, temp);");
+        w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
         w.Close();
         w.Blank();
         w.Line("writer.WriteArrayEnd<TLuminProfile>();");
@@ -195,7 +213,7 @@ internal static class ConcurrentQueueOwnerFile
         w.Line(preserve);
         w.Line("internal static void RootReadJson<TLuminProfile>(");
         w.Line("    scoped ref " + jsonReader + " reader,");
-        w.Line("    scoped ref " + Queue + " value)");
+        w.Line("    scoped ref " + queue + " value)");
         w.Line("    where TLuminProfile : struct, " + options);
         w.Open();
         w.Line("if (reader.IsNull())");
@@ -207,7 +225,7 @@ internal static class ConcurrentQueueOwnerFile
         w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
         w.Line("if (value is null)");
         w.Open();
-        w.Line("value = new " + Queue + "();");
+        w.Line("value = new " + queue + "();");
         w.Close();
         w.Line("else");
         w.Open();
@@ -220,8 +238,8 @@ internal static class ConcurrentQueueOwnerFile
         w.Line("    break;");
         w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
         w.Line("    continue;");
-        w.Line("int item = default !;");
-        w.Line("global::LuminPack.Binary_" + extension + "_Int.Read<TLuminProfile>(ref reader, ref item);");
+        w.Line(scalar + " item = default !;");
+        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
         w.Line("value.Enqueue(item);");
         w.Close();
         w.Close();
@@ -230,58 +248,59 @@ internal static class ConcurrentQueueOwnerFile
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void Serialize_ConcurrentQueueOfInt<TLuminProfile>(");
+        w.Line("internal static void Serialize_ConcurrentQueueOf" + readable + "<TLuminProfile>(");
         w.Line("    scoped ref " + writer + " writer,");
-        w.Line("    scoped in " + Queue + " input)");
-        w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ConcurrentQueueOfInt.RootWrite(ref writer, input);");
+        w.Line("    scoped in " + queue + " input)");
+        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite(ref writer, input);");
         w.Blank();
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize_ConcurrentQueueOfInt(");
+        w.Line("internal static void Deserialize_ConcurrentQueueOf" + readable + "(");
         w.Line("    scoped ref " + reader + " reader,");
-        w.Line("    scoped ref " + Queue + " value)");
-        w.Line("        => LuminRoots_ConcurrentQueueOfInt.RootRead(ref reader, ref value);");
+        w.Line("    scoped ref " + queue + " value)");
+        w.Line("        => " + roots + ".RootRead" + (ownerRead ? "<" + utf16 + ">" : string.Empty) + "(ref reader, ref value);");
         w.Blank();
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize_ConcurrentQueueOfInt<TLuminProfile>(");
+        w.Line("internal static void Deserialize_ConcurrentQueueOf" + readable + "<TLuminProfile>(");
         w.Line("    scoped ref " + reader + " reader,");
-        w.Line("    scoped ref " + Queue + " value)");
-        w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ConcurrentQueueOfInt.RootRead(ref reader, ref value);");
+        w.Line("    scoped ref " + queue + " value)");
+        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootRead" +
+            (ownerRead ? "<TLuminProfile>" : string.Empty) + "(ref reader, ref value);");
         w.Blank();
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void SerializeJson_ConcurrentQueueOfInt(");
+        w.Line("internal static void SerializeJson_ConcurrentQueueOf" + readable + "(");
         w.Line("    scoped ref " + jsonWriter + " writer,");
-        w.Line("    scoped in " + Queue + " input)");
-        w.Line("        => LuminRoots_ConcurrentQueueOfInt.RootWriteJson<" + utf16 + ">(ref writer, input);");
+        w.Line("    scoped in " + queue + " input)");
+        w.Line("        => " + roots + ".RootWriteJson<" + utf16 + ">(ref writer, input);");
         w.Blank();
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void SerializeJson_ConcurrentQueueOfInt<TLuminProfile>(");
+        w.Line("internal static void SerializeJson_ConcurrentQueueOf" + readable + "<TLuminProfile>(");
         w.Line("    scoped ref " + jsonWriter + " writer,");
-        w.Line("    scoped in " + Queue + " input)");
-        w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ConcurrentQueueOfInt.RootWriteJson<TLuminProfile>(ref writer, input);");
+        w.Line("    scoped in " + queue + " input)");
+        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWriteJson<TLuminProfile>(ref writer, input);");
         w.Blank();
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeJson_ConcurrentQueueOfInt(");
+        w.Line("internal static void DeserializeJson_ConcurrentQueueOf" + readable + "(");
         w.Line("    scoped ref " + jsonReader + " reader,");
-        w.Line("    scoped ref " + Queue + " value)");
-        w.Line("        => LuminRoots_ConcurrentQueueOfInt.RootReadJson<" + utf16 + ">(ref reader, ref value);");
+        w.Line("    scoped ref " + queue + " value)");
+        w.Line("        => " + roots + ".RootReadJson<" + utf16 + ">(ref reader, ref value);");
         w.Blank();
 
         w.Line(preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeJson_ConcurrentQueueOfInt<TLuminProfile>(");
+        w.Line("internal static void DeserializeJson_ConcurrentQueueOf" + readable + "<TLuminProfile>(");
         w.Line("    scoped ref " + jsonReader + " reader,");
-        w.Line("    scoped ref " + Queue + " value)");
-        w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ConcurrentQueueOfInt.RootReadJson<TLuminProfile>(ref reader, ref value);");
+        w.Line("    scoped ref " + queue + " value)");
+        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootReadJson<TLuminProfile>(ref reader, ref value);");
         w.Close();
         w.Blank();
 
@@ -290,51 +309,53 @@ internal static class ConcurrentQueueOwnerFile
         w.Line(inline);
         w.Line("internal static void Write(");
         w.Line("    this ref " + writer + " state,");
-        w.Line("    in " + Queue + " value)");
-        w.Line("        => " + serializer + ".LuminRoots_ConcurrentQueueOfInt.RootWrite(ref state, value);");
+        w.Line("    in " + queue + " value)");
+        w.Line("        => " + serializer + "." + roots + ".RootWrite(ref state, value);");
         w.Line(inline);
         w.Line("internal static void Write<TOptions>(");
         w.Line("    this ref " + writer + " state,");
-        w.Line("    in " + Queue + " value)");
-        w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_ConcurrentQueueOfInt.RootWrite(ref state, value);");
+        w.Line("    in " + queue + " value)");
+        w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootWrite(ref state, value);");
         w.Line(inline);
         w.Line("internal static void Read(");
         w.Line("    this ref " + reader + " state,");
-        w.Line("    ref " + Queue + " value)");
-        w.Line("        => " + serializer + ".LuminRoots_ConcurrentQueueOfInt.RootRead(ref state, ref value);");
+        w.Line("    ref " + queue + " value)");
+        w.Line("        => " + serializer + "." + roots + ".RootRead" + (ownerRead ? "<" + utf16 + ">" : string.Empty) +
+            "(ref state, ref value);");
         w.Line(inline);
         w.Line("internal static void Read<TOptions>(");
         w.Line("    this ref " + reader + " state,");
-        w.Line("    ref " + Queue + " value)");
-        w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_ConcurrentQueueOfInt.RootRead(ref state, ref value);");
+        w.Line("    ref " + queue + " value)");
+        w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootRead" +
+            (ownerRead ? "<TOptions>" : string.Empty) + "(ref state, ref value);");
         w.Line(inline);
         w.Line("internal static void Write(");
         w.Line("    this ref " + jsonWriter + " state,");
-        w.Line("    in " + Queue + " value)");
-        w.Line("        => " + serializer + ".LuminRoots_ConcurrentQueueOfInt.RootWriteJson<" + utf16 + ">(ref state, value);");
+        w.Line("    in " + queue + " value)");
+        w.Line("        => " + serializer + "." + roots + ".RootWriteJson<" + utf16 + ">(ref state, value);");
         w.Line(inline);
         w.Line("internal static void Write<TOptions>(");
         w.Line("    this ref " + jsonWriter + " state,");
-        w.Line("    in " + Queue + " value)");
-        w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_ConcurrentQueueOfInt.RootWriteJson<TOptions>(ref state, value);");
+        w.Line("    in " + queue + " value)");
+        w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootWriteJson<TOptions>(ref state, value);");
         w.Line(inline);
-        w.Line("internal static void Read(this ref " + jsonReader + " state, ref " + Queue + " value)");
+        w.Line("internal static void Read(this ref " + jsonReader + " state, ref " + queue + " value)");
         w.Open();
         w.Line("if (state.CurrentTokenType == " + jsonReader + ".JsonTokenType.None && !state.Read<" + utf16 + ">())");
         w.Line("    " + exception + ".ThrowFormatException(\"JSON input does not contain a value.\");");
-        w.Line(serializer + ".LuminRoots_ConcurrentQueueOfInt.RootReadJson<" + utf16 + ">(ref state, ref value);");
+        w.Line(serializer + "." + roots + ".RootReadJson<" + utf16 + ">(ref state, ref value);");
         w.Line("state.CompleteValue();");
         w.Close();
         w.Blank();
         w.Line(inline);
         w.Line("internal static void Read<TOptions>(");
         w.Line("    this ref " + jsonReader + " state,");
-        w.Line("    ref " + Queue + " value)");
+        w.Line("    ref " + queue + " value)");
         w.Line("    where TOptions : struct, " + options);
         w.Open();
         w.Line("if (state.CurrentTokenType == " + jsonReader + ".JsonTokenType.None && !state.Read<TOptions>())");
         w.Line("    " + exception + ".ThrowFormatException(\"JSON input does not contain a value.\");");
-        w.Line(serializer + ".LuminRoots_ConcurrentQueueOfInt.RootReadJson<TOptions>(ref state, ref value);");
+        w.Line(serializer + "." + roots + ".RootReadJson<TOptions>(ref state, ref value);");
         w.Line("state.CompleteValue();");
         w.Close();
         w.Close();

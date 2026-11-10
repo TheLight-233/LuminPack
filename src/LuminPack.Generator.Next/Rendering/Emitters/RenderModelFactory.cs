@@ -14,11 +14,6 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 /// Features whose rendering facts are not modeled return null so the pipeline emits nothing instead of partial code.</remarks>
 internal static class RenderModelFactory
 {
-    private const string ConcurrentQueueOfInt = "global::System.Collections.Concurrent.ConcurrentQueue<int>";
-    private const string ImmutableArrayOfInt = "global::System.Collections.Immutable.ImmutableArray<int>";
-    private const string ConcurrentQueueOfString = "global::System.Collections.Concurrent.ConcurrentQueue<string>";
-    private const string ImmutableArrayOfString = "global::System.Collections.Immutable.ImmutableArray<string>";
-
     /// <summary>Builds the render model of one payload.</summary>
     /// <param name="model">The normalized payload.</param>
     /// <param name="options">The project facts.</param>
@@ -365,10 +360,23 @@ internal static class RenderModelFactory
     /// <returns>The render member, or null when the family is outside the direct emitters.</returns>
     private static RenderMember? Collection(CollectionMember member, string extension, GeneratorOptions options)
     {
-        if (member.Scalar == null)
-            return null;
         bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, member.DeclaredType);
+        // A concurrent or immutable sequence publishes an owner per closed element type: a raw scalar or shared string
+        // variant, or a packable element whose record body the owner expands in place.
+        if (member.Kind is CollectionKind.Concurrent or CollectionKind.Immutable)
+        {
+            RenderMemberKind kind = member.Kind == CollectionKind.Concurrent
+                ? RenderMemberKind.ConcurrentQueue : RenderMemberKind.ImmutableArray;
+            // A packable element carries its declared spelling in Scalar, so the nested model decides the shape first.
+            if (member.Nested != null)
+                return PayloadElement(member, formatter, mirrored, property, options);
+            return member.Scalar == null ? null :
+                new RenderMember(member.Name, kind, member.Scalar, member.DeclaredType, 0, formatter,
+                    ScalarKind.Other, mirrored, property: property);
+        }
+        if (member.Scalar == null)
+            return null;
         switch (member.Kind)
         {
             case CollectionKind.Array:
@@ -380,19 +388,6 @@ internal static class RenderModelFactory
             case CollectionKind.SortedSet:
                 return new RenderMember(member.Name, RenderMemberKind.SortedSet, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, raw: true, property: property);
-            // The concurrent and immutable sequences are published only for the element types whose shared owner exists.
-            case CollectionKind.Concurrent when Owns(member.DeclaredType, extension, ConcurrentQueueOfInt) ||
-                Owns(member.DeclaredType, extension, ConcurrentQueueOfString):
-                return new RenderMember(member.Name, RenderMemberKind.ConcurrentQueue, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored, property: property);
-            case CollectionKind.Concurrent when member.Nested != null:
-                return PayloadElement(member, formatter, mirrored, property, options);
-            case CollectionKind.Immutable when Owns(member.DeclaredType, extension, ImmutableArrayOfInt) ||
-                Owns(member.DeclaredType, extension, ImmutableArrayOfString):
-                return new RenderMember(member.Name, RenderMemberKind.ImmutableArray, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored, property: property);
-            case CollectionKind.Immutable when member.Nested != null:
-                return PayloadElement(member, formatter, mirrored, property, options);
             case CollectionKind.List:
             case CollectionKind.NestedList:
                 // A list of key/value pairs writes each pair's key and value in one checkable loop.
@@ -507,14 +502,6 @@ internal static class RenderModelFactory
             return null;
         return element;
     }
-
-    /// <summary>Whether a declared sequence names the shared formatter owner the renderers publish.</summary>
-    /// <param name="declaredType">The declared sequence spelling.</param>
-    /// <param name="extension">The assembly's extension container.</param>
-    /// <param name="ownerType">The supported sequence spelling.</param>
-    /// <returns>Whether the shared owner of the supported sequence is the declared sequence's owner.</returns>
-    private static bool Owns(string declaredType, string extension, string ownerType)
-        => GeneratedNames.Owner(extension, declaredType) == GeneratedNames.Owner(extension, ownerType);
 
     private static ScalarKind FieldType(string keyword) => keyword switch
     {

@@ -35,7 +35,7 @@ internal static class ImmutableArrayPayloadOwnerFile
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
         string array = fact.DeclaredType;
-        PayloadRenderModel element = fact.Element;
+        PayloadRenderModel element = fact.Element!;
         string elementType = element.GlobalName;
         string elementOwner = element.Owner;
         string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(array));

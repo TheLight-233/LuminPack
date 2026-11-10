@@ -34,7 +34,7 @@ internal static class ConcurrentQueuePayloadOwnerFile
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
         string queue = fact.DeclaredType;
-        PayloadRenderModel element = fact.Element;
+        PayloadRenderModel element = fact.Element!;
         string elementType = element.GlobalName;
         string elementOwner = element.Owner;
         string owner = "Binary_" + extension + "_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(queue));
