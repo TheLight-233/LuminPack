@@ -24,10 +24,12 @@ internal static partial class DirectBinaryEmitter
     {
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
         var members = model.Members;
-        // Version-tolerant roots always take the operation's profile.
-        bool genericWrite = model.Version != null || members.Any(member => member.Kind == DirectMemberKind.Text);
-        // An inline object member is stored by the profile-free stream protocol, so it does not make a root generic.
-        bool genericRead = model.Version != null || members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object));
+        // Version-tolerant roots always take the operation's profile, and so does a string anywhere in an inline object below.
+        bool genericWrite = model.Version != null || model.ProfilePayload;
+        // A fixed member or an inline object of fixed members needs no profile; anything else, including a string in an inline
+        // object, does.
+        bool genericRead = model.Version != null || model.ProfilePayload ||
+            members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object));
         bool allFixed = members.All(member => member.IsFixed);
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         // State parameters are spelled through the imported namespace; the other helper names are qualified until presentation.
@@ -275,9 +277,10 @@ internal static partial class DirectBinaryEmitter
             w.Indented(() => w.Line(Constraint() + " => " + container + "." + writeRoot + "(ref writer, input);"));
         }
 
-        // A stream record's body is already the lowered statement text, so the call budget is counted from it directly.
+        // A stream record's body is already the lowered statement text, so the call budget is counted from it directly. A
+        // member write stays a call boundary whose callee keeps its own budget, so the runtime sizes the entry instead.
         string WriteHint(List<string> body, bool union) => model.StreamRecord
-            ? (DirectCalls.Count(body) <= 16 ? inline : null)
+            ? (DirectCalls.Count(body) <= 16 && !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) ? inline : null)
             : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null);
 
         string ReadHint(List<string> body) => model.StreamRecord
@@ -638,6 +641,14 @@ internal static partial class DirectBinaryEmitter
             var member = members[index];
             if (member.Kind == DirectMemberKind.Object)
             {
+                // A child with strings publishes a named member write, which keeps its own framing; the parent calls it instead
+                // of copying its body.
+                if (member.Nested.MemberWrite)
+                {
+                    body.Add(w.A("LuminPackSerializer") + ".SerializeMember_" + member.Nested.Readable + "<" + Profile + ">(ref writer, " +
+                        owner + "." + member.Name + ");");
+                    continue;
+                }
                 string name = InlineName(names, "inlineValue", depth);
                 body.Add("var " + name + " = " + owner + "." + member.Name + ";");
                 body.Add("if (" + name + " is null)");
@@ -1117,6 +1128,11 @@ internal static partial class DirectBinaryEmitter
                 body.Add(owner + "." + member.Name + " = " + name + ";");
                 body.Add("}");
                 body.Add("");
+                continue;
+            }
+            if (member.Kind == DirectMemberKind.Text)
+            {
+                body.Add("reader.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
                 continue;
             }
             int last = RunEnd(members, index);

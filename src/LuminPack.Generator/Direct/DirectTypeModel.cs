@@ -126,6 +126,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool IsStruct;
     /// <summary>Whether a member is an inline object, which selects the stream record protocol instead of the reserved one.</summary>
     internal bool StreamRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object);
+    /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
+    /// generic.</summary>
+    internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||
+        member.Kind == DirectMemberKind.Object && member.Nested.ProfilePayload);
     /// <summary>The positional storage view of a portable struct, whose fields are copied one by one at packed wire offsets, or null.</summary>
     internal readonly string View;
     /// <summary>Whether the portable view is elided: every positional view name is also a field name of the struct, so the
@@ -582,9 +586,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         }
         // A packable class of this assembly with analyzed fields is stored inline: the parent record writes its members
         // directly after a marker holding their count. Versioned, mirrored, constructed and pooled children change that
-        // record shape, and a child with a string or collection keeps the original pipeline.
+        // record shape. A child with strings writes through its named member operation; a child mixing strings with inline
+        // objects or collections keeps the original reserved body and the original pipeline.
         if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } objectType && symbol.SpecialType == SpecialType.None &&
-            symbol.NullableAnnotation != NullableAnnotation.Annotated && objectType.ContainingType == null &&
+            objectType.ContainingType == null &&
             SymbolEqualityComparer.Default.Equals(objectType.ContainingAssembly, compilation.Assembly) &&
             TypeMetaChecker.TryCheckPackableAttribute(objectType) && field.Type == LuminFiledType.Class &&
             field.FieldType == LuminDataType.Reference && field.ClassFields.Count != 0 && field.RentPoolMethod == null &&
@@ -593,9 +598,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if (_depth > 8)
                 return DirectEmission.Reject<DirectMember>("nested object depth");
             var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(objectType, compilation, metadata), compilation, metadata);
-            if (nested == null || nested.IsStruct || nested.Mirror != null || nested.Version != null || nested.Proven ||
+            if (nested == null || nested.IsStruct || nested.Mirror != null || nested.Version != null ||
                 nested.ConstructorArguments != null || nested.Members.Length == 0 ||
-                !nested.Members.All(item => item.Kind is DirectMemberKind.Fixed or DirectMemberKind.Object))
+                nested.Members.Any(item => item.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or DirectMemberKind.Object)))
+                return DirectEmission.Reject<DirectMember>("nested object member");
+            bool text = nested.Members.Any(item => item.Kind == DirectMemberKind.Text);
+            if (text && (!nested.MemberWrite || nested.Members.Any(item => item.Kind == DirectMemberKind.Object)))
                 return DirectEmission.Reject<DirectMember>("nested object member");
             string spelling = objectType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return new DirectMember(field.Name, DirectMemberKind.Object, spelling, spelling, 0,
