@@ -138,7 +138,14 @@ internal static class DirectEmission
             // A Union file compacts its short case rows and spells canonical names through the aliases at presentation.
             return GeneratedSourceLayout.Apply(writer.Complete(json), aliases);
         }
-        if (json)
+        if (model.Circle)
+        {
+            if (json)
+                DirectCircleJsonEmitter.Emit(model, writer, operations);
+            else
+                DirectCircleBinaryEmitter.Emit(model, writer, operations);
+        }
+        else if (json)
             DirectJsonEmitter.Emit(model, writer, operations);
         else if (model.IsStruct)
             DirectStructEmitter.Emit(model, writer, operations);
