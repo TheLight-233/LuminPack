@@ -12,20 +12,23 @@ internal static class DirectInlining
     private const int Limit = 16;
 
     /// <summary>Whether a root write keeps its aggressive inlining hint.</summary>
-    internal static bool Write(DirectTypeModel model, bool union)
+    /// <param name="model">The covered type.</param>
+    /// <param name="union">Whether the root is the Union payload write.</param>
+    /// <param name="sizes">The runtime-size calls of raw struct widths in the body.</param>
+    internal static bool Write(DirectTypeModel model, bool union, int sizes)
     {
         var members = model.Members;
         // A mirrored type also calls the mirror view of the read-only input: LuminPackMarshal.As and Unsafe.AsRef.
         int mirror = model.Mirror == null ? 0 : 2;
         if (members.All(member => member.IsFixed))
-            return mirror + (union ? 1 : 2) + Group(members.Length) <= Limit;
+            return mirror + (union ? 1 : 2) + Group(members.Length) + sizes <= Limit;
         int count = mirror + (union ? 0 : 2);
         count += members.Count(member => !member.IsFixed);   // snapshot capture or string bound
         count += members.Count(member => !member.IsFixed);   // reserved record store
         count += 2;                                          // reservation and commit
         foreach (int run in Runs(model))
             count += run == 1 ? 1 : Group(run);
-        return count <= Limit;
+        return count + sizes <= Limit;
     }
 
     /// <summary>Whether a portable struct's write root keeps its aggressive inlining hint.</summary>
@@ -40,9 +43,9 @@ internal static class DirectInlining
         => write ? 7 + 4 * model.Members.Length : 7 + 2 * model.Members.Length;
 
     /// <summary>Whether a root read keeps its aggressive inlining hint.</summary>
-    internal static bool Read(DirectTypeModel model)
+    internal static bool Read(DirectTypeModel model, int sizes)
     {
-        int count = 1 + model.Members.Count(member => !member.IsFixed);
+        int count = 1 + sizes + model.Members.Count(member => !member.IsFixed);
         // A mirrored type also calls the mirror view, and a mirrored string compares the decoded instance.
         if (model.Mirror != null)
             count += 1 + model.Members.Count(member => member.Mirrored && member.Kind == DirectMemberKind.Text);
@@ -60,7 +63,7 @@ internal static class DirectInlining
     }
 
     /// <summary>Whether an all-fixed Union read keeps its aggressive inlining hint.</summary>
-    internal static bool FixedUnionRead(DirectTypeModel model) => 2 * model.Members.Length + 1 <= Limit;
+    internal static bool FixedUnionRead(DirectTypeModel model, int sizes) => 2 * model.Members.Length + 1 + sizes <= Limit;
 
     /// <summary>Counts a fixed-run write: its proof, block copy, field-wise stores and cursor advance.</summary>
     private static int Group(int fields) => 7 * fields - 1;

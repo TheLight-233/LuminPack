@@ -44,7 +44,7 @@ internal static class DirectJsonEmitter
         w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + input + type + nullable + " input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
-        WriteBody(model, w, helper);
+        Lines(w, WriteBody(model, w, helper));
         w.Close();
         w.Blank();
         w.Suppressed = !reads;
@@ -138,7 +138,7 @@ internal static class DirectJsonEmitter
     private static string Head(DirectTypeModel model, int index) => (index == 0 ? "{" : ",") + "\"" + model.Members[index].Name + "\":";
 
     /// <summary>Builds the JSON write body.</summary>
-    private static void WriteBody(DirectTypeModel model, DirectWriter w, string helper)
+    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, string helper)
     {
         var body = new List<string>();
         body.Add("var value = input;");
@@ -194,9 +194,18 @@ internal static class DirectJsonEmitter
             if (block)
                 body.Add("");
             body.Add("writer.SetFirstElement(true);");
+            if (member.Raw)
+            {
+                // A raw struct is written by its binary formatter owner from a copy, without a null branch.
+                string temp = temps++ == 0 ? "temp" : "temp" + temps.ToString(CultureInfo.InvariantCulture);
+                body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + temp + ");");
+                body.Add("");
+                continue;
+            }
             if (member.IsFixed)
             {
-                body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
+                body.Add("writer.Write<" + Profile + ">(" + (member.Underlying != null ? "(" + member.Underlying + ")" : string.Empty) + owner + "." + member.Name + ");");
                 continue;
             }
             body.Add("if (" + owner + "." + member.Name + " == null)");
@@ -217,8 +226,12 @@ internal static class DirectJsonEmitter
             body.Add("");
         }
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
-        Lines(w, body);
+        return body;
     }
+
+    /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
+    /// of more than sixteen calls stays behind its formatter's call.</summary>
+    internal static int WriteCalls(DirectTypeModel model) => DirectCalls.Count(WriteBody(model, new DirectWriter(-1), model.JsonHelper));
 
     /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes, otherwise as its raw span.</summary>
     /// <returns>Whether the head was written as a braced block.</returns>
@@ -321,10 +334,16 @@ internal static class DirectJsonEmitter
                 caseLines.Add("if (reuseExisting)");
                 caseLines.Add("\t" + target + " = " + (model.Mirror == null ? "value!." : "reuseLocal.") + member.Name + ";");
             }
-            if (member.IsFixed)
+            if (member.Raw)
+            {
+                caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
+                caseLines.Add("break;");
+            }
+            else if (member.IsFixed)
             {
                 string options = member.IsBoolean ? w.A("LuminPackDefaultOptions") : Profile;
-                caseLines.Add(target + " = " + (member.IsFloating ? "\u0001" + member.Scalar + "\u0001" : "reader.Read<" + member.Scalar + ", " + options + ">()") + ";");
+                caseLines.Add(target + " = " + (member.IsFloating ? "\u0001" + member.Scalar + "\u0001" : member.Underlying != null
+                    ? "(" + member.Scalar + ")reader.Read<" + member.Underlying + ", " + options + ">()" : "reader.Read<" + member.Scalar + ", " + options + ">()") + ";");
                 caseLines.Add("break;");
             }
             else

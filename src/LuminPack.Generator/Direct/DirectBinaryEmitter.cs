@@ -111,6 +111,12 @@ internal static class DirectBinaryEmitter
         w.Line("internal static void SerializeUnion<" + Profile + ">(scoped ref " + writer + " writer, " + type + "? input)");
         w.Indented(() => w.Line(Constraint() + " => " + (genericWrite ? container + "." + writeUnion + "(ref writer, input);" : "SerializeUnion(ref writer, input);")));
         w.Blank();
+        if (model.FixedUnionCase)
+        {
+            Method(FixedUnionBody(w, WriteBody(model, w, union: true)), "SerializeUnionAt", false,
+                "(scoped ref " + writer + " writer, " + type + "? input, int initialIndex, byte? unionTag)", inline, "int");
+            w.Blank();
+        }
         w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
@@ -122,7 +128,7 @@ internal static class DirectBinaryEmitter
         w.Line("internal static void DeserializeUnion" + suffix + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(Constraint() + " => " + (genericRead ? container + "." + readUnion + "(ref reader, ref value);" : "DeserializeUnion" + suffix + "(ref reader, ref value);")));
         w.Suppressed = !writes;
-        if (allFixed)
+        if (model.MeasureRecord)
         {
             w.Blank();
             w.Line(w.Preserve);
@@ -232,34 +238,47 @@ internal static class DirectBinaryEmitter
             var write = Mirrored(model, w, WriteBody(model, w, union: false), writes: true, union: false);
             if (model.Proven)
                 write = ProvenWriteBody(model, w, write, union: false);
-            Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", DirectInlining.Write(model, union: false) ? inline : null);
+            Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
+                DirectInlining.Write(model, union: false, Sizes(write)) ? inline : null);
             w.Blank();
             w.Suppressed = !reads;
             var read = Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
-            Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", DirectInlining.Read(model) ? inline : null);
+            Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
+                DirectInlining.Read(model, Sizes(read)) ? inline : null);
             w.Blank();
             w.Suppressed = !writes;
-            var writeUnionBody = Mirrored(model, w, WriteBody(model, w, union: true), writes: true, union: true);
-            // A lone record checks itself, so only a reserved record takes the proven path.
-            if (model.Proven && members.Length != 1)
-                writeUnionBody = ProvenWriteBody(model, w, writeUnionBody, union: true);
-            Method(writeUnionBody, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
-                DirectInlining.Write(model, union: true) ? inline : null);
+            if (model.FixedUnionCase)
+            {
+                // A fixed Union case's Union write publishes the cursor its shared returning kernel computes.
+                w.Line(w.Preserve);
+                w.Line(inline);
+                w.Line("internal static void RootWriteUnion(scoped ref " + writer + " writer, " + type +
+                    "? input) => writer.Position = SerializeUnionAt(ref writer, input, writer.Position, null);");
+            }
+            else
+            {
+                var writeUnionBody = Mirrored(model, w, WriteBody(model, w, union: true), writes: true, union: true);
+                // A lone record checks itself, so only a reserved record takes the proven path.
+                if (model.Proven && members.Length != 1)
+                    writeUnionBody = ProvenWriteBody(model, w, writeUnionBody, union: true);
+                Method(writeUnionBody, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
+                    DirectInlining.Write(model, union: true, Sizes(writeUnionBody)) ? inline : null);
+            }
             w.Blank();
             w.Suppressed = !reads;
             var readUnionBody = Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
             Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                allFixed ? (DirectInlining.FixedUnionRead(model) ? inline : null) : w.MethodImpl("NoInlining"));
+                allFixed ? (DirectInlining.FixedUnionRead(model, Sizes(readUnionBody)) ? inline : null) : w.MethodImpl("NoInlining"));
             w.Suppressed = false;
             w.Close();
         }
 
-        void Method(List<string> body, string name, bool generic, string parameters, string attribute)
+        void Method(List<string> body, string name, bool generic, string parameters, string attribute, string returns = "void")
         {
             w.Line(w.Preserve);
             if (attribute != null)
                 w.Line(attribute);
-            w.Line("internal static void " + name + (generic ? "<" + Profile + ">" : string.Empty) + parameters);
+            w.Line("internal static " + returns + " " + name + (generic ? "<" + Profile + ">" : string.Empty) + parameters);
             if (generic)
                 w.Indented(() => w.Line(Constraint()));
             w.Open();
@@ -281,8 +300,40 @@ internal static class DirectBinaryEmitter
     }
 
     /// <summary>Spells an unaligned cursor position; a plain spelling was already short in the template and registers no alias.</summary>
-    private static string At(DirectWriter w, string cursor, int offset, bool plain = false)
-        => offset == 0 ? cursor : (plain ? "Unsafe" : w.A("Unsafe")) + ".Add(ref " + cursor + ", " + offset.ToString(CultureInfo.InvariantCulture) + ")";
+    private static string At(DirectWriter w, string cursor, string offset, bool plain = false)
+        => offset == "0" ? cursor : (plain ? "Unsafe" : w.A("Unsafe")) + ".Add(ref " + cursor + ", " + offset + ")";
+
+    /// <summary>Adds a member's width to an offset as the original template does: constants fold until the first runtime size, after
+    /// which every term is appended in order.</summary>
+    private static string Add(string offset, string size)
+    {
+        if (offset == "0")
+            return size;
+        if (int.TryParse(offset, NumberStyles.None, CultureInfo.InvariantCulture, out int total) &&
+            int.TryParse(size, NumberStyles.None, CultureInfo.InvariantCulture, out int length) && total <= int.MaxValue - length)
+            return (total + length).ToString(CultureInfo.InvariantCulture);
+        return offset + " + " + size;
+    }
+
+    /// <summary>The packed width of a run of fixed members.</summary>
+    private static string Width(DirectMember[] members, int first, int last)
+    {
+        string width = "0";
+        for (int index = first; index <= last; index++)
+            width = Add(width, members[index].Width);
+        return width;
+    }
+
+    /// <summary>Counts the runtime-size calls of raw struct widths in a root body, which the inlining budget counts as calls.</summary>
+    private static int Sizes(List<string> body)
+    {
+        int count = 0;
+        foreach (string line in body)
+            for (int index = line.IndexOf(".SizeOf<", StringComparison.Ordinal); index >= 0; index = line.IndexOf(".SizeOf<", index + 1, StringComparison.Ordinal))
+                if (string.CompareOrdinal(line, index + 8, "global::System.IntPtr>", 0, 22) != 0)
+                    count++;
+        return count;
+    }
 
     /// <summary>Spells a member's storage reinterpreted as bytes for a block copy or proof; see <see cref="At"/> for plain spellings.</summary>
     private static string Bytes(DirectWriter w, DirectMember member, string owner, bool readOnly, bool plain = false)
@@ -294,7 +345,7 @@ internal static class DirectBinaryEmitter
         var terms = new List<string> { w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" };
         for (int index = first; index < last; index++)
             terms.Add(w.A("Unsafe") + ".ByteOffset(ref " + Bytes(w, members[index], owner, readOnly) + ", ref " + Bytes(w, members[index + 1], owner, readOnly) +
-                ") == " + members[index].Size.ToString(CultureInfo.InvariantCulture));
+                ") == " + (members[index].Raw ? w.A("Unsafe") + ".SizeOf<" + members[index].Scalar + ">()" : members[index].Width));
         return string.Join(" && ", terms);
     }
 
@@ -339,7 +390,7 @@ internal static class DirectBinaryEmitter
         {
             if (union)
             {
-                string widths = string.Join(" + ", members.Select(member => member.Size.ToString(CultureInfo.InvariantCulture)));
+                string widths = string.Join(" + ", members.Select(member => member.Width));
                 body.Add("if (checked(3 + " + widths + ") > 4096)");
                 body.Add("\twriter.EnsureAdditionalCapacity(checked(" + widths + "));");
             }
@@ -354,14 +405,14 @@ internal static class DirectBinaryEmitter
                 body.Add("writer.Write(value." + members[0].Name + ");");
                 return body;
             }
-            int width = members.Sum(member => member.Size);
+            string width = Width(members, 0, members.Length - 1);
             body.Add("if (" + Proof(w, members, 0, members.Length - 1, "value", readOnly: true) + ")");
-            body.Add("\twriter.Write(ref " + Bytes(w, members[0], "value", readOnly: true, plain: true) + ", " + width.ToString(CultureInfo.InvariantCulture) + ");");
+            body.Add("\twriter.Write(ref " + Bytes(w, members[0], "value", readOnly: true, plain: true) + ", " + width + ");");
             body.Add("else");
             body.Add("{");
             body.Add("ref byte cursor = ref writer.Cursor;");
             AddFixedStores(w, members, 0, members.Length - 1, "cursor", body);
-            body.Add("writer.Advance(" + width.ToString(CultureInfo.InvariantCulture) + ");");
+            body.Add("writer.Advance(" + width + ");");
             body.Add("}");
             return body;
         }
@@ -456,6 +507,76 @@ internal static class DirectBinaryEmitter
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
         return body;
+    }
+
+    /// <summary>Turns an all-fixed Union write into the returning cursor kernel of a fixed Union case, as the fixed Union cursor
+    /// projection does: the cursor is a local byte index into the buffer, advancing adds to it, a block write copies into the
+    /// buffer, a lone store returns its width, and the index is published only before a capacity reservation.</summary>
+    private static List<string> FixedUnionBody(DirectWriter w, List<string> original)
+    {
+        string destination = w.A("Unsafe") + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(writer.Buffer), unchecked((nint)(uint)(fixedUnionIndex)))";
+        var body = new List<string>
+        {
+            "int fixedUnionIndex = initialIndex;",
+            "if (unionTag.HasValue)",
+            "{",
+            destination + " = unionTag.GetValueOrDefault();",
+            "fixedUnionIndex++;",
+            "}",
+            "",
+        };
+        const string block = "\twriter.Write(ref ";
+        foreach (string line in original)
+        {
+            if (line.StartsWith("\twriter.EnsureAdditionalCapacity(", StringComparison.Ordinal))
+            {
+                body.Add("{");
+                body.Add("writer.Position = fixedUnionIndex;");
+                body.Add(line.Substring(1));
+                body.Add("}");
+                body.Add("");
+            }
+            else if (line.StartsWith(block, StringComparison.Ordinal))
+            {
+                // The block source and width are separated by the last top-level comma.
+                string arguments = line.Substring(block.Length, line.Length - block.Length - 2);
+                int comma = TopLevelComma(arguments);
+                string source = arguments.Substring(0, comma), width = arguments.Substring(comma + 2);
+                body.Add("{");
+                body.Add(w.A("LuminPackMarshal") + ".CopyBlockUnaligned(ref " + destination + ", ref " + source + ", (uint)(" + width + "));");
+                body.Add("fixedUnionIndex += " + width + ";");
+                body.Add("}");
+            }
+            else if (line == "ref byte cursor = ref writer.Cursor;")
+                body.Add("ref byte cursor = ref " + destination + ";");
+            else if (line.StartsWith("writer.Advance(", StringComparison.Ordinal))
+                body.Add("fixedUnionIndex += " + line.Substring("writer.Advance(".Length, line.Length - "writer.Advance(".Length - 2) + ";");
+            else if (line.StartsWith("writer.Write(", StringComparison.Ordinal))
+                body.Add("fixedUnionIndex += " + w.A("LuminPackWriter") + ".Write(ref " + destination + ", " + line.Substring("writer.Write(".Length));
+            else
+                body.Add(line);
+        }
+        if (body[body.Count - 1] == "}")
+            body.Add("");
+        body.Add("return fixedUnionIndex;");
+        return body;
+    }
+
+    /// <summary>Finds the last comma outside parentheses and angle brackets.</summary>
+    private static int TopLevelComma(string text)
+    {
+        int depth = 0, found = -1;
+        for (int index = 0; index < text.Length; index++)
+        {
+            char c = text[index];
+            if (c is '(' or '<')
+                depth++;
+            else if (c is ')' or '>')
+                depth--;
+            else if (c == ',' && depth == 0)
+                found = index;
+        }
+        return found;
     }
 
     /// <summary>Reaches a mirrored type's storage through its layout mirror: the mirror view is declared after the null handling
@@ -621,14 +742,14 @@ internal static class DirectBinaryEmitter
     /// <summary>Stores a run of fixed fields at their packed offsets from a cursor.</summary>
     private static void AddFixedStores(DirectWriter w, DirectMember[] members, int first, int last, string cursor, List<string> body)
     {
-        int offset = 0;
+        string offset = "0";
         for (int index = first; index <= last; index++)
         {
             var member = members[index];
-            body.Add(member.Size == 8
+            body.Add(member.Size == 8 || member.Raw
                 ? w.A("LuminPackWriter") + ".Write(ref " + At(w, cursor, offset) + ", in value." + member.Name + ");"
                 : w.A("Unsafe") + ".WriteUnaligned(ref " + At(w, cursor, offset) + ", value." + member.Name + ");");
-            offset += member.Size;
+            offset = Add(offset, member.Width);
         }
     }
 
@@ -673,7 +794,10 @@ internal static class DirectBinaryEmitter
                     width += members[item].Size;
                 }
                 string cursor = "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
-                string widthText = width.ToString(CultureInfo.InvariantCulture);
+                string widthText = Width(members, index, last);
+                // A runtime-sized advance is spelled as the unsigned native offset of the cursor projection.
+                string advance = int.TryParse(widthText, NumberStyles.None, CultureInfo.InvariantCulture, out _) ? widthText
+                    : "unchecked((nint)(uint)((" + widthText + ")))";
                 if (!union)
                 {
                     body.Add("if (" + Proof(w, members, index, last, "instance", readOnly: false) + ")");
@@ -696,14 +820,14 @@ internal static class DirectBinaryEmitter
                 }
                 body.Add("ref byte " + cursor + " = ref reader.Cursor;");
                 body.Add("reader.EnsureReadable(" + widthText + ");");
-                body.Add("reader.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader.Cursor, " + widthText + ");");
-                int offset = 0;
+                body.Add("reader.Cursor = ref " + w.A("Unsafe") + ".Add(ref reader.Cursor, " + advance + ");");
+                string offset = "0";
                 for (int item = index; item <= last; item++)
                 {
                     var field = members[item];
                     body.Add("instance." + field.Name + " = " + (field.IsBoolean ? Policy() + ".ReadBoolean(ref " + At(w, cursor, offset, plain: true) + ");"
                         : w.A("LuminPackReader") + ".Read<" + field.Scalar + ">(ref " + At(w, cursor, offset, plain: true) + ");"));
-                    offset += field.Size;
+                    offset = Add(offset, field.Width);
                 }
                 if (!union)
                     body.Add("}");

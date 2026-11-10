@@ -40,11 +40,18 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly LuminFiledType FieldType;
     /// <summary>Whether the member is an auto-property, whose storage is reached through the type's layout mirror.</summary>
     internal readonly bool Mirrored;
+    /// <summary>The underlying scalar keyword of an enum member, whose <see cref="Scalar"/> is the enum's global spelling, or null.</summary>
+    internal readonly string Underlying;
+    /// <summary>Whether the member is a raw unmanaged packable struct, whose width is the runtime size <c>Unsafe.SizeOf&lt;T&gt;()</c>
+    /// and whose JSON goes through its binary formatter owner (<see cref="Formatter"/>).</summary>
+    internal readonly bool Raw;
 
     /// <summary>Captures one member.</summary>
     internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
-        bool mirrored)
+        bool mirrored, string underlying = null, bool raw = false)
     {
+        Raw = raw;
+        Underlying = underlying;
         Mirrored = mirrored;
         Name = name;
         Kind = kind;
@@ -55,8 +62,11 @@ internal sealed class DirectMember : IEquatable<DirectMember>
         FieldType = fieldType;
     }
 
-    /// <summary>Whether the member stores a fixed scalar.</summary>
+    /// <summary>Whether the member stores a fixed scalar or raw struct.</summary>
     internal bool IsFixed => Kind == DirectMemberKind.Fixed;
+
+    /// <summary>The member's packed width as the original template spells it: a constant, or the runtime size of a raw struct.</summary>
+    internal string Width => Raw ? "Unsafe.SizeOf<" + Scalar + ">()" : Size.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Whether the scalar is a Boolean.</summary>
     internal bool IsBoolean => Kind == DirectMemberKind.Fixed && Scalar == "bool";
@@ -66,7 +76,8 @@ internal sealed class DirectMember : IEquatable<DirectMember>
 
     /// <inheritdoc/>
     public bool Equals(DirectMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
-        TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored;
+        TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored &&
+        Underlying == other.Underlying && Raw == other.Raw;
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectMember);
@@ -113,10 +124,18 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string Mirror;
     /// <summary>The mirror's field declarations, such as <c>string? Name</c>, in storage order.</summary>
     internal readonly string[] MirrorFields;
+    /// <summary>Whether the Union write is the shared returning cursor kernel <c>SerializeUnionAt</c> of a fixed Union case.</summary>
+    internal readonly bool FixedUnionCase;
+    /// <summary>Whether the type has the record measurement entry <c>MeasureRecord</c>, which the original selection gives only to
+    /// supported fixed records.</summary>
+    internal readonly bool MeasureRecord;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
-        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided)
+        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
+        bool fixedUnionCase, bool measureRecord)
     {
+        MeasureRecord = measureRecord;
+        FixedUnionCase = fixedUnionCase;
         IsStruct = isStruct;
         View = view;
         ViewElided = viewElided;
@@ -142,6 +161,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
         UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
+        FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
@@ -156,7 +176,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <param name="compilation">The consumer compilation.</param>
     /// <param name="metadata">The project generation settings.</param>
     /// <returns>The model, or null when the type keeps the original pipeline.</returns>
-    internal static DirectTypeModel TryCreate(LuminDataInfo data, Compilation compilation, MetaInfo metadata)
+    /// <param name="nested">Whether the model only measures a raw struct's JSON write for a containing type, which reads none of
+    /// the struct's constructors.</param>
+    internal static DirectTypeModel TryCreate(LuminDataInfo data, Compilation compilation, MetaInfo metadata, bool nested = false)
     {
         if (DirectEmission.Mode == DirectEmissionMode.Off || !GeneratedSourceLayout.Enabled)
             return null;
@@ -186,22 +208,25 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("type declaration: " + (type.TypeKind != TypeKind.Class ? "kind" : type.IsAbstract ? "abstract" :
                 type.IsStatic ? "static" : type.IsRecord ? "record" : type.IsGenericType ? "generic" : type.ContainingType != null && type.ContainingType.IsGenericType ? "nested in generic" :
                 !Reachable(type) ? "accessibility" : "interfaces"));
-        // Base types contribute their fields after the type's own, and must be plain classes of the same assembly.
+        // Base types contribute their fields after the type's own, and must be plain or abstract classes of the same assembly. A Union
+        // base's case list only shapes the base's own dispatch file, never the files of its cases.
         var levels = new System.Collections.Generic.List<INamedTypeSymbol> { type };
         for (var level = type.BaseType; level != null && level.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType); level = level.BaseType)
         {
-            if (level.TypeKind != TypeKind.Class || level.IsAbstract || level.IsStatic || level.IsRecord || level.IsGenericType ||
+            if (level.TypeKind != TypeKind.Class || level.IsStatic || level.IsRecord || level.IsGenericType ||
                 level.ContainingType is { IsGenericType: true } || !Reachable(level) || level.AllInterfaces.Length != 0 ||
                 !SymbolEqualityComparer.Default.Equals(level.ContainingAssembly, compilation.Assembly) ||
-                level.GetAttributes().Any(attribute => !PlainPackable(attribute)))
+                level.GetAttributes().Any(attribute => !PlainPackable(attribute) && !Foreign(attribute) && !UnionCase(attribute) && !JsonPolymorphism(attribute)))
                 return DirectEmission.Reject<DirectTypeModel>("base type");
             levels.Add(level);
         }
         bool derived = levels.Count > 1;
-        if (type.InstanceConstructors.Length != 1 || type.InstanceConstructors[0].Parameters.Length != 0 ||
-            type.InstanceConstructors[0].DeclaredAccessibility != Accessibility.Public)
+        // A raw struct is copied as one value, so its storage layout option never reaches the binary operations; its constructors
+        // only reach its JSON read.
+        if (!(raw && nested) && (type.InstanceConstructors.Length != 1 || type.InstanceConstructors[0].Parameters.Length != 0 ||
+            type.InstanceConstructors[0].DeclaredAccessibility != Accessibility.Public))
             return DirectEmission.Reject<DirectTypeModel>("constructor");
-        var attributes = type.GetAttributes();
+        var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !(raw && StructLayoutOption(attribute))).ToArray();
         if (attributes.Length != 1 || !PlainPackable(attributes[0]))
             return DirectEmission.Reject<DirectTypeModel>("type attributes");
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
@@ -214,8 +239,18 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 continue;
             if (member.IsImplicitlyDeclared)
                 continue;
-            if (member.GetAttributes().Length != 0)
+            if (member.GetAttributes().Any(attribute => !Foreign(attribute) &&
+                    !(member is IMethodSymbol { MethodKind: MethodKind.Ordinary } && attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.MethodImplAttribute") &&
+                    !(raw && nested && member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
+                    !(member is IFieldSymbol or IPropertySymbol && attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOrderAttribute" or "LuminPack.Attribute.LuminPackIgnoreAttribute")))
                 return DirectEmission.Reject<DirectTypeModel>("member attributes");
+            // An ignored member keeps its storage but is never serialized.
+            if (member is IFieldSymbol or IPropertySymbol && member.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackIgnoreAttribute"))
+            {
+                if (member is IPropertySymbol || member.DeclaredAccessibility != Accessibility.Public || member.IsStatic)
+                    return DirectEmission.Reject<DirectTypeModel>("ignored member");
+                continue;
+            }
             // An auto-property is stored in its backing field, which the generated code reaches through the layout mirror.
             if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } auto &&
                 auto.ContainingType.GetMembers().OfType<IFieldSymbol>().Any(backing => SymbolEqualityComparer.Default.Equals(backing.AssociatedSymbol, auto)))
@@ -244,11 +279,17 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string extension = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
         var members = new DirectMember[data.fields.Count];
         for (int index = 0; index < members.Length; index++)
-            if ((members[index] = Member(data.fields[index], extension)) == null)
+            if ((members[index] = Member(data.fields[index], extension, compilation, metadata)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
+        // A local case of an abstract packable base whose payload is raw fixed storage writes through the fixed Union cursor protocol.
+        bool fixedUnionCase = !isStruct && members.All(member => member.IsFixed) && FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata);
+        // Raw struct members are covered in fixed Union case records of at least two fields without Booleans, whose batch masks need
+        // constant offsets.
+        if (members.Any(member => member.Raw) && (!fixedUnionCase || members.Length < 2 || members.Any(member => member.IsBoolean || member.Mirrored)))
+            return DirectEmission.Reject<DirectTypeModel>("struct member record");
         // Strings without collections take the named member write and the proven object write; both need the runtime's own profiles.
         bool mirrored = data.fields.Any(field => field.isProperty);
-        if (isStruct && (mirrored || members.Any(member => !member.IsFixed)))
+        if (isStruct && (mirrored || members.Any(member => !member.IsFixed || member.Raw)))
             return DirectEmission.Reject<DirectTypeModel>("struct members");
         bool proven = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
             members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
@@ -294,7 +335,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         }
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
-            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided);
+            fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
+            members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type));
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -324,6 +366,36 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             attribute.ConstructorArguments.All(argument => argument.Kind == TypedConstantKind.Enum &&
                 System.Convert.ToInt64(argument.Value, System.Globalization.CultureInfo.InvariantCulture) == 0);
 
+    /// <summary>Accepts an attribute of another library, such as another serializer's <c>[Key(0)]</c>, which the analysis never reads:
+    /// its class name does not start with LuminPack, and its outermost namespace is not LuminPack, System, Microsoft or Unity.</summary>
+    private static bool Foreign(AttributeData attribute)
+    {
+        var type = attribute.AttributeClass;
+        if (type == null || type.TypeKind == TypeKind.Error || type.Name.StartsWith("LuminPack", StringComparison.Ordinal))
+            return false;
+        var root = type.ContainingNamespace;
+        if (root == null || root.IsGlobalNamespace)
+            return false;
+        while (!root.ContainingNamespace.IsGlobalNamespace)
+            root = root.ContainingNamespace;
+        return root.Name is not ("LuminPack" or "System" or "Microsoft" or "Unity" or "UnityEngine" or "UnityEditor");
+    }
+
+    /// <summary>Accepts <c>[LuminPackOption(StructLayout = ...)]</c> without other settings.</summary>
+    private static bool StructLayoutOption(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute" && attribute.ConstructorArguments.Length == 0 &&
+            attribute.NamedArguments.Length == 1 && attribute.NamedArguments[0].Key == "StructLayout";
+
+    /// <summary>Accepts one case of a Union base, <c>[LuminPackUnion(tag, typeof(Case))]</c> or <c>[Union(tag, typeof(Case))]</c>.</summary>
+    private static bool UnionCase(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() is LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or "System.Runtime.CompilerServices.UnionAttribute" &&
+            attribute.NamedArguments.Length == 0 && attribute.ConstructorArguments.Length == 2;
+
+    /// <summary>Accepts the System.Text.Json polymorphism attributes, which only System.Text.Json reads.</summary>
+    private static bool JsonPolymorphism(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() is "System.Text.Json.Serialization.JsonPolymorphicAttribute" or
+            "System.Text.Json.Serialization.JsonDerivedTypeAttribute";
+
     /// <summary>Accepts a declared member that has no instance storage and is never serialized.</summary>
     private static bool Unserialized(ISymbol member)
     {
@@ -344,7 +416,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     }
 
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
-    private static DirectMember Member(LuminDataField field, string extension)
+    private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata)
     {
         if (field.IsPrivate || field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 ||
             field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
@@ -356,6 +428,32 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if (field.FieldType != LuminDataType.Value)
                 return DirectEmission.Reject<DirectMember>("fixed member");
             return new DirectMember(field.Name, DirectMemberKind.Fixed, scalar.Keyword, scalar.Keyword, scalar.Size, null, field.Type, field.isProperty);
+        }
+        // An enum is stored as its underlying scalar; the binary emitters spell the enum itself, JSON casts through the scalar.
+        if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Enum, EnumUnderlyingType: { } underlying } enumType &&
+            symbol.NullableAnnotation != NullableAnnotation.Annotated && Scalar(underlying, allowBoolean: false) is { } backing)
+        {
+            if (field.FieldType != LuminDataType.Value || field.Type != LuminFiledType.Enum)
+                return DirectEmission.Reject<DirectMember>("enum member");
+            string spelling = enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return new DirectMember(field.Name, DirectMemberKind.Fixed, spelling, spelling, backing.Size, null, field.Type, field.isProperty, backing.Keyword);
+        }
+        // A raw unmanaged packable struct of this assembly joins fixed runs at its runtime size.
+        if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Struct, IsGenericType: false } rawStruct && symbol.SpecialType == SpecialType.None &&
+            symbol.NullableAnnotation != NullableAnnotation.Annotated && EmitterTypeTraits.CanUseUnmanagedSerialization(rawStruct) &&
+            TypeMetaChecker.TryCheckPackableAttribute(rawStruct) && rawStruct.ContainingType == null &&
+            SymbolEqualityComparer.Default.Equals(rawStruct.ContainingAssembly, compilation.Assembly) &&
+            LuminPackCodeGenerator.IsMergeableField(field))
+        {
+            if (field.FieldType != LuminDataType.Value || field.Type != LuminFiledType.Struct)
+                return DirectEmission.Reject<DirectMember>("struct member");
+            // A containing JSON write copies a small struct write inline; only a struct written behind its formatter call is covered.
+            var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(rawStruct, compilation, metadata), compilation, metadata, nested: true);
+            if (nested == null || !nested.IsStruct || nested.View != null || DirectJsonEmitter.WriteCalls(nested) <= 16)
+                return DirectEmission.Reject<DirectMember>("struct member JSON");
+            string spelling = rawStruct.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return new DirectMember(field.Name, DirectMemberKind.Fixed, spelling, spelling, 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, field.isProperty, raw: true);
         }
         if (symbol.SpecialType == SpecialType.System_String)
         {

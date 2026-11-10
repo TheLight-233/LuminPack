@@ -157,7 +157,18 @@ internal sealed class StateForwardingPlan : IEquatable<StateForwardingPlan>
             return text;
         }
         var forwarded = root.RemoveNodes(removed, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
-        return published ? PublishedSyntax.Attach(forwarded.ToFullString(), forwarded) : forwarded.ToFullString();
+        if (published)
+            return PublishedSyntax.Attach(forwarded.ToFullString(), forwarded);
+        // A rendered file is not laid out again, so a member that now opens its block drops the blank line that separated it
+        // from the removed one, as the publication layout does.
+        var opening = forwarded.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Select(type => type.Members.FirstOrDefault())
+            .Where(member => member != null && member.GetLeadingTrivia() is { Count: > 0 } trivia && trivia[0].IsKind(SyntaxKind.EndOfLineTrivia))
+            .ToArray();
+        if (opening.Length != 0)
+            forwarded = forwarded.ReplaceNodes(opening, (_, member) =>
+                member.WithLeadingTrivia(member.GetLeadingTrivia().SkipWhile(trivia => trivia.IsKind(SyntaxKind.EndOfLineTrivia))));
+        return forwarded.ToFullString();
     }
 
     /// <summary>Finds a method that forwards only the original state and value to its own nested root.</summary>
