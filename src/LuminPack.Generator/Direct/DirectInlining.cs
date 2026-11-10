@@ -59,6 +59,11 @@ internal static class DirectInlining
                 count += 10;
                 continue;
             }
+            if (member.Kind == DirectMemberKind.Array && member.FormatterCall)
+            {
+                count += 1;
+                continue;
+            }
             if (member.Kind == DirectMemberKind.Fixed)
             {
                 int run = 1;

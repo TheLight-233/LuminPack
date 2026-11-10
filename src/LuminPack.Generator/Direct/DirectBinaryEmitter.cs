@@ -721,6 +721,13 @@ internal static partial class DirectBinaryEmitter
                     body.Add("");
                 continue;
             }
+            // A formatter-call array is a plain call beside the value members, which keeps no separating blank line.
+            if (member.Kind == DirectMemberKind.Array && member.FormatterCall)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                index++;
+                continue;
+            }
             int last = index;
             while (last + 1 < members.Length && !IsInlineSegment(members[last + 1]))
                 last++;
@@ -1032,7 +1039,8 @@ internal static partial class DirectBinaryEmitter
     private static bool IsTextList(DirectMember member) => member.Kind == DirectMemberKind.List && member.Scalar == "string";
 
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
-    private static bool IsInlineSegment(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member);
+    private static bool IsInlineSegment(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member) ||
+        member.Kind == DirectMemberKind.Array && member.FormatterCall;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(DirectMember member) =>

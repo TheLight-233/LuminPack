@@ -52,11 +52,15 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     /// <summary>The inline model of a packable class member, whose members the parent record stores without a separate record
     /// header, or null.</summary>
     internal readonly DirectTypeModel Nested;
+    /// <summary>Whether a collection member writes through its generated formatter call instead of a reserved span, which an
+    /// array of unmanaged scalars does.</summary>
+    internal readonly bool FormatterCall;
 
     /// <summary>Captures one member.</summary>
     internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
-        bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null)
+        bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null, bool formatterCall = false)
     {
+        FormatterCall = formatterCall;
         Nested = nested;
         Raw = raw;
         Builtin = builtin;
@@ -86,7 +90,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     /// <inheritdoc/>
     public bool Equals(DirectMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored &&
-        Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && Equals(Nested, other.Nested);
+        Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectMember);
@@ -127,20 +131,23 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether a member is written in place instead of entering a reservation: an inline object or a string list.</summary>
     private static bool InlineBlock(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite ||
         member.Kind == DirectMemberKind.List && member.Scalar == "string";
-    /// <summary>Whether every member is an inline block or a fixed scalar, which takes the stream record protocol alone: a
+    /// <summary>Whether a member is a write segment of its own: an inline object, a string list or a formatter-call array.</summary>
+    private static bool Segment(DirectMember member) => member.Kind == DirectMemberKind.Object || InlineBlock(member) ||
+        member.Kind == DirectMemberKind.Array && member.FormatterCall;
+    /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
-    internal bool StreamRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object || InlineBlock(member)) &&
-        Members.All(member => member.IsFixed || member.Kind == DirectMemberKind.Object || InlineBlock(member));
-    /// <summary>Whether inline blocks sit beside members that reserve: the record writes its leading members with the header,
-    /// then each block and every following run in place.</summary>
-    internal bool MixedRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object || InlineBlock(member)) && !StreamRecord;
+    internal bool StreamRecord => !IsStruct && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
+    /// <summary>Whether write segments sit beside members that reserve: the record writes its leading members with the header,
+    /// then each segment and every following run in place.</summary>
+    internal bool MixedRecord => !IsStruct && Members.Any(Segment) && !StreamRecord;
     /// <summary>Whether a member is copied in place rather than through its named member operation; only a record with such a
-    /// member camel-cases its snapshot locals.</summary>
-    internal bool InlineObject => Members.Any(InlineBlock);
+    /// member or a formatter-call array camel-cases its snapshot locals.</summary>
+    internal bool InlineObject => Members.Any(member => InlineBlock(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall);
     /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
     /// generic.</summary>
     internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||
         member.Kind == DirectMemberKind.List && member.Scalar == "string" ||
+        member.Kind == DirectMemberKind.Array && member.FormatterCall ||
         member.Kind == DirectMemberKind.Object && member.Nested.ProfilePayload);
 
     /// <summary>An array inside an inline object calls its generated formatter with the operation's profile, which makes the
@@ -707,10 +714,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return new DirectMember(field.Name, DirectMemberKind.Text, "string", "string", 0, null, field.Type, field.isProperty);
         }
         string payload = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        if (symbol is IArrayTypeSymbol { Rank: 1 } array && Scalar(array.ElementType, allowBoolean: false) is { } element &&
-            field.Type == LuminFiledType.Array && field.FieldType == LuminDataType.Reference)
-            return new DirectMember(field.Name, DirectMemberKind.Array, element.Keyword, element.Keyword + "[]", 0,
-                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
+        if (symbol is IArrayTypeSymbol { Rank: 1 } array && field.Type == LuminFiledType.Array && field.FieldType == LuminDataType.Reference)
+        {
+            if (Scalar(array.ElementType, allowBoolean: false) is { } element)
+                return new DirectMember(field.Name, DirectMemberKind.Array, element.Keyword, element.Keyword + "[]", 0,
+                    "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
+            // Any other element type writes through its generated array formatter, which also serves JSON and reads.
+            return new DirectMember(field.Name, DirectMemberKind.Array, payload, payload, 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty, formatterCall: true);
+        }
         if (symbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
             list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" &&
             field.FieldType == LuminDataType.Reference && field.Type is LuminFiledType.List)
