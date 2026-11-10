@@ -62,9 +62,9 @@ internal abstract class TypeModel : IEquatable<TypeModel>
     }
 
     /// <inheritdoc/>
-    public bool Equals(TypeModel? other) => other != null && Kind == other.Kind && Identity.Equals(other.Identity) &&
-        Accessibility == other.Accessibility && Policy.Equals(other.Policy) && Members.Length == other.Members.Length &&
-        Same(Members, other.Members) && Same(Constraints, other.Constraints);
+    public bool Equals(TypeModel? other) => ReferenceEquals(this, other) || other != null && Kind == other.Kind &&
+        Identity.Equals(other.Identity) && Accessibility == other.Accessibility && Policy.Equals(other.Policy) &&
+        Members.Length == other.Members.Length && Same(Members, other.Members) && Same(Constraints, other.Constraints);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as TypeModel);
@@ -73,7 +73,7 @@ internal abstract class TypeModel : IEquatable<TypeModel>
     public override int GetHashCode() => Identity.GetHashCode();
 
     private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T>
-        => left.Length == right.Length && System.Linq.Enumerable.SequenceEqual(left, right);
+        => ReferenceEquals(left, right) || left.Length == right.Length && System.Linq.Enumerable.SequenceEqual(left, right);
 }
 
 /// <summary>An ordinary class record, optionally version-tolerant.</summary>
@@ -200,8 +200,8 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     }
 
     /// <inheritdoc/>
-    public bool Equals(UnionCaseModel? other) => other != null && Tag == other.Tag && Type.Equals(other.Type) && Read == other.Read &&
-        Sealed == other.Sealed && FixedCursor == other.FixedCursor;
+    public bool Equals(UnionCaseModel? other) => ReferenceEquals(this, other) || other != null && Tag == other.Tag && Type.Equals(other.Type) &&
+        Read == other.Read && Sealed == other.Sealed && FixedCursor == other.FixedCursor;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as UnionCaseModel);

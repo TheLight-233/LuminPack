@@ -54,9 +54,10 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     }
 
     /// <inheritdoc/>
-    public bool Equals(GeneratorOptions? other) => other != null && Net8 == other.Net8 && CSharpVersion == other.CSharpVersion &&
-        Unsafe == other.Unsafe && Unity == other.Unity && RegisterMode == other.RegisterMode && AvailableAliases == other.AvailableAliases &&
-        AssemblyName == other.AssemblyName && Interceptors == other.Interceptors;
+    public bool Equals(GeneratorOptions? other) => ReferenceEquals(this, other) || other != null && Net8 == other.Net8 &&
+        CSharpVersion == other.CSharpVersion && Unsafe == other.Unsafe && Unity == other.Unity &&
+        RegisterMode == other.RegisterMode && AvailableAliases == other.AvailableAliases && AssemblyName == other.AssemblyName &&
+        Interceptors == other.Interceptors;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as GeneratorOptions);

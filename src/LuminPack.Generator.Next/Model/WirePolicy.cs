@@ -68,8 +68,9 @@ internal sealed class StringProfile : IEquatable<StringProfile>
     }
 
     /// <inheritdoc/>
-    public bool Equals(StringProfile? other) => other != null && Format == other.Format && Precision == other.Precision &&
-        Depth == other.Depth && Strict == other.Strict && Encoding == other.Encoding && Recording == other.Recording;
+    public bool Equals(StringProfile? other) => ReferenceEquals(this, other) || other != null && Format == other.Format &&
+        Precision == other.Precision && Depth == other.Depth && Strict == other.Strict && Encoding == other.Encoding &&
+        Recording == other.Recording;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as StringProfile);
@@ -109,8 +110,8 @@ internal sealed class WirePolicy : IEquatable<WirePolicy>
     }
 
     /// <inheritdoc/>
-    public bool Equals(WirePolicy? other) => other != null && Input == other.Input && Strings.Equals(other.Strings) &&
-        Bound == other.Bound && TrackReferences == other.TrackReferences;
+    public bool Equals(WirePolicy? other) => ReferenceEquals(this, other) || other != null && Input == other.Input &&
+        Strings.Equals(other.Strings) && Bound == other.Bound && TrackReferences == other.TrackReferences;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as WirePolicy);

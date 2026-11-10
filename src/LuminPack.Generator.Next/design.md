@@ -1,8 +1,11 @@
 # LuminPack Generator Next: Architecture and Migration Design
 
-Status: working scaffold. The analysis layer is complete for the current supported surface, and the
-payload record and raw-struct renderers now run inside the Next project. Collection, portable-struct,
-Union, circle-reference and version-tolerant rendering remain on the migration plan.
+Status: working scaffold with the foundation in place. The analysis layer is complete for the current
+supported surface, and the payload record and raw-struct renderers run inside the Next project. Model
+equality has reference fast paths, one analysis session is shared per compilation and reused across
+nested payloads, referenced-type invalidation is verified, and a same-run benchmark harness compares
+the Next and legacy generators. Collection, portable-struct, Union, circle-reference and
+version-tolerant rendering remain on the migration plan.
 
 ## 1. Design philosophy
 
@@ -57,21 +60,35 @@ attributed payload type: the syntax provider is keyed by the declaration, the tr
 that transform and its outputs; unrelated payloads keep their cached model.
 
 `ModeledPayload` and `ModelResult` implement value equality, and `GeneratorOptions` is cached per
-compilation and compared by value. An edit that leaves a payload's symbol and the project facts
-unchanged therefore does not re-render its files. Generated code size is a separate concern: one file
-per payload and format is the default, while shared facades and dispatch reduction are tracked in
-M-15.
+compilation and compared by value. Equality checks compare references before structure, so a cached
+model reused inside several parents compares without walking it again. An edit that leaves a payload's
+symbol and the project facts unchanged therefore does not re-render its files.
 
-The remaining semantic dependency is a referenced type that changes without editing the payload that
-uses it. That case needs explicit dependency tracking in the pipeline; it is tracked in M-14.
+The analysis session is shared by every payload of one compilation. A nested payload is modeled once
+per depth and its completed result is reused by every parent that embeds it; a model reached through
+a cycle is never published to that cache. Project facts are resolved once per compilation as well.
 
-Measured on a 40-type corpus with one type per file (80 generated files):
+A referenced type that changes without editing the payload that uses it is observed by the semantic
+transform: the model is rebuilt and a changed nested model reaches the parent's output. The probe
+verifies both an enum-underlying-type edit (the parent's generated file changes) and a packable child
+member edit (the child and its parent report `Modified`, unrelated payloads stay `Unchanged`). What
+remains is an optimization, not correctness: every compilation change re-runs the semantic transform
+for every attributed declaration, so unchanged models are recomputed and then deduplicated by value
+equality. Cross-compilation reuse is tracked in M-14.
 
-| Run | Generator time | Output |
-| --- | ---: | --- |
-| Full generation | 0.607 s | 80 files, 22,360 lines |
-| Comment edit in one file | 0.034 s | 80 files, 22,360 lines (no churn) |
-| Add one member in one file | 0.012 s | 80 files, 22,436 lines (only the edited payload changes) |
+Measured with `GeneratorBenchmarks` on a warm process and cold generator state (median of 3 runs;
+legacy numbers load the legacy formatter, JSON and facade generators together):
+
+| Corpus | Generator | Full | Comment edit | Member edit | Analysis only |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 40 records, one type per file | Next | 0.031 s / 18.0 MB | 0.008 s / 0.7 MB | 0.010 s / 1.1 MB | 0.003 s / 0.3 MB |
+| 40 records, one type per file | Legacy direct | 0.402 s / 89.2 MB | 0.018 s / 1.9 MB | 0.020 s / 3.2 MB | — |
+| 220 payloads, one file | Next | 0.098 s / 78.6 MB | 0.073 s / 4.0 MB | 0.040 s / 4.7 MB | 0.010 s / 1.9 MB |
+| 220 payloads, one file | Legacy direct | 1.196 s / 472.7 MB | 0.093 s / 34.3 MB | 0.077 s / 36.9 MB | — |
+
+The 220-payload corpus is one file, so every edit re-parses and re-runs all 220 transforms; the
+one-type-per-file corpus shows the per-type granularity. Legacy output includes shared facades and
+layout files, so its file count is larger than the payload files the Next run currently covers.
 
 ### Layer rules
 
@@ -103,6 +120,7 @@ Measured on a 40-type corpus with one type per file (80 generated files):
 | `Rendering/Binary/BinaryRenderer.cs` | Binary renderer dispatch |
 | `Rendering/Json/JsonRenderer.cs` | JSON renderer dispatch |
 | `Rendering/Union/UnionRenderer.cs` | Union renderer placeholder |
+| `benchmarks/GeneratorBenchmarks/Program.cs` | Same-run Next/legacy timings, allocations and the incremental model trace |
 
 ## 3. Current coverage
 
@@ -112,13 +130,15 @@ records, 10 raw structs, 10 packed structs, 10 Unions with 20 cases and 10 circl
 | Stage | Result |
 | --- | --- |
 | Analysis | `220 complete, 0 incomplete, 0 unsupported` |
-| Record and raw-struct generation | 130 payloads, 260 files, 95,630 lines |
+| Record and raw-struct generation | 130 payloads, 260 files |
 | Compilation of generated output | `0` generated errors |
-| Analysis-only cost | 0.62 s cold, 0.030-0.038 s warm, 3.7 MB |
-| Current Next generation | 0.71 s cold for analysis plus 130 payload files |
-| Incremental edit, 40 types | 0.034 s comment edit; 0.012 s member edit |
-| Old template pipeline, same 220 payloads | 16.46 s warm, 5.53 GB |
-| Legacy payload pipeline (old generator DLL), same 220 payloads | 0.435 s warm, 0.45 GB, byte-identical output |
+| Analysis-only cost | 0.010 s median, 1.9 MB on a warm process |
+| Current Next generation | 0.098 s median for analysis plus 260 payload files, 78.6 MB |
+| Incremental edit, 40 types | 0.008 s comment edit; 0.010 s member edit |
+| Legacy direct pipeline, same 220 payloads | 1.196 s median, 472.7 MB, all three legacy generators |
+
+The legacy direct pipeline still publishes byte-identical files to the legacy original pipeline on this
+corpus; that comparison belongs to the legacy tree and is not a Next parity result.
 
 The 130/220 figure is the honest scope of this milestone. The adapter returns null for payloads whose
 supporting renderer or model facts are not ported, so the pipeline never publishes code it cannot
@@ -195,7 +215,7 @@ pipeline; P2 improves the product.
 | M-11 | Declared string profiles, input limits and member-scope profiles | Analysis + Rendering | M-09 | Member and type profile declarations generate correctly | P1 |
 | M-12 | Diagnostics and analyzers for unsupported members, layouts, options and Union cases | Analysis | — | Diagnostics are reported at the declaration, not in generated code | P2 |
 | M-13 | Keyed version tolerance and layout metadata | Model + Rendering | M-07 | Reordered and removed members read correctly | P2 |
-| M-14 | Dependency-aware invalidation: the per-type provider and value-equal model results landed; add referenced-type dependency tracking so a model re-runs when a type it embeds changes | Pipeline | M-09 | Editing or changing one referenced type does not recompute unrelated models | P2 |
+| M-14 | Cross-compilation model reuse: referenced-type invalidation is verified (an enum-underlying-type edit changes the parent's file; a packable child edit marks the child and parent `Modified`), but every compilation change still re-runs every attributed transform | Pipeline | M-09 | An unrelated edit skips model analysis while a referenced-type edit still refreshes its parents | P2 |
 | M-15 | Generated size reduction: shared dispatch, per-call operation selection, facade deduplication | Rendering | M-09 | Generated source per type approaches the old payload output without shared bloat | P2 |
 | M-16 | Cross-language codegen (TypeScript, Go, Rust) | Tooling | M-13 | Generators read and write the same bytes | P2 |
 | M-17 | ASP.NET Core formatters | Integrations | M-09 | MVC and Minimal API bodies use the generated entries | P2 |
@@ -216,15 +236,20 @@ pipeline; P2 improves the product.
   Next copies fix those errors locally; the old tree is not modified.
 - `PublicationLayout.Apply` and `LayOutLines` are passthroughs in this milestone. Generated output is
   valid but not byte-identical until M-10 lands.
+- `benchmarks/GeneratorBenchmarks` is the same-run harness. It builds the Next generator directly and
+  loads the legacy generator DLL reflectively, then reports repeated full, comment-edit, member-edit
+  and analysis-only timings with allocations. It measures generator time, not generated size. The
+  harness is a separate project excluded from the analyzer compilation.
 
 ## 7. Verification
 
 ```text
 dotnet build src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj -c Release -v:q --nologo
+dotnet run -c Release --project src/LuminPack.Generator.Next/benchmarks/GeneratorBenchmarks/GeneratorBenchmarks.csproj -- --corpus <dir> --runs 3
 ```
 
-The current corpus probe loads `LuminPack.Generator.Next.dll`, runs the generator on 220 payloads and
-compiles the generated trees. It reports:
+The corpus probe loads `LuminPack.Generator.Next.dll`, runs the generator on 220 payloads and compiles
+the generated trees. It reports:
 
 ```text
 payloads=220 complete=220 incomplete=0 unsupported=0

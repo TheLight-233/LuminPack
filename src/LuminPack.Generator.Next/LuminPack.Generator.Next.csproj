@@ -15,4 +15,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The benchmark harness is a separate project; it must not join this analyzer's compilation. -->
+    <Compile Remove="benchmarks\**\*.cs" />
+    <InternalsVisibleTo Include="LuminPack.Generator.Next.Benchmarks" />
+  </ItemGroup>
 </Project>

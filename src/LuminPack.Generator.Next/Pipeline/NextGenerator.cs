@@ -32,7 +32,8 @@ public sealed class NextGenerator : IIncrementalGenerator
                 GeneratorOptions options = GeneratorOptionsFactory.From(attributeContext.SemanticModel.Compilation);
                 var symbol = (INamedTypeSymbol)attributeContext.TargetSymbol;
                 return new ModeledPayload(TypeModelFactory.TryCreate(symbol, attributeContext.SemanticModel.Compilation, options), options);
-            });
+            })
+            .WithTrackingName("LuminPack.Next.PayloadModels");
         context.RegisterSourceOutput(models, static (production, payload) =>
         {
             if (payload.Result.Model is not { } model || !payload.Result.IsComplete)

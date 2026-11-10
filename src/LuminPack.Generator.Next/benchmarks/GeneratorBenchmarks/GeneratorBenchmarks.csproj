@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LuminPack.Generator.Next.Benchmarks</AssemblyName>
+    <RootNamespace>LuminPack.SourceGenerator.Next.Benchmarks</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <LuminPackUseSatori>false</LuminPackUseSatori>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <ProjectReference Include="..\..\LuminPack.Generator.Next.csproj" />
+  </ItemGroup>
+</Project>

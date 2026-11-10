@@ -32,8 +32,8 @@ internal sealed class ModelResult : IEquatable<ModelResult>
     internal static ModelResult Unsupported(string reason) => new ModelResult(null, complete: false, reason: reason);
 
     /// <inheritdoc/>
-    public bool Equals(ModelResult? other) => other != null && IsComplete == other.IsComplete && Reason == other.Reason &&
-        Equals(Model, other.Model);
+    public bool Equals(ModelResult? other) => ReferenceEquals(this, other) || other != null && IsComplete == other.IsComplete &&
+        Reason == other.Reason && Equals(Model, other.Model);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as ModelResult);

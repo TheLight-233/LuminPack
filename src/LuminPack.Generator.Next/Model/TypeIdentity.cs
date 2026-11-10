@@ -56,8 +56,8 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
     internal string GlobalName => "global::" + DisplayName;
 
     /// <inheritdoc/>
-    public bool Equals(TypeIdentity? other) => other != null && Namespace == other.Namespace && Name == other.Name &&
-        ContainingTypes.SequenceEqual(other.ContainingTypes) && TypeParameters.SequenceEqual(other.TypeParameters);
+    public bool Equals(TypeIdentity? other) => ReferenceEquals(this, other) || other != null && Namespace == other.Namespace &&
+        Name == other.Name && ContainingTypes.SequenceEqual(other.ContainingTypes) && TypeParameters.SequenceEqual(other.TypeParameters);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as TypeIdentity);

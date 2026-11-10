@@ -39,8 +39,8 @@ internal abstract class MemberModel : IEquatable<MemberModel>
     internal bool Mirrored => Storage != MemberStorage.Field;
 
     /// <inheritdoc/>
-    public bool Equals(MemberModel? other) => other != null && other.GetType() == GetType() && Name == other.Name &&
-        Storage == other.Storage && Policy.Equals(other.Policy) && EqualsCore(other);
+    public bool Equals(MemberModel? other) => ReferenceEquals(this, other) || other != null && other.GetType() == GetType() &&
+        Name == other.Name && Storage == other.Storage && Policy.Equals(other.Policy) && EqualsCore(other);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MemberModel);
@@ -300,8 +300,8 @@ internal sealed class TypeRef : IEquatable<TypeRef>
     }
 
     /// <inheritdoc/>
-    public bool Equals(TypeRef? other) => other != null && GlobalName == other.GlobalName && Nullable == other.Nullable &&
-        TypeParameter == other.TypeParameter;
+    public bool Equals(TypeRef? other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
+        Nullable == other.Nullable && TypeParameter == other.TypeParameter;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as TypeRef);

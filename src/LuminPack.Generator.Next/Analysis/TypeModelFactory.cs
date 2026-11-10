@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using LuminPack.SourceGenerator.Next.Model;
 using Microsoft.CodeAnalysis;
 
@@ -27,50 +28,89 @@ internal static class TypeModelFactory
     /// <summary>The deepest nested payload chain the analysis expands.</summary>
     private const int MaxDepth = 8;
 
+    /// <summary>The analysis state shared by every payload of one compilation.</summary>
+    /// <remarks>A compilation is a weak key, so the cache does not retain a finished run. A nested payload is analyzed once
+    /// per depth and reused by every parent that embeds it.</remarks>
+    private static readonly ConditionalWeakTable<Compilation, Session> Sessions = new ConditionalWeakTable<Compilation, Session>();
+
     /// <summary>Builds a model for one attributed type.</summary>
     /// <param name="symbol">The attributed type.</param>
     /// <param name="compilation">The consumer compilation.</param>
     /// <param name="options">The project facts.</param>
     /// <returns>A complete model, an incomplete model or an unsupported result.</returns>
     internal static ModelResult TryCreate(INamedTypeSymbol symbol, Compilation compilation, GeneratorOptions options)
-        => new Session(compilation, options).Create(symbol, 0);
+    {
+        Session session = Sessions.GetValue(compilation, item => new Session(item, options));
+        // Project facts are created once per compilation. A caller that supplies different facts on the same compilation
+        // gets an isolated run instead of a cache that was built under another caller's facts.
+        return session.Options.Equals(options) ? session.Create(symbol, depth: 0) : new Session(compilation, options).Create(symbol, depth: 0);
+    }
 
-    /// <summary>Holds the per-run analysis state: the consumer compilation, its project facts and the payloads being expanded.</summary>
+    /// <summary>Holds the per-compilation analysis state: the consumer compilation, its project facts and the completed models.</summary>
     private sealed class Session
     {
         private readonly Compilation _compilation;
-        private readonly GeneratorOptions _options;
-        private readonly HashSet<INamedTypeSymbol> _inProgress = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
+        private readonly object _gate = new object();
 
         internal Session(Compilation compilation, GeneratorOptions options)
         {
-            _options = options;
+            Options = options;
             _compilation = compilation;
         }
+
+        /// <summary>The project facts this session analyzes under.</summary>
+        internal GeneratorOptions Options { get; }
 
         /// <summary>Models one payload, stopping before a cycle or an over-deep nested expansion can recurse.</summary>
         /// <param name="symbol">The declared payload type.</param>
         /// <param name="depth">The number of nested payload expansions already entered.</param>
         /// <returns>The analysis result.</returns>
-        internal ModelResult Create(INamedTypeSymbol symbol, int depth)
+        internal ModelResult Create(INamedTypeSymbol symbol, int depth) => Analyze(symbol, depth, new Path());
+
+        /// <summary>Returns a completed model when one exists, otherwise analyzes one payload and records it.</summary>
+        /// <param name="symbol">The declared payload type.</param>
+        /// <param name="depth">The number of nested payload expansions already entered.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
+        /// <returns>The analysis result.</returns>
+        /// <remarks>A result is published to the session cache only when its own expansion saw no cycle. A model reached
+        /// through a cycle keeps a framing that depends on the path, so it must be recomputed from another root.</remarks>
+        private ModelResult Analyze(INamedTypeSymbol symbol, int depth, Path path)
         {
             if (depth > MaxDepth)
                 return ModelResult.Unsupported("payload nesting exceeds " + MaxDepth.ToString(CultureInfo.InvariantCulture) + " levels");
-            if (!_inProgress.Add(symbol))
+            var key = new AnalysisKey(symbol, depth);
+            lock (_gate)
+            {
+                if (_completed.TryGetValue(key, out ModelResult? cached))
+                    return cached;
+            }
+            if (!path.Active.Add(symbol))
+            {
+                path.SawCycle = true;
                 return ModelResult.Unsupported("payload refers back to '" + symbol.ToDisplayString() + "'");
+            }
             var issues = new List<string>();
             try
             {
-                TypeModel? model = CreateCore(symbol, depth, issues);
+                TypeModel? model = CreateCore(symbol, depth, issues, path);
+                ModelResult result;
                 if (model == null)
-                    return ModelResult.Unsupported(issues.Count == 0 ? "not a modeled payload" : string.Join("; ", issues));
-                if (issues.Count == 0)
-                    return ModelResult.Ready(model);
-                return ModelResult.Incomplete(model, string.Join("; ", issues.Distinct(StringComparer.Ordinal)));
+                    result = ModelResult.Unsupported(issues.Count == 0 ? "not a modeled payload" : string.Join("; ", issues));
+                else if (issues.Count == 0)
+                    result = ModelResult.Ready(model);
+                else
+                    result = ModelResult.Incomplete(model, string.Join("; ", issues.Distinct(StringComparer.Ordinal)));
+                if (!path.SawCycle)
+                {
+                    lock (_gate)
+                        _completed[key] = result;
+                }
+                return result;
             }
             finally
             {
-                _inProgress.Remove(symbol);
+                path.Active.Remove(symbol);
             }
         }
 
@@ -78,8 +118,9 @@ internal static class TypeModelFactory
         /// <param name="symbol">The declared payload type.</param>
         /// <param name="depth">The nested payload depth.</param>
         /// <param name="issues">Receives the reasons the model is not complete.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
         /// <returns>The model, or null when the declaration itself is outside the surface.</returns>
-        private TypeModel? CreateCore(INamedTypeSymbol symbol, int depth, List<string> issues)
+        private TypeModel? CreateCore(INamedTypeSymbol symbol, int depth, List<string> issues, Path path)
         {
             var attribute = symbol.GetAttributes().FirstOrDefault(item =>
                 item.AttributeClass?.ToDisplayString() == PackableAttribute);
@@ -127,7 +168,7 @@ internal static class TypeModelFactory
             {
                 case PayloadKind.Struct:
                 {
-                    MemberModel[] members = Members(symbol, policy, depth, issues, out _);
+                    MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
                     PortableLayout? layout = symbol.IsUnmanagedType ? TryPortableLayout(symbol) : null;
                     StructStorage storage = !symbol.IsUnmanagedType ? StructStorage.ManagedRecord :
                         layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
@@ -145,14 +186,14 @@ internal static class TypeModelFactory
                 }
                 case PayloadKind.CircleReference:
                 {
-                    MemberModel[] members = Members(symbol, policy, depth, issues, out _);
+                    MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
                     return new CircleReferenceModel(identity, accessibility, members, policy, constraints, guarded: true);
                 }
                 default:
                 {
-                    MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived);
+                    MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
                     bool versioned = generatorType == "VersionTolerant";
-                    bool proven = !versioned && !derived && policy.Bound == null && _options.Net8 && _options.Unsafe && !_options.Unity &&
+                    bool proven = !versioned && !derived && policy.Bound == null && Options.Net8 && Options.Unsafe && !Options.Unity &&
                         members.Length != 0 && members.Any(member => member is TextMember) &&
                         members.All(member => member is ScalarMember or TextMember);
                     return new RecordModel(identity, accessibility, members, policy, constraints, versioned, derived, proven);
@@ -166,8 +207,10 @@ internal static class TypeModelFactory
         /// <param name="depth">The nested payload depth.</param>
         /// <param name="issues">Receives the reasons a member could not be modeled.</param>
         /// <param name="derived">Whether the payload has a base type whose storage participates in its record.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
         /// <returns>The members in wire order.</returns>
-        private MemberModel[] Members(INamedTypeSymbol symbol, WirePolicy ownerPolicy, int depth, List<string> issues, out bool derived)
+        private MemberModel[] Members(INamedTypeSymbol symbol, WirePolicy ownerPolicy, int depth, List<string> issues, out bool derived,
+            Path path)
         {
             var levels = new List<INamedTypeSymbol>();
             for (var level = symbol; level != null && level.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
@@ -183,7 +226,7 @@ internal static class TypeModelFactory
                 if (!TryStorage(member, out MemberStorage storage))
                     continue;
                 WirePolicy policy = MemberPolicy(member, ownerPolicy);
-                MemberModel? model = Classify(member, storage, policy, symbol, depth, issues);
+                MemberModel? model = Classify(member, storage, policy, symbol, depth, issues, path);
                 if (model == null)
                     continue;
                 if (!names.Add(model.Name))
@@ -240,9 +283,10 @@ internal static class TypeModelFactory
         /// <param name="owner">The payload that declares the member.</param>
         /// <param name="depth">The nested payload depth.</param>
         /// <param name="issues">Receives the reason an unsupported member is omitted.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
         /// <returns>The member model, or null when the type is outside the modeled surface.</returns>
         private MemberModel? Classify(ISymbol member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth,
-            List<string> issues)
+            List<string> issues, Path path)
         {
             ITypeSymbol type = member is IFieldSymbol field ? field.Type : ((IPropertySymbol)member).Type;
             string name = member.Name;
@@ -299,7 +343,7 @@ internal static class TypeModelFactory
                     return new CollectionMember(name, storage, policy, DeclaredType(named), collectionKind,
                         Reference(named.TypeArguments[0]));
                 if (named.TypeKind is TypeKind.Class or TypeKind.Struct)
-                    return Payload(member, named, storage, policy, depth, issues);
+                    return Payload(member, named, storage, policy, depth, issues, path);
             }
 
             issues.Add("member '" + name + "' has the unsupported type '" + type.ToDisplayString() + "'");
@@ -313,9 +357,10 @@ internal static class TypeModelFactory
         /// <param name="policy">The member's resolved wire policy.</param>
         /// <param name="depth">The nested payload depth.</param>
         /// <param name="issues">Receives the reason a nested payload is not expanded.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
         /// <returns>The payload member.</returns>
         private MemberModel? Payload(ISymbol member, INamedTypeSymbol type, MemberStorage storage, WirePolicy policy, int depth,
-            List<string> issues)
+            List<string> issues, Path path)
         {
             string name = member.Name;
             if (!IsPackable(type))
@@ -336,15 +381,18 @@ internal static class TypeModelFactory
             if (!SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
 
-            if (_inProgress.Contains(type))
+            if (path.Active.Contains(type))
             {
+                // The framing of this member depends on the expansion path, so neither this payload nor its ancestors may be
+                // published to the session cache.
+                path.SawCycle = true;
                 if (GenerationMode(type) == "CircleReference")
                     return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.ReferenceTracked, nested: null);
                 issues.Add("member '" + name + "' refers back to '" + type.ToDisplayString() + "' before its payload is complete");
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
             }
 
-            ModelResult nested = Create(type, depth + 1);
+            ModelResult nested = Analyze(type, depth + 1, path);
             if (nested.Model == null)
             {
                 issues.Add("member '" + name + "': " + (nested.Reason ?? "the nested payload is not modeled"));
@@ -729,6 +777,38 @@ internal static class TypeModelFactory
             return property.ContainingType.GetMembers().OfType<IFieldSymbol>()
                 .Any(field => SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, property));
         }
+    }
+
+    /// <summary>The payloads on one expansion path, and whether that path reached a cycle.</summary>
+    private sealed class Path
+    {
+        /// <summary>The payloads currently being expanded.</summary>
+        internal readonly HashSet<INamedTypeSymbol> Active = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
+        /// <summary>Whether any payload on this path referred back to an active payload.</summary>
+        internal bool SawCycle;
+    }
+
+    /// <summary>The cache key of a completed analysis: one payload at one nested depth.</summary>
+    private readonly struct AnalysisKey : IEquatable<AnalysisKey>
+    {
+        private readonly INamedTypeSymbol _symbol;
+        private readonly int _depth;
+
+        internal AnalysisKey(INamedTypeSymbol symbol, int depth)
+        {
+            _symbol = symbol;
+            _depth = depth;
+        }
+
+        /// <inheritdoc/>
+        public bool Equals(AnalysisKey other) => _depth == other._depth && SymbolEqualityComparer.Default.Equals(_symbol, other._symbol);
+
+        /// <inheritdoc/>
+        public override bool Equals(object? obj) => obj is AnalysisKey other && Equals(other);
+
+        /// <inheritdoc/>
+        public override int GetHashCode() => (SymbolEqualityComparer.Default.GetHashCode(_symbol) * 31) + _depth;
     }
 
     /// <summary>Builds the identity of a declared type, including its containing chain and parameters.</summary>
