@@ -55,7 +55,8 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     /// <summary>Whether a collection member writes through its generated formatter call instead of a reserved span, which an
     /// array of unmanaged scalars does.</summary>
     internal readonly bool FormatterCall;
-    /// <summary>Whether the member is an auto-property, whose mirror storage is assigned rather than passed by reference.</summary>
+    /// <summary>Whether the member is declared as an auto-property: its mirror storage is assigned rather than passed by
+    /// reference, and its existing-instance string read keeps the decoded instance.</summary>
     internal readonly bool Property;
 
     /// <summary>Captures one member.</summary>
@@ -136,6 +137,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool CamelSnapshots;
     /// <summary>Whether the type is a struct: raw unmanaged, written and read as one value, or portable (see <see cref="View"/>).</summary>
     internal readonly bool IsStruct;
+    /// <summary>Whether the struct has reference members and is written as a record instead of one raw value.</summary>
+    internal readonly bool ManagedStruct;
+    /// <summary>The positional storage view and packed transfers of a portable struct, or null.</summary>
+    internal readonly DirectPortableView PortableView;
     /// <summary>Whether a member is written in place instead of entering a reservation: an inline object, a string list or a
     /// list whose elements expand their record body in the loop.</summary>
     private static bool InlineBlock(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite ||
@@ -145,10 +150,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         member.Kind == DirectMemberKind.Array && member.FormatterCall;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
-    internal bool StreamRecord => !IsStruct && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
+    internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
     /// <summary>Whether write segments sit beside members that reserve: the record writes its leading members with the header,
     /// then each segment and every following run in place.</summary>
-    internal bool MixedRecord => !IsStruct && Members.Any(Segment) && !StreamRecord;
+    internal bool MixedRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && !StreamRecord;
     /// <summary>Whether a member is copied in place rather than through its named member operation; only a record with such a
     /// member or a formatter-call array camel-cases its snapshot locals.</summary>
     internal bool InlineObject => Members.Any(member => InlineBlock(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall);
@@ -262,8 +267,11 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null,
         DirectUnionSlot[] unionBinarySlots = null, DirectUnionSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
-        bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false)
+        bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
+        DirectPortableView portableView = null)
     {
+        PortableView = portableView;
+        ManagedStruct = managedStruct;
         CircleGuarded = circleGuarded;
         Circle = circle;
         UnionTierSealed = unionTierSealed;
@@ -307,7 +315,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         ViewElided = viewElided;
         Proven = proven;
         MemberWrite = memberWrite;
-        CamelSnapshots = derived || members.Any(member => member.Mirrored);
+        CamelSnapshots = isStruct || derived || members.Any(member => member.Mirrored);
         Mirror = mirror;
         MirrorFields = mirrorFields;
         UniqueEntries = uniqueEntries;
@@ -326,7 +334,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
         UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
-        CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
+        CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && ManagedStruct == other.ManagedStruct &&
+        Equals(PortableView, other.PortableView) && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
         Rent == other.Rent && Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
         Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter) &&
@@ -399,13 +408,20 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         bool raw = data.isValueType && type != null && type.TypeKind == TypeKind.Struct && EmitterTypeTraits.CanUseUnmanagedSerialization(type);
         var portable = data.isValueType && !raw && type != null && type.TypeKind == TypeKind.Struct && !PortableStructPlan.RequiresClosedDispatch(type)
             ? PortableStructPlan.TryCreate(type) : null;
-        if (portable != null && (portable.Fields == null || portable.Children == null || portable.Children.Any(child => child.Fields != null) ||
-            portable.Fields.Any(field => field.IsVolatile) || type is INamedTypeSymbol { IsTupleType: true }))
+        // A portable struct with a nested aggregate needs its child view; tuple components flatten into their parent view.
+        if (portable != null && (portable.Fields == null || portable.Children == null ||
+            portable.Children.Any(child => child.Fields != null && !TupleStorage(child.Type)) || type is INamedTypeSymbol { IsTupleType: true }))
             portable = null;
-        bool isStruct = raw || portable != null;
+        // A struct with reference members keeps the record protocol instead of a raw copy.
+        bool managedStruct = data.isValueType && type != null && type.TypeKind == TypeKind.Struct && !raw && portable == null;
+        bool isStruct = raw || portable != null || managedStruct;
         bool versioned = data.generatorType == GeneratorType.VersionTolerant;
         bool circle = data.generatorType == GeneratorType.CircleReference;
-        if (type == null || data.generatorType != GeneratorType.Object && !versioned && !circle || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
+        // A version-tolerant struct writes a schema prefix and revisions, which the struct roots do not reproduce yet.
+        if (isStruct && versioned)
+            return DirectEmission.Reject<DirectTypeModel>("versioned struct");
+        if (type == null || data.generatorType != GeneratorType.Object && !versioned && !circle || data.isUnion || data.isGeneric ||
+            data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
         // Callbacks and pool rents shape the binary roots; a version-tolerant root without callbacks covers a plain rent,
@@ -477,6 +493,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                     !(member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
                     !(member is IFieldSymbol or IPropertySymbol && attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOrderAttribute"
                         or "LuminPack.Attribute.LuminPackIgnoreAttribute" or "LuminPack.Attribute.LuminPackIncludeAttribute") &&
+                    !(isStruct && member is IFieldSymbol && attribute.AttributeClass?.ToDisplayString() == "System.Runtime.InteropServices.FieldOffsetAttribute") &&
                     !(versioned && member is IFieldSymbol && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")))
                 return DirectEmission.Reject<DirectTypeModel>("member attributes: " + member.Name + " [" + string.Join("+",
                     member.GetAttributes().Select(attribute => attribute.AttributeClass?.Name)) + "]");
@@ -501,17 +518,21 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 if (field.IsStatic || field.IsConst)
                     continue;
                 // A non-public field is part of the wire format only when [LuminPackInclude] names it; other private and
-                // protected storage never enters the record.
+                // protected storage never enters the record. Portable struct fields may be volatile snapshots.
                 bool included = field.GetAttributes().Any(attribute =>
                     attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackIncludeAttribute");
                 if (!included && field.DeclaredAccessibility != Accessibility.Public)
                     continue;
-                if (field.IsReadOnly || field.IsVolatile)
+                if (field.IsReadOnly || field.IsVolatile && portable == null)
                     return DirectEmission.Reject<DirectTypeModel>("declared field: " + field.Name + " " + field.DeclaredAccessibility +
                         (field.IsReadOnly ? " readonly" : string.Empty) + (field.IsVolatile ? " volatile" : string.Empty));
                 fieldsDeclared++;
                 continue;
             }
+            // A private auto-property that is not included has instance storage but is never serialized.
+            if (managedStruct && member is IPropertySymbol { IsStatic: false, IsIndexer: false } privateProperty &&
+                privateProperty.DeclaredAccessibility != Accessibility.Public)
+                continue;
             if (!Unserialized(member))
                 return DirectEmission.Reject<DirectTypeModel>("declared member: " + member.Kind + " " + member.Name);
         }
@@ -521,10 +542,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string extension = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
         var members = new DirectMember[data.fields.Count];
         for (int index = 0; index < members.Length; index++)
-            if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned, circle, type)) == null)
+            if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned, circle, type,
+                data.fields[index].IsPrivate, portable != null)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
-        // The constructed read stores each member in a temporary local, which only fixed scalars and strings spell today.
-        if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text)))
+        // The constructed read stores each member in a temporary local, which fixed scalars, strings and built-in values spell.
+        if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text) &&
+            !(member.Raw && member.Builtin)))
             return DirectEmission.Reject<DirectTypeModel>("constructor members");
         // A reference-tracked record covers fixed scalars of at most four bytes, strings and other reference-tracked records.
         // Collections, raw struct widths, slot gaps and oversized tables change its table protocol and keep the original pipeline.
@@ -543,21 +566,30 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("bounded record");
         // A local case of an abstract packable base whose payload is raw fixed storage writes through the fixed Union cursor protocol.
         bool fixedUnionCase = !isStruct && members.All(member => member.IsFixed) && FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata);
-        // Raw struct members are covered in fixed Union case records of at least two fields without Booleans, whose batch masks need
-        // constant offsets.
-        if (members.Any(member => member.Raw && !member.Builtin) && (!fixedUnionCase || members.Length < 2 || members.Any(member => member.IsBoolean || member.Mirrored)))
+        // Raw struct members are covered in fixed Union case records of at least two fields without Booleans, whose batch masks
+        // need constant offsets; a raw struct copies its complete storage, so its nested raw members need no fixed-run proof.
+        if (!raw && members.Any(member => member.Raw && !member.Builtin) &&
+            (!fixedUnionCase || members.Length < 2 || members.Any(member => member.IsBoolean || member.Mirrored)))
             return DirectEmission.Reject<DirectTypeModel>("struct member record");
-        // Strings without collections take the named member write and the proven object write; both need the runtime's own profiles.
         // Included non-public fields are reached through the same layout mirror as auto-property storage, and a
         // circle-reference payload always declares its storage mirror.
         bool mirrored = circle || data.fields.Any(field => field.isProperty || field.IsPrivate);
-        if (isStruct && (mirrored || members.Any(member => !member.IsFixed || member.Raw)))
-            return DirectEmission.Reject<DirectTypeModel>("struct members");
+        // A raw struct copies its complete storage; a portable struct transfers only fixed fields; a managed struct records
+        // fixed scalars, strings and built-in values until inline objects and collections join it.
+        if (isStruct)
+        {
+            if (raw && members.Any(member => !member.IsFixed))
+                return DirectEmission.Reject<DirectTypeModel>("struct members");
+            if (portable != null && members.Any(member => !member.IsFixed))
+                return DirectEmission.Reject<DirectTypeModel>("struct members");
+            if (managedStruct && members.Any(member => !member.IsFixed && member.Kind != DirectMemberKind.Text || member.Raw && !member.Builtin))
+                return DirectEmission.Reject<DirectTypeModel>("struct members");
+        }
         bool strings = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
             members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
         // The proven object write needs .NET 8, unsafe code and a non-Unity project, as ProvenObjectWriteProjection checks.
         bool unity = metadata.IsForUnity || metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal));
-        bool proven = strings && !versioned && metadata.IsNet8 && metadata.AllowUnsafe && !unity &&
+        bool proven = !isStruct && strings && !versioned && metadata.IsNet8 && metadata.AllowUnsafe && !unity &&
             data.callBackMethods.Count == 0 && bounded == null;
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
@@ -584,7 +616,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         {
             // The mirror declares every instance field of the type in storage order, so it must hold exactly the members;
             // LuminPackOrder may reorder the wire members independently of that storage order.
-            if (fresh || derived || data.localFields.Count != members.Length ||
+            if (fresh && !isStruct || derived || data.localFields.Count != members.Length ||
                 data.localFields.Select(local => local.Identifier).OrderBy(name => name, StringComparer.Ordinal)
                     .SequenceEqual(members.Select(member => member.Name).OrderBy(name => name, StringComparer.Ordinal)) == false)
                 return DirectEmission.Reject<DirectTypeModel>("layout mirror");
@@ -597,10 +629,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         }
         string view = null;
         bool viewElided = false;
+        DirectPortableView portableView = null;
         if (portable != null)
         {
-            // The plan's fields are the struct's fields in declaration order, as are the members.
-            if (portable.Fields.Length != members.Length || portable.Fields.Where((field, index) => field.Name != members[index].Name).Any())
+            // The plan's fields are the struct's fields in declaration order; LuminPackOrder may reorder the wire members.
+            // A positional record's storage fields are its generated backing fields, so only the count is compared.
+            if (portable.Fields.Length != members.Length)
                 return DirectEmission.Reject<DirectTypeModel>("portable struct");
             using (var hash = System.Security.Cryptography.SHA256.Create())
                 view = "LuminLayout_" + string.Concat(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(FormatterTypeName.Get(type)))
@@ -608,6 +642,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                     LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(type) + "_LocalPortable" + LuminPackLocalLayoutGenerator.GetLocalDeclarationName(type);
             var names = new System.Collections.Generic.HashSet<string>(members.Select(member => member.Name), StringComparer.Ordinal);
             viewElided = Enumerable.Range(0, members.Length).All(index => names.Contains("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            portableView = CreatePortableView(portable, view);
         }
         string[] arguments = null, constructed = null;
         if (data.SelectedConstructor is { Parameters.Count: > 0 } selected)
@@ -659,11 +694,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
             fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
             members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
-            strings && !derived && !versioned && data.callBackMethods.Count == 0 && bounded == null, metadata.IsNet8,
+            strings && !derived && !versioned && data.callBackMethods.Count == 0 && bounded == null && !isStruct, metadata.IsNet8,
             metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
             referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray(),
             selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded,
-            circle: circle, circleGuarded: circle && RecursiveTypeAnalysis.IsRecursive(type));
+            circle: circle, circleGuarded: circle && RecursiveTypeAnalysis.IsRecursive(type),
+            managedStruct: managedStruct, portableView: portableView);
     }
 
     /// <summary>Models a polymorphic Union root: its declared cases, compiled profile slots and dispatch tier, when every case
@@ -871,6 +907,42 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         return DirectEmission.ProjectFacts(compilation) || DirectEmission.Reject<DirectTypeModel>("assembly attributes") != null;
     }
 
+    /// <summary>Recognizes a tuple or <c>ValueTuple</c> construction, whose components flatten into the parent portable view.</summary>
+    private static bool TupleStorage(ITypeSymbol type)
+        => type is INamedTypeSymbol named && (named.IsTupleType || named.OriginalDefinition.MetadataName.StartsWith("ValueTuple`", StringComparison.Ordinal) &&
+            named.ContainingNamespace.ToDisplayString() == "System");
+
+    /// <summary>Builds the positional view and its scalar transfers from the portable storage plan.</summary>
+    /// <param name="plan">The analyzed portable storage.</param>
+    /// <param name="view">The view's declaration name.</param>
+    /// <returns>The view with every scalar transfer in wire order.</returns>
+    private static DirectPortableView CreatePortableView(PortableStructPlan plan, string view)
+    {
+        var fields = new DirectPortableViewField[plan.Fields.Length];
+        for (int index = 0; index < fields.Length; index++)
+        {
+            var leaves = new System.Collections.Generic.List<DirectPortableLeaf>();
+            Flatten(plan.Children[index], "F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture), plan.Fields[index].IsVolatile, leaves);
+            fields[index] = new DirectPortableViewField("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                FormatterTypeName.Get(plan.Fields[index].Type), plan.Fields[index].IsVolatile, plan.Fields[index].Offset, leaves.ToArray());
+        }
+        return new DirectPortableView(view, fields);
+
+        // A tuple's components are its own storage fields; a scalar ends the descent at its packed width.
+        void Flatten(PortableStructPlan node, string access, bool isVolatile, System.Collections.Generic.List<DirectPortableLeaf> leaves)
+        {
+            if (node.Fields == null)
+            {
+                leaves.Add(new DirectPortableLeaf(access, FormatterTypeName.Get(node.Type), node.WireSize, isVolatile));
+                return;
+            }
+            if (!TupleStorage(node.Type))
+                return;
+            for (int index = 0; index < node.Fields.Length; index++)
+                Flatten(node.Children[index], access + "." + node.Fields[index].Name, isVolatile || node.Fields[index].IsVolatile, leaves);
+        }
+    }
+
     /// <summary>Accepts a public or internal type whose containing types are public or internal too.</summary>
     private static bool Reachable(INamedTypeSymbol type)
     {
@@ -1018,9 +1090,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
 
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
     private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata, bool versioned = false,
-        bool circle = false, INamedTypeSymbol owner = null)
+        bool circle = false, INamedTypeSymbol owner = null, bool mirroredStorage = false, bool volatileStorage = false)
     {
-        if (field.IsPrivate && field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 && !versioned ||
+        if (field.IsPrivate && !mirroredStorage || field.IsVolatile && !volatileStorage || field.IsCompress || field.OldNames.Length != 0 && !versioned ||
             field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
             !SyntaxFacts.IsValidIdentifier(field.Name))
             return DirectEmission.Reject<DirectMember>("member options: " + field.Name + " private=" + field.IsPrivate + " volatile=" + field.IsVolatile +
@@ -1045,6 +1117,16 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return new DirectMember(field.Name, DirectMemberKind.Fixed, spelling, spelling, backing.Size, null, field.Type, mirrored, backing.Keyword,
                 property: field.isProperty);
         }
+        // A tuple has a generated binary formatter and no null form; its packed components feed a portable view.
+        if (symbol is INamedTypeSymbol tupleType && symbol.NullableAnnotation != NullableAnnotation.Annotated && TupleStorage(tupleType) &&
+            symbol.SpecialType == SpecialType.None)
+        {
+            if (field.FieldType != LuminDataType.Value || field.Type is not (LuminFiledType.Struct or LuminFiledType.Other))
+                return DirectEmission.Reject<DirectMember>("built-in struct member");
+            string tupleSpelling = FormatterTypeName.Get(tupleType);
+            return new DirectMember(field.Name, DirectMemberKind.Fixed, tupleSpelling, tupleSpelling, 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, tupleSpelling), field.Type, mirrored, raw: true, builtin: true, property: field.isProperty);
+        }
         // A raw unmanaged packable struct of this assembly joins fixed runs at its runtime size.
         if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Struct, IsGenericType: false } rawStruct && symbol.SpecialType == SpecialType.None &&
             symbol.NullableAnnotation != NullableAnnotation.Annotated && EmitterTypeTraits.CanUseUnmanagedSerialization(rawStruct) &&
@@ -1054,14 +1136,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         {
             if (field.FieldType != LuminDataType.Value || field.Type != LuminFiledType.Struct)
                 return DirectEmission.Reject<DirectMember>("struct member");
-            // A containing JSON write copies a small struct write inline; only a struct written behind its formatter call is covered.
-            // The struct's own model gives that count.
+            // A containing JSON write copies a small struct write inline; a larger one stays behind its formatter call. A
+            // managed struct member keeps its own record operation and is not a fixed raw run here.
             var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(rawStruct, compilation, metadata), compilation, metadata);
-            if (nested == null || !nested.IsStruct || nested.View != null || DirectJsonEmitter.WriteCalls(nested) <= 16)
+            if (nested == null || !nested.IsStruct || nested.ManagedStruct)
                 return DirectEmission.Reject<DirectMember>("struct member JSON");
             string spelling = rawStruct.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return new DirectMember(field.Name, DirectMemberKind.Fixed, spelling, spelling, 0,
-                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, mirrored, property: field.isProperty, raw: true);
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, mirrored, property: field.isProperty, raw: true,
+                nested: nested);
         }
         // A reference-tracked member keeps its own slot table and reference id, so the parent writes its length and calls its
         // operation. A self member reuses this model; any other member is modeled as its own record.
@@ -1083,7 +1166,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             }
             string circleSpelling = circleType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return new DirectMember(field.Name, DirectMemberKind.Object, circleSpelling, circleSpelling, 0,
-                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, circleSpelling), field.Type, field.isProperty, nested: nested);
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, circleSpelling), field.Type, mirrored, property: field.isProperty, nested: nested);
         }
         // A packable class of this assembly with analyzed fields is stored inline: the parent record writes its members
         // directly after a marker holding their count. Versioned, mirrored, constructed and pooled children change that

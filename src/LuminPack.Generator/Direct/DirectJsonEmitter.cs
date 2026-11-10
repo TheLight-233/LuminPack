@@ -218,7 +218,8 @@ internal static class DirectJsonEmitter
         }
         // A mirrored type's storage is reached through its layout mirror.
         if (model.Mirror != null && model.Members.Any(member => member.Mirrored))
-            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value + "!);");
+            body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value +
+                (model.IsStruct ? ");" : "!);"));
         body.Add("if (!writer.IsFirstElement)");
         body.Add("\twriter.WriteByteRaw<" + Profile + ">((byte)',');");
         body.Add("bool " + isUtf8 + " = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
@@ -260,6 +261,13 @@ internal static class DirectJsonEmitter
             body.Add("writer.SetFirstElement(true);");
             if (member.Raw)
             {
+                // A small declared struct copies its object body in place; a built-in or larger one keeps its formatter call.
+                if (!member.Builtin && member.Nested != null && expand && WriteCalls(member.Nested) <= 16)
+                {
+                    ExpandStruct(body, member, owner, w, names);
+                    body.Add("");
+                    continue;
+                }
                 // A raw struct is written by its binary formatter owner from a copy, without a null branch.
                 string temp = names.Next("temp");
                 body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
@@ -293,6 +301,18 @@ internal static class DirectJsonEmitter
         }
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
         return body;
+    }
+
+    /// <summary>Copies a declared struct member's write body in place: a struct value is read-only, has no null branch and
+    /// needs no exit label.</summary>
+    private static void ExpandStruct(List<string> body, DirectMember member, string owner, DirectWriter w, JsonNames names)
+    {
+        string temp = names.Next("temp");
+        body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
+        string input = names.Next("input");
+        body.Add("ref readonly " + member.Nested.GlobalName + " " + input + " = ref " + temp + ";");
+        string helper = "global::LuminPack.Generated." + member.Nested.Extension + "." + member.Nested.JsonHelper;
+        body.AddRange(WriteBody(member.Nested, w, helper, names, expand: true, inputName: input));
     }
 
     /// <summary>Copies an inline object's write body into its parent's method, renaming its locals and turning its return into a
@@ -358,7 +378,14 @@ internal static class DirectJsonEmitter
         bool packed = members.Length >= 4;
         var body = new List<string>();
         if (model.IsStruct)
-            body.Add("bool reuseExisting = false;");
+        {
+            // A struct reuses its existing storage when any reference member is already set.
+            var referenced = members.Where(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.Object or
+                DirectMemberKind.Array or DirectMemberKind.List).ToArray();
+            body.Add("bool reuseExisting = " + (referenced.Length == 0 ? "false" : string.Join(" || ", referenced.Select(member =>
+                (member.Mirrored ? "LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value)." : "value.") +
+                member.Name + " is not null"))) + ";");
+        }
         else
         {
             body.Add("if (reader.IsNull())");
@@ -375,13 +402,21 @@ internal static class DirectJsonEmitter
             }
             body.Add("bool reuseExisting = value is not null;");
         }
+        var mirroredMembers = members.Where(member => member.Mirrored).ToArray();
         if (fresh)
         {
             body.Add("var result = reuseExisting ? value! : new " + model.GlobalName + "();");
+            // A mirrored member decodes into a temporary and reaches the result through the layout mirror afterwards.
+            if (mirroredMembers.Length != 0)
+            {
+                body.Add("// Temp vars");
+                foreach (var member in mirroredMembers)
+                    body.Add(member.TypeName + (member.IsFixed ? string.Empty : "?") + " " + Camel(member.Name) + "Temp = default;");
+            }
             if (packed)
                 body.Add("uint seenFields = 0;");
             else
-                foreach (var member in members)
+                foreach (var member in members.Where(member => !member.Mirrored))
                     body.Add("bool " + Camel(member.Name) + "Seen = false;");
         }
         else
@@ -390,7 +425,8 @@ internal static class DirectJsonEmitter
             foreach (var member in members)
                 body.Add(member.TypeName + (member.IsFixed ? string.Empty : "?") + " " + Camel(member.Name) + "Temp = default;");
             if (model.Mirror != null && members.Any(member => member.Mirrored))
-                body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
+                    (model.IsStruct ? "value" : "value!") + ");");
         }
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
         body.Add("bool isUtf8 = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
@@ -426,11 +462,19 @@ internal static class DirectJsonEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            string target = fresh ? "result." + member.Name : Camel(member.Name) + "Temp";
+            string target = fresh ? (member.Mirrored ? Camel(member.Name) + "Temp" : "result." + member.Name) : Camel(member.Name) + "Temp";
             caseLines.Add("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
             caseLines.Add("{");
             if (fresh)
-                caseLines.Add(packed ? "seenFields |= " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u;" : Camel(member.Name) + "Seen = true;");
+            {
+                if (member.Mirrored)
+                {
+                    caseLines.Add("if (reuseExisting)");
+                    caseLines.Add("\t" + target + " = LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref result)." + member.Name + ";");
+                }
+                else
+                    caseLines.Add(packed ? "seenFields |= " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u;" : Camel(member.Name) + "Seen = true;");
+            }
             else
             {
                 caseLines.Add("if (reuseExisting)");
@@ -476,10 +520,18 @@ internal static class DirectJsonEmitter
         {
             for (int index = 0; index < members.Length; index++)
             {
+                if (members[index].Mirrored)
+                    continue;
                 body.Add("if (" + (packed ? "(seenFields & " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u) == 0" : "!" + Camel(members[index].Name) + "Seen") + ")");
                 body.Add("\tresult." + members[index].Name + " = default !;");
             }
             body.Add("value = result;");
+            if (mirroredMembers.Length != 0)
+            {
+                body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value);");
+                foreach (var member in mirroredMembers)
+                    body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+            }
         }
         else
         {
@@ -495,7 +547,8 @@ internal static class DirectJsonEmitter
                 body.Add("// Populate every field on the pooled instance.");
                 bool mirroredStorage = members.Any(member => member.Mirrored);
                 if (model.Mirror != null && mirroredStorage)
-                    body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                    body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
+                        (model.IsStruct ? "value" : "value!") + ");");
                 foreach (var member in members)
                     body.Add((mirroredStorage && member.Mirrored ? "local." : Value(model)) + member.Name + " = " + Camel(member.Name) + "Temp!;");
             }
@@ -517,7 +570,8 @@ internal static class DirectJsonEmitter
                 if (mirrored.Length != 0)
                 {
                     body.Add("// Assign private fields.");
-                    body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                    body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
+                        (model.IsStruct ? "value" : "value!") + ");");
                     foreach (var member in mirrored)
                         body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
                 }
