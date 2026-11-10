@@ -167,7 +167,7 @@ internal static class DirectJsonEmitter
             string owner = member.Mirrored ? "local" : "value";
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(head);
             // The fused head-and-integer write applies to a directly named field only.
-            if (!member.Mirrored && member.FieldType is LuminFiledType.Int or LuminFiledType.UInt or LuminFiledType.Long or LuminFiledType.ULong &&
+            if (model.Net8 && !member.Mirrored && member.FieldType is LuminFiledType.Int or LuminFiledType.UInt or LuminFiledType.Long or LuminFiledType.ULong &&
                 utf8Bytes.Length >= 8 && utf8Bytes.Length <= 16)
             {
                 var (first, last) = Words(utf8Bytes);
@@ -179,7 +179,7 @@ internal static class DirectJsonEmitter
                 body.Add("if (isUtf8)");
                 body.Add("\twriter.WriteRaw(" + utf8 + ");");
                 body.Add("else");
-                if (Literal(body, head, utf16, utf8: false))
+                if (Literal(model, body, head, utf16, utf8: false))
                     body.Add("");
                 body.Add("writer.SetFirstElement(true);");
                 body.Add("writer.Write<" + Profile + ">(value." + member.Name + ");");
@@ -188,9 +188,9 @@ internal static class DirectJsonEmitter
                 continue;
             }
             body.Add("if (isUtf8)");
-            Literal(body, head, utf8, utf8: true);
+            Literal(model, body, head, utf8, utf8: true);
             body.Add("else");
-            bool block = Literal(body, head, utf16, utf8: false);
+            bool block = Literal(model, body, head, utf16, utf8: false);
             if (block)
                 body.Add("");
             body.Add("writer.SetFirstElement(true);");
@@ -237,12 +237,13 @@ internal static class DirectJsonEmitter
     /// of more than sixteen calls stays behind its formatter's call.</summary>
     internal static int WriteCalls(DirectTypeModel model) => DirectCalls.Count(WriteBody(model, new DirectWriter(-1), model.JsonHelper));
 
-    /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes, otherwise as its raw span.</summary>
+    /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes on .NET 8 or later, otherwise as
+    /// its raw span.</summary>
     /// <returns>Whether the head was written as a braced block.</returns>
-    private static bool Literal(List<string> body, string head, string raw, bool utf8)
+    private static bool Literal(DirectTypeModel model, List<string> body, string head, string raw, bool utf8)
     {
         byte[] bytes = (utf8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(head);
-        if (bytes.Length >= 8 && bytes.Length <= 16)
+        if (model.Net8 && bytes.Length >= 8 && bytes.Length <= 16)
         {
             var (first, last) = Words(bytes);
             body.Add("{");
@@ -507,6 +508,17 @@ internal static class DirectJsonEmitter
             w.Open();
             for (int index = 0; index < members.Length; index++)
             {
+                if (!model.Utf8Literals)
+                {
+                    // Without UTF-8 string literals the heads are arrays of the punctuation and the name's units.
+                    string first = index == 0 ? "'{'" : "','";
+                    w.Line(utf8
+                        ? "internal static readonly byte[] " + Member(members[index]) + " = new byte[] { (byte)" + first + ", (byte)'\"', " +
+                            string.Join(", ", Encoding.UTF8.GetBytes(members[index].Name).Select(item => item.ToString(CultureInfo.InvariantCulture))) + ", (byte)'\"', (byte)':' };"
+                        : "internal static readonly char[] " + Member(members[index]) + " = new char[] { (char)" + first + ", (char)'\"', " +
+                            string.Join(", ", members[index].Name.Select(item => "(char)'" + item + "'")) + ", (char)'\"', (char)':' };");
+                    continue;
+                }
                 string literal = SymbolDisplay.FormatLiteral(Head(model, index), true);
                 // The publication layout expands an attributed accessor written on the head's line.
                 w.Line("internal static global::System.ReadOnlySpan<" + (utf8 ? "byte" : "char") + "> " + Member(members[index]) + " {" + method);

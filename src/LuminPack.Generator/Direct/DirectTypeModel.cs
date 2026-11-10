@@ -134,11 +134,18 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string[] ConstructorArguments;
     /// <summary>The members the selected constructor sets, which the object initializer leaves out.</summary>
     internal readonly string[] ConstructorMembers;
+    /// <summary>Whether the project targets .NET 8 or later, whose operations take <c>scoped</c> state and write generated JSON
+    /// literals.</summary>
+    internal readonly bool Net8;
+    /// <summary>Whether JSON property heads are UTF-8 string literal properties (.NET 8 and C# 11 or later) rather than arrays.</summary>
+    internal readonly bool Utf8Literals;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
-        bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers)
+        bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals)
     {
+        Net8 = net8;
+        Utf8Literals = utf8Literals;
         ConstructorArguments = constructorArguments;
         ConstructorMembers = constructorMembers;
         MeasureRecord = measureRecord;
@@ -147,7 +154,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         View = view;
         ViewElided = viewElided;
         Proven = proven;
-        MemberWrite = proven && !derived;
+        MemberWrite = memberWrite;
         CamelSnapshots = mirror != null || derived;
         Mirror = mirror;
         MirrorFields = mirrorFields;
@@ -170,6 +177,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
+        Net8 == other.Net8 && Utf8Literals == other.Utf8Literals &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
@@ -299,8 +307,11 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         bool mirrored = data.fields.Any(field => field.isProperty);
         if (isStruct && (mirrored || members.Any(member => !member.IsFixed || member.Raw)))
             return DirectEmission.Reject<DirectTypeModel>("struct members");
-        bool proven = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
+        bool strings = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
             members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
+        // The proven object write needs .NET 8, unsafe code and a non-Unity project, as ProvenObjectWriteProjection checks.
+        bool unity = metadata.IsForUnity || metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal));
+        bool proven = strings && metadata.IsNet8 && metadata.AllowUnsafe && !unity;
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
         // JSON read locals are named after the camel-cased member; the presentation renames a leading underscore or a clash.
@@ -353,18 +364,17 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
             fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
-            members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed);
+            members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
+            strings && !derived, metadata.IsNet8, metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
     private static bool SupportedProject(Compilation compilation, MetaInfo metadata)
     {
-        if (!metadata.IsNet8 || !metadata.IsNet9_OR_GREATER || metadata.IsForUnity)
-            return DirectEmission.Reject<DirectTypeModel>("target framework") != null;
-        if (!metadata.AllowUnsafe)
-            return DirectEmission.Reject<DirectTypeModel>("unsafe code") != null;
-        if (metadata.CSharpVersion <= LanguageVersion.CSharp10 || compilation is not CSharpCompilation)
-            return DirectEmission.Reject<DirectTypeModel>("language version") != null;
+        // Target framework, Unity, unsafe code and language version only select variants of the emitted text (see Net8,
+        // Utf8Literals and the proven object write), so every C# project is supported.
+        if (compilation is not CSharpCompilation)
+            return DirectEmission.Reject<DirectTypeModel>("language") != null;
         return DirectEmission.ProjectFacts(compilation) || DirectEmission.Reject<DirectTypeModel>("assembly attributes") != null;
     }
 

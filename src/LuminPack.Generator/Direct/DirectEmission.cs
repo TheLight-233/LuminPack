@@ -80,7 +80,7 @@ internal static class DirectEmission
     /// <param name="operations">The operations the project calls; the members of the others are left out.</param>
     internal static string Render(DirectTypeModel model, bool json, int aliases, LuminPack.Code.Core.GeneratedOperations operations)
     {
-        var writer = new DirectWriter(aliases);
+        var writer = new DirectWriter(aliases) { Scoped = model.Net8 };
         if (json)
             DirectJsonEmitter.Emit(model, writer, operations);
         else if (model.IsStruct)
@@ -132,6 +132,11 @@ internal sealed class DirectWriter
     /// <summary>Discards lines and alias uses while set, for the members of operations the project does not call.</summary>
     internal bool Suppressed;
 
+    /// <summary>Whether state and payload parameters keep their <c>scoped</c> modifier, which the operations declare from .NET 8 on.</summary>
+    internal bool Scoped = true;
+
+    private static readonly System.Text.RegularExpressions.Regex ScopedModifier = new(@"\bscoped (?=(ref|in) )");
+
     /// <summary>Spells a helper type through its alias when the consumer leaves the alias available.</summary>
     /// <param name="alias">The alias name.</param>
     /// <returns>The alias or the fully qualified target.</returns>
@@ -168,6 +173,8 @@ internal sealed class DirectWriter
             _body.Append(Environment.NewLine);
             _pendingBlank = false;
         }
+        if (!Scoped && text.Contains("scoped "))
+            text = ScopedModifier.Replace(text, string.Empty);
         _body.Append(' ', _indent * 4).Append(text).Append(Environment.NewLine);
     }
 
