@@ -101,9 +101,9 @@ internal static partial class DirectCircleBinaryEmitter
         string prefix = model.Mirror == null ? null : model.Mirror.Substring(0, "LuminLayout_".Length + 64 + 1);
         foreach (var child in readChildren)
             if (child.Mirror != null && child.Mirror != model.Mirror && emitted.Add(child.Mirror))
-                Mirror(prefix + child.Mirror.Substring(prefix.Length), child.MirrorFields, child.LayoutAttribute);
+                Mirror(prefix + child.Mirror.Substring(prefix.Length), child.MirrorFields, child.MirrorOffsets, child.LayoutAttribute);
         if (model.Mirror != null)
-            Mirror(model.Mirror, model.MirrorFields, model.LayoutAttribute);
+            Mirror(model.Mirror, model.MirrorFields, model.MirrorOffsets, model.LayoutAttribute);
         w.Close();
         w.Blank();
 
@@ -150,7 +150,7 @@ internal static partial class DirectCircleBinaryEmitter
         w.Close();
         w.Blank();
 
-        void Mirror(string name, string[] fields, string layoutAttribute)
+        void Mirror(string name, string[] fields, int[] offsets, string layoutAttribute)
         {
             w.Blank();
             w.Line(w.Preserve);
@@ -158,8 +158,7 @@ internal static partial class DirectCircleBinaryEmitter
                 w.Line(layoutAttribute);
             w.Line("private class " + name);
             w.Open();
-            foreach (string field in fields)
-                w.Line("internal " + field + ";");
+            DirectBinaryEmitter.MirrorFields(w, fields, offsets);
             w.Close();
         }
 

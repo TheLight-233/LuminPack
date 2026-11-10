@@ -120,8 +120,7 @@ internal static partial class DirectBinaryEmitter
                 w.Line(model.LayoutAttribute);
             w.Line("private struct " + model.Mirror);
             w.Open();
-            foreach (string field in model.MirrorFields ?? Array.Empty<string>())
-                w.Line("internal " + field + ";");
+            MirrorFields(w, model.MirrorFields ?? Array.Empty<string>(), model.MirrorOffsets);
             w.Close();
         }
         w.Close();

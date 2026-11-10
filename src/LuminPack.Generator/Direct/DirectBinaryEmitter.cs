@@ -182,8 +182,7 @@ internal static partial class DirectBinaryEmitter
             w.Line(w.Preserve);
             w.Line("private class " + (model.Mirror ?? model.Version.Layout));
             w.Open();
-            foreach (string field in model.MirrorFields ?? model.Version.LayoutFields)
-                w.Line("internal " + field + ";");
+            MirrorFields(w, model.MirrorFields ?? model.Version.LayoutFields, model.MirrorFields != null ? model.MirrorOffsets : null);
             w.Close();
         }
         w.Close();
@@ -389,21 +388,25 @@ internal static partial class DirectBinaryEmitter
         {
             // The Union payload of a version-tolerant record is the record itself; only the inline hint follows the body size.
             // A mirrored record keeps its null handling in both bodies, so the mirror view is declared at the same position.
-            var write = Mirrored(model, w, VersionWriteBody(model, w), writes: true, union: false);
+            // A struct never writes or reads a null marker and keeps its callbacks around the same schema body.
+            string value = model.IsStruct ? type : type + "?";
+            var write = AddCallbacks(Mirrored(model, w, VersionWriteBody(model, w), writes: true, union: false), model.WriteBefore, model.WriteAfter);
             string writeHint = VersionWriteInline(model) ? inline : null;
             w.Suppressed = !writes;
-            Method(write, "RootWrite", true, "(scoped ref " + writer + " writer, " + type + "? input)", writeHint);
+            Method(write, "RootWrite", true, "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)", writeHint);
             w.Blank();
             w.Suppressed = !reads;
-            Method(VersionReadBody(model, w), "RootRead", true, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", null);
+            Method(AddReadCallbacks(model, VersionReadBody(model, w)), "RootRead", true,
+                "(scoped ref " + reader + " reader, scoped ref " + value + " value)", null);
             w.Blank();
             w.Suppressed = !writes;
-            Method(Mirrored(model, w, VersionWriteBody(model, w), writes: true, union: false), "RootWriteUnion", true,
-                "(scoped ref " + writer + " writer, " + type + "? input)", writeHint);
+            Method(Mirrored(model, w, AddCallbacks(VersionWriteBody(model, w), model.WriteBefore, model.WriteAfter), writes: true, union: false),
+                "RootWriteUnion", true, "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)", writeHint);
             w.Blank();
             w.Suppressed = !reads;
-            Method(VersionReadBody(model, w), "RootReadUnion", true, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                members.All(member => member.IsFixed) ? null : w.MethodImpl("NoInlining"));
+            Method(AddReadCallbacks(model, VersionReadBody(model, w)), "RootReadUnion", true,
+                "(scoped ref " + reader + " reader, scoped ref " + value + " value)",
+                !model.IsStruct && members.Any(member => !member.IsFixed) ? w.MethodImpl("NoInlining") : null);
             w.Suppressed = false;
             w.Close();
         }
@@ -1467,6 +1470,20 @@ internal static partial class DirectBinaryEmitter
         return found;
     }
 
+    /// <summary>Writes a mirror's field declarations, reproducing an explicit-layout offset where one is declared.</summary>
+    /// <param name="w">The file writer.</param>
+    /// <param name="fields">The mirror field declarations in storage order.</param>
+    /// <param name="offsets">The explicit-layout offset per field, or -1, or null.</param>
+    internal static void MirrorFields(DirectWriter w, string[] fields, int[] offsets)
+    {
+        for (int index = 0; index < fields.Length; index++)
+        {
+            if (offsets != null && index < offsets.Length && offsets[index] >= 0)
+                w.Line("[global::System.Runtime.InteropServices.FieldOffset(" + offsets[index].ToString(CultureInfo.InvariantCulture) + ")]");
+            w.Line("internal " + fields[index] + ";");
+        }
+    }
+
     /// <summary>Reaches a mirrored type's storage through its layout mirror: the mirror view is declared after the null handling
     /// or the instance, and every member access goes through it.</summary>
     private static List<string> Mirrored(DirectTypeModel model, DirectWriter w, List<string> body, bool writes, bool union)
@@ -1483,7 +1500,13 @@ internal static partial class DirectBinaryEmitter
         foreach (string line in body)
             result.Add(System.Text.RegularExpressions.Regex.Replace(line, pattern, "local.$1"));
         if (writes)
-            result.Insert(union ? 1 : 8, "ref var local = ref " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref Unsafe.AsRef(in value));");
+        {
+            // A version-tolerant struct has no null handling, so its mirror view follows the value local at once.
+            int at = model.Version != null && model.IsStruct ? 1 : (union ? 1 : 8);
+            if (at > result.Count)
+                at = result.Count;
+            result.Insert(at, "ref var local = ref " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref Unsafe.AsRef(in value));");
+        }
         else
         {
             // A constructed read declares its mirror views itself, so it has no instance local to attach one to.

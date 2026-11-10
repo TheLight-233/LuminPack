@@ -52,15 +52,17 @@ internal sealed class DirectVersionSchema : IEquatable<DirectVersionSchema>
         LayoutFields = layoutFields;
     }
 
-    /// <summary>Models the schema of a version-tolerant record whose members are public raw scalars with constant widths.</summary>
+    /// <summary>Models the schema of a version-tolerant record or struct whose members are raw scalars, strings or
+    /// reserved-span lists with constant widths.</summary>
     /// <returns>The schema, or null when the record keeps the original pipeline.</returns>
     internal static DirectVersionSchema TryCreate(LuminDataInfo data, INamedTypeSymbol type, MetaInfo metadata, DirectMember[] members, bool derived, bool mirrored)
     {
-        if (derived || data.isValueType || data.VersionSchemaType == null)
+        if (derived || data.VersionSchemaType == null)
             return DirectEmission.Reject<DirectVersionSchema>("version tolerant: shape");
-        if (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List or DirectMemberKind.Stack or
-            DirectMemberKind.SortedSet or DirectMemberKind.SortedList or DirectMemberKind.PairList or DirectMemberKind.NestedList or
-            DirectMemberKind.SparseDictionary || member.Raw))
+        if (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.Object or DirectMemberKind.Dictionary or
+            DirectMemberKind.Stack or DirectMemberKind.SortedSet or DirectMemberKind.SortedList or DirectMemberKind.PairList or
+            DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary ||
+            member.Kind == DirectMemberKind.List && (member.Nested != null || member.FormatterCall) || member.Raw))
             return DirectEmission.Reject<DirectVersionSchema>("version tolerant: members");
         // Constant schema bytes are emitted as collection expressions, which the original emits on .NET 8 with C# 12 or later.
         if (!metadata.IsNet8 || metadata.CSharpVersion < (LanguageVersion)1200)
@@ -139,18 +141,29 @@ internal static partial class DirectBinaryEmitter
         var body = new List<string>
         {
             "var value = input;",
-            "if (value is null)",
-            "{",
-            "writer.Cursor = " + w.A("LuminPackCode") + ".NullObject;",
-            "writer.Advance(1);",
-            "return;",
-            "}",
-            "",
-            "ref byte cursor = ref writer.Cursor;",
         };
+        if (!model.IsStruct)
+        {
+            body.Add("if (value is null)");
+            body.Add("{");
+            body.Add("writer.Cursor = " + w.A("LuminPackCode") + ".NullObject;");
+            body.Add("writer.Advance(1);");
+            body.Add("return;");
+            body.Add("}");
+            body.Add("");
+        }
+        body.Add("ref byte cursor = ref writer.Cursor;");
         var terms = new List<string> { schema.Schema + ".Prefix.Length" };
         for (int index = 0; index < members.Length; index++)
         {
+            if (members[index].Kind == DirectMemberKind.List)
+            {
+                // A reserved-span list captures its complete payload bound before the record is reserved.
+                body.Add("var " + VersionSnapshot(model, index) + " = " + w.A("LuminPackWriter") + ".Capture(value." + members[index].Name + ");");
+                terms.Add("4");
+                terms.Add(VersionSnapshot(model, index) + ".Bound");
+                continue;
+            }
             if (members[index].Kind != DirectMemberKind.Text)
             {
                 terms.Add(members[index].Width);
@@ -166,14 +179,16 @@ internal static partial class DirectBinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind is DirectMemberKind.Text or DirectMemberKind.List)
             {
-                // A string payload is preceded by its byte length, patched after the string is written.
+                // A string or reserved-span list payload is preceded by its byte length, patched afterwards.
                 string length = lengths++ == 0 ? "length" : "length" + (lengths - 1).ToString(CultureInfo.InvariantCulture);
                 body.Add("// Field: " + member.Name);
                 body.Add("ref byte " + length + " = ref cursor;");
                 body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
-                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + VersionSnapshot(model, index) + ");");
+                body.Add(member.Kind == DirectMemberKind.Text
+                    ? "cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + VersionSnapshot(model, index) + ");"
+                    : "cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + VersionSnapshot(model, index) + ");");
                 body.Add(w.A("Unsafe") + ".WriteUnaligned(ref " + length + ", (int)" + w.A("Unsafe") + ".ByteOffset(ref " + w.A("Unsafe") + ".Add(ref " + length + ", 4), ref cursor));");
                 continue;
             }
@@ -211,8 +226,8 @@ internal static partial class DirectBinaryEmitter
             body.Add("");
             index = last;
         }
-        // A record with a string separates the commit from its last store.
-        if (members.Any(member => member.Kind == DirectMemberKind.Text) && body[body.Count - 1].Length != 0)
+        // A record with a string or list separates the commit from its last store.
+        if (members.Any(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.List) && body[body.Count - 1].Length != 0)
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
         return body;
@@ -266,7 +281,7 @@ internal static partial class DirectBinaryEmitter
         body.Add("}");
         body.Add("");
         bool allRaw = members.All(member => member.IsFixed);
-        if (!allRaw)
+        if (!allRaw && !model.IsStruct)
         {
             // Variable members start from the reused instance's values.
             body.Add("if (value is not null)");
@@ -289,12 +304,12 @@ internal static partial class DirectBinaryEmitter
             if (separate && !group)
                 body.Add("");
             separate = !member.IsFixed || group;
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind is DirectMemberKind.Text or DirectMemberKind.List)
             {
                 string length = "length" + index.ToString(CultureInfo.InvariantCulture), end = End();
                 body.Add("int " + length + " = reader.ReadVersionPayloadLength();");
                 body.Add("int " + end + " = reader.Position + " + length + ";");
-                body.Add(text + ".Read<" + Profile + ">(ref reader, ref " + temps[index] + "!);");
+                body.Add((member.Kind == DirectMemberKind.Text ? text : member.Formatter) + ".Read<" + Profile + ">(ref reader, ref " + temps[index] + "!);");
                 body.Add(Reader() + ".ValidateVersionFieldEnd(reader.Position, " + end + ");");
                 continue;
             }
@@ -351,15 +366,16 @@ internal static partial class DirectBinaryEmitter
         {
             body.Add("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
             body.Add("{");
-            if (members[index].Kind == DirectMemberKind.Text)
+            if (members[index].Kind is DirectMemberKind.Text or DirectMemberKind.List)
             {
-                // A string is read within a temporary input limit of its recorded payload length.
+                // A string or list is read within a temporary input limit of its recorded payload length.
                 string end = End(), limit = Limit();
                 body.Add("int " + end + " = reader2.Position + length;");
                 body.Add("int " + limit + " = reader2.EnterVersionField(length);");
                 body.Add("try");
                 body.Add("{");
-                body.Add(text + ".Read<" + Profile + ">(ref reader2, ref " + temps[index] + "2!);");
+                body.Add((members[index].Kind == DirectMemberKind.Text ? text : members[index].Formatter) + ".Read<" + Profile + ">(ref reader2, ref " +
+                    temps[index] + "2!);");
                 body.Add("}");
                 body.Add("finally");
                 body.Add("{");
@@ -398,11 +414,25 @@ internal static partial class DirectBinaryEmitter
             body.Add("return " + (members.Length == 1 ? temps[0] + "2" : "(" + string.Join(", ", temps.Select(temp => temp + "2")) + ")") + ";");
         body.Add("}");
         body.Add("");
+        bool mirroredMembers = model.Members.Any(member => member.Mirrored);
+        var initializer = members.Where(member => !member.Mirrored).ToArray();
+        if (model.IsStruct)
+        {
+            // A struct always builds a fresh value and copies its mirrored storage through the layout mirror.
+            AddVersionConstruction(model, body, initializer, temps);
+            if (mirroredMembers)
+            {
+                body.Add("// Assign private fields.");
+                body.Add("ref var local = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value);");
+                for (int index = 0; index < members.Length; index++)
+                    if (members[index].Mirrored)
+                        body.Add("local." + members[index].Name + " = " + temps[index] + "!;");
+            }
+            return body;
+        }
         body.Add("var completedInstance = value;");
         body.Add("if (value is null)");
         body.Add("{");
-        bool mirroredMembers = model.Members.Any(member => member.Mirrored);
-        var initializer = members.Where(member => !member.Mirrored).ToArray();
         if (model.Rent != null)
         {
             // A rented instance is populated field by field, mirrored members through the layout mirror.
@@ -413,23 +443,17 @@ internal static partial class DirectBinaryEmitter
             for (int index = 0; index < members.Length; index++)
                 body.Add((members[index].Mirrored ? "local." : "value!.") + members[index].Name + " = " + temps[index] + "!;");
         }
-        else if (initializer.Length == 0)
-            body.Add("value = new " + model.GlobalName + "();");
         else
         {
-            body.Add("value = new " + model.GlobalName + "()");
-            body.Add("{");
-            foreach (var member in initializer)
-                body.Add(member.Name + " = " + temps[System.Array.IndexOf(members, member)] + "!,");
-            body.Add("};");
-        }
-        if (model.Rent == null && mirroredMembers)
-        {
-            body.Add("// Assign private fields.");
-            body.Add("ref var local = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
-            for (int index = 0; index < members.Length; index++)
-                if (members[index].Mirrored)
-                    body.Add("local." + members[index].Name + " = " + temps[index] + "!;");
+            AddVersionConstruction(model, body, initializer, temps);
+            if (mirroredMembers)
+            {
+                body.Add("// Assign private fields.");
+                body.Add("ref var local = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                for (int index = 0; index < members.Length; index++)
+                    if (members[index].Mirrored)
+                        body.Add("local." + members[index].Name + " = " + temps[index] + "!;");
+            }
         }
         body.Add("completedInstance = value;");
         body.Add("}");
@@ -441,6 +465,176 @@ internal static partial class DirectBinaryEmitter
             body.Add((members[index].Mirrored ? "reuseLocal." : "completedInstance!.") + members[index].Name + " = " + temps[index] + "!;");
         body.Add("}");
         return body;
+    }
+
+    /// <summary>Spells the fresh construction of a version-tolerant value, with the object initializer only for visible members.</summary>
+    private static void AddVersionConstruction(DirectTypeModel model, List<string> body, DirectMember[] initializer, string[] temps)
+    {
+        if (initializer.Length == 0)
+        {
+            body.Add("value = new " + model.GlobalName + "();");
+            return;
+        }
+        body.Add("value = new " + model.GlobalName + "()");
+        body.Add("{");
+        foreach (var member in initializer)
+            body.Add(member.Name + " = " + temps[System.Array.IndexOf(model.Members, member)] + "!,");
+        body.Add("};");
+    }
+
+    /// <summary>Emits the complete binary file body of a version-tolerant struct: the schema prefix and revisions around the
+    /// struct's member body, the struct's non-nullable facade entries, the mirror and the schema class.</summary>
+    /// <param name="model">The version-tolerant struct.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="operations">The operations the project calls.</param>
+    internal static void EmitVersionStruct(DirectTypeModel model, DirectWriter w, GeneratedOperations operations)
+    {
+        bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
+        string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
+        const string writer = "LuminPackWriter", reader = "LuminPackReader";
+        string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
+        string inline = w.MethodImpl("AggressiveInlining");
+        string Constraint() => "where TLuminProfile : struct, " + w.A("ILuminPackOptions");
+        string Serializer() => w.A("LuminPackSerializer");
+        string Standard() => w.A("LuminPackUtf16LengthOptions");
+        string polymorphic = "[" + w.Attribute("MethodImpl") + "(MethodImplOptions.AggressiveInlining)]";
+
+        w.Line("namespace LuminPack");
+        w.Open();
+        w.Line("public static partial class LuminPackSerializer");
+        w.Open();
+        w.Suppressed = !writes;
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void Serialize" + suffix + "(scoped ref " + writer + " writer, scoped in " + type + " input) => " + container +
+            ".RootWrite<" + Standard() + ">(ref writer, in input);");
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void Serialize" + suffix + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + " input)");
+        w.Indented(() => w.Line(Constraint() + " => " + container + ".RootWrite<TLuminProfile>(ref writer, in input);"));
+        w.Suppressed = false;
+        w.Blank();
+        w.Line("internal static partial class " + container);
+        w.Open();
+        w.Suppressed = !writes;
+        string writeHint = VersionWriteInline(model) ? inline : null;
+        Method(w, AddCallbacks(MirroredStruct(model, w, VersionWriteBody(model, w)), model.WriteBefore, model.WriteAfter), "RootWrite", true,
+            "(scoped ref " + writer + " writer, scoped in " + type + " input)", writeHint);
+        w.Blank();
+        w.Suppressed = !reads;
+        Method(w, AddReadCallbacks(model, VersionReadBody(model, w)), "RootRead", true,
+            "(scoped ref " + reader + " reader, scoped ref " + type + " value)", null);
+        w.Blank();
+        w.Suppressed = !writes;
+        Method(w, AddCallbacks(MirroredStruct(model, w, VersionWriteBody(model, w)), model.WriteBefore, model.WriteAfter), "RootWriteUnion", true,
+            "(scoped ref " + writer + " writer, scoped in " + type + " input)", writeHint);
+        w.Blank();
+        w.Suppressed = !reads;
+        Method(w, AddReadCallbacks(model, VersionReadBody(model, w)), "RootReadUnion", true,
+            "(scoped ref " + reader + " reader, scoped ref " + type + " value)", null);
+        w.Suppressed = false;
+        w.Close();
+        w.Blank();
+        w.Suppressed = !reads;
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void Deserialize" + suffix + "(scoped ref " + reader + " reader, scoped ref " + type + " value) => " + container +
+            ".RootRead<" + Standard() + ">(ref reader, ref value);");
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void Deserialize" + suffix + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + " value)");
+        w.Indented(() => w.Line(Constraint() + " => " + container + ".RootRead<TLuminProfile>(ref reader, ref value);"));
+        w.Blank();
+        w.Suppressed = !writes;
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void SerializeUnion(scoped ref " + writer + " writer, scoped in " + type + " input) => SerializeUnion<" + Standard() +
+            ">(ref writer, in input);");
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void SerializeUnion<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + " input)");
+        w.Indented(() => w.Line(Constraint() + " => " + container + ".RootWriteUnion<TLuminProfile>(ref writer, in input);"));
+        w.Blank();
+        w.Suppressed = !reads;
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void DeserializeUnion" + suffix + "(scoped ref " + reader + " reader, scoped ref " + type + " value) => DeserializeUnion" +
+            suffix + "<" + Standard() + ">(ref reader, ref value);");
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void DeserializeUnion" + suffix + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + " value)");
+        w.Indented(() => w.Line(Constraint() + " => " + container + ".RootReadUnion<TLuminProfile>(ref reader, ref value);"));
+        w.Suppressed = false;
+        if (model.MeasureRecord)
+        {
+            w.Blank();
+            w.Suppressed = !writes;
+            string evaluated = "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + " value)";
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void MeasureRecord" + suffix + evaluated + " => evaluator.Add(" + model.Version.Schema + ".Prefix.Length + " +
+                model.Members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ");");
+            w.Blank();
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void MeasureRecord" + suffix + "<" + Profile + ">" + evaluated);
+            w.Indented(() => w.Line(Constraint() + " => MeasureRecord" + suffix + "(ref evaluator, ref value);"));
+            w.Suppressed = false;
+        }
+        w.Blank();
+        w.Line(w.Preserve);
+        w.Line("private struct " + model.Version.Layout);
+        w.Open();
+        foreach (string field in model.Version.LayoutFields)
+            w.Line("internal " + field + ";");
+        w.Close();
+        w.Close();
+        w.Blank();
+
+        w.Line("internal static partial class " + model.Owner);
+        w.Open();
+        w.Suppressed = !writes;
+        w.Line(inline);
+        w.Line("internal static void Write(this ref " + writer + " state, in " + type + " value) => " + Serializer() + "." + container +
+            ".RootWrite<" + Standard() + ">(ref state, in value);");
+        w.Line(inline);
+        w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + " value)");
+        w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + Serializer() + "." + container +
+            ".RootWrite<TOptions>(ref state, in value);"));
+        w.Suppressed = !reads;
+        IsolatedRead(w, "internal static void Read(this ref " + reader + " state, ref " + type + " value)", null, Standard(), container, inline, Serializer());
+        w.Blank();
+        IsolatedRead(w, "internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + " value)",
+            "where TOptions : struct, " + w.A("ILuminPackOptions"), "TOptions", container, inline, Serializer());
+        w.Suppressed = false;
+        w.Close();
+        w.Close();
+        w.Blank();
+
+        w.Line("namespace LuminPack.Generated");
+        w.Open();
+        w.Line("internal static partial class " + model.Extension);
+        w.Open();
+        w.Suppressed = !writes;
+        w.Line(w.Preserve);
+        w.Line(polymorphic);
+        w.Line("public static void WritePolymorphismValue(ref this " + writer + " writer, scoped in " + type + " input) => " + Serializer() +
+            ".SerializeUnion(ref writer, input);");
+        w.Blank();
+        w.Suppressed = !reads;
+        w.Line(w.Preserve);
+        w.Line(polymorphic);
+        w.Line("public static void ReadPolymorphismValue(ref this " + reader + " reader, scoped ref " + type + " value) => " + Serializer() +
+            ".DeserializeUnion" + suffix + "(ref reader, ref value);");
+        w.Suppressed = false;
+        w.Blank();
+        VersionSchemaClass(model, w);
+        w.Close();
+        w.Close();
     }
 
     /// <summary>Writes the schema class: the field table, the constant metadata and prefixes, the fingerprint, the short-record
