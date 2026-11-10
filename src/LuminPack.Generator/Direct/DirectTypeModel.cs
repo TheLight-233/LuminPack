@@ -124,19 +124,23 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool CamelSnapshots;
     /// <summary>Whether the type is a struct: raw unmanaged, written and read as one value, or portable (see <see cref="View"/>).</summary>
     internal readonly bool IsStruct;
-    /// <summary>Whether every member is an inline object or a fixed scalar, which takes the stream record protocol alone: a
+    /// <summary>Whether a member is written in place instead of entering a reservation: an inline object or a string list.</summary>
+    private static bool InlineBlock(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite ||
+        member.Kind == DirectMemberKind.List && member.Scalar == "string";
+    /// <summary>Whether every member is an inline block or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
-    internal bool StreamRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object) &&
-        Members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Object);
-    /// <summary>Whether inline objects sit beside members that reserve: the record writes its leading members with the header,
-    /// then each object and every following run in place.</summary>
-    internal bool MixedRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object) && !StreamRecord;
-    /// <summary>Whether an object member is copied in place rather than through its named member operation; only that mixed
-    /// shape camel-cases its snapshot locals.</summary>
-    internal bool InlineObject => Members.Any(member => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite);
+    internal bool StreamRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object || InlineBlock(member)) &&
+        Members.All(member => member.IsFixed || member.Kind == DirectMemberKind.Object || InlineBlock(member));
+    /// <summary>Whether inline blocks sit beside members that reserve: the record writes its leading members with the header,
+    /// then each block and every following run in place.</summary>
+    internal bool MixedRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object || InlineBlock(member)) && !StreamRecord;
+    /// <summary>Whether a member is copied in place rather than through its named member operation; only a record with such a
+    /// member camel-cases its snapshot locals.</summary>
+    internal bool InlineObject => Members.Any(InlineBlock);
     /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
     /// generic.</summary>
     internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||
+        member.Kind == DirectMemberKind.List && member.Scalar == "string" ||
         member.Kind == DirectMemberKind.Object && member.Nested.ProfilePayload);
 
     /// <summary>An array inside an inline object calls its generated formatter with the operation's profile, which makes the
@@ -710,10 +714,16 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
         if (symbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
             list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" &&
-            Scalar(list.TypeArguments[0], allowBoolean: false) is { } item && field.FieldType == LuminDataType.Reference &&
-            field.Type is LuminFiledType.List)
-            return new DirectMember(field.Name, DirectMemberKind.List, item.Keyword, "global::System.Collections.Generic.List<" + item.Keyword + ">", 0,
-                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
+            field.FieldType == LuminDataType.Reference && field.Type is LuminFiledType.List)
+        {
+            if (Scalar(list.TypeArguments[0], allowBoolean: false) is { } item)
+                return new DirectMember(field.Name, DirectMemberKind.List, item.Keyword, "global::System.Collections.Generic.List<" + item.Keyword + ">", 0,
+                    "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
+            // A list of strings writes its payload through one span call and reads through its element formatter.
+            if (list.TypeArguments[0].SpecialType == SpecialType.System_String)
+                return new DirectMember(field.Name, DirectMemberKind.List, "string", "global::System.Collections.Generic.List<string>", 0,
+                    "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
+        }
         return DirectEmission.Reject<DirectMember>("member type: " + (symbol.NullableAnnotation == NullableAnnotation.Annotated ? "annotated " : string.Empty) +
             (symbol.TypeKind == TypeKind.Enum ? "enum" : symbol is IArrayTypeSymbol ? "array" : symbol is INamedTypeSymbol { IsGenericType: true } generic ?
                 generic.OriginalDefinition.Name : symbol.SpecialType != SpecialType.None ? symbol.SpecialType.ToString() :

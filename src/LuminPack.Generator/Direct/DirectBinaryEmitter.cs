@@ -683,12 +683,12 @@ internal static partial class DirectBinaryEmitter
     private static List<string> MixedWriteBody(DirectTypeModel model, DirectWriter w, bool union, List<string> body)
     {
         var members = model.Members;
-        int ends = 0, cursors = 1;
+        int ends = 0, cursors = 1, spans = 0;
         var names = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 };
         // The leading members before the first inline object share the header's reservation; without any, the header is a
         // lone record of its own.
         int first = 0;
-        while (first < members.Length && members[first].Kind != DirectMemberKind.Object)
+        while (first < members.Length && !IsInlineSegment(members[first]))
             first++;
         body.Add("ref byte cursor = ref writer.Cursor;");
         if (first == 0)
@@ -705,16 +705,24 @@ internal static partial class DirectBinaryEmitter
         while (index < members.Length)
         {
             var member = members[index];
+            if (IsTextList(member))
+            {
+                AddInlineListWrite(body, member, "value", w, names, ref ends, ref spans);
+                index++;
+                if (index < members.Length && !StartsInlineObject(members[index]))
+                    body.Add("");
+                continue;
+            }
             if (member.Kind == DirectMemberKind.Object)
             {
-                AddInlineObjectWrite(body, member, "value", 0, w, names, ref ends, ref cursors);
+                AddInlineObjectWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
                 if (!member.Nested.MemberWrite && index < members.Length && !StartsInlineObject(members[index]))
                     body.Add("");
                 continue;
             }
             int last = index;
-            while (last + 1 < members.Length && members[last + 1].Kind != DirectMemberKind.Object)
+            while (last + 1 < members.Length && !IsInlineSegment(members[last + 1]))
                 last++;
             body.Add("cursor = ref writer.Cursor;");
             if (last == index)
@@ -731,7 +739,7 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Writes one inline object member: a named member operation when the child publishes one, otherwise its marker
     /// and its members in place.</summary>
     private static void AddInlineObjectWrite(List<string> body, DirectMember member, string owner, int depth, DirectWriter w,
-        Dictionary<string, int> names, ref int ends, ref int cursors)
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         if (member.Nested.MemberWrite)
         {
@@ -750,7 +758,40 @@ internal static partial class DirectBinaryEmitter
         body.Add("{");
         body.Add("writer.Cursor = (byte)" + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
         body.Add("writer.Advance(1);");
-        AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends, ref cursors);
+        AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends, ref cursors, ref spans);
+        body.Add("}");
+    }
+
+    /// <summary>Writes one list member in place: a null count marker, otherwise the element count and payload. A string list
+    /// writes its strings through one profiled span call; a scalar list stores the span directly.</summary>
+    private static void AddInlineListWrite(List<string> body, DirectMember member, string owner, DirectWriter w,
+        Dictionary<string, int> names, ref int ends, ref int spans)
+    {
+        string local = RoleName(names, "value");
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + " is null)");
+        body.Add("{");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add("writer.Write(-1);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add("");
+        if (member.Scalar == "string")
+        {
+            string span = RoleName(names, "span");
+            body.Add("var " + span + " = LuminPackMarshal.GetListSpan(" + w.A("Unsafe") + ".AsRef(in " + local + "));");
+            body.Add("writer.EnsureAdditionalCapacity(4);");
+            body.Add("writer.Write(" + span + ".Length);");
+            body.Add("writer.WriteStrings<" + Profile + ">(" + span + ");");
+            body.Add("writer.CheckBuffer();");
+        }
+        else
+            body.Add("writer.Write<" + member.Scalar + ">(LuminPackMarshal.GetListSpan(" + local + "), " + local + ".Count);");
+        body.Add(exit + ":");
+        body.Add("\t;");
         body.Add("}");
     }
 
@@ -865,8 +906,8 @@ internal static partial class DirectBinaryEmitter
             body.Add("writer.Cursor = (byte)" + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
             body.Add("writer.Advance(1);");
         }
-        int ends = 0, cursors = 0;
-        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 }, ref ends, ref cursors);
+        int ends = 0, cursors = 0, spans = 0;
+        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 }, ref ends, ref cursors, ref spans);
         ReduceInlineNames(body);
         return body;
     }
@@ -882,8 +923,9 @@ internal static partial class DirectBinaryEmitter
     /// <param name="ends">The exit label counter shared by the whole method.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method; a mixed record's own cursor holds the first
     /// occurrence.</param>
+    /// <param name="spans">The string list span counter shared by the whole method.</param>
     private static void AddStreamWrite(List<string> body, DirectTypeModel model, string owner, int depth, DirectWriter w,
-        Dictionary<string, int> names, ref int ends, ref int cursors)
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         var members = model.Members;
         for (int index = 0; index < members.Length; index++)
@@ -898,7 +940,7 @@ internal static partial class DirectBinaryEmitter
             }
             if (member.Kind == DirectMemberKind.Object)
             {
-                AddInlineObjectWrite(body, member, owner, depth, w, names, ref ends, ref cursors);
+                AddInlineObjectWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                 // An inline object leaves a blank line before a following field unless that field opens another inline object;
                 // a named member write stays a plain call and keeps no blank, as the old body's continue does.
                 if (!member.Nested.MemberWrite && index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
@@ -911,27 +953,38 @@ internal static partial class DirectBinaryEmitter
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
-            // A list inside an inline object expands its generated null header and span store, whose failure exits through
-            // a method-wide label. Its write needs no profile, unlike its read.
+            // A list inside a stream record or an inline object expands its generated null header and payload in place, whose
+            // failure exits through a method-wide label. A string list separates itself from the member that follows it, while
+            // a scalar list keeps the presentation's own blank rule.
             if (member.Kind == DirectMemberKind.List)
             {
-                string local = RoleName(names, "value");
-                body.Add("{");
-                body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
-                body.Add("if (" + local + " is null)");
-                body.Add("{");
-                body.Add("writer.EnsureAdditionalCapacity(4);");
-                body.Add("writer.Write(-1);");
-                body.Add("goto end" + ends.ToString(CultureInfo.InvariantCulture) + ";");
-                body.Add("}");
-                body.Add("");
-                body.Add("writer.Write<" + member.Scalar + ">(LuminPackMarshal.GetListSpan(" + local + "), " + local + ".Count);");
-                body.Add("end" + ends.ToString(CultureInfo.InvariantCulture) + ":");
-                body.Add("\t;");
-                body.Add("}");
-                ends++;
-                if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                if (member.Scalar == "string")
+                {
+                    AddInlineListWrite(body, member, owner, w, names, ref ends, ref spans);
+                    if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                        body.Add("");
+                }
+                else
+                {
+                    string local = RoleName(names, "value");
+                    string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+                    ends++;
+                    body.Add("{");
+                    body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+                    body.Add("if (" + local + " is null)");
+                    body.Add("{");
+                    body.Add("writer.EnsureAdditionalCapacity(4);");
+                    body.Add("writer.Write(-1);");
+                    body.Add("goto " + exit + ";");
+                    body.Add("}");
                     body.Add("");
+                    body.Add("writer.Write<" + member.Scalar + ">(LuminPackMarshal.GetListSpan(" + local + "), " + local + ".Count);");
+                    body.Add(exit + ":");
+                    body.Add("\t;");
+                    body.Add("}");
+                    if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                        body.Add("");
+                }
                 continue;
             }
             int last = RunEnd(members, index);
@@ -974,6 +1027,16 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Whether a member's write opens with a local declaration, which the presentation keeps directly under the
     /// preceding block instead of separating it with a blank line.</summary>
     private static bool StartsInlineObject(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite;
+
+    /// <summary>Whether a member is a list of strings, which writes its payload in place instead of entering a reservation.</summary>
+    private static bool IsTextList(DirectMember member) => member.Kind == DirectMemberKind.List && member.Scalar == "string";
+
+    /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
+    private static bool IsInlineSegment(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member);
+
+    /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
+    private static bool IsInlineBlock(DirectMember member) =>
+        member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite || IsTextList(member);
 
     /// <summary>Drops the depth suffix of an inline local whose purely alphabetic stem is otherwise unused, as the presentation
     /// does.</summary>
