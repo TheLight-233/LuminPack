@@ -240,6 +240,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string Mirror;
     /// <summary>The mirror's field declarations, such as <c>string? Name</c>, in storage order.</summary>
     internal readonly string[] MirrorFields;
+    /// <summary>The explicit-layout offset of each mirror field, or -1 for a field without one; null when the type has no
+    /// explicit layout.</summary>
+    internal readonly int[] MirrorOffsets;
     /// <summary>Whether the Union write is the shared returning cursor kernel <c>SerializeUnionAt</c> of a fixed Union case.</summary>
     internal readonly bool FixedUnionCase;
     /// <summary>Whether the type has the record measurement entry <c>MeasureRecord</c>, which the original selection gives only to
@@ -323,8 +326,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         DirectUnionSlot[] unionBinarySlots = null, DirectUnionSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
-        DirectPortableView portableView = null)
+        DirectPortableView portableView = null, int[] mirrorOffsets = null)
     {
+        MirrorOffsets = mirrorOffsets;
         PortableView = portableView;
         ManagedStruct = managedStruct;
         CircleGuarded = circleGuarded;
@@ -406,6 +410,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         Circle == other.Circle && CircleGuarded == other.CircleGuarded &&
         Same(UnionCases, other.UnionCases) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
+        Same(MirrorOffsets, other.MirrorOffsets) &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
@@ -472,17 +477,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         bool isStruct = raw || portable != null || managedStruct;
         bool versioned = data.generatorType == GeneratorType.VersionTolerant;
         bool circle = data.generatorType == GeneratorType.CircleReference;
-        // A version-tolerant struct writes a schema prefix and revisions, which the struct roots do not reproduce yet.
-        if (isStruct && versioned)
-            return DirectEmission.Reject<DirectTypeModel>("versioned struct");
         if (type == null || data.generatorType != GeneratorType.Object && !versioned && !circle || data.isUnion || data.isGeneric ||
             data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
         // Callbacks and pool rents shape the binary roots; a version-tolerant root without callbacks covers a plain rent,
-        // while a rent returning by reference needs its own storage protocol and is not modeled yet.
+        // while a rent returning by reference needs its own storage protocol and is not modeled yet. A version-tolerant
+        // struct keeps its callbacks around the same schema prefix and revision body.
         if (data.enableBurst || data.RentPoolMethod is { ReturnsByRef: true } ||
-            versioned && data.callBackMethods.Count != 0)
+            versioned && data.callBackMethods.Count != 0 && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("callbacks, pool or burst");
         if (data.Diagnostics.Length != 0)
             return DirectEmission.Reject<DirectTypeModel>("diagnostics");
@@ -578,15 +581,21 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                     attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackIncludeAttribute");
                 if (!included && field.DeclaredAccessibility != Accessibility.Public)
                     continue;
-                if (field.IsReadOnly || field.IsVolatile && portable == null)
+                // A private included field may be readonly when the mirror or positional view assigns it; any other readonly
+                // field keeps the original pipeline.
+                bool storageMirrored = data.fields.Any(item => item.isProperty || item.IsPrivate);
+                if (field.IsReadOnly && !(included && (storageMirrored || portable != null)) ||
+                    field.IsVolatile && portable == null)
                     return DirectEmission.Reject<DirectTypeModel>("declared field: " + field.Name + " " + field.DeclaredAccessibility +
                         (field.IsReadOnly ? " readonly" : string.Empty) + (field.IsVolatile ? " volatile" : string.Empty));
                 fieldsDeclared++;
                 continue;
             }
-            // A private auto-property that is not included has instance storage but is never serialized.
-            if (managedStruct && member is IPropertySymbol { IsStatic: false, IsIndexer: false } privateProperty &&
-                privateProperty.DeclaredAccessibility != Accessibility.Public)
+            // A private auto-property that is not included has instance storage but is never serialized. This holds for
+            // classes and structs alike.
+            if (member is IPropertySymbol { IsStatic: false, IsIndexer: false } privateProperty &&
+                privateProperty.DeclaredAccessibility != Accessibility.Public &&
+                !privateProperty.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackIncludeAttribute"))
                 continue;
             if (!Unserialized(member))
                 return DirectEmission.Reject<DirectTypeModel>("declared member: " + member.Kind + " " + member.Name);
@@ -665,15 +674,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("type spelling");
         string mirror = null;
         string[] mirrorFields = null;
+        int[] mirrorOffsets = null;
         bool fresh = !circle && LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data);
         // A pooled type declares a mirror even for public fields, which its JSON read uses when it reuses an instance.
         if (mirrored || data.RentPoolMethod != null)
         {
-            // The mirror declares every instance field of the type in storage order, so it must hold exactly the members;
-            // LuminPackOrder may reorder the wire members independently of that storage order.
-            if (fresh && !isStruct || derived || data.localFields.Count != members.Length ||
-                data.localFields.Select(local => local.Identifier).OrderBy(name => name, StringComparer.Ordinal)
-                    .SequenceEqual(members.Select(member => member.Name).OrderBy(name => name, StringComparer.Ordinal)) == false)
+            // The mirror declares every instance field of the type in storage order, so every wire member must be one of
+            // those storage fields; a fresh record and ignored storage keep their fields beside the serialized ones. A
+            // derived type would need its base storage as well and keeps the original pipeline.
+            if (derived || members.Any(member => data.localFields.All(local => local.Identifier != member.Name)))
                 return DirectEmission.Reject<DirectTypeModel>("layout mirror");
             using (var hash = System.Security.Cryptography.SHA256.Create())
                 mirror = "LuminLayout_" + string.Concat(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(FormatterTypeName.Get(type)))
@@ -682,6 +691,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             mirrorFields = data.localFields.Select(local => (local.TypeSymbol is IArrayTypeSymbol { Rank: > 1 } multi
                 ? MultiDimensionalName(multi) : local.TypeName) +
                 (LuminPackCodeGenerator.IsUnmanagedFiledType(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + local.Identifier).ToArray();
+            // An explicit-layout mirror reproduces each field's declared offset.
+            mirrorOffsets = data.localFields.Any(local => local.filedOffset >= 0)
+                ? data.localFields.Select(local => local.filedOffset).ToArray() : null;
         }
         string view = null;
         bool viewElided = false;
@@ -755,7 +767,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray(),
             selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded,
             circle: circle, circleGuarded: circle && RecursiveTypeAnalysis.IsRecursive(type),
-            managedStruct: managedStruct, portableView: portableView);
+            managedStruct: managedStruct, portableView: portableView, mirrorOffsets: mirrorOffsets);
     }
 
     /// <summary>Models a polymorphic Union root: its declared cases, compiled profile slots and dispatch tier, when every case

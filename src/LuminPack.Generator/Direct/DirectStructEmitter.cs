@@ -19,6 +19,12 @@ internal static class DirectStructEmitter
     /// <param name="operations">The operations the project calls; see <see cref="DirectBinaryEmitter.Emit"/>.</param>
     internal static void Emit(DirectTypeModel model, DirectWriter w, GeneratedOperations operations)
     {
+        // A version-tolerant struct writes a schema prefix and revisions around the struct's non-nullable members.
+        if (model.Version != null)
+        {
+            DirectBinaryEmitter.EmitVersionStruct(model, w, operations);
+            return;
+        }
         if (model.ManagedStruct)
         {
             DirectBinaryEmitter.EmitStruct(model, w, operations);
@@ -97,8 +103,7 @@ internal static class DirectStructEmitter
                 w.Line(model.LayoutAttribute);
             w.Line("private struct " + model.Mirror);
             w.Open();
-            foreach (string field in model.MirrorFields ?? System.Array.Empty<string>())
-                w.Line("internal " + field + ";");
+            DirectBinaryEmitter.MirrorFields(w, model.MirrorFields ?? System.Array.Empty<string>(), model.MirrorOffsets);
             w.Close();
             if (portable)
                 w.Blank();
