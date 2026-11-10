@@ -128,9 +128,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool CamelSnapshots;
     /// <summary>Whether the type is a struct: raw unmanaged, written and read as one value, or portable (see <see cref="View"/>).</summary>
     internal readonly bool IsStruct;
-    /// <summary>Whether a member is written in place instead of entering a reservation: an inline object or a string list.</summary>
+    /// <summary>Whether a member is written in place instead of entering a reservation: an inline object, a string list or a
+    /// list whose elements expand their record body in the loop.</summary>
     private static bool InlineBlock(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite ||
-        member.Kind == DirectMemberKind.List && member.Scalar == "string";
+        member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null);
     /// <summary>Whether a member is a write segment of its own: an inline object, a string list or a formatter-call array.</summary>
     private static bool Segment(DirectMember member) => member.Kind == DirectMemberKind.Object || InlineBlock(member) ||
         member.Kind == DirectMemberKind.Array && member.FormatterCall;
@@ -146,7 +147,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
     /// generic.</summary>
     internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||
-        member.Kind == DirectMemberKind.List && member.Scalar == "string" ||
+        member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload) ||
         member.Kind == DirectMemberKind.Array && member.FormatterCall ||
         member.Kind == DirectMemberKind.Object && member.Nested.ProfilePayload);
 
@@ -158,6 +159,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// the parent's read root generic; its write expands inline and needs no profile, as a top-level list does.</summary>
     internal bool InlineList => Members.Any(member => member.Kind == DirectMemberKind.Object &&
         (member.Nested.Members.Any(item => item.Kind == DirectMemberKind.List) || member.Nested.InlineList));
+    /// <summary>Whether the write body contains an element loop or expands an inline object that does, which leaves native
+    /// inlining to the runtime.</summary>
+    internal bool ElementList => Members.Any(member => member.Kind == DirectMemberKind.List && member.Nested != null ||
+        member.Kind == DirectMemberKind.Object && member.Nested.ElementList);
     /// <summary>The positional storage view of a portable struct, whose fields are copied one by one at packed wire offsets, or null.</summary>
     internal readonly string View;
     /// <summary>Whether the portable view is elided: every positional view name is also a field name of the struct, so the
@@ -770,6 +775,26 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if (list.TypeArguments[0].SpecialType == SpecialType.System_String)
                 return new DirectMember(field.Name, DirectMemberKind.List, "string", "global::System.Collections.Generic.List<string>", 0,
                     "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty);
+            // A list of packable classes expands each element's record body in the loop; an unmanaged struct element keeps
+            // the portable storage path instead.
+            if (list.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } elementType &&
+                elementType.SpecialType == SpecialType.None &&
+                SymbolEqualityComparer.Default.Equals(elementType.ContainingAssembly, compilation.Assembly) &&
+                TypeMetaChecker.TryCheckPackableAttribute(elementType))
+            {
+                if (_depth > 8)
+                    return DirectEmission.Reject<DirectMember>("list element depth");
+                var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(elementType, compilation, metadata), compilation, metadata);
+                if (nested == null || nested.IsStruct || nested.Version != null || nested.ConstructorArguments != null || nested.Mirror != null ||
+                    nested.HasCallbacks || nested.Rent != null || nested.MixedRecord || nested.Members.Length == 0 ||
+                    nested.Members.Any(item => item.Mirrored || item.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or
+                        DirectMemberKind.Object or DirectMemberKind.Array or DirectMemberKind.List)))
+                    return DirectEmission.Reject<DirectMember>("list element member");
+                string elementSpelling = elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                return new DirectMember(field.Name, DirectMemberKind.List, elementSpelling,
+                    "global::System.Collections.Generic.List<" + elementSpelling + ">", 0,
+                    "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty, nested: nested);
+            }
         }
         return DirectEmission.Reject<DirectMember>("member type: " + (symbol.NullableAnnotation == NullableAnnotation.Annotated ? "annotated " : string.Empty) +
             (symbol.TypeKind == TypeKind.Enum ? "enum" : symbol is IArrayTypeSymbol ? "array" : symbol is INamedTypeSymbol { IsGenericType: true } generic ?

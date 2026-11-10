@@ -59,6 +59,12 @@ internal static class DirectInlining
                 count += 10;
                 continue;
             }
+            // An element list expands the null header, the span store and the element's own expanded record body.
+            if (member.Kind == DirectMemberKind.List && member.Nested != null)
+            {
+                count += 10 + MixedCost(member.Nested) - 2;
+                continue;
+            }
             if (member.Kind == DirectMemberKind.Array && member.FormatterCall)
             {
                 count += 1;

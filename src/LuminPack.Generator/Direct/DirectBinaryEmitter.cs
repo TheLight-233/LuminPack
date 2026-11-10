@@ -193,13 +193,26 @@ internal static partial class DirectBinaryEmitter
         w.Line("internal static partial class " + model.Owner);
         w.Open();
         w.Suppressed = !writes;
-        w.Line(inline);
-        w.Line("internal static void Write(this ref " + writer + " state, in " + type + "? value) => " + Serializer() + "." + container + "." +
-            (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref state, value);");
-        w.Line(inline);
-        w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
-            (genericWrite ? "RootWrite<TOptions>" : "RootWrite") + "(ref state, value);"));
+        // A payload whose write body contains an element loop advances through an isolated copy of the writer state, so a
+        // failure leaves the caller's state untouched.
+        if (model.ElementList)
+        {
+            IsolatedWrite("internal static void Write(this ref " + writer + " state, in " + type + "? value)", null,
+                genericWrite ? Standard() : null);
+            w.Blank();
+            IsolatedWrite("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)", "where TOptions : struct, " + Options(),
+                genericWrite ? "TOptions" : null);
+        }
+        else
+        {
+            w.Line(inline);
+            w.Line("internal static void Write(this ref " + writer + " state, in " + type + "? value) => " + Serializer() + "." + container + "." +
+                (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref state, value);");
+            w.Line(inline);
+            w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)");
+            w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
+                (genericWrite ? "RootWrite<TOptions>" : "RootWrite") + "(ref state, value);"));
+        }
         w.Suppressed = !reads;
         // A version-tolerant record and a type built by its selected constructor read through an isolated copy of the reader
         // state, so a failure leaves the caller's state untouched.
@@ -264,6 +277,20 @@ internal static partial class DirectBinaryEmitter
             w.Close();
         }
 
+        void IsolatedWrite(string signature, string constraint, string profile)
+        {
+            w.Line(inline);
+            w.Line(signature);
+            if (constraint != null)
+                w.Indented(() => w.Line(constraint));
+            w.Open();
+            w.Line(writer + " isolated = default;");
+            w.Line("state.CopyTo(ref isolated);");
+            w.Line(Serializer() + "." + container + ".RootWrite" + (profile == null ? string.Empty : "<" + profile + ">") + "(ref isolated, value);");
+            w.Line("isolated.CopyTo(ref state);");
+            w.Close();
+        }
+
         void SerializeStandard()
         {
             w.Line(w.Preserve);
@@ -286,7 +313,8 @@ internal static partial class DirectBinaryEmitter
         // sites, decide the budget. A member write stays a call boundary whose callee keeps its own budget, so the runtime
         // sizes the entry instead, and any record that calls one keeps no inline hint.
         string WriteHint(List<string> body, bool union) => (model.StreamRecord || model.MixedRecord) &&
-            !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0)
+            !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) &&
+            !body.Any(line => line.StartsWith("for (", StringComparison.Ordinal))
             ? ((model.StreamRecord ? DirectCalls.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
             : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));
 
@@ -687,7 +715,7 @@ internal static partial class DirectBinaryEmitter
     {
         var members = model.Members;
         int ends = 0, cursors = 1, spans = 0;
-        var names = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 };
+        var names = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
         // The leading members before the first inline object share the header's reservation; without any, the header is a
         // lone record of its own.
         int first = 0;
@@ -711,6 +739,14 @@ internal static partial class DirectBinaryEmitter
             if (IsTextList(member))
             {
                 AddInlineListWrite(body, member, "value", w, names, ref ends, ref spans);
+                index++;
+                if (index < members.Length && !StartsInlineObject(members[index]))
+                    body.Add("");
+                continue;
+            }
+            if (IsElementList(member))
+            {
+                AddInlineElementListWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
                 if (index < members.Length && !StartsInlineObject(members[index]))
                     body.Add("");
@@ -804,6 +840,195 @@ internal static partial class DirectBinaryEmitter
         body.Add("\t;");
         body.Add("}");
     }
+
+    /// <summary>Writes one list of packable classes in place: a null count marker, otherwise the element count and a loop that
+    /// expands each element's record body, skipping a null element through its own exit label.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The list member, whose <see cref="DirectMember.Nested"/> model is the element.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="depth">The inline nesting depth the element body continues.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit label counter shared by the whole method; the element label is numbered before the list's.</param>
+    /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    /// <param name="spans">The span counter shared by the whole method.</param>
+    private static void AddInlineElementListWrite(List<string> body, DirectMember member, string owner, int depth, DirectWriter w,
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+    {
+        var element = member.Nested;
+        string local = RoleName(names, "value");
+        // The element's null exit claims the first label even though the list's null exit appears first in the text.
+        string elementExit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        string span = RoleName(names, "span");
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + " is null)");
+        body.Add("{");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add("writer.Write(-1);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add("");
+        body.Add("var " + span + " = LuminPackMarshal.GetListSpan(" + w.A("Unsafe") + ".AsRef(in " + local + "));");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add("writer.Write(" + span + ".Length);");
+        body.Add("for (int i = 0; i < " + span + ".Length; i++)");
+        body.Add("{");
+        body.Add("writer.CheckBuffer();");
+        body.Add("{");
+        string input = RoleName(names, "input");
+        string value = RoleName(names, "value");
+        body.Add("ref readonly " + element.GlobalName + " " + input + " = ref " + span + "[i]!;");
+        body.Add("var " + value + " = " + input + ";");
+        body.Add("if (" + value + " is null)");
+        body.Add("{");
+        body.Add("writer.Cursor = (byte)255;");
+        body.Add("writer.Advance(1);");
+        body.Add("goto " + elementExit + ";");
+        body.Add("}");
+        body.Add("");
+        AddElementWrite(body, element, value, depth, w, names, ref ends, ref cursors, ref spans);
+        body.Add(elementExit + ":");
+        body.Add("\t;");
+        body.Add("}");
+        body.Add("}");
+        body.Add("");
+        body.Add("writer.CheckBuffer();");
+        body.Add(exit + ":");
+        body.Add("\t;");
+        body.Add("}");
+    }
+
+    /// <summary>Expands one sequence element's record body in the loop, without its null handling and with camel-cased
+    /// snapshots, as a member expansion does.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="element">The element's model.</param>
+    /// <param name="owner">The local holding the element.</param>
+    /// <param name="depth">The inline nesting depth of the element body.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit label counter shared by the whole method.</param>
+    /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    /// <param name="spans">The span counter shared by the whole method.</param>
+    private static void AddElementWrite(List<string> body, DirectTypeModel element, string owner, int depth, DirectWriter w,
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+    {
+        var members = element.Members;
+        string count = members.Length.ToString(CultureInfo.InvariantCulture);
+        if (members.All(member => member.IsFixed))
+        {
+            body.Add("writer.Cursor = (byte)" + count + ";");
+            body.Add("writer.Advance(1);");
+            if (members.Length == 1)
+            {
+                body.Add("writer.Write(" + owner + "." + members[0].Name + ");");
+                return;
+            }
+            string width = Width(members, 0, members.Length - 1);
+            body.Add("if (" + Proof(w, members, 0, members.Length - 1, owner, readOnly: true) + ")");
+            body.Add("\twriter.Write(ref " + Bytes(w, members[0], owner, readOnly: true) + ", " + width + ");");
+            body.Add("else");
+            body.Add("{");
+            string cursor = CursorName(ref cursors);
+            body.Add("ref byte " + cursor + " = ref writer.Cursor;");
+            AddFixedStores(w, members, 0, members.Length - 1, cursor, body, owner);
+            body.Add("writer.Advance(" + width + ");");
+            body.Add("}");
+            body.Add("");
+            return;
+        }
+        if (element.StreamRecord)
+        {
+            body.Add("writer.Cursor = (byte)" + count + ";");
+            body.Add("writer.Advance(1);");
+            AddStreamWrite(body, element, owner, depth, w, names, ref ends, ref cursors, ref spans);
+            return;
+        }
+        // The element reserves its record as a whole; its members keep the member order of the template.
+        string elementCursor = CursorName(ref cursors);
+        body.Add("ref byte " + elementCursor + " = ref writer.Cursor;");
+        body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
+        var terms = new List<string> { "1" };
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            string snapshot = Snapshot(element, index, camel: true);
+            if (member.Kind == DirectMemberKind.Fixed)
+                terms.Add(member.Width);
+            else if (member.Kind == DirectMemberKind.Text)
+            {
+                body.Add("string " + snapshot + " = " + owner + "." + member.Name + ";");
+                terms.Add("writer.RecordBound<" + Profile + ">(" + snapshot + ")");
+            }
+            else
+            {
+                body.Add("var " + snapshot + " = " + w.A("LuminPackWriter") + ".Capture(" + owner + "." + member.Name + ");");
+                terms.Add(snapshot + ".Bound");
+            }
+        }
+        body.Add(elementCursor + " = ref writer.ReserveRecord(ref " + elementCursor + ", checked(" + string.Join(" + ", terms) + "));");
+        body.Add(elementCursor + " = (byte)" + count + ";");
+        body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", 1);");
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (member.IsFixed)
+            {
+                int last = RunEnd(members, index);
+                if (last == index)
+                {
+                    if (member.Size == 8 || member.Raw)
+                    {
+                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" +
+                            (member.Raw ? " || " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">() <= 4" : string.Empty) + ")");
+                        body.Add("{");
+                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref " + elementCursor + ", " + owner + "." + member.Name + ");");
+                        body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
+                        body.Add("}");
+                        body.Add("else");
+                        body.Add("{");
+                        body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref " + elementCursor + ", " +
+                            owner + "." + member.Name + ");");
+                        body.Add("}");
+                        body.Add("");
+                    }
+                    else
+                    {
+                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref " + elementCursor + ", " + owner + "." + member.Name + ");");
+                        body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
+                    }
+                    continue;
+                }
+                string runWidth = Width(members, index, last);
+                body.Add("if (" + Proof(w, members, index, last, owner, readOnly: true) + ")");
+                body.Add("\t" + elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref " + elementCursor + ", ref " +
+                    Bytes(w, member, owner, readOnly: true) + ", " + runWidth + ");");
+                body.Add("else");
+                body.Add("{");
+                AddFixedStores(w, members, index, last, elementCursor, body, owner);
+                body.Add(elementCursor + " = ref " + w.A("Unsafe") + ".Add(ref " + elementCursor + ", " + runWidth + ");");
+                body.Add("}");
+                body.Add("");
+                index = last;
+                continue;
+            }
+            body.Add("// Field: " + member.Name);
+            if (member.Kind == DirectMemberKind.Text)
+                body.Add(elementCursor + " = ref writer.WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
+            else
+                body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
+        }
+        if (body[body.Count - 1].Length != 0)
+            body.Add("");
+        body.Add("writer.Cursor = ref " + elementCursor + ";");
+    }
+
+    /// <summary>Spells the method-wide cursor local: the first is <c>cursor</c>, the following ones carry their ordinal.</summary>
+    private static string CursorName(ref int cursors)
+        => "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>Writes a lone member through the cursor without reserving first, as a one-member record does.</summary>
     private static void AddLoneRecord(List<string> body, DirectMember member)
@@ -917,7 +1142,7 @@ internal static partial class DirectBinaryEmitter
             body.Add("writer.Advance(1);");
         }
         int ends = 0, cursors = 0, spans = 0;
-        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 }, ref ends, ref cursors, ref spans);
+        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 }, ref ends, ref cursors, ref spans);
         ReduceInlineNames(body);
         return body;
     }
@@ -971,6 +1196,12 @@ internal static partial class DirectBinaryEmitter
                 if (member.Scalar == "string")
                 {
                     AddInlineListWrite(body, member, owner, w, names, ref ends, ref spans);
+                    if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                        body.Add("");
+                }
+                else if (member.Nested != null)
+                {
+                    AddInlineElementListWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                     if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
                         body.Add("");
                 }
@@ -1041,13 +1272,16 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Whether a member is a list of strings, which writes its payload in place instead of entering a reservation.</summary>
     private static bool IsTextList(DirectMember member) => member.Kind == DirectMemberKind.List && member.Scalar == "string";
 
+    /// <summary>Whether a member is a list whose elements expand their record body in place.</summary>
+    private static bool IsElementList(DirectMember member) => member.Kind == DirectMemberKind.List && member.Nested != null;
+
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     private static bool IsInlineSegment(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member) ||
-        member.Kind == DirectMemberKind.Array && member.FormatterCall;
+        IsElementList(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(DirectMember member) =>
-        member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite || IsTextList(member);
+        member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite || IsTextList(member) || IsElementList(member);
 
     /// <summary>Drops the depth suffix of an inline local whose purely alphabetic stem is otherwise unused, as the presentation
     /// does.</summary>
