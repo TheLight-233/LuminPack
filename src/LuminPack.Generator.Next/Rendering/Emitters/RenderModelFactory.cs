@@ -69,7 +69,7 @@ internal static class RenderModelFactory
             GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: isStruct,
             uniqueEntries: options.Interceptors, members, proven, mirror: mirror!, mirrorFields: record?.MirrorFields ?? null!,
             derived: model is RecordModel { Derived: true },
-            isStruct, view: view!, viewElided, fixedUnionCase: false,
+            isStruct, view: view!, viewElided, fixedUnionCase: record?.FixedUnionCase ?? false,
             measureRecord: members.All(item => item.IsFixed) && model switch
             {
                 StructModel structModel => structModel.RecordWidth,

@@ -224,8 +224,9 @@ internal static class TypeModelFactory
                     bool proven = !versioned && !derived && mirror == null && policy.Bound == null && Options.Net8 && Options.Unsafe &&
                         !Options.Unity && members.Length != 0 && members.Any(member => member is TextMember) &&
                         members.All(member => member is ScalarMember or TextMember);
-                    return new RecordModel(identity, accessibility, members, policy, constraints, versioned, derived, proven,
-                        RecordWidthSupported(symbol), mirror, mirrorFields, mirrorOffsets, mirrorLayout);
+                    return new RecordModel(identity, accessibility, members, policy, constraints, versioned,
+                        fixedUnionCase: !versioned && members.All(member => member is ScalarMember) && IsFixedUnionCase(symbol),
+                        derived, proven, RecordWidthSupported(symbol), mirror, mirrorFields, mirrorOffsets, mirrorLayout);
                 }
             }
         }
@@ -943,6 +944,47 @@ internal static class TypeModelFactory
                     CanGeneratePartial(item.Type) && CanUseCursorPayload(item.Type))
                     cases.Add(item.Type);
             return cases;
+        }
+
+        /// <summary>Whether the type is a declared case of a Union root that selects the returning cursor kernel.</summary>
+        /// <param name="type">The candidate case.</param>
+        /// <returns>Whether the case payload must publish the shared <c>SerializeUnionAt</c> entry.</returns>
+        /// <remarks>The root and its declarations are re-checked from the case alone, because a case is also modeled as an
+        /// independent payload; the checks mirror <see cref="FixedUnionCases"/> for that root.</remarks>
+        private bool IsFixedUnionCase(INamedTypeSymbol type)
+        {
+            if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !IsLocal(type) ||
+                GenerationMode(type) != "Object")
+                return false;
+            INamedTypeSymbol? root = FixedUnionRoot(type);
+            if (root == null)
+                return false;
+            var issues = new List<string>();
+            var declared = UnionMembers(root, issues);
+            if (issues.Count != 0 || root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
+                !IsLocal(root) || GenerationMode(root) != "Object" || HasAttribute(root, WideTagAttribute) ||
+                OptionSwitch(root, "WideTag") || declared.Any(item => item.Tag >= 250))
+                return false;
+            return declared.Any(item => SymbolEqualityComparer.Default.Equals(item.Type, type)) && CanUseCursorPayload(type);
+        }
+
+        /// <summary>Finds the nearest base Union root that declares the given case.</summary>
+        /// <param name="type">The candidate case.</param>
+        /// <returns>The declaring root, or null when the type is not a declared case.</returns>
+        private static INamedTypeSymbol? FixedUnionRoot(INamedTypeSymbol type)
+        {
+            for (var parent = type.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object;
+                parent = parent.BaseType)
+            {
+                if (!parent.IsAbstract || parent.IsGenericType || !IsPackable(parent))
+                    continue;
+                if (parent.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == UnionAttribute &&
+                        attribute.ConstructorArguments.Length >= 2 &&
+                        attribute.ConstructorArguments[1].Value is INamedTypeSymbol declared &&
+                        SymbolEqualityComparer.Default.Equals(declared, type)))
+                    return parent;
+            }
+            return null;
         }
 
         /// <summary>Whether a case payload is entirely public raw fields, as the returning cursor kernel requires.</summary>

@@ -134,7 +134,7 @@ records, 10 raw structs, 10 packed structs, 10 Unions with 20 cases and 10 circl
 | --- | --- |
 | Analysis | `220 complete, 0 incomplete, 0 unsupported` |
 | Payload rendering | all 220 payloads, 440 files |
-| Compilation of generated output with the Next generator alone | `430` errors: 360 CS0234 for the shared collection/string formatter owners and 70 CS0117 for the shared Union cursor facade |
+| Compilation of generated output with the Next generator alone | `360` CS0234 errors: the shared collection/string formatter owners are not published yet |
 | Analysis-only cost | 0.029 s median, 2.3 MB on a warm process |
 | Current Next generation | 0.136 s median for analysis plus 440 payload files, 117.3 MB |
 | Incremental edit, 40 types | 0.007 s comment edit; 0.007 s member edit |
@@ -149,11 +149,11 @@ Parity against the legacy direct output matched 9/10 files before the record-wid
 mismatch was the missing `MeasureRecord` entry, which the record model now carries. Derived records,
 managed structs, constructors, callbacks, rent and versioned records stay unmapped.
 
-All 220 corpus payloads now render, but the generated trees are not yet self-contained. Collection
-members and circle string reads call the shared `Binary_<assembly>_<type>` formatter owners that the
-legacy formatter generator publishes, and Union roots call the shared `SerializeUnionAt` cursor facade.
-The Next project does not publish either yet, so the corpus compiles only beside the legacy formatter
-and facade output. Shared publication is tracked in M-01 and M-09.
+All 220 corpus payloads now render, and fixed Union cases publish their own `SerializeUnionAt` cursor
+entries. The generated trees are still not fully self-contained: collection members and circle string
+reads call the shared `Binary_<assembly>_<type>` formatter owners that the legacy formatter generator
+publishes. The Next project does not publish those owners yet, so the corpus compiles only beside the
+legacy formatter output. Shared publication is tracked in M-01 and M-09.
 
 ## 4. Architecture comparison with Nino
 
@@ -264,5 +264,5 @@ the generated trees. It reports:
 
 ```text
 payloads=220 complete=220 incomplete=0 unsupported=0
-files=440 compileErrors generated=430 (shared formatter owners and Union cursor facade pending)
+files=440 compileErrors generated=360 (shared collection/string formatter owners pending)
 ```

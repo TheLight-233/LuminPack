@@ -83,6 +83,9 @@ internal sealed class RecordModel : TypeModel
     /// <summary>Whether the record writes a version schema prefix.</summary>
     internal readonly bool Versioned;
 
+    /// <summary>Whether the record is a case of a Union root that uses the shared returning cursor kernel.</summary>
+    internal readonly bool FixedUnionCase;
+
     /// <summary>Whether the record has a base payload whose members follow its own.</summary>
     internal readonly bool Derived;
 
@@ -107,10 +110,11 @@ internal sealed class RecordModel : TypeModel
 
     /// <summary>Captures a record.</summary>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
-        bool versioned, bool derived, bool proven, bool recordWidth, string? mirror, string[]? mirrorFields, int[]? mirrorOffsets,
-        string? mirrorLayout)
+        bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, string? mirror, string[]? mirrorFields,
+        int[]? mirrorOffsets, string? mirrorLayout)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
+        FixedUnionCase = fixedUnionCase;
         RecordWidth = recordWidth;
         Proven = proven;
         Derived = derived;
@@ -123,7 +127,8 @@ internal sealed class RecordModel : TypeModel
 
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
-        other is RecordModel record && base.Equals(other) && Versioned == record.Versioned && Derived == record.Derived &&
+        other is RecordModel record && base.Equals(other) && Versioned == record.Versioned &&
+        FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && Mirror == record.Mirror &&
         MirrorLayout == record.MirrorLayout &&
         (ReferenceEquals(MirrorFields, record.MirrorFields) || MirrorFields != null && record.MirrorFields != null &&
