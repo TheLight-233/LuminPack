@@ -38,10 +38,20 @@ internal static partial class DirectBinaryEmitter
         string Serializer() => w.A("LuminPackSerializer");
         string Standard() => w.A("LuminPackUtf16LengthOptions");
         string Constraint() => "where TLuminProfile : struct, " + Options();
-        string writeRoot = genericWrite ? "RootWrite<" + Profile + ">" : "RootWrite";
-        string readRoot = genericRead ? "RootRead<" + Profile + ">" : "RootRead";
-        string writeUnion = genericWrite ? "RootWriteUnion<" + Profile + ">" : "RootWriteUnion";
-        string readUnion = genericRead ? "RootReadUnion<" + Profile + ">" : "RootReadUnion";
+        // Every method of a generic definition repeats its type parameters first, then the operation's profile.
+        string Arguments(params string[] extra) => model.TypeArguments(extra);
+        string TypeConstraint() => model.TypeConstraintText;
+        string ConstraintLine(bool profile) => profile
+            ? (TypeConstraint().Length == 0 ? Constraint() : TypeConstraint() + " " + Constraint())
+            : TypeConstraint();
+        string OptionsConstraint() => TypeConstraint().Length == 0
+            ? "where TOptions : struct, " + Options() : TypeConstraint() + " where TOptions : struct, " + Options();
+        string Root(string name, bool profile) => name + (profile ? Arguments(Profile) : Arguments());
+        string Invoke(string name, string profile) => name + (profile == null ? Arguments() : Arguments(profile));
+        string writeRoot = Root("RootWrite", genericWrite);
+        string readRoot = Root("RootRead", genericRead);
+        string writeUnion = Root("RootWriteUnion", genericWrite);
+        string readUnion = Root("RootReadUnion", genericRead);
         string inline = w.MethodImpl("AggressiveInlining");
         // Interception gives every payload's state entries unique names; otherwise they are overloads.
         string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
@@ -60,13 +70,13 @@ internal static partial class DirectBinaryEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void SerializeMember" + suffix + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => SerializeMember" +
-                suffix + "<" + Standard() + ">(ref writer, in input);");
+            w.Line("internal static void SerializeMember" + suffix + Arguments() + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => SerializeMember" +
+                suffix + Arguments(Standard()) + "(ref writer, in input);");
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void SerializeMember" + suffix + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
-            w.Indented(() => w.Line(Constraint() + " => " + container + ".RootWriteMember<" + Profile + ">(ref writer, input);"));
+            w.Line("internal static void SerializeMember" + suffix + Arguments(Profile) + "(scoped ref " + writer + " writer, scoped in " + type + "? input)");
+            w.Indented(() => w.Line(ConstraintLine(true) + " => " + container + ".RootWriteMember" + Arguments(Profile) + "(ref writer, input);"));
             w.Blank();
         }
         else
@@ -96,24 +106,39 @@ internal static partial class DirectBinaryEmitter
         w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize" + suffix + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " + container + "." +
-            (genericRead ? "RootRead<" + Standard() + ">" : "RootRead") + "(ref reader, ref value);");
+        string deserialize = "internal static void Deserialize" + suffix + Arguments() + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)";
+        string deserializeCall = container + "." + Invoke("RootRead", genericRead ? Standard() : null) + "(ref reader, ref value);";
+        if (TypeConstraint().Length == 0)
+            w.Line(deserialize + " => " + deserializeCall);
+        else
+        {
+            w.Line(deserialize);
+            w.Indented(() => w.Line(ConstraintLine(false) + " => " + deserializeCall));
+        }
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize" + suffix + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
-        w.Indented(() => w.Line(Constraint() + " => " + container + "." + readRoot + "(ref reader, ref value);"));
+        w.Line("internal static void Deserialize" + suffix + Arguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Indented(() => w.Line(ConstraintLine(true) + " => " + container + "." + readRoot + "(ref reader, ref value);"));
         w.Blank();
         w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void SerializeUnion(scoped ref " + writer + " writer, " + type + "? input) => " +
-            (genericWrite ? "SerializeUnion<" + Standard() + ">(ref writer, input);" : container + ".RootWriteUnion(ref writer, input);"));
+        string serializeUnion = "internal static void SerializeUnion" + Arguments() + "(scoped ref " + writer + " writer, " + type + "? input)";
+        string serializeUnionCall = genericWrite ? "SerializeUnion" + Arguments(Standard()) + "(ref writer, input);" :
+            container + ".RootWriteUnion" + Arguments() + "(ref writer, input);";
+        if (TypeConstraint().Length == 0)
+            w.Line(serializeUnion + " => " + serializeUnionCall);
+        else
+        {
+            w.Line(serializeUnion);
+            w.Indented(() => w.Line(TypeConstraint() + " => " + serializeUnionCall));
+        }
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void SerializeUnion<" + Profile + ">(scoped ref " + writer + " writer, " + type + "? input)");
-        w.Indented(() => w.Line(Constraint() + " => " + (genericWrite ? container + "." + writeUnion + "(ref writer, input);" : "SerializeUnion(ref writer, input);")));
+        w.Line("internal static void SerializeUnion" + Arguments(Profile) + "(scoped ref " + writer + " writer, " + type + "? input)");
+        w.Indented(() => w.Line(ConstraintLine(true) + " => " + (genericWrite ? container + "." + writeUnion + "(ref writer, input);" : "SerializeUnion" + Arguments() + "(ref writer, input);")));
         w.Blank();
         if (model.FixedUnionCase)
         {
@@ -124,20 +149,29 @@ internal static partial class DirectBinaryEmitter
         w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeUnion" + suffix + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
-            (genericRead ? "DeserializeUnion" + suffix + "<" + Standard() + ">(ref reader, ref value);" : container + ".RootReadUnion(ref reader, ref value);"));
+        string deserializeUnion = "internal static void DeserializeUnion" + suffix + Arguments() + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)";
+        string deserializeUnionCall = genericRead ? "DeserializeUnion" + suffix + Arguments(Standard()) + "(ref reader, ref value);" :
+            container + ".RootReadUnion" + Arguments() + "(ref reader, ref value);";
+        if (TypeConstraint().Length == 0)
+            w.Line(deserializeUnion + " => " + deserializeUnionCall);
+        else
+        {
+            w.Line(deserializeUnion);
+            w.Indented(() => w.Line(TypeConstraint() + " => " + deserializeUnionCall));
+        }
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeUnion" + suffix + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
-        w.Indented(() => w.Line(Constraint() + " => " + (genericRead ? container + "." + readUnion + "(ref reader, ref value);" : "DeserializeUnion" + suffix + "(ref reader, ref value);")));
+        w.Line("internal static void DeserializeUnion" + suffix + Arguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Indented(() => w.Line(ConstraintLine(true) + " => " + (genericRead ? container + "." + readUnion + "(ref reader, ref value);" :
+            "DeserializeUnion" + suffix + Arguments() + "(ref reader, ref value);")));
         w.Suppressed = !writes;
         if (model.MeasureRecord)
         {
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void MeasureRecord" + suffix + "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
+            w.Line("internal static void MeasureRecord" + suffix + Arguments() + "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
             w.Open();
             w.Line("if (value is null)");
             w.Open();
@@ -168,8 +202,8 @@ internal static partial class DirectBinaryEmitter
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void MeasureRecord" + suffix + "<" + Profile + ">(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
-            w.Indented(() => w.Line(Constraint() + " => MeasureRecord" + suffix + "(ref evaluator, ref value);"));
+            w.Line("internal static void MeasureRecord" + suffix + Arguments(Profile) + "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + "? value)");
+            w.Indented(() => w.Line(ConstraintLine(true) + " => MeasureRecord" + suffix + Arguments() + "(ref evaluator, ref value);"));
         }
         w.Suppressed = false;
         if ((model.Mirror ?? model.Version?.Layout) != null)
@@ -181,6 +215,8 @@ internal static partial class DirectBinaryEmitter
             if (model.LayoutAttribute != null)
                 w.Line(model.LayoutAttribute);
             w.Line("private class " + (model.Mirror ?? model.Version.Layout));
+            if (model.Mirror != null && TypeConstraint().Length != 0)
+                w.Indented(() => w.Line(TypeConstraint()));
             w.Open();
             foreach (string field in model.MirrorFields ?? model.Version.LayoutFields)
                 w.Line("internal " + field + ";");
@@ -197,21 +233,28 @@ internal static partial class DirectBinaryEmitter
         // failure leaves the caller's state untouched.
         if (model.ElementList)
         {
-            IsolatedWrite("internal static void Write(this ref " + writer + " state, in " + type + "? value)", null,
+            IsolatedWrite("internal static void Write" + Arguments() + "(this ref " + writer + " state, in " + type + "? value)", null,
                 genericWrite ? Standard() : null);
             w.Blank();
-            IsolatedWrite("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)", "where TOptions : struct, " + Options(),
+            IsolatedWrite("internal static void Write" + Arguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)", OptionsConstraint(),
                 genericWrite ? "TOptions" : null);
         }
         else
         {
             w.Line(inline);
-            w.Line("internal static void Write(this ref " + writer + " state, in " + type + "? value) => " + Serializer() + "." + container + "." +
-                (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref state, value);");
+            string write = "internal static void Write" + Arguments() + "(this ref " + writer + " state, in " + type + "? value)";
+            string writeCall = Serializer() + "." + container + "." + Invoke("RootWrite", genericWrite ? Standard() : null) + "(ref state, value);";
+            if (TypeConstraint().Length == 0)
+                w.Line(write + " => " + writeCall);
+            else
+            {
+                w.Line(write);
+                w.Indented(() => w.Line(TypeConstraint() + " => " + writeCall));
+            }
             w.Line(inline);
-            w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)");
-            w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
-                (genericWrite ? "RootWrite<TOptions>" : "RootWrite") + "(ref state, value);"));
+            w.Line("internal static void Write" + Arguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)");
+            w.Indented(() => w.Line(OptionsConstraint() + " => " + Serializer() + "." + container + "." +
+                Invoke("RootWrite", genericWrite ? "TOptions" : null) + "(ref state, value);"));
         }
         w.Suppressed = !reads;
         // A version-tolerant record and a type built by its selected constructor read through an isolated copy of the reader
@@ -219,21 +262,28 @@ internal static partial class DirectBinaryEmitter
         if (model.Version != null || !model.IsStruct && model.ConstructorArguments != null)
         {
             // A version-tolerant record reads through an isolated copy of the reader state.
-            IsolatedRead("internal static void Read(this ref " + reader + " state, ref " + type + "? value)", null,
+            IsolatedRead("internal static void Read" + Arguments() + "(this ref " + reader + " state, ref " + type + "? value)", null,
                 genericRead ? Standard() : null);
             w.Blank();
-            IsolatedRead("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)", "where TOptions : struct, " + Options(),
+            IsolatedRead("internal static void Read" + Arguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)", OptionsConstraint(),
                 genericRead ? "TOptions" : null);
         }
         else
         {
             w.Line(inline);
-            w.Line("internal static void Read(this ref " + reader + " state, ref " + type + "? value) => " + Serializer() + "." + container + "." +
-                (genericRead ? "RootRead<" + Standard() + ">" : "RootRead") + "(ref state, ref value);");
+            string read = "internal static void Read" + Arguments() + "(this ref " + reader + " state, ref " + type + "? value)";
+            string readCall = Serializer() + "." + container + "." + Invoke("RootRead", genericRead ? Standard() : null) + "(ref state, ref value);";
+            if (TypeConstraint().Length == 0)
+                w.Line(read + " => " + readCall);
+            else
+            {
+                w.Line(read);
+                w.Indented(() => w.Line(TypeConstraint() + " => " + readCall));
+            }
             w.Line(inline);
-            w.Line("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)");
-            w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
-                (genericRead ? "RootRead<TOptions>" : "RootRead") + "(ref state, ref value);"));
+            w.Line("internal static void Read" + Arguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)");
+            w.Indented(() => w.Line(OptionsConstraint() + " => " + Serializer() + "." + container + "." +
+                Invoke("RootRead", genericRead ? "TOptions" : null) + "(ref state, ref value);"));
         }
         w.Suppressed = false;
         w.Close();
@@ -247,13 +297,28 @@ internal static partial class DirectBinaryEmitter
         w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(polymorphic);
-        w.Line("public static void WritePolymorphismValue(ref this " + writer + " writer, scoped in " + type + "? input) => " + Serializer() + ".SerializeUnion(ref writer, input);");
+        string writePolymorphic = "public static void WritePolymorphismValue" + Arguments() + "(ref this " + writer + " writer, scoped in " + type + "? input)";
+        string writePolymorphicCall = Serializer() + ".SerializeUnion" + Arguments() + "(ref writer, input);";
+        if (TypeConstraint().Length == 0)
+            w.Line(writePolymorphic + " => " + writePolymorphicCall);
+        else
+        {
+            w.Line(writePolymorphic);
+            w.Indented(() => w.Line(TypeConstraint() + " => " + writePolymorphicCall));
+        }
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(polymorphic);
-        w.Line("public static void ReadPolymorphismValue(ref this " + reader + " reader, scoped ref " + type + "? value) => " + Serializer() +
-            ".DeserializeUnion" + suffix + "(ref reader, ref value);");
+        string readPolymorphic = "public static void ReadPolymorphismValue" + Arguments() + "(ref this " + reader + " reader, scoped ref " + type + "? value)";
+        string readPolymorphicCall = Serializer() + ".DeserializeUnion" + suffix + Arguments() + "(ref reader, ref value);";
+        if (TypeConstraint().Length == 0)
+            w.Line(readPolymorphic + " => " + readPolymorphicCall);
+        else
+        {
+            w.Line(readPolymorphic);
+            w.Indented(() => w.Line(TypeConstraint() + " => " + readPolymorphicCall));
+        }
         w.Suppressed = false;
         if (model.Version != null)
         {
@@ -272,7 +337,7 @@ internal static partial class DirectBinaryEmitter
             w.Open();
             w.Line(reader + " isolated = default;");
             w.Line("state.CopyTo(ref isolated);");
-            w.Line(Serializer() + "." + container + ".RootRead" + (profile == null ? string.Empty : "<" + profile + ">") + "(ref isolated, ref value);");
+            w.Line(Serializer() + "." + container + "." + Invoke("RootRead", profile) + "(ref isolated, ref value);");
             w.Line("isolated.CopyTo(ref state);");
             w.Close();
         }
@@ -286,7 +351,7 @@ internal static partial class DirectBinaryEmitter
             w.Open();
             w.Line(writer + " isolated = default;");
             w.Line("state.CopyTo(ref isolated);");
-            w.Line(Serializer() + "." + container + ".RootWrite" + (profile == null ? string.Empty : "<" + profile + ">") + "(ref isolated, value);");
+            w.Line(Serializer() + "." + container + "." + Invoke("RootWrite", profile) + "(ref isolated, value);");
             w.Line("isolated.CopyTo(ref state);");
             w.Close();
         }
@@ -295,8 +360,15 @@ internal static partial class DirectBinaryEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void Serialize" + suffix + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " + container + "." +
-                (genericWrite ? "RootWrite<" + Standard() + ">" : "RootWrite") + "(ref writer, input);");
+            string signature = "internal static void Serialize" + suffix + Arguments() + "(scoped ref " + writer + " writer, scoped in " + type + "? input)";
+            string call = container + "." + Invoke("RootWrite", genericWrite ? Standard() : null) + "(ref writer, input);";
+            if (TypeConstraint().Length == 0)
+                w.Line(signature + " => " + call);
+            else
+            {
+                w.Line(signature);
+                w.Indented(() => w.Line(TypeConstraint() + " => " + call));
+            }
             w.Blank();
         }
 
@@ -304,8 +376,8 @@ internal static partial class DirectBinaryEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void Serialize" + suffix + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
-            w.Indented(() => w.Line(Constraint() + " => " + container + "." + writeRoot + "(ref writer, input);"));
+            w.Line("internal static void Serialize" + suffix + Arguments(Profile) + "(scoped ref " + writer + " writer, scoped in " + type + "? input)");
+            w.Indented(() => w.Line(ConstraintLine(true) + " => " + container + "." + writeRoot + "(ref writer, input);"));
         }
 
         // A stream record's body is already the lowered statement text, so the call budget is counted from it directly. A
@@ -377,7 +449,9 @@ internal static partial class DirectBinaryEmitter
             // A declared reference member keeps the Union read behind its outlined entry; a fixed record leaves the hint to the
             // runtime when a contiguous block cannot be proven, as the original expansion does.
             Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                model.ReferencePayload ? w.MethodImpl("NoInlining")
+                members.Any(member => member.Kind == DirectMemberKind.Parameter)
+                    ? (model.ElementList ? w.MethodImpl("NoInlining") : inline)
+                    : model.ReferencePayload ? w.MethodImpl("NoInlining")
                     : allFixed && DirectInlining.FixedUnionRead(model, Sizes(readUnionBody)) ? inline : null);
             w.Suppressed = false;
             w.Close();
@@ -411,9 +485,9 @@ internal static partial class DirectBinaryEmitter
             w.Line(w.Preserve);
             if (attribute != null)
                 w.Line(attribute);
-            w.Line("internal static " + returns + " " + name + (generic ? "<" + Profile + ">" : string.Empty) + parameters);
+            w.Line("internal static " + returns + " " + name + (generic ? Arguments(Profile) : Arguments()) + parameters);
             if (generic)
-                w.Indented(() => w.Line(Constraint()));
+                w.Indented(() => w.Line(ConstraintLine(true)));
             w.Open();
             for (int index = 0; index < body.Count; index++)
             {
@@ -809,6 +883,13 @@ internal static partial class DirectBinaryEmitter
             if (member.Kind == DirectMemberKind.Array && member.FormatterCall)
             {
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                index++;
+                continue;
+            }
+            // A type-parameter member is written in place by the generic serializer itself.
+            if (member.Kind == DirectMemberKind.Parameter)
+            {
+                body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -1218,6 +1299,12 @@ internal static partial class DirectBinaryEmitter
                 body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
                 continue;
             }
+            // A type-parameter member is written by the generic serializer itself.
+            if (member.Kind == DirectMemberKind.Parameter)
+            {
+                body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, " + owner + "." + member.Name + ");");
+                continue;
+            }
             if (member.Kind == DirectMemberKind.Object)
             {
                 AddInlineObjectWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
@@ -1293,6 +1380,9 @@ internal static partial class DirectBinaryEmitter
         }
     }
 
+    /// <summary>Spells a type-parameter member's payload call: its own parameter, then the operation's profile.</summary>
+    private static string MemberArguments(DirectMember member, string profile) => "<" + member.Scalar + ", " + profile + ">";
+
     /// <summary>Spells an inline object's local the way the template numbers its depth-suffixed role local.</summary>
     private static string InlineName(Dictionary<string, int> names, string role, int depth)
     {
@@ -1322,7 +1412,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     private static bool IsInlineSegment(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member) ||
-        IsElementList(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall;
+        IsElementList(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall || member.Kind == DirectMemberKind.Parameter;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(DirectMember member) =>
@@ -1637,13 +1727,18 @@ internal static partial class DirectBinaryEmitter
         if (model.Mirror != null)
             body.Add("ref var reuseLocal = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value2!);");
         for (int index = 0; index < members.Length; index++)
-            AddConstructedReadExisting(body, members[index], index + 1 < members.Length);
+            AddConstructedReadExisting(body, model, w, members[index], index + 1 < members.Length);
         foreach (string call in model.ReadAfter)
             body.Add(call.Replace("value?.", "value2?."));
         body.Add("}");
         body.Add("");
         foreach (var member in members)
-            body.Add(Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
+        {
+            if (member.Kind == DirectMemberKind.Parameter)
+                body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + Camel(member.Name) + "Temp!);");
+            else
+                body.Add(Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
+        }
         body.Add("// Construct the object and populate its members.");
         string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
             name == null ? "default" : Camel(name) + "Temp!"));
@@ -1676,7 +1771,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Reads one member in place for the constructed read's existing-instance path.</summary>
-    private static void AddConstructedReadExisting(List<string> body, DirectMember member, bool hasNext)
+    private static void AddConstructedReadExisting(List<string> body, DirectTypeModel model, DirectWriter w, DirectMember member, bool hasNext)
     {
         string owner = member.Mirrored ? "reuseLocal" : "value2!";
         if (member.Kind == DirectMemberKind.Text && member.Mirrored)
@@ -1692,6 +1787,16 @@ internal static partial class DirectBinaryEmitter
         if (member.Kind == DirectMemberKind.Text)
         {
             body.Add("reader2.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
+            return;
+        }
+        if (member.Kind == DirectMemberKind.Parameter)
+        {
+            if (!member.ValueTypeParameter)
+            {
+                body.Add("if (" + w.A("LuminPackSerializer") + ".FormatterDispatch.LuminPackShouldResetMember<" + member.Scalar + ">(ref reader2))");
+                body.Add("\t" + owner + "." + member.Name + " = default !;");
+            }
+            body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
         body.Add(owner + "." + member.Name + " = " + FixedOrTextRead(member, "reader2") + ";");
@@ -1898,6 +2003,18 @@ internal static partial class DirectBinaryEmitter
                     continue;
                 }
                 body.Add("reader.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
+                continue;
+            }
+            // A type-parameter member reads through the generic serializer, assigning the reset guard only when its
+            // parameter may hold a reference.
+            if (member.Kind == DirectMemberKind.Parameter)
+            {
+                if (!member.ValueTypeParameter)
+                {
+                    body.Add("if (" + w.A("LuminPackSerializer") + ".FormatterDispatch.LuminPackShouldResetMember<" + member.Scalar + ">(ref reader))");
+                    body.Add("\t" + owner + "." + member.Name + " = default !;");
+                }
+                body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // An array or list member reads through its generated formatter, which keeps its own framing and profile.
