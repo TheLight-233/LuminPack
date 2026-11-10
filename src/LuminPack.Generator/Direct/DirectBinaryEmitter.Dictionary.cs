@@ -37,6 +37,8 @@ internal static partial class DirectBinaryEmitter
                     AddInlineListWrite(body, member, "value", w, names, ref ends, ref spans);
                 else if (IsElementList(member))
                     AddInlineElementListWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
+                else if (IsCollectionBlock(member))
+                    AddCollectionWrite(body, model, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 else
                     AddInlineObjectWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
@@ -89,7 +91,7 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Whether a member writes in place through the writer rather than at the cursor: an inline object, a string
     /// list or a list whose elements expand their record body.</summary>
     private static bool IsWriterBlock(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member) ||
-        IsElementList(member);
+        IsElementList(member) || IsCollectionBlock(member);
 
     /// <summary>Writes one fused-entry dictionary member at the cursor: the kernel under a UTF-16 record profile and the
     /// original operation as its fallback.</summary>

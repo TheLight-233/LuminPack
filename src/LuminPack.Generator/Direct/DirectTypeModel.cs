@@ -23,6 +23,53 @@ internal enum DirectMemberKind : byte
     Dictionary,
     /// <summary>A packable class of this assembly whose members are written inline in the parent record.</summary>
     Object,
+    /// <summary>A <c>Stack&lt;T&gt;</c> of raw scalars, written from its storage span.</summary>
+    Stack,
+    /// <summary>A <c>SortedSet&lt;T&gt;</c> of raw scalars, written through the tree storage helper.</summary>
+    SortedSet,
+    /// <summary>A <c>SortedList&lt;TKey, TValue&gt;</c> written as paired entries.</summary>
+    SortedList,
+    /// <summary>A <c>List&lt;KeyValuePair&lt;TKey, TValue&gt;&gt;</c> written as paired entries.</summary>
+    PairList,
+    /// <summary>A <c>List&lt;List&lt;T&gt;&gt;</c> whose inner lists expand their element records in place.</summary>
+    NestedList,
+    /// <summary>A dictionary with a nullable raw value, written as sparse raw entries.</summary>
+    SparseDictionary,
+}
+
+/// <summary>The entry shape of a sorted or paired collection member.</summary>
+internal sealed class DirectCollection : IEquatable<DirectCollection>
+{
+    /// <summary>The C# spelling of a raw key, such as <c>int</c>.</summary>
+    internal readonly string KeyType;
+    /// <summary>The C# spelling of a raw value, such as <c>int?</c>.</summary>
+    internal readonly string ValueType;
+    /// <summary>Whether the value is a string record.</summary>
+    internal readonly bool ValueText;
+    /// <summary>The inner list spelling of a nested list, or null.</summary>
+    internal readonly string ItemType;
+    /// <summary>The pair entry spelling of a key/value list, or null.</summary>
+    internal readonly string EntryType;
+
+    /// <summary>Captures a collection's entry shape.</summary>
+    internal DirectCollection(string keyType, string valueType, bool valueText, string itemType = null, string entryType = null)
+    {
+        EntryType = entryType;
+        ItemType = itemType;
+        ValueText = valueText;
+        ValueType = valueType;
+        KeyType = keyType;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(DirectCollection other) => other != null && KeyType == other.KeyType && ValueType == other.ValueType &&
+        ValueText == other.ValueText && ItemType == other.ItemType && EntryType == other.EntryType;
+
+    /// <inheritdoc/>
+    public override bool Equals(object obj) => Equals(obj as DirectCollection);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (KeyType ?? string.Empty).GetHashCode();
 }
 
 /// <summary>The stored entry shape of a dictionary member and the text its kernel spells.</summary>
@@ -104,12 +151,15 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly bool Property;
     /// <summary>The entry shape of a dictionary member, or null.</summary>
     internal readonly DirectDictionary Dictionary;
+    /// <summary>The entry shape of a sorted, paired or nested collection member, or null.</summary>
+    internal readonly DirectCollection Collection;
 
     /// <summary>Captures one member.</summary>
     internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null, bool formatterCall = false,
-        bool property = false, DirectDictionary dictionary = null)
+        bool property = false, DirectDictionary dictionary = null, DirectCollection collection = null)
     {
+        Collection = collection;
         Dictionary = dictionary;
         Property = property;
         FormatterCall = formatterCall;
@@ -146,7 +196,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     public bool Equals(DirectMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored &&
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
-        Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Nested, other.Nested);
+        Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectMember);
@@ -192,9 +242,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// list whose elements expand their record body in the loop.</summary>
     private static bool InlineBlock(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite ||
         member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null);
-    /// <summary>Whether a member is a write segment of its own: an inline object, a string list or a formatter-call array.</summary>
+    /// <summary>Whether a member is a write segment of its own: an inline object, a string list, a formatter-call array or a
+    /// collection that writes through the writer in place.</summary>
     private static bool Segment(DirectMember member) => member.Kind == DirectMemberKind.Object || InlineBlock(member) ||
-        member.Kind == DirectMemberKind.Array && member.FormatterCall;
+        member.Kind == DirectMemberKind.Array && member.FormatterCall ||
+        member.Kind is DirectMemberKind.Stack or DirectMemberKind.SortedSet or DirectMemberKind.SortedList or
+            DirectMemberKind.PairList or DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
@@ -209,6 +262,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||
         member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload) ||
         member.Kind == DirectMemberKind.Dictionary && (member.Dictionary.KeyText || member.Dictionary.ValueText) ||
+        member.Kind is DirectMemberKind.SortedList or DirectMemberKind.PairList && member.Collection.ValueText ||
+        member.Kind == DirectMemberKind.NestedList && member.Nested.ProfilePayload ||
         member.Kind == DirectMemberKind.Array && member.FormatterCall ||
         member.Kind == DirectMemberKind.Object && member.Nested.ProfilePayload);
 
@@ -223,6 +278,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether the write body contains an element loop or expands an inline object that does, which leaves native
     /// inlining to the runtime.</summary>
     internal bool ElementList => Members.Any(member => member.Kind == DirectMemberKind.List && member.Nested != null ||
+        member.Kind is DirectMemberKind.Stack or DirectMemberKind.SortedSet or DirectMemberKind.SortedList or
+            DirectMemberKind.PairList or DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary ||
         member.Kind == DirectMemberKind.Object && member.Nested.ElementList);
     /// <summary>Whether a Boolean array or list member takes the checked read completion, whose inlined root renames the
     /// instance local.</summary>
@@ -611,7 +668,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("constructor members");
         // A reference-tracked record covers fixed scalars of at most four bytes, strings and other reference-tracked records.
         // Collections, raw struct widths, slot gaps and oversized tables change its table protocol and keep the original pipeline.
-        if (circle && (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List ||
+        if (circle && (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List or
+                DirectMemberKind.Dictionary or DirectMemberKind.Stack or DirectMemberKind.SortedSet or DirectMemberKind.SortedList or
+                DirectMemberKind.PairList or DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary ||
                 member.Kind == DirectMemberKind.Fixed && (member.Raw || member.Size > 4)) ||
             data.fields.Where((field, index) => field.Order != (uint)index).Any() || data.fields.Count > 249))
             return DirectEmission.Reject<DirectTypeModel>("circle members");
@@ -622,7 +681,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // A bounded write reserves the complete record once; the version-tolerant template reserves per member instead, and
         // a list or inline object owns exit labels and its own capacity handling.
         if (bounded != null && (versioned || isStruct || circle || members.Any(member => member.Kind is DirectMemberKind.Object
-            or DirectMemberKind.List or DirectMemberKind.Dictionary || member.Kind == DirectMemberKind.Array && member.FormatterCall)))
+            or DirectMemberKind.List or DirectMemberKind.Dictionary or DirectMemberKind.Stack or DirectMemberKind.SortedSet or
+            DirectMemberKind.SortedList or DirectMemberKind.PairList or DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary ||
+            member.Kind == DirectMemberKind.Array && member.FormatterCall)))
             return DirectEmission.Reject<DirectTypeModel>("bounded record");
         // A local case of an abstract packable base whose payload is raw fixed storage writes through the fixed Union cursor protocol.
         bool fixedUnionCase = !isStruct && members.All(member => member.IsFixed) && FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata);
@@ -1317,6 +1378,46 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if (list.TypeArguments[0].SpecialType == SpecialType.System_String)
                 return new DirectMember(field.Name, DirectMemberKind.List, "string", "global::System.Collections.Generic.List<string>", 0,
                     "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, mirrored, property: field.isProperty);
+            // A list of key/value pairs writes each pair's key and value, and reads through its element formatter.
+            if (list.TypeArguments[0] is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 2 } pairType &&
+                pairType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
+            {
+                var pairKey = Scalar(pairType.TypeArguments[0], allowBoolean: false);
+                bool pairValueText = pairType.TypeArguments[1].SpecialType == SpecialType.System_String;
+                var pairValue = pairValueText ? null : Scalar(pairType.TypeArguments[1], allowBoolean: false);
+                if (pairKey != null && (pairValueText || pairValue != null))
+                {
+                    string pairSpelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var shape = new DirectCollection(pairKey.Value.Keyword, pairValueText ? "string" : pairValue.Value.Keyword, pairValueText,
+                        entryType: pairType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                    return new DirectMember(field.Name, DirectMemberKind.PairList, pairSpelling, pairSpelling, 0,
+                        "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty, raw: true,
+                        property: field.isProperty, collection: shape);
+                }
+            }
+            // A list of lists whose inner elements expand their record body writes both levels in place.
+            if (list.TypeArguments[0] is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } innerList &&
+                innerList.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" &&
+                innerList.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } nestedElement &&
+                nestedElement.SpecialType == SpecialType.None &&
+                SymbolEqualityComparer.Default.Equals(nestedElement.ContainingAssembly, compilation.Assembly) &&
+                TypeMetaChecker.TryCheckPackableAttribute(nestedElement))
+            {
+                if (_depth > 8)
+                    return DirectEmission.Reject<DirectMember>("list element depth");
+                var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(nestedElement, compilation, metadata), compilation, metadata);
+                if (nested == null || nested.IsStruct || nested.Version != null || nested.ConstructorArguments != null || nested.Mirror != null ||
+                    nested.HasCallbacks || nested.Rent != null || nested.MixedRecord || nested.Members.Length == 0 ||
+                    nested.Members.Any(item => item.Mirrored || item.Kind == DirectMemberKind.Dictionary && item.Dictionary.Pair ||
+                        item.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or
+                        DirectMemberKind.Object or DirectMemberKind.Array or DirectMemberKind.List or DirectMemberKind.Dictionary)))
+                    return DirectEmission.Reject<DirectMember>("list element member");
+                string nestedSpelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var shape = new DirectCollection(null, null, false, innerList.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                return new DirectMember(field.Name, DirectMemberKind.NestedList, nestedSpelling, nestedSpelling, 0,
+                    "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty,
+                    property: field.isProperty, nested: nested, collection: shape);
+            }
             // A list of packable classes expands each element's record body in the loop; an unmanaged struct element keeps
             // the portable storage path instead.
             if (list.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } elementType &&
@@ -1339,6 +1440,42 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                     "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, mirrored, property: field.isProperty, nested: nested);
             }
         }
+        // A stack of raw scalars writes its storage span as one batch and reads through its element formatter.
+        if (symbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } stack &&
+            stack.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Stack<T>" &&
+            field.FieldType == LuminDataType.Reference && Scalar(stack.TypeArguments[0], allowBoolean: true) is { } stackItem)
+        {
+            string stackSpelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return new DirectMember(field.Name, DirectMemberKind.Stack, stackItem.Keyword, stackSpelling, 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty, raw: true,
+                property: field.isProperty);
+        }
+        // A sorted set of raw scalars writes its tree storage in place and reads through its element formatter.
+        if (symbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } sortedSet &&
+            sortedSet.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.SortedSet<T>" &&
+            field.FieldType == LuminDataType.Reference && Scalar(sortedSet.TypeArguments[0], allowBoolean: true) is { } setItem)
+        {
+            string setSpelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return new DirectMember(field.Name, DirectMemberKind.SortedSet, setItem.Keyword, setSpelling, 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty, raw: true,
+                property: field.isProperty);
+        }
+        // A sorted list of a raw key and a raw or string value writes both stored arrays as paired entries.
+        if (symbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 2 } sortedList &&
+            sortedList.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.SortedList<TKey, TValue>" &&
+            field.FieldType == LuminDataType.Reference && Scalar(sortedList.TypeArguments[0], allowBoolean: false) is { } sortedKey)
+        {
+            bool sortedValueText = sortedList.TypeArguments[1].SpecialType == SpecialType.System_String;
+            var sortedValue = sortedValueText ? null : Scalar(sortedList.TypeArguments[1], allowBoolean: false);
+            if (sortedValueText || sortedValue != null)
+            {
+                string sortedSpelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var shape = new DirectCollection(sortedKey.Keyword, sortedValueText ? "string" : sortedValue.Value.Keyword, sortedValueText);
+                return new DirectMember(field.Name, DirectMemberKind.SortedList, sortedSpelling, sortedSpelling, 0,
+                    "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty, raw: true,
+                    property: field.isProperty, collection: shape);
+            }
+        }
         // A dictionary writes fused entries when a string member bounds its record, or paired records when both key and
         // value are raw scalars. Untrusted Boolean entries and nullable values keep their original operations.
         if (symbol is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 2 } dictionary &&
@@ -1358,6 +1495,21 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                     "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload));
                 return new DirectMember(field.Name, DirectMemberKind.Dictionary, type, type, 0, shape.Formatter, field.Type,
                     field.isProperty, raw: true, dictionary: shape);
+            }
+            // A dictionary whose value is a nullable raw scalar writes sparse entries with a varint key and the fixed value.
+            string sparseValue = Scalar(dictionary.TypeArguments[1], allowBoolean: true)?.Keyword;
+            var nullableValue = dictionary.TypeArguments[1] as INamedTypeSymbol;
+            bool isNullableValue = nullableValue is { IsGenericType: true, TypeArguments.Length: 1 } &&
+                nullableValue.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+            var nullableRaw = isNullableValue ? Scalar(nullableValue.TypeArguments[0], allowBoolean: true) : null;
+            var sparseKey = Scalar(dictionary.TypeArguments[0], allowBoolean: false);
+            if (reserved == 0 && sparseValue == null && nullableRaw is { } innerValue && sparseKey is { } innerKey)
+            {
+                string sparseSpelling = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var shape = new DirectCollection(innerKey.Keyword, innerValue.Keyword + "?", false);
+                return new DirectMember(field.Name, DirectMemberKind.SparseDictionary, sparseSpelling, sparseSpelling, 0,
+                    "global::LuminPack." + BinaryExtensionProjection.Owner(extension, payload), field.Type, field.isProperty, raw: true,
+                    property: field.isProperty, collection: shape);
             }
         }
         return DirectEmission.Reject<DirectMember>("member type: " + (symbol.NullableAnnotation == NullableAnnotation.Annotated ? "annotated " : string.Empty) +
