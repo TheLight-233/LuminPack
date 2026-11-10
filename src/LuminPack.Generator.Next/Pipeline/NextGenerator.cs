@@ -20,17 +20,19 @@ public sealed class NextGenerator : IIncrementalGenerator
     private const string PackableAttribute = "LuminPack.Attribute.LuminPackableAttribute";
 
     /// <inheritdoc/>
+    /// <remarks>The provider is keyed per attributed type: editing one declaration re-runs that payload's transform and its
+    /// source output, while unrelated payloads keep their cached model. Project facts are cached per compilation and compared
+    /// by value, so an edit that leaves them unchanged does not invalidate every model.</remarks>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var symbols = context.SyntaxProvider.ForAttributeWithMetadataName(PackableAttribute,
-                static (node, _) => node is TypeDeclarationSyntax,
-                static (attributeContext, _) => (INamedTypeSymbol)attributeContext.TargetSymbol)
-            .Where(static symbol => symbol != null);
-        var models = symbols.Combine(context.CompilationProvider).Select(static (pair, _) =>
-        {
-            GeneratorOptions options = GeneratorOptionsFactory.From(pair.Right);
-            return new ModeledPayload(TypeModelFactory.TryCreate(pair.Left, pair.Right, options), options);
-        });
+        var models = context.SyntaxProvider.ForAttributeWithMetadataName(PackableAttribute,
+            static (node, _) => node is TypeDeclarationSyntax,
+            static (attributeContext, _) =>
+            {
+                GeneratorOptions options = GeneratorOptionsFactory.From(attributeContext.SemanticModel.Compilation);
+                var symbol = (INamedTypeSymbol)attributeContext.TargetSymbol;
+                return new ModeledPayload(TypeModelFactory.TryCreate(symbol, attributeContext.SemanticModel.Compilation, options), options);
+            });
         context.RegisterSourceOutput(models, static (production, payload) =>
         {
             if (payload.Result.Model is not { } model || !payload.Result.IsComplete)
@@ -51,7 +53,7 @@ public sealed class NextGenerator : IIncrementalGenerator
         production.AddSource(model.Identity.DisplayName.Replace('<', '_').Replace('>', '_').Replace(',', '_').Replace(' ', '_') + suffix + ".g.cs", source);
     }
 
-    private readonly struct ModeledPayload
+    private readonly struct ModeledPayload : IEquatable<ModeledPayload>
     {
         internal ModeledPayload(ModelResult result, GeneratorOptions options)
         {
@@ -62,5 +64,11 @@ public sealed class NextGenerator : IIncrementalGenerator
         internal ModelResult Result { get; }
 
         internal GeneratorOptions Options { get; }
+
+        public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options);
+
+        public override bool Equals(object? obj) => obj is ModeledPayload other && Equals(other);
+
+        public override int GetHashCode() => Result.GetHashCode();
     }
 }

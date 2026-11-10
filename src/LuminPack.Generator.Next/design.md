@@ -1,7 +1,7 @@
 # LuminPack Generator Next: Architecture and Migration Design
 
 Status: working scaffold. The analysis layer is complete for the current supported surface, and the
-direct record and raw-struct renderers now run inside the Next project. Collection, portable-struct,
+payload record and raw-struct renderers now run inside the Next project. Collection, portable-struct,
 Union, circle-reference and version-tolerant rendering remain on the migration plan.
 
 ## 1. Design philosophy
@@ -42,12 +42,36 @@ consumer compilation
                               |
                               v
 +---------------------------- Rendering ------------------------------+
-| BinaryRenderer / JsonRenderer / UnionRenderer                     |
-| DirectModelFactory maps a TypeModel onto the direct emitter model  |
-| Direct emitters (Binary, JSON, Struct, Union, Circle, Version)     |
-| DirectWriter -> DirectLayout -> generated source                   |
+| BinaryRenderer / JsonRenderer / UnionRenderer                      |
+| RenderModelFactory maps a TypeModel to a PayloadRenderModel        |
+| Payload emitters: Binary, JSON, Struct, Union, Circle, Version     |
+| CodeWriter -> PublicationLayout -> generated source                |
 +--------------------------------------------------------------------+
 ```
+
+### Incremental granularity
+
+Incrementality belongs to the **generator pipeline**, not to the generated code. The unit is one
+attributed payload type: the syntax provider is keyed by the declaration, the transform produces one
+`ModeledPayload`, and the output action emits that payload's files. Editing one declaration re-runs
+that transform and its outputs; unrelated payloads keep their cached model.
+
+`ModeledPayload` and `ModelResult` implement value equality, and `GeneratorOptions` is cached per
+compilation and compared by value. An edit that leaves a payload's symbol and the project facts
+unchanged therefore does not re-render its files. Generated code size is a separate concern: one file
+per payload and format is the default, while shared facades and dispatch reduction are tracked in
+M-15.
+
+The remaining semantic dependency is a referenced type that changes without editing the payload that
+uses it. That case needs explicit dependency tracking in the pipeline; it is tracked in M-14.
+
+Measured on a 40-type corpus with one type per file (80 generated files):
+
+| Run | Generator time | Output |
+| --- | ---: | --- |
+| Full generation | 0.607 s | 80 files, 22,360 lines |
+| Comment edit in one file | 0.034 s | 80 files, 22,360 lines (no churn) |
+| Add one member in one file | 0.012 s | 80 files, 22,436 lines (only the edited payload changes) |
 
 ### Layer rules
 
@@ -69,17 +93,16 @@ consumer compilation
 | `Model/WirePolicy.cs` | Input policy, string profile, record bound, reference tracking |
 | `Model/GeneratorOptions.cs` | Project facts: .NET 8, language version, unsafe, Unity, registration, aliases, assembly name, interception |
 | `Analysis/TypeModelFactory.cs` | The single Roslyn boundary |
-| `Rendering/Direct/DirectModelFactory.cs` | Maps a `TypeModel` to the direct emitter model |
-| `Rendering/Direct/DirectEmission.cs` | Direct entry point, writer and call counter |
-| `Rendering/Direct/DirectBinaryEmitter*.cs` | Binary roots for records, structs, sequences and dictionaries |
-| `Rendering/Direct/DirectJsonEmitter.cs` | JSON roots, name tables and literal writes |
-| `Rendering/Direct/DirectStructEmitter.cs` | Raw and managed struct roots |
-| `Rendering/Direct/DirectPortableModel.cs` | Portable view leaves and fields |
-| `Rendering/Direct/DirectUnionModel.cs` | Union case and compiled-slot descriptions |
+| `Rendering/Emitters/RenderModelFactory.cs` | Maps a `TypeModel` to the payload emitter model |
+| `Rendering/Emitters/PayloadEmitter.cs` | Payload entry point, code writer and call counter |
+| `Rendering/Emitters/BinaryEmitter*.cs` | Binary roots for records, structs, sequences and dictionaries |
+| `Rendering/Emitters/JsonEmitter.cs` | JSON roots, name tables and literal writes |
+| `Rendering/Emitters/StructEmitter.cs` | Raw and managed struct roots |
+| `Rendering/Emitters/PortableModel.cs` | Portable view leaves and fields |
+| `Rendering/Emitters/UnionRenderModel.cs` | Union case and compiled-slot descriptions |
 | `Rendering/Binary/BinaryRenderer.cs` | Binary renderer dispatch |
 | `Rendering/Json/JsonRenderer.cs` | JSON renderer dispatch |
 | `Rendering/Union/UnionRenderer.cs` | Union renderer placeholder |
-| `Migrated/` | Byte-identical reference snapshot of the old `Direct/` files; excluded from compilation |
 
 ## 3. Current coverage
 
@@ -93,8 +116,9 @@ records, 10 raw structs, 10 packed structs, 10 Unions with 20 cases and 10 circl
 | Compilation of generated output | `0` generated errors |
 | Analysis-only cost | 0.62 s cold, 0.030-0.038 s warm, 3.7 MB |
 | Current Next generation | 0.71 s cold for analysis plus 130 payload files |
+| Incremental edit, 40 types | 0.034 s comment edit; 0.012 s member edit |
 | Old template pipeline, same 220 payloads | 16.46 s warm, 5.53 GB |
-| Migrated Direct pipeline, same 220 payloads | 0.435 s warm, 0.45 GB, byte-identical output |
+| Legacy payload pipeline (old generator DLL), same 220 payloads | 0.435 s warm, 0.45 GB, byte-identical output |
 
 The 130/220 figure is the honest scope of this milestone. The adapter returns null for payloads whose
 supporting renderer or model facts are not ported, so the pipeline never publishes code it cannot
@@ -109,7 +133,7 @@ benchmarks against MemoryPack.
 
 | Dimension | LuminPack Next | Nino v4 |
 | --- | --- | --- |
-| Generator granularity | `ForAttributeWithMetadataName` plus a compilation combine; model rebuilt when the compilation changes | One file per type; only edited types regenerate |
+| Generator granularity | Per-attributed-type provider; project facts cached per compilation and value-equal; referenced-type dependency tracking still pending | One file per type; only edited types regenerate |
 | Intermediate model | Explicit, immutable, value-equal, Roslyn-free model layer | Generator-internal; the emitted formatter is the contract |
 | Rendering split | Analysis / model / renderer boundaries, one renderer per payload kind | Formatter generation per type; runtime API in `Nino.Core` |
 | Generated size | Large: shared facades, roots, dispatch and per-operation branches | One file per type; oriented toward small output |
@@ -158,21 +182,21 @@ pipeline; P2 improves the product.
 
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | Collection formatter and dispatch generator: arrays, `List<T>`, `Stack<T>`, `SortedSet<T>`, nested lists, immutable and concurrent families | Rendering/Direct | — | Sequence records compile and run without the old formatter generator | P0 |
-| M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values | Rendering/Direct | M-01 | Dictionary records generate and compile | P0 |
-| M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `DirectPortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
+| M-01 | Collection formatter and dispatch generator: arrays, `List<T>`, `Stack<T>`, `SortedSet<T>`, nested lists, immutable and concurrent families | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
+| M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
+| M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
 | M-05 | Circle-reference model facts: mirror, slots, guards, reference ids | Model + Rendering | M-06 | Circle payloads generate and compile | P0 |
 | M-06 | Layout mirror: mirror name, field list and explicit offsets for auto-properties and included fields | Model + Rendering | — | Auto-property and included-private payloads generate and compile | P1 |
 | M-07 | Version-tolerant schema: metadata encoder, prefix, field entries, old names, layout | Analysis + Rendering | — | Versioned records generate the same schema as the old pipeline | P1 |
 | M-08 | Callbacks, selected constructors, pool rent and reuse | Analysis + Rendering | M-06 | Callback, constructor and pooled types generate | P1 |
 | M-09 | Shared publication: serializer facades, formatter dispatch, registration, layout files | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
-| M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Direct and Next output are byte-identical on the corpus | P1 |
+| M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Old and Next output are byte-identical on the corpus | P1 |
 | M-11 | Declared string profiles, input limits and member-scope profiles | Analysis + Rendering | M-09 | Member and type profile declarations generate correctly | P1 |
 | M-12 | Diagnostics and analyzers for unsupported members, layouts, options and Union cases | Analysis | — | Diagnostics are reported at the declaration, not in generated code | P2 |
 | M-13 | Keyed version tolerance and layout metadata | Model + Rendering | M-07 | Reordered and removed members read correctly | P2 |
-| M-14 | True incremental pipeline: no compilation combine, per-type model caching, one file per type | Pipeline | M-09 | Editing one type does not recompute every model | P2 |
-| M-15 | Generated size reduction: shared dispatch, per-call operation selection, facade deduplication | Rendering | M-09 | Generated source per type approaches the Direct output without shared bloat | P2 |
+| M-14 | Dependency-aware invalidation: the per-type provider and value-equal model results landed; add referenced-type dependency tracking so a model re-runs when a type it embeds changes | Pipeline | M-09 | Editing or changing one referenced type does not recompute unrelated models | P2 |
+| M-15 | Generated size reduction: shared dispatch, per-call operation selection, facade deduplication | Rendering | M-09 | Generated source per type approaches the old payload output without shared bloat | P2 |
 | M-16 | Cross-language codegen (TypeScript, Go, Rust) | Tooling | M-13 | Generators read and write the same bytes | P2 |
 | M-17 | ASP.NET Core formatters | Integrations | M-09 | MVC and Minimal API bodies use the generated entries | P2 |
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
@@ -185,11 +209,12 @@ pipeline; P2 improves the product.
   pipeline. A declaration restores unchecked reads with `UntrustedData = false`.
 - The copied renderers keep the legacy `#nullable disable` style; new code in `Analysis/`, `Model/`
   and the renderer entry points is nullable-clean.
-- `Migrated/` is a reference snapshot only. It is excluded from compilation and is not the active
-  renderer. The active renderers live under `Rendering/Direct/`.
-- The old generator tree currently does not rebuild because of eight pre-existing Direct merge
-  errors. The Next copies fix those errors locally; the old tree is not modified.
-- `DirectLayout.Apply` and `LayOutLines` are passthroughs in this milestone. Generated output is
+- The temporary `Migrated/` snapshot was deleted after the active files moved to
+  `Rendering/Emitters/`. The new project carries no `Direct` or `Migrated` names; the old generator
+  tree remains only as the migration source for the Union, circle and version emitters.
+- The old generator tree currently does not rebuild because of eight pre-existing merge errors. The
+  Next copies fix those errors locally; the old tree is not modified.
+- `PublicationLayout.Apply` and `LayOutLines` are passthroughs in this milestone. Generated output is
   valid but not byte-identical until M-10 lands.
 
 ## 7. Verification

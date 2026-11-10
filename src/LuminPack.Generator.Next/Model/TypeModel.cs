@@ -157,8 +157,8 @@ internal enum UnionDispatchTier
     /// <summary>Sealed exact cases are matched by runtime type before the virtual slot.</summary>
     ExactPatterns,
 
-    /// <summary>The root dispatches directly on the exact case type.</summary>
-    Direct,
+    /// <summary>The root dispatches on the exact case type.</summary>
+    ExactType,
 }
 
 /// <summary>The read strategy of one Union case.</summary>

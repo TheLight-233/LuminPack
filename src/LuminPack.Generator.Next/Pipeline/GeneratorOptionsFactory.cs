@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using LuminPack.SourceGenerator.Next.Model;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -10,10 +11,16 @@ namespace LuminPack.SourceGenerator.Next.Pipeline;
 /// <summary>Reads the project facts a model and its renderer need from the consumer compilation.</summary>
 internal static class GeneratorOptionsFactory
 {
-    /// <summary>Captures the project facts.</summary>
+    private static readonly ConditionalWeakTable<Compilation, GeneratorOptions> Cache = new();
+
+    /// <summary>Captures the project facts once per compilation.</summary>
     /// <param name="compilation">The consumer compilation.</param>
     /// <returns>The immutable project facts.</returns>
-    internal static GeneratorOptions From(Compilation compilation)
+    /// <remarks>The per-payload transform calls this for every attributed type. The compilation is a weak key, so the
+    /// options are shared by all payloads of one run without retaining a finished compilation.</remarks>
+    internal static GeneratorOptions From(Compilation compilation) => Cache.GetValue(compilation, static item => Create(item));
+
+    private static GeneratorOptions Create(Compilation compilation)
     {
         var csharp = compilation as CSharpCompilation;
         var symbols = new HashSet<string>(StringComparer.Ordinal);
