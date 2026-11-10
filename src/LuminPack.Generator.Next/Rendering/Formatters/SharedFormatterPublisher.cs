@@ -63,6 +63,9 @@ internal static class SharedFormatterPublisher
                     case SequenceFamily.ImmutableStack:
                         production.AddSource(hint, ImmutableStackOwnerFile.Render(set, fact));
                         break;
+                    case SequenceFamily.ImmutableList:
+                        production.AddSource(hint, ImmutableListOwnerFile.Render(set, fact));
+                        break;
                 }
             }
     }

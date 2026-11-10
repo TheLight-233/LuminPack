@@ -374,6 +374,7 @@ internal static class RenderModelFactory
             {
                 SequenceFamily.ConcurrentQueue => RenderMemberKind.ConcurrentQueue,
                 SequenceFamily.ImmutableStack => RenderMemberKind.ImmutableStack,
+                SequenceFamily.ImmutableList => RenderMemberKind.ImmutableList,
                 _ => RenderMemberKind.ImmutableArray,
             };
             // A packable element carries its declared spelling in Scalar, so the nested model decides the shape first.
@@ -492,9 +493,13 @@ internal static class RenderModelFactory
         PayloadRenderModel? element = SequenceElement(member.Nested, options);
         if (element == null)
             return null;
-        RenderMemberKind kind = family == SequenceFamily.ConcurrentQueue
-            ? RenderMemberKind.ConcurrentQueue : family == SequenceFamily.ImmutableArray
-                ? RenderMemberKind.ImmutableArray : RenderMemberKind.ImmutableStack;
+        RenderMemberKind kind = family switch
+        {
+            SequenceFamily.ConcurrentQueue => RenderMemberKind.ConcurrentQueue,
+            SequenceFamily.ImmutableArray => RenderMemberKind.ImmutableArray,
+            SequenceFamily.ImmutableStack => RenderMemberKind.ImmutableStack,
+            _ => RenderMemberKind.ImmutableList,
+        };
         return new RenderMember(member.Name, kind, member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored,
             nested: element, property: property);
     }
@@ -503,8 +508,9 @@ internal static class RenderModelFactory
     /// <param name="member">The sequence member.</param>
     /// <returns>The supported family, or null when the declared family, element form or string element is not reproduced.</returns>
     /// <remarks>The analysis group covers every concurrent and immutable collection, while the shared owners currently cover the
-    /// queue, the array and the stack; the other families stay unmapped instead of rendering with the wrong storage protocol.
-    /// A stack currently supports raw scalar elements only, so its string and packable elements stay unmapped.</remarks>
+    /// queue, the array, the stack and the list; the other families stay unmapped instead of rendering with the wrong storage
+    /// protocol. The stack and the list currently support raw scalar elements only, so their string and packable elements stay
+    /// unmapped.</remarks>
     internal static SequenceFamily? SupportedFamily(CollectionMember member)
     {
         string family = SequenceFamilyName(member.DeclaredType);
@@ -516,6 +522,8 @@ internal static class RenderModelFactory
             return SequenceFamily.ImmutableArray;
         if (family == "ImmutableStack" && member.Nested == null && member.Scalar != null && member.Scalar != "string")
             return SequenceFamily.ImmutableStack;
+        if (family == "ImmutableList" && member.Nested == null && member.Scalar != null && member.Scalar != "string")
+            return SequenceFamily.ImmutableList;
         return null;
     }
 
