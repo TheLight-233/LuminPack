@@ -82,6 +82,9 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     /// <summary>Whether the member stores a fixed scalar or raw struct.</summary>
     internal bool IsFixed => Kind == DirectMemberKind.Fixed;
 
+    /// <summary>Whether the member stores a variable-length payload: a string or a separately framed record.</summary>
+    internal bool IsPayload => Kind is DirectMemberKind.Text or DirectMemberKind.Object;
+
     /// <summary>The member's packed width as the original template spells it: a constant, or the runtime size of a raw struct.</summary>
     internal string Width => Raw ? "Unsafe.SizeOf<" + Scalar + ">()" : Size.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
@@ -205,6 +208,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>The complete-record byte bound a <c>[LuminPackBounded]</c> declaration guarantees, which the write roots reserve
     /// once and assert, or null.</summary>
     internal readonly int? Bounded;
+    /// <summary>Whether the type is reference-tracked: its record carries a slot table and an object reference id.</summary>
+    internal readonly bool Circle;
+    /// <summary>Whether a reference-tracked type participates in a reference cycle, so its roots guard the stack.</summary>
+    internal readonly bool CircleGuarded;
     /// <summary>The serialization callbacks, spelled as statements of the write or read root, in declaration order.</summary>
     internal readonly string[] WriteBefore = System.Array.Empty<string>(), WriteAfter = System.Array.Empty<string>(),
         ReadBefore = System.Array.Empty<string>(), ReadAfter = System.Array.Empty<string>();
@@ -255,8 +262,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null,
         DirectUnionSlot[] unionBinarySlots = null, DirectUnionSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
-        bool[] unionTierSealed = null)
+        bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false)
     {
+        CircleGuarded = circleGuarded;
+        Circle = circle;
         UnionTierSealed = unionTierSealed;
         UnionTierCases = unionTierCases;
         UnionTier = unionTier;
@@ -330,6 +339,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         UnionCanonical == other.UnionCanonical && UnionStandardBinary == other.UnionStandardBinary && UnionStandardJson == other.UnionStandardJson &&
         UnionTier == other.UnionTier && Same(UnionChain, other.UnionChain) && Same(UnionTierCases, other.UnionTierCases) &&
         Same(UnionTierSealed, other.UnionTierSealed) && Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
+        Circle == other.Circle && CircleGuarded == other.CircleGuarded &&
         Same(UnionCases, other.UnionCases) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
@@ -394,7 +404,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             portable = null;
         bool isStruct = raw || portable != null;
         bool versioned = data.generatorType == GeneratorType.VersionTolerant;
-        if (type == null || data.generatorType != GeneratorType.Object && !versioned || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
+        bool circle = data.generatorType == GeneratorType.CircleReference;
+        if (type == null || data.generatorType != GeneratorType.Object && !versioned && !circle || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
         // Callbacks and pool rents shape the binary roots; a version-tolerant root without callbacks covers a plain rent,
@@ -437,10 +448,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("constructor: " + type.InstanceConstructors.Length + " " +
                 string.Join("+", type.InstanceConstructors.Select(item => item.Parameters.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) +
                     item.DeclaredAccessibility.ToString())));
+        // A reference-tracked record owns its complete storage mirror, one instance and one allocation site. Base types, pool
+        // rents and constructor arguments change that framing and keep the original pipeline.
+        if (circle && (derived || data.RentPoolMethod != null || selectedConstructor))
+            return DirectEmission.Reject<DirectTypeModel>("circle storage");
         // The constructed read stores each member in a temporary local, so it is limited after the members are reduced.
         var constructedMembers = !raw && selectedConstructor;
         var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !StructLayoutOption(attribute) && !StructLayoutAttribute(attribute)).ToArray();
-        if (!PackableAttributes(attributes, versioned, out int? bounded))
+        if (!PackableAttributes(attributes, versioned, circle, out int? bounded))
             return DirectEmission.Reject<DirectTypeModel>("type attributes: " + string.Join("+", attributes.Select(attribute =>
                 attribute.AttributeClass?.Name + "(" + attribute.ConstructorArguments.Length + "," + attribute.NamedArguments.Length + ")")));
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
@@ -506,14 +521,24 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string extension = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
         var members = new DirectMember[data.fields.Count];
         for (int index = 0; index < members.Length; index++)
-            if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned)) == null)
+            if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned, circle, type)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
         // The constructed read stores each member in a temporary local, which only fixed scalars and strings spell today.
         if (constructedMembers && members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text)))
             return DirectEmission.Reject<DirectTypeModel>("constructor members");
+        // A reference-tracked record covers fixed scalars of at most four bytes, strings and other reference-tracked records.
+        // Collections, raw struct widths, slot gaps and oversized tables change its table protocol and keep the original pipeline.
+        if (circle && (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List ||
+                member.Kind == DirectMemberKind.Fixed && (member.Raw || member.Size > 4)) ||
+            data.fields.Where((field, index) => field.Order != (uint)index).Any() || data.fields.Count > 249))
+            return DirectEmission.Reject<DirectTypeModel>("circle members");
+        // Reserve-able members may only precede the reference members; a later one would reopen a reservation group.
+        int firstObject = System.Array.FindIndex(members, member => member.Kind == DirectMemberKind.Object);
+        if (circle && firstObject >= 0 && members.Skip(firstObject).Any(member => !member.IsPayload))
+            return DirectEmission.Reject<DirectTypeModel>("circle member order");
         // A bounded write reserves the complete record once; the version-tolerant template reserves per member instead, and
         // a list or inline object owns exit labels and its own capacity handling.
-        if (bounded != null && (versioned || isStruct || members.Any(member => member.Kind is DirectMemberKind.Object or DirectMemberKind.List ||
+        if (bounded != null && (versioned || isStruct || circle || members.Any(member => member.Kind is DirectMemberKind.Object or DirectMemberKind.List ||
             member.Kind == DirectMemberKind.Array && member.FormatterCall)))
             return DirectEmission.Reject<DirectTypeModel>("bounded record");
         // A local case of an abstract packable base whose payload is raw fixed storage writes through the fixed Union cursor protocol.
@@ -523,8 +548,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (members.Any(member => member.Raw && !member.Builtin) && (!fixedUnionCase || members.Length < 2 || members.Any(member => member.IsBoolean || member.Mirrored)))
             return DirectEmission.Reject<DirectTypeModel>("struct member record");
         // Strings without collections take the named member write and the proven object write; both need the runtime's own profiles.
-        // Included non-public fields are reached through the same layout mirror as auto-property storage.
-        bool mirrored = data.fields.Any(field => field.isProperty || field.IsPrivate);
+        // Included non-public fields are reached through the same layout mirror as auto-property storage, and a
+        // circle-reference payload always declares its storage mirror.
+        bool mirrored = circle || data.fields.Any(field => field.isProperty || field.IsPrivate);
         if (isStruct && (mirrored || members.Any(member => !member.IsFixed || member.Raw)))
             return DirectEmission.Reject<DirectTypeModel>("struct members");
         bool strings = !mirrored && members.Any(member => member.Kind == DirectMemberKind.Text) &&
@@ -552,7 +578,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("type spelling");
         string mirror = null;
         string[] mirrorFields = null;
-        bool fresh = LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data);
+        bool fresh = !circle && LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data);
         // A pooled type declares a mirror even for public fields, which its JSON read uses when it reuses an instance.
         if (mirrored || data.RentPoolMethod != null)
         {
@@ -636,7 +662,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             strings && !derived && !versioned && data.callBackMethods.Count == 0 && bounded == null, metadata.IsNet8,
             metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
             referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray(),
-            selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded);
+            selectedConstructor ? data.localFields.Select(local => local.Identifier).ToArray() : null, bounded,
+            circle: circle, circleGuarded: circle && RecursiveTypeAnalysis.IsRecursive(type));
     }
 
     /// <summary>Models a polymorphic Union root: its declared cases, compiled profile slots and dispatch tier, when every case
@@ -861,13 +888,13 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
 
     /// <summary>Accepts the packable attribute of the generation mode, an explicit default input policy and a complete-record
     /// byte bound, which only changes the write roots' reservation.</summary>
-    private static bool PackableAttributes(AttributeData[] attributes, bool versioned, out int? bounded)
+    private static bool PackableAttributes(AttributeData[] attributes, bool versioned, bool circle, out int? bounded)
     {
         bool packable = false;
         bounded = null;
         foreach (var attribute in attributes)
         {
-            if (versioned ? VersionedPackable(attribute) : PlainPackable(attribute))
+            if (versioned ? VersionedPackable(attribute) : circle ? CirclePackable(attribute) : PlainPackable(attribute))
             {
                 if (packable)
                     return false;
@@ -928,6 +955,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 System.Convert.ToInt64(member.ConstantValue, System.Globalization.CultureInfo.InvariantCulture) ==
                 System.Convert.ToInt64(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture));
 
+    /// <summary>Accepts <c>[LuminPackable(GeneratorType.CircleReference)]</c> without other arguments.</summary>
+    private static bool CirclePackable(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE && attribute.NamedArguments.Length == 0 &&
+            attribute.ConstructorArguments.Length == 1 && attribute.ConstructorArguments[0].Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } kind &&
+            kind.GetMembers().OfType<IFieldSymbol>().Any(member => member.Name == "CircleReference" && member.HasConstantValue &&
+                System.Convert.ToInt64(member.ConstantValue, System.Globalization.CultureInfo.InvariantCulture) ==
+                System.Convert.ToInt64(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture));
+
     /// <summary>Accepts <c>[LuminPackOption(StructLayout = ...)]</c> without other settings.</summary>
     private static bool StructLayoutOption(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute" && attribute.ConstructorArguments.Length == 0 &&
@@ -982,7 +1017,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     }
 
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
-    private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata, bool versioned = false)
+    private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata, bool versioned = false,
+        bool circle = false, INamedTypeSymbol owner = null)
     {
         if (field.IsPrivate && field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 && !versioned ||
             field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
@@ -1026,6 +1062,28 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             string spelling = rawStruct.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return new DirectMember(field.Name, DirectMemberKind.Fixed, spelling, spelling, 0,
                 "global::LuminPack." + BinaryExtensionProjection.Owner(extension, spelling), field.Type, mirrored, property: field.isProperty, raw: true);
+        }
+        // A reference-tracked member keeps its own slot table and reference id, so the parent writes its length and calls its
+        // operation. A self member reuses this model; any other member is modeled as its own record.
+        if (circle && symbol is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } circleType &&
+            circleType.SpecialType == SpecialType.None && field.FieldType == LuminDataType.Reference &&
+            SymbolEqualityComparer.Default.Equals(circleType.ContainingAssembly, compilation.Assembly) &&
+            TypeMetaChecker.TryCheckPackableAttribute(circleType))
+        {
+            if (TypeMetaChecker.CheckGeneratorType(circleType) != GeneratorType.CircleReference)
+                return DirectEmission.Reject<DirectMember>("circle member generator");
+            if (_depth > 8)
+                return DirectEmission.Reject<DirectMember>("circle member depth");
+            DirectTypeModel nested = null;
+            if (owner == null || !SymbolEqualityComparer.Default.Equals(circleType, owner))
+            {
+                nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(circleType, compilation, metadata), compilation, metadata);
+                if (nested == null || !nested.Circle || nested.IsStruct || nested.Version != null || nested.Bounded != null)
+                    return DirectEmission.Reject<DirectMember>("circle member model");
+            }
+            string circleSpelling = circleType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            return new DirectMember(field.Name, DirectMemberKind.Object, circleSpelling, circleSpelling, 0,
+                "global::LuminPack." + BinaryExtensionProjection.Owner(extension, circleSpelling), field.Type, field.isProperty, nested: nested);
         }
         // A packable class of this assembly with analyzed fields is stored inline: the parent record writes its members
         // directly after a marker holding their count. Versioned, mirrored, constructed and pooled children change that
