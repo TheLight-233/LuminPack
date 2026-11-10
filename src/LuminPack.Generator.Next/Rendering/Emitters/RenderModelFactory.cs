@@ -10,8 +10,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 /// <summary>Maps a Next payload model onto the render model the direct emitters consume.</summary>
 /// <remarks>This adapter is the only place where the normalized <see cref="TypeModel"/> facts become emitter input. It covers
 /// ordinary records whose members are public fields of a fixed scalar, text, a supported sequence or a supported keyed family,
-/// raw and portable structs, and reference-tracked nodes whose complete framing the circle emitters reproduce. Features whose
-/// rendering facts are not modeled return null so the pipeline emits nothing instead of partial code.</remarks>
+/// raw, portable and managed structs, and reference-tracked nodes whose complete framing the circle emitters reproduce.
+/// Features whose rendering facts are not modeled return null so the pipeline emits nothing instead of partial code.</remarks>
 internal static class RenderModelFactory
 {
     /// <summary>Builds the render model of one payload.</summary>
@@ -25,11 +25,18 @@ internal static class RenderModelFactory
         if (model is CircleReferenceModel circle)
             return Circle(circle, options);
         bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null };
+        // A struct with reference members keeps the record protocol: public fields of fixed scalars, strings and built-in
+        // values only. Mirrored storage, construction, callbacks, rent, a version schema and a bound change that framing and
+        // are not modeled yet.
+        bool managed = model is StructModel { Storage: StructStorage.ManagedRecord } managedStruct &&
+            !managedStruct.Versioned && !managedStruct.Rent && !managedStruct.Constructors && !managedStruct.Callbacks &&
+            !managedStruct.Identity.IsGeneric && managedStruct.Policy.Bound == null &&
+            managedStruct.Members.All(member => !member.Mirrored && member is ScalarMember or TextMember);
         PortableLayout? portable = model is StructModel { Storage: StructStorage.PortableUnmanaged } portableStruct
             ? portableStruct.Layout : null;
         if (portable is not { Complete: true })
             portable = null;
-        bool isStruct = raw || portable != null;
+        bool isStruct = raw || portable != null || managed;
         if (!isStruct && model is not RecordModel { Versioned: false })
             return null;
         // The layout mirror reaches auto-property and included non-public storage. A record whose mirror could not be
@@ -49,8 +56,9 @@ internal static class RenderModelFactory
                 return null;
             members[index] = member;
         }
-        // A raw struct copies its complete storage; a portable struct transfers only fixed fields.
-        if (isStruct && !members.All(member => member.IsFixed))
+        // A raw struct copies its complete storage; a portable struct transfers only fixed fields. A managed struct writes a
+        // record body, so its strings and built-in values keep their variable-length records.
+        if (!managed && isStruct && !members.All(member => member.IsFixed))
             return null;
         string globalName = model.Identity.GlobalName;
         // The proven object write needs .NET 8, unsafe code and a non-Unity project. The named member write only needs every
@@ -81,7 +89,8 @@ internal static class RenderModelFactory
             referencePayload: model.Members.Any(item => item is not ScalarMember),
             layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
-            trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView, mirrorOffsets: record?.MirrorOffsets);
+            trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView, mirrorOffsets: record?.MirrorOffsets,
+            managedStruct: managed);
     }
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters

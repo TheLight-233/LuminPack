@@ -146,8 +146,9 @@ corpus; that comparison belongs to the legacy tree and is not a Next parity resu
 A separate five-type mirror corpus (auto-properties, init-only setters, mixed public fields and
 properties, included private and readonly fields) renders 5/5 as ten files with zero compile errors.
 Parity against the legacy direct output matched 9/10 files before the record-width fix; the only
-mismatch was the missing `MeasureRecord` entry, which the record model now carries. Derived records,
-managed structs, constructors, callbacks, rent and versioned records stay unmapped.
+mismatch was the missing `MeasureRecord` entry, which the record model now carries. Managed structs of
+public fixed scalars, strings and built-in values render as record bodies; derived records, mirrored or
+constructed managed structs, callbacks, rent and versioned records stay unmapped.
 
 All 220 corpus payloads now render, and fixed Union cases publish their own `SerializeUnionAt` cursor
 entries. The generated trees are still not fully self-contained: collection members and circle string

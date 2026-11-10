@@ -168,15 +168,43 @@ internal sealed class StructModel : TypeModel
     /// <summary>Whether the declaration is a supported fixed record, which gives the struct its <c>MeasureRecord</c> entry.</summary>
     internal readonly bool RecordWidth;
 
+    /// <summary>Whether the declaration is version-tolerant, whose schema prefix the struct roots do not reproduce.</summary>
+    internal readonly bool Versioned;
+
+    /// <summary>Whether the declaration declares a pool rent method.</summary>
+    internal readonly bool Rent;
+
+    /// <summary>Whether the declaration declares an instance constructor with parameters.</summary>
+    internal readonly bool Constructors;
+
+    /// <summary>Whether the declaration registers a serialization callback.</summary>
+    internal readonly bool Callbacks;
+
     /// <summary>Captures a struct.</summary>
     internal StructModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
-        StructStorage storage, PortableLayout? layout, bool recordWidth)
+        StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks)
         : base(identity, accessibility, PayloadKind.Struct, members, policy, constraints)
     {
+        Callbacks = callbacks;
+        Constructors = constructors;
+        Rent = rent;
+        Versioned = versioned;
         RecordWidth = recordWidth;
         Layout = layout;
         Storage = storage;
     }
+
+    /// <inheritdoc/>
+    public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
+        other is StructModel model && base.Equals(other) && Storage == model.Storage && RecordWidth == model.RecordWidth &&
+        Versioned == model.Versioned && Rent == model.Rent && Constructors == model.Constructors &&
+        Callbacks == model.Callbacks && Equals(Layout, model.Layout);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as StructModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Identity.GetHashCode();
 }
 
 /// <summary>One scalar transfer of a portable struct's packed wire.</summary>

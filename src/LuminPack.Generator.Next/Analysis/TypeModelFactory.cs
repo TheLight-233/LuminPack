@@ -178,8 +178,13 @@ internal static class TypeModelFactory
                     PortableLayout? layout = symbol.IsUnmanagedType && generatorType == "Object" ? TryPortableLayout(symbol) : null;
                     StructStorage storage = !symbol.IsUnmanagedType ? StructStorage.ManagedRecord :
                         layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
+                    // A managed record body is framed by the declaration's constructors, callbacks and rent; a value type that
+                    // is version-tolerant writes a schema prefix the struct roots do not reproduce.
+                    bool managed = storage == StructStorage.ManagedRecord;
                     return new StructModel(identity, accessibility, members, policy, constraints, storage, layout,
-                        RecordWidthSupported(symbol));
+                        RecordWidthSupported(symbol), versioned: generatorType == "VersionTolerant",
+                        rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
+                        callbacks: managed && Callbacks(symbol));
                 }
                 case PayloadKind.Union:
                 {
@@ -2036,6 +2041,12 @@ internal static class TypeModelFactory
         private static bool SelectedConstructor(INamedTypeSymbol type)
             => type.InstanceConstructors.Any(constructor => constructor.Parameters.Length != 0 && constructor.GetAttributes().Any(attribute =>
                 attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute"));
+
+        /// <summary>Whether the declaration declares an instance constructor with parameters.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <returns>Whether a parameterized constructor exists.</returns>
+        private static bool Constructors(INamedTypeSymbol type)
+            => type.InstanceConstructors.Any(constructor => constructor.Parameters.Length != 0);
 
         /// <summary>Whether the declaration registers a serialization callback.</summary>
         /// <param name="type">The declared payload.</param>
