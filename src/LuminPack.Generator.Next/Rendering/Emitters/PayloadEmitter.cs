@@ -19,11 +19,18 @@ internal static class PayloadEmitter
     /// <returns>The complete published file, or an empty string when this renderer does not cover the payload yet.</returns>
     internal static string Render(PayloadRenderModel model, bool json, int aliases, GeneratedOperations operations)
     {
-        if (model.UnionRoot || model.Circle)
+        if (model.UnionRoot)
             return string.Empty;
         var writer = new CodeWriter(aliases) { Scoped = model.Net8 };
         if (json)
-            JsonEmitter.Emit(model, writer, operations);
+        {
+            if (model.Circle)
+                CircleJsonEmitter.Emit(model, writer, operations);
+            else
+                JsonEmitter.Emit(model, writer, operations);
+        }
+        else if (model.Circle)
+            CircleBinaryEmitter.Emit(model, writer, operations);
         else if (model.IsStruct)
             StructEmitter.Emit(model, writer, operations);
         else

@@ -63,7 +63,7 @@ internal abstract class TypeModel : IEquatable<TypeModel>
     }
 
     /// <inheritdoc/>
-    public bool Equals(TypeModel? other) => ReferenceEquals(this, other) || other != null && Kind == other.Kind &&
+    public virtual bool Equals(TypeModel? other) => ReferenceEquals(this, other) || other != null && Kind == other.Kind &&
         Identity.Equals(other.Identity) && Accessibility == other.Accessibility && Policy.Equals(other.Policy) &&
         Members.Length == other.Members.Length && Same(Members, other.Members) && Same(Constraints, other.Constraints);
 
@@ -392,11 +392,61 @@ internal sealed class CircleReferenceModel : TypeModel
     /// <summary>Whether the node participates in cycle detection or only reference sharing.</summary>
     internal readonly bool Guarded;
 
+    /// <summary>Whether the node has a base payload whose storage would join its mirror.</summary>
+    internal readonly bool Derived;
+
+    /// <summary>Whether the node declares a pool rent method.</summary>
+    internal readonly bool Rent;
+
+    /// <summary>Whether the node selects a constructor with parameters for its reads.</summary>
+    internal readonly bool SelectedConstructor;
+
+    /// <summary>Whether the node declares a serialization callback.</summary>
+    internal readonly bool Callbacks;
+
+    /// <summary>Whether every serialized member sits at its declared wire position.</summary>
+    internal readonly bool FieldsInOrder;
+
+    /// <summary>The node's complete storage mirror declarations in storage order, or null when the storage cannot be
+    /// reproduced exactly.</summary>
+    internal readonly string[]? MirrorFields;
+
+    /// <summary>The explicit-layout offset per mirror field, or null when the storage is sequential.</summary>
+    internal readonly int[]? MirrorOffsets;
+
+    /// <summary>The CLR layout attribute line of the storage mirror, or null.</summary>
+    internal readonly string? MirrorLayout;
+
     /// <summary>Captures a reference-tracked node.</summary>
     internal CircleReferenceModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy,
-        string[] constraints, bool guarded)
+        string[] constraints, bool guarded, bool derived, bool rent, bool selectedConstructor, bool callbacks, bool fieldsInOrder,
+        string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout)
         : base(identity, accessibility, PayloadKind.CircleReference, members, policy, constraints)
     {
+        MirrorLayout = mirrorLayout;
+        MirrorOffsets = mirrorOffsets;
+        MirrorFields = mirrorFields;
+        FieldsInOrder = fieldsInOrder;
+        Callbacks = callbacks;
+        SelectedConstructor = selectedConstructor;
+        Rent = rent;
+        Derived = derived;
         Guarded = guarded;
     }
+
+    /// <inheritdoc/>
+    public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
+        other is CircleReferenceModel circle && base.Equals(other) && Guarded == circle.Guarded && Derived == circle.Derived &&
+        Rent == circle.Rent && SelectedConstructor == circle.SelectedConstructor && Callbacks == circle.Callbacks &&
+        FieldsInOrder == circle.FieldsInOrder && MirrorLayout == circle.MirrorLayout &&
+        (ReferenceEquals(MirrorFields, circle.MirrorFields) || MirrorFields != null && circle.MirrorFields != null &&
+            Enumerable.SequenceEqual(MirrorFields, circle.MirrorFields)) &&
+        (ReferenceEquals(MirrorOffsets, circle.MirrorOffsets) || MirrorOffsets != null && circle.MirrorOffsets != null &&
+            Enumerable.SequenceEqual(MirrorOffsets, circle.MirrorOffsets));
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as TypeModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Identity.GetHashCode();
 }

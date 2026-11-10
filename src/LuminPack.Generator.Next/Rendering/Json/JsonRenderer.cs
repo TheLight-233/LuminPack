@@ -16,12 +16,15 @@ internal sealed class JsonRenderer : IRenderer
     {
         RecordModel record => Record(record, context),
         StructModel structModel => Struct(structModel, context),
+        CircleReferenceModel circle => Circle(circle, context),
         _ => string.Empty,
     };
 
     private static string Record(RecordModel model, RenderContext context) => Emit(model, context);
 
     private static string Struct(StructModel model, RenderContext context) => Emit(model, context);
+
+    private static string Circle(CircleReferenceModel model, RenderContext context) => Emit(model, context);
 
     private static string Emit(TypeModel model, RenderContext context)
     {

@@ -25,6 +25,7 @@ internal static class TypeModelFactory
     private const string BoundedAttribute = "LuminPack.Attribute.LuminPackBoundedAttribute";
     private const string UnionAttribute = "LuminPack.Attribute.LuminPackUnionAttribute";
     private const string WideTagAttribute = "LuminPack.Attribute.LuminPackWideTagAttribute";
+    private const string OrderAttribute = "LuminPack.Attribute.LuminPackOrderAttribute";
     private const string StructLayoutAttribute = "System.Runtime.InteropServices.StructLayoutAttribute";
     private const string FieldOffsetAttribute = "System.Runtime.InteropServices.FieldOffsetAttribute";
 
@@ -190,8 +191,11 @@ internal static class TypeModelFactory
                 }
                 case PayloadKind.CircleReference:
                 {
-                    MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
-                    return new CircleReferenceModel(identity, accessibility, members, policy, constraints, guarded: true);
+                    MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
+                    MirrorFields(symbol, out string[]? mirrorFields, out int[]? mirrorOffsets, out string? mirrorLayout);
+                    return new CircleReferenceModel(identity, accessibility, members, policy, constraints, IsRecursive(symbol), derived,
+                        Rent(symbol), SelectedConstructor(symbol), Callbacks(symbol), FieldsInOrder(symbol, members),
+                        mirrorFields, mirrorOffsets, mirrorLayout);
                 }
                 default:
                 {
@@ -1483,6 +1487,251 @@ internal static class TypeModelFactory
                         return Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture);
             }
             return null;
+        }
+
+        /// <summary>Reports whether serializing the type can re-enter an operation of the same type.</summary>
+        /// <param name="type">The formatter type.</param>
+        /// <returns>Whether a member, element, type argument, base type or Union case path leads back to the type.</returns>
+        private static bool IsRecursive(INamedTypeSymbol type)
+            => Successors(type).Any(next => Reaches(next, type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default)));
+
+        /// <summary>Searches the member graph depth-first for a target type.</summary>
+        /// <param name="current">The type being expanded.</param>
+        /// <param name="target">The type that closes a cycle.</param>
+        /// <param name="visited">The finite set of types already expanded.</param>
+        /// <returns>Whether the target is reachable from the current type.</returns>
+        private static bool Reaches(ITypeSymbol current, ITypeSymbol target, HashSet<ITypeSymbol> visited)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, target))
+                return true;
+            if (!visited.Add(current))
+                return false;
+            return Successors(current).Any(next => Reaches(next, target, visited));
+        }
+
+        /// <summary>Lists the types serialized inside a value of the given type.</summary>
+        /// <param name="type">The containing type.</param>
+        /// <returns>Element, argument, member, base and Union case types.</returns>
+        private static IEnumerable<ITypeSymbol> Successors(ITypeSymbol type)
+        {
+            if (type is IArrayTypeSymbol array)
+            {
+                yield return array.ElementType;
+                yield break;
+            }
+            if (type is not INamedTypeSymbol named)
+                yield break;
+            foreach (ITypeSymbol argument in named.TypeArguments)
+                yield return argument;
+            if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+                yield break;
+            // Only declarations that LuminPack analyzes expose members; framework types are opaque beyond their arguments.
+            if (!IsPackable(named))
+                yield break;
+            for (var level = named; level != null && level.SpecialType != SpecialType.System_Object &&
+                level.SpecialType != SpecialType.System_ValueType; level = level.BaseType)
+                foreach (ISymbol member in level.GetMembers())
+                {
+                    if (member is IFieldSymbol { IsStatic: false } field)
+                        yield return field.Type;
+                    else if (member is IPropertySymbol { IsStatic: false, IsIndexer: false } property)
+                        yield return property.Type;
+                }
+            foreach (AttributeData attribute in named.GetAttributes())
+                if (attribute.AttributeClass?.ToDisplayString() == UnionAttribute && attribute.ConstructorArguments.Length == 2 &&
+                    attribute.ConstructorArguments[1].Value is ITypeSymbol caseType)
+                    yield return caseType;
+        }
+
+        /// <summary>Whether the declaration declares a pool rent method, whose framing the circle roots do not reproduce.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <returns>Whether a rent method exists.</returns>
+        private static bool Rent(INamedTypeSymbol type)
+            => type.GetMembers().OfType<IMethodSymbol>().Any(method => method.GetAttributes().Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackPoolRentAttribute"));
+
+        /// <summary>Whether the declaration selects a constructor with parameters for its reads.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <returns>Whether such a constructor is selected.</returns>
+        private static bool SelectedConstructor(INamedTypeSymbol type)
+            => type.InstanceConstructors.Any(constructor => constructor.Parameters.Length != 0 && constructor.GetAttributes().Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute"));
+
+        /// <summary>Whether the declaration registers a serialization callback.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <returns>Whether a callback method exists.</returns>
+        private static bool Callbacks(INamedTypeSymbol type)
+            => type.GetMembers().OfType<IMethodSymbol>().Any(method => method.GetAttributes().Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOnSerializingAttribute"
+                    or "LuminPack.Attribute.LuminPackOnSerializedAttribute"
+                    or "LuminPack.Attribute.LuminPackOnDeserializingAttribute"
+                    or "LuminPack.Attribute.LuminPackOnDeserializedAttribute"));
+
+        /// <summary>Whether every serialized member sits at its declared wire position.</summary>
+        /// <param name="symbol">The declared payload.</param>
+        /// <param name="members">The serialized members in wire order.</param>
+        /// <returns>Whether each member's declared order equals its position.</returns>
+        private static bool FieldsInOrder(INamedTypeSymbol symbol, MemberModel[] members)
+        {
+            int serialized = 0;
+            foreach (INamedTypeSymbol level in Levels(symbol))
+                foreach (ISymbol member in OrderedStorageMembers(level))
+                {
+                    if (!TryStorage(member, out _))
+                        continue;
+                    // A member the analysis omitted keeps the model incomplete; the remaining order still has to match.
+                    if (!members.Any(model => model.Name == member.Name))
+                        continue;
+                    uint order = Order(member) ?? (uint)serialized;
+                    if (order != (uint)serialized)
+                        return false;
+                    serialized++;
+                }
+            return true;
+        }
+
+        /// <summary>Reads a member's declared wire position.</summary>
+        /// <param name="member">The declared member.</param>
+        /// <returns>The position, or null when the member declares none.</returns>
+        private static uint? Order(ISymbol member)
+        {
+            foreach (AttributeData attribute in member.GetAttributes())
+                if (attribute.AttributeClass?.ToDisplayString() == OrderAttribute && attribute.ConstructorArguments.Length == 1)
+                    return Convert.ToUInt32(attribute.ConstructorArguments[0].Value, CultureInfo.InvariantCulture);
+            return null;
+        }
+
+        /// <summary>Builds the complete storage mirror of a reference-tracked node.</summary>
+        /// <param name="symbol">The declared payload.</param>
+        /// <param name="fields">Receives the mirror declarations in storage order, or null when they cannot be reproduced.</param>
+        /// <param name="offsets">Receives the explicit-layout offset per field, or null for sequential storage.</param>
+        /// <param name="layout">Receives the CLR layout attribute line, or null.</param>
+        private static void MirrorFields(INamedTypeSymbol symbol, out string[]? fields, out int[]? offsets, out string? layout)
+        {
+            var declarations = new List<string>();
+            var positions = new List<int>();
+            bool complete = true;
+            Collect(symbol);
+            if (!complete)
+            {
+                fields = null;
+                offsets = null;
+                layout = null;
+                return;
+            }
+            fields = declarations.ToArray();
+            offsets = positions.Any(position => position >= 0) ? positions.ToArray() : null;
+            layout = MirrorLayout(symbol);
+
+            void Collect(INamedTypeSymbol level)
+            {
+                if (level.BaseType != null && level.BaseType.SpecialType != SpecialType.System_Object)
+                    Collect(level.BaseType);
+                foreach (ISymbol member in OrderedStorageMembers(level))
+                {
+                    if (member.IsImplicitlyDeclared || member.IsStatic)
+                        continue;
+                    ITypeSymbol storage;
+                    bool isValue;
+                    ISymbol offsetOwner = member;
+                    if (member is IPropertySymbol property)
+                    {
+                        if (!IsAutoProperty(property))
+                            continue;
+                        storage = property.Type;
+                        isValue = property.Type.IsValueType;
+                        offsetOwner = level.GetMembers().OfType<IFieldSymbol>()
+                            .FirstOrDefault(field => SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, property)) ?? member;
+                    }
+                    else if (member is IFieldSymbol field)
+                    {
+                        // A fixed-size buffer is inline storage the mirror cannot spell from its field type.
+                        if (field.IsFixedSizeBuffer)
+                        {
+                            complete = false;
+                            return;
+                        }
+                        storage = field.Type;
+                        isValue = field.Type.IsValueType;
+                    }
+                    else
+                        continue;
+                    string spelling = storage is IArrayTypeSymbol { Rank: > 1 } multi
+                        ? multi.ElementType.ToDisplayString() + "[" + new string(',', multi.Rank - 1) + " ]"
+                        : storage.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    declarations.Add(spelling + (IsUnmanagedKeyword(spelling) || isValue ? string.Empty : "?") + " " + Identifier(member.Name));
+                    positions.Add(FieldOffset(offsetOwner));
+                }
+            }
+        }
+
+        /// <summary>Spells a name the way a declaration does, escaping language keywords.</summary>
+        /// <param name="name">The declared name.</param>
+        /// <returns>The identifier spelling.</returns>
+        private static string Identifier(string name)
+            => SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None
+                ? "@" + name : name;
+
+        /// <summary>Reads a field's declared explicit offset, including an auto-property's backing field.</summary>
+        /// <param name="member">The declared storage member.</param>
+        /// <returns>The offset, or minus one when none is declared.</returns>
+        private static int FieldOffset(ISymbol member)
+        {
+            foreach (AttributeData attribute in member.GetAttributes())
+                if (attribute.AttributeClass?.ToDisplayString() == FieldOffsetAttribute && attribute.ConstructorArguments.Length != 0)
+                    return Convert.ToInt32(attribute.ConstructorArguments[0].Value, CultureInfo.InvariantCulture);
+            return -1;
+        }
+
+        /// <summary>Spells the CLR layout attribute a storage replica reproduces.</summary>
+        /// <param name="type">The storage declaration.</param>
+        /// <returns>The attribute line, or null for the default layout.</returns>
+        private static string? MirrorLayout(INamedTypeSymbol type)
+        {
+            foreach (AttributeData attribute in type.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() != StructLayoutAttribute || attribute.ConstructorArguments.Length == 0)
+                    continue;
+                string kind = Convert.ToInt32(attribute.ConstructorArguments[0].Value, CultureInfo.InvariantCulture) switch
+                {
+                    0 => "Sequential",
+                    2 => "Explicit",
+                    _ => "Auto",
+                };
+                var text = new StringBuilder("[global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.")
+                    .Append(kind);
+                foreach (var argument in attribute.NamedArguments)
+                {
+                    if (argument.Value.Value is not int value || value == 0)
+                        continue;
+                    if (argument.Key == "Pack")
+                        text.Append(", Pack = ").Append(value.ToString(CultureInfo.InvariantCulture));
+                    else if (argument.Key == "Size")
+                        text.Append(", Size = ").Append(value.ToString(CultureInfo.InvariantCulture));
+                    else if (argument.Key == "CharSet")
+                        text.Append(", CharSet = (global::System.Runtime.InteropServices.CharSet)").Append(value.ToString(CultureInfo.InvariantCulture));
+                }
+                return text.Append(")]").ToString();
+            }
+            return null;
+        }
+
+        /// <summary>Recognizes the scalar spellings a mirror declares without a nullable annotation.</summary>
+        /// <param name="spelling">The type spelling.</param>
+        /// <returns>Whether the spelling names an unmanaged scalar keyword.</returns>
+        private static bool IsUnmanagedKeyword(string spelling) => spelling is "byte" or "sbyte" or "bool" or "short" or "ushort" or
+            "int" or "uint" or "long" or "ulong" or "float" or "double" or "decimal" or "char";
+
+        /// <summary>Lists the payload's base chain from the outermost base to the declaration.</summary>
+        /// <param name="symbol">The declared payload.</param>
+        /// <returns>The levels whose storage joins the record.</returns>
+        private static List<INamedTypeSymbol> Levels(INamedTypeSymbol symbol)
+        {
+            var levels = new List<INamedTypeSymbol>();
+            for (var level = symbol; level != null && level.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
+                level = level.BaseType)
+                levels.Insert(0, level);
+            return levels;
         }
 
         /// <summary>Enumerates a type's fields and auto-properties in declaration order.</summary>

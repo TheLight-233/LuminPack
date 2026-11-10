@@ -16,6 +16,7 @@ internal sealed class BinaryRenderer : IRenderer
     {
         RecordModel record => Record(record, context),
         StructModel structModel => Struct(structModel, context),
+        CircleReferenceModel circle => Circle(circle, context),
         // A Union root's payload file combines the root record with the dispatch container; UnionRenderer owns it.
         UnionModel => string.Empty,
         _ => string.Empty,
@@ -24,6 +25,8 @@ internal sealed class BinaryRenderer : IRenderer
     private static string Record(RecordModel model, RenderContext context) => Emit(model, context);
 
     private static string Struct(StructModel model, RenderContext context) => Emit(model, context);
+
+    private static string Circle(CircleReferenceModel model, RenderContext context) => Emit(model, context);
 
     private static string Emit(TypeModel model, RenderContext context)
     {
