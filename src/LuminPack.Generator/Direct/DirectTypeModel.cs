@@ -139,11 +139,15 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool Net8;
     /// <summary>Whether JSON property heads are UTF-8 string literal properties (.NET 8 and C# 11 or later) rather than arrays.</summary>
     internal readonly bool Utf8Literals;
+    /// <summary>The version-tolerant schema, or null for an ordinary record.</summary>
+    internal readonly DirectVersionSchema Version;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
-        bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals)
+        bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
+        DirectVersionSchema version)
     {
+        Version = version;
         Net8 = net8;
         Utf8Literals = utf8Literals;
         ConstructorArguments = constructorArguments;
@@ -177,7 +181,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
-        Net8 == other.Net8 && Utf8Literals == other.Utf8Literals &&
+        Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && Equals(Version, other.Version) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
@@ -210,7 +214,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             portable.Fields.Any(field => field.IsVolatile) || type is INamedTypeSymbol { IsTupleType: true }))
             portable = null;
         bool isStruct = raw || portable != null;
-        if (type == null || data.generatorType != GeneratorType.Object || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
+        bool versioned = data.generatorType == GeneratorType.VersionTolerant;
+        if (type == null || data.generatorType != GeneratorType.Object && !versioned || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
         if (data.RentPoolMethod != null || data.callBackMethods.Count != 0 || data.enableBurst)
@@ -243,7 +248,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             type.InstanceConstructors[0].DeclaredAccessibility != Accessibility.Public))
             return DirectEmission.Reject<DirectTypeModel>("constructor");
         var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !StructLayoutOption(attribute)).ToArray();
-        if (attributes.Length != 1 || !PlainPackable(attributes[0]))
+        if (attributes.Length != 1 || !(versioned ? VersionedPackable(attributes[0]) : PlainPackable(attributes[0])))
             return DirectEmission.Reject<DirectTypeModel>("type attributes");
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
         // fields, are never serialized. Any other declared member keeps the original pipeline.
@@ -258,7 +263,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if (member.GetAttributes().Any(attribute => !Foreign(attribute) &&
                     !(member is IMethodSymbol { MethodKind: MethodKind.Ordinary } && attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.MethodImplAttribute") &&
                     !(raw && member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
-                    !(member is IFieldSymbol or IPropertySymbol && attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOrderAttribute" or "LuminPack.Attribute.LuminPackIgnoreAttribute")))
+                    !(member is IFieldSymbol or IPropertySymbol && attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOrderAttribute" or "LuminPack.Attribute.LuminPackIgnoreAttribute") &&
+                    !(versioned && member is IFieldSymbol && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")))
                 return DirectEmission.Reject<DirectTypeModel>("member attributes");
             // An ignored member keeps its storage but is never serialized.
             if (member is IFieldSymbol or IPropertySymbol && member.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackIgnoreAttribute"))
@@ -295,7 +301,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string extension = LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation);
         var members = new DirectMember[data.fields.Count];
         for (int index = 0; index < members.Length; index++)
-            if ((members[index] = Member(data.fields[index], extension, compilation, metadata)) == null)
+            if ((members[index] = Member(data.fields[index], extension, compilation, metadata, versioned)) == null)
                 return DirectEmission.Reject<DirectTypeModel>("member shape");
         // A local case of an abstract packable base whose payload is raw fixed storage writes through the fixed Union cursor protocol.
         bool fixedUnionCase = !isStruct && members.All(member => member.IsFixed) && FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata);
@@ -311,7 +317,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
         // The proven object write needs .NET 8, unsafe code and a non-Unity project, as ProvenObjectWriteProjection checks.
         bool unity = metadata.IsForUnity || metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal));
-        bool proven = strings && metadata.IsNet8 && metadata.AllowUnsafe && !unity;
+        bool proven = strings && !versioned && metadata.IsNet8 && metadata.AllowUnsafe && !unity;
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
         // JSON read locals are named after the camel-cased member; the presentation renames a leading underscore or a clash.
@@ -361,11 +367,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 ? parameter.MatchingFieldName : null).ToArray();
             constructed = selected.Parameters.Select(parameter => parameter.MatchingFieldName).Where(name => name != null).ToArray();
         }
+        DirectVersionSchema version = null;
+        if (versioned && (version = DirectVersionSchema.TryCreate(data, type, metadata, members, derived, mirrored)) == null)
+            return null;
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
             fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
             members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
-            strings && !derived, metadata.IsNet8, metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10);
+            strings && !derived && !versioned, metadata.IsNet8, metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -408,6 +417,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         return root.Name is not ("LuminPack" or "System" or "Microsoft" or "Unity" or "UnityEngine" or "UnityEditor");
     }
 
+    /// <summary>Accepts <c>[LuminPackable(GeneratorType.VersionTolerant)]</c> without other arguments.</summary>
+    private static bool VersionedPackable(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE && attribute.NamedArguments.Length == 0 &&
+            attribute.ConstructorArguments.Length == 1 && attribute.ConstructorArguments[0].Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } kind &&
+            kind.GetMembers().OfType<IFieldSymbol>().Any(member => member.Name == "VersionTolerant" && member.HasConstantValue &&
+                System.Convert.ToInt64(member.ConstantValue, System.Globalization.CultureInfo.InvariantCulture) ==
+                System.Convert.ToInt64(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture));
+
     /// <summary>Accepts <c>[LuminPackOption(StructLayout = ...)]</c> without other settings.</summary>
     private static bool StructLayoutOption(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute" && attribute.ConstructorArguments.Length == 0 &&
@@ -443,9 +460,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     }
 
     /// <summary>Reduces one analyzed member to the facts of a covered storage shape.</summary>
-    private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata)
+    private static DirectMember Member(LuminDataField field, string extension, Compilation compilation, MetaInfo metadata, bool versioned = false)
     {
-        if (field.IsPrivate || field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 ||
+        if (field.IsPrivate || field.IsVolatile || field.IsCompress || field.OldNames.Length != 0 && !versioned ||
             field.Options != null && field.Options.IsDeclared || field.TypeSymbol == null || field.Identifier != field.Name ||
             !SyntaxFacts.IsValidIdentifier(field.Name) || field.Name.Any(c => c > 127))
             return DirectEmission.Reject<DirectMember>("member options");

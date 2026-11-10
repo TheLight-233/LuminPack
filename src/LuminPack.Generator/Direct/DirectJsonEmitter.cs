@@ -229,6 +229,16 @@ internal static class DirectJsonEmitter
         return body;
     }
 
+    /// <summary>Lists the former names of the members, in member order, as the original name tables number them.</summary>
+    private static IEnumerable<(string Name, int Index, string Suffix)> OldNames(DirectTypeModel model)
+    {
+        if (model.Version == null)
+            yield break;
+        for (int index = 0; index < model.Members.Length; index++)
+            for (int alias = 0; alias < model.Version.OldNames[index].Length; alias++)
+                yield return (model.Version.OldNames[index][alias], index, "Alias_" + index.ToString(CultureInfo.InvariantCulture) + "_" + alias.ToString(CultureInfo.InvariantCulture));
+    }
+
     /// <summary>The reused value's member access: a struct read through its selected constructor reaches it without the
     /// null-forgiving operator.</summary>
     private static string Value(DirectTypeModel model) => model.ConstructorArguments == null ? "value!." : "value.";
@@ -527,6 +537,27 @@ internal static class DirectJsonEmitter
             w.Close();
             w.Blank();
         }
+        var oldNames = OldNames(model).ToArray();
+        if (oldNames.Length != 0)
+        {
+            // Former member names, which reads accept beside the current names.
+            w.Line("internal static class LuminPackOldNames");
+            w.Open();
+            foreach (bool utf8 in new[] { true, false })
+            {
+                w.Line("internal static class " + (utf8 ? "Utf8" : "Utf16"));
+                w.Open();
+                foreach (var alias in oldNames)
+                    w.Line(utf8
+                        ? "internal static readonly byte[] " + alias.Suffix + " = new byte[] { " + string.Join(", ", Encoding.UTF8.GetBytes(alias.Name)) + " };"
+                        : "internal static readonly char[] " + alias.Suffix + " = new char[] { " + string.Join(", ", alias.Name.Select(c => "(char)" + ((int)c).ToString(CultureInfo.InvariantCulture))) + " };");
+                w.Close();
+                if (utf8)
+                    w.Blank();
+            }
+            w.Close();
+            w.Blank();
+        }
         w.Suppressed = !reads;
         foreach (bool utf8 in new[] { true, false })
         {
@@ -568,23 +599,26 @@ internal static class DirectJsonEmitter
     private static void Lookup(DirectTypeModel model, DirectWriter w, bool utf8)
     {
         var members = model.Members;
-        bool small = members.Length <= 8;
+        // Former names follow the members as extra candidates of the same lookup.
+        var candidates = members.Select((member, index) => (Name: member.Name, Index: index, Table: (utf8 ? "Utf8." : "Utf16.") + Member(member)))
+            .Concat(OldNames(model).Select(alias => (alias.Name, alias.Index, Table: "LuminPackOldNames." + (utf8 ? "Utf8." : "Utf16.") + alias.Suffix))).ToArray();
+        bool small = candidates.Length <= 8;
         string element = utf8 ? "byte" : "char";
         w.Line("internal static int GetJsonPropertyIndex" + (utf8 ? "Utf8" : "Utf16") + "(global::System.ReadOnlySpan<" + element + "> name)");
         var body = new List<string>();
         body.Add(small ? "switch (name.Length)" : "switch (global::LuminPack.Internal.XxHash3.Hash64" + (utf8 ? "Utf8" : "Utf16") + "(name))");
         body.Add("{");
-        var groups = members.Select((member, index) => (Member: member, Index: index, Bytes: Encoding.UTF8.GetBytes(member.Name)))
-            .GroupBy(item => small ? (ulong)(utf8 ? item.Bytes.Length : item.Member.Name.Length)
-                : utf8 ? LuminPackJsonCodeGenerator.ComputeUtf8BytesHash(item.Bytes) : LuminPackJsonCodeGenerator.ComputeUtf16Hash(item.Member.Name));
+        var groups = candidates.Select(item => (item.Name, item.Index, item.Table, Bytes: Encoding.UTF8.GetBytes(item.Name)))
+            .GroupBy(item => small ? (ulong)(utf8 ? item.Bytes.Length : item.Name.Length)
+                : utf8 ? LuminPackJsonCodeGenerator.ComputeUtf8BytesHash(item.Bytes) : LuminPackJsonCodeGenerator.ComputeUtf16Hash(item.Name));
         foreach (var group in groups)
         {
             body.Add("case " + group.Key.ToString(CultureInfo.InvariantCulture) + (small ? ":" : "UL:"));
             foreach (var item in group)
             {
-                string table = (utf8 ? "Utf8." : "Utf16.") + Member(item.Member);
+                string table = item.Table;
                 string fallback = "global::System.MemoryExtensions.SequenceEqual<" + element + ">(name, " + table + ")";
-                int length = utf8 ? item.Bytes.Length : item.Member.Name.Length;
+                int length = utf8 ? item.Bytes.Length : item.Name.Length;
                 string index = item.Index.ToString(CultureInfo.InvariantCulture);
                 if (length > (utf8 ? 16 : 8))
                 {
@@ -601,7 +635,7 @@ internal static class DirectJsonEmitter
                     for (int i = 0; i < width; i++)
                     {
                         int position = offset + i;
-                        int value = utf8 ? item.Bytes[position] : (byte)(item.Member.Name[position / 2] >> (8 * (position & 1)));
+                        int value = utf8 ? item.Bytes[position] : (byte)(item.Name[position / 2] >> (8 * (position & 1)));
                         word |= (uint)value << (8 * i);
                     }
                     condition.Append(" && ");

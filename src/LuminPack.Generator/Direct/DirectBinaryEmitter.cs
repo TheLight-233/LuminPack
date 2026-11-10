@@ -10,7 +10,7 @@ namespace LuminPack.SourceGenerator.Direct;
 /// <remarks>The text is what the original pipeline publishes for these shapes: the cursor record write with one reservation,
 /// proven fixed-field blocks with their field-wise fallbacks, checked reads with Boolean batch masks, the root container, the
 /// state entries and the payload extensions. Lines longer than the layout width are wrapped by the publication formatter.</remarks>
-internal static class DirectBinaryEmitter
+internal static partial class DirectBinaryEmitter
 {
     private const string Profile = "TLuminProfile";
     private const string Constraint = "where TLuminProfile : struct, ILuminPackOptions";
@@ -24,8 +24,9 @@ internal static class DirectBinaryEmitter
     {
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
         var members = model.Members;
-        bool genericWrite = members.Any(member => member.Kind == DirectMemberKind.Text);
-        bool genericRead = members.Any(member => !member.IsFixed);
+        // Version-tolerant roots always take the operation's profile.
+        bool genericWrite = model.Version != null || members.Any(member => member.Kind == DirectMemberKind.Text);
+        bool genericRead = model.Version != null || members.Any(member => !member.IsFixed);
         bool allFixed = !genericRead;
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         // State parameters are spelled through the imported namespace; the other helper names are qualified until presentation.
@@ -141,9 +142,14 @@ internal static class DirectBinaryEmitter
             w.Line("return;");
             w.Close();
             w.Blank();
-            w.Line("int totalLength = 1;");
-            w.Line("totalLength += " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ";");
-            w.Line("evaluator.Add(totalLength);");
+            if (model.Version != null)
+                w.Line("evaluator.Add(" + model.Version.Schema + ".Prefix.Length + " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ");");
+            else
+            {
+                w.Line("int totalLength = 1;");
+                w.Line("totalLength += " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ";");
+                w.Line("evaluator.Add(totalLength);");
+            }
             w.Close();
             w.Blank();
             w.Line(w.Preserve);
@@ -152,14 +158,15 @@ internal static class DirectBinaryEmitter
             w.Indented(() => w.Line(Constraint() + " => MeasureRecord" + suffix + "(ref evaluator, ref value);"));
         }
         w.Suppressed = false;
-        if (model.Mirror != null)
+        if ((model.Mirror ?? model.Version?.Layout) != null)
         {
-            // The root-private layout mirror that the operations reach auto-property storage through.
+            // The root-private layout mirror that the operations reach auto-property storage through; a version-tolerant record
+            // always declares it.
             w.Blank();
             w.Line(w.Preserve);
-            w.Line("private class " + model.Mirror);
+            w.Line("private class " + (model.Mirror ?? model.Version.Layout));
             w.Open();
-            foreach (string field in model.MirrorFields)
+            foreach (string field in model.MirrorFields ?? model.Version.LayoutFields)
                 w.Line("internal " + field + ";");
             w.Close();
         }
@@ -178,13 +185,23 @@ internal static class DirectBinaryEmitter
         w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
             (genericWrite ? "RootWrite<TOptions>" : "RootWrite") + "(ref state, value);"));
         w.Suppressed = !reads;
-        w.Line(inline);
-        w.Line("internal static void Read(this ref " + reader + " state, ref " + type + "? value) => " + Serializer() + "." + container + "." +
-            (genericRead ? "RootRead<" + Standard() + ">" : "RootRead") + "(ref state, ref value);");
-        w.Line(inline);
-        w.Line("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
-            (genericRead ? "RootRead<TOptions>" : "RootRead") + "(ref state, ref value);"));
+        if (model.Version != null)
+        {
+            // A version-tolerant record reads through an isolated copy of the reader state.
+            IsolatedRead("internal static void Read(this ref " + reader + " state, ref " + type + "? value)", null, Standard());
+            w.Blank();
+            IsolatedRead("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)", "where TOptions : struct, " + Options(), "TOptions");
+        }
+        else
+        {
+            w.Line(inline);
+            w.Line("internal static void Read(this ref " + reader + " state, ref " + type + "? value) => " + Serializer() + "." + container + "." +
+                (genericRead ? "RootRead<" + Standard() + ">" : "RootRead") + "(ref state, ref value);");
+            w.Line(inline);
+            w.Line("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)");
+            w.Indented(() => w.Line("where TOptions : struct, " + Options() + " => " + Serializer() + "." + container + "." +
+                (genericRead ? "RootRead<TOptions>" : "RootRead") + "(ref state, ref value);"));
+        }
         w.Suppressed = false;
         w.Close();
         w.Close();
@@ -205,8 +222,27 @@ internal static class DirectBinaryEmitter
         w.Line("public static void ReadPolymorphismValue(ref this " + reader + " reader, scoped ref " + type + "? value) => " + Serializer() +
             ".DeserializeUnion" + suffix + "(ref reader, ref value);");
         w.Suppressed = false;
+        if (model.Version != null)
+        {
+            w.Blank();
+            VersionSchemaClass(model, w);
+        }
         w.Close();
         w.Close();
+
+        void IsolatedRead(string signature, string constraint, string profile)
+        {
+            w.Line(inline);
+            w.Line(signature);
+            if (constraint != null)
+                w.Indented(() => w.Line(constraint));
+            w.Open();
+            w.Line(reader + " isolated = default;");
+            w.Line("state.CopyTo(ref isolated);");
+            w.Line(Serializer() + "." + container + ".RootRead<" + profile + ">(ref isolated, ref value);");
+            w.Line("isolated.CopyTo(ref state);");
+            w.Close();
+        }
 
         void SerializeStandard()
         {
@@ -234,6 +270,11 @@ internal static class DirectBinaryEmitter
             {
                 Method(MemberWriteBody(model, w), "RootWriteMember", true, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
                 w.Blank();
+            }
+            if (model.Version != null)
+            {
+                VersionRoots();
+                return;
             }
             var write = Mirrored(model, w, WriteBody(model, w, union: false), writes: true, union: false);
             if (model.Proven)
@@ -273,6 +314,27 @@ internal static class DirectBinaryEmitter
             w.Close();
         }
 
+        void VersionRoots()
+        {
+            // The Union payload of a version-tolerant record is the record itself; only the inline hint follows the body size.
+            var write = VersionWriteBody(model, w);
+            string writeHint = VersionWriteInline(model) ? inline : null;
+            w.Suppressed = !writes;
+            Method(write, "RootWrite", true, "(scoped ref " + writer + " writer, " + type + "? input)", writeHint);
+            w.Blank();
+            w.Suppressed = !reads;
+            Method(VersionReadBody(model, w), "RootRead", true, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", null);
+            w.Blank();
+            w.Suppressed = !writes;
+            Method(VersionWriteBody(model, w), "RootWriteUnion", true, "(scoped ref " + writer + " writer, " + type + "? input)", writeHint);
+            w.Blank();
+            w.Suppressed = !reads;
+            Method(VersionReadBody(model, w), "RootReadUnion", true, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
+                members.All(member => member.IsFixed) ? null : w.MethodImpl("NoInlining"));
+            w.Suppressed = false;
+            w.Close();
+        }
+
         void Method(List<string> body, string name, bool generic, string parameters, string attribute, string returns = "void")
         {
             w.Line(w.Preserve);
@@ -288,6 +350,8 @@ internal static class DirectBinaryEmitter
                     w.Blank();
                 else if (line == "}")
                     w.Close();
+                else if (line == "};")
+                    w.Close(";");
                 else if (line == "{")
                     w.Open();
                 else if (line.StartsWith("\t", StringComparison.Ordinal))
