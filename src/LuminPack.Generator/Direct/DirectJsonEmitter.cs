@@ -29,8 +29,16 @@ internal static class DirectJsonEmitter
         string jsonWriter = w.A("LuminPackJsonWriter"), jsonReader = w.A("LuminPackJsonReader"), options = w.A("ILuminPackOptions");
         string serializer = w.A("LuminPackSerializer"), standard = w.A("LuminPackUtf16LengthOptions");
         string constraint = "where TLuminProfile : struct, " + options;
+        // Every method of a generic definition repeats its type parameters first, then the operation's profile.
+        string Arguments(params string[] extra) => model.TypeArguments(extra);
+        string TypeConstraint() => model.TypeConstraintText;
+        string ConstraintLine(bool profile) => profile
+            ? (TypeConstraint().Length == 0 ? constraint : TypeConstraint() + " " + constraint)
+            : TypeConstraint();
+        string OptionsConstraint() => TypeConstraint().Length == 0
+            ? "where TOptions : struct, " + options : TypeConstraint() + " where TOptions : struct, " + options;
         string inline = w.MethodImpl("AggressiveInlining");
-        string helper = "global::LuminPack.Generated." + model.Extension + "." + model.JsonHelper;
+        string helper = "global::LuminPack.Generated." + model.Extension + "." + model.JsonHelper + model.TypeParameterList;
         // A struct is passed by reference without a null annotation.
         string nullable = model.IsStruct ? string.Empty : "?", input = model.IsStruct ? "scoped in " : string.Empty, pass = model.IsStruct ? "in " : string.Empty;
 
@@ -42,8 +50,8 @@ internal static class DirectJsonEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(w.Preserve);
-        w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + jsonWriter + " writer, " + input + type + nullable + " input)");
-        w.Indented(() => w.Line(constraint));
+        w.Line("internal static void RootWriteJson" + Arguments(Profile) + "(scoped ref " + jsonWriter + " writer, " + input + type + nullable + " input)");
+        w.Indented(() => w.Line(ConstraintLine(true)));
         w.Open();
         var names = new JsonNames();
         var writeBody = WriteBody(model, w, helper, names);
@@ -53,8 +61,8 @@ internal static class DirectJsonEmitter
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
-        w.Line("internal static void RootReadJson<" + Profile + ">(scoped ref " + jsonReader + " reader, scoped ref " + type + nullable + " value)");
-        w.Indented(() => w.Line(constraint));
+        w.Line("internal static void RootReadJson" + Arguments(Profile) + "(scoped ref " + jsonReader + " reader, scoped ref " + type + nullable + " value)");
+        w.Indented(() => w.Line(ConstraintLine(true)));
         w.Open();
         ReadBody(model, w, helper);
         w.Close();
@@ -73,22 +81,33 @@ internal static class DirectJsonEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(inline);
-        w.Line("internal static void Write(this ref " + jsonWriter + " state, in " + type + nullable + " value) => " + serializer + "." + container +
-            ".RootWriteJson<" + standard + ">(ref state, " + pass + "value);");
+        string write = "internal static void Write" + Arguments() + "(this ref " + jsonWriter + " state, in " + type + nullable + " value)";
+        string writeCall = serializer + "." + container + ".RootWriteJson" + model.TypeArguments(standard) + "(ref state, " + pass + "value);";
+        if (TypeConstraint().Length == 0)
+            w.Line(write + " => " + writeCall);
+        else
+        {
+            w.Line(write);
+            w.Indented(() => w.Line(TypeConstraint() + " => " + writeCall));
+        }
         w.Line(inline);
-        w.Line("internal static void Write<TOptions>(this ref " + jsonWriter + " state, in " + type + nullable + " value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + options + " => " + serializer + "." + container + ".RootWriteJson<TOptions>(ref state, " + pass + "value);"));
+        w.Line("internal static void Write" + Arguments("TOptions") + "(this ref " + jsonWriter + " state, in " + type + nullable + " value)");
+        w.Indented(() => w.Line(OptionsConstraint() + " => " + serializer + "." + container + ".RootWriteJson" + model.TypeArguments("TOptions") +
+            "(ref state, " + pass + "value);"));
         w.Suppressed = !reads;
         foreach (string profile in new[] { standard, "TOptions" })
         {
+            bool profiled = profile == "TOptions";
             w.Line(inline);
-            w.Line("internal static void Read" + (profile == "TOptions" ? "<TOptions>" : string.Empty) + "(this ref " + jsonReader + " state, ref " + type + nullable + " value)");
-            if (profile == "TOptions")
-                w.Indented(() => w.Line("where TOptions : struct, " + options));
+            w.Line("internal static void Read" + (profiled ? Arguments(profile) : Arguments()) + "(this ref " + jsonReader + " state, ref " + type + nullable + " value)");
+            if (profiled)
+                w.Indented(() => w.Line(OptionsConstraint()));
+            else if (TypeConstraint().Length != 0)
+                w.Indented(() => w.Line(TypeConstraint()));
             w.Open();
             w.Line("if (state.CurrentTokenType == " + jsonReader + ".JsonTokenType.None && !state.Read<" + profile + ">())");
             w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowFormatException(\"JSON input does not contain a value.\");"));
-            w.Line(serializer + "." + container + ".RootReadJson<" + profile + ">(ref state, ref value);");
+            w.Line(serializer + "." + container + ".RootReadJson" + model.TypeArguments(profile) + "(ref state, ref value);");
             w.Line("state.CompleteValue();");
             w.Close();
             w.Blank();
@@ -102,7 +121,9 @@ internal static class DirectJsonEmitter
         w.Open();
         w.Line("internal static partial class " + model.Extension);
         w.Open();
-        w.Line("internal static class " + model.JsonHelper);
+        w.Line("internal static class " + model.JsonHelper + Arguments());
+        if (TypeConstraint().Length != 0)
+            w.Indented(() => w.Line(TypeConstraint()));
         w.Open();
         NameTables(model, w, reads);
         w.Close();
@@ -111,14 +132,23 @@ internal static class DirectJsonEmitter
 
         void Entry(string prefix, string parameters, string root, string arguments)
         {
+            string name = prefix + (model.UniqueEntries ? "_" + readable : string.Empty);
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + prefix + (model.UniqueEntries ? "_" + readable : string.Empty) + parameters + " => " + container + "." + root + "<" + standard + ">(" + arguments + ");");
+            string standardSignature = "internal static void " + name + Arguments() + parameters;
+            string standardCall = container + "." + root + model.TypeArguments(standard) + "(" + arguments + ");";
+            if (TypeConstraint().Length == 0)
+                w.Line(standardSignature + " => " + standardCall);
+            else
+            {
+                w.Line(standardSignature);
+                w.Indented(() => w.Line(TypeConstraint() + " => " + standardCall));
+            }
             w.Blank();
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + prefix + (model.UniqueEntries ? "_" + readable : string.Empty) + "<" + Profile + ">" + parameters);
-            w.Indented(() => w.Line(constraint + " => " + container + "." + root + "<" + Profile + ">(" + arguments + ");"));
+            w.Line("internal static void " + name + Arguments(Profile) + parameters);
+            w.Indented(() => w.Line(ConstraintLine(true) + " => " + container + "." + root + model.TypeArguments(Profile) + "(" + arguments + ");"));
             w.Blank();
         }
     }
@@ -259,6 +289,15 @@ internal static class DirectJsonEmitter
             if (block)
                 body.Add("");
             body.Add("writer.SetFirstElement(true);");
+            // A type-parameter member is written by the generic serializer from a copy, without a null branch.
+            if (member.Kind == DirectMemberKind.Parameter)
+            {
+                string temp = names.Next("temp");
+                body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
+                body.Add(w.A("LuminPackSerializer") + ".SerializeJson<" + member.Scalar + ", " + Profile + ">(ref writer, in " + temp + ");");
+                body.Add("");
+                continue;
+            }
             if (member.Raw)
             {
                 // A small declared struct copies its object body in place; a built-in or larger one keeps its formatter call.
@@ -379,12 +418,17 @@ internal static class DirectJsonEmitter
         var body = new List<string>();
         if (model.IsStruct)
         {
-            // A struct reuses its existing storage when any reference member is already set.
+            // A struct reuses its existing storage when any reference member is already set. A type parameter may hold a
+            // reference, so its check keeps a runtime value-type test.
             var referenced = members.Where(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.Object or
-                DirectMemberKind.Array or DirectMemberKind.List).ToArray();
+                DirectMemberKind.Array or DirectMemberKind.List || member.Kind == DirectMemberKind.Parameter).ToArray();
             body.Add("bool reuseExisting = " + (referenced.Length == 0 ? "false" : string.Join(" || ", referenced.Select(member =>
+                (member.Kind == DirectMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter
+                    ? "(!typeof(" + member.Scalar + ").IsValueType && (object? )"
+                    : string.Empty) +
                 (member.Mirrored ? "LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value)." : "value.") +
-                member.Name + " is not null"))) + ";");
+                member.Name + " is not null" +
+                (member.Kind == DirectMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter ? ")" : string.Empty))) + ";");
         }
         else
         {
@@ -423,7 +467,8 @@ internal static class DirectJsonEmitter
         {
             body.Add("// Temp vars");
             foreach (var member in members)
-                body.Add(member.TypeName + (member.IsFixed ? string.Empty : "?") + " " + Camel(member.Name) + "Temp = default;");
+                body.Add(member.TypeName + (member.IsFixed || member.Kind == DirectMemberKind.Parameter && !member.ReferencePayload ? string.Empty : "?") +
+                    " " + Camel(member.Name) + "Temp = default;");
             if (model.Mirror != null && members.Any(member => member.Mirrored))
                 body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                     (model.IsStruct ? "value" : "value!") + ");");
@@ -480,7 +525,13 @@ internal static class DirectJsonEmitter
                 caseLines.Add("if (reuseExisting)");
                 caseLines.Add("\t" + target + " = " + (model.Mirror == null || !model.Members.Any(member => member.Mirrored) ? Value(model) : "reuseLocal.") + member.Name + ";");
             }
-            if (member.Raw)
+            if (member.Kind == DirectMemberKind.Parameter)
+            {
+                // A type-parameter member is read by the generic serializer, which owns its null handling.
+                caseLines.Add(w.A("LuminPackSerializer") + ".DeserializeJson<" + member.Scalar + ", " + Profile + ">(ref reader, ref " + target + ");");
+                caseLines.Add("break;");
+            }
+            else if (member.Raw)
             {
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("break;");
@@ -738,25 +789,33 @@ internal static class DirectJsonEmitter
             return;
         }
         w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions")));
+        // The ordered-name locals avoid the definition's type parameters, whose spelling the published text strips to the
+        // leading-underscore form shown below.
+        var identifiers = new System.Collections.Generic.HashSet<string>(model.TypeParameters.Select(name => name.TrimStart('@')), StringComparer.Ordinal);
+        string utf8Local = "luminOrderedNameUtf8", utf16Local = "luminOrderedNameUtf16";
+        while (!identifiers.Add("__" + utf8Local))
+            utf8Local += "_";
+        while (!identifiers.Add("__" + utf16Local))
+            utf16Local += "_";
         var body = new List<string>
         {
-            "byte[] luminOrderedNameUtf8;",
-            "char[] luminOrderedNameUtf16;",
+            "byte[] " + utf8Local + ";",
+            "char[] " + utf16Local + ";",
             "switch (index)",
             "{",
         };
         for (int index = 0; index < members.Length; index++)
         {
             body.Add("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
-            body.Add("\tluminOrderedNameUtf8 = Utf8." + Member(members[index]) + ";");
-            body.Add("\tluminOrderedNameUtf16 = Utf16." + Member(members[index]) + ";");
+            body.Add("\t" + utf8Local + " = Utf8." + Member(members[index]) + ";");
+            body.Add("\t" + utf16Local + " = Utf16." + Member(members[index]) + ";");
             body.Add("\tbreak;");
         }
         body.Add("default:");
         body.Add("\treturn false;");
         body.Add("}");
         body.Add("");
-        body.Add("return reader.TryReadPropertyName<" + Profile + ">(luminOrderedNameUtf8, luminOrderedNameUtf16);");
+        body.Add("return reader.TryReadPropertyName<" + Profile + ">(" + utf8Local + ", " + utf16Local + ");");
         w.Open();
         Lines(w, body);
         w.Close();
