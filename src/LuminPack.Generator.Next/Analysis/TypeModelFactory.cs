@@ -6,8 +6,10 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
 
@@ -181,13 +183,23 @@ internal static class TypeModelFactory
                 }
                 case PayloadKind.Union:
                 {
-                    UnionCaseModel[] cases = UnionCases(symbol, issues);
+                    var declared = UnionMembers(symbol, issues);
+                    bool wide = HasAttribute(symbol, WideTagAttribute) || OptionSwitch(symbol, "WideTag") ||
+                        declared.Any(item => item.Tag >= 250);
+                    HashSet<ITypeSymbol> fixedCases = FixedUnionCases(symbol, declared, issues);
+                    UnionCaseModel[] cases = UnionCases(symbol, declared, fixedCases, depth, issues, path, out bool readGeneric);
                     if (cases.Length == 0)
                         issues.Add("the Union root declares no cases");
-                    bool wide = HasAttribute(symbol, WideTagAttribute) || OptionSwitch(symbol, "WideTag");
+                    UnionDispatchTier tier = UnionTier(symbol, declared);
+                    int encoding = (int)policy.Strings.Encoding, recording = (int)policy.Strings.Recording;
                     return new UnionModel(identity, accessibility, policy, constraints, cases,
-                        isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, slotSuffix: SlotSuffix(identity),
-                        tier: UnionDispatchTier.Virtual);
+                        isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: SlotSuffix(identity),
+                        tier: tier, tierCases: TierCases(declared, tier), tierSealed: TierSealed(declared, tier),
+                        cursor: fixedCases.Count != 0, readGeneric: readGeneric, chain: Chain(symbol), @namespace: identity.Namespace,
+                        binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
+                        canonical: CanonicalUnionProfiles(),
+                        standardBinary: UnionProfileAlias(encoding, recording),
+                        standardJson: UnionProfileAlias(encoding, recording));
                 }
                 case PayloadKind.CircleReference:
                 {
@@ -621,13 +633,13 @@ internal static class TypeModelFactory
             return new PayloadMember(name, storage, policy, Reference(type), ShapeOf(nested.Model), nested.Model);
         }
 
-        /// <summary>Builds the Union cases declared on a root.</summary>
+        /// <summary>Reads the declared Union cases in declaration order.</summary>
         /// <param name="symbol">The Union root.</param>
         /// <param name="issues">Receives invalid case declarations.</param>
-        /// <returns>The cases in tag order.</returns>
-        private static UnionCaseModel[] UnionCases(INamedTypeSymbol symbol, List<string> issues)
+        /// <returns>The declared tag and case type of each attribute.</returns>
+        private static List<(int Tag, INamedTypeSymbol Type)> UnionMembers(INamedTypeSymbol symbol, List<string> issues)
         {
-            var cases = new List<UnionCaseModel>();
+            var cases = new List<(int Tag, INamedTypeSymbol Type)>();
             var tags = new HashSet<int>();
             foreach (var attribute in symbol.GetAttributes().Where(item => item.AttributeClass?.ToDisplayString() == UnionAttribute))
             {
@@ -651,17 +663,434 @@ internal static class TypeModelFactory
                         caseType.ToDisplayString() + "', which has no modeled identity");
                     continue;
                 }
+                cases.Add((tag, caseType));
+            }
+            return cases;
+        }
+
+        /// <summary>Models each declared case: its own read entry, read profile, sealing, cursor and expanded payload.</summary>
+        /// <param name="root">The Union root.</param>
+        /// <param name="declared">The declared tag and case type of each attribute.</param>
+        /// <param name="fixedCases">The cases whose complete fixed payload uses the returning cursor kernel.</param>
+        /// <param name="depth">The nested payload depth.</param>
+        /// <param name="issues">Receives invalid case declarations.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
+        /// <param name="readGeneric">Receives whether any case read entry takes the operation's profile.</param>
+        /// <returns>The modeled cases.</returns>
+        private UnionCaseModel[] UnionCases(INamedTypeSymbol root, List<(int Tag, INamedTypeSymbol Type)> declared,
+            HashSet<ITypeSymbol> fixedCases, int depth, List<string> issues, Path path, out bool readGeneric)
+        {
+            readGeneric = false;
+            var cases = new List<UnionCaseModel>(declared.Count);
+            var symbols = declared.Select(item => item.Type).ToArray();
+            foreach (var (tag, caseType) in declared)
+            {
+                if (caseType.TypeKind != TypeKind.Class || caseType.IsAbstract || caseType.IsGenericType || caseType.IsUnboundGenericType)
+                {
+                    issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " names the case '" +
+                        caseType.ToDisplayString() + "', which is not an ordinary class record");
+                    continue;
+                }
+                bool ownEntry = ReadsOwnUnionEntry(caseType);
+                ModelResult analyzed = Analyze(caseType, 0, path);
+                TypeModel? caseModel = analyzed.Model;
+                bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
+                if (!ownEntry && (caseModel == null || !analyzed.IsComplete || caseModel is UnionModel || caseModel is StructModel ||
+                    caseModel.Members.Length == 0 || caseModel.Members.Any(member => member.Mirrored) ||
+                    caseModel.Members.Any(member => member is not ScalarMember) || SelectedConstructor(caseType)))
+                {
+                    issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " case read: '" +
+                        caseType.ToDisplayString() + "' is not a fixed record this pipeline expands");
+                    caseReadGeneric = true;
+                }
+                readGeneric |= caseReadGeneric;
+                bool sealedCase = root.TypeKind == TypeKind.Class && !HasDerivedCase(symbols, caseType.OriginalDefinition);
                 try
                 {
-                    cases.Add(new UnionCaseModel(tag, Identity(caseType), UnionCaseRead.OwnEntry, caseType.IsSealed, fixedCursor: false));
+                    string globalName = caseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    cases.Add(new UnionCaseModel(tag, Identity(caseType),
+                        ownEntry ? UnionCaseRead.OwnEntry : UnionCaseRead.ExpandedFixed, ownEntry, caseReadGeneric, sealedCase,
+                        fixedCases.Contains(caseType), caseModel, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)),
+                        Chain(caseType), NamespaceOf(caseType)));
                 }
                 catch (NotSupportedException error)
                 {
                     issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + ": " + error.Message);
                 }
             }
-            cases.Sort((left, right) => left.Tag.CompareTo(right.Tag));
             return cases.ToArray();
+        }
+
+        /// <summary>Whether another declared case derives from or implements the case definition.</summary>
+        /// <param name="cases">The declared case symbols.</param>
+        /// <param name="definition">The case definition.</param>
+        /// <returns>Whether a derived case exists.</returns>
+        private static bool HasDerivedCase(INamedTypeSymbol[] cases, INamedTypeSymbol definition)
+        {
+            foreach (var item in cases)
+            {
+                if (SymbolEqualityComparer.Default.Equals(item.OriginalDefinition, definition))
+                    continue;
+                if (UnionRootMatch(item, definition) != null)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Finds the base or interface of a case that is the given root definition.</summary>
+        /// <param name="member">The declared case.</param>
+        /// <param name="root">The union root definition.</param>
+        /// <returns>The matched base or interface, or null.</returns>
+        private static INamedTypeSymbol? UnionRootMatch(INamedTypeSymbol member, INamedTypeSymbol root)
+        {
+            if (root.TypeKind == TypeKind.Class)
+            {
+                for (var current = member.BaseType; current != null; current = current.BaseType)
+                    if (SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, root))
+                        return current;
+                return null;
+            }
+            foreach (var current in member.AllInterfaces)
+                if (SymbolEqualityComparer.Default.Equals(current.OriginalDefinition, root))
+                    return current;
+            return null;
+        }
+
+        /// <summary>Whether the case is a local reference type with a variable payload, whose binary read entry the dispatch
+        /// calls instead of expanding its members.</summary>
+        /// <param name="type">The concrete case.</param>
+        /// <returns>Whether the case owns its Union read entry.</returns>
+        private bool ReadsOwnUnionEntry(INamedTypeSymbol type)
+            => type is { IsReferenceType: true, IsAbstract: false, TypeKind: TypeKind.Class } &&
+               SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) &&
+               !ContainsTypeParameter(type) && GenerationMode(type) != "Custom" && HasVariablePayload(type);
+
+        /// <summary>Whether some instance field or property of the case or its bases is not unmanaged storage.</summary>
+        /// <param name="type">The concrete case.</param>
+        /// <returns>Whether the case payload is variable.</returns>
+        private static bool HasVariablePayload(INamedTypeSymbol type)
+        {
+            for (var current = type; current != null && current.SpecialType != SpecialType.System_Object; current = current.BaseType)
+                foreach (var member in current.GetMembers())
+                {
+                    if (member.IsStatic || member.IsImplicitlyDeclared)
+                        continue;
+                    if (member is IFieldSymbol field && !field.Type.IsUnmanagedType)
+                        return true;
+                    if (member is IPropertySymbol { IsIndexer: false } property && !property.Type.IsUnmanagedType)
+                        return true;
+                }
+            return false;
+        }
+
+        /// <summary>Whether a case's binary read entry takes the operation's profile.</summary>
+        /// <param name="model">The analyzed case.</param>
+        /// <returns>Whether the case read is generic.</returns>
+        private static bool NeedsReadProfile(TypeModel model) => model switch
+        {
+            RecordModel record => record.Versioned || ProfilePayload(record) ||
+                record.Members.Any(member => member is not (ScalarMember or PayloadMember { Shape: PayloadShape.Inline })) ||
+                InlineArray(record) || InlineList(record),
+            _ => true,
+        };
+
+        /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile.</summary>
+        /// <param name="model">The record model.</param>
+        /// <returns>Whether the profile is required.</returns>
+        private static bool ProfilePayload(TypeModel model) => model.Members.Any(member => member switch
+        {
+            TextMember or TypeParameterMember => true,
+            CollectionMember { Scalar: "string" } => true,
+            CollectionMember collection => collection.Nested != null && ProfilePayload(collection.Nested),
+            DictionaryMember dictionary => dictionary.KeyText || dictionary.ValueText,
+            PayloadMember { Shape: PayloadShape.Inline, Nested: { } nested } => ProfilePayload(nested),
+            PayloadMember { Shape: PayloadShape.ReferenceTracked } => true,
+            _ => false,
+        });
+
+        /// <summary>Whether an array inside an inline object makes the parent read root generic.</summary>
+        /// <param name="model">The record model.</param>
+        /// <returns>Whether such an array exists.</returns>
+        private static bool InlineArray(TypeModel model) => model.Members.Any(member =>
+            member is PayloadMember { Shape: PayloadShape.Inline, Nested: { } nested } &&
+            (nested.Members.Any(item => item is CollectionMember { Kind: CollectionKind.Array }) || InlineArray(nested)));
+
+        /// <summary>Whether a list inside an inline object makes the parent read root generic.</summary>
+        /// <param name="model">The record model.</param>
+        /// <returns>Whether such a list exists.</returns>
+        private static bool InlineList(TypeModel model) => model.Members.Any(member =>
+            member is PayloadMember { Shape: PayloadShape.Inline, Nested: { } nested } &&
+            (nested.Members.Any(item => item is CollectionMember { Kind: CollectionKind.List }) || InlineList(nested)));
+
+        /// <summary>Lists the partial declarations from the outermost containing type to the given type.</summary>
+        /// <param name="type">The declared type.</param>
+        /// <returns>The partial declaration lines.</returns>
+        private static string[] Chain(INamedTypeSymbol type)
+        {
+            var chain = new List<string>();
+            for (var current = type; current != null; current = current.ContainingType)
+                chain.Insert(0, UnionDeclaration(current));
+            return chain.ToArray();
+        }
+
+        /// <summary>Spells one partial declaration of a containing chain.</summary>
+        /// <param name="type">The declared type.</param>
+        /// <returns>The partial declaration line.</returns>
+        private static string UnionDeclaration(INamedTypeSymbol type)
+        {
+            string accessibility = type.DeclaredAccessibility switch
+            {
+                Accessibility.Public => "public ",
+                Accessibility.Internal => "internal ",
+                Accessibility.Private => "private ",
+                Accessibility.Protected => "protected ",
+                Accessibility.ProtectedAndInternal => "private protected ",
+                Accessibility.ProtectedOrInternal => "protected internal ",
+                _ => string.Empty,
+            };
+            string name = SyntaxFacts.GetKeywordKind(type.Name) == SyntaxKind.None ? type.Name : "@" + type.Name;
+            return accessibility + "partial " + (type.TypeKind == TypeKind.Interface ? "interface " : "class ") + name;
+        }
+
+        /// <summary>Spells a type's namespace, or null in the global namespace.</summary>
+        /// <param name="type">The declared type.</param>
+        /// <returns>The namespace, or null.</returns>
+        private static string? NamespaceOf(INamedTypeSymbol type)
+            => type.ContainingNamespace == null || type.ContainingNamespace.IsGlobalNamespace
+                ? null : type.ContainingNamespace.ToDisplayString();
+
+        /// <summary>Selects the compiled dispatch tier of a local class Union root.</summary>
+        /// <param name="root">The Union root.</param>
+        /// <param name="declared">The declared cases.</param>
+        /// <returns>The selected tier.</returns>
+        private UnionDispatchTier UnionTier(INamedTypeSymbol root, List<(int Tag, INamedTypeSymbol Type)> declared)
+        {
+            if (root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } || !CanGeneratePartial(root))
+                return UnionDispatchTier.Virtual;
+            if (declared.Count == 0 || Options.Net8 && declared.Count > 4)
+                return UnionDispatchTier.Virtual;
+            var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach (var item in declared.OrderBy(member => member.Tag))
+            {
+                if (item.Type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } ||
+                    !CanGeneratePartial(item.Type) || !seen.Add(item.Type.OriginalDefinition))
+                    return UnionDispatchTier.Virtual;
+            }
+            if (Options.Net8 && Options.RegisterMode == RegisterMode.Disabled && declared.Count == 1 &&
+                declared[0].Type.IsSealed && ClosedUnion(root))
+                return UnionDispatchTier.ExactType;
+            return UnionDispatchTier.ExactPatterns;
+        }
+
+        /// <summary>Lists the exact tier cases in tag order, or nothing for the virtual tier.</summary>
+        /// <param name="declared">The declared cases.</param>
+        /// <param name="tier">The selected tier.</param>
+        /// <returns>The fully qualified exact case types.</returns>
+        private static string[] TierCases(List<(int Tag, INamedTypeSymbol Type)> declared, UnionDispatchTier tier)
+            => tier == UnionDispatchTier.Virtual
+                ? Array.Empty<string>()
+                : declared.OrderBy(item => item.Tag).Select(item => item.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).ToArray();
+
+        /// <summary>Lists whether each exact tier case is declared sealed, or nothing for the virtual tier.</summary>
+        /// <param name="declared">The declared cases.</param>
+        /// <param name="tier">The selected tier.</param>
+        /// <returns>The sealed flags in tag order.</returns>
+        private static bool[] TierSealed(List<(int Tag, INamedTypeSymbol Type)> declared, UnionDispatchTier tier)
+            => tier == UnionDispatchTier.Virtual
+                ? Array.Empty<bool>()
+                : declared.OrderBy(item => item.Tag).Select(item => item.Type.IsSealed).ToArray();
+
+        /// <summary>Checks that no other assembly can add a case to the root.</summary>
+        /// <param name="root">The Union root.</param>
+        /// <returns>Whether every implementation must be declared in this compilation.</returns>
+        private bool ClosedUnion(INamedTypeSymbol root)
+        {
+            if (OptionSwitch(root, "SingleImplementation") || HasAttribute(root, "LuminPack.Attribute.LuminPackSingleImplementationAttribute"))
+                return true;
+            if (_compilation.Assembly.GetAttributes().Any(attribute =>
+                    attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.InternalsVisibleToAttribute"))
+                return false;
+            for (var current = root; current != null; current = current.ContainingType)
+                if (current.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal))
+                    return true;
+            return root.InstanceConstructors.All(constructor =>
+                constructor.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal));
+        }
+
+        /// <summary>Lists the cases whose complete fixed payload uses the returning cursor kernel.</summary>
+        /// <param name="root">The Union root.</param>
+        /// <param name="declared">The declared cases.</param>
+        /// <param name="issues">Receives the invalid declarations of the root.</param>
+        /// <returns>The eligible cases, or empty when the root keeps the original protocol.</returns>
+        private HashSet<ITypeSymbol> FixedUnionCases(INamedTypeSymbol root, List<(int Tag, INamedTypeSymbol Type)> declared, List<string> issues)
+        {
+            var cases = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+            if (issues.Count != 0 || root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
+                !IsLocal(root) || GenerationMode(root) != "Object" || HasAttribute(root, WideTagAttribute) ||
+                OptionSwitch(root, "WideTag") || declared.Any(item => item.Tag >= 250))
+                return cases;
+            foreach (var item in declared.OrderBy(member => member.Tag))
+                if (item.Type is { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } &&
+                    CanGeneratePartial(item.Type) && CanUseCursorPayload(item.Type))
+                    cases.Add(item.Type);
+            return cases;
+        }
+
+        /// <summary>Whether a case payload is entirely public raw fields, as the returning cursor kernel requires.</summary>
+        /// <param name="type">The concrete case.</param>
+        /// <returns>Whether the case can use the shared fixed write body.</returns>
+        private bool CanUseCursorPayload(INamedTypeSymbol type)
+        {
+            if (type is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } || !IsLocal(type))
+                return false;
+            bool hasRoot = false;
+            for (var parent = type.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object; parent = parent.BaseType)
+            {
+                if (parent.IsGenericType)
+                    return false;
+                hasRoot |= parent.IsAbstract && IsLocal(parent) && IsPackable(parent);
+            }
+            if (!hasRoot)
+                return false;
+            int fields = 0;
+            var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+            for (var level = type; level != null && level.SpecialType != SpecialType.System_Object; level = level.BaseType)
+            {
+                if (GenerationMode(level) != "Object")
+                    return false;
+                foreach (var member in level.GetMembers())
+                {
+                    if (member is IMethodSymbol method && method.GetAttributes().Any(attribute =>
+                            attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOnSerializingAttribute" or
+                                "LuminPack.Attribute.LuminPackOnSerializedAttribute"))
+                        return false;
+                    if (member.IsStatic || member.IsImplicitlyDeclared)
+                        continue;
+                    if (member is IPropertySymbol)
+                        return false;
+                    if (member is not IFieldSymbol field)
+                        continue;
+                    if (field.DeclaredAccessibility != Accessibility.Public || field.IsVolatile ||
+                        field.GetAttributes().Any(attribute =>
+                            attribute.AttributeClass?.ContainingNamespace.ToDisplayString() == "LuminPack.Attribute"))
+                        return false;
+                    if (!HasRawContract(field.Type, visited))
+                        return false;
+                    fields++;
+                }
+            }
+            return fields != 0;
+        }
+
+        /// <summary>Whether the complete storage of a field type is copied as raw bytes without a nested formatter boundary.</summary>
+        /// <param name="type">The field type.</param>
+        /// <param name="visited">The finite storage already inspected.</param>
+        /// <returns>Whether the type is raw unmanaged storage.</returns>
+        private static bool HasRawContract(ITypeSymbol type, HashSet<ITypeSymbol> visited)
+        {
+            if (type.NullableAnnotation == NullableAnnotation.Annotated || !type.IsUnmanagedType || ContainsTypeParameter(type))
+                return false;
+            if (!visited.Add(type))
+                return true;
+            if (type is not INamedTypeSymbol named)
+                return true;
+            if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T || GenerationMode(named) != "Object" ||
+                HasAttribute(named, UnionAttribute) || HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute"))
+                return false;
+            return named.TypeKind != TypeKind.Struct || named.GetMembers().OfType<IFieldSymbol>()
+                .Where(field => !field.IsStatic).All(field => HasRawContract(field.Type, visited));
+        }
+
+        /// <summary>Whether the type is declared in this compilation and can receive partial members.</summary>
+        /// <param name="type">The candidate type.</param>
+        /// <returns>Whether partial dispatch can be emitted into it.</returns>
+        private bool IsLocal(INamedTypeSymbol type)
+            => SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) && CanGeneratePartial(type);
+
+        /// <summary>Whether every declaration of the type and its containing types is partial source.</summary>
+        /// <param name="type">The candidate type.</param>
+        /// <returns>Whether a partial declaration can be added.</returns>
+        private static bool CanGeneratePartial(INamedTypeSymbol type)
+        {
+            for (var current = type; current != null; current = current.ContainingType)
+            {
+                if (current.DeclaringSyntaxReferences.Length == 0)
+                    return false;
+                foreach (var reference in current.DeclaringSyntaxReferences)
+                    if (reference.GetSyntax() is not TypeDeclarationSyntax declaration ||
+                        !declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
+                        return false;
+            }
+            return true;
+        }
+
+        /// <summary>Lists the compiled binary or JSON slots of a declared profile in profile order.</summary>
+        /// <param name="json">Whether only the JSON encoding selects a slot.</param>
+        /// <param name="declaredEncoding">The declared string encoding.</param>
+        /// <param name="declaredRecording">The declared string recording the slot family compares against.</param>
+        /// <returns>The slots.</returns>
+        private static UnionSlotModel[] UnionSlots(bool json, int declaredEncoding, int declaredRecording)
+        {
+            var slots = new List<UnionSlotModel>();
+            foreach (var (encoding, recording) in UnionProfiles(json))
+            {
+                string identity = UnionProfileIdentity(encoding, recording);
+                slots.Add(new UnionSlotModel(encoding == declaredEncoding && recording == declaredRecording ? string.Empty : "_Options_" + identity,
+                    UnionProfileAlias(encoding, recording), identity, encoding, recording));
+            }
+            return slots.ToArray();
+        }
+
+        /// <summary>Lists the finite profile combinations in the legacy slot order.</summary>
+        /// <param name="json">Whether only the JSON encoding selects a slot.</param>
+        /// <returns>The encoding and recording pairs.</returns>
+        private static IEnumerable<(int Encoding, int Recording)> UnionProfiles(bool json)
+        {
+            for (int encoding = 0; encoding != 2; encoding++)
+                for (int recording = 0; recording != (json ? 1 : 2); recording++)
+                    yield return (encoding, recording);
+            if (!json)
+                for (int encoding = 0; encoding != 2; encoding++)
+                    yield return (encoding, 2);
+        }
+
+        /// <summary>Spells the stable identity of one canonical Union profile.</summary>
+        /// <param name="encoding">The string encoding.</param>
+        /// <param name="recording">The string recording.</param>
+        /// <returns>The profile identity.</returns>
+        private static string UnionProfileIdentity(int encoding, int recording) =>
+            "E" + encoding.ToString(CultureInfo.InvariantCulture) + "R" + recording.ToString(CultureInfo.InvariantCulture) +
+            "F71P255D1024V0";
+
+        /// <summary>The imported string options type of a profile.</summary>
+        /// <param name="encoding">The string encoding.</param>
+        /// <param name="recording">The string recording.</param>
+        /// <returns>The imported alias name.</returns>
+        private static string UnionProfileAlias(int encoding, int recording) => recording switch
+        {
+            1 => encoding == 0 ? "LuminPackUtf8TokenOptions" : "LuminPackUtf16TokenOptions",
+            2 => encoding == 0 ? "LuminPackUtf8VarIntOptions" : "LuminPackUtf16VarIntOptions",
+            _ => encoding == 0 ? "LuminPackUtf8LengthOptions" : "LuminPackUtf16LengthOptions",
+        };
+
+        /// <summary>Whether the referenced runtime exposes every canonical profile, as the exact slot shortcuts require.</summary>
+        /// <returns>Whether the exact canonical profile shortcuts can bind.</returns>
+        private bool CanonicalUnionProfiles()
+        {
+            var writer = _compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+            if (writer == null || SymbolEqualityComparer.Default.Equals(writer.ContainingAssembly, _compilation.Assembly) ||
+                writer.GetMembers("Cursor").OfType<IFieldSymbol>().Any(field => field.Type is IPointerTypeSymbol) ||
+                _compilation.SyntaxTrees.Any(tree => tree.Options is CSharpParseOptions parse &&
+                    parse.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal))))
+                return false;
+            var names = new List<string>();
+            foreach (var (encoding, recording) in UnionProfiles(json: false))
+                names.Add("LuminPack.Option." + UnionProfileAlias(encoding, recording));
+            names.Add("LuminPack.Option.LuminPackFixedOptions`1");
+            names.Add("LuminPack.Option.LuminPackDefaultOptions");
+            names.Add("LuminPack.Option.LuminPackDeclaredOptions");
+            return names.All(name => _compilation.GetTypeByMetadataName(name) is { } symbol &&
+                SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, writer.ContainingAssembly));
         }
 
         /// <summary>Resolves the declaration-time wire policy of one payload.</summary>
@@ -1859,8 +2288,16 @@ internal static class TypeModelFactory
     /// <returns>The slot suffix.</returns>
     private static string SlotSuffix(TypeIdentity identity)
     {
-        // The final spelling is a stable hash of the metadata name; the scaffold keeps the readable portion so the shape is visible.
-        return identity.Name;
+        // Slot names are a public override contract, so this spelling stays as the original FNV identity.
+        string name = identity.GlobalName;
+        uint hash = 2166136261;
+        foreach (char character in name)
+        {
+            hash ^= character;
+            hash *= 16777619;
+        }
+        string readable = new string(name.Where(character => char.IsLetterOrDigit(character) || character == '_').ToArray());
+        return readable + "_" + hash.ToString("x8", CultureInfo.InvariantCulture);
     }
 
     /// <summary>Whether a symbol carries the named attribute.</summary>

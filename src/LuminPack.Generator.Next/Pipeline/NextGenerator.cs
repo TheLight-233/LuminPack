@@ -39,16 +39,19 @@ public sealed class NextGenerator : IIncrementalGenerator
             if (payload.Result.Model is not { } model || !payload.Result.IsComplete)
                 return;
             var renderContext = new RenderContext(payload.Options, AliasTable.For(payload.Options.AvailableAliases));
-            Emit(production, model, BinaryRenderer.Instance, renderContext, string.Empty);
-            Emit(production, model, JsonRenderer.Instance, renderContext, ".Json");
             if (model is UnionModel)
-                Emit(production, model, UnionRenderer.Instance, renderContext, ".Union");
+            {
+                Emit(production, model, renderContext, UnionRenderer.Instance.RenderBinary(model, renderContext), string.Empty);
+                Emit(production, model, renderContext, UnionRenderer.Instance.RenderJson(model, renderContext), ".Json");
+                return;
+            }
+            Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
+            Emit(production, model, renderContext, JsonRenderer.Instance.Render(model, renderContext), ".Json");
         });
     }
 
-    private static void Emit(SourceProductionContext production, TypeModel model, IRenderer renderer, RenderContext context, string suffix)
+    private static void Emit(SourceProductionContext production, TypeModel model, RenderContext context, string source, string suffix)
     {
-        string source = renderer.Render(model, context);
         if (source.Length == 0)
             return;
         production.AddSource(model.Identity.DisplayName.Replace('<', '_').Replace('>', '_').Replace(',', '_').Replace(' ', '_') + suffix + ".g.cs", source);

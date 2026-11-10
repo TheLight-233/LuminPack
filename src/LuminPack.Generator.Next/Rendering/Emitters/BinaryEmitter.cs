@@ -883,6 +883,13 @@ internal static partial class BinaryEmitter
         return result;
     }
 
+    /// <summary>Builds the statement lines that read a covered fixed case's Union payload.</summary>
+    /// <param name="model">The case's covered model, whose members are all fixed.</param>
+    /// <param name="w">The file writer that spells helper aliases.</param>
+    /// <returns>The body lines, opening with the instance local.</returns>
+    internal static List<string> UnionReadBody(PayloadRenderModel model, CodeWriter w)
+        => AddReadCallbacks(model, ReadBody(model, w, union: true));
+
     /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in
     /// place, and every following run of reserving members written through its own reservation.</summary>
     private static List<string> MixedWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)

@@ -328,17 +328,42 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     /// <summary>The read strategy.</summary>
     internal readonly UnionCaseRead Read;
 
+    /// <summary>Whether the case's binary read entry the dispatch calls instead of expanding its members.</summary>
+    internal readonly bool OwnEntry;
+
+    /// <summary>Whether the case's binary read entry takes the operation's profile.</summary>
+    internal readonly bool ReadGeneric;
+
     /// <summary>Whether the case slot can be sealed.</summary>
     internal readonly bool Sealed;
 
     /// <summary>Whether the case payload uses the returning cursor kernel.</summary>
     internal readonly bool FixedCursor;
 
+    /// <summary>The analyzed case payload, whose fixed member reads the dispatch expands, or null.</summary>
+    internal readonly TypeModel? Model;
+
+    /// <summary>The readable payload name of the case, which names its own Union entry.</summary>
+    internal readonly string Readable;
+
+    /// <summary>The partial declarations from the outermost containing type to the case.</summary>
+    internal readonly string[] Chain;
+
+    /// <summary>The case's namespace, or null in the global namespace.</summary>
+    internal readonly string? Namespace;
+
     /// <summary>Captures a Union case.</summary>
-    internal UnionCaseModel(int tag, TypeIdentity type, UnionCaseRead read, bool sealedCase, bool fixedCursor)
+    internal UnionCaseModel(int tag, TypeIdentity type, UnionCaseRead read, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor,
+        TypeModel? model, string readable, string[] chain, string? @namespace)
     {
+        Namespace = @namespace;
+        Chain = chain;
+        Readable = readable;
+        Model = model;
         FixedCursor = fixedCursor;
         Sealed = sealedCase;
+        ReadGeneric = readGeneric;
+        OwnEntry = ownEntry;
         Read = read;
         Type = type;
         Tag = tag;
@@ -346,7 +371,9 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
 
     /// <inheritdoc/>
     public bool Equals(UnionCaseModel? other) => ReferenceEquals(this, other) || other != null && Tag == other.Tag && Type.Equals(other.Type) &&
-        Read == other.Read && Sealed == other.Sealed && FixedCursor == other.FixedCursor;
+        Read == other.Read && OwnEntry == other.OwnEntry && ReadGeneric == other.ReadGeneric && Sealed == other.Sealed &&
+        FixedCursor == other.FixedCursor && Readable == other.Readable && Namespace == other.Namespace &&
+        (ReferenceEquals(Chain, other.Chain) || Enumerable.SequenceEqual(Chain, other.Chain)) && Equals(Model, other.Model);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as UnionCaseModel);
@@ -355,10 +382,49 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     public override int GetHashCode() => Tag;
 }
 
+/// <summary>One compiled wire-profile slot of a Union root.</summary>
+internal sealed class UnionSlotModel : IEquatable<UnionSlotModel>
+{
+    /// <summary>The method-name suffix: empty for the declared profile, otherwise <c>_Options_&lt;identity&gt;</c>.</summary>
+    internal readonly string Suffix;
+
+    /// <summary>The imported name of the profile's string options type.</summary>
+    internal readonly string Profile;
+
+    /// <summary>The complete compiled-profile identity.</summary>
+    internal readonly string Identity;
+
+    /// <summary>The profile's string encoding, zero for UTF-8 or one for UTF-16.</summary>
+    internal readonly int Encoding;
+
+    /// <summary>The profile's string recording, zero for lengths, one for tokens or two for variable lengths.</summary>
+    internal readonly int Recording;
+
+    /// <summary>Captures one slot.</summary>
+    internal UnionSlotModel(string suffix, string profile, string identity, int encoding, int recording)
+    {
+        Recording = recording;
+        Encoding = encoding;
+        Identity = identity;
+        Profile = profile;
+        Suffix = suffix;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(UnionSlotModel? other) => ReferenceEquals(this, other) || other != null && Suffix == other.Suffix &&
+        Profile == other.Profile && Identity == other.Identity && Encoding == other.Encoding && Recording == other.Recording;
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as UnionSlotModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Suffix.GetHashCode();
+}
+
 /// <summary>A polymorphic root.</summary>
 internal sealed class UnionModel : TypeModel
 {
-    /// <summary>The declared cases in tag order.</summary>
+    /// <summary>The declared cases in declaration order.</summary>
     internal readonly UnionCaseModel[] Cases;
 
     /// <summary>Whether the root is an interface rather than an abstract class.</summary>
@@ -368,22 +434,86 @@ internal sealed class UnionModel : TypeModel
     internal readonly bool WideTags;
 
     /// <summary>The canonical slot suffix.</summary>
-    internal readonly string SlotSuffix;
+    internal readonly string UnionSuffix;
 
     /// <summary>The compiled dispatch tier.</summary>
     internal readonly UnionDispatchTier Tier;
 
+    /// <summary>The exact case types of a pattern or direct tier, in tag order.</summary>
+    internal readonly string[] TierCases;
+
+    /// <summary>Whether each exact tier case is declared sealed.</summary>
+    internal readonly bool[] TierSealed;
+
+    /// <summary>Whether a fixed case gives the root the returning cursor protocol.</summary>
+    internal readonly bool Cursor;
+
+    /// <summary>Whether the binary read root takes the operation's profile, because some case entry does.</summary>
+    internal readonly bool ReadGeneric;
+
+    /// <summary>The partial declarations from the outermost containing type to the root.</summary>
+    internal readonly string[] Chain;
+
+    /// <summary>The root's namespace, or null in the global namespace.</summary>
+    internal readonly string? Namespace;
+
+    /// <summary>The compiled binary profile slots in profile order.</summary>
+    internal readonly UnionSlotModel[] BinarySlots;
+
+    /// <summary>The compiled JSON profile slots in profile order.</summary>
+    internal readonly UnionSlotModel[] JsonSlots;
+
+    /// <summary>Whether the exact canonical profile shortcuts can bind the referenced runtime's profiles.</summary>
+    internal readonly bool Canonical;
+
+    /// <summary>The imported string options type of the declared binary profile.</summary>
+    internal readonly string StandardBinary;
+
+    /// <summary>The imported string options type of the declared JSON profile.</summary>
+    internal readonly string StandardJson;
+
     /// <summary>Captures a Union root.</summary>
     internal UnionModel(TypeIdentity identity, TypeAccessibility accessibility, WirePolicy policy, string[] constraints, UnionCaseModel[] cases,
-        bool isInterface, bool wideTags, string slotSuffix, UnionDispatchTier tier)
+        bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, string[] tierCases, bool[] tierSealed, bool cursor,
+        bool readGeneric, string[] chain, string? @namespace, UnionSlotModel[] binarySlots, UnionSlotModel[] jsonSlots, bool canonical,
+        string standardBinary, string standardJson)
         : base(identity, accessibility, PayloadKind.Union, System.Array.Empty<MemberModel>(), policy, constraints)
     {
+        StandardJson = standardJson;
+        StandardBinary = standardBinary;
+        Canonical = canonical;
+        JsonSlots = jsonSlots;
+        BinarySlots = binarySlots;
+        Namespace = @namespace;
+        Chain = chain;
+        ReadGeneric = readGeneric;
+        Cursor = cursor;
+        TierSealed = tierSealed;
+        TierCases = tierCases;
         Tier = tier;
-        SlotSuffix = slotSuffix;
+        UnionSuffix = unionSuffix;
         WideTags = wideTags;
         IsInterface = isInterface;
         Cases = cases;
     }
+
+    /// <inheritdoc/>
+    public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
+        other is UnionModel union && base.Equals(other) && IsInterface == union.IsInterface && WideTags == union.WideTags &&
+        UnionSuffix == union.UnionSuffix && Tier == union.Tier && Cursor == union.Cursor && ReadGeneric == union.ReadGeneric &&
+        Canonical == union.Canonical && StandardBinary == union.StandardBinary && StandardJson == union.StandardJson &&
+        Namespace == union.Namespace && Same(Cases, union.Cases) && Same(TierCases, union.TierCases) &&
+        Same(TierSealed, union.TierSealed) && Same(Chain, union.Chain) && Same(BinarySlots, union.BinarySlots) &&
+        Same(JsonSlots, union.JsonSlots);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as TypeModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Identity.GetHashCode();
+
+    private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T>
+        => ReferenceEquals(left, right) || left.Length == right.Length && Enumerable.SequenceEqual(left, right);
 }
 
 /// <summary>A reference-tracked graph node.</summary>

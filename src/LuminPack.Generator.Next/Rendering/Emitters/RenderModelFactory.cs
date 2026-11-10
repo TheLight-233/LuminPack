@@ -20,6 +20,8 @@ internal static class RenderModelFactory
     /// <returns>The render model, or null when this adapter does not cover the payload yet.</returns>
     internal static PayloadRenderModel? Create(TypeModel model, GeneratorOptions options)
     {
+        if (model is UnionModel union)
+            return Union(union, options);
         if (model is CircleReferenceModel circle)
             return Circle(circle, options);
         bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null };
@@ -28,7 +30,7 @@ internal static class RenderModelFactory
         if (portable is not { Complete: true })
             portable = null;
         bool isStruct = raw || portable != null;
-        if (!isStruct && model is not RecordModel { Versioned: false, Derived: false })
+        if (!isStruct && model is not RecordModel { Versioned: false })
             return null;
         if (portable != null && !portable.Fields.All(field => field.Leaves.Length != 0))
             return null;
@@ -58,7 +60,8 @@ internal static class RenderModelFactory
             .All(index => names.Contains("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)), extension,
             GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: isStruct,
-            uniqueEntries: options.Interceptors, members, proven, mirror: null!, mirrorFields: null!, derived: false,
+            uniqueEntries: options.Interceptors, members, proven, mirror: null!, mirrorFields: null!,
+            derived: model is RecordModel { Derived: true },
             isStruct, view: view!, viewElided, fixedUnionCase: false,
             measureRecord: isStruct && model is StructModel structModel && structModel.RecordWidth && members.All(item => item.IsFixed),
             constructorArguments: null, constructorMembers: null, memberWrite: memberWrite, net8: options.Net8,
@@ -66,6 +69,66 @@ internal static class RenderModelFactory
             referencePayload: model.Members.Any(item => item is not ScalarMember), layoutAttribute: portable?.LayoutAttribute,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
             trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView);
+    }
+
+    /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters
+    /// reproduce.</summary>
+    /// <param name="model">The normalized Union root.</param>
+    /// <param name="options">The project facts.</param>
+    /// <returns>The render model, or null when the root is outside the direct Union emitters.</returns>
+    private static PayloadRenderModel? Union(UnionModel model, GeneratorOptions options)
+    {
+        StringProfile profile = model.Policy.Strings;
+        if (profile.Format != 'G' || profile.Precision != byte.MaxValue || profile.Depth != 1024 || profile.Strict)
+            return PayloadEmitter.Reject<PayloadRenderModel>("union declared profile");
+        if (profile.Encoding != StringEncoding.Utf16 || profile.Recording != StringRecording.Length)
+            return PayloadEmitter.Reject<PayloadRenderModel>("union compiled profile slots");
+        if (model.Identity.IsGeneric)
+            return PayloadEmitter.Reject<PayloadRenderModel>("union generic");
+        if (model.Cases.Length == 0)
+            return PayloadEmitter.Reject<PayloadRenderModel>("union cases");
+        var cases = new UnionRenderCase[model.Cases.Length];
+        for (int index = 0; index < cases.Length; index++)
+        {
+            UnionCaseModel item = model.Cases[index];
+            PayloadRenderModel? caseModel = item.Model == null ? null : Create(item.Model, options);
+            // A case arm either calls the case's own read entry or expands a complete fixed record body.
+            if (!item.OwnEntry && (caseModel == null || caseModel.UnionRoot || caseModel.IsStruct || caseModel.Mirror != null ||
+                caseModel.Version != null || caseModel.ConstructorArguments != null || caseModel.Members.Length == 0 ||
+                !caseModel.Members.All(member => member.IsFixed)))
+                return PayloadEmitter.Reject<PayloadRenderModel>("union case read: " + item.Type.DisplayName);
+            cases[index] = new UnionRenderCase(item.Tag, item.Type.GlobalName, item.OwnEntry, item.ReadGeneric, item.Sealed,
+                item.FixedCursor, caseModel!, item.Readable, item.Chain, item.Namespace!);
+        }
+        string globalName = model.Identity.GlobalName;
+        return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)),
+            GeneratedNames.Extension(options.AssemblyName), GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)),
+            freshResult: false, uniqueEntries: options.Interceptors, System.Array.Empty<RenderMember>(), proven: false,
+            mirror: null!, mirrorFields: null!, derived: false, isStruct: false, view: null!, viewElided: false,
+            fixedUnionCase: false, measureRecord: false, constructorArguments: null, constructorMembers: null, memberWrite: false,
+            net8: options.Net8, utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: null!,
+            referencePayload: false, layoutAttribute: null!, typeParameters: model.Identity.TypeParameters,
+            typeConstraints: model.Constraints, unionRoot: true, unionInterface: model.IsInterface,
+            unionSuffix: model.UnionSuffix, unionCases: cases, unionCursor: model.Cursor, unionReadGeneric: model.ReadGeneric,
+            unionChain: model.Chain, unionNamespace: model.Namespace!,
+            unionBinarySlots: Slots(model.BinarySlots), unionJsonSlots: Slots(model.JsonSlots),
+            unionCanonical: model.Canonical, unionStandardBinary: model.StandardBinary, unionStandardJson: model.StandardJson,
+            unionTier: (int)model.Tier, unionTierCases: model.TierCases, unionTierSealed: model.TierSealed, unionWide: model.WideTags,
+            trusted: model.Policy.Input == InputPolicy.Trusted);
+    }
+
+    /// <summary>Maps the model's compiled profile slots onto the emitter's slots.</summary>
+    /// <param name="slots">The modeled slots.</param>
+    /// <returns>The emitter slots.</returns>
+    private static UnionRenderSlot[] Slots(UnionSlotModel[] slots)
+    {
+        var result = new UnionRenderSlot[slots.Length];
+        for (int index = 0; index < slots.Length; index++)
+        {
+            UnionSlotModel slot = slots[index];
+            result[index] = new UnionRenderSlot(slot.Suffix, slot.Profile, slot.Identity, slot.Encoding, slot.Recording);
+        }
+        return result;
     }
 
     /// <summary>Maps a reference-tracked node when every legacy circle check passes.</summary>
