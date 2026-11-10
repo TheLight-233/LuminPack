@@ -510,6 +510,9 @@ internal static class TypeModelFactory
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: stackItem.Keyword, raw: true);
             if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
+            // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.
+            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && Scalar(item) is { } sequenceItem)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: sequenceItem.Keyword);
             if (kind is not (CollectionKind.List or CollectionKind.NestedList))
                 return new CollectionMember(name, storage, policy, declared, kind, element);
 

@@ -13,6 +13,8 @@ internal static class SharedFormatterPublisher
     private const string StringHint = "LuminPack.SharedFormatters/String.g.cs";
     private const string IntHint = "LuminPack.SharedFormatters/Int.g.cs";
     private const string CultureInfoHint = "LuminPack.SharedFormatters/CultureInfo.g.cs";
+    private const string ConcurrentQueueOfIntHint = "LuminPack.SharedFormatters/ConcurrentQueueOfInt.g.cs";
+    private const string ImmutableArrayOfIntHint = "LuminPack.SharedFormatters/ImmutableArrayOfInt.g.cs";
 
     /// <summary>Publishes every owner in the set.</summary>
     /// <param name="production">The source production context.</param>
@@ -31,5 +33,9 @@ internal static class SharedFormatterPublisher
             production.AddSource(IntHint, IntOwnerFile.Render(set));
         if ((set.Owners & SharedFormatterKind.CultureInfo) != 0)
             production.AddSource(CultureInfoHint, CultureInfoOwnerFile.Render(set));
+        if ((set.Owners & SharedFormatterKind.ConcurrentQueueOfInt) != 0)
+            production.AddSource(ConcurrentQueueOfIntHint, ConcurrentQueueOwnerFile.Render(set));
+        if ((set.Owners & SharedFormatterKind.ImmutableArrayOfInt) != 0)
+            production.AddSource(ImmutableArrayOfIntHint, ImmutableArrayOwnerFile.Render(set));
     }
 }

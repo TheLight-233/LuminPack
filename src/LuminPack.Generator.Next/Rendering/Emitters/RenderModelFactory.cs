@@ -14,6 +14,9 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 /// Features whose rendering facts are not modeled return null so the pipeline emits nothing instead of partial code.</remarks>
 internal static class RenderModelFactory
 {
+    private const string ConcurrentQueueOfInt = "global::System.Collections.Concurrent.ConcurrentQueue<int>";
+    private const string ImmutableArrayOfInt = "global::System.Collections.Immutable.ImmutableArray<int>";
+
     /// <summary>Builds the render model of one payload.</summary>
     /// <param name="model">The normalized payload.</param>
     /// <param name="options">The project facts.</param>
@@ -375,6 +378,13 @@ internal static class RenderModelFactory
             case CollectionKind.SortedSet:
                 return new RenderMember(member.Name, RenderMemberKind.SortedSet, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, raw: true, property: property);
+            // The concurrent and immutable sequences are published only for the scalar element whose shared owner exists.
+            case CollectionKind.Concurrent when Owns(member.DeclaredType, extension, ConcurrentQueueOfInt):
+                return new RenderMember(member.Name, RenderMemberKind.ConcurrentQueue, member.Scalar, member.DeclaredType, 0, formatter,
+                    ScalarKind.Other, mirrored, property: property);
+            case CollectionKind.Immutable when Owns(member.DeclaredType, extension, ImmutableArrayOfInt):
+                return new RenderMember(member.Name, RenderMemberKind.ImmutableArray, member.Scalar, member.DeclaredType, 0, formatter,
+                    ScalarKind.Other, mirrored, property: property);
             case CollectionKind.List:
             case CollectionKind.NestedList:
                 // A list of key/value pairs writes each pair's key and value in one checkable loop.
@@ -456,6 +466,14 @@ internal static class RenderModelFactory
         element.Members.All(member => !member.Mirrored && !(member.Kind == RenderMemberKind.Dictionary && member.Dictionary.Pair) &&
             member.Kind is RenderMemberKind.Fixed or RenderMemberKind.Text or RenderMemberKind.Object or RenderMemberKind.Array or
                 RenderMemberKind.List or RenderMemberKind.Dictionary);
+
+    /// <summary>Whether a declared sequence names the shared formatter owner the renderers publish.</summary>
+    /// <param name="declaredType">The declared sequence spelling.</param>
+    /// <param name="extension">The assembly's extension container.</param>
+    /// <param name="ownerType">The supported sequence spelling.</param>
+    /// <returns>Whether the shared owner of the supported sequence is the declared sequence's owner.</returns>
+    private static bool Owns(string declaredType, string extension, string ownerType)
+        => GeneratedNames.Owner(extension, declaredType) == GeneratedNames.Owner(extension, ownerType);
 
     private static ScalarKind FieldType(string keyword) => keyword switch
     {

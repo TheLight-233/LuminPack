@@ -35,6 +35,10 @@ internal enum RenderMemberKind : byte
     Parameter,
     /// <summary>A culture-info member, written and read through its shared generated formatter owner.</summary>
     CultureInfo,
+    /// <summary>A <c>ConcurrentQueue&lt;T&gt;</c> member, written in place and read through its shared generated formatter owner.</summary>
+    ConcurrentQueue,
+    /// <summary>An <c>ImmutableArray&lt;T&gt;</c> member, written in place and read through its shared generated formatter owner.</summary>
+    ImmutableArray,
 }
 
 /// <summary>The entry shape of a sorted or paired collection member.</summary>
@@ -270,7 +274,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo;
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
+            RenderMemberKind.ImmutableArray;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
@@ -303,7 +308,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// inlining to the runtime.</summary>
     internal bool ElementList => Members.Any(member => member.Kind == RenderMemberKind.List && member.Nested != null ||
         member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
-            RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
+            RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary or
+            RenderMemberKind.ConcurrentQueue ||
         member.Kind == RenderMemberKind.Object && member.Nested.ElementList);
     /// <summary>Whether a Boolean array or list member takes the checked read completion, whose inlined root renames the
     /// instance local.</summary>

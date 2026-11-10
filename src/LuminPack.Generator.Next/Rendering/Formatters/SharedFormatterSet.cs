@@ -27,6 +27,12 @@ internal enum SharedFormatterKind
 
     /// <summary>The <c>System.Globalization.CultureInfo</c> roots and owner class.</summary>
     CultureInfo = 16,
+
+    /// <summary>The <c>System.Collections.Concurrent.ConcurrentQueue&lt;int&gt;</c> roots and owner class.</summary>
+    ConcurrentQueueOfInt = 32,
+
+    /// <summary>The <c>System.Collections.Immutable.ImmutableArray&lt;int&gt;</c> roots and owner class.</summary>
+    ImmutableArrayOfInt = 64,
 }
 
 /// <summary>The value-equal publication decision for the shared formatter owners.</summary>
@@ -36,6 +42,8 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
 {
     private const string IntArrayType = "int[]";
     private const string ListOfIntType = "global::System.Collections.Generic.List<int>";
+    private const string ConcurrentQueueOfIntType = "global::System.Collections.Concurrent.ConcurrentQueue<int>";
+    private const string ImmutableArrayOfIntType = "global::System.Collections.Immutable.ImmutableArray<int>";
 
     /// <summary>The assembly extension container the owners belong to, or null before the first complete model.</summary>
     internal readonly string? Extension;
@@ -73,8 +81,9 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         int aliases = Extension == null ? options.AvailableAliases : AvailableAliases;
         bool cultureInfoReuse = CultureInfoReuse;
         SharedFormatterKind owners = Owners | Required(model, extension, ref cultureInfoReuse);
-        // The array and list JSON roots transfer their elements through the shared scalar owner.
-        if ((owners & (SharedFormatterKind.IntArray | SharedFormatterKind.ListOfInt)) != 0)
+        // The array, list and sequence JSON roots transfer their elements through the shared scalar owner.
+        if ((owners & (SharedFormatterKind.IntArray | SharedFormatterKind.ListOfInt | SharedFormatterKind.ConcurrentQueueOfInt |
+            SharedFormatterKind.ImmutableArrayOfInt)) != 0)
             owners |= SharedFormatterKind.Int;
         return new SharedFormatterSet(extension, owners, aliases, cultureInfoReuse);
     }
@@ -155,6 +164,12 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         else if (member.Kind == CollectionKind.List &&
             GeneratedNames.Owner(extension, member.DeclaredType) == listOfIntOwner)
             owners |= SharedFormatterKind.ListOfInt;
+        else if (member.Kind == CollectionKind.Concurrent &&
+            GeneratedNames.Owner(extension, member.DeclaredType) == GeneratedNames.Owner(extension, ConcurrentQueueOfIntType))
+            owners |= SharedFormatterKind.ConcurrentQueueOfInt;
+        else if (member.Kind == CollectionKind.Immutable &&
+            GeneratedNames.Owner(extension, member.DeclaredType) == GeneratedNames.Owner(extension, ImmutableArrayOfIntType))
+            owners |= SharedFormatterKind.ImmutableArrayOfInt;
         if (member.Nested is { } nested)
             Walk(nested, extension, intArrayOwner, listOfIntOwner, ref owners, ref cultureInfoReuse, visited);
     }

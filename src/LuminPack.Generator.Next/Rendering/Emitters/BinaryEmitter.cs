@@ -968,6 +968,16 @@ internal static partial class BinaryEmitter
                 index++;
                 continue;
             }
+            // A concurrent queue or immutable array writes its counted or span payload in place.
+            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray)
+            {
+                if (member.Kind == RenderMemberKind.ConcurrentQueue)
+                    AddConcurrentQueueWrite(body, member, "value", w, names, ref ends);
+                else
+                    AddImmutableArrayWrite(body, member, "value", w, names, ref ends);
+                index++;
+                continue;
+            }
             int last = index;
             while (last + 1 < members.Length && !IsInlineSegment(members[last + 1]))
                 last++;
@@ -1034,6 +1044,77 @@ internal static partial class BinaryEmitter
         body.Add("writer.Cursor = unchecked((byte)(0));");
         body.Add("writer.Advance(1);");
         body.Add("writer.Write<" + Profile + ">(" + local + ".Name);");
+        body.Add(exit + ":");
+        body.Add("\t;");
+        body.Add("}");
+    }
+
+    /// <summary>Expands a concurrent-queue member's shared write body in place: the null collection header, then the counted
+    /// enumeration of the queue.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The queue member.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit-label counter shared by the whole method.</param>
+    private static void AddConcurrentQueueWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
+        Dictionary<string, int> names, ref int ends)
+    {
+        string local = RoleName(names, "value");
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + " is null)");
+        body.Add("{");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add(w.A("Unsafe") + ".WriteUnaligned(ref writer.Cursor, " + w.A("LuminPackCode") + ".NullCollection);");
+        body.Add("writer.Advance(4);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add("int countPosition = writer.BeginCollection();");
+        body.Add("int count = 0;");
+        body.Add("foreach (var item in " + local + ")");
+        body.Add("{");
+        body.Add("writer.CheckBuffer();");
+        body.Add("count++;");
+        body.Add("var v = item;");
+        body.Add("writer.Write(in v);");
+        body.Add("}");
+        body.Add("");
+        body.Add("writer.EndCollection(countPosition, count);");
+        body.Add("writer.CheckBuffer();");
+        body.Add("");
+        body.Add(exit + ":");
+        body.Add("\t;");
+        body.Add("}");
+    }
+
+    /// <summary>Expands an immutable-array member's shared write body in place: the default marker, then the storage span.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The immutable-array member.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit-label counter shared by the whole method.</param>
+    private static void AddImmutableArrayWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
+        Dictionary<string, int> names, ref int ends)
+    {
+        string local = RoleName(names, "value");
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + ".IsDefault)");
+        body.Add("{");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add(w.A("Unsafe") + ".WriteUnaligned(ref writer.Cursor, " + w.A("LuminPackCode") + ".NullCollection);");
+        body.Add("writer.Advance(4);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = " + local + ".AsSpan();");
+        body.Add("writer.Write<" + member.Scalar + ">(items, items.Length);");
+        body.Add("");
         body.Add(exit + ":");
         body.Add("\t;");
         body.Add("}");
@@ -1469,6 +1550,18 @@ internal static partial class BinaryEmitter
                 AddCultureInfoWrite(body, member, owner, w, names, ref ends);
                 continue;
             }
+            // A concurrent queue writes its counted enumeration in place and reads through its shared owner.
+            if (member.Kind == RenderMemberKind.ConcurrentQueue)
+            {
+                AddConcurrentQueueWrite(body, member, owner, w, names, ref ends);
+                continue;
+            }
+            // An immutable array writes its default marker or its storage span in place and reads through its shared owner.
+            if (member.Kind == RenderMemberKind.ImmutableArray)
+            {
+                AddImmutableArrayWrite(body, member, owner, w, names, ref ends);
+                continue;
+            }
             // A list inside a stream record or an inline object expands its generated null header and payload in place, whose
             // failure exits through a method-wide label. A string list separates itself from the member that follows it, while
             // a scalar list keeps the presentation's own blank rule.
@@ -1594,7 +1687,8 @@ internal static partial class BinaryEmitter
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     private static bool IsInlineSegment(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo;
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
+            RenderMemberKind.ImmutableArray;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(RenderMember member) =>
@@ -2282,6 +2376,12 @@ internal static partial class BinaryEmitter
             }
             // A culture-info member reads through its shared formatter owner, which handles its own null marker.
             if (member.Kind == RenderMemberKind.CultureInfo)
+            {
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                continue;
+            }
+            // A concurrent queue or immutable array reads through its shared formatter owner, which frames its own null record.
+            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
