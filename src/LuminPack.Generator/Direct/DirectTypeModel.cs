@@ -309,6 +309,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly string[] UnionTierCases;
     /// <summary>Whether each exact tier case is sealed, which needs no exact runtime type test.</summary>
     internal readonly bool[] UnionTierSealed;
+    /// <summary>Whether the root writes and reads three-byte Union headers, because a declared case tag exceeds the narrow
+    /// byte protocol or the root declares <c>[LuminPackWideTag]</c>.</summary>
+    internal readonly bool UnionWide;
 
     /// <summary>Whether any serialization callback runs, which keeps the type out of the named member write.</summary>
     internal bool HasCallbacks => WriteBefore.Length != 0 || WriteAfter.Length != 0 || ReadBefore.Length != 0 || ReadAfter.Length != 0;
@@ -323,8 +326,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         DirectUnionSlot[] unionBinarySlots = null, DirectUnionSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
-        DirectPortableView portableView = null)
+        DirectPortableView portableView = null, bool unionWide = false)
     {
+        UnionWide = unionWide;
         PortableView = portableView;
         ManagedStruct = managedStruct;
         CircleGuarded = circleGuarded;
@@ -401,7 +405,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         UnionRoot == other.UnionRoot && UnionInterface == other.UnionInterface && UnionSuffix == other.UnionSuffix &&
         UnionCursor == other.UnionCursor && UnionReadGeneric == other.UnionReadGeneric && UnionNamespace == other.UnionNamespace &&
         UnionCanonical == other.UnionCanonical && UnionStandardBinary == other.UnionStandardBinary && UnionStandardJson == other.UnionStandardJson &&
-        UnionTier == other.UnionTier && Same(UnionChain, other.UnionChain) && Same(UnionTierCases, other.UnionTierCases) &&
+        UnionTier == other.UnionTier && UnionWide == other.UnionWide && Same(UnionChain, other.UnionChain) && Same(UnionTierCases, other.UnionTierCases) &&
         Same(UnionTierSealed, other.UnionTierSealed) && Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
         Circle == other.Circle && CircleGuarded == other.CircleGuarded &&
         Same(UnionCases, other.UnionCases) &&
@@ -502,7 +506,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 level.ContainingType is { IsGenericType: true } || !Reachable(level) ||
                 !SymbolEqualityComparer.Default.Equals(level.ContainingAssembly, compilation.Assembly) ||
                 level.GetAttributes().Any(attribute => !PlainPackable(attribute) && !Foreign(attribute) && !UnionCase(attribute) && !JsonPolymorphism(attribute) &&
-                    !StructLayoutAttribute(attribute) && !(_unionCase > 0 && OptionAttribute(attribute))))
+                    !StructLayoutAttribute(attribute) && !WideTagAttribute(attribute) &&
+                    !(_unionCase > 0 && OptionAttribute(attribute)) && !(OptionAttribute(attribute) && UnionBase(level))))
                 return DirectEmission.Reject<DirectTypeModel>("base type: " + level.ToDisplayString());
             levels.Add(level);
         }
@@ -779,8 +784,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             return DirectEmission.Reject<DirectTypeModel>("union accessibility");
         if (!data.CanGenerateUnionDispatch || data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
             return DirectEmission.Reject<DirectTypeModel>("union dispatch");
-        if (data.IsWideTag || data.UnionMembers.Any(member => member.Id >= 250))
-            return DirectEmission.Reject<DirectTypeModel>("union wide tag");
+        bool wide = data.IsWideTag || data.UnionMembers.Any(member => member.Id >= 250);
         if (data.callBackMethods.Count != 0 || data.RentPoolMethod != null)
             return DirectEmission.Reject<DirectTypeModel>("union callbacks or pool");
         if (data.UnionMembers.Count == 0)
@@ -849,7 +853,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             unionCanonical: CanonicalUnionProfiles(compilation, false),
             unionStandardBinary: UnionProfileAlias(declaredBinary.Encoding, declaredBinary.Recording),
             unionStandardJson: UnionProfileAlias(declaredBinary.Encoding, declaredBinary.Recording),
-            unionTier: (int)tier.Tier, unionTierCases: tierCases, unionTierSealed: tierSealed);
+            unionTier: (int)tier.Tier, unionTierCases: tierCases, unionTierSealed: tierSealed, unionWide: wide);
     }
 
     /// <summary>Whether the case list already holds a type.</summary>
@@ -1108,6 +1112,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     private static bool UnionCase(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString() is LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or "System.Runtime.CompilerServices.UnionAttribute" &&
             attribute.NamedArguments.Length == 0 && attribute.ConstructorArguments.Length == 2;
+
+    /// <summary>Accepts a Union root's <c>[LuminPackWideTag]</c> declaration, which only shapes that root's own headers.</summary>
+    private static bool WideTagAttribute(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackWideTagAttribute";
+
+    /// <summary>Whether a base type declares Union cases, so a wire profile on it only shapes that root's dispatch.</summary>
+    private static bool UnionBase(INamedTypeSymbol type)
+        => type.IsAbstract && type.GetAttributes().Any(UnionCase);
 
     /// <summary>Accepts the System.Text.Json polymorphism attributes, which only System.Text.Json reads.</summary>
     private static bool JsonPolymorphism(AttributeData attribute)

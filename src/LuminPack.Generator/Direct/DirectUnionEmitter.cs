@@ -80,7 +80,7 @@ internal static class DirectUnionEmitter
         if (model.UnionReadGeneric)
             w.Indented(() => w.Line(constraint));
         w.Open();
-        w.Line("if (!reader.TryPeekUnionHeader(out var tag))");
+        w.Line("if (!reader." + (model.UnionWide ? "TryPeekWideUnionHeader" : "TryPeekUnionHeader") + "(out var tag))");
         w.Open();
         w.Line("value = default;");
         w.Line("return;");
@@ -768,7 +768,8 @@ internal static class DirectUnionEmitter
                 w.Line(Hidden(w));
                 w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + "(ref " + w.A("LuminPackWriter") + " writer)");
                 w.Open();
-                w.Line("writer.WriteUnionHeader(" + item.Id.ToString(CultureInfo.InvariantCulture) + ");");
+                w.Line("writer." + (model.UnionWide ? "WriteWideUnionHeader" : "WriteUnionHeader") + "(" +
+                    item.Id.ToString(CultureInfo.InvariantCulture) + ");");
                 w.Line("var concreteValue = this;");
                 w.Line(w.A("LuminPackSerializer") + ".SerializeUnion<" + w.A(slot.Profile) + ">(ref writer, concreteValue);");
                 w.Close();
