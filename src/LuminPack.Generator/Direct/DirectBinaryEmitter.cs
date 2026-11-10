@@ -174,12 +174,12 @@ internal static partial class DirectBinaryEmitter
         w.Suppressed = false;
         if ((model.Mirror ?? model.Version?.Layout) != null)
         {
-            // The root-private layout mirror that the operations reach auto-property storage through; a version-tolerant record
-            // always declares it.
+            // The root-private layout mirror that the operations reach auto-property and included non-public storage through;
+            // a version-tolerant record always declares it.
             w.Blank();
-            w.Line(w.Preserve);
             if (model.LayoutAttribute != null)
                 w.Line(model.LayoutAttribute);
+            w.Line(w.Preserve);
             w.Line("private class " + (model.Mirror ?? model.Version.Layout));
             w.Open();
             foreach (string field in model.MirrorFields ?? model.Version.LayoutFields)
@@ -501,16 +501,19 @@ internal static partial class DirectBinaryEmitter
         return last;
     }
 
+    /// <summary>Whether a name consists of ASCII letters only, which the presentation's expansion-number removal requires.</summary>
+    private static bool AsciiLetters(string name) => name.All(letter => letter is >= 'A' and <= 'Z' or >= 'a' and <= 'z');
+
     /// <summary>Spells the snapshot local of a variable member as the projected emitter names it.</summary>
     /// <param name="model">The record that owns the member.</param>
     /// <param name="index">The member's index.</param>
     /// <param name="camel">Whether the mixed record body camel-cases every snapshot local, as its inline object members do.</param>
     private static string Snapshot(DirectTypeModel model, int index, bool camel = false)
     {
-        string name = model.Members[index].Name + "Snapshot" + index.ToString(CultureInfo.InvariantCulture);
-        // The presentation drops an expansion number from a purely alphabetic name whose base is otherwise unused.
-        string stem = model.Members[index].Name + "Snapshot";
-        string chosen = model.Members[index].Name.All(char.IsLetter) && model.Members.All(member => member.Name != stem) ? stem : name;
+        string trimmed = model.Members[index].Name.TrimStart('_');
+        string stem = trimmed + "Snapshot";
+        string name = stem + index.ToString(CultureInfo.InvariantCulture);
+        string chosen = AsciiLetters(trimmed) && model.Members.All(member => member.Name != stem) ? stem : name;
         // Snapshots of mirrored members are named like role locals.
         return !(model.CamelSnapshots || camel) ? chosen : char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
     }
@@ -1707,7 +1710,7 @@ internal static partial class DirectBinaryEmitter
     private static string TempType(DirectMember member) => member.Kind == DirectMemberKind.Text ? "string?" : member.TypeName;
 
     /// <summary>Spells a member's temporary local with the leading letter in lower case.</summary>
-    private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
+    private static string Camel(string name) => DirectEmission.LocalName(name);
 
     /// <summary>Builds a root read body.</summary>
     private static List<string> ReadBody(DirectTypeModel model, DirectWriter w, bool union)
@@ -1799,10 +1802,10 @@ internal static partial class DirectBinaryEmitter
                 index = last;
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Text && member.Mirrored)
+            if (member.Kind == DirectMemberKind.Text && member.Mirrored && member.Property)
             {
                 string number = strings++ == 0 ? string.Empty : strings.ToString(CultureInfo.InvariantCulture);
-                // A mirrored string is assigned only when the decoded instance differs; it follows a fixed run directly.
+                // A mirrored auto-property is assigned only when the decoded instance differs; it follows a fixed run directly.
                 if (body[body.Count - 1].Length == 0)
                     body.RemoveAt(body.Count - 1);
                 body.Add("var currentString" + number + " = instance." + member.Name + ";");
@@ -1812,6 +1815,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add("");
             }
             else if (member.Kind == DirectMemberKind.Text)
+                // Included non-public fields pass their mirror storage by reference, as public fields do.
                 body.Add("reader.Read<" + Profile + ">(ref instance." + member.Name + ");");
             else
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref instance." + member.Name + "!);");

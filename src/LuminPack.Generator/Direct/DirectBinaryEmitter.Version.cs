@@ -228,9 +228,10 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Spells a string member's write snapshot, camel-cased like the other bound locals of these operations.</summary>
     private static string VersionSnapshot(DirectTypeModel model, int index)
     {
-        string name = model.Members[index].Name + "Snapshot" + index.ToString(CultureInfo.InvariantCulture);
-        string stem = model.Members[index].Name + "Snapshot";
-        string chosen = model.Members[index].Name.All(char.IsLetter) && model.Members.All(member => member.Name != stem) ? stem : name;
+        string trimmed = model.Members[index].Name.TrimStart('_');
+        string stem = trimmed + "Snapshot";
+        string name = stem + index.ToString(CultureInfo.InvariantCulture);
+        string chosen = DirectBinaryEmitter.AsciiLetters(trimmed) && model.Members.All(member => member.Name != stem) ? stem : name;
         return char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
     }
 
@@ -245,7 +246,7 @@ internal static partial class DirectBinaryEmitter
         string text = "global::LuminPack." + BinaryExtensionProjection.Owner(model.Extension, "string");
         string Policy() => w.A("LuminPackInputPolicy");
         string Reader() => w.A("LuminPackReader");
-        var temps = members.Select(member => char.ToLowerInvariant(member.Name[0]) + member.Name.Substring(1) + "Temp").ToArray();
+        var temps = members.Select(member => DirectEmission.LocalName(member.Name) + "Temp").ToArray();
         // Frame-end locals are numbered across the root and its mapped read, as are the saved field limits of the mapped read.
         int ends = 0, limits = 0;
         string End() => ends++ == 0 ? "end" : "end" + ends.ToString(CultureInfo.InvariantCulture);

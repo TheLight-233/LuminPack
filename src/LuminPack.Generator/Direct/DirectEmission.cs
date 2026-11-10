@@ -98,6 +98,16 @@ internal static class DirectEmission
     /// <param name="name">The type's readable name.</param>
     internal static void Accept(string name) => Trace("covered " + name);
 
+    /// <summary>Spells a member's read or snapshot local the way the projected emitters name role locals: leading
+    /// underscores are dropped and the first letter is lower-cased.</summary>
+    /// <param name="name">The member name.</param>
+    /// <returns>The local stem.</returns>
+    internal static string LocalName(string name)
+    {
+        string trimmed = name.TrimStart('_');
+        return trimmed.Length == 0 ? name : char.ToLowerInvariant(trimmed[0]) + trimmed.Substring(1);
+    }
+
     /// <summary>Checks the assembly-wide facts the direct emitters assume, once per compilation.</summary>
     /// <param name="compilation">The consumer compilation.</param>
     /// <returns>Whether no assembly attribute can change generated LuminPack code.</returns>

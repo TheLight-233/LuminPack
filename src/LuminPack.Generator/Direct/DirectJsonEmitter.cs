@@ -573,7 +573,7 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Lower-cases the first character, as role-named generated locals are spelled.</summary>
-    private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
+    private static string Camel(string name) => DirectEmission.LocalName(name);
 
     /// <summary>Writes body lines: an empty string is a blank line, braces open and close blocks, and a tab indents one line.</summary>
     internal static void Lines(DirectWriter w, List<string> body)
