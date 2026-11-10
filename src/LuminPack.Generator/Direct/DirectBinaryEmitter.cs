@@ -147,7 +147,18 @@ internal static partial class DirectBinaryEmitter
             else
             {
                 w.Line("int totalLength = 1;");
-                w.Line("totalLength += " + members.Sum(member => member.Size).ToString(CultureInfo.InvariantCulture) + ";");
+                // A memberless record's only byte is its marker, which the initializer already counts; constant widths
+                // fold into one term, while a runtime struct size stays an expression.
+                if (members.Length != 0)
+                {
+                    int constant = 0;
+                    bool folded = members.All(member => int.TryParse(member.Width, NumberStyles.None, CultureInfo.InvariantCulture, out _));
+                    if (folded)
+                        foreach (var member in members)
+                            constant += int.Parse(member.Width, CultureInfo.InvariantCulture);
+                    w.Line("totalLength += " + (folded ? constant.ToString(CultureInfo.InvariantCulture) :
+                        string.Join(" + ", members.Select(member => member.Width))) + ";");
+                }
                 w.Line("evaluator.Add(totalLength);");
             }
             w.Close();
@@ -164,6 +175,8 @@ internal static partial class DirectBinaryEmitter
             // always declares it.
             w.Blank();
             w.Line(w.Preserve);
+            if (model.LayoutAttribute != null)
+                w.Line(model.LayoutAttribute);
             w.Line("private class " + (model.Mirror ?? model.Version.Layout));
             w.Open();
             foreach (string field in model.MirrorFields ?? model.Version.LayoutFields)
@@ -308,8 +321,11 @@ internal static partial class DirectBinaryEmitter
             w.Blank();
             w.Suppressed = !reads;
             var readUnionBody = Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
+            // A declared reference member keeps the Union read behind its outlined entry; a fixed record leaves the hint to the
+            // runtime when a contiguous block cannot be proven, as the original expansion does.
             Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                allFixed ? (DirectInlining.FixedUnionRead(model, Sizes(readUnionBody)) ? inline : null) : w.MethodImpl("NoInlining"));
+                model.ReferencePayload ? w.MethodImpl("NoInlining")
+                    : allFixed && DirectInlining.FixedUnionRead(model, Sizes(readUnionBody)) ? inline : null);
             w.Suppressed = false;
             w.Close();
         }
@@ -450,6 +466,16 @@ internal static partial class DirectBinaryEmitter
             body.Add("}");
             body.Add("");
         }
+        // A memberless record is its marker alone; its Union payload writes no bytes.
+        if (members.Length == 0)
+        {
+            if (!union)
+            {
+                body.Add("writer.Cursor = (byte)0;");
+                body.Add("writer.Advance(1);");
+            }
+            return body;
+        }
         if (members.All(member => member.IsFixed))
         {
             if (union)
@@ -500,7 +526,7 @@ internal static partial class DirectBinaryEmitter
             var member = members[index];
             string snapshot = Snapshot(model, index);
             if (member.Kind == DirectMemberKind.Fixed)
-                terms.Add(member.Size.ToString(CultureInfo.InvariantCulture));
+                terms.Add(member.Width);
             else if (member.Kind == DirectMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = value." + member.Name + ";");
@@ -526,9 +552,12 @@ internal static partial class DirectBinaryEmitter
                 int last = RunEnd(members, index);
                 if (last == index)
                 {
-                    if (member.Size == 8)
+                    if (member.Size == 8 || member.Raw)
                     {
-                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8)");
+                        // A raw framework struct keeps its aligned store on 64-bit targets and its checked reserved
+                        // store otherwise; an eight-byte scalar uses the same split without the size test.
+                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" +
+                            (member.Raw ? " || " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">() <= 4" : string.Empty) + ")");
                         body.Add("{");
                         body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
                         body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
@@ -546,16 +575,14 @@ internal static partial class DirectBinaryEmitter
                     }
                     continue;
                 }
-                int width = 0;
-                for (int item = index; item <= last; item++)
-                    width += members[item].Size;
+                string width = Width(members, index, last);
                 body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true) + ")");
                 body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " + Bytes(w, member, "value", readOnly: true) + ", " +
-                    width.ToString(CultureInfo.InvariantCulture) + ");");
+                    width + ");");
                 body.Add("else");
                 body.Add("{");
                 AddFixedStores(w, members, index, last, "cursor", body);
-                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width.ToString(CultureInfo.InvariantCulture) + ");");
+                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width + ");");
                 body.Add("}");
                 body.Add("");
                 index = last;
@@ -694,10 +721,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add("writer.Write(value." + member.Name + ");");
                 continue;
             }
-            int width = 0;
-            for (int item = index; item <= last; item++)
-                width += members[item].Size;
-            string widthText = width.ToString(CultureInfo.InvariantCulture);
+            string widthText = Width(members, index, last);
             body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true) + ")");
             body.Add("\twriter.Write(ref " + Bytes(w, member, "value", readOnly: true) + ", " + widthText + ");");
             body.Add("else");
@@ -748,7 +772,7 @@ internal static partial class DirectBinaryEmitter
         {
             if (member.Kind != DirectMemberKind.Text)
             {
-                terms.Add(member.Size.ToString(CultureInfo.InvariantCulture));
+                terms.Add(member.Width);
                 continue;
             }
             string name = names[text++];

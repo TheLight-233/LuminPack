@@ -151,6 +151,12 @@ internal static class DirectJsonEmitter
             body.Add("}");
             body.Add("");
         }
+        if (model.Members.Length == 0)
+        {
+            body.Add("writer.WriteObjectStart<" + Profile + ">();");
+            body.Add("writer.WriteObjectEnd<" + Profile + ">();");
+            return body;
+        }
         // A mirrored type's storage is reached through its layout mirror.
         if (model.Mirror != null)
             body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
@@ -499,20 +505,24 @@ internal static class DirectJsonEmitter
     {
         var members = model.Members;
         string method = w.MethodImpl("AggressiveInlining");
-        w.Line("internal static class Utf8");
-        w.Open();
-        foreach (var member in members)
-            w.Line("internal static readonly byte[] " + Member(member) + " = new byte[] { " + string.Join(", ", Encoding.UTF8.GetBytes(member.Name)
-                .Select(item => item.ToString(CultureInfo.InvariantCulture))) + " };");
-        w.Close();
-        w.Blank();
-        w.Line("internal static class Utf16");
-        w.Open();
-        foreach (var member in members)
-            w.Line("internal static readonly char[] " + Member(member) + " = new char[] { " + string.Join(", ", member.Name.Select(item => "'" + item + "'")) + " };");
-        w.Close();
-        w.Blank();
-        foreach (bool utf8 in new[] { true, false })
+        // A memberless record has no name tables at all.
+        if (members.Length != 0)
+        {
+            w.Line("internal static class Utf8");
+            w.Open();
+            foreach (var member in members)
+                w.Line("internal static readonly byte[] " + Member(member) + " = new byte[] { " + string.Join(", ", Encoding.UTF8.GetBytes(member.Name)
+                    .Select(item => item.ToString(CultureInfo.InvariantCulture))) + " };");
+            w.Close();
+            w.Blank();
+            w.Line("internal static class Utf16");
+            w.Open();
+            foreach (var member in members)
+                w.Line("internal static readonly char[] " + Member(member) + " = new char[] { " + string.Join(", ", member.Name.Select(item => "'" + item + "'")) + " };");
+            w.Close();
+            w.Blank();
+        }
+        foreach (bool utf8 in members.Length == 0 ? new bool[0] : new[] { true, false })
         {
             w.Line("internal static class " + (utf8 ? "Utf8Head" : "Utf16Head"));
             w.Open();
@@ -569,6 +579,12 @@ internal static class DirectJsonEmitter
             w.A("LuminPackUtf16LengthOptions") + ">(ref reader, index);");
         w.Blank();
         w.Line("internal static bool TryReadOrderedJsonProperty<" + Profile + ">(ref " + reader + " reader, int index)");
+        if (members.Length == 0)
+        {
+            // A memberless record never matches an ordered property.
+            w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions") + " => false;"));
+            return;
+        }
         w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions")));
         var body = new List<string>
         {

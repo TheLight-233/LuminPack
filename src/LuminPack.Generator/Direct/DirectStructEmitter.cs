@@ -82,6 +82,8 @@ internal static class DirectStructEmitter
         if (portable)
         {
             // The positional storage view stays declared when the projection named the fields directly.
+            if (model.LayoutAttribute != null)
+                w.Line(model.LayoutAttribute);
             w.Line("private struct " + model.View);
             w.Open();
             for (int index = 0; index < model.Members.Length; index++)

@@ -40,15 +40,63 @@ internal static class DirectEmission
     /// <summary>Counts uncovered types by the check that excluded them, in <see cref="DirectEmissionMode.Verify"/>.</summary>
     internal static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> Rejections = new();
 
+    /// <summary>The type currently being modeled, for development traces.</summary>
+    [ThreadStatic]
+    private static string TraceType;
+    [ThreadStatic]
+    private static int TraceDepth;
+    private static readonly object TraceLock = new();
+    private static readonly string TracePath = Environment.GetEnvironmentVariable("LUMINPACK_DIRECT_TRACE");
+
+    /// <summary>Starts modeling one type, which nested models inherit as their trace context.</summary>
+    /// <param name="name">The type's readable name.</param>
+    internal static void Enter(string name)
+    {
+        if (TraceDepth++ == 0)
+            TraceType = name;
+    }
+
+    /// <summary>Ends modeling one type.</summary>
+    internal static void Exit()
+    {
+        if (--TraceDepth == 0)
+            TraceType = null;
+    }
+
+    /// <summary>Writes one development trace line when the trace environment variable is set.</summary>
+    /// <param name="text">The line to append.</param>
+    internal static void Trace(string text)
+    {
+        if (TracePath == null)
+            return;
+        lock (TraceLock)
+        {
+            try
+            {
+                File.AppendAllText(TracePath, (TraceType ?? "?") + " | " + text + Environment.NewLine);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
     /// <summary>Records why a type keeps the original pipeline.</summary>
     /// <param name="check">The name of the failed check.</param>
     /// <returns>Null, for the caller to return.</returns>
     internal static T Reject<T>(string check) where T : class
     {
         if (Mode == DirectEmissionMode.Verify)
+        {
             Rejections.AddOrUpdate(check, 1, (_, count) => count + 1);
+            Trace("reject " + check);
+        }
         return null;
     }
+
+    /// <summary>Records that a type is covered by the direct emitters.</summary>
+    /// <param name="name">The type's readable name.</param>
+    internal static void Accept(string name) => Trace("covered " + name);
 
     /// <summary>Checks the assembly-wide facts the direct emitters assume, once per compilation.</summary>
     /// <param name="compilation">The consumer compilation.</param>
