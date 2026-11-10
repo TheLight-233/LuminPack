@@ -124,8 +124,13 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool CamelSnapshots;
     /// <summary>Whether the type is a struct: raw unmanaged, written and read as one value, or portable (see <see cref="View"/>).</summary>
     internal readonly bool IsStruct;
-    /// <summary>Whether a member is an inline object, which selects the stream record protocol instead of the reserved one.</summary>
-    internal bool StreamRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object);
+    /// <summary>Whether every member is an inline object or a fixed scalar, which takes the stream record protocol alone: a
+    /// member count, then each member, with no reservation.</summary>
+    internal bool StreamRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object) &&
+        Members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Object);
+    /// <summary>Whether inline objects sit beside members that reserve: the record writes its leading members with the header,
+    /// then each object and every following run in place.</summary>
+    internal bool MixedRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object) && !StreamRecord;
     /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
     /// generic.</summary>
     internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||

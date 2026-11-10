@@ -278,12 +278,14 @@ internal static partial class DirectBinaryEmitter
         }
 
         // A stream record's body is already the lowered statement text, so the call budget is counted from it directly. A
-        // member write stays a call boundary whose callee keeps its own budget, so the runtime sizes the entry instead.
+        // member write stays a call boundary whose callee keeps its own budget, so the runtime sizes the entry instead. A
+        // mixed record reserves around its inline objects, so its write keeps no inline hint, while its read counts like a
+        // stream record's.
         string WriteHint(List<string> body, bool union) => model.StreamRecord
             ? (DirectCalls.Count(body) <= 16 && !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) ? inline : null)
-            : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null);
+            : model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null);
 
-        string ReadHint(List<string> body) => model.StreamRecord
+        string ReadHint(List<string> body) => model.StreamRecord || model.MixedRecord
             ? (DirectCalls.Count(body) <= 16 ? inline : null)
             : (DirectInlining.Read(model, Sizes(body)) ? inline : null);
 
