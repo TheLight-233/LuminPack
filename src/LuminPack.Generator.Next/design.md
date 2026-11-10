@@ -1,11 +1,11 @@
 # LuminPack Generator Next: Architecture and Migration Design
 
 Status: working scaffold with the foundation in place. The analysis layer is complete for the current
-supported surface, and the payload record and raw-struct renderers run inside the Next project. Model
-equality has reference fast paths, one analysis session is shared per compilation and reused across
-nested payloads, referenced-type invalidation is verified, and a same-run benchmark harness compares
-the Next and legacy generators. Collection, portable-struct, Union, circle-reference and
-version-tolerant rendering remain on the migration plan.
+supported surface, and the payload record, raw-struct, collection and dictionary renderers run inside
+the Next project. Model equality has reference fast paths, one analysis session is shared per
+compilation and reused across nested payloads, referenced-type invalidation is verified, and a
+same-run benchmark harness compares the Next and legacy generators. Portable-struct, Union,
+circle-reference and version-tolerant rendering remain on the migration plan.
 
 ## 1. Design philosophy
 
@@ -81,10 +81,10 @@ legacy numbers load the legacy formatter, JSON and facade generators together):
 
 | Corpus | Generator | Full | Comment edit | Member edit | Analysis only |
 | --- | --- | ---: | ---: | ---: | ---: |
-| 40 records, one type per file | Next | 0.031 s / 18.0 MB | 0.008 s / 0.7 MB | 0.010 s / 1.1 MB | 0.003 s / 0.3 MB |
-| 40 records, one type per file | Legacy direct | 0.402 s / 89.2 MB | 0.018 s / 1.9 MB | 0.020 s / 3.2 MB | — |
-| 220 payloads, one file | Next | 0.098 s / 78.6 MB | 0.073 s / 4.0 MB | 0.040 s / 4.7 MB | 0.010 s / 1.9 MB |
-| 220 payloads, one file | Legacy direct | 1.196 s / 472.7 MB | 0.093 s / 34.3 MB | 0.077 s / 36.9 MB | — |
+| 40 records, one type per file | Next | 0.029 s / 18.0 MB | 0.007 s / 0.7 MB | 0.008 s / 1.1 MB | 0.002 s / 0.3 MB |
+| 40 records, one type per file | Legacy direct | 0.369 s / 89.4 MB | 0.024 s / 1.9 MB | 0.022 s / 3.2 MB | — |
+| 220 payloads, one file | Next | 0.107 s / 94.7 MB | 0.051 s / 4.2 MB | 0.059 s / 4.8 MB | 0.022 s / 1.9 MB |
+| 220 payloads, one file | Legacy direct | 1.213 s / 472.5 MB | 0.092 s / 35.2 MB | 0.078 s / 37.2 MB | — |
 
 The 220-payload corpus is one file, so every edit re-parses and re-runs all 220 transforms; the
 one-type-per-file corpus shows the per-type granularity. Legacy output includes shared facades and
@@ -130,19 +130,22 @@ records, 10 raw structs, 10 packed structs, 10 Unions with 20 cases and 10 circl
 | Stage | Result |
 | --- | --- |
 | Analysis | `220 complete, 0 incomplete, 0 unsupported` |
-| Record and raw-struct generation | 130 payloads, 260 files |
-| Compilation of generated output | `0` generated errors |
-| Analysis-only cost | 0.010 s median, 1.9 MB on a warm process |
-| Current Next generation | 0.098 s median for analysis plus 260 payload files, 78.6 MB |
-| Incremental edit, 40 types | 0.008 s comment edit; 0.010 s member edit |
-| Legacy direct pipeline, same 220 payloads | 1.196 s median, 472.7 MB, all three legacy generators |
+| Record, collection and raw-struct generation | 170 payloads, 340 files |
+| Compilation of generated output beside the legacy formatter infrastructure | `0` errors in Next-generated files |
+| Compilation of generated output with the Next generator alone | `320` CS0234 errors: the shared collection formatter owners are not published yet |
+| Analysis-only cost | 0.022 s median, 1.9 MB on a warm process |
+| Current Next generation | 0.107 s median for analysis plus 340 payload files, 94.7 MB |
+| Incremental edit, 40 types | 0.007 s comment edit; 0.008 s member edit |
+| Legacy direct pipeline, same 220 payloads | 1.213 s median, 472.5 MB, all three legacy generators |
 
 The legacy direct pipeline still publishes byte-identical files to the legacy original pipeline on this
 corpus; that comparison belongs to the legacy tree and is not a Next parity result.
 
-The 130/220 figure is the honest scope of this milestone. The adapter returns null for payloads whose
-supporting renderer or model facts are not ported, so the pipeline never publishes code it cannot
-compile.
+The 170/220 figure is the honest scope of this milestone. The adapter returns null for payloads whose
+supporting renderer or model facts are not ported. Collection members call the shared
+`Binary_<assembly>_<type>` formatter owners that the legacy formatter generator publishes; the Next
+project does not publish those owners yet, so a collection payload compiles only beside the legacy
+formatter infrastructure. Shared publication is tracked in M-01 and M-09.
 
 ## 4. Architecture comparison with Nino
 
@@ -253,5 +256,5 @@ the generated trees. It reports:
 
 ```text
 payloads=220 complete=220 incomplete=0 unsupported=0
-files=260 compileErrors generated=0
+files=340 compileErrors generated=320 (shared collection formatter owners pending)
 ```

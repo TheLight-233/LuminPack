@@ -318,16 +318,7 @@ internal static class TypeModelFactory
             if (type.SpecialType == SpecialType.System_String)
                 return new TextMember(name, storage, policy);
             if (type is IArrayTypeSymbol array)
-            {
-                if (array.Rank != 1)
-                {
-                    issues.Add("member '" + name + "' is a multi-dimensional array, which has no modeled sequence form");
-                    return null;
-                }
-                return new CollectionMember(name, storage, policy,
-                    array.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
-                    Reference(array.ElementType));
-            }
+                return ArrayMember(name, storage, policy, array);
 
             if (type is INamedTypeSymbol named)
             {
@@ -337,11 +328,9 @@ internal static class TypeModelFactory
                     return null;
                 }
                 if (DictionaryKind(named) is { } dictionaryKind)
-                    return new DictionaryMember(name, storage, policy, DeclaredType(named), dictionaryKind,
-                        Reference(named.TypeArguments[0]), Reference(named.TypeArguments[1]));
+                    return DictionaryMember(name, storage, policy, named, dictionaryKind);
                 if (SequenceKind(named) is { } collectionKind)
-                    return new CollectionMember(name, storage, policy, DeclaredType(named), collectionKind,
-                        Reference(named.TypeArguments[0]));
+                    return SequenceMemberModel(name, storage, policy, named, collectionKind, depth, issues, path);
                 if (named.TypeKind is TypeKind.Class or TypeKind.Struct)
                     return Payload(member, named, storage, policy, depth, issues, path);
             }
@@ -349,6 +338,224 @@ internal static class TypeModelFactory
             issues.Add("member '" + name + "' has the unsupported type '" + type.ToDisplayString() + "'");
             return null;
         }
+
+        /// <summary>Models a one-dimensional or higher array member.</summary>
+        /// <param name="name">The member name.</param>
+        /// <param name="storage">How the member's storage is reached.</param>
+        /// <param name="policy">The member's resolved wire policy.</param>
+        /// <param name="array">The declared array type.</param>
+        /// <returns>The sequence member.</returns>
+        /// <remarks>A one-dimensional array of raw scalars stores its span directly; every other array writes through its
+        /// generated formatter, and a multi-dimensional array keeps its runtime-sized raw path.</remarks>
+        private static MemberModel ArrayMember(string name, MemberStorage storage, WirePolicy policy, IArrayTypeSymbol array)
+        {
+            string declared = array.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            TypeRef element = Reference(array.ElementType);
+            if (array.Rank != 1)
+                return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
+                    scalar: declared, raw: true, formatterCall: true);
+            if (Scalar(array.ElementType) is { } scalar)
+                return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, scalar: scalar.Keyword);
+            return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
+                scalar: declared, formatterCall: true);
+        }
+
+        /// <summary>Models a generic sequence member of a covered family.</summary>
+        /// <param name="name">The member name.</param>
+        /// <param name="storage">How the member's storage is reached.</param>
+        /// <param name="policy">The member's resolved wire policy.</param>
+        /// <param name="type">The declared sequence type.</param>
+        /// <param name="kind">The declared family.</param>
+        /// <param name="depth">The nested payload depth.</param>
+        /// <param name="issues">Receives the reason an element payload is not expanded.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
+        /// <returns>The sequence member.</returns>
+        private MemberModel SequenceMemberModel(string name, MemberStorage storage, WirePolicy policy, INamedTypeSymbol type,
+            CollectionKind kind, int depth, List<string> issues, Path path)
+        {
+            string declared = DeclaredType(type);
+            ITypeSymbol item = type.TypeArguments[0];
+            TypeRef element = Reference(item);
+            if (kind == CollectionKind.Stack && Scalar(item) is { } stackItem)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: stackItem.Keyword, raw: true);
+            if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
+            if (kind is not (CollectionKind.List or CollectionKind.NestedList))
+                return new CollectionMember(name, storage, policy, declared, kind, element);
+
+            // A list of raw scalars stores its span directly; a raw unmanaged struct keeps its runtime-sized storage path.
+            if (Scalar(item) is { } scalar)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: scalar.Keyword);
+            if (IsReservedElement(item))
+                return new CollectionMember(name, storage, policy, declared, kind, element,
+                    scalar: item.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            // A list of strings writes its payload through one span call and reads through its element formatter.
+            if (item.SpecialType == SpecialType.System_String)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
+            // A list of key/value pairs writes each pair's key and value.
+            if (item is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 2 } pair &&
+                pair.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
+            {
+                var pairKey = Scalar(pair.TypeArguments[0], allowBoolean: false);
+                bool pairValueText = pair.TypeArguments[1].SpecialType == SpecialType.System_String;
+                var pairValue = pairValueText ? null : Scalar(pair.TypeArguments[1], allowBoolean: false);
+                if (pairKey != null && (pairValueText || pairValue != null))
+                    return new CollectionMember(name, storage, policy, declared, kind, element, scalar: declared,
+                        shape: new CollectionShape(pairKey.Value.Keyword, pairValueText ? "string" : pairValue.GetValueOrDefault().Keyword,
+                            pairValueText, entryType: pair.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+            }
+            // A list of lists whose inner elements expand their record body writes both levels in place.
+            if (item is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } innerList &&
+                innerList.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" &&
+                LocalPackableClass(innerList.TypeArguments[0]) is { } nestedElement)
+            {
+                TypeModel? nested = ElementModel(nestedElement, depth, issues, path, name);
+                if (nested == null)
+                    return new CollectionMember(name, storage, policy, declared, kind, element);
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: declared,
+                    shape: new CollectionShape(null, null, false,
+                        itemType: innerList.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)), nested: nested);
+            }
+            // A list of packable classes expands each element's record body in the loop.
+            if (LocalPackableClass(item) is { } elementType)
+            {
+                TypeModel? nested = ElementModel(elementType, depth, issues, path, name);
+                if (nested == null)
+                    return new CollectionMember(name, storage, policy, declared, kind, element);
+                return new CollectionMember(name, storage, policy, declared, kind, element,
+                    scalar: elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested);
+            }
+            return new CollectionMember(name, storage, policy, declared, kind, element);
+        }
+
+        /// <summary>Models a dictionary, sorted list or sparse dictionary member.</summary>
+        /// <param name="name">The member name.</param>
+        /// <param name="storage">How the member's storage is reached.</param>
+        /// <param name="policy">The member's resolved wire policy.</param>
+        /// <param name="type">The declared keyed type.</param>
+        /// <param name="kind">The declared family.</param>
+        /// <returns>The keyed member.</returns>
+        private MemberModel DictionaryMember(string name, MemberStorage storage, WirePolicy policy, INamedTypeSymbol type, DictionaryKind kind)
+        {
+            string declared = DeclaredType(type);
+            TypeRef key = Reference(type.TypeArguments[0]), value = Reference(type.TypeArguments[1]);
+            // A sorted list of a raw key and a raw or string value writes both stored arrays as paired entries.
+            if (kind == Model.DictionaryKind.SortedList)
+            {
+                var sortedKey = Scalar(type.TypeArguments[0], allowBoolean: false);
+                bool sortedValueText = type.TypeArguments[1].SpecialType == SpecialType.System_String;
+                var sortedValue = sortedValueText ? null : Scalar(type.TypeArguments[1], allowBoolean: false);
+                if (sortedKey != null && (sortedValueText || sortedValue != null))
+                    return new DictionaryMember(name, storage, policy, declared, kind, key, value, keyText: false,
+                        valueText: sortedValueText, keyType: sortedKey.Value.Keyword,
+                        valueType: sortedValueText ? "string" : sortedValue.GetValueOrDefault().Keyword);
+                return new DictionaryMember(name, storage, policy, declared, kind, key, value);
+            }
+            if (kind != Model.DictionaryKind.Dictionary)
+                return new DictionaryMember(name, storage, policy, declared, kind, key, value);
+            // A dictionary writes fused entries when a string member bounds its record, or paired records when both key and
+            // value are raw scalars.
+            int reserved = ReservedKind(type);
+            bool keyText = type.TypeArguments[0].SpecialType == SpecialType.System_String;
+            bool valueText = type.TypeArguments[1].SpecialType == SpecialType.System_String;
+            var keyRaw = keyText ? null : Scalar(type.TypeArguments[0], allowBoolean: false);
+            var valueRaw = valueText ? null : Scalar(type.TypeArguments[1], allowBoolean: false);
+            if (reserved is 5 or 6 && (keyText || keyRaw != null) && (valueText || valueRaw != null))
+                return new DictionaryMember(name, storage, policy, declared, kind, key, value, pair: reserved == 5, keyText, valueText,
+                    keyType: keyRaw?.Keyword, valueType: valueRaw?.Keyword);
+            // A dictionary whose value is a nullable raw scalar writes sparse entries with a varint key and the fixed value.
+            if (reserved == 0 && Scalar(type.TypeArguments[1]) == null &&
+                type.TypeArguments[1] is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } nullable &&
+                nullable.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T &&
+                Scalar(nullable.TypeArguments[0]) is { } innerValue && Scalar(type.TypeArguments[0], allowBoolean: false) is { } innerKey)
+                return new DictionaryMember(name, storage, policy, declared, kind, key, value, sparse: true,
+                    keyType: innerKey.Keyword, valueType: innerValue.Keyword + "?");
+            return new DictionaryMember(name, storage, policy, declared, kind, key, value);
+        }
+
+        /// <summary>Expands the element payload of a list, when its complete record can be written in place.</summary>
+        /// <param name="element">The element payload type.</param>
+        /// <param name="depth">The nested payload depth.</param>
+        /// <param name="issues">Receives the reason the element is not expanded.</param>
+        /// <param name="path">The payloads on the current expansion path.</param>
+        /// <param name="memberName">The declaring member, for the issue text.</param>
+        /// <returns>The element model, or null when the element is outside the inline record shape.</returns>
+        private TypeModel? ElementModel(INamedTypeSymbol element, int depth, List<string> issues, Path path, string memberName)
+        {
+            if (path.Active.Contains(element))
+            {
+                path.SawCycle = true;
+                issues.Add("member '" + memberName + "' refers back to '" + element.ToDisplayString() + "' before its payload is complete");
+                return null;
+            }
+            ModelResult nested = Analyze(element, depth + 1, path);
+            if (nested.Model is RecordModel { Versioned: false } record && nested.IsComplete)
+                return record;
+            issues.Add("member '" + memberName + "': " + (nested.Reason ?? "the element payload is not a plain record"));
+            return null;
+        }
+
+        /// <summary>Recognizes a packable class of the consumer assembly that a list can expand element by element.</summary>
+        /// <param name="type">The candidate element type.</param>
+        /// <returns>The class symbol, or null for every other declaration.</returns>
+        private INamedTypeSymbol? LocalPackableClass(ITypeSymbol type)
+            => type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } named && named.SpecialType == SpecialType.None &&
+                SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, _compilation.Assembly) && IsPackable(named) ? named : null;
+
+        /// <summary>Classifies a member whose complete record has an upper bound computable from one read of its storage.</summary>
+        /// <param name="type">The declared member type.</param>
+        /// <returns>Zero for an unbounded member, four for a raw list and five or six for a bounded-entry dictionary.</returns>
+        private int ReservedKind(INamedTypeSymbol type)
+        {
+            if (TryPortableLayout(type) != null || RequiresClosedDispatch(type))
+                return 0;
+            if (type is { IsGenericType: true, TypeArguments.Length: 1 } list &&
+                list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && IsReservedElement(list.TypeArguments[0]))
+                return 4;
+            if (type is { IsGenericType: true, TypeArguments.Length: 2 } dictionary &&
+                dictionary.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>")
+            {
+                if (IsReservedElement(dictionary.TypeArguments[0]) && IsReservedElement(dictionary.TypeArguments[1]))
+                    return 5;
+                // Raw and string members bound each entry from one read, so the dictionary is an open record checked entry by entry.
+                if (IsEntryMember(dictionary.TypeArguments[0]) && IsEntryMember(dictionary.TypeArguments[1]))
+                    return 6;
+            }
+            return 0;
+        }
+
+        /// <summary>Accepts a dictionary key or value whose record has a bound computable from one read.</summary>
+        /// <param name="type">The key or value type.</param>
+        /// <returns>Whether it is a string or raw element storage.</returns>
+        private bool IsEntryMember(ITypeSymbol type)
+            => type.SpecialType == SpecialType.System_String || IsReservedElement(type);
+
+        /// <summary>Accepts only elements the raw collection path copies as their native storage.</summary>
+        /// <param name="element">The element type.</param>
+        /// <returns>Whether the element is closed, raw and unmanaged, with no separate framing contract.</returns>
+        private bool IsReservedElement(ITypeSymbol element)
+        {
+            if (element is ITypeParameterSymbol || element.IsRefLikeType || !element.IsUnmanagedType)
+                return false;
+            if (element is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+                return false;
+            if (element is not INamedTypeSymbol named)
+                return true;
+            // A pair's per-value formatter frames its two members separately, so it is never raw storage.
+            if (named.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
+                return false;
+            if (GenerationMode(named) is "NonGenerator" or "Custom")
+                return false;
+            if (HasAttribute(named, UnionAttribute) || HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute"))
+                return false;
+            return TryPortableLayout(named) == null;
+        }
+
+        /// <summary>Whether a generic declaration still dispatches its unmanaged storage through a closed formatter.</summary>
+        /// <param name="type">The candidate storage type.</param>
+        /// <returns>Whether its width depends on an undetermined type argument.</returns>
+        private static bool RequiresClosedDispatch(ITypeSymbol type)
+            => type is INamedTypeSymbol { IsGenericType: true } named && IsPackable(named) && GenerationMode(named) == "Object";
 
         /// <summary>Models a member that embeds another payload or a generic definition.</summary>
         /// <param name="member">The declared member.</param>
@@ -995,6 +1202,13 @@ internal static class TypeModelFactory
             _ => null,
         };
     }
+
+    /// <summary>Spells a covered fixed scalar, optionally excluding Booleans.</summary>
+    /// <param name="type">The element, key or value type.</param>
+    /// <param name="allowBoolean">Whether a Boolean is a covered scalar.</param>
+    /// <returns>The scalar keyword and packed width, or null for every other type.</returns>
+    private static (string Keyword, int Size)? Scalar(ITypeSymbol type, bool allowBoolean)
+        => !allowBoolean && type.SpecialType == SpecialType.System_Boolean ? null : Scalar(type);
 
     /// <summary>Spells a framework built-in that has a generated formatter and a runtime native width.</summary>
     /// <param name="type">The member type.</param>

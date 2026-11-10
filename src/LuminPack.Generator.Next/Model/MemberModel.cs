@@ -165,6 +165,45 @@ internal enum CollectionKind
     Concurrent,
 }
 
+/// <summary>The stored entry shape of a paired, nested or sorted sequence member.</summary>
+internal sealed class CollectionShape : IEquatable<CollectionShape?>
+{
+    /// <summary>The raw key spelling of a paired or sorted entry, or null.</summary>
+    internal readonly string? Key;
+
+    /// <summary>The raw value spelling, or <c>string</c> when the value is a string record, or null.</summary>
+    internal readonly string? Value;
+
+    /// <summary>Whether the value is a string record.</summary>
+    internal readonly bool ValueText;
+
+    /// <summary>The inner list spelling of a nested list, or null.</summary>
+    internal readonly string? ItemType;
+
+    /// <summary>The pair entry spelling of a key/value list, or null.</summary>
+    internal readonly string? EntryType;
+
+    /// <summary>Captures a collection's entry shape.</summary>
+    internal CollectionShape(string? key, string? value, bool valueText, string? itemType = null, string? entryType = null)
+    {
+        EntryType = entryType;
+        ItemType = itemType;
+        ValueText = valueText;
+        Value = value;
+        Key = key;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(CollectionShape? other) => ReferenceEquals(this, other) || other != null && Key == other.Key &&
+        Value == other.Value && ValueText == other.ValueText && ItemType == other.ItemType && EntryType == other.EntryType;
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as CollectionShape);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (Key ?? ItemType ?? EntryType ?? string.Empty).GetHashCode();
+}
+
 /// <summary>A sequence member.</summary>
 internal sealed class CollectionMember : MemberModel
 {
@@ -177,10 +216,37 @@ internal sealed class CollectionMember : MemberModel
     /// <summary>The element type.</summary>
     internal readonly TypeRef Element;
 
+    /// <summary>The element keyword of a scalar collection, the element spelling of a raw or payload element, or the declared
+    /// family spelling of a paired or nested list, or null when no raw storage form covers the declaration.</summary>
+    internal readonly string? Scalar;
+
+    /// <summary>Whether the member copies raw storage through the writer in place.</summary>
+    internal readonly bool Raw;
+
+    /// <summary>Whether the member writes through its generated formatter instead of a reserved span.</summary>
+    internal readonly bool FormatterCall;
+
+    /// <summary>Whether the member is a list of strings.</summary>
+    internal readonly bool ElementText;
+
+    /// <summary>The model of the element payload, or null.</summary>
+    internal readonly TypeModel? Nested;
+
+    /// <summary>The stored entry shape of a paired, nested or sorted list, or null.</summary>
+    internal readonly CollectionShape? Shape;
+
     /// <summary>Captures a sequence member.</summary>
-    internal CollectionMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, CollectionKind kind, TypeRef element)
+    internal CollectionMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, CollectionKind kind, TypeRef element,
+        string? scalar = null, bool raw = false, bool formatterCall = false, bool elementText = false, TypeModel? nested = null,
+        CollectionShape? shape = null)
         : base(name, storage, policy)
     {
+        Shape = shape;
+        Nested = nested;
+        ElementText = elementText;
+        FormatterCall = formatterCall;
+        Raw = raw;
+        Scalar = scalar;
         Element = element;
         Kind = kind;
         DeclaredType = declaredType;
@@ -190,7 +256,9 @@ internal sealed class CollectionMember : MemberModel
     protected override bool EqualsCore(MemberModel other)
     {
         var member = (CollectionMember)other;
-        return DeclaredType == member.DeclaredType && Kind == member.Kind && Element.Equals(member.Element);
+        return DeclaredType == member.DeclaredType && Kind == member.Kind && Element.Equals(member.Element) &&
+            Scalar == member.Scalar && Raw == member.Raw && FormatterCall == member.FormatterCall &&
+            ElementText == member.ElementText && Equals(Nested, member.Nested) && Equals(Shape, member.Shape);
     }
 }
 
@@ -228,10 +296,36 @@ internal sealed class DictionaryMember : MemberModel
     /// <summary>The value type.</summary>
     internal readonly TypeRef Value;
 
+    /// <summary>Whether both entries are raw scalars, which stores paired records instead of fused entries.</summary>
+    internal readonly bool Pair;
+
+    /// <summary>Whether the key is a string record.</summary>
+    internal readonly bool KeyText;
+
+    /// <summary>Whether the value is a string record.</summary>
+    internal readonly bool ValueText;
+
+    /// <summary>Whether the value is a nullable raw scalar, whose entries are sparse.</summary>
+    internal readonly bool Sparse;
+
+    /// <summary>The raw key spelling, or null when the key is a string or unsupported.</summary>
+    internal readonly string? KeyType;
+
+    /// <summary>The raw value spelling, or null when the value is a string or unsupported.</summary>
+    internal readonly string? ValueType;
+
     /// <summary>Captures a dictionary member.</summary>
-    internal DictionaryMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, DictionaryKind kind, TypeRef key, TypeRef value)
+    internal DictionaryMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, DictionaryKind kind, TypeRef key,
+        TypeRef value, bool pair = false, bool keyText = false, bool valueText = false, bool sparse = false, string? keyType = null,
+        string? valueType = null)
         : base(name, storage, policy)
     {
+        ValueType = valueType;
+        KeyType = keyType;
+        Sparse = sparse;
+        ValueText = valueText;
+        KeyText = keyText;
+        Pair = pair;
         Value = value;
         Key = key;
         Kind = kind;
@@ -242,7 +336,9 @@ internal sealed class DictionaryMember : MemberModel
     protected override bool EqualsCore(MemberModel other)
     {
         var member = (DictionaryMember)other;
-        return DeclaredType == member.DeclaredType && Kind == member.Kind && Key.Equals(member.Key) && Value.Equals(member.Value);
+        return DeclaredType == member.DeclaredType && Kind == member.Kind && Key.Equals(member.Key) && Value.Equals(member.Value) &&
+            Pair == member.Pair && KeyText == member.KeyText && ValueText == member.ValueText && Sparse == member.Sparse &&
+            KeyType == member.KeyType && ValueType == member.ValueType;
     }
 }
 
