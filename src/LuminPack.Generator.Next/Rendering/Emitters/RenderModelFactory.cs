@@ -32,6 +32,12 @@ internal static class RenderModelFactory
         bool isStruct = raw || portable != null;
         if (!isStruct && model is not RecordModel { Versioned: false })
             return null;
+        // The layout mirror reaches auto-property and included non-public storage. A record whose mirror could not be
+        // reproduced exactly stays unmapped instead of emitting partial code.
+        RecordModel? record = isStruct ? null : (RecordModel)model;
+        string? mirror = record?.Mirror;
+        if (record != null && mirror == null && record.Members.Any(member => member.Mirrored))
+            return null;
         if (portable != null && !portable.Fields.All(field => field.Leaves.Length != 0))
             return null;
         string extension = GeneratedNames.Extension(options.AssemblyName);
@@ -48,9 +54,10 @@ internal static class RenderModelFactory
             return null;
         string globalName = model.Identity.GlobalName;
         // The proven object write needs .NET 8, unsafe code and a non-Unity project. The named member write only needs every
-        // variable member to be a string, so a project outside those facts still publishes it.
+        // variable member to be a string, so a project outside those facts still publishes it. A mirrored record reaches
+        // its storage through the mirror, so neither write is its original record body.
         bool proven = model is RecordModel { Proven: true };
-        bool memberWrite = model is RecordModel { Versioned: false, Derived: false } && model.Policy.Bound == null &&
+        bool memberWrite = mirror == null && model is RecordModel { Versioned: false, Derived: false } && model.Policy.Bound == null &&
             model.Members.Length != 0 && model.Members.Any(member => member is TextMember) &&
             model.Members.All(member => member is ScalarMember or TextMember);
         string? view = portable?.ViewName;
@@ -60,15 +67,21 @@ internal static class RenderModelFactory
             .All(index => names.Contains("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)), extension,
             GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: isStruct,
-            uniqueEntries: options.Interceptors, members, proven, mirror: null!, mirrorFields: null!,
+            uniqueEntries: options.Interceptors, members, proven, mirror: mirror!, mirrorFields: record?.MirrorFields ?? null!,
             derived: model is RecordModel { Derived: true },
             isStruct, view: view!, viewElided, fixedUnionCase: false,
-            measureRecord: isStruct && model is StructModel structModel && structModel.RecordWidth && members.All(item => item.IsFixed),
+            measureRecord: members.All(item => item.IsFixed) && model switch
+            {
+                StructModel structModel => structModel.RecordWidth,
+                RecordModel recordModel => recordModel.RecordWidth,
+                _ => false,
+            },
             constructorArguments: null, constructorMembers: null, memberWrite: memberWrite, net8: options.Net8,
             utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: null!,
-            referencePayload: model.Members.Any(item => item is not ScalarMember), layoutAttribute: portable?.LayoutAttribute,
+            referencePayload: model.Members.Any(item => item is not ScalarMember),
+            layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
-            trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView);
+            trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView, mirrorOffsets: record?.MirrorOffsets);
     }
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters
@@ -265,20 +278,21 @@ internal static class RenderModelFactory
 
     private static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options)
     {
-        if (member.Mirrored)
-            return null;
+        // Auto-property and included non-public storage keeps the same wire shapes as a public field; the mirror facts on the
+        // payload decide how the emitters reach it.
+        bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         switch (member)
         {
             case ScalarMember scalar when scalar.Raw && scalar.Builtin:
                 return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.Scalar, scalar.Scalar, 0,
-                    "global::LuminPack." + GeneratedNames.Owner(extension, scalar.Scalar), ScalarKind.Struct, mirrored: false,
-                    raw: true, builtin: true);
+                    "global::LuminPack." + GeneratedNames.Owner(extension, scalar.Scalar), ScalarKind.Struct, mirrored,
+                    raw: true, builtin: true, property: property);
             case ScalarMember scalar:
                 return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.Scalar, scalar.Scalar, scalar.Size, null!,
-                    FieldType(scalar.Scalar), mirrored: false);
+                    FieldType(scalar.Scalar), mirrored, property: property);
             case TextMember:
                 return new RenderMember(member.Name, RenderMemberKind.Text, "string", "string", 0, null!, ScalarKind.String,
-                    mirrored: false);
+                    mirrored, property: property);
             case CollectionMember collection:
                 return Collection(collection, extension, options);
             case DictionaryMember dictionary:
@@ -297,24 +311,25 @@ internal static class RenderModelFactory
     {
         if (member.Scalar == null)
             return null;
+        bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, member.DeclaredType);
         switch (member.Kind)
         {
             case CollectionKind.Array:
                 return new RenderMember(member.Name, RenderMemberKind.Array, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Array, mirrored: false, raw: member.Raw, formatterCall: member.FormatterCall);
+                    ScalarKind.Array, mirrored, raw: member.Raw, formatterCall: member.FormatterCall, property: property);
             case CollectionKind.Stack:
                 return new RenderMember(member.Name, RenderMemberKind.Stack, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored: false, raw: true);
+                    ScalarKind.Other, mirrored, raw: true, property: property);
             case CollectionKind.SortedSet:
                 return new RenderMember(member.Name, RenderMemberKind.SortedSet, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored: false, raw: true);
+                    ScalarKind.Other, mirrored, raw: true, property: property);
             case CollectionKind.List:
             case CollectionKind.NestedList:
                 // A list of key/value pairs writes each pair's key and value in one checkable loop.
                 if (member.Shape is { EntryType: not null } pair)
                     return new RenderMember(member.Name, RenderMemberKind.PairList, member.Scalar, member.DeclaredType, 0, formatter,
-                        ScalarKind.Other, mirrored: false, raw: true,
+                        ScalarKind.Other, mirrored, raw: true, property: property,
                         collection: new RenderCollection(pair.Key, pair.Value, pair.ValueText, entryType: pair.EntryType));
                 // A list of lists writes both levels in place around the element's expanded record body. Its JSON write
                 // keeps the list formatter call, so it is not a raw member.
@@ -323,7 +338,7 @@ internal static class RenderModelFactory
                     PayloadRenderModel? element = Element(member.Nested, options);
                     return element == null ? null :
                         new RenderMember(member.Name, RenderMemberKind.NestedList, member.Scalar, member.DeclaredType, 0, formatter,
-                            ScalarKind.Other, mirrored: false, nested: element,
+                            ScalarKind.Other, mirrored, nested: element, property: property,
                             collection: new RenderCollection(null, null, false, itemType: nested.ItemType));
                 }
                 // A list of packable classes expands each element's record body in the loop.
@@ -332,10 +347,10 @@ internal static class RenderModelFactory
                     PayloadRenderModel? element = Element(member.Nested, options);
                     return element == null ? null :
                         new RenderMember(member.Name, RenderMemberKind.List, member.Scalar, member.DeclaredType, 0, formatter,
-                            ScalarKind.List, mirrored: false, nested: element);
+                            ScalarKind.List, mirrored, nested: element, property: property);
                 }
                 return new RenderMember(member.Name, RenderMemberKind.List, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.List, mirrored: false);
+                    ScalarKind.List, mirrored, property: property);
             default:
                 return null;
         }
@@ -347,20 +362,21 @@ internal static class RenderModelFactory
     /// <returns>The render member, or null when the family is outside the direct emitters.</returns>
     private static RenderMember? Dictionary(DictionaryMember member, string extension)
     {
+        bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, member.DeclaredType);
         switch (member.Kind)
         {
             case DictionaryKind.SortedList when member.KeyType != null && member.ValueType != null:
                 return new RenderMember(member.Name, RenderMemberKind.SortedList, member.DeclaredType, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored: false, raw: true,
+                    ScalarKind.Other, mirrored, raw: true, property: property,
                     collection: new RenderCollection(member.KeyType, member.ValueType, member.ValueText));
             case DictionaryKind.Dictionary when member.Sparse:
                 return new RenderMember(member.Name, RenderMemberKind.SparseDictionary, member.DeclaredType, member.DeclaredType, 0,
-                    formatter, ScalarKind.Other, mirrored: false, raw: true,
+                    formatter, ScalarKind.Other, mirrored, raw: true, property: property,
                     collection: new RenderCollection(member.KeyType!, member.ValueType!, false));
             case DictionaryKind.Dictionary when member.KeyText || member.KeyType != null:
                 return new RenderMember(member.Name, RenderMemberKind.Dictionary, member.DeclaredType, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored: false, raw: true,
+                    ScalarKind.Other, mirrored, raw: true, property: property,
                     dictionary: new RenderDictionary(member.Pair, member.KeyText, member.ValueText, member.KeyType, member.ValueType,
                         member.DeclaredType, formatter));
             default:

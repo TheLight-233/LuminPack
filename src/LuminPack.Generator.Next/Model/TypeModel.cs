@@ -89,15 +89,53 @@ internal sealed class RecordModel : TypeModel
     /// <summary>Whether every variable member is a string, which allows the proven object write.</summary>
     internal readonly bool Proven;
 
+    /// <summary>Whether the declaration is a supported fixed record, which gives it the <c>MeasureRecord</c> entry.</summary>
+    internal readonly bool RecordWidth;
+
+    /// <summary>The root-private layout mirror that auto-property and included non-public storage is reached through, or null
+    /// when every serialized member is a publicly nameable field.</summary>
+    internal readonly string? Mirror;
+
+    /// <summary>The mirror's field declarations, such as <c>string? Name</c>, in storage order, or null.</summary>
+    internal readonly string[]? MirrorFields;
+
+    /// <summary>The explicit-layout offset of each mirror field, or null when the storage is sequential.</summary>
+    internal readonly int[]? MirrorOffsets;
+
+    /// <summary>The CLR layout attribute line of the storage mirror, or null.</summary>
+    internal readonly string? MirrorLayout;
+
     /// <summary>Captures a record.</summary>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
-        bool versioned, bool derived, bool proven)
+        bool versioned, bool derived, bool proven, bool recordWidth, string? mirror, string[]? mirrorFields, int[]? mirrorOffsets,
+        string? mirrorLayout)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
+        RecordWidth = recordWidth;
         Proven = proven;
         Derived = derived;
         Versioned = versioned;
+        Mirror = mirror;
+        MirrorFields = mirrorFields;
+        MirrorOffsets = mirrorOffsets;
+        MirrorLayout = mirrorLayout;
     }
+
+    /// <inheritdoc/>
+    public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
+        other is RecordModel record && base.Equals(other) && Versioned == record.Versioned && Derived == record.Derived &&
+        Proven == record.Proven && RecordWidth == record.RecordWidth && Mirror == record.Mirror &&
+        MirrorLayout == record.MirrorLayout &&
+        (ReferenceEquals(MirrorFields, record.MirrorFields) || MirrorFields != null && record.MirrorFields != null &&
+            Enumerable.SequenceEqual(MirrorFields, record.MirrorFields)) &&
+        (ReferenceEquals(MirrorOffsets, record.MirrorOffsets) || MirrorOffsets != null && record.MirrorOffsets != null &&
+            Enumerable.SequenceEqual(MirrorOffsets, record.MirrorOffsets));
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as RecordModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Identity.GetHashCode();
 }
 
 /// <summary>The storage protocol of a value type.</summary>

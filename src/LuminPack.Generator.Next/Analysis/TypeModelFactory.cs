@@ -213,10 +213,19 @@ internal static class TypeModelFactory
                 {
                     MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
                     bool versioned = generatorType == "VersionTolerant";
-                    bool proven = !versioned && !derived && policy.Bound == null && Options.Net8 && Options.Unsafe && !Options.Unity &&
-                        members.Length != 0 && members.Any(member => member is TextMember) &&
+                    // Storage reached through auto-property or included non-public fields needs the legacy layout mirror before
+                    // the record emitters can write or read it. Every shape the mirror cannot reproduce stays unmapped.
+                    string? mirror = null, mirrorLayout = null;
+                    string[]? mirrorFields = null;
+                    int[]? mirrorOffsets = null;
+                    if (members.Any(member => member.Mirrored))
+                        TryMirror(symbol, identity, versioned, derived, policy, members, issues,
+                            out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
+                    bool proven = !versioned && !derived && mirror == null && policy.Bound == null && Options.Net8 && Options.Unsafe &&
+                        !Options.Unity && members.Length != 0 && members.Any(member => member is TextMember) &&
                         members.All(member => member is ScalarMember or TextMember);
-                    return new RecordModel(identity, accessibility, members, policy, constraints, versioned, derived, proven);
+                    return new RecordModel(identity, accessibility, members, policy, constraints, versioned, derived, proven,
+                        RecordWidthSupported(symbol), mirror, mirrorFields, mirrorOffsets, mirrorLayout);
                 }
             }
         }
@@ -2143,6 +2152,131 @@ internal static class TypeModelFactory
                 return text.Append(")]").ToString();
             }
             return null;
+        }
+
+        /// <summary>Builds the legacy layout mirror of a record whose serialized storage is not publicly nameable.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="identity">The payload's identity, which supplies the mirror's parameter list.</param>
+        /// <param name="versioned">Whether the record is version-tolerant.</param>
+        /// <param name="derived">Whether the record's base type contributes storage.</param>
+        /// <param name="policy">The effective wire policy.</param>
+        /// <param name="members">The serialized members in wire order.</param>
+        /// <param name="issues">Receives the reason the mirror is outside the modeled surface.</param>
+        /// <param name="mirror">Receives the mirror declaration name, or null.</param>
+        /// <param name="mirrorFields">Receives the mirror declarations in storage order, or null.</param>
+        /// <param name="mirrorOffsets">Receives the explicit-layout offsets, or null.</param>
+        /// <param name="mirrorLayout">Receives the CLR layout attribute line, or null.</param>
+        private static void TryMirror(INamedTypeSymbol type, TypeIdentity identity, bool versioned, bool derived, WirePolicy policy,
+            MemberModel[] members, List<string> issues, out string? mirror, out string[]? mirrorFields, out int[]? mirrorOffsets,
+            out string? mirrorLayout)
+        {
+            mirror = null;
+            mirrorFields = null;
+            mirrorOffsets = null;
+            mirrorLayout = null;
+            // A versioned record owns a schema-owned mirror, a derived record needs its base storage and a declared profile,
+            // selected constructor, callbacks or rent change the framing the direct record emitters reproduce.
+            if (versioned || derived)
+            {
+                issues.Add("a mirrored record that is versioned or derived keeps its layout mirror outside the direct emitters");
+                return;
+            }
+            if (!policy.Equals(WirePolicy.Default))
+            {
+                issues.Add("a mirrored record with a declared profile keeps its layout mirror outside the direct emitters");
+                return;
+            }
+            if (SelectedConstructor(type) || Callbacks(type) || Rent(type))
+            {
+                issues.Add("a mirrored record with a selected constructor, callbacks or a pool rent keeps its layout mirror outside the direct emitters");
+                return;
+            }
+            MirrorFields(type, out string[]? fields, out int[]? offsets, out string? layout);
+            if (fields == null)
+            {
+                issues.Add("the layout mirror of '" + identity.DisplayName + "' cannot be reproduced");
+                return;
+            }
+            foreach (MemberModel member in members)
+            {
+                // An auto-property is reached through its backing storage, which only the public accessors keep writable.
+                if (member.Storage == MemberStorage.AutoProperty && !PublicAutoProperty(type, member.Name))
+                {
+                    issues.Add("member '" + member.Name + "' has a non-public or attributed accessor");
+                    return;
+                }
+                if (!MirrorStorageContains(type, member.Name))
+                {
+                    issues.Add("member '" + member.Name + "' is not part of the reconstructed storage");
+                    return;
+                }
+            }
+            mirror = MirrorName(type, identity);
+            mirrorFields = fields;
+            mirrorOffsets = offsets;
+            mirrorLayout = layout;
+        }
+
+        /// <summary>Spells the legacy layout mirror name of a declared payload.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="identity">The payload's identity, which supplies the mirror's parameter list.</param>
+        /// <returns>The mirror declaration name.</returns>
+        private static string MirrorName(INamedTypeSymbol type, TypeIdentity identity)
+        {
+            string formatted = FormatterTypeName(type);
+            string digest;
+            using (var hash = SHA256.Create())
+            {
+                digest = string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(formatted))
+                    .Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
+            }
+            // BuildLocalMyClassName strips the global:: prefix, joins the declaring names with underscores and drops the
+            // generic arguments, which the parameter list spells after the local class name.
+            string local = formatted.StartsWith("global::", StringComparison.Ordinal) ? formatted.Substring(8) : formatted;
+            local = local.Replace('.', '_').Replace('+', '_');
+            int generic = local.IndexOf('<');
+            if (generic >= 0)
+                local = local.Substring(0, generic);
+            string parameters = identity.TypeParameters.Length == 0 ? string.Empty : "<" + string.Join(", ", identity.TypeParameters) + ">";
+            return "LuminLayout_" + digest + "_" + PortableSlotSuffix(type) + "_Local" + local + parameters;
+        }
+
+        /// <summary>Whether a declared auto-property has public accessors and no accessor attributes.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="name">The property name.</param>
+        /// <returns>Whether the mirror reaches the property's backing storage without accessor routing.</returns>
+        private static bool PublicAutoProperty(INamedTypeSymbol type, string name)
+        {
+            foreach (INamedTypeSymbol level in Levels(type))
+                foreach (IPropertySymbol property in level.GetMembers().OfType<IPropertySymbol>())
+                {
+                    if (property.Name != name)
+                        continue;
+                    IMethodSymbol? getter = property.GetMethod, setter = property.SetMethod;
+                    return getter is { DeclaredAccessibility: Microsoft.CodeAnalysis.Accessibility.Public } &&
+                        (setter == null || setter.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public) &&
+                        getter.GetAttributes().Length == 0 && (setter == null || setter.GetAttributes().Length == 0);
+                }
+            return false;
+        }
+
+        /// <summary>Whether the reconstructed storage of a payload declares a member with this name.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="name">The serialized member name.</param>
+        /// <returns>Whether the layout mirror declares the member's storage slot.</returns>
+        private static bool MirrorStorageContains(INamedTypeSymbol type, string name)
+        {
+            foreach (INamedTypeSymbol level in Levels(type))
+                foreach (ISymbol member in OrderedStorageMembers(level))
+                {
+                    if (member.IsImplicitlyDeclared || member.IsStatic)
+                        continue;
+                    if (member is IPropertySymbol property && !IsAutoProperty(property))
+                        continue;
+                    if (member is IFieldSymbol or IPropertySymbol && member.Name == name)
+                        return true;
+                }
+            return false;
         }
 
         /// <summary>Recognizes the scalar spellings a mirror declares without a nullable annotation.</summary>

@@ -5,8 +5,10 @@ supported surface, and every payload kind of the current corpus renders inside t
 records, raw and portable structs, collections, dictionaries, circle references and Union roots.
 Model equality has reference fast paths, one analysis session is shared per compilation and reused
 across nested payloads, referenced-type invalidation is verified, and a same-run benchmark harness
-compares the Next and legacy generators. Shared formatter/facade publication and version-tolerant
-rendering remain on the migration plan.
+compares the Next and legacy generators. Non-derived class records with auto-properties or included
+non-public fields render through the legacy layout mirror, and fixed records publish the legacy
+measurement entry. Shared formatter/facade publication and version-tolerant rendering remain on the
+migration plan.
 
 ## 1. Design philosophy
 
@@ -140,6 +142,12 @@ records, 10 raw structs, 10 packed structs, 10 Unions with 20 cases and 10 circl
 
 The legacy direct pipeline still publishes byte-identical files to the legacy original pipeline on this
 corpus; that comparison belongs to the legacy tree and is not a Next parity result.
+
+A separate five-type mirror corpus (auto-properties, init-only setters, mixed public fields and
+properties, included private and readonly fields) renders 5/5 as ten files with zero compile errors.
+Parity against the legacy direct output matched 9/10 files before the record-width fix; the only
+mismatch was the missing `MeasureRecord` entry, which the record model now carries. Derived records,
+managed structs, constructors, callbacks, rent and versioned records stay unmapped.
 
 All 220 corpus payloads now render, but the generated trees are not yet self-contained. Collection
 members and circle string reads call the shared `Binary_<assembly>_<type>` formatter owners that the
