@@ -43,6 +43,9 @@ internal enum RenderMemberKind : byte
     ImmutableStack,
     /// <summary>An <c>ImmutableList&lt;T&gt;</c> member, written from pooled storage and read through its shared generated formatter owner.</summary>
     ImmutableList,
+    /// <summary>An <c>ImmutableHashSet&lt;T&gt;</c> member, written through the tree-storage helper and read through its shared
+    /// generated formatter owner.</summary>
+    ImmutableHashSet,
 }
 
 /// <summary>The sequence families the shared formatter owners reproduce.</summary>
@@ -56,6 +59,8 @@ internal enum SequenceFamily : byte
     ImmutableStack,
     /// <summary>A <c>System.Collections.Immutable.ImmutableList&lt;T&gt;</c>.</summary>
     ImmutableList,
+    /// <summary>A <c>System.Collections.Immutable.ImmutableHashSet&lt;T&gt;</c>.</summary>
+    ImmutableHashSet,
 }
 
 /// <summary>The entry shape of a sorted or paired collection member.</summary>
@@ -292,7 +297,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
         member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
-            RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList;
+            RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or
+            RenderMemberKind.ImmutableHashSet;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));

@@ -15,6 +15,7 @@ internal static class SharedFormatterPublisher
     private const string CultureInfoHint = "LuminPack.SharedFormatters/CultureInfo.g.cs";
     private const string ConcurrentQueueOfStringHint = "LuminPack.SharedFormatters/ConcurrentQueueOfString.g.cs";
     private const string ImmutableArrayOfStringHint = "LuminPack.SharedFormatters/ImmutableArrayOfString.g.cs";
+    private const string ImmutableCandidateHint = "LuminPack.SharedFormatters/ImmutableCandidateCache.g.cs";
 
     /// <summary>Publishes every owner in the set.</summary>
     /// <param name="production">The source production context.</param>
@@ -41,6 +42,14 @@ internal static class SharedFormatterPublisher
                 production.AddSource(ScalarHint(scalar), ScalarOwnerFile.Render(set, scalar));
         // A concurrent or immutable sequence publishes one owner per closed sequence type, keyed by its declared spelling.
         if (set.SequenceOwners != null)
+        {
+            // The set owner reuses a weak candidate cache that is shared by every closed set of the compilation.
+            for (int index = 0; index < set.SequenceOwners.Length; index++)
+                if (set.SequenceOwners[index].Family == SequenceFamily.ImmutableHashSet && set.SequenceOwners[index].Element == null)
+                {
+                    production.AddSource(ImmutableCandidateHint, ImmutableHashSetOwnerFile.RenderCache(set));
+                    break;
+                }
             foreach (SequenceOwnerFact fact in set.SequenceOwners)
             {
                 string hint = SequenceHint(fact);
@@ -66,8 +75,12 @@ internal static class SharedFormatterPublisher
                     case SequenceFamily.ImmutableList:
                         production.AddSource(hint, ImmutableListOwnerFile.Render(set, fact));
                         break;
+                    case SequenceFamily.ImmutableHashSet:
+                        production.AddSource(hint, ImmutableHashSetOwnerFile.Render(set, fact));
+                        break;
                 }
             }
+        }
     }
 
     /// <summary>Names the hint of a sequence owner.</summary>
