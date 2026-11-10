@@ -7,9 +7,11 @@ Model equality has reference fast paths, one analysis session is shared per comp
 across nested payloads, referenced-type invalidation is verified, and a same-run benchmark harness
 compares the Next and legacy generators. Non-derived class records with auto-properties or included
 non-public fields render through the legacy layout mirror, fixed records publish the legacy measurement
-entry, and version-tolerant class records render their schema prefix and name tables. Shared formatter
-publication, versioned structs, constructors, callbacks, pool rent and the original-pipeline special
-types remain on the migration plan.
+entry, and version-tolerant class records render their schema prefix and name tables. The corpus now
+publishes its IntArray, ListOfInt, String and Int shared formatter owners, so its generated trees
+compile without the legacy generator. Other collection, scalar and dictionary owners, the serializer
+facade, versioned structs, constructors, callbacks, pool rent, the original-pipeline special types and
+analysis diagnostics remain on the migration plan.
 
 ## 1. Design philosophy
 
@@ -85,10 +87,10 @@ legacy numbers load the legacy formatter, JSON and facade generators together):
 
 | Corpus | Generator | Full | Comment edit | Member edit | Analysis only |
 | --- | --- | ---: | ---: | ---: | ---: |
-| 40 records, one type per file | Next | 0.028 s / 18.0 MB | 0.007 s / 0.7 MB | 0.007 s / 1.1 MB | 0.002 s / 0.3 MB |
-| 40 records, one type per file | Legacy direct | 0.349 s / 89.5 MB | 0.028 s / 1.9 MB | 0.030 s / 3.2 MB | — |
-| 220 payloads, one file | Next | 0.136 s / 117.3 MB | 0.089 s / 4.8 MB | 0.075 s / 5.4 MB | 0.029 s / 2.3 MB |
-| 220 payloads, one file | Legacy direct | 0.968 s / 472.5 MB | 0.075 s / 34.4 MB | 0.077 s / 36.8 MB | — |
+| 40 records, one type per file | Next | 0.028 s / 18.0 MB | 0.008 s / 0.8 MB | 0.009 s / 1.2 MB | 0.004 s / 0.3 MB |
+| 40 records, one type per file | Legacy direct | 0.345 s / 89.5 MB | 0.013 s / 1.9 MB | 0.015 s / 3.2 MB | — |
+| 220 payloads, one file | Next | 0.140 s / 117.8 MB | 0.070 s / 5.1 MB | 0.095 s / 6.2 MB | 0.041 s / 2.6 MB |
+| 220 payloads, one file | Legacy direct | 1.078 s / 465.7 MB | 0.071 s / 36.2 MB | 0.081 s / 37.3 MB | — |
 
 The 220-payload corpus is one file, so every edit re-parses and re-runs all 220 transforms; the
 one-type-per-file corpus shows the per-type granularity. Legacy output includes shared facades and
@@ -134,12 +136,13 @@ records, 10 raw structs, 10 packed structs, 10 Unions with 20 cases and 10 circl
 | Stage | Result |
 | --- | --- |
 | Analysis | `220 complete, 0 incomplete, 0 unsupported` |
-| Payload rendering | all 220 payloads, 440 files |
-| Compilation of generated output with the Next generator alone | `360` CS0234 errors: the shared collection/string formatter owners are not published yet |
-| Analysis-only cost | 0.029 s median, 2.3 MB on a warm process |
-| Current Next generation | 0.136 s median for analysis plus 440 payload files, 117.3 MB |
-| Incremental edit, 40 types | 0.007 s comment edit; 0.007 s member edit |
-| Legacy direct pipeline, same 220 payloads | 0.968 s median, 472.5 MB, all three legacy generators |
+| Payload rendering | all 220 payloads, 440 payload files |
+| Shared formatter owners | 4 files: IntArray, ListOfInt, String and Int |
+| Compilation of generated output with the Next generator alone | `0` errors |
+| Analysis-only cost | 0.041 s median, 2.6 MB on a warm process |
+| Current Next generation | 0.140 s median for analysis plus 444 files, 117.8 MB |
+| Incremental edit, 40 types | 0.008 s comment edit; 0.009 s member edit |
+| Legacy direct pipeline, same 220 payloads | 1.078 s median, 465.7 MB, all three legacy generators |
 
 The legacy direct pipeline still publishes byte-identical files to the legacy original pipeline on this
 corpus; that comparison belongs to the legacy tree and is not a Next parity result.
@@ -157,11 +160,11 @@ because the fresh-result read path was not modeled; records now compute the lega
 condition, so the adapter selects the same `var result = reuseExisting ? ...` body. Versioned structs,
 callbacks, rent, generic, bounded and non-default profiles stay unmapped.
 
-All 220 corpus payloads now render, and fixed Union cases publish their own `SerializeUnionAt` cursor
-entries. The generated trees are still not fully self-contained: collection members and circle string
-reads call the shared `Binary_<assembly>_<type>` formatter owners that the legacy formatter generator
-publishes. The Next project does not publish those owners yet, so the corpus compiles only beside the
-legacy formatter output. Shared publication is tracked in M-01 and M-09.
+All 220 corpus payloads now render, fixed Union cases publish their own `SerializeUnionAt` cursor
+entries, and the collected payload set publishes the corpus's four shared formatter owners. The corpus
+therefore compiles with the Next generator alone. Other collection element types, scalar and built-in
+owners beyond Int, dictionary families and the serializer facade remain unpublished; shared
+publication is tracked in M-01, M-02 and M-09.
 
 ## 4. Architecture comparison with Nino
 
@@ -221,15 +224,15 @@ pipeline; P2 improves the product.
 
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | Collection formatter and dispatch generator: arrays, `List<T>`, `Stack<T>`, `SortedSet<T>`, nested lists, immutable and concurrent families | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
-| M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
+| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners and the `Int`/`String` owners landed; other element types, `Stack<T>`, `SortedSet<T>`, nested lists and immutable/concurrent families remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
+| M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values; no shared dictionary owner is published yet | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
 | M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
 | M-05 | Circle-reference model facts: mirror, slots, guards, reference ids | Model + Rendering | M-06 | Circle payloads generate and compile | P0 |
 | M-06 | Layout mirror: mirror name, field list and explicit offsets for auto-properties and included fields | Model + Rendering | — | Auto-property and included-private payloads generate and compile | P1 |
 | M-07 | Version-tolerant schema: class records and their metadata encoder, prefix, field entries, old names and layout landed; versioned structs, callbacks, rent, generic, bounded and non-default profiles remain | Analysis + Rendering | — | Versioned class records generate the same schema as the old pipeline; remaining version shapes match | P1 |
 | M-08 | Callbacks, selected constructors, pool rent and reuse | Analysis + Rendering | M-06 | Callback, constructor and pooled types generate | P1 |
-| M-09 | Shared publication: serializer facades, formatter dispatch, registration, layout files | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
+| M-09 | Shared publication: the corpus formatter owners are published; serializer facades, formatter dispatch, registration and layout files remain | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
 | M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Old and Next output are byte-identical on the corpus | P1 |
 | M-11 | Declared string profiles, input limits and member-scope profiles | Analysis + Rendering | M-09 | Member and type profile declarations generate correctly | P1 |
 | M-12 | Diagnostics and analyzers for unsupported members, layouts, options and Union cases | Analysis | — | Diagnostics are reported at the declaration, not in generated code | P2 |
@@ -272,5 +275,5 @@ the generated trees. It reports:
 
 ```text
 payloads=220 complete=220 incomplete=0 unsupported=0
-files=440 compileErrors generated=360 (shared collection/string formatter owners pending)
+files=444 compileErrors generated=0
 ```

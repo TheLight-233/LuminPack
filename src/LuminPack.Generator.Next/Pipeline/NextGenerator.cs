@@ -3,6 +3,7 @@ using LuminPack.SourceGenerator.Next.Analysis;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering;
 using LuminPack.SourceGenerator.Next.Rendering.Binary;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using LuminPack.SourceGenerator.Next.Rendering.Json;
 using LuminPack.SourceGenerator.Next.Rendering.Union;
 using Microsoft.CodeAnalysis;
@@ -48,6 +49,19 @@ public sealed class NextGenerator : IIncrementalGenerator
             Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
             Emit(production, model, renderContext, JsonRenderer.Instance.Render(model, renderContext), ".Json");
         });
+        // The shared formatter owners are collected once: the flag set is order-independent, so the same complete payloads
+        // publish the same files and an unchanged set reuses its cached output across edits.
+        var sharedFormatters = models.Collect()
+            .Select(static (payloads, _) =>
+            {
+                SharedFormatterSet set = SharedFormatterSet.Empty;
+                foreach (ModeledPayload payload in payloads)
+                    if (payload.Result.Model is { } model && payload.Result.IsComplete)
+                        set = set.Include(model, payload.Options);
+                return set;
+            })
+            .WithTrackingName("LuminPack.Next.SharedFormatters");
+        context.RegisterSourceOutput(sharedFormatters, static (production, set) => SharedFormatterPublisher.Publish(production, set));
     }
 
     private static void Emit(SourceProductionContext production, TypeModel model, RenderContext context, string source, string suffix)
