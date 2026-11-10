@@ -278,12 +278,13 @@ internal static partial class DirectBinaryEmitter
         }
 
         // A stream record's body is already the lowered statement text, so the call budget is counted from it directly. A
-        // member write stays a call boundary whose callee keeps its own budget, so the runtime sizes the entry instead. A
-        // mixed record reserves around its inline objects, so its write keeps no inline hint, while its read counts like a
-        // stream record's.
-        string WriteHint(List<string> body, bool union) => model.StreamRecord
-            ? (DirectCalls.Count(body) <= 16 && !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) ? inline : null)
-            : model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null);
+        // mixed record counts its inline objects' expanded bodies structurally, because their member runs, not their call
+        // sites, decide the budget. A member write stays a call boundary whose callee keeps its own budget, so the runtime
+        // sizes the entry instead, and any record that calls one keeps no inline hint.
+        string WriteHint(List<string> body, bool union) => (model.StreamRecord || model.MixedRecord) &&
+            !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0)
+            ? ((model.StreamRecord ? DirectCalls.Count(body) <= 16 : DirectInlining.MixedWrite(model)) ? inline : null)
+            : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));
 
         string ReadHint(List<string> body) => model.StreamRecord || model.MixedRecord
             ? (DirectCalls.Count(body) <= 16 ? inline : null)
@@ -462,14 +463,17 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Spells the snapshot local of a variable member as the projected emitter names it.</summary>
-    private static string Snapshot(DirectTypeModel model, int index)
+    /// <param name="model">The record that owns the member.</param>
+    /// <param name="index">The member's index.</param>
+    /// <param name="camel">Whether the mixed record body camel-cases every snapshot local, as its inline object members do.</param>
+    private static string Snapshot(DirectTypeModel model, int index, bool camel = false)
     {
         string name = model.Members[index].Name + "Snapshot" + index.ToString(CultureInfo.InvariantCulture);
         // The presentation drops an expansion number from a purely alphabetic name whose base is otherwise unused.
         string stem = model.Members[index].Name + "Snapshot";
         string chosen = model.Members[index].Name.All(char.IsLetter) && model.Members.All(member => member.Name != stem) ? stem : name;
         // Snapshots of mirrored members are named like role locals.
-        return !model.CamelSnapshots ? chosen : char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
+        return !(model.CamelSnapshots || camel) ? chosen : char.ToLowerInvariant(chosen[0]) + chosen.Substring(1);
     }
 
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
@@ -533,6 +537,10 @@ internal static partial class DirectBinaryEmitter
         // every inline object writing its own count and members in place.
         if (model.StreamRecord)
             return StreamWriteBody(model, w, union, body);
+        // Inline objects and reserving members alternate: the leading members share the header's reservation, each object
+        // writes in place, and every following run reserves on its own.
+        if (model.MixedRecord)
+            return MixedWriteBody(model, w, union, body);
 
         body.Add("ref byte cursor = ref writer.Cursor;");
         body.Add("// Fields: " + string.Join(", ", members.Select(member => member.Name)));
@@ -627,6 +635,184 @@ internal static partial class DirectBinaryEmitter
         return body;
     }
 
+    /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in
+    /// place, and every following run of reserving members written through its own reservation.</summary>
+    private static List<string> MixedWriteBody(DirectTypeModel model, DirectWriter w, bool union, List<string> body)
+    {
+        var members = model.Members;
+        int ends = 0, cursors = 1;
+        var names = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 };
+        // The leading members before the first inline object share the header's reservation; without any, the header is a
+        // lone record of its own.
+        int first = 0;
+        while (first < members.Length && members[first].Kind != DirectMemberKind.Object)
+            first++;
+        body.Add("ref byte cursor = ref writer.Cursor;");
+        if (first == 0)
+        {
+            if (!union)
+                body.Add("cursor = ref writer.WriteRecord(ref cursor, (byte)" + members.Length.ToString(CultureInfo.InvariantCulture) + ");");
+        }
+        else if (union && first == 1)
+            AddLoneRecord(body, members[0]);
+        else
+            AddReservedSegment(model, w, body, 0, first - 1, header: !union);
+        body.Add("writer.Cursor = ref cursor;");
+        int index = first;
+        while (index < members.Length)
+        {
+            var member = members[index];
+            if (member.Kind == DirectMemberKind.Object)
+            {
+                AddInlineObjectWrite(body, member, "value", 0, w, names, ref ends, ref cursors);
+                index++;
+                if (!member.Nested.MemberWrite && index < members.Length && !StartsInlineObject(members[index]))
+                    body.Add("");
+                continue;
+            }
+            int last = index;
+            while (last + 1 < members.Length && members[last + 1].Kind != DirectMemberKind.Object)
+                last++;
+            body.Add("cursor = ref writer.Cursor;");
+            if (last == index)
+                AddLoneRecord(body, member);
+            else
+                AddReservedSegment(model, w, body, index, last, header: false);
+            body.Add("writer.Cursor = ref cursor;");
+            index = last + 1;
+        }
+        ReduceInlineNames(body);
+        return body;
+    }
+
+    /// <summary>Writes one inline object member: a named member operation when the child publishes one, otherwise its marker
+    /// and its members in place.</summary>
+    private static void AddInlineObjectWrite(List<string> body, DirectMember member, string owner, int depth, DirectWriter w,
+        Dictionary<string, int> names, ref int ends, ref int cursors)
+    {
+        if (member.Nested.MemberWrite)
+        {
+            body.Add(w.A("LuminPackSerializer") + ".SerializeMember_" + member.Nested.Readable + "<" + Profile + ">(ref writer, " +
+                owner + "." + member.Name + ");");
+            return;
+        }
+        string name = InlineName(names, "inlineValue", depth);
+        body.Add("var " + name + " = " + owner + "." + member.Name + ";");
+        body.Add("if (" + name + " is null)");
+        body.Add("{");
+        body.Add("writer.Cursor = (byte)255;");
+        body.Add("writer.Advance(1);");
+        body.Add("}");
+        body.Add("else");
+        body.Add("{");
+        body.Add("writer.Cursor = (byte)" + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
+        body.Add("writer.Advance(1);");
+        AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends, ref cursors);
+        body.Add("}");
+    }
+
+    /// <summary>Writes a lone member through the cursor without reserving first, as a one-member record does.</summary>
+    private static void AddLoneRecord(List<string> body, DirectMember member)
+    {
+        body.Add("// Fields: " + member.Name);
+        if (member.Kind == DirectMemberKind.Fixed)
+            body.Add("cursor = ref writer.WriteRecord(ref cursor, value." + member.Name + ");");
+        else if (member.Kind == DirectMemberKind.Text)
+            body.Add("cursor = ref writer.WriteRecordString<" + Profile + ">(ref cursor, value." + member.Name + ");");
+        else
+            body.Add("cursor = ref writer.WriteRecordSpan(ref cursor, value." + member.Name + ");");
+    }
+
+    /// <summary>Writes a span of a mixed record through one reservation, optionally including the record header byte.</summary>
+    private static void AddReservedSegment(DirectTypeModel model, DirectWriter w, List<string> body, int first, int last, bool header)
+    {
+        var members = model.Members;
+        var names = new List<string>();
+        for (int index = first; index <= last; index++)
+            names.Add(members[index].Name);
+        body.Add("// Fields: " + string.Join(", ", names));
+        var terms = new List<string>();
+        if (header)
+            terms.Add("1");
+        for (int index = first; index <= last; index++)
+        {
+            var member = members[index];
+            string snapshot = Snapshot(model, index, camel: model.InlineObject);
+            if (member.Kind == DirectMemberKind.Fixed)
+                terms.Add(member.Width);
+            else if (member.Kind == DirectMemberKind.Text)
+            {
+                body.Add("string " + snapshot + " = value." + member.Name + ";");
+                terms.Add("writer.RecordBound<" + Profile + ">(" + snapshot + ")");
+            }
+            else
+            {
+                body.Add("var " + snapshot + " = " + w.A("LuminPackWriter") + ".Capture(value." + member.Name + ");");
+                terms.Add(snapshot + ".Bound");
+            }
+        }
+        body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
+        if (header)
+        {
+            body.Add("cursor = (byte)" + members.Length.ToString(CultureInfo.InvariantCulture) + ";");
+            body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 1);");
+        }
+        for (int index = first; index <= last; index++)
+        {
+            var member = members[index];
+            if (member.IsFixed)
+            {
+                int end = RunEnd(members, index);
+                if (end > last)
+                    end = last;
+                if (end == index)
+                {
+                    if (member.Size == 8 || member.Raw)
+                    {
+                        // A raw framework struct keeps its aligned store on 64-bit targets and its checked reserved store
+                        // otherwise; an eight-byte scalar uses the same split without the size test.
+                        body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" +
+                            (member.Raw ? " || " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">() <= 4" : string.Empty) + ")");
+                        body.Add("{");
+                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
+                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
+                        body.Add("}");
+                        body.Add("else");
+                        body.Add("{");
+                        body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
+                        body.Add("}");
+                        body.Add("");
+                    }
+                    else
+                    {
+                        body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, value." + member.Name + ");");
+                        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
+                    }
+                    continue;
+                }
+                string width = Width(members, index, end);
+                body.Add("if (" + Proof(w, members, index, end, "value", readOnly: true) + ")");
+                body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " + Bytes(w, member, "value", readOnly: true) + ", " +
+                    width + ");");
+                body.Add("else");
+                body.Add("{");
+                AddFixedStores(w, members, index, end, "cursor", body);
+                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width + ");");
+                body.Add("}");
+                body.Add("");
+                index = end;
+                continue;
+            }
+            body.Add("// Field: " + member.Name);
+            if (member.Kind == DirectMemberKind.Text)
+                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + Snapshot(model, index, camel: model.InlineObject) + ");");
+            else
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.InlineObject) + ");");
+        }
+        if (body[body.Count - 1].Length != 0)
+            body.Add("");
+    }
+
     /// <summary>Builds a stream record's write body: the member count, then every member, with inline objects writing their own
     /// count and members in place.</summary>
     private static List<string> StreamWriteBody(DirectTypeModel model, DirectWriter w, bool union, List<string> body)
@@ -636,8 +822,8 @@ internal static partial class DirectBinaryEmitter
             body.Add("writer.Cursor = (byte)" + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
             body.Add("writer.Advance(1);");
         }
-        int ends = 0;
-        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 }, ref ends);
+        int ends = 0, cursors = 0;
+        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 }, ref ends, ref cursors);
         ReduceInlineNames(body);
         return body;
     }
@@ -651,38 +837,28 @@ internal static partial class DirectBinaryEmitter
     /// <param name="names">The occurrence counters of the inline locals of this method; the root's own value local holds the
     /// first occurrence of the list alias name.</param>
     /// <param name="ends">The exit label counter shared by the whole method.</param>
+    /// <param name="cursors">The cursor local counter shared by the whole method; a mixed record's own cursor holds the first
+    /// occurrence.</param>
     private static void AddStreamWrite(List<string> body, DirectTypeModel model, string owner, int depth, DirectWriter w,
-        Dictionary<string, int> names, ref int ends)
+        Dictionary<string, int> names, ref int ends, ref int cursors)
     {
         var members = model.Members;
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
+            // A string inside an inline object writes with the operation's profile, as the old pipeline's inline object
+            // emits it: writer.Write<TLuminProfile>(inlineValue.Name); (ProbeMixed.O1).
+            if (member.Kind == DirectMemberKind.Text)
+            {
+                body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
+                continue;
+            }
             if (member.Kind == DirectMemberKind.Object)
             {
-                // A child with strings publishes a named member write, which keeps its own framing; the parent calls it instead
-                // of copying its body.
-                if (member.Nested.MemberWrite)
-                {
-                    body.Add(w.A("LuminPackSerializer") + ".SerializeMember_" + member.Nested.Readable + "<" + Profile + ">(ref writer, " +
-                        owner + "." + member.Name + ");");
-                    continue;
-                }
-                string name = InlineName(names, "inlineValue", depth);
-                body.Add("var " + name + " = " + owner + "." + member.Name + ";");
-                body.Add("if (" + name + " is null)");
-                body.Add("{");
-                body.Add("writer.Cursor = (byte)255;");
-                body.Add("writer.Advance(1);");
-                body.Add("}");
-                body.Add("else");
-                body.Add("{");
-                body.Add("writer.Cursor = (byte)" + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
-                body.Add("writer.Advance(1);");
-                AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends);
-                body.Add("}");
-                // An inline object leaves a blank line before a following field unless that field opens another inline object.
-                if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                AddInlineObjectWrite(body, member, owner, depth, w, names, ref ends, ref cursors);
+                // An inline object leaves a blank line before a following field unless that field opens another inline object;
+                // a named member write stays a plain call and keeps no blank, as the old body's continue does.
+                if (!member.Nested.MemberWrite && index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
                     body.Add("");
                 continue;
             }
@@ -726,8 +902,9 @@ internal static partial class DirectBinaryEmitter
             body.Add("\twriter.Write(ref " + Bytes(w, members[index], owner, readOnly: true) + ", " + width + ");");
             body.Add("else");
             body.Add("{");
-            body.Add("ref byte cursor = ref writer.Cursor;");
-            AddFixedStores(w, members, index, last, "cursor", body, owner);
+            string cursor = "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
+            body.Add("ref byte " + cursor + " = ref writer.Cursor;");
+            AddFixedStores(w, members, index, last, cursor, body, owner);
             body.Add("writer.Advance(" + width + ");");
             body.Add("}");
             index = last;
@@ -1030,7 +1207,9 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Builds a root read body.</summary>
     private static List<string> ReadBody(DirectTypeModel model, DirectWriter w, bool union)
     {
-        if (model.StreamRecord)
+        // A mixed record reads with the stream protocol: the inline objects keep their markers, so the reserved write
+        // segments change nothing about the order and shape of the reads.
+        if (model.StreamRecord || model.MixedRecord)
             return StreamReadBody(model, w, union);
         var members = model.Members;
         var body = new List<string>();
@@ -1187,7 +1366,12 @@ internal static partial class DirectBinaryEmitter
                 AddStreamRead(body, member.Nested, name, depth + 1, prove, markerSeen, w, names, ref cursors);
                 body.Add(owner + "." + member.Name + " = " + name + ";");
                 body.Add("}");
-                body.Add("");
+                // A following unproven fixed run opens with its own cursor local, which the presentation keeps directly
+                // under the block instead of separating it with a blank line; a proven run opens with its proof. The parent's
+                // assignment after the last member keeps the blank, so it is added even without a next member.
+                bool opensCursor = !prove && index + 1 < members.Length && members[index + 1].IsFixed && RunEnd(members, index + 1) > index + 1;
+                if (!opensCursor)
+                    body.Add("");
                 continue;
             }
             if (member.Kind == DirectMemberKind.Text)

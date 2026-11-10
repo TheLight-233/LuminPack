@@ -131,6 +131,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether inline objects sit beside members that reserve: the record writes its leading members with the header,
     /// then each object and every following run in place.</summary>
     internal bool MixedRecord => !IsStruct && Members.Any(member => member.Kind == DirectMemberKind.Object) && !StreamRecord;
+    /// <summary>Whether an object member is copied in place rather than through its named member operation; only that mixed
+    /// shape camel-cases its snapshot locals.</summary>
+    internal bool InlineObject => Members.Any(member => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite);
     /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
     /// generic.</summary>
     internal bool ProfilePayload => Members.Any(member => member.Kind == DirectMemberKind.Text ||
@@ -394,10 +397,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             members.Select(member => char.ToLowerInvariant(member.Name[0]) + member.Name.Substring(1)).Distinct(StringComparer.Ordinal).Count() != members.Length)
             return DirectEmission.Reject<DirectTypeModel>("member names");
         // Inline object members keep the stream record protocol: a marker holding the member count, then each member in
-        // order. That shape is only emitted for a plain class record of fixed scalars and other inline objects.
+        // order. Beside reserving members the record writes a reserved prefix with the header, then each object and every
+        // following run in place.
         bool objects = members.Any(member => member.Kind == DirectMemberKind.Object);
-        if (objects && (mirrored || versioned || derived || isStruct ||
-            members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object))))
+        if (objects && (mirrored || versioned || derived || isStruct))
             return DirectEmission.Reject<DirectTypeModel>("nested object record");
 
         string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -600,8 +603,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         }
         // A packable class of this assembly with analyzed fields is stored inline: the parent record writes its members
         // directly after a marker holding their count. Versioned, mirrored, constructed and pooled children change that
-        // record shape. A child with strings writes through its named member operation; a child mixing strings with inline
-        // objects or collections keeps the original reserved body and the original pipeline.
+        // record shape. A child with strings writes through its named member operation when every member is a fixed scalar
+        // or a string; otherwise its strings write inline with the parent's profile.
         if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } objectType && symbol.SpecialType == SpecialType.None &&
             objectType.ContainingType == null &&
             SymbolEqualityComparer.Default.Equals(objectType.ContainingAssembly, compilation.Assembly) &&
@@ -616,9 +619,6 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 nested.ConstructorArguments != null || nested.Members.Length == 0 ||
                 nested.Members.Any(item => item.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or DirectMemberKind.Object or
                     DirectMemberKind.Array or DirectMemberKind.List)))
-                return DirectEmission.Reject<DirectMember>("nested object member");
-            bool text = nested.Members.Any(item => item.Kind == DirectMemberKind.Text);
-            if (text && (!nested.MemberWrite || nested.Members.Any(item => item.Kind == DirectMemberKind.Object)))
                 return DirectEmission.Reject<DirectMember>("nested object member");
             string spelling = objectType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             return new DirectMember(field.Name, DirectMemberKind.Object, spelling, spelling, 0,

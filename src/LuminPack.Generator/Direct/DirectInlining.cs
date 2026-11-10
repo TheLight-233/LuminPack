@@ -31,6 +31,38 @@ internal static class DirectInlining
         return count + sizes <= Limit;
     }
 
+    /// <summary>Whether a mixed record's write root keeps its aggressive inlining hint. The record expands its inline objects
+    /// in place, so their member runs are counted as part of its own body.</summary>
+    internal static bool MixedWrite(DirectTypeModel model) => MixedCost(model) <= Limit;
+
+    /// <summary>Counts a mixed record's expanded write: the reservation and commit, each variable member's snapshot and store,
+    /// each fixed run, and each inline object's marker and expanded body.</summary>
+    private static int MixedCost(DirectTypeModel model)
+    {
+        var members = model.Members;
+        int count = 2;
+        for (int index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (member.Kind == DirectMemberKind.Object)
+            {
+                count += 1 + MixedCost(member.Nested);
+                continue;
+            }
+            if (member.Kind == DirectMemberKind.Fixed)
+            {
+                int run = 1;
+                while (index + run < members.Length && members[index + run].IsFixed)
+                    run++;
+                count += run == 1 ? 1 : Group(run);
+                index += run - 1;
+                continue;
+            }
+            count += 2;
+        }
+        return count;
+    }
+
     /// <summary>Whether a portable struct's write root keeps its aggressive inlining hint.</summary>
     internal static bool PortableWrite(DirectTypeModel model) => PortableCount(model, write: true) <= Limit;
 
