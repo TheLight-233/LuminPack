@@ -28,6 +28,12 @@ internal static class TypeModelFactory
     private const string UnionAttribute = "LuminPack.Attribute.LuminPackUnionAttribute";
     private const string WideTagAttribute = "LuminPack.Attribute.LuminPackWideTagAttribute";
     private const string OrderAttribute = "LuminPack.Attribute.LuminPackOrderAttribute";
+    private const string ConstructorAttribute = "LuminPack.Attribute.LuminPackConstructorAttribute";
+    private const string PoolRentAttribute = "LuminPack.Attribute.LuminPackPoolRentAttribute";
+    private const string OnSerializingAttribute = "LuminPackOnSerializingAttribute";
+    private const string OnSerializedAttribute = "LuminPackOnSerializedAttribute";
+    private const string OnDeserializingAttribute = "LuminPackOnDeserializingAttribute";
+    private const string OnDeserializedAttribute = "LuminPackOnDeserializedAttribute";
     private const string StructLayoutAttribute = "System.Runtime.InteropServices.StructLayoutAttribute";
     private const string FieldOffsetAttribute = "System.Runtime.InteropServices.FieldOffsetAttribute";
 
@@ -218,6 +224,41 @@ internal static class TypeModelFactory
                 {
                     MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
                     bool versioned = generatorType == "VersionTolerant";
+                    // A selected constructor, a pool rent and the serialization callbacks shape the record roots the same way
+                    // the legacy model computes them; a rent supplies the instance instead of the constructor.
+                    ConstructorModel? constructor = SelectedConstructorModel(symbol, members, issues);
+                    string? rent = PoolRent(symbol, identity.GlobalName, issues);
+                    CallbackModel? callbacks = SerializationCallbacks(symbol, identity.GlobalName);
+                    // A version-tolerant root without callbacks covers a plain rent; callbacks keep the original pipeline.
+                    if (versioned && callbacks != null)
+                    {
+                        issues.Add("a version-tolerant record keeps its serialization callbacks outside the direct emitters");
+                        callbacks = null;
+                    }
+                    if (constructor != null)
+                    {
+                        // The constructed read stores each member in a temporary local, which fixed scalars, strings, built-in
+                        // values and type parameters spell.
+                        if (!ConstructedMembers(members))
+                        {
+                            issues.Add("a selected constructor record stores only fixed scalars, strings and type parameters");
+                            constructor = null;
+                        }
+                        else if (policy.Input == InputPolicy.Trusted)
+                        {
+                            issues.Add("a trusted record keeps its checked constructed read outside the direct emitters");
+                            constructor = null;
+                        }
+                        else if (rent != null)
+                            constructor = constructor.Rented();
+                    }
+                    // A pooled type declares its storage mirror even for public fields; a derived type would need its base
+                    // storage as well and keeps the original pipeline.
+                    if (rent != null && derived)
+                    {
+                        issues.Add("a pooled derived record keeps its layout mirror outside the direct emitters");
+                        rent = null;
+                    }
                     // Storage reached through auto-property or included non-public fields needs the legacy layout mirror before
                     // the record emitters can write or read it. Every shape the mirror cannot reproduce stays unmapped.
                     string? mirror = null, mirrorLayout = null;
@@ -231,16 +272,21 @@ internal static class TypeModelFactory
                             TryVersionMirror(symbol, identity, members, issues,
                                 out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
                     }
-                    else if (members.Any(member => member.Mirrored))
+                    else if (members.Any(member => member.Mirrored) || rent != null)
                         TryMirror(symbol, identity, versioned, derived, policy, members, issues,
                             out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
-                    bool proven = !versioned && !derived && mirror == null && policy.Bound == null && Options.Net8 && Options.Unsafe &&
-                        !Options.Unity && members.Length != 0 && members.Any(member => member is TextMember) &&
-                        members.All(member => member is ScalarMember or TextMember);
+                    // The proven object write needs every variable member to be a string; a rent declares a layout mirror for
+                    // its public fields, which the proven write still reaches directly.
+                    bool proven = !versioned && !derived && !members.Any(member => member.Mirrored) &&
+                        policy.Bound == null && Options.Net8 && Options.Unsafe && !Options.Unity && members.Length != 0 &&
+                        members.Any(member => member is TextMember) && members.All(member => member is ScalarMember or TextMember);
                     return new RecordModel(identity, accessibility, members, policy, constraints, versioned,
                         fixedUnionCase: !versioned && members.All(member => member is ScalarMember) && IsFixedUnionCase(symbol),
-                        derived, proven, RecordWidthSupported(symbol), CanDeserializeDirectlyIntoFreshResult(symbol, members),
-                        mirror, mirrorFields, mirrorOffsets, mirrorLayout, version);
+                        derived, proven, RecordWidthSupported(symbol),
+                        // A pooled read rents its instance, so it never assigns a fresh result directly.
+                        rent == null && CanDeserializeDirectlyIntoFreshResult(symbol, members),
+                        mirror, mirrorFields, mirrorOffsets, mirrorLayout, version,
+                        constructor, callbacks, rent);
                 }
             }
         }
@@ -2101,6 +2147,169 @@ internal static class TypeModelFactory
                     or "LuminPack.Attribute.LuminPackOnDeserializingAttribute"
                     or "LuminPack.Attribute.LuminPackOnDeserializedAttribute"));
 
+        /// <summary>Models the constructor the legacy analysis selects for a record's reads.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="members">The serialized members in wire order.</param>
+        /// <param name="issues">Receives the reason a required constructor is missing.</param>
+        /// <returns>The selected constructor facts, or null when the parameterless constructor is used.</returns>
+        /// <remarks>The legacy analysis selects the single public explicit constructor, or the one marked with
+        /// <c>[LuminPackConstructor]</c>; a parameter matches the first serialized member whose name equals it, ignoring case.
+        /// A mismatched parameter becomes a <c>default</c> argument.</remarks>
+        private static ConstructorModel? SelectedConstructorModel(INamedTypeSymbol type, MemberModel[] members, List<string> issues)
+        {
+            var publicConstructors = type.InstanceConstructors
+                .Where(constructor => !constructor.IsStatic &&
+                    constructor.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public &&
+                    !constructor.IsImplicitlyDeclared)
+                .ToList();
+            IMethodSymbol? selected = null;
+            if (publicConstructors.Count != 0)
+            {
+                var marked = publicConstructors.Where(constructor => HasAttribute(constructor, ConstructorAttribute)).ToList();
+                if (marked.Count == 1)
+                    selected = marked[0];
+                else if (marked.Count == 0 && publicConstructors.Count == 1)
+                    selected = publicConstructors[0];
+            }
+            // The generated roots create a parameterless instance; a selected constructor only supplies the arguments when
+            // its parameter list is non-empty.
+            bool parameterless = type.InstanceConstructors.Any(constructor =>
+                constructor.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public && constructor.Parameters.Length == 0);
+            if (selected == null || selected.Parameters.Length == 0)
+            {
+                if (!parameterless)
+                    issues.Add("constructor: no public parameterless constructor and no selected parameterized constructor");
+                return null;
+            }
+            string?[] arguments = selected.Parameters.Select(parameter => MatchConstructorParameter(members, parameter.Name)).ToArray();
+            string[] constructed = arguments.Where(name => name != null).Select(name => name!).ToArray();
+            return new ConstructorModel(arguments, constructed, StorageOrder(type));
+        }
+
+        /// <summary>Matches a constructor parameter to the first serialized member with equal name, ignoring case.</summary>
+        /// <param name="members">The serialized members in wire order.</param>
+        /// <param name="parameter">The constructor parameter name.</param>
+        /// <returns>The member's exact name, or null when no member matches.</returns>
+        private static string? MatchConstructorParameter(MemberModel[] members, string parameter)
+        {
+            foreach (MemberModel member in members)
+                if (string.Equals(member.Name, parameter, StringComparison.OrdinalIgnoreCase))
+                    return member.Name;
+            return null;
+        }
+
+        /// <summary>Enumerates every instance storage member name in base-first storage order, for a constructed read's
+        /// temporary declarations.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <returns>The storage names in declaration order.</returns>
+        private static string[] StorageOrder(INamedTypeSymbol type)
+        {
+            var names = new List<string>();
+            foreach (INamedTypeSymbol level in Levels(type))
+                foreach (ISymbol member in OrderedStorageMembers(level))
+                {
+                    if (member.IsImplicitlyDeclared || member.IsStatic)
+                        continue;
+                    if (member is IPropertySymbol property && !IsAutoProperty(property))
+                        continue;
+                    names.Add(member.Name);
+                }
+            return names.ToArray();
+        }
+
+        /// <summary>Whether every serialized member can be staged in a constructed read's temporary local.</summary>
+        /// <param name="members">The serialized members in wire order.</param>
+        /// <returns>Whether each member is a fixed scalar, a string, a built-in value or a type parameter.</returns>
+        private static bool ConstructedMembers(MemberModel[] members)
+        {
+            foreach (MemberModel member in members)
+            {
+                if (member is TextMember or TypeParameterMember)
+                    continue;
+                if (member is ScalarMember scalar && (!scalar.Raw || scalar.Builtin))
+                    continue;
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>Models the pool rent method of a record.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="globalName">The fully qualified payload spelling.</param>
+        /// <param name="issues">Receives the reason a rent that returns by reference is outside the direct emitters.</param>
+        /// <returns>The static rent call, or null when the payload declares no usable rent method.</returns>
+        private static string? PoolRent(INamedTypeSymbol type, string globalName, List<string> issues)
+        {
+            var methods = type.GetMembers().OfType<IMethodSymbol>()
+                .Where(method => method.GetAttributes().Any(attribute =>
+                    attribute.AttributeClass?.ToDisplayString() == PoolRentAttribute))
+                .ToList();
+            if (methods.Count != 1)
+                return null;
+            IMethodSymbol method = methods[0];
+            if (!method.IsStatic || method.Parameters.Length != 0 ||
+                !SymbolEqualityComparer.Default.Equals(method.ReturnType, type))
+                return null;
+            // A rent returning by reference needs its own storage protocol, which the direct read does not spell.
+            if (method.ReturnsByRef)
+            {
+                issues.Add("a pool rent that returns by reference keeps its own storage protocol");
+                return null;
+            }
+            return globalName + "." + method.Name + "()";
+        }
+
+        /// <summary>Models the serialization callbacks as the statements a record's write and read roots run.</summary>
+        /// <param name="type">The declared payload.</param>
+        /// <param name="globalName">The fully qualified payload spelling.</param>
+        /// <returns>The callback statements in declaration order, or null when the record declares none.</returns>
+        /// <remarks>An invalid callback declaration keeps the original pipeline's diagnostic and never runs; it does not
+        /// change the record's rendering.</remarks>
+        private static CallbackModel? SerializationCallbacks(INamedTypeSymbol type, string globalName)
+        {
+            var writeBefore = new List<string>();
+            var writeAfter = new List<string>();
+            var readBefore = new List<string>();
+            var readAfter = new List<string>();
+            foreach (IMethodSymbol method in type.GetMembers().OfType<IMethodSymbol>())
+                foreach (AttributeData attribute in method.GetAttributes())
+                {
+                    string? name = attribute.AttributeClass?.Name;
+                    if (name is not (OnSerializingAttribute or OnSerializedAttribute or OnDeserializingAttribute or OnDeserializedAttribute))
+                        continue;
+                    if (!ValidCallback(type, method))
+                        continue;
+                    string call = method.IsStatic ? globalName + "." + method.Name + "();" : "value?." + method.Name + "();";
+                    switch (name)
+                    {
+                        case OnSerializingAttribute: writeBefore.Add(call); break;
+                        case OnSerializedAttribute: writeAfter.Add(call); break;
+                        case OnDeserializingAttribute: readBefore.Add(call); break;
+                        default: readAfter.Add(call); break;
+                    }
+                }
+            if (writeBefore.Count == 0 && writeAfter.Count == 0 && readBefore.Count == 0 && readAfter.Count == 0)
+                return null;
+            return new CallbackModel(writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray());
+        }
+
+        /// <summary>Whether a callback declaration can be spelled as a generated statement.</summary>
+        /// <param name="type">The declaring payload.</param>
+        /// <param name="method">The attributed method.</param>
+        /// <returns>Whether the method is an accessible parameterless instance or static method.</returns>
+        private static bool ValidCallback(INamedTypeSymbol type, IMethodSymbol method)
+        {
+            // An unmanaged struct's callback would change its storage copy, and the original pipeline reports the rest.
+            if (type.TypeKind == TypeKind.Struct && type.IsUnmanagedType)
+                return false;
+            if (method.DeclaredAccessibility is Microsoft.CodeAnalysis.Accessibility.NotApplicable
+                or Microsoft.CodeAnalysis.Accessibility.Private
+                or Microsoft.CodeAnalysis.Accessibility.Protected
+                or Microsoft.CodeAnalysis.Accessibility.ProtectedAndInternal)
+                return false;
+            return method.Parameters.Length == 0;
+        }
+
         /// <summary>Whether every serialized member sits at its declared wire position.</summary>
         /// <param name="symbol">The declared payload.</param>
         /// <param name="members">The serialized members in wire order.</param>
@@ -2715,8 +2924,8 @@ internal static class TypeModelFactory
             mirrorFields = null;
             mirrorOffsets = null;
             mirrorLayout = null;
-            // A versioned record owns a schema-owned mirror, a derived record needs its base storage and a declared profile,
-            // selected constructor, callbacks or rent change the framing the direct record emitters reproduce.
+            // A versioned record owns a schema-owned mirror; a derived record needs its base storage and keeps the original
+            // pipeline. A selected constructor, callbacks or a rent reach the same mirror the record emitters spell.
             if (versioned || derived)
             {
                 issues.Add("a mirrored record that is versioned or derived keeps its layout mirror outside the direct emitters");
@@ -2725,11 +2934,6 @@ internal static class TypeModelFactory
             if (!policy.Equals(WirePolicy.Default))
             {
                 issues.Add("a mirrored record with a declared profile keeps its layout mirror outside the direct emitters");
-                return;
-            }
-            if (SelectedConstructor(type) || Callbacks(type) || Rent(type))
-            {
-                issues.Add("a mirrored record with a selected constructor, callbacks or a pool rent keeps its layout mirror outside the direct emitters");
                 return;
             }
             MirrorFields(type, out string[]? fields, out int[]? offsets, out string? layout);

@@ -141,6 +141,99 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
     public override int GetHashCode() => Schema.GetHashCode();
 }
 
+/// <summary>The selected constructor of a record: the member per parameter, the members it sets and the storage-order
+/// temporaries its read declares.</summary>
+internal sealed class ConstructorModel : IEquatable<ConstructorModel>
+{
+    /// <summary>The matched member name per constructor parameter, <c>null</c> for a <c>default</c> argument, or null when a
+    /// pool rent supplies the instance instead of the selected constructor.</summary>
+    internal readonly string?[]? Arguments;
+
+    /// <summary>The members the selected constructor sets, or null when a pool rent supplies the instance.</summary>
+    internal readonly string[]? Members;
+
+    /// <summary>The member names the constructed read declares temporaries in, in storage order.</summary>
+    internal readonly string[] DeclaredOrder;
+
+    /// <summary>Captures a selected constructor.</summary>
+    internal ConstructorModel(string?[]? arguments, string[]? members, string[] declaredOrder)
+    {
+        DeclaredOrder = declaredOrder;
+        Members = members;
+        Arguments = arguments;
+    }
+
+    /// <summary>Drops the construction facts a pool rent replaces, keeping the declared temporary order.</summary>
+    /// <returns>The constructor facts of a pooled record.</returns>
+    internal ConstructorModel Rented() => new ConstructorModel(null, null, DeclaredOrder);
+
+    /// <inheritdoc/>
+    public bool Equals(ConstructorModel? other) => ReferenceEquals(this, other) ||
+        other != null && SameArguments(Arguments, other.Arguments) && Same(Members, other.Members) &&
+        Same(DeclaredOrder, other.DeclaredOrder);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as ConstructorModel);
+
+    private static bool SameArguments(string?[]? left, string?[]? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left == null || right == null || left.Length != right.Length)
+            return false;
+        for (int index = 0; index < left.Length; index++)
+            if (!string.Equals(left[index], right[index], StringComparison.Ordinal))
+                return false;
+        return true;
+    }
+
+    private static bool Same<T>(T[]? left, T[]? right) where T : IEquatable<T>
+        => ReferenceEquals(left, right) || left != null && right != null && left.Length == right.Length &&
+            Enumerable.SequenceEqual(left, right);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => DeclaredOrder.Length;
+}
+
+/// <summary>The serialization callbacks of a record, spelled as statements of the write or read root.</summary>
+internal sealed class CallbackModel : IEquatable<CallbackModel>
+{
+    /// <summary>The statements that run before the write body.</summary>
+    internal readonly string[] WriteBefore;
+
+    /// <summary>The statements that run after the write body.</summary>
+    internal readonly string[] WriteAfter;
+
+    /// <summary>The statements that run before the read body.</summary>
+    internal readonly string[] ReadBefore;
+
+    /// <summary>The statements that run after the read body.</summary>
+    internal readonly string[] ReadAfter;
+
+    /// <summary>Captures the callback statements in declaration order.</summary>
+    internal CallbackModel(string[] writeBefore, string[] writeAfter, string[] readBefore, string[] readAfter)
+    {
+        ReadAfter = readAfter;
+        ReadBefore = readBefore;
+        WriteAfter = writeAfter;
+        WriteBefore = writeBefore;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(CallbackModel? other) => ReferenceEquals(this, other) || other != null &&
+        Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
+        Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as CallbackModel);
+
+    private static bool Same(string[] left, string[] right)
+        => ReferenceEquals(left, right) || left.Length == right.Length && Enumerable.SequenceEqual(left, right);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => WriteBefore.Length + WriteAfter.Length + ReadBefore.Length + ReadAfter.Length;
+}
+
 /// <summary>An ordinary class record, optionally version-tolerant.</summary>
 internal sealed class RecordModel : TypeModel
 {
@@ -179,12 +272,25 @@ internal sealed class RecordModel : TypeModel
     /// <summary>The version-tolerant schema of the record, or null for an ordinary record.</summary>
     internal readonly VersionSchemaModel? Version;
 
+    /// <summary>The selected constructor of the record, or null when its reads use the parameterless constructor.</summary>
+    internal readonly ConstructorModel? Constructor;
+
+    /// <summary>The serialization callbacks of the record, or null when it declares none.</summary>
+    internal readonly CallbackModel? Callbacks;
+
+    /// <summary>The static pool rent call of a pooled record, such as <c>global::N.T.Rent()</c>, or null.</summary>
+    internal readonly string? Rent;
+
     /// <summary>Captures a record.</summary>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
-        string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version)
+        string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
+        ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
+        Rent = rent;
+        Callbacks = callbacks;
+        Constructor = constructor;
         FixedUnionCase = fixedUnionCase;
         RecordWidth = recordWidth;
         FreshResult = freshResult;
@@ -203,7 +309,8 @@ internal sealed class RecordModel : TypeModel
         other is RecordModel record && base.Equals(other) && Versioned == record.Versioned &&
         FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
-        Mirror == record.Mirror &&
+        Mirror == record.Mirror && Rent == record.Rent && Equals(Constructor, record.Constructor) &&
+        Equals(Callbacks, record.Callbacks) &&
         MirrorLayout == record.MirrorLayout && Equals(Version, record.Version) &&
         (ReferenceEquals(MirrorFields, record.MirrorFields) || MirrorFields != null && record.MirrorFields != null &&
             Enumerable.SequenceEqual(MirrorFields, record.MirrorFields)) &&

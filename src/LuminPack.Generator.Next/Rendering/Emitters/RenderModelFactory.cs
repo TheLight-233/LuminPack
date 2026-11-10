@@ -68,11 +68,19 @@ internal static class RenderModelFactory
         if (!managed && isStruct && !members.All(member => member.IsFixed))
             return null;
         string globalName = model.Identity.GlobalName;
+        // The selected constructor, pool rent and serialization callbacks scale the record's construction and framing; the
+        // direct emitters consume the same facts the legacy model states.
+        ConstructorModel? constructor = record?.Constructor;
+        CallbackModel? callbacks = record?.Callbacks;
+        string? rent = record?.Rent;
+        bool hasCallbacks = callbacks != null;
         // The proven object write needs .NET 8, unsafe code and a non-Unity project. The named member write only needs every
         // variable member to be a string, so a project outside those facts still publishes it. A mirrored record reaches
-        // its storage through the mirror, so neither write is its original record body.
-        bool proven = model is RecordModel { Proven: true };
-        bool memberWrite = mirror == null && model is RecordModel { Versioned: false, Derived: false } && model.Policy.Bound == null &&
+        // its storage through the mirror, so neither write is its original record body. A callback keeps both out, as the
+        // legacy model does.
+        bool proven = model is RecordModel { Proven: true } && !hasCallbacks;
+        bool memberWrite = !hasCallbacks && !model.Members.Any(member => member.Mirrored) &&
+            model is RecordModel { Versioned: false, Derived: false } && model.Policy.Bound == null &&
             model.Members.Length != 0 && model.Members.Any(member => member is TextMember) &&
             model.Members.All(member => member is ScalarMember or TextMember);
         string? view = portable?.ViewName;
@@ -92,13 +100,17 @@ internal static class RenderModelFactory
                 RecordModel recordModel => recordModel.RecordWidth,
                 _ => false,
             },
-            constructorArguments: null, constructorMembers: null, memberWrite: memberWrite, net8: options.Net8,
+            constructorArguments: constructor?.Arguments!, constructorMembers: constructor?.Members!,
+            memberWrite: memberWrite, net8: options.Net8,
             utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: Schema(record?.Version),
             referencePayload: model.Members.Any(item => item is not ScalarMember),
             layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
             trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView, mirrorOffsets: record?.MirrorOffsets,
-            managedStruct: managed);
+            managedStruct: managed, rent: rent!,
+            writeBefore: callbacks?.WriteBefore!, writeAfter: callbacks?.WriteAfter!,
+            readBefore: callbacks?.ReadBefore!, readAfter: callbacks?.ReadAfter!,
+            declaredOrder: constructor?.DeclaredOrder!);
     }
 
     /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>

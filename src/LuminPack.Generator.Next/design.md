@@ -7,11 +7,12 @@ Model equality has reference fast paths, one analysis session is shared per comp
 across nested payloads, referenced-type invalidation is verified, and a same-run benchmark harness
 compares the Next and legacy generators. Non-derived class records with auto-properties or included
 non-public fields render through the legacy layout mirror, fixed records publish the legacy measurement
-entry, and version-tolerant class records render their schema prefix and name tables. The corpus now
-publishes its IntArray, ListOfInt, String and Int shared formatter owners, so its generated trees
-compile without the legacy generator. Other collection, scalar and dictionary owners, the serializer
-facade, versioned structs, constructors, callbacks, pool rent, the original-pipeline special types and
-analysis diagnostics remain on the migration plan.
+entry, version-tolerant class records render their schema prefix and name tables, and class records
+with selected constructors, serialization callbacks or a static pool rent render those mechanisms.
+The corpus now publishes its IntArray, ListOfInt, String and Int shared formatter owners, so its
+generated trees compile without the legacy generator. Other collection, scalar and dictionary owners, the serializer
+facade, versioned structs, the remaining constructor/callback/pool shapes, the original-pipeline
+special types and analysis diagnostics remain on the migration plan.
 
 ## 1. Design philosophy
 
@@ -158,7 +159,12 @@ A five-record version-tolerant corpus (scalar/string, old name, mirrored, enum a
 Binary output is 5/5 identical to the legacy direct output. JSON initially differed in three files only
 because the fresh-result read path was not modeled; records now compute the legacy fresh-result
 condition, so the adapter selects the same `var result = reuseExisting ? ...` body. Versioned structs,
-callbacks, rent, generic, bounded and non-default profiles stay unmapped.
+versioned callbacks, generic, bounded and non-default profiles stay unmapped.
+
+A seven-record constructor/callback/rent corpus (selected constructors, the four callbacks, a static
+pool rent, combinations and mirrored variants) renders 7/7; binary and JSON are 14/14 identical to the
+legacy direct output. Ref-returning rent, constructed collection or payload members, trusted
+constructed records and derived pooled records stay unmapped.
 
 All 220 corpus payloads now render, fixed Union cases publish their own `SerializeUnionAt` cursor
 entries, and the collected payload set publishes the corpus's four shared formatter owners. The corpus
@@ -231,7 +237,7 @@ pipeline; P2 improves the product.
 | M-05 | Circle-reference model facts: mirror, slots, guards, reference ids | Model + Rendering | M-06 | Circle payloads generate and compile | P0 |
 | M-06 | Layout mirror: mirror name, field list and explicit offsets for auto-properties and included fields | Model + Rendering | — | Auto-property and included-private payloads generate and compile | P1 |
 | M-07 | Version-tolerant schema: class records and their metadata encoder, prefix, field entries, old names and layout landed; versioned structs, callbacks, rent, generic, bounded and non-default profiles remain | Analysis + Rendering | — | Versioned class records generate the same schema as the old pipeline; remaining version shapes match | P1 |
-| M-08 | Callbacks, selected constructors, pool rent and reuse | Analysis + Rendering | M-06 | Callback, constructor and pooled types generate | P1 |
+| M-08 | Callbacks, selected constructors and pool rent landed for class records; ref-returning rent, constructed collection/payload members, trusted constructed records, derived pooled records and versioned callbacks remain | Analysis + Rendering | M-06 | Callback, constructor and pooled types generate | P1 |
 | M-09 | Shared publication: the corpus formatter owners are published; serializer facades, formatter dispatch, registration and layout files remain | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
 | M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Old and Next output are byte-identical on the corpus | P1 |
 | M-11 | Declared string profiles, input limits and member-scope profiles | Analysis + Rendering | M-09 | Member and type profile declarations generate correctly | P1 |
