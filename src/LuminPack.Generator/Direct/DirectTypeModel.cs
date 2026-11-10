@@ -670,13 +670,13 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             objectType.ContainingType == null &&
             SymbolEqualityComparer.Default.Equals(objectType.ContainingAssembly, compilation.Assembly) &&
             TypeMetaChecker.TryCheckPackableAttribute(objectType) && field.Type == LuminFiledType.Class &&
-            field.FieldType == LuminDataType.Reference && field.ClassFields.Count != 0 && field.RentPoolMethod == null &&
+            field.FieldType == LuminDataType.Reference && field.ClassFields.Count != 0 &&
             (field.SelectedConstructor == null || field.SelectedConstructor.Parameters.Count == 0))
         {
             if (_depth > 8)
                 return DirectEmission.Reject<DirectMember>("nested object depth");
             var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(objectType, compilation, metadata), compilation, metadata);
-            if (nested == null || nested.IsStruct || nested.Mirror != null || nested.Version != null ||
+            if (nested == null || nested.IsStruct || nested.Members.Any(item => item.Mirrored) || nested.Version != null ||
                 nested.ConstructorArguments != null || nested.Members.Length == 0 ||
                 nested.Members.Any(item => item.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or DirectMemberKind.Object or
                     DirectMemberKind.Array or DirectMemberKind.List)))
