@@ -179,8 +179,15 @@ the shared `ConcurrentQueue<int>` and `ImmutableArray<int>` owners, and their `i
 with zero compile errors. The two binary records, two JSON records and two owners are identical to the
 legacy output after whitespace normalization (6/6). The queue writes its counted enumeration in place
 and its extension isolates the writer state; the immutable array writes its default marker or storage
-span in place. Elements other than `int`, string or payload elements and the remaining concurrent and
-immutable families stay unmapped.
+span in place.
+
+A second two-record corpus covers `string` elements. It renders seven files with zero compile errors,
+and the two binary records, two JSON records and both string owners are identical to the legacy output
+after whitespace normalization (6/6). The queue string root is generic over the operation profile, its
+counted loop skips the buffer check because the string write performs it, and its read fills pooled
+storage through the shared string owner; the immutable string root writes its count and strings through
+one profiled call and its read seeds reused elements before the string kernel. Payload elements and the
+remaining concurrent and immutable families stay unmapped.
 
 All 220 corpus payloads now render, fixed Union cases publish their own `SerializeUnionAt` cursor
 entries, and the collected payload set publishes the corpus's four shared formatter owners. The corpus
@@ -246,7 +253,7 @@ pipeline; P2 improves the product.
 
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `Int`/`String` owners and the `ConcurrentQueue<int>`/`ImmutableArray<int>` owners landed; other element types, string and payload elements, the other concurrent/immutable families, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
+| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `Int`/`String` owners and the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for `int` and `string` landed; other element types, payload elements, the other concurrent/immutable families, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
 | M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values; no shared dictionary owner is published yet | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
 | M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
@@ -266,7 +273,7 @@ pipeline; P2 improves the product.
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
 | M-19 | Untrusted-input fuzzing and one-exception contract | Analysis + Runtime | M-09 | Crafted inputs cannot crash, over-allocate or instantiate undeclared types | P2 |
 | M-20 | JSON name and layout parity with the old pipeline | Rendering | M-10 | JSON payload files are byte-identical on the corpus | P2 |
-| M-21 | Special framework types: CultureInfo and the `ConcurrentQueue<int>`/`ImmutableArray<int>` families landed; the remaining concurrent and immutable collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
+| M-21 | Special framework types: CultureInfo and the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for `int` and `string` landed; payload elements, the remaining concurrent and immutable collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
 
 ## 6. Decisions and constraints
 

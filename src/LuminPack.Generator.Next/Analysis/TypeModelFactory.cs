@@ -513,6 +513,9 @@ internal static class TypeModelFactory
             // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && Scalar(item) is { } sequenceItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: sequenceItem.Keyword);
+            // A concurrent or immutable sequence of strings transfers its elements through the shared string owner.
+            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && item.SpecialType == SpecialType.System_String)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
             if (kind is not (CollectionKind.List or CollectionKind.NestedList))
                 return new CollectionMember(name, storage, policy, declared, kind, element);
 

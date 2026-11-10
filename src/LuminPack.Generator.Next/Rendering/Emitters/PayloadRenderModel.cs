@@ -294,6 +294,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind == RenderMemberKind.NestedList && member.Nested.ProfilePayload ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind == RenderMemberKind.CultureInfo ||
+        (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray && member.Scalar == "string") ||
         member.Kind == RenderMemberKind.Object && member.Nested.ProfilePayload);
 
     /// <summary>An array inside an inline object calls its generated formatter with the operation's profile, which makes the

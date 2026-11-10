@@ -1076,10 +1076,23 @@ internal static partial class BinaryEmitter
         body.Add("int count = 0;");
         body.Add("foreach (var item in " + local + ")");
         body.Add("{");
-        body.Add("writer.CheckBuffer();");
-        body.Add("count++;");
-        body.Add("var v = item;");
-        body.Add("writer.Write(in v);");
+        // A string element writes through the operation's profile, whose own store checks the buffer; a raw element keeps
+        // the explicit check the unchecked span store does not perform.
+        if (member.Scalar == "string")
+        {
+            string element = RoleName(names, "value");
+            body.Add("count++;");
+            body.Add("var v = item;");
+            body.Add("ref readonly string " + element + " = ref v;");
+            body.Add("writer.Write<" + Profile + ">(" + element + ");");
+        }
+        else
+        {
+            body.Add("writer.CheckBuffer();");
+            body.Add("count++;");
+            body.Add("var v = item;");
+            body.Add("writer.Write(in v);");
+        }
         body.Add("}");
         body.Add("");
         body.Add("writer.EndCollection(countPosition, count);");
@@ -1112,8 +1125,20 @@ internal static partial class BinaryEmitter
         body.Add("writer.Advance(4);");
         body.Add("goto " + exit + ";");
         body.Add("}");
-        body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = " + local + ".AsSpan();");
-        body.Add("writer.Write<" + member.Scalar + ">(items, items.Length);");
+        // A string span writes its element count and the records through one profiled call; a raw span stores in place.
+        if (member.Scalar == "string")
+        {
+            body.Add("global::System.ReadOnlySpan<string> items = " + local + ".AsSpan();");
+            body.Add("writer.EnsureAdditionalCapacity(4);");
+            body.Add("writer.Write(items.Length);");
+            body.Add("writer.WriteStrings<" + Profile + ">(items);");
+            body.Add("writer.CheckBuffer();");
+        }
+        else
+        {
+            body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = " + local + ".AsSpan();");
+            body.Add("writer.Write<" + member.Scalar + ">(items, items.Length);");
+        }
         body.Add("");
         body.Add(exit + ":");
         body.Add("\t;");

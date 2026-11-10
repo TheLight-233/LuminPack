@@ -16,6 +16,8 @@ internal static class RenderModelFactory
 {
     private const string ConcurrentQueueOfInt = "global::System.Collections.Concurrent.ConcurrentQueue<int>";
     private const string ImmutableArrayOfInt = "global::System.Collections.Immutable.ImmutableArray<int>";
+    private const string ConcurrentQueueOfString = "global::System.Collections.Concurrent.ConcurrentQueue<string>";
+    private const string ImmutableArrayOfString = "global::System.Collections.Immutable.ImmutableArray<string>";
 
     /// <summary>Builds the render model of one payload.</summary>
     /// <param name="model">The normalized payload.</param>
@@ -378,11 +380,13 @@ internal static class RenderModelFactory
             case CollectionKind.SortedSet:
                 return new RenderMember(member.Name, RenderMemberKind.SortedSet, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, raw: true, property: property);
-            // The concurrent and immutable sequences are published only for the scalar element whose shared owner exists.
-            case CollectionKind.Concurrent when Owns(member.DeclaredType, extension, ConcurrentQueueOfInt):
+            // The concurrent and immutable sequences are published only for the element types whose shared owner exists.
+            case CollectionKind.Concurrent when Owns(member.DeclaredType, extension, ConcurrentQueueOfInt) ||
+                Owns(member.DeclaredType, extension, ConcurrentQueueOfString):
                 return new RenderMember(member.Name, RenderMemberKind.ConcurrentQueue, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property);
-            case CollectionKind.Immutable when Owns(member.DeclaredType, extension, ImmutableArrayOfInt):
+            case CollectionKind.Immutable when Owns(member.DeclaredType, extension, ImmutableArrayOfInt) ||
+                Owns(member.DeclaredType, extension, ImmutableArrayOfString):
                 return new RenderMember(member.Name, RenderMemberKind.ImmutableArray, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property);
             case CollectionKind.List:
