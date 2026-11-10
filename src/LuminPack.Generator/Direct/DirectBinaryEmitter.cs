@@ -287,7 +287,7 @@ internal static partial class DirectBinaryEmitter
         // sizes the entry instead, and any record that calls one keeps no inline hint.
         string WriteHint(List<string> body, bool union) => (model.StreamRecord || model.MixedRecord) &&
             !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0)
-            ? ((model.StreamRecord ? DirectCalls.Count(body) <= 16 : DirectInlining.MixedWrite(model)) ? inline : null)
+            ? ((model.StreamRecord ? DirectCalls.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
             : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));
 
         string ReadHint(List<string> body) => model.StreamRecord || model.MixedRecord
@@ -1545,8 +1545,8 @@ internal static partial class DirectBinaryEmitter
             body.Add("\treturn;");
         }
         body.Add("var instance = value ??= " + NewInstance(model) + ";");
-        int cursors = 0;
-        AddStreamRead(body, model, "instance", 0, !union, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors);
+        int cursors = 0, strings = 0;
+        AddStreamRead(body, model, "instance", 0, !union, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors, ref strings);
         while (body.Count != 0 && body[body.Count - 1].Length == 0)
             body.RemoveAt(body.Count - 1);
         ReduceInlineNames(body);
@@ -1563,8 +1563,9 @@ internal static partial class DirectBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="names">The occurrence counters of the inline locals of this method.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
+    /// <param name="strings">The mirrored string local counter shared by the whole method.</param>
     private static void AddStreamRead(List<string> body, DirectTypeModel model, string owner, int depth, bool prove, bool markerSeen,
-        DirectWriter w, Dictionary<string, int> names, ref int cursors)
+        DirectWriter w, Dictionary<string, int> names, ref int cursors, ref int strings)
     {
         var members = model.Members;
         string Policy() => w.A("LuminPackInputPolicy");
@@ -1579,7 +1580,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add("else");
                 body.Add("{");
                 body.Add("var " + name + " = " + owner + "." + member.Name + " ?? " + NewInstance(member.Nested) + ";");
-                AddStreamRead(body, member.Nested, name, depth + 1, prove, markerSeen, w, names, ref cursors);
+                AddStreamRead(body, member.Nested, name, depth + 1, prove, markerSeen, w, names, ref cursors, ref strings);
                 body.Add(owner + "." + member.Name + " = " + name + ";");
                 body.Add("}");
                 // A following unproven fixed run opens with its own cursor local, which the presentation keeps directly
@@ -1592,6 +1593,17 @@ internal static partial class DirectBinaryEmitter
             }
             if (member.Kind == DirectMemberKind.Text)
             {
+                if (member.Mirrored)
+                {
+                    // A mirrored string is assigned only when the decoded instance differs, so its storage keeps the old one.
+                    string number = strings++ == 0 ? string.Empty : strings.ToString(CultureInfo.InvariantCulture);
+                    body.Add("var currentString" + number + " = " + owner + "." + member.Name + ";");
+                    body.Add("var decodedString" + number + " = reader.Read<" + Profile + ">(currentString" + number + ");");
+                    body.Add("if (!object.ReferenceEquals(currentString" + number + ", decodedString" + number + "))");
+                    body.Add("\t" + owner + "." + member.Name + " = decodedString" + number + "!;");
+                    body.Add("");
+                    continue;
+                }
                 body.Add("reader.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
                 continue;
             }

@@ -437,7 +437,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // order. Beside reserving members the record writes a reserved prefix with the header, then each object and every
         // following run in place.
         bool objects = members.Any(member => member.Kind == DirectMemberKind.Object);
-        if (objects && (mirrored || versioned || derived || isStruct))
+        if (objects && (versioned || derived || isStruct))
             return DirectEmission.Reject<DirectTypeModel>("nested object record");
 
         string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

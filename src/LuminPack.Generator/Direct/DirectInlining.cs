@@ -33,20 +33,30 @@ internal static class DirectInlining
 
     /// <summary>Whether a mixed record's write root keeps its aggressive inlining hint. The record expands its inline objects
     /// in place, so their member runs are counted as part of its own body.</summary>
-    internal static bool MixedWrite(DirectTypeModel model) => MixedCost(model) <= Limit;
+    /// <param name="model">The covered type.</param>
+    /// <param name="union">Whether the root is the Union payload write, whose leading header is not reserved.</param>
+    internal static bool MixedWrite(DirectTypeModel model, bool union) => MixedCost(model) - (union ? 1 : 0) <= Limit;
 
-    /// <summary>Counts a mixed record's expanded write: the reservation and commit, each variable member's snapshot and store,
-    /// each fixed run, and each inline object's marker and expanded body.</summary>
+    /// <summary>Counts a mixed record's expanded write: the reservation and commit, the mirror view of a mirrored type, each
+    /// variable member's snapshot and store, each fixed run, each inline object's marker and expanded body, and each string
+    /// list's expanded null header and profiled span store.</summary>
     private static int MixedCost(DirectTypeModel model)
     {
         var members = model.Members;
         int count = 2;
+        if (members.Any(member => member.Mirrored))
+            count += 2;
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
             if (member.Kind == DirectMemberKind.Object)
             {
                 count += 1 + MixedCost(member.Nested);
+                continue;
+            }
+            if (member.Kind == DirectMemberKind.List && member.Scalar == "string")
+            {
+                count += 10;
                 continue;
             }
             if (member.Kind == DirectMemberKind.Fixed)
