@@ -6,21 +6,21 @@ using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Writes a covered type's JSON roots, entries, extensions and name tables in their final published form.</summary>
 /// <remarks>Property heads use the fused integer writer or the generated literal stores of the original emitter, reads use the
 /// ordered-property fast path with length- or hash-dispatched name lookups, and floating-point reads move into non-inlined
 /// local functions under the same budget as <c>JsonScalarLoopProjection</c>.</remarks>
-internal static class DirectJsonEmitter
+internal static class JsonEmitter
 {
     private const string Profile = "TLuminProfile";
 
     /// <summary>Emits the complete JSON file body.</summary>
     /// <param name="model">The covered type.</param>
     /// <param name="w">The file writer.</param>
-    /// <param name="operations">The operations the project calls; see <see cref="DirectBinaryEmitter.Emit"/>.</param>
-    internal static void Emit(DirectTypeModel model, DirectWriter w, GeneratedOperations operations)
+    /// <param name="operations">The operations the project calls; see <see cref="BinaryEmitter.Emit"/>.</param>
+    internal static void Emit(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
     {
         bool writes = (operations & GeneratedOperations.JsonWrite) != 0;
         bool reads = (operations & GeneratedOperations.JsonRead) != 0;
@@ -52,9 +52,9 @@ internal static class DirectJsonEmitter
         w.Line("internal static void RootWriteJson" + Arguments(Profile) + "(scoped ref " + jsonWriter + " writer, " + input + type + nullable + " input)");
         w.Indented(() => w.Line(ConstraintLine(true)));
         w.Open();
-        var names = new JsonNames();
+        var names = new JsonTable();
         var writeBody = WriteBody(model, w, helper, names);
-        JsonNames.Resolve(writeBody);
+        JsonTable.Resolve(writeBody);
         Lines(w, writeBody);
         w.Close();
         w.Blank();
@@ -153,7 +153,7 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Spells a member's table entry, as the JSON name layout does.</summary>
-    private static string Member(DirectMember member) => DirectJsonNames.MemberSuffix(member.Name);
+    private static string Member(RenderMember member) => JsonNames.MemberSuffix(member.Name);
 
     /// <summary>Encodes a little-endian 64-bit word of a literal's first or last eight bytes.</summary>
     private static (string First, string Last) Words(byte[] bytes)
@@ -168,12 +168,12 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>The complete property head of a member, including its leading brace or separator.</summary>
-    private static string Head(DirectTypeModel model, int index) => (index == 0 ? "{" : ",") + "\"" + model.Members[index].Name + "\":";
+    private static string Head(PayloadRenderModel model, int index) => (index == 0 ? "{" : ",") + "\"" + model.Members[index].Name + "\":";
 
     /// <summary>Names the locals and exit labels of one JSON write method.</summary>
     /// <remarks>An inline object copies the child's whole write body into the parent method, so every repeated role takes the
     /// occurrence count as a suffix and every copied return becomes a jump to a label placed where the copy closes.</remarks>
-    private sealed class JsonNames
+    private sealed class JsonTable
     {
         private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
         private int _tokens;
@@ -223,10 +223,10 @@ internal static class DirectJsonEmitter
     /// formatter; the inline budget of the original pipeline is measured on the copy that keeps the call.</param>
     /// <param name="inputName">The already named input parameter of an inline object copy, or null.</param>
     /// <param name="exit">The placeholder an inline object copy jumps to instead of returning, or null for a root.</param>
-    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, string helper, JsonNames names = null, bool expand = true,
+    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper, JsonTable names = null, bool expand = true,
         string inputName = null, string exit = null)
     {
-        names ??= new JsonNames();
+        names ??= new JsonTable();
         string value = names.Next("value"), input = inputName ?? names.Next("input"), isUtf8 = names.Next("isUtf8");
         var body = new List<string>();
         body.Add("var " + value + " = " + input + ";");
@@ -261,7 +261,7 @@ internal static class DirectJsonEmitter
             string owner = member.Mirrored ? "local" : value;
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(head);
             // The fused head-and-integer write applies to a directly named field only.
-            if (model.Net8 && !member.Mirrored && member.FieldType is LuminFiledType.Int or LuminFiledType.UInt or LuminFiledType.Long or LuminFiledType.ULong &&
+            if (model.Net8 && !member.Mirrored && member.FieldType is ScalarKind.Int or ScalarKind.UInt or ScalarKind.Long or ScalarKind.ULong &&
                 utf8Bytes.Length >= 8 && utf8Bytes.Length <= 16)
             {
                 var (first, last) = Words(utf8Bytes);
@@ -289,7 +289,7 @@ internal static class DirectJsonEmitter
                 body.Add("");
             body.Add("writer.SetFirstElement(true);");
             // A type-parameter member is written by the generic serializer from a copy, without a null branch.
-            if (member.Kind == DirectMemberKind.Parameter)
+            if (member.Kind == RenderMemberKind.Parameter)
             {
                 string temp = names.Next("temp");
                 body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
@@ -324,9 +324,9 @@ internal static class DirectJsonEmitter
             body.Add("}");
             body.Add("else");
             body.Add("{");
-            if (member.Kind == DirectMemberKind.Object && expand && WriteCalls(member.Nested) <= 16)
+            if (member.Kind == RenderMemberKind.Object && expand && WriteCalls(member.Nested) <= 16)
                 Expand(body, member, owner, w, names);
-            else if (member.Kind == DirectMemberKind.Text)
+            else if (member.Kind == RenderMemberKind.Text)
                 body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
             else
             {
@@ -343,7 +343,7 @@ internal static class DirectJsonEmitter
 
     /// <summary>Copies a declared struct member's write body in place: a struct value is read-only, has no null branch and
     /// needs no exit label.</summary>
-    private static void ExpandStruct(List<string> body, DirectMember member, string owner, DirectWriter w, JsonNames names)
+    private static void ExpandStruct(List<string> body, RenderMember member, string owner, CodeWriter w, JsonTable names)
     {
         string temp = names.Next("temp");
         body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
@@ -355,7 +355,7 @@ internal static class DirectJsonEmitter
 
     /// <summary>Copies an inline object's write body into its parent's method, renaming its locals and turning its return into a
     /// jump to a label placed where the copy closes.</summary>
-    private static void Expand(List<string> body, DirectMember member, string owner, DirectWriter w, JsonNames names)
+    private static void Expand(List<string> body, RenderMember member, string owner, CodeWriter w, JsonTable names)
     {
         string temp = names.Next("temp"), input = names.Next("input"), token = names.Token();
         body.Add("var " + temp + " = " + owner + "." + member.Name + ";");
@@ -369,7 +369,7 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Lists the former names of the members, in member order, as the original name tables number them.</summary>
-    private static IEnumerable<(string Name, int Index, string Suffix)> OldNames(DirectTypeModel model)
+    private static IEnumerable<(string Name, int Index, string Suffix)> OldNames(PayloadRenderModel model)
     {
         if (model.Version == null)
             yield break;
@@ -380,16 +380,16 @@ internal static class DirectJsonEmitter
 
     /// <summary>The reused value's member access: a struct read through its selected constructor reaches it without the
     /// null-forgiving operator.</summary>
-    private static string Value(DirectTypeModel model) => model.IsStruct ? "value." : "value!.";
+    private static string Value(PayloadRenderModel model) => model.IsStruct ? "value." : "value!.";
 
     /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
     /// of more than sixteen calls stays behind its formatter's call.</summary>
-    internal static int WriteCalls(DirectTypeModel model) => DirectCalls.Count(WriteBody(model, new DirectWriter(-1), model.JsonHelper, expand: false));
+    internal static int WriteCalls(PayloadRenderModel model) => InvocationCounter.Count(WriteBody(model, new CodeWriter(-1), model.JsonHelper, expand: false));
 
     /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes on .NET 8 or later, otherwise as
     /// its raw span.</summary>
     /// <returns>Whether the head was written as a braced block.</returns>
-    private static bool Literal(DirectTypeModel model, List<string> body, string head, string raw, bool utf8)
+    private static bool Literal(PayloadRenderModel model, List<string> body, string head, string raw, bool utf8)
     {
         byte[] bytes = (utf8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(head);
         if (model.Net8 && bytes.Length >= 8 && bytes.Length <= 16)
@@ -408,7 +408,7 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Builds the JSON read body.</summary>
-    private static void ReadBody(DirectTypeModel model, DirectWriter w, string helper)
+    private static void ReadBody(PayloadRenderModel model, CodeWriter w, string helper)
     {
         var members = model.Members;
         string jsonReader = w.A("LuminPackJsonReader");
@@ -419,15 +419,15 @@ internal static class DirectJsonEmitter
         {
             // A struct reuses its existing storage when any reference member is already set. A type parameter may hold a
             // reference, so its check keeps a runtime value-type test.
-            var referenced = members.Where(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.Object or
-                DirectMemberKind.Array or DirectMemberKind.List || member.Kind == DirectMemberKind.Parameter).ToArray();
+            var referenced = members.Where(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Object or
+                RenderMemberKind.Array or RenderMemberKind.List || member.Kind == RenderMemberKind.Parameter).ToArray();
             string reuse = referenced.Length == 0 ? "false" : string.Join(" || ", referenced.Select(member =>
-                (member.Kind == DirectMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter
+                (member.Kind == RenderMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter
                     ? "(!typeof(" + member.Scalar + ").IsValueType && (object? )"
                     : string.Empty) +
                 (member.Mirrored ? "LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value)." : "value.") +
                 member.Name + " is not null" +
-                (member.Kind == DirectMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter ? ")" : string.Empty)));
+                (member.Kind == RenderMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter ? ")" : string.Empty)));
             body.Add("bool reuseExisting = " + reuse + ";");
         }
         else
@@ -467,7 +467,7 @@ internal static class DirectJsonEmitter
         {
             body.Add("// Temp vars");
             foreach (var member in members)
-                body.Add(member.TypeName + (member.IsFixed || member.Kind == DirectMemberKind.Parameter && !member.ReferencePayload ? string.Empty : "?") +
+                body.Add(member.TypeName + (member.IsFixed || member.Kind == RenderMemberKind.Parameter && !member.ReferencePayload ? string.Empty : "?") +
                     " " + Camel(member.Name) + "Temp = default;");
             if (model.Mirror != null && members.Any(member => member.Mirrored))
                 body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
@@ -525,7 +525,7 @@ internal static class DirectJsonEmitter
                 caseLines.Add("if (reuseExisting)");
                 caseLines.Add("\t" + target + " = " + (model.Mirror == null || !model.Members.Any(member => member.Mirrored) ? Value(model) : "reuseLocal.") + member.Name + ";");
             }
-            if (member.Kind == DirectMemberKind.Parameter)
+            if (member.Kind == RenderMemberKind.Parameter)
             {
                 // A type-parameter member is read by the generic serializer, which owns its null handling.
                 caseLines.Add(w.A("LuminPackSerializer") + ".DeserializeJson<" + member.Scalar + ", " + Profile + ">(ref reader, ref " + target + ");");
@@ -551,7 +551,7 @@ internal static class DirectJsonEmitter
                 caseLines.Add("}");
                 caseLines.Add("else");
                 caseLines.Add("{");
-                caseLines.Add(member.Kind == DirectMemberKind.Text ? "reader.Read<" + Profile + ">(ref " + target + ");"
+                caseLines.Add(member.Kind == RenderMemberKind.Text ? "reader.Read<" + Profile + ">(ref " + target + ");"
                     : member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("}");
                 caseLines.Add("");
@@ -641,7 +641,7 @@ internal static class DirectJsonEmitter
             int start = line.IndexOf('');
             return start < 0 ? line : line.Substring(0, start) + "reader.Read<double, TLuminProfile>()" + line.Substring(line.IndexOf('', start + 1) + 1);
         });
-        bool isolate = floating > 1 && DirectCalls.Count(measured) > 16;
+        bool isolate = floating > 1 && InvocationCounter.Count(measured) > 16;
         string jsonReaderType = jsonReader;
         for (int index = 0; index < body.Count; index++)
         {
@@ -678,10 +678,10 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Lower-cases the first character, as role-named generated locals are spelled.</summary>
-    private static string Camel(string name) => DirectEmission.LocalName(name);
+    private static string Camel(string name) => PayloadEmitter.LocalName(name);
 
     /// <summary>Writes body lines: an empty string is a blank line, braces open and close blocks, and a tab indents one line.</summary>
-    internal static void Lines(DirectWriter w, List<string> body)
+    internal static void Lines(CodeWriter w, List<string> body)
     {
         foreach (string line in body)
         {
@@ -704,7 +704,7 @@ internal static class DirectJsonEmitter
     /// <param name="model">The covered type.</param>
     /// <param name="w">The file writer.</param>
     /// <param name="reads">Whether the read-only lookups and the ordered-property reader are written.</param>
-    private static void NameTables(DirectTypeModel model, DirectWriter w, bool reads)
+    private static void NameTables(PayloadRenderModel model, CodeWriter w, bool reads)
     {
         var members = model.Members;
         string method = w.MethodImpl("AggressiveInlining");
@@ -823,7 +823,7 @@ internal static class DirectJsonEmitter
     }
 
     /// <summary>Writes one encoding's name lookup: a length switch for up to eight names, otherwise a hash switch.</summary>
-    private static void Lookup(DirectTypeModel model, DirectWriter w, bool utf8)
+    private static void Lookup(PayloadRenderModel model, CodeWriter w, bool utf8)
     {
         var members = model.Members;
         // Former names follow the members as extra candidates of the same lookup.
@@ -837,7 +837,7 @@ internal static class DirectJsonEmitter
         body.Add("{");
         var groups = candidates.Select(item => (item.Name, item.Index, item.Table, Bytes: Encoding.UTF8.GetBytes(item.Name)))
             .GroupBy(item => small ? (ulong)(utf8 ? item.Bytes.Length : item.Name.Length)
-                : utf8 ? DirectJsonNames.ComputeUtf8BytesHash(item.Bytes) : DirectJsonNames.ComputeUtf16Hash(item.Name));
+                : utf8 ? JsonNames.ComputeUtf8BytesHash(item.Bytes) : JsonNames.ComputeUtf16Hash(item.Name));
         foreach (var group in groups)
         {
             body.Add("case " + group.Key.ToString(CultureInfo.InvariantCulture) + (small ? ":" : "UL:"));

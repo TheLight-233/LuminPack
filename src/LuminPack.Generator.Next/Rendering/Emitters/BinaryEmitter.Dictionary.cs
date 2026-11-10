@@ -2,15 +2,15 @@
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Writes the types whose records carry dictionary members with the original cursor protocol: fused entry kernels
 /// beside an inline block, or paired raw records inside a reservation.</summary>
-internal static partial class DirectBinaryEmitter
+internal static partial class BinaryEmitter
 {
     /// <summary>Builds a record write whose dictionary members take the cursor path, reproducing the original member
     /// grouping: a reserved prefix, each dictionary kernel in place and every inline block between them.</summary>
-    private static void DictionaryWriteBody(DirectTypeModel model, DirectWriter w, bool union, List<string> body)
+    private static void DictionaryWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
         var members = model.Members;
         int ends = 0, cursors = 0, spans = 0;
@@ -42,12 +42,12 @@ internal static partial class DirectBinaryEmitter
                 else
                     AddInlineObjectWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
-                bool named = member.Kind == DirectMemberKind.Object && member.Nested.MemberWrite;
+                bool named = member.Kind == RenderMemberKind.Object && member.Nested.MemberWrite;
                 if (!named && index < members.Length && !StartsInlineObject(members[index]))
                     body.Add("");
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Dictionary && !member.Dictionary.Pair)
+            if (member.Kind == RenderMemberKind.Dictionary && !member.Dictionary.Pair)
             {
                 if (header)
                 {
@@ -65,7 +65,7 @@ internal static partial class DirectBinaryEmitter
             }
             int last = index;
             while (last + 1 < members.Length && !IsWriterBlock(members[last + 1]) &&
-                !(members[last + 1].Kind == DirectMemberKind.Dictionary && !members[last + 1].Dictionary.Pair))
+                !(members[last + 1].Kind == RenderMemberKind.Dictionary && !members[last + 1].Dictionary.Pair))
                 last++;
             if (!current && !header)
             {
@@ -90,13 +90,13 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Whether a member writes in place through the writer rather than at the cursor: an inline object, a string
     /// list or a list whose elements expand their record body.</summary>
-    private static bool IsWriterBlock(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member) ||
+    private static bool IsWriterBlock(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member);
 
     /// <summary>Writes one fused-entry dictionary member at the cursor: the kernel under a UTF-16 record profile and the
     /// original operation as its fallback.</summary>
-    private static void AddDictionaryEntries(List<string> body, DirectTypeModel model, DirectMember member, int index, string owner,
-        DirectWriter w, Dictionary<string, int> names, ref int ends)
+    private static void AddDictionaryEntries(List<string> body, PayloadRenderModel model, RenderMember member, int index, string owner,
+        CodeWriter w, Dictionary<string, int> names, ref int ends)
     {
         var shape = member.Dictionary;
         string entries = "entries" + index.ToString(CultureInfo.InvariantCulture);
@@ -193,7 +193,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Writes a dictionary member's original operation inside an inline object, which writes through the writer
     /// without a cursor local.</summary>
-    private static void AddDictionaryInline(List<string> body, DirectTypeModel model, DirectMember member, string owner, DirectWriter w,
+    private static void AddDictionaryInline(List<string> body, PayloadRenderModel model, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
         var shape = member.Dictionary;
@@ -271,7 +271,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="entry">The entry local.</param>
     /// <param name="textFormatter">The generated string formatter owner.</param>
     /// <param name="unsafeAlias">The <c>Unsafe</c> spelling of the file.</param>
-    private static void AddEntryWrite(List<string> body, DirectDictionary shape, string writer, string entry, string textFormatter,
+    private static void AddEntryWrite(List<string> body, RenderDictionary shape, string writer, string entry, string textFormatter,
         string unsafeAlias)
     {
         if (shape.KeyText)
@@ -291,7 +291,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes one key and value of a sparse dictionary enumeration, which copies raw values from a local.</summary>
-    private static void AddSparseEntryWrite(List<string> body, DirectDictionary shape, string writer, string item, string textFormatter)
+    private static void AddSparseEntryWrite(List<string> body, RenderDictionary shape, string writer, string item, string textFormatter)
     {
         if (shape.KeyText)
         {
@@ -326,7 +326,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes the dense-entry kernel of a fused dictionary member.</summary>
-    private static void AddEntryKernel(List<string> body, DirectTypeModel model, DirectMember member, string title, DirectWriter w)
+    private static void AddEntryKernel(List<string> body, PayloadRenderModel model, RenderMember member, string title, CodeWriter w)
     {
         var shape = member.Dictionary;
         string keyLocal = shape.KeyText ? "key3" : null;
@@ -401,12 +401,12 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>The generated string formatter owner of the containing extension container.</summary>
-    private static string TextFormatter(DirectTypeModel model) => "global::LuminPack." +
-        DirectNames.Owner(model.Extension, "global::System.String");
+    private static string TextFormatter(PayloadRenderModel model) => "global::LuminPack." +
+        GeneratedNames.Owner(model.Extension, "global::System.String");
 
     /// <summary>Registers the runtime helper aliases the dictionary text spells by name. A mirrored record reaches its
     /// storage through the qualified marshal type, so only an unmirrored file declares that alias.</summary>
-    private static void TouchDictionaryAliases(DirectTypeModel model, DirectWriter w)
+    private static void TouchDictionaryAliases(PayloadRenderModel model, CodeWriter w)
     {
         if (model.Mirror == null)
             w.A("LuminPackMarshal");

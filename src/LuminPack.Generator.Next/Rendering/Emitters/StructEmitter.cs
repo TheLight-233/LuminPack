@@ -1,7 +1,7 @@
+#nullable disable
 using System.Linq;
-using LuminPack.Code.Core;
 
-namespace LuminPack.SourceGenerator.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Writes a covered struct's binary roots, facade entries and extensions in their final published form.</summary>
 /// <remarks>A raw unmanaged struct, whose storage is its wire layout, is written and read as one value: its roots copy the
@@ -9,25 +9,25 @@ namespace LuminPack.SourceGenerator.Direct;
 /// struct copies each scalar field at its packed wire offset through a positional storage view, with typed unaligned stores on
 /// 64-bit targets and the writer's checked stores otherwise; its reads go through read roots. The entries take the struct by
 /// reference and need no profile, so the profiled overloads forward to the plain ones.</remarks>
-internal static class DirectStructEmitter
+internal static class StructEmitter
 {
     private const string Profile = "TLuminProfile";
 
     /// <summary>Emits the complete binary file body of a covered struct.</summary>
     /// <param name="model">The covered struct.</param>
     /// <param name="w">The file writer.</param>
-    /// <param name="operations">The operations the project calls; see <see cref="DirectBinaryEmitter.Emit"/>.</param>
-    internal static void Emit(DirectTypeModel model, DirectWriter w, GeneratedOperations operations)
+    /// <param name="operations">The operations the project calls; see <see cref="BinaryEmitter.Emit"/>.</param>
+    internal static void Emit(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
     {
         // A version-tolerant struct writes a schema prefix and revisions around the struct's non-nullable members.
         if (model.Version != null)
         {
-            DirectBinaryEmitter.EmitVersionStruct(model, w, operations);
+            BinaryEmitter.EmitVersionStruct(model, w, operations);
             return;
         }
         if (model.ManagedStruct)
         {
-            DirectBinaryEmitter.EmitStruct(model, w, operations);
+            BinaryEmitter.EmitStruct(model, w, operations);
             return;
         }
         bool portable = model.View != null;
@@ -103,7 +103,7 @@ internal static class DirectStructEmitter
                 w.Line(model.LayoutAttribute);
             w.Line("private struct " + model.Mirror);
             w.Open();
-            DirectBinaryEmitter.MirrorFields(w, model.MirrorFields ?? System.Array.Empty<string>(), model.MirrorOffsets);
+            BinaryEmitter.MirrorFields(w, model.MirrorFields ?? System.Array.Empty<string>(), model.MirrorOffsets);
             w.Close();
             if (portable)
                 w.Blank();
@@ -259,3 +259,4 @@ internal static class DirectStructEmitter
         }
     }
 }
+

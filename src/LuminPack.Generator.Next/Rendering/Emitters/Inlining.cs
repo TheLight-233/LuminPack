@@ -1,6 +1,7 @@
+#nullable disable
 using System.Linq;
 
-namespace LuminPack.SourceGenerator.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Applies <c>GeneratedExecutionPolicy</c>'s sixteen-call root budget to covered binary roots.</summary>
 /// <remarks>The policy counts the invocations of the expanded operation template before the cursor and storage projections
@@ -15,7 +16,7 @@ internal static class DirectInlining
     /// <param name="model">The covered type.</param>
     /// <param name="union">Whether the root is the Union payload write.</param>
     /// <param name="sizes">The runtime-size calls of raw struct widths in the body.</param>
-    internal static bool Write(DirectTypeModel model, bool union, int sizes)
+    internal static bool Write(PayloadRenderModel model, bool union, int sizes)
     {
         var members = model.Members;
         // A mirrored type also calls the mirror view of the read-only input: LuminPackMarshal.As and Unsafe.AsRef.
@@ -37,12 +38,12 @@ internal static class DirectInlining
     /// in place, so their member runs are counted as part of its own body.</summary>
     /// <param name="model">The covered type.</param>
     /// <param name="union">Whether the root is the Union payload write, whose leading header is not reserved.</param>
-    internal static bool MixedWrite(DirectTypeModel model, bool union) => MixedCost(model) - (union ? 1 : 0) <= Limit;
+    internal static bool MixedWrite(PayloadRenderModel model, bool union) => MixedCost(model) - (union ? 1 : 0) <= Limit;
 
     /// <summary>Counts a mixed record's expanded write: the reservation and commit, the mirror view of a mirrored type, each
     /// variable member's snapshot and store, each fixed run, each inline object's marker and expanded body, and each string
     /// list's expanded null header and profiled span store.</summary>
-    private static int MixedCost(DirectTypeModel model)
+    private static int MixedCost(PayloadRenderModel model)
     {
         var members = model.Members;
         int count = 2;
@@ -51,28 +52,28 @@ internal static class DirectInlining
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            if (member.Kind == DirectMemberKind.Object)
+            if (member.Kind == RenderMemberKind.Object)
             {
                 count += 1 + MixedCost(member.Nested);
                 continue;
             }
-            if (member.Kind == DirectMemberKind.List && member.Scalar == "string")
+            if (member.Kind == RenderMemberKind.List && member.Scalar == "string")
             {
                 count += 10;
                 continue;
             }
             // An element list expands the null header, the span store and the element's own expanded record body.
-            if (member.Kind == DirectMemberKind.List && member.Nested != null)
+            if (member.Kind == RenderMemberKind.List && member.Nested != null)
             {
                 count += 10 + MixedCost(member.Nested) - 2;
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Array && member.FormatterCall)
+            if (member.Kind == RenderMemberKind.Array && member.FormatterCall)
             {
                 count += 1;
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Fixed)
+            if (member.Kind == RenderMemberKind.Fixed)
             {
                 int run = 1;
                 while (index + run < members.Length && members[index + run].IsFixed)
@@ -87,38 +88,38 @@ internal static class DirectInlining
     }
 
     /// <summary>Whether a portable struct's write root keeps its aggressive inlining hint.</summary>
-    internal static bool PortableWrite(DirectTypeModel model) => PortableCount(model, write: true) <= Limit;
+    internal static bool PortableWrite(PayloadRenderModel model) => PortableCount(model, write: true) <= Limit;
 
     /// <summary>Whether a portable struct's read root keeps its aggressive inlining hint.</summary>
-    internal static bool PortableRead(DirectTypeModel model) => PortableCount(model, write: false) <= Limit;
+    internal static bool PortableRead(PayloadRenderModel model) => PortableCount(model, write: false) <= Limit;
 
     /// <summary>Counts a portable struct operation's template calls: the span index and reference, the advance, the view
     /// (marshal and address) per branch, and per field its offset and transfer in each branch; a read also checks the span and the advance.</summary>
-    private static int PortableCount(DirectTypeModel model, bool write)
+    private static int PortableCount(PayloadRenderModel model, bool write)
         => write ? 7 + 4 * model.PortableView.Leaves.Length : 7 + 2 * model.PortableView.Leaves.Length;
 
     /// <summary>Whether a constructed read keeps its aggressive inlining hint: the null marker, the existing-instance call,
     /// one decode per member and the mirror views of both construction branches.</summary>
     /// <param name="model">The covered type.</param>
-    internal static bool ConstructedRead(DirectTypeModel model)
+    internal static bool ConstructedRead(PayloadRenderModel model)
         => 2 + model.Members.Length + (model.Mirror == null ? 0 : 2) <= Limit;
 
     /// <summary>Whether a root read keeps its aggressive inlining hint.</summary>
     /// <param name="model">The covered type.</param>
     /// <param name="sizes">The runtime-size calls of raw struct widths in the body.</param>
-    internal static bool Read(DirectTypeModel model, int sizes)
+    internal static bool Read(PayloadRenderModel model, int sizes)
     {
         int count = 1 + sizes + model.Members.Count(member => !member.IsFixed);
         // A mirrored type also calls the mirror view, and a mirrored string compares the decoded instance.
         if (model.Mirror != null)
-            count += 1 + model.Members.Count(member => member.Mirrored && member.Kind == DirectMemberKind.Text);
+            count += 1 + model.Members.Count(member => member.Mirrored && member.Kind == RenderMemberKind.Text);
         int first = 0;
         foreach (int run in Runs(model))
         {
             while (!model.Members[first].IsFixed)
                 first++;
             // A run whose Booleans fit no batch mask checks each Boolean after the block read.
-            count += run == 1 ? 1 : 5 * run + 1 + (DirectBinaryEmitter.HasBatchMask(model.Members, first, first + run - 1) ? 0 :
+            count += run == 1 ? 1 : 5 * run + 1 + (BinaryEmitter.HasBatchMask(model.Members, first, first + run - 1) ? 0 :
                 model.Members.Skip(first).Take(run).Count(member => member.IsBoolean));
             first += run;
         }
@@ -126,13 +127,13 @@ internal static class DirectInlining
     }
 
     /// <summary>Whether an all-fixed Union read keeps its aggressive inlining hint.</summary>
-    internal static bool FixedUnionRead(DirectTypeModel model, int sizes) => 2 * model.Members.Length + 1 + sizes <= Limit;
+    internal static bool FixedUnionRead(PayloadRenderModel model, int sizes) => 2 * model.Members.Length + 1 + sizes <= Limit;
 
     /// <summary>Counts a fixed-run write: its proof, block copy, field-wise stores and cursor advance.</summary>
     private static int Group(int fields) => 7 * fields - 1;
 
     /// <summary>Lists the lengths of consecutive fixed member runs.</summary>
-    private static System.Collections.Generic.IEnumerable<int> Runs(DirectTypeModel model)
+    private static System.Collections.Generic.IEnumerable<int> Runs(PayloadRenderModel model)
     {
         var members = model.Members;
         for (int index = 0; index < members.Length; index++)
@@ -147,3 +148,4 @@ internal static class DirectInlining
         }
     }
 }
+

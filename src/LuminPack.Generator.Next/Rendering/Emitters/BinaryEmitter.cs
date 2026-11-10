@@ -4,13 +4,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Writes a covered type's binary roots, facade entries and extensions in their final published form.</summary>
 /// <remarks>The text is what the original pipeline publishes for these shapes: the cursor record write with one reservation,
 /// proven fixed-field blocks with their field-wise fallbacks, checked reads with Boolean batch masks, the root container, the
 /// state entries and the payload extensions. Lines longer than the layout width are wrapped by the publication formatter.</remarks>
-internal static partial class DirectBinaryEmitter
+internal static partial class BinaryEmitter
 {
     private const string Profile = "TLuminProfile";
     private const string Constraint = "where TLuminProfile : struct, ILuminPackOptions";
@@ -20,7 +20,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="operations">The operations the project calls. The members of the others are left out, as the operation
     /// filter removes them from a finished file; the declarations that hold them stay.</param>
-    internal static void Emit(DirectTypeModel model, DirectWriter w, GeneratedOperations operations)
+    internal static void Emit(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
     {
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
         var members = model.Members;
@@ -32,7 +32,7 @@ internal static partial class DirectBinaryEmitter
         // A fixed member or an inline object of fixed members needs no profile; anything else, including a string in an inline
         // object, does.
         bool genericRead = !fixedProfile && (model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
-            members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object)));
+            members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object)));
         bool allFixed = members.All(member => member.IsFixed);
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         // State parameters are spelled through the imported namespace; the other helper names are qualified until presentation.
@@ -404,11 +404,11 @@ internal static partial class DirectBinaryEmitter
             !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) &&
             !body.Any(line => line.StartsWith("for (", StringComparison.Ordinal) || line.StartsWith("foreach (", StringComparison.Ordinal) ||
                 line.StartsWith("static ", StringComparison.Ordinal))
-            ? ((model.StreamRecord ? DirectCalls.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
+            ? ((model.StreamRecord ? InvocationCounter.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
             : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));
 
         string ReadHint(List<string> body) => model.StreamRecord || model.MixedRecord
-            ? (DirectCalls.Count(body) <= 16 ? inline : null)
+            ? (InvocationCounter.Count(body) <= 16 ? inline : null)
             : (model.ConstructorArguments != null ? (DirectInlining.ConstructedRead(model) ? inline : null)
                 : (DirectInlining.Read(model, Sizes(body)) ? inline : null));
 
@@ -466,7 +466,7 @@ internal static partial class DirectBinaryEmitter
             // A declared reference member keeps the Union read behind its outlined entry; a fixed record leaves the hint to the
             // runtime when a contiguous block cannot be proven, as the original expansion does.
             Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                members.Any(member => member.Kind == DirectMemberKind.Parameter)
+                members.Any(member => member.Kind == RenderMemberKind.Parameter)
                     ? (model.ElementList ? w.MethodImpl("NoInlining") : inline)
                     : model.ReferencePayload ? w.MethodImpl("NoInlining")
                     : allFixed && DirectInlining.FixedUnionRead(model, Sizes(readUnionBody)) ? inline : null);
@@ -538,7 +538,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Spells an unaligned cursor position; a plain spelling was already short in the template and registers no alias.</summary>
-    private static string At(DirectWriter w, string cursor, string offset, bool plain = false)
+    private static string At(CodeWriter w, string cursor, string offset, bool plain = false)
         => offset == "0" ? cursor : (plain ? "Unsafe" : w.A("Unsafe")) + ".Add(ref " + cursor + ", " + offset + ")";
 
     /// <summary>Adds a member's width to an offset as the original template does: constants fold until the first runtime size, after
@@ -554,7 +554,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>The packed width of a run of fixed members.</summary>
-    private static string Width(DirectMember[] members, int first, int last)
+    private static string Width(RenderMember[] members, int first, int last)
     {
         string width = "0";
         for (int index = first; index <= last; index++)
@@ -574,11 +574,11 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Spells a member's storage reinterpreted as bytes for a block copy or proof; see <see cref="At"/> for plain spellings.</summary>
-    private static string Bytes(DirectWriter w, DirectMember member, string owner, bool readOnly, bool plain = false)
+    private static string Bytes(CodeWriter w, RenderMember member, string owner, bool readOnly, bool plain = false)
         => (plain ? "Unsafe" : w.A("Unsafe")) + ".As<" + member.Scalar + ", byte>(ref " + (readOnly ? (plain ? "Unsafe" : w.A("Unsafe")) + ".AsRef(in " + owner + "." + member.Name + ")" : owner + "." + member.Name) + ")";
 
     /// <summary>Spells the proof that a run of fixed fields is laid out contiguously on a 64-bit target.</summary>
-    private static string Proof(DirectWriter w, DirectMember[] members, int first, int last, string owner, bool readOnly)
+    private static string Proof(CodeWriter w, RenderMember[] members, int first, int last, string owner, bool readOnly)
     {
         var terms = new List<string> { w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" };
         for (int index = first; index < last; index++)
@@ -588,7 +588,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Ends a run of consecutive fixed members.</summary>
-    private static int RunEnd(DirectMember[] members, int first)
+    private static int RunEnd(RenderMember[] members, int first)
     {
         int last = first;
         while (last + 1 < members.Length && members[last + 1].IsFixed)
@@ -603,7 +603,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="model">The record that owns the member.</param>
     /// <param name="index">The member's index.</param>
     /// <param name="camel">Whether the mixed record body camel-cases every snapshot local, as its inline object members do.</param>
-    private static string Snapshot(DirectTypeModel model, int index, bool camel = false)
+    private static string Snapshot(PayloadRenderModel model, int index, bool camel = false)
     {
         string trimmed = model.Members[index].Name.TrimStart('_');
         string stem = trimmed + "Snapshot";
@@ -614,7 +614,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
-    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, bool union, bool structValue = false)
+    private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, bool union, bool structValue = false)
     {
         var members = model.Members;
         var body = new List<string>();
@@ -714,7 +714,7 @@ internal static partial class DirectBinaryEmitter
         if (union && members.Length == 1)
         {
             // A lone record checks itself.
-            body.Add(members[0].Kind == DirectMemberKind.Text
+            body.Add(members[0].Kind == RenderMemberKind.Text
                 ? "cursor = ref writer.WriteRecordString<" + WriteProfile(model, w, members[0]) + ">(ref cursor, value." + members[0].Name + ");"
                 : "cursor = ref writer.WriteRecordSpan(ref cursor, value." + members[0].Name + ");");
             body.Add("writer.Cursor = ref cursor;");
@@ -728,9 +728,9 @@ internal static partial class DirectBinaryEmitter
         {
             var member = members[index];
             string snapshot = Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null);
-            if (member.Kind == DirectMemberKind.Fixed)
+            if (member.Kind == RenderMemberKind.Fixed)
                 terms.Add(member.Width);
-            else if (member.Kind == DirectMemberKind.Text)
+            else if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = value." + member.Name + ";");
                 terms.Add("writer.RecordBound<" + WriteProfile(model, w, member) + ">(" + snapshot + ")");
@@ -792,7 +792,7 @@ internal static partial class DirectBinaryEmitter
                 continue;
             }
             body.Add("// Field: " + member.Name);
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == RenderMemberKind.Text)
                 body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
             else
                 body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null) + ");");
@@ -807,7 +807,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Closes a bounded write root: the null exit label, the completed-length assertion and the commit.</summary>
-    private static void AddBoundExit(List<string> body, DirectTypeModel model, bool union)
+    private static void AddBoundExit(List<string> body, PayloadRenderModel model, bool union)
     {
         if (model.Bounded == null)
             return;
@@ -825,26 +825,26 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Spells instance creation for a read: the pool rent call of a pooled type, or its parameterless constructor.</summary>
-    private static string NewInstance(DirectTypeModel model) => model.Rent ?? "new " + model.GlobalName + "()";
+    private static string NewInstance(PayloadRenderModel model) => model.Rent ?? "new " + model.GlobalName + "()";
 
     /// <summary>Spells a fixed profile wrapper around an imported string options type.</summary>
-    private static string ScopedProfile(DirectWriter w, string alias) =>
+    private static string ScopedProfile(CodeWriter w, string alias) =>
         "global::LuminPack.Option.LuminPackFixedOptions<" + w.A(alias) + ">";
 
     /// <summary>The profile a member's write kernels consume: its own declaration, the containing type's declaration, or the
     /// operation's profile.</summary>
-    private static string WriteProfile(DirectTypeModel model, DirectWriter w, DirectMember member) =>
+    private static string WriteProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? ScopedProfile(w, member.ScopeProfile) :
         model.DeclaredProfile != null ? ScopedProfile(w, model.DeclaredProfile) : Profile;
 
     /// <summary>The profile a plain string read consumes: a declared profile is passed without the fixed wrapper, as the
     /// member and type projections do.</summary>
-    private static string ReadProfile(DirectTypeModel model, DirectWriter w, DirectMember member) =>
+    private static string ReadProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? w.A(member.ScopeProfile) :
         model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : Profile;
 
     /// <summary>The declared profile a named member write passes to its plain string stores, or the operation's profile.</summary>
-    private static string DeclarationProfile(DirectTypeModel model, DirectWriter w, DirectMember member) =>
+    private static string DeclarationProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? w.A(member.ScopeProfile) :
         model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : Profile;
 
@@ -872,7 +872,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Adds the deserialization callbacks around a read body; a constructed read places the completion callback inside
     /// its branches itself.</summary>
-    private static List<string> AddReadCallbacks(DirectTypeModel model, List<string> body)
+    private static List<string> AddReadCallbacks(PayloadRenderModel model, List<string> body)
     {
         if (!model.HasCallbacks || !model.IsStruct && model.ConstructorArguments != null)
             return body;
@@ -885,7 +885,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in
     /// place, and every following run of reserving members written through its own reservation.</summary>
-    private static List<string> MixedWriteBody(DirectTypeModel model, DirectWriter w, bool union, List<string> body)
+    private static List<string> MixedWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
         var members = model.Members;
         int ends = 0, cursors = 1, spans = 0;
@@ -932,7 +932,7 @@ internal static partial class DirectBinaryEmitter
                     body.Add("");
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Object)
+            if (member.Kind == RenderMemberKind.Object)
             {
                 AddInlineObjectWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
@@ -941,14 +941,14 @@ internal static partial class DirectBinaryEmitter
                 continue;
             }
             // A formatter-call array is a plain call beside the value members, which keeps no separating blank line.
-            if (member.Kind == DirectMemberKind.Array && member.FormatterCall)
+            if (member.Kind == RenderMemberKind.Array && member.FormatterCall)
             {
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
             // A type-parameter member is written in place by the generic serializer itself.
-            if (member.Kind == DirectMemberKind.Parameter)
+            if (member.Kind == RenderMemberKind.Parameter)
             {
                 body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, value." + member.Name + ");");
                 index++;
@@ -971,7 +971,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Writes one inline object member: a named member operation when the child publishes one, otherwise its marker
     /// and its members in place.</summary>
-    private static void AddInlineObjectWrite(List<string> body, DirectMember member, string owner, int depth, DirectWriter w,
+    private static void AddInlineObjectWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         if (member.Nested.MemberWrite)
@@ -997,7 +997,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Writes one list member in place: a null count marker, otherwise the element count and payload. A string list
     /// writes its strings through one profiled span call; a scalar list stores the span directly.</summary>
-    private static void AddInlineListWrite(List<string> body, DirectMember member, string owner, DirectWriter w,
+    private static void AddInlineListWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int spans)
     {
         string local = RoleName(names, "value");
@@ -1031,7 +1031,7 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Writes one list of packable classes in place: a null count marker, otherwise the element count and a loop that
     /// expands each element's record body, skipping a null element through its own exit label.</summary>
     /// <param name="body">The body lines.</param>
-    /// <param name="member">The list member, whose <see cref="DirectMember.Nested"/> model is the element.</param>
+    /// <param name="member">The list member, whose <see cref="RenderMember.Nested"/> model is the element.</param>
     /// <param name="owner">The expression holding the record being written.</param>
     /// <param name="depth">The inline nesting depth the element body continues.</param>
     /// <param name="w">The file writer.</param>
@@ -1039,7 +1039,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="ends">The exit label counter shared by the whole method; the element label is numbered before the list's.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="spans">The span counter shared by the whole method.</param>
-    private static void AddInlineElementListWrite(List<string> body, DirectMember member, string owner, int depth, DirectWriter w,
+    private static void AddInlineElementListWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         var element = member.Nested;
@@ -1100,7 +1100,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="ends">The exit label counter shared by the whole method.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="spans">The span counter shared by the whole method.</param>
-    private static void AddElementWrite(List<string> body, DirectTypeModel element, string owner, int depth, DirectWriter w,
+    private static void AddElementWrite(List<string> body, PayloadRenderModel element, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         var members = element.Members;
@@ -1143,9 +1143,9 @@ internal static partial class DirectBinaryEmitter
         {
             var member = members[index];
             string snapshot = Snapshot(element, index, camel: true);
-            if (member.Kind == DirectMemberKind.Fixed)
+            if (member.Kind == RenderMemberKind.Fixed)
                 terms.Add(member.Width);
-            else if (member.Kind == DirectMemberKind.Text)
+            else if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = " + owner + "." + member.Name + ";");
                 terms.Add("writer.RecordBound<" + Profile + ">(" + snapshot + ")");
@@ -1203,7 +1203,7 @@ internal static partial class DirectBinaryEmitter
                 continue;
             }
             body.Add("// Field: " + member.Name);
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == RenderMemberKind.Text)
                 body.Add(elementCursor + " = ref writer.WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
             else
                 body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
@@ -1218,16 +1218,16 @@ internal static partial class DirectBinaryEmitter
         => "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>Writes a lone member through the cursor without reserving first, as a one-member record does.</summary>
-    private static void AddLoneRecord(DirectTypeModel model, DirectWriter w, List<string> body, DirectMember member)
+    private static void AddLoneRecord(PayloadRenderModel model, CodeWriter w, List<string> body, RenderMember member)
     {
         // The template keeps no member comment on a lone group whose member owns a profile boundary.
         if (member.ScopeProfile == null)
             body.Add("// Fields: " + member.Name);
-        if (member.Kind == DirectMemberKind.Fixed)
+        if (member.Kind == RenderMemberKind.Fixed)
             body.Add("cursor = ref writer.WriteRecord(ref cursor, value." + member.Name + ");");
-        else if (member.Kind == DirectMemberKind.Text)
+        else if (member.Kind == RenderMemberKind.Text)
             body.Add("cursor = ref writer.WriteRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, value." + member.Name + ");");
-        else if (member.Kind == DirectMemberKind.Dictionary)
+        else if (member.Kind == RenderMemberKind.Dictionary)
             body.Add("cursor = ref writer.WriteRecordPairs(ref cursor, value." + member.Name + ");");
         else
             body.Add("cursor = ref writer.WriteRecordSpan(ref cursor, value." + member.Name + ");");
@@ -1235,7 +1235,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Writes a leading or following run of reserving members, splitting it at each member-level profile boundary.
     /// A group that is alone and carries no header stores through its one-member record kernel, as the template does.</summary>
-    private static void AddProfileSegments(DirectTypeModel model, DirectWriter w, List<string> body, int first, int last, bool header)
+    private static void AddProfileSegments(PayloadRenderModel model, CodeWriter w, List<string> body, int first, int last, bool header)
     {
         var members = model.Members;
         int start = first;
@@ -1256,7 +1256,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes a span of a mixed record through one reservation, optionally including the record header byte.</summary>
-    private static void AddReservedSegment(DirectTypeModel model, DirectWriter w, List<string> body, int first, int last, bool header,
+    private static void AddReservedSegment(PayloadRenderModel model, CodeWriter w, List<string> body, int first, int last, bool header,
         bool? camel = null)
     {
         var members = model.Members;
@@ -1271,9 +1271,9 @@ internal static partial class DirectBinaryEmitter
         {
             var member = members[index];
             string snapshot = Snapshot(model, index, camel: camel ?? model.InlineObject);
-            if (member.Kind == DirectMemberKind.Fixed)
+            if (member.Kind == RenderMemberKind.Fixed)
                 terms.Add(member.Width);
-            else if (member.Kind == DirectMemberKind.Text)
+            else if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("string " + snapshot + " = value." + member.Name + ";");
                 terms.Add("writer.RecordBound<" + WriteProfile(model, w, member) + ">(" + snapshot + ")");
@@ -1338,9 +1338,9 @@ internal static partial class DirectBinaryEmitter
             }
             body.Add("// Field: " + member.Name);
             string written = Snapshot(model, index, camel: camel ?? model.InlineObject);
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == RenderMemberKind.Text)
                 body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + written + ");");
-            else if (member.Kind == DirectMemberKind.Dictionary)
+            else if (member.Kind == RenderMemberKind.Dictionary)
                 body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved(ref cursor, " + written + ");");
             else
                 body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + written + ");");
@@ -1351,7 +1351,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Builds a stream record's write body: the member count, then every member, with inline objects writing their own
     /// count and members in place.</summary>
-    private static List<string> StreamWriteBody(DirectTypeModel model, DirectWriter w, bool union, List<string> body)
+    private static List<string> StreamWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
         if (!union)
         {
@@ -1376,7 +1376,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="cursors">The cursor local counter shared by the whole method; a mixed record's own cursor holds the first
     /// occurrence.</param>
     /// <param name="spans">The string list span counter shared by the whole method.</param>
-    private static void AddStreamWrite(List<string> body, DirectTypeModel model, string owner, int depth, DirectWriter w,
+    private static void AddStreamWrite(List<string> body, PayloadRenderModel model, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         var members = model.Members;
@@ -1385,18 +1385,18 @@ internal static partial class DirectBinaryEmitter
             var member = members[index];
             // A string inside an inline object writes with the operation's profile, as the old pipeline's inline object
             // emits it: writer.Write<TLuminProfile>(inlineValue.Name); (ProbeMixed.O1).
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("writer.Write<" + Profile + ">(" + owner + "." + member.Name + ");");
                 continue;
             }
             // A type-parameter member is written by the generic serializer itself.
-            if (member.Kind == DirectMemberKind.Parameter)
+            if (member.Kind == RenderMemberKind.Parameter)
             {
                 body.Add(w.A("LuminPackSerializer") + ".Serialize" + MemberArguments(member, Profile) + "(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Object)
+            if (member.Kind == RenderMemberKind.Object)
             {
                 AddInlineObjectWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                 // An inline object leaves a blank line before a following field unless that field opens another inline object;
@@ -1406,7 +1406,7 @@ internal static partial class DirectBinaryEmitter
                 continue;
             }
             // A fused dictionary inside an inline object writes its original operation in place.
-            if (member.Kind == DirectMemberKind.Dictionary)
+            if (member.Kind == RenderMemberKind.Dictionary)
             {
                 AddDictionaryInline(body, model, member, owner, w, names, ref ends);
                 if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
@@ -1414,7 +1414,7 @@ internal static partial class DirectBinaryEmitter
                 continue;
             }
             // An array member writes through its generated formatter, which keeps its own framing and profile.
-            if (member.Kind == DirectMemberKind.Array)
+            if (member.Kind == RenderMemberKind.Array)
             {
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
@@ -1422,7 +1422,7 @@ internal static partial class DirectBinaryEmitter
             // A list inside a stream record or an inline object expands its generated null header and payload in place, whose
             // failure exits through a method-wide label. A string list separates itself from the member that follows it, while
             // a scalar list keeps the presentation's own blank rule.
-            if (member.Kind == DirectMemberKind.List)
+            if (member.Kind == RenderMemberKind.List)
             {
                 if (member.Scalar == "string")
                 {
@@ -1487,7 +1487,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Spells a type-parameter member's payload call: its own parameter, then the operation's profile.</summary>
-    private static string MemberArguments(DirectMember member, string profile) => "<" + member.Scalar + ", " + profile + ">";
+    private static string MemberArguments(RenderMember member, string profile) => "<" + member.Scalar + ", " + profile + ">";
 
     /// <summary>Adds the reset guard of a generic payload member, which depends on what its declared type is.</summary>
     /// <param name="body">The body lines.</param>
@@ -1495,7 +1495,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="reader">The reader expression the payload call reads from.</param>
     /// <param name="target">The destination storage expression.</param>
-    private static void AddParameterReset(List<string> body, DirectMember member, DirectWriter w, string reader, string target)
+    private static void AddParameterReset(List<string> body, RenderMember member, CodeWriter w, string reader, string target)
     {
         // A bare parameter may hold a value or a reference, so the runtime formatter decides whether the member is reset.
         if (member.BareParameter)
@@ -1533,22 +1533,22 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Whether a member's write opens with a local declaration, which the presentation keeps directly under the
     /// preceding block instead of separating it with a blank line.</summary>
-    private static bool StartsInlineObject(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite;
+    private static bool StartsInlineObject(RenderMember member) => member.Kind == RenderMemberKind.Object && !member.Nested.MemberWrite;
 
     /// <summary>Whether a member is a list of strings, which writes its payload in place instead of entering a reservation.</summary>
-    private static bool IsTextList(DirectMember member) => member.Kind == DirectMemberKind.List && member.Scalar == "string";
+    private static bool IsTextList(RenderMember member) => member.Kind == RenderMemberKind.List && member.Scalar == "string";
 
     /// <summary>Whether a member is a list whose elements expand their record body in place.</summary>
-    private static bool IsElementList(DirectMember member) => member.Kind == DirectMemberKind.List && member.Nested != null;
+    private static bool IsElementList(RenderMember member) => member.Kind == RenderMemberKind.List && member.Nested != null;
 
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
-    private static bool IsInlineSegment(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member) ||
-        IsElementList(member) || IsCollectionBlock(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall ||
-        member.Kind == DirectMemberKind.Parameter;
+    private static bool IsInlineSegment(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
+        IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
+        member.Kind == RenderMemberKind.Parameter;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
-    private static bool IsInlineBlock(DirectMember member) =>
-        member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite || IsTextList(member) || IsElementList(member);
+    private static bool IsInlineBlock(RenderMember member) =>
+        member.Kind == RenderMemberKind.Object && !member.Nested.MemberWrite || IsTextList(member) || IsElementList(member);
 
     /// <summary>Drops the depth suffix of an inline local whose purely alphabetic stem is otherwise unused, as the presentation
     /// does.</summary>
@@ -1580,7 +1580,7 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Turns an all-fixed Union write into the returning cursor kernel of a fixed Union case, as the fixed Union cursor
     /// projection does: the cursor is a local byte index into the buffer, advancing adds to it, a block write copies into the
     /// buffer, a lone store returns its width, and the index is published only before a capacity reservation.</summary>
-    private static List<string> FixedUnionBody(DirectWriter w, List<string> original)
+    private static List<string> FixedUnionBody(CodeWriter w, List<string> original)
     {
         string destination = w.A("Unsafe") + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(writer.Buffer), unchecked((nint)(uint)(fixedUnionIndex)))";
         var body = new List<string>
@@ -1651,7 +1651,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="fields">The mirror field declarations in storage order.</param>
     /// <param name="offsets">The explicit-layout offset per field, or -1, or null.</param>
-    internal static void MirrorFields(DirectWriter w, string[] fields, int[] offsets)
+    internal static void MirrorFields(CodeWriter w, string[] fields, int[] offsets)
     {
         for (int index = 0; index < fields.Length; index++)
         {
@@ -1663,7 +1663,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Reaches a mirrored type's storage through its layout mirror: the mirror view is declared after the null handling
     /// or the instance, and every member access goes through it.</summary>
-    private static List<string> Mirrored(DirectTypeModel model, DirectWriter w, List<string> body, bool writes, bool union)
+    private static List<string> Mirrored(PayloadRenderModel model, CodeWriter w, List<string> body, bool writes, bool union)
     {
         // A pool mirror only declares the layout for reuse; public fields keep their direct access.
         if (model.Mirror == null || !model.Members.Any(member => member.Mirrored))
@@ -1695,7 +1695,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Builds the named member write: the original stream writes of an object nested in another record.</summary>
-    private static List<string> MemberWriteBody(DirectTypeModel model, DirectWriter w)
+    private static List<string> MemberWriteBody(PayloadRenderModel model, CodeWriter w)
     {
         var members = model.Members;
         var body = new List<string>
@@ -1712,7 +1712,7 @@ internal static partial class DirectBinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == RenderMemberKind.Text)
             {
                 body.Add("writer.Write<" + DeclarationProfile(model, w, member) + ">(value." + member.Name + ");");
                 continue;
@@ -1747,7 +1747,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="original">The reserved record write.</param>
     /// <param name="union">Whether the record is a Union payload without the null marker and member count.</param>
     /// <returns>The proven operation body.</returns>
-    private static List<string> ProvenWriteBody(DirectTypeModel model, DirectWriter w, List<string> original, bool union)
+    private static List<string> ProvenWriteBody(PayloadRenderModel model, CodeWriter w, List<string> original, bool union)
     {
         int cursorLine = original.IndexOf("ref byte cursor = ref writer.Cursor;");
         int reserve = original.FindIndex(line => line.StartsWith("cursor = ref writer.ReserveRecord(", StringComparison.Ordinal));
@@ -1760,7 +1760,7 @@ internal static partial class DirectBinaryEmitter
         var record = original.GetRange(reserve + 1, original.Count - reserve - 1);
         var names = new List<string>();
         for (int index = 0; index < model.Members.Length; index++)
-            if (model.Members[index].Kind == DirectMemberKind.Text)
+            if (model.Members[index].Kind == RenderMemberKind.Text)
                 names.Add(Snapshot(model, index, camel: model.HasCallbacks || model.Bounded != null));
         string type = model.GlobalName + "?";
         string arguments = string.Join(", ", new[] { "ref writer", "value" }.Concat(names));
@@ -1776,7 +1776,7 @@ internal static partial class DirectBinaryEmitter
         int text = 0;
         foreach (var member in model.Members)
         {
-            if (member.Kind != DirectMemberKind.Text)
+            if (member.Kind != RenderMemberKind.Text)
             {
                 terms.Add(member.Width);
                 continue;
@@ -1835,11 +1835,11 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Stores a run of fixed fields at their packed offsets from a cursor.</summary>
-    private static void AddFixedStores(DirectWriter w, DirectMember[] members, int first, int last, string cursor, List<string> body)
+    private static void AddFixedStores(CodeWriter w, RenderMember[] members, int first, int last, string cursor, List<string> body)
         => AddFixedStores(w, members, first, last, cursor, body, "value");
 
     /// <summary>Stores a run of fixed fields of one record, which may be an inline object, at their packed offsets from a cursor.</summary>
-    private static void AddFixedStores(DirectWriter w, DirectMember[] members, int first, int last, string cursor, List<string> body, string owner)
+    private static void AddFixedStores(CodeWriter w, RenderMember[] members, int first, int last, string cursor, List<string> body, string owner)
     {
         string offset = "0";
         for (int index = first; index <= last; index++)
@@ -1854,7 +1854,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Builds the read body of a type whose selected constructor takes parameters: temporary locals hold the decoded
     /// values, an existing instance reads in place, and a fresh one is constructed with its arguments and remaining fields.</summary>
-    private static List<string> ConstructedReadBody(DirectTypeModel model, DirectWriter w, bool union)
+    private static List<string> ConstructedReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         var members = model.Members;
         string policy = w.A("LuminPackInputPolicy");
@@ -1891,7 +1891,7 @@ internal static partial class DirectBinaryEmitter
         body.Add("");
         foreach (var member in members)
         {
-            if (member.Kind == DirectMemberKind.Parameter)
+            if (member.Kind == RenderMemberKind.Parameter)
                 body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + Camel(member.Name) + "Temp!);");
             else
                 body.Add(Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
@@ -1912,7 +1912,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
             body.Add("};");
         }
-        var mirrored = model.Mirror == null ? Array.Empty<DirectMember>() : members.Where(member => member.Mirrored &&
+        var mirrored = model.Mirror == null ? Array.Empty<RenderMember>() : members.Where(member => member.Mirrored &&
             (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
         if (mirrored.Length != 0)
         {
@@ -1928,10 +1928,10 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Reads one member in place for the constructed read's existing-instance path.</summary>
-    private static void AddConstructedReadExisting(List<string> body, DirectTypeModel model, DirectWriter w, DirectMember member, bool hasNext)
+    private static void AddConstructedReadExisting(List<string> body, PayloadRenderModel model, CodeWriter w, RenderMember member, bool hasNext)
     {
         string owner = member.Mirrored ? "reuseLocal" : "value2!";
-        if (member.Kind == DirectMemberKind.Text && member.Mirrored)
+        if (member.Kind == RenderMemberKind.Text && member.Mirrored)
         {
             body.Add("var currentString = " + owner + "." + member.Name + ";");
             body.Add("var decodedString = reader2.Read<" + Profile + ">(currentString);");
@@ -1941,12 +1941,12 @@ internal static partial class DirectBinaryEmitter
                 body.Add("");
             return;
         }
-        if (member.Kind == DirectMemberKind.Text)
+        if (member.Kind == RenderMemberKind.Text)
         {
             body.Add("reader2.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
             return;
         }
-        if (member.Kind == DirectMemberKind.Parameter)
+        if (member.Kind == RenderMemberKind.Parameter)
         {
             AddParameterReset(body, member, w, "reader2", owner + "." + member.Name);
             body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
@@ -1956,20 +1956,20 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Spells a fixed or string member's read from the given reader expression.</summary>
-    private static string FixedOrTextRead(DirectMember member, string reader) =>
-        member.Kind == DirectMemberKind.Text ? reader + ".Read<" + Profile + ">((string? )null)!" :
+    private static string FixedOrTextRead(RenderMember member, string reader) =>
+        member.Kind == RenderMemberKind.Text ? reader + ".Read<" + Profile + ">((string? )null)!" :
         member.IsBoolean ? "LuminPackInputPolicy.ReadBoolean(ref " + reader + ")" :
         reader + ".Read<" + member.Scalar + ">()";
 
     /// <summary>Spells the temporary local type of one member, as the constructed read declares it.</summary>
-    private static string TempType(DirectMember member) => member.Kind == DirectMemberKind.Text ? "string?" :
-        member.Kind == DirectMemberKind.Parameter && member.ReferencePayload ? member.TypeName + "?" : member.TypeName;
+    private static string TempType(RenderMember member) => member.Kind == RenderMemberKind.Text ? "string?" :
+        member.Kind == RenderMemberKind.Parameter && member.ReferencePayload ? member.TypeName + "?" : member.TypeName;
 
     /// <summary>Spells a member's temporary local with the leading letter in lower case.</summary>
-    private static string Camel(string name) => DirectEmission.LocalName(name);
+    private static string Camel(string name) => PayloadEmitter.LocalName(name);
 
     /// <summary>Builds a root read body.</summary>
-    private static List<string> ReadBody(DirectTypeModel model, DirectWriter w, bool union)
+    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         // A selected constructor builds the instance from temporary locals; a raw struct's arguments only reach its JSON
         // read, so the binary body keeps the struct paths.
@@ -2063,7 +2063,7 @@ internal static partial class DirectBinaryEmitter
                 index = last;
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Text && member.Mirrored && member.Property)
+            if (member.Kind == RenderMemberKind.Text && member.Mirrored && member.Property)
             {
                 string number = strings++ == 0 ? string.Empty : strings.ToString(CultureInfo.InvariantCulture);
                 // A mirrored auto-property is assigned only when the decoded instance differs; it follows a fixed run directly.
@@ -2075,16 +2075,16 @@ internal static partial class DirectBinaryEmitter
                 body.Add("\tinstance." + member.Name + " = decodedString" + number + "!;");
                 body.Add("");
             }
-            else if (member.Kind == DirectMemberKind.Text)
+            else if (member.Kind == RenderMemberKind.Text)
                 // Included non-public fields pass their mirror storage by reference, as public fields do.
                 body.Add("reader.Read<" + ReadProfile(model, w, member) + ">(ref instance." + member.Name + ");");
-            else if (member.Kind == DirectMemberKind.Array && member.Scalar == "bool" && !trusted)
+            else if (member.Kind == RenderMemberKind.Array && member.Scalar == "bool" && !trusted)
                 body.Add(Policy() + ".ReadBooleans(ref reader, ref instance." + member.Name + "!);");
             else
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref instance." + member.Name + "!);");
                 // A Boolean list carries unmanaged values, so an untrusted read still checks the decoded bytes.
-                if (member.Kind == DirectMemberKind.List && member.Scalar == "bool" && !trusted)
+                if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
                     body.Add(Policy() + ".CheckBooleans(instance." + member.Name + "!);");
             }
         }
@@ -2101,7 +2101,7 @@ internal static partial class DirectBinaryEmitter
     /// <summary>Renames the instance local of a read root whose Boolean collection takes the checked completion. The
     /// untrusted-read projection inlines that root under its entry prefix, which the published file keeps as the role
     /// name.</summary>
-    private static void RenameCheckedReadInstance(List<string> body, DirectTypeModel model, bool union)
+    private static void RenameCheckedReadInstance(List<string> body, PayloadRenderModel model, bool union)
     {
         if (!model.BooleanCollection || model.Trusted)
             return;
@@ -2113,7 +2113,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Builds a stream record's read body: the null marker, then every member, with inline objects reading their own
     /// marker and members in place.</summary>
-    private static List<string> StreamReadBody(DirectTypeModel model, DirectWriter w, bool union)
+    private static List<string> StreamReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         var members = model.Members;
         var body = new List<string>();
@@ -2146,8 +2146,8 @@ internal static partial class DirectBinaryEmitter
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="strings">The mirrored string local counter shared by the whole method.</param>
     /// <param name="ends">The exit-label counter of the outlined trusted child reads.</param>
-    private static void AddStreamRead(List<string> body, DirectTypeModel model, string owner, int depth, bool prove, bool markerSeen,
-        DirectWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends)
+    private static void AddStreamRead(List<string> body, PayloadRenderModel model, string owner, int depth, bool prove, bool markerSeen,
+        CodeWriter w, Dictionary<string, int> names, ref int cursors, ref int strings, ref int ends)
     {
         var members = model.Members;
         string Policy() => w.A("LuminPackInputPolicy");
@@ -2155,7 +2155,7 @@ internal static partial class DirectBinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            if (member.Kind == DirectMemberKind.Object)
+            if (member.Kind == RenderMemberKind.Object)
             {
                 // A trusted parent outlines an explicitly untrusted child: it peeks for the null marker and runs the child's
                 // own checked root read, so the child keeps its depth-guarded and validated operations.
@@ -2163,7 +2163,7 @@ internal static partial class DirectBinaryEmitter
                     member.Nested.ConstructorArguments == null && member.Nested.Version == null && member.Nested.Mirror == null &&
                     member.Nested.Rent == null && !member.Nested.HasCallbacks && member.Nested.Bounded == null &&
                     !member.Nested.Members.Any(item => item.Mirrored) &&
-                    member.Nested.Members.All(item => item.IsFixed || item.Kind == DirectMemberKind.Text))
+                    member.Nested.Members.All(item => item.IsFixed || item.Kind == RenderMemberKind.Text))
                 {
                     string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
                     ends++;
@@ -2200,7 +2200,7 @@ internal static partial class DirectBinaryEmitter
                     body.Add("");
                 continue;
             }
-            if (member.Kind == DirectMemberKind.Text)
+            if (member.Kind == RenderMemberKind.Text)
             {
                 if (member.Mirrored)
                 {
@@ -2218,14 +2218,14 @@ internal static partial class DirectBinaryEmitter
             }
             // A type-parameter member reads through the generic serializer, assigning the reset guard only when its
             // parameter may hold a reference.
-            if (member.Kind == DirectMemberKind.Parameter)
+            if (member.Kind == RenderMemberKind.Parameter)
             {
                 AddParameterReset(body, member, w, "reader", owner + "." + member.Name);
                 body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.
-            if (member.Kind == DirectMemberKind.Dictionary)
+            if (member.Kind == RenderMemberKind.Dictionary)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
@@ -2237,14 +2237,14 @@ internal static partial class DirectBinaryEmitter
                 continue;
             }
             // An array or list member reads through its generated formatter, which keeps its own framing and profile.
-            if (member.Kind is DirectMemberKind.Array or DirectMemberKind.List)
+            if (member.Kind is RenderMemberKind.Array or RenderMemberKind.List)
             {
-                if (member.Kind == DirectMemberKind.Array && member.Scalar == "bool" && !trusted)
+                if (member.Kind == RenderMemberKind.Array && member.Scalar == "bool" && !trusted)
                     body.Add(Policy() + ".ReadBooleans(ref reader, ref " + owner + "." + member.Name + "!);");
                 else
                 {
                     body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
-                    if (member.Kind == DirectMemberKind.List && member.Scalar == "bool" && !trusted)
+                    if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
                         body.Add(Policy() + ".CheckBooleans(" + owner + "." + member.Name + "!);");
                 }
                 continue;
@@ -2324,7 +2324,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="exit">The label a null child jumps to.</param>
     /// <param name="cursors">The parent method's cursor local counter, advanced by the child's own cursors.</param>
     /// <returns>The child body lines.</returns>
-    private static List<string> InlineRootRead(DirectTypeModel child, DirectWriter w, string target, string instanceName, string exit, ref int cursors)
+    private static List<string> InlineRootRead(PayloadRenderModel child, CodeWriter w, string target, string instanceName, string exit, ref int cursors)
     {
         var lines = ReadBody(child, w, union: false);
         var instance = new System.Text.RegularExpressions.Regex(@"\binstance\b");
@@ -2370,7 +2370,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Whether the Booleans of a fixed run, if any, fit one batch mask.</summary>
-    internal static bool HasBatchMask(DirectMember[] members, int first, int last)
+    internal static bool HasBatchMask(RenderMember[] members, int first, int last)
     {
         var offsets = new List<int>();
         int width = 0;

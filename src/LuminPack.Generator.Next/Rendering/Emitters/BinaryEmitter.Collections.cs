@@ -1,18 +1,20 @@
+#nullable disable
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace LuminPack.SourceGenerator.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Writes the collection members whose binary protocols expand in place: stacks, sorted sets, sorted lists,
 /// key/value pair lists, nested lists and dictionaries with nullable raw values.</summary>
-internal static partial class DirectBinaryEmitter
+internal static partial class BinaryEmitter
 {
     /// <summary>Whether a member writes its own block in place instead of entering the surrounding reservation.</summary>
-    private static bool IsCollectionBlock(DirectMember member) => member.Kind is DirectMemberKind.Stack or DirectMemberKind.SortedSet or
-        DirectMemberKind.SortedList or DirectMemberKind.PairList or DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary;
+    private static bool IsCollectionBlock(RenderMember member) => member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or
+        RenderMemberKind.SortedList or RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary;
 
     /// <summary>Writes one collection member in place: its null header, its payload and its exit label.</summary>
     /// <param name="body">The body lines.</param>
+    /// <param name="model">The render model.</param>
     /// <param name="member">The collection member.</param>
     /// <param name="owner">The expression holding the record being written.</param>
     /// <param name="depth">The inline nesting depth of the member.</param>
@@ -21,24 +23,24 @@ internal static partial class DirectBinaryEmitter
     /// <param name="ends">The exit label counter shared by the whole method.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="spans">The span counter shared by the whole method.</param>
-    private static void AddCollectionWrite(List<string> body, DirectTypeModel model, DirectMember member, string owner, int depth,
-        DirectWriter w, Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+    private static void AddCollectionWrite(List<string> body, PayloadRenderModel model, RenderMember member, string owner, int depth,
+        CodeWriter w, Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         switch (member.Kind)
         {
-            case DirectMemberKind.Stack:
+            case RenderMemberKind.Stack:
                 AddStackWrite(body, member, owner, w, names, ref ends);
                 break;
-            case DirectMemberKind.SortedSet:
+            case RenderMemberKind.SortedSet:
                 AddSortedSetWrite(body, member, owner, w, names, ref ends);
                 break;
-            case DirectMemberKind.SortedList:
+            case RenderMemberKind.SortedList:
                 AddSortedListWrite(body, model, member, owner, w, names, ref ends);
                 break;
-            case DirectMemberKind.PairList:
+            case RenderMemberKind.PairList:
                 AddPairListWrite(body, model, member, owner, w, names, ref ends);
                 break;
-            case DirectMemberKind.NestedList:
+            case RenderMemberKind.NestedList:
                 AddNestedListWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                 break;
             default:
@@ -48,7 +50,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes a stack's storage span as one batch, as the original operation does.</summary>
-    private static void AddStackWrite(List<string> body, DirectMember member, string owner, DirectWriter w,
+    private static void AddStackWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
         string local = RoleName(names, "value");
@@ -75,7 +77,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes a sorted set of raw scalars through the tree storage helper.</summary>
-    private static void AddSortedSetWrite(List<string> body, DirectMember member, string owner, DirectWriter w,
+    private static void AddSortedSetWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
         string local = RoleName(names, "value");
@@ -92,7 +94,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes a sorted list's stored key and value arrays as paired entries, with an array-pool fallback.</summary>
-    private static void AddSortedListWrite(List<string> body, DirectTypeModel model, DirectMember member, string owner, DirectWriter w,
+    private static void AddSortedListWrite(List<string> body, PayloadRenderModel model, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
         var shape = member.Collection;
@@ -159,7 +161,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes a list of key/value pairs, storing each pair's key and value in one checkable loop.</summary>
-    private static void AddPairListWrite(List<string> body, DirectTypeModel model, DirectMember member, string owner, DirectWriter w,
+    private static void AddPairListWrite(List<string> body, PayloadRenderModel model, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
         var shape = member.Collection;
@@ -190,7 +192,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes a list of lists: the outer span, then each inner span with its elements' expanded record bodies.</summary>
-    private static void AddNestedListWrite(List<string> body, DirectMember member, string owner, int depth, DirectWriter w,
+    private static void AddNestedListWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
         var element = member.Nested;
@@ -258,7 +260,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes a dictionary with a nullable raw value as sparse raw entries whose keys use their varint record.</summary>
-    private static void AddSparseDictionaryWrite(List<string> body, DirectMember member, string owner, DirectWriter w,
+    private static void AddSparseDictionaryWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
         var shape = member.Collection;
@@ -294,7 +296,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Writes one sorted or paired value: a text record through the string formatter, or a raw scalar store.</summary>
-    private static void AddCollectionValueWrite(List<string> body, DirectCollection shape, string writer, string source, DirectTypeModel model)
+    private static void AddCollectionValueWrite(List<string> body, RenderCollection shape, string writer, string source, PayloadRenderModel model)
     {
         if (shape.ValueText)
             body.Add(TextFormatter(model) + ".Write<" + Profile + ">(ref " + writer + ", " + source + ");");
@@ -309,7 +311,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="reserve">Whether the header reserves its own four bytes before storing.</param>
     /// <param name="countMarker">Whether the header stores the list's negative count instead of the null collection code.</param>
-    private static void AddCollectionNull(List<string> body, string value, string exit, DirectWriter w, bool reserve, bool countMarker)
+    private static void AddCollectionNull(List<string> body, string value, string exit, CodeWriter w, bool reserve, bool countMarker)
     {
         body.Add("if (" + value + " is null)");
         body.Add("{");
@@ -326,3 +328,4 @@ internal static partial class DirectBinaryEmitter
         body.Add("}");
     }
 }
+

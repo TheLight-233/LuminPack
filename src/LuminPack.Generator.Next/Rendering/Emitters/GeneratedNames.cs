@@ -2,12 +2,12 @@ using System;
 using System.Linq;
 using System.Text;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Spells the generated container, helper and formatter-owner names from a payload identity.</summary>
 /// <remarks>These names are part of the generated contract: the extension container, the JSON name table, the layout mirror
 /// and the binary formatter owner must agree with the files the other generators publish.</remarks>
-internal static class DirectNames
+internal static class GeneratedNames
 {
     /// <summary>Names the assembly-specific extension container.</summary>
     /// <param name="assemblyName">The consuming assembly name.</param>

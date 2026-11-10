@@ -1,10 +1,10 @@
 #nullable disable
 using System;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>One declared case of a covered Union root, reduced to the facts its dispatch text depends on.</summary>
-internal sealed class DirectUnionCase : IEquatable<DirectUnionCase>
+internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
 {
     /// <summary>The narrow Union tag.</summary>
     internal readonly int Id;
@@ -21,7 +21,7 @@ internal sealed class DirectUnionCase : IEquatable<DirectUnionCase>
     internal readonly bool FixedCursor;
     /// <summary>The direct model whose fixed member reads this case's switch arm expands, or null when the arm calls the
     /// case's own entry.</summary>
-    internal readonly DirectTypeModel Model;
+    internal readonly PayloadRenderModel Model;
     /// <summary>The readable payload name of the case, which names its own Union entry.</summary>
     internal readonly string Readable;
     /// <summary>The partial declarations from the outermost containing type to the case.</summary>
@@ -30,7 +30,7 @@ internal sealed class DirectUnionCase : IEquatable<DirectUnionCase>
     internal readonly string Namespace;
 
     /// <summary>Captures one case.</summary>
-    internal DirectUnionCase(int id, string type, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor, DirectTypeModel model,
+    internal UnionRenderCase(int id, string type, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor, PayloadRenderModel model,
         string readable, string[] chain, string @namespace)
     {
         Namespace = @namespace;
@@ -46,21 +46,21 @@ internal sealed class DirectUnionCase : IEquatable<DirectUnionCase>
     }
 
     /// <inheritdoc/>
-    public bool Equals(DirectUnionCase other) => other != null && Id == other.Id && Type == other.Type && OwnEntry == other.OwnEntry &&
+    public bool Equals(UnionRenderCase other) => other != null && Id == other.Id && Type == other.Type && OwnEntry == other.OwnEntry &&
         ReadGeneric == other.ReadGeneric && Sealed == other.Sealed && FixedCursor == other.FixedCursor && Namespace == other.Namespace &&
         Readable == other.Readable && Same(Chain, other.Chain) && Equals(Model, other.Model);
 
     private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && System.Linq.Enumerable.SequenceEqual(left, right);
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) => Equals(obj as DirectUnionCase);
+    public override bool Equals(object obj) => Equals(obj as UnionRenderCase);
 
     /// <inheritdoc/>
     public override int GetHashCode() => Id;
 }
 
 /// <summary>One compiled wire-profile slot of a covered Union root.</summary>
-internal sealed class DirectUnionSlot : IEquatable<DirectUnionSlot>
+internal sealed class UnionRenderSlot : IEquatable<UnionRenderSlot>
 {
     /// <summary>The method-name suffix: empty for the declared profile, otherwise <c>_Options_&lt;identity&gt;</c>.</summary>
     internal readonly string Suffix;
@@ -74,7 +74,7 @@ internal sealed class DirectUnionSlot : IEquatable<DirectUnionSlot>
     internal readonly int Recording;
 
     /// <summary>Captures one slot.</summary>
-    internal DirectUnionSlot(string suffix, string profile, string identity, int encoding, int recording)
+    internal UnionRenderSlot(string suffix, string profile, string identity, int encoding, int recording)
     {
         Recording = recording;
         Encoding = encoding;
@@ -84,11 +84,11 @@ internal sealed class DirectUnionSlot : IEquatable<DirectUnionSlot>
     }
 
     /// <inheritdoc/>
-    public bool Equals(DirectUnionSlot other) => other != null && Suffix == other.Suffix && Profile == other.Profile &&
+    public bool Equals(UnionRenderSlot other) => other != null && Suffix == other.Suffix && Profile == other.Profile &&
         Identity == other.Identity && Encoding == other.Encoding && Recording == other.Recording;
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) => Equals(obj as DirectUnionSlot);
+    public override bool Equals(object obj) => Equals(obj as UnionRenderSlot);
 
     /// <inheritdoc/>
     public override int GetHashCode() => Suffix.GetHashCode();

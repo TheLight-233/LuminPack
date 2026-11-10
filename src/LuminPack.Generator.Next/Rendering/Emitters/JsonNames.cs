@@ -1,9 +1,9 @@
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Spells JSON name-table identifiers and computes the hashes their dispatch uses.</summary>
 /// <remarks>The JSON emitter groups names by length for small tables and by XxHash3 for larger ones. Both the member suffix
 /// and the hash are part of the generated lookup, so they must remain identical across generators.</remarks>
-internal static class DirectJsonNames
+internal static class JsonNames
 {
     /// <summary>Spells a member's table suffix, keeping a leading <c>U_</c> from colliding with the UTF-8 prefix.</summary>
     /// <param name="name">The member name.</param>

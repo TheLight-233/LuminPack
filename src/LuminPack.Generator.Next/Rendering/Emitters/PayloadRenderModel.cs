@@ -1,10 +1,10 @@
 #nullable disable
 using System;
 using System.Linq;
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>How a member's binary record is stored.</summary>
-internal enum DirectMemberKind : byte
+internal enum RenderMemberKind : byte
 {
     /// <summary>A raw unmanaged scalar stored at a fixed width.</summary>
     Fixed,
@@ -36,7 +36,7 @@ internal enum DirectMemberKind : byte
 }
 
 /// <summary>The entry shape of a sorted or paired collection member.</summary>
-internal sealed class DirectCollection : IEquatable<DirectCollection>
+internal sealed class RenderCollection : IEquatable<RenderCollection>
 {
     /// <summary>The C# spelling of a raw key, such as <c>int</c>.</summary>
     internal readonly string KeyType;
@@ -50,7 +50,7 @@ internal sealed class DirectCollection : IEquatable<DirectCollection>
     internal readonly string EntryType;
 
     /// <summary>Captures a collection's entry shape.</summary>
-    internal DirectCollection(string keyType, string valueType, bool valueText, string itemType = null, string entryType = null)
+    internal RenderCollection(string keyType, string valueType, bool valueText, string itemType = null, string entryType = null)
     {
         EntryType = entryType;
         ItemType = itemType;
@@ -60,18 +60,18 @@ internal sealed class DirectCollection : IEquatable<DirectCollection>
     }
 
     /// <inheritdoc/>
-    public bool Equals(DirectCollection other) => other != null && KeyType == other.KeyType && ValueType == other.ValueType &&
+    public bool Equals(RenderCollection other) => other != null && KeyType == other.KeyType && ValueType == other.ValueType &&
         ValueText == other.ValueText && ItemType == other.ItemType && EntryType == other.EntryType;
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) => Equals(obj as DirectCollection);
+    public override bool Equals(object obj) => Equals(obj as RenderCollection);
 
     /// <inheritdoc/>
     public override int GetHashCode() => (KeyType ?? string.Empty).GetHashCode();
 }
 
 /// <summary>The stored entry shape of a dictionary member and the text its kernel spells.</summary>
-internal sealed class DirectDictionary : IEquatable<DirectDictionary>
+internal sealed class RenderDictionary : IEquatable<RenderDictionary>
 {
     /// <summary>Whether both key and value are raw scalars, which stores paired records instead of fused entries.</summary>
     internal readonly bool Pair;
@@ -89,7 +89,7 @@ internal sealed class DirectDictionary : IEquatable<DirectDictionary>
     internal readonly string Formatter;
 
     /// <summary>Captures a dictionary's entry shape.</summary>
-    internal DirectDictionary(bool pair, bool keyText, bool valueText, string keyType, string valueType, string typeName, string formatter)
+    internal RenderDictionary(bool pair, bool keyText, bool valueText, string keyType, string valueType, string typeName, string formatter)
     {
         Pair = pair;
         KeyText = keyText;
@@ -101,24 +101,24 @@ internal sealed class DirectDictionary : IEquatable<DirectDictionary>
     }
 
     /// <inheritdoc/>
-    public bool Equals(DirectDictionary other) => other != null && Pair == other.Pair && KeyText == other.KeyText &&
+    public bool Equals(RenderDictionary other) => other != null && Pair == other.Pair && KeyText == other.KeyText &&
         ValueText == other.ValueText && KeyType == other.KeyType && ValueType == other.ValueType && TypeName == other.TypeName &&
         Formatter == other.Formatter;
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) => Equals(obj as DirectDictionary);
+    public override bool Equals(object obj) => Equals(obj as RenderDictionary);
 
     /// <inheritdoc/>
     public override int GetHashCode() => TypeName.GetHashCode();
 }
 
 /// <summary>One serialized member of a model-direct type, reduced to the facts its emitted text depends on.</summary>
-internal sealed class DirectMember : IEquatable<DirectMember>
+internal sealed class RenderMember : IEquatable<RenderMember>
 {
     /// <summary>The member name, which is also its identifier and JSON name.</summary>
     internal readonly string Name;
     /// <summary>The storage class of the member's binary record.</summary>
-    internal readonly DirectMemberKind Kind;
+    internal readonly RenderMemberKind Kind;
     /// <summary>The scalar keyword of a fixed member, or the element keyword of a collection.</summary>
     internal readonly string Scalar;
     /// <summary>The C# spelling of the declared member type, as the emitters spell temporary locals.</summary>
@@ -128,7 +128,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     /// <summary>The generated formatter owner of a collection payload, or null.</summary>
     internal readonly string Formatter;
     /// <summary>The emitter's scalar classification.</summary>
-    internal readonly LuminFiledType FieldType;
+    internal readonly ScalarKind FieldType;
     /// <summary>Whether the member is an auto-property, whose storage is reached through the type's layout mirror.</summary>
     internal readonly bool Mirrored;
     /// <summary>The underlying scalar keyword of an enum member, whose <see cref="Scalar"/> is the enum's global spelling, or null.</summary>
@@ -140,7 +140,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly bool Builtin;
     /// <summary>The inline model of a packable class member, whose members the parent record stores without a separate record
     /// header, or null.</summary>
-    internal readonly DirectTypeModel Nested;
+    internal readonly PayloadRenderModel Nested;
     /// <summary>Whether a collection member writes through its generated formatter call instead of a reserved span, which an
     /// array of unmanaged scalars does.</summary>
     internal readonly bool FormatterCall;
@@ -148,9 +148,9 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     /// reference, and its existing-instance string read keeps the decoded instance.</summary>
     internal readonly bool Property;
     /// <summary>The entry shape of a dictionary member, or null.</summary>
-    internal readonly DirectDictionary Dictionary;
+    internal readonly RenderDictionary Dictionary;
     /// <summary>The entry shape of a sorted, paired or nested collection member, or null.</summary>
-    internal readonly DirectCollection Collection;
+    internal readonly RenderCollection Collection;
     /// <summary>Whether a type-parameter member's parameter is constrained to a value type, whose read assigns no reset guard.</summary>
     internal readonly bool ValueTypeParameter;
     /// <summary>Whether the member's declared type is the parameter itself rather than a type that contains it, whose reset guard
@@ -165,9 +165,9 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     internal readonly string ScopeProfile;
 
     /// <summary>Captures one member.</summary>
-    internal DirectMember(string name, DirectMemberKind kind, string scalar, string typeName, int size, string formatter, LuminFiledType fieldType,
-        bool mirrored, string underlying = null, bool raw = false, bool builtin = false, DirectTypeModel nested = null, bool formatterCall = false,
-        bool property = false, DirectDictionary dictionary = null, DirectCollection collection = null, bool valueTypeParameter = false,
+    internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
+        bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
+        bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
         bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null)
     {
         ScopeProfile = scopeProfile;
@@ -194,22 +194,22 @@ internal sealed class DirectMember : IEquatable<DirectMember>
     }
 
     /// <summary>Whether the member stores a fixed scalar or raw struct.</summary>
-    internal bool IsFixed => Kind == DirectMemberKind.Fixed;
+    internal bool IsFixed => Kind == RenderMemberKind.Fixed;
 
     /// <summary>Whether the member stores a variable-length payload: a string or a separately framed record.</summary>
-    internal bool IsPayload => Kind is DirectMemberKind.Text or DirectMemberKind.Object;
+    internal bool IsPayload => Kind is RenderMemberKind.Text or RenderMemberKind.Object;
 
     /// <summary>The member's packed width as the original template spells it: a constant, or the runtime size of a raw struct.</summary>
     internal string Width => Raw ? "Unsafe.SizeOf<" + Scalar + ">()" : Size.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Whether the scalar is a Boolean.</summary>
-    internal bool IsBoolean => Kind == DirectMemberKind.Fixed && Scalar == "bool";
+    internal bool IsBoolean => Kind == RenderMemberKind.Fixed && Scalar == "bool";
 
     /// <summary>Whether the member is a JSON floating-point read site.</summary>
-    internal bool IsFloating => Kind == DirectMemberKind.Fixed && Scalar is "float" or "double";
+    internal bool IsFloating => Kind == RenderMemberKind.Fixed && Scalar is "float" or "double";
 
     /// <inheritdoc/>
-    public bool Equals(DirectMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
+    public bool Equals(RenderMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
         TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && FieldType == other.FieldType && Mirrored == other.Mirrored &&
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
@@ -218,7 +218,7 @@ internal sealed class DirectMember : IEquatable<DirectMember>
         ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) => Equals(obj as DirectMember);
+    public override bool Equals(object obj) => Equals(obj as RenderMember);
 
     /// <inheritdoc/>
     public override int GetHashCode() => Name.GetHashCode();
@@ -227,9 +227,9 @@ internal sealed class DirectMember : IEquatable<DirectMember>
 /// <summary>An immutable, value-equal description of a packable type whose generated roots are written directly from the
 /// model instead of through the emitter text and its syntax projections.</summary>
 /// <remarks>Only shapes whose complete output the direct emitters reproduce are modeled; every other type returns null from
-/// <see cref="DirectModelFactory.Create"/> and keeps the original pipeline. The model holds strings only, so it never
+/// <see cref="RenderModelFactory.Create"/> and keeps the original pipeline. The model holds strings only, so it never
 /// retains a compilation.</remarks>
-internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
+internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
 {
     /// <summary>The fully qualified type spelling, such as <c>global::N.Model</c>.</summary>
     internal readonly string GlobalName;
@@ -244,7 +244,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether interception gives the state entries payload-specific names, such as <c>Serialize_Model</c>.</summary>
     internal readonly bool UniqueEntries;
     /// <summary>The serialized members in wire order.</summary>
-    internal readonly DirectMember[] Members;
+    internal readonly RenderMember[] Members;
     /// <summary>Whether the variable members are all strings, so the type has a named member write and its reserved record
     /// writes take the proven object path.</summary>
     internal readonly bool Proven;
@@ -257,18 +257,18 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether the struct has reference members and is written as a record instead of one raw value.</summary>
     internal readonly bool ManagedStruct;
     /// <summary>The positional storage view and packed transfers of a portable struct, or null.</summary>
-    internal readonly DirectPortableView PortableView;
+    internal readonly PortableView PortableView;
     /// <summary>Whether a member is written in place instead of entering a reservation: an inline object, a string list or a
     /// list whose elements expand their record body in the loop.</summary>
-    private static bool InlineBlock(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite ||
-        member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null);
+    private static bool InlineBlock(RenderMember member) => member.Kind == RenderMemberKind.Object && !member.Nested.MemberWrite ||
+        member.Kind == RenderMemberKind.List && (member.Scalar == "string" || member.Nested != null);
     /// <summary>Whether a member is a write segment of its own: an inline object, a string list, a formatter-call array or a
     /// collection that writes through the writer in place.</summary>
-    private static bool Segment(DirectMember member) => member.Kind == DirectMemberKind.Object || InlineBlock(member) ||
-        member.Kind == DirectMemberKind.Array && member.FormatterCall ||
-        member.Kind is DirectMemberKind.Stack or DirectMemberKind.SortedSet or DirectMemberKind.SortedList or
-            DirectMemberKind.PairList or DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary ||
-        member.Kind == DirectMemberKind.Parameter;
+    private static bool Segment(RenderMember member) => member.Kind == RenderMemberKind.Object || InlineBlock(member) ||
+        member.Kind == RenderMemberKind.Array && member.FormatterCall ||
+        member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
+            RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
+        member.Kind == RenderMemberKind.Parameter;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
@@ -277,38 +277,38 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal bool MixedRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && !StreamRecord;
     /// <summary>Whether a member is copied in place rather than through its named member operation; only a record with such a
     /// member or a formatter-call array camel-cases its snapshot locals.</summary>
-    internal bool InlineObject => Members.Any(member => InlineBlock(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall);
+    internal bool InlineObject => Members.Any(member => InlineBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall);
     /// <summary>Whether a string anywhere in this record or in an inline object below it needs the profile, which makes the roots
     /// generic.</summary>
-    internal bool ProfilePayload => Members.Any(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.Parameter ||
-        member.Kind == DirectMemberKind.List && (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload) ||
-        member.Kind == DirectMemberKind.Dictionary && (member.Dictionary.KeyText || member.Dictionary.ValueText) ||
-        member.Kind is DirectMemberKind.SortedList or DirectMemberKind.PairList && member.Collection.ValueText ||
-        member.Kind == DirectMemberKind.NestedList && member.Nested.ProfilePayload ||
-        member.Kind == DirectMemberKind.Array && member.FormatterCall ||
-        member.Kind == DirectMemberKind.Object && member.Nested.ProfilePayload);
+    internal bool ProfilePayload => Members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Parameter ||
+        member.Kind == RenderMemberKind.List && (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload) ||
+        member.Kind == RenderMemberKind.Dictionary && (member.Dictionary.KeyText || member.Dictionary.ValueText) ||
+        member.Kind is RenderMemberKind.SortedList or RenderMemberKind.PairList && member.Collection.ValueText ||
+        member.Kind == RenderMemberKind.NestedList && member.Nested.ProfilePayload ||
+        member.Kind == RenderMemberKind.Array && member.FormatterCall ||
+        member.Kind == RenderMemberKind.Object && member.Nested.ProfilePayload);
 
     /// <summary>An array inside an inline object calls its generated formatter with the operation's profile, which makes the
     /// parent's roots generic; a top-level array keeps its own non-generic write.</summary>
-    internal bool InlineArray => Members.Any(member => member.Kind == DirectMemberKind.Object &&
-        (member.Nested.Members.Any(item => item.Kind == DirectMemberKind.Array) || member.Nested.InlineArray));
+    internal bool InlineArray => Members.Any(member => member.Kind == RenderMemberKind.Object &&
+        (member.Nested.Members.Any(item => item.Kind == RenderMemberKind.Array) || member.Nested.InlineArray));
     /// <summary>A list inside an inline object reads through its generated formatter with the operation's profile, which makes
     /// the parent's read root generic; its write expands inline and needs no profile, as a top-level list does.</summary>
-    internal bool InlineList => Members.Any(member => member.Kind == DirectMemberKind.Object &&
-        (member.Nested.Members.Any(item => item.Kind == DirectMemberKind.List) || member.Nested.InlineList));
+    internal bool InlineList => Members.Any(member => member.Kind == RenderMemberKind.Object &&
+        (member.Nested.Members.Any(item => item.Kind == RenderMemberKind.List) || member.Nested.InlineList));
     /// <summary>Whether the write body contains an element loop or expands an inline object that does, which leaves native
     /// inlining to the runtime.</summary>
-    internal bool ElementList => Members.Any(member => member.Kind == DirectMemberKind.List && member.Nested != null ||
-        member.Kind is DirectMemberKind.Stack or DirectMemberKind.SortedSet or DirectMemberKind.SortedList or
-            DirectMemberKind.PairList or DirectMemberKind.NestedList or DirectMemberKind.SparseDictionary ||
-        member.Kind == DirectMemberKind.Object && member.Nested.ElementList);
+    internal bool ElementList => Members.Any(member => member.Kind == RenderMemberKind.List && member.Nested != null ||
+        member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
+            RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
+        member.Kind == RenderMemberKind.Object && member.Nested.ElementList);
     /// <summary>Whether a Boolean array or list member takes the checked read completion, whose inlined root renames the
     /// instance local.</summary>
-    internal bool BooleanCollection => Members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List &&
+    internal bool BooleanCollection => Members.Any(member => member.Kind is RenderMemberKind.Array or RenderMemberKind.List &&
         member.Scalar == "bool");
     /// <summary>Whether a dictionary member takes the cursor write path with fused entries or paired records.</summary>
-    internal bool HasDictionary => Members.Any(member => member.Kind == DirectMemberKind.Dictionary ||
-        member.Kind == DirectMemberKind.Object && member.Nested.HasDictionary);
+    internal bool HasDictionary => Members.Any(member => member.Kind == RenderMemberKind.Dictionary ||
+        member.Kind == RenderMemberKind.Object && member.Nested.HasDictionary);
     /// <summary>The positional storage view of a portable struct, whose fields are copied one by one at packed wire offsets, or null.</summary>
     internal readonly string View;
     /// <summary>Whether the portable view is elided: every positional view name is also a field name of the struct, so the
@@ -339,7 +339,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether JSON property heads are UTF-8 string literal properties (.NET 8 and C# 11 or later) rather than arrays.</summary>
     internal readonly bool Utf8Literals;
     /// <summary>The version-tolerant schema, or null for an ordinary record.</summary>
-    internal readonly DirectVersionSchema Version;
+    internal readonly VersionSchema Version;
     /// <summary>Whether a declared instance member is not unmanaged storage, which gives the Union read its outlined entry.</summary>
     internal readonly bool ReferencePayload;
     /// <summary>The CLR layout attribute line of a declared layout replica, or null.</summary>
@@ -371,7 +371,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>The canonical Union slot suffix.</summary>
     internal readonly string UnionSuffix;
     /// <summary>The declared cases in tag order.</summary>
-    internal readonly DirectUnionCase[] UnionCases;
+    internal readonly UnionRenderCase[] UnionCases;
     /// <summary>Whether a fixed case gives the root the returning cursor protocol.</summary>
     internal readonly bool UnionCursor;
     /// <summary>Whether the binary read root takes the operation's profile, because some case entry does.</summary>
@@ -381,9 +381,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>The root's namespace, or null in the global namespace.</summary>
     internal readonly string UnionNamespace;
     /// <summary>The compiled binary profile slots in profile order.</summary>
-    internal readonly DirectUnionSlot[] UnionBinarySlots;
+    internal readonly UnionRenderSlot[] UnionBinarySlots;
     /// <summary>The compiled JSON profile slots in profile order.</summary>
-    internal readonly DirectUnionSlot[] UnionJsonSlots;
+    internal readonly UnionRenderSlot[] UnionJsonSlots;
     /// <summary>Whether the exact canonical profile shortcuts can bind the referenced runtime's profiles.</summary>
     internal readonly bool UnionCanonical;
     /// <summary>The imported string options type of the declared binary profile, which the non-generic entries pass.</summary>
@@ -420,17 +420,17 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether any serialization callback runs, which keeps the type out of the named member write.</summary>
     internal bool HasCallbacks => WriteBefore.Length != 0 || WriteAfter.Length != 0 || ReadBefore.Length != 0 || ReadAfter.Length != 0;
 
-    internal DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
-        DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
+    internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
+        RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
-        DirectVersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
+        VersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
         string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null, int? bounded = null,
-        bool unionRoot = false, bool unionInterface = false, string unionSuffix = null, DirectUnionCase[] unionCases = null,
+        bool unionRoot = false, bool unionInterface = false, string unionSuffix = null, UnionRenderCase[] unionCases = null,
         bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null,
-        DirectUnionSlot[] unionBinarySlots = null, DirectUnionSlot[] unionJsonSlots = null, bool unionCanonical = false,
+        UnionRenderSlot[] unionBinarySlots = null, UnionRenderSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
-        DirectPortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
+        PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null)
     {
         DeclaredProfile = declaredProfile;
@@ -497,10 +497,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     }
 
     /// <summary>The binary formatter owner of this payload.</summary>
-    internal string Owner => DirectNames.Owner(Extension, GlobalName);
+    internal string Owner => GeneratedNames.Owner(Extension, GlobalName);
 
     /// <inheritdoc/>
-    public bool Equals(DirectTypeModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
+    public bool Equals(PayloadRenderModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
         UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && ManagedStruct == other.ManagedStruct &&
@@ -525,7 +525,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
-    public override bool Equals(object obj) => Equals(obj as DirectTypeModel);
+    public override bool Equals(object obj) => Equals(obj as PayloadRenderModel);
 
     private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T> => left == null ? right == null : right != null && left.SequenceEqual(right);
 

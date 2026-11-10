@@ -1,7 +1,7 @@
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>The analyzer's scalar classification of a serialized member.</summary>
-internal enum LuminFiledType : byte
+internal enum ScalarKind : byte
 {
     /// <summary>Specifies int.</summary>
     Int,

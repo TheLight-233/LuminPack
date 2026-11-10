@@ -1,5 +1,5 @@
 using LuminPack.SourceGenerator.Next.Model;
-using LuminPack.SourceGenerator.Next.Rendering.Direct;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Json;
 
@@ -25,8 +25,8 @@ internal sealed class JsonRenderer : IRenderer
 
     private static string Emit(TypeModel model, RenderContext context)
     {
-        DirectTypeModel? direct = DirectModelFactory.Create(model, context.Options);
-        return direct == null ? string.Empty : DirectEmission.Render(direct, json: true, context.Options.AvailableAliases,
+        PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
+        return direct == null ? string.Empty : PayloadEmitter.Render(direct, json: true, context.Options.AvailableAliases,
             (GeneratedOperations)(int)context.Operations);
     }
 }

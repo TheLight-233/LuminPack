@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Entry points of the model-direct emission that the Next pipeline owns.</summary>
-/// <remarks>The emitters below this boundary consume only <see cref="DirectTypeModel"/> values; no Roslyn symbol, legacy
+/// <remarks>The emitters below this boundary consume only <see cref="PayloadRenderModel"/> values; no Roslyn symbol, legacy
 /// analysis object or old generator service participates. Union and reference-tracked payloads keep their placeholders until
 /// their model facts are ported.</remarks>
-internal static class DirectEmission
+internal static class PayloadEmitter
 {
     /// <summary>Renders one format of a covered payload.</summary>
     /// <param name="model">The render model.</param>
@@ -17,18 +17,18 @@ internal static class DirectEmission
     /// <param name="aliases">The aliases available in the consuming compilation.</param>
     /// <param name="operations">The operations the project calls.</param>
     /// <returns>The complete published file, or an empty string when this renderer does not cover the payload yet.</returns>
-    internal static string Render(DirectTypeModel model, bool json, int aliases, GeneratedOperations operations)
+    internal static string Render(PayloadRenderModel model, bool json, int aliases, GeneratedOperations operations)
     {
         if (model.UnionRoot || model.Circle)
             return string.Empty;
-        var writer = new DirectWriter(aliases) { Scoped = model.Net8 };
+        var writer = new CodeWriter(aliases) { Scoped = model.Net8 };
         if (json)
-            DirectJsonEmitter.Emit(model, writer, operations);
+            JsonEmitter.Emit(model, writer, operations);
         else if (model.IsStruct)
-            DirectStructEmitter.Emit(model, writer, operations);
+            StructEmitter.Emit(model, writer, operations);
         else
-            DirectBinaryEmitter.Emit(model, writer, operations);
-        return DirectLayout.LayOutLines(writer.Complete(json));
+            BinaryEmitter.Emit(model, writer, operations);
+        return PublicationLayout.LayOutLines(writer.Complete(json));
     }
 
     /// <summary>Records why a type keeps the original pipeline.</summary>
@@ -47,7 +47,7 @@ internal static class DirectEmission
 }
 
 /// <summary>Builds one direct file line by line in the publication layout.</summary>
-internal sealed class DirectWriter
+internal sealed class CodeWriter
 {
     private readonly StringBuilder _body = new StringBuilder(16384);
     private readonly int _available;
@@ -57,7 +57,7 @@ internal sealed class DirectWriter
 
     /// <summary>Creates a writer for the consumer's available aliases.</summary>
     /// <param name="aliases">The alias mask.</param>
-    internal DirectWriter(int aliases) => _available = aliases < 0 ? int.MaxValue : aliases;
+    internal CodeWriter(int aliases) => _available = aliases < 0 ? int.MaxValue : aliases;
 
     /// <summary>Discards lines and alias uses while set, for the members of operations the project does not call.</summary>
     internal bool Suppressed;
@@ -75,9 +75,9 @@ internal sealed class DirectWriter
     /// <returns>The alias or the fully qualified target.</returns>
     internal string A(string alias)
     {
-        int index = DirectLayout.AliasIndex(alias);
+        int index = PublicationLayout.AliasIndex(alias);
         if ((_available & (1 << index)) == 0)
-            return DirectLayout.AliasTarget(index);
+            return PublicationLayout.AliasTarget(index);
         if (!Suppressed)
             _used |= 1 << index;
         return alias;
@@ -186,9 +186,9 @@ internal sealed class DirectWriter
         foreach (string space in new[] { "System", "System.Collections.Generic", "System.Runtime.CompilerServices", "System.Runtime.InteropServices",
             "System.Threading.Tasks", "LuminPack", "LuminPack.Code", "LuminPack.Core", "LuminPack.Utility", "LuminPack.Attribute", "LuminPack.Generated" })
             header.Append("using global::").Append(space).Append(';').Append(newLine);
-        for (int index = 0; index < DirectLayout.AliasCount; index++)
+        for (int index = 0; index < PublicationLayout.AliasCount; index++)
             if ((_used & (1 << index)) != 0)
-                header.Append("using ").Append(DirectLayout.AliasName(index)).Append(" = ").Append(DirectLayout.AliasTarget(index))
+                header.Append("using ").Append(PublicationLayout.AliasName(index)).Append(" = ").Append(PublicationLayout.AliasTarget(index))
                     .Append(';').Append(newLine);
         header.Append(newLine);
         int end = _body.Length;
@@ -199,7 +199,7 @@ internal sealed class DirectWriter
 }
 
 /// <summary>Counts call sites in emitted statements the way the inlining policy counts invocation syntax.</summary>
-internal static class DirectCalls
+internal static class InvocationCounter
 {
     private static readonly HashSet<string> NotCalls = new(StringComparer.Ordinal)
     {

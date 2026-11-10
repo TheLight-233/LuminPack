@@ -1,6 +1,6 @@
 using System;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>The serialization operations a project calls.</summary>
 [Flags]

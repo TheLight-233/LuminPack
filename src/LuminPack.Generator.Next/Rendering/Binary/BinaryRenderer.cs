@@ -1,5 +1,5 @@
 using LuminPack.SourceGenerator.Next.Model;
-using LuminPack.SourceGenerator.Next.Rendering.Direct;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Binary;
 
@@ -27,8 +27,8 @@ internal sealed class BinaryRenderer : IRenderer
 
     private static string Emit(TypeModel model, RenderContext context)
     {
-        DirectTypeModel? direct = DirectModelFactory.Create(model, context.Options);
-        return direct == null ? string.Empty : DirectEmission.Render(direct, json: false, context.Options.AvailableAliases,
+        PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
+        return direct == null ? string.Empty : PayloadEmitter.Render(direct, json: false, context.Options.AvailableAliases,
             (GeneratedOperations)(int)context.Operations);
     }
 }

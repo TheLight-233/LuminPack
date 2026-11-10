@@ -1,12 +1,12 @@
 using System;
 using System.Linq;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>The schema facts of a version-tolerant record, reduced to the strings and bytes its emitted text depends on.</summary>
 /// <remarks>The Next model does not carry the schema bytes, revision prefix or former names yet, so the model factory leaves
-/// <see cref="DirectTypeModel.Version"/> null. The class remains the renderer's contract for the version migration task.</remarks>
-internal sealed class DirectVersionSchema : IEquatable<DirectVersionSchema>
+/// <see cref="PayloadRenderModel.Version"/> null. The class remains the renderer's contract for the version migration task.</remarks>
+internal sealed class VersionSchema : IEquatable<VersionSchema>
 {
     /// <summary>The qualified schema class.</summary>
     internal readonly string Schema;
@@ -52,7 +52,7 @@ internal sealed class DirectVersionSchema : IEquatable<DirectVersionSchema>
     /// <param name="layout">The layout mirror name.</param>
     /// <param name="layoutFields">The layout mirror fields.</param>
     /// <param name="oldNames">The former names of each member.</param>
-    internal DirectVersionSchema(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes, string[] typeNames,
+    internal VersionSchema(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes, string[] typeNames,
         string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames)
     {
         OldNames = oldNames;
@@ -81,14 +81,14 @@ internal sealed class DirectVersionSchema : IEquatable<DirectVersionSchema>
     }
 
     /// <inheritdoc/>
-    public bool Equals(DirectVersionSchema? other) => other != null && Schema == other.Schema && Layout == other.Layout &&
+    public bool Equals(VersionSchema? other) => other != null && Schema == other.Schema && Layout == other.Layout &&
         Metadata.SequenceEqual(other.Metadata) && Prefix.SequenceEqual(other.Prefix) && FieldEntries.SequenceEqual(other.FieldEntries) &&
         TempTypes.SequenceEqual(other.TempTypes) && TypeNames.SequenceEqual(other.TypeNames) && QualifiedTypes.SequenceEqual(other.QualifiedTypes) &&
         LayoutFields.SequenceEqual(other.LayoutFields) && OldNames.Length == other.OldNames.Length &&
         OldNames.Zip(other.OldNames, (left, right) => left.SequenceEqual(right)).All(same => same);
 
     /// <inheritdoc/>
-    public override bool Equals(object? obj) => Equals(obj as DirectVersionSchema);
+    public override bool Equals(object? obj) => Equals(obj as VersionSchema);
 
     /// <inheritdoc/>
     public override int GetHashCode() => Schema.GetHashCode();

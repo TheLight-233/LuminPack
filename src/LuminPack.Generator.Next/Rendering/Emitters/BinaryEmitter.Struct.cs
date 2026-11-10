@@ -1,18 +1,18 @@
+#nullable disable
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
-using LuminPack.Code.Core;
 
-namespace LuminPack.SourceGenerator.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Writes a managed struct's binary roots in the record form the original pipeline publishes.</summary>
 /// <remarks>A struct never writes or reads a null marker. Its root write reserves the record exactly as a class record does,
 /// while its root read consumes the member-count byte, reuses an existing value whose reference members are set, and otherwise
 /// decodes into a fresh instance or its selected constructor. Mirrored storage, including private included fields, is reached
 /// through the root-private layout mirror.</remarks>
-internal static partial class DirectBinaryEmitter
+internal static partial class BinaryEmitter
 {
     private const string StructProfile = "TLuminProfile";
 
@@ -20,13 +20,13 @@ internal static partial class DirectBinaryEmitter
     /// <param name="model">The managed struct.</param>
     /// <param name="w">The file writer.</param>
     /// <param name="operations">The operations the project calls.</param>
-    internal static void EmitStruct(DirectTypeModel model, DirectWriter w, GeneratedOperations operations)
+    internal static void EmitStruct(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
     {
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
         var members = model.Members;
         bool genericWrite = model.ProfilePayload || model.InlineArray;
         bool genericRead = model.ProfilePayload || model.InlineArray || model.InlineList ||
-            members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object));
+            members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object));
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         const string writer = "LuminPackWriter", reader = "LuminPackReader";
         string Options() => w.A("ILuminPackOptions");
@@ -215,14 +215,13 @@ internal static partial class DirectBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="union">Whether this is the Union payload without the member-count byte.</param>
     /// <returns>The read body lines.</returns>
-    private static List<string> StructReadBody(DirectTypeModel model, DirectWriter w, bool union)
+    private static List<string> StructReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         var members = model.Members;
         var body = new List<string>();
-        string Policy() => w.A("LuminPackInputPolicy");
         bool constructed = model.ConstructorArguments != null;
-        var referenced = members.Where(member => member.Kind is DirectMemberKind.Text or DirectMemberKind.Object or
-            DirectMemberKind.Array or DirectMemberKind.List || member.Kind == DirectMemberKind.Parameter).ToArray();
+        var referenced = members.Where(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Object or
+            RenderMemberKind.Array or RenderMemberKind.List || member.Kind == RenderMemberKind.Parameter).ToArray();
         var mirrored = members.Where(member => member.Mirrored).ToArray();
         var temps = (constructed ? members : mirrored.Where(member => model.ConstructorMembers == null ||
             !model.ConstructorMembers.Contains(member.Name))).ToArray();
@@ -241,7 +240,7 @@ internal static partial class DirectBinaryEmitter
         }
         if (referenced.Length != 0)
         {
-            var checks = referenced.Select(member => member.Kind == DirectMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter
+            var checks = referenced.Select(member => member.Kind == RenderMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter
                 ? "(!typeof(" + member.Scalar + ").IsValueType && (object? )" + (member.Mirrored
                     ? "LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value)." : "value.") +
                     member.Name + " is not null)"
@@ -267,7 +266,7 @@ internal static partial class DirectBinaryEmitter
         if (constructed)
         {
             foreach (var member in members)
-                body.Add(member.Kind == DirectMemberKind.Parameter
+                body.Add(member.Kind == RenderMemberKind.Parameter
                     ? w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader, ref " + Camel(member.Name) + "Temp!);"
                     : Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
             body.Add("// Construct the object and populate its members.");
@@ -294,7 +293,7 @@ internal static partial class DirectBinaryEmitter
             body.Add("var result = new " + model.GlobalName + "();");
             foreach (var member in members)
             {
-                if (member.Kind == DirectMemberKind.Parameter)
+                if (member.Kind == RenderMemberKind.Parameter)
                     body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader, ref " +
                         (member.Mirrored ? Camel(member.Name) + "Temp!" : "result." + member.Name + "!") + ");");
                 else if (member.Mirrored)
@@ -310,10 +309,10 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Reads one member in place for a managed struct's existing-instance path.</summary>
-    private static void AddStructExistingRead(List<string> body, DirectMember member, bool hasNext, DirectWriter w)
+    private static void AddStructExistingRead(List<string> body, RenderMember member, bool hasNext, CodeWriter w)
     {
         string owner = member.Mirrored ? "reuseLocal" : "value2!";
-        if (member.Kind == DirectMemberKind.Text && member.Mirrored && member.Property)
+        if (member.Kind == RenderMemberKind.Text && member.Mirrored && member.Property)
         {
             body.Add("var currentString = " + owner + "." + member.Name + ";");
             body.Add("var decodedString = reader2.Read<" + StructProfile + ">(currentString);");
@@ -323,12 +322,12 @@ internal static partial class DirectBinaryEmitter
                 body.Add("");
             return;
         }
-        if (member.Kind == DirectMemberKind.Text)
+        if (member.Kind == RenderMemberKind.Text)
         {
             body.Add("reader2.Read<" + StructProfile + ">(ref " + owner + "." + member.Name + ");");
             return;
         }
-        if (member.Kind == DirectMemberKind.Parameter)
+        if (member.Kind == RenderMemberKind.Parameter)
         {
             AddParameterReset(body, member, w, "reader2", owner + "." + member.Name);
             body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
@@ -338,7 +337,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Assigns the mirrored members of a fresh struct through its layout mirror.</summary>
-    private static void AddStructMirrorAssignments(List<string> body, DirectTypeModel model, DirectWriter w, DirectMember[] members)
+    private static void AddStructMirrorAssignments(List<string> body, PayloadRenderModel model, CodeWriter w, RenderMember[] members)
     {
         if (model.Mirror == null || members.Length == 0)
             return;
@@ -348,7 +347,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Reaches a mirrored struct's storage through its layout mirror.</summary>
-    private static List<string> MirroredStruct(DirectTypeModel model, DirectWriter w, List<string> body)
+    private static List<string> MirroredStruct(PayloadRenderModel model, CodeWriter w, List<string> body)
     {
         if (model.Mirror == null || !model.Members.Any(member => member.Mirrored))
             return body;
@@ -362,15 +361,15 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Whether a managed struct's write root keeps its aggressive inlining hint.</summary>
-    private static string WriteHint(DirectTypeModel model, List<string> body, bool union, string inline)
+    private static string WriteHint(PayloadRenderModel model, List<string> body, bool union, string inline)
         => model.StreamRecord || model.MixedRecord
             ? (DirectInlining.MixedWrite(model, union) ? inline : null)
             : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null);
 
     /// <summary>Whether a managed struct's read root keeps its aggressive inlining hint; an inline object or collection
     /// member keeps its larger expanded body out of line.</summary>
-    private static string ReadHint(DirectTypeModel model, string inline)
-        => model.Members.Any(member => member.Kind is DirectMemberKind.Object or DirectMemberKind.Array or DirectMemberKind.List)
+    private static string ReadHint(PayloadRenderModel model, string inline)
+        => model.Members.Any(member => member.Kind is RenderMemberKind.Object or RenderMemberKind.Array or RenderMemberKind.List)
             ? null
             : (DirectInlining.Read(model, 0) ? inline : null);
 
@@ -383,7 +382,7 @@ internal static partial class DirectBinaryEmitter
     /// <param name="constraint">The constraint clauses of the root, or an empty string.</param>
     /// <param name="parameters">The parameter list.</param>
     /// <param name="attribute">The inlining attribute, or null.</param>
-    private static void Method(DirectWriter w, List<string> body, string name, bool generic, string arguments, string constraint,
+    private static void Method(CodeWriter w, List<string> body, string name, bool generic, string arguments, string constraint,
         string parameters, string attribute)
     {
         w.Line(w.Preserve);
@@ -418,7 +417,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Emits an isolated reader-state extension read.</summary>
-    private static void IsolatedRead(DirectWriter w, string signature, string constraint, string root, string inline, string serializer)
+    private static void IsolatedRead(CodeWriter w, string signature, string constraint, string root, string inline, string serializer)
     {
         w.Line(inline);
         w.Line(signature);
@@ -432,3 +431,4 @@ internal static partial class DirectBinaryEmitter
         w.Close();
     }
 }
+

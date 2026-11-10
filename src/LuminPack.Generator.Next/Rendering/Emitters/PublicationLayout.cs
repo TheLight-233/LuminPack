@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 
-namespace LuminPack.SourceGenerator.Next.Rendering.Direct;
+namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>Resolves the helper aliases and applies the publication layout to a rendered file.</summary>
 /// <remarks>The alias table is fixed and ordered, so a consumer always renders the same header and short names. The Next
 /// renderer currently keeps the writer's line layout; the syntax-based wrapping and JSON name grouping remain a migration
 /// task and are the passthrough methods below.</remarks>
-internal static class DirectLayout
+internal static class PublicationLayout
 {
     private static readonly (string Alias, string Target)[] Aliases =
     {
