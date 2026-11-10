@@ -16,8 +16,15 @@ internal static class RenderModelFactory
     /// <returns>The render model, or null when this adapter does not cover the payload yet.</returns>
     internal static PayloadRenderModel? Create(TypeModel model, GeneratorOptions options)
     {
-        bool isStruct = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null };
+        bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null };
+        PortableLayout? portable = model is StructModel { Storage: StructStorage.PortableUnmanaged } portableStruct
+            ? portableStruct.Layout : null;
+        if (portable is not { Complete: true })
+            portable = null;
+        bool isStruct = raw || portable != null;
         if (!isStruct && model is not RecordModel { Versioned: false, Derived: false })
+            return null;
+        if (portable != null && !portable.Fields.All(field => field.Leaves.Length != 0))
             return null;
         string extension = GeneratedNames.Extension(options.AssemblyName);
         var members = new RenderMember[model.Members.Length];
@@ -28,6 +35,9 @@ internal static class RenderModelFactory
                 return null;
             members[index] = member;
         }
+        // A raw struct copies its complete storage; a portable struct transfers only fixed fields.
+        if (isStruct && !members.All(member => member.IsFixed))
+            return null;
         string globalName = model.Identity.GlobalName;
         // The proven object write needs .NET 8, unsafe code and a non-Unity project. The named member write only needs every
         // variable member to be a string, so a project outside those facts still publishes it.
@@ -35,15 +45,41 @@ internal static class RenderModelFactory
         bool memberWrite = model is RecordModel { Versioned: false, Derived: false } && model.Policy.Bound == null &&
             model.Members.Length != 0 && model.Members.Any(member => member is TextMember) &&
             model.Members.All(member => member is ScalarMember or TextMember);
+        string? view = portable?.ViewName;
+        PortableView? portableView = portable == null ? null : View(portable);
+        var names = new System.Collections.Generic.HashSet<string>(members.Select(member => member.Name), StringComparer.Ordinal);
+        bool viewElided = portableView != null && Enumerable.Range(0, members.Length)
+            .All(index => names.Contains("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)), extension,
-            GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: false,
+            GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: isStruct,
             uniqueEntries: options.Interceptors, members, proven, mirror: null!, mirrorFields: null!, derived: false,
-            isStruct, view: null!, viewElided: false, fixedUnionCase: false, measureRecord: isStruct && members.All(item => item.IsFixed),
+            isStruct, view: view!, viewElided, fixedUnionCase: false,
+            measureRecord: isStruct && model is StructModel structModel && structModel.RecordWidth && members.All(item => item.IsFixed),
             constructorArguments: null, constructorMembers: null, memberWrite: memberWrite, net8: options.Net8,
             utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: null!,
-            referencePayload: model.Members.Any(item => item is not ScalarMember), layoutAttribute: null!,
+            referencePayload: model.Members.Any(item => item is not ScalarMember), layoutAttribute: portable?.LayoutAttribute,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
-            trusted: model.Policy.Input == InputPolicy.Trusted);
+            trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView);
+    }
+
+    /// <summary>Maps the model's positional view onto the emitter's view.</summary>
+    /// <param name="layout">The complete portable layout.</param>
+    /// <returns>The view with every scalar transfer in wire order.</returns>
+    private static PortableView View(PortableLayout layout)
+    {
+        var fields = new PortableViewField[layout.Fields.Length];
+        for (int index = 0; index < fields.Length; index++)
+        {
+            PortableFieldModel field = layout.Fields[index];
+            var leaves = new PortableLeaf[field.Leaves.Length];
+            for (int leaf = 0; leaf < leaves.Length; leaf++)
+            {
+                PortableLeafModel source = field.Leaves[leaf];
+                leaves[leaf] = new PortableLeaf(source.Access, source.Scalar, source.Size, source.Volatile);
+            }
+            fields[index] = new PortableViewField(field.Name, field.Type, field.Volatile, field.Offset, leaves);
+        }
+        return new PortableView(layout.ViewName, fields);
     }
 
     private static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options)

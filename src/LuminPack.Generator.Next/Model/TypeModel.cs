@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace LuminPack.SourceGenerator.Next.Model;
 
@@ -121,31 +122,175 @@ internal sealed class StructModel : TypeModel
     /// <summary>The positional transfer layout of a portable unmanaged struct, or null.</summary>
     internal readonly PortableLayout? Layout;
 
+    /// <summary>Whether the declaration is a supported fixed record, which gives the struct its <c>MeasureRecord</c> entry.</summary>
+    internal readonly bool RecordWidth;
+
     /// <summary>Captures a struct.</summary>
     internal StructModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
-        StructStorage storage, PortableLayout? layout)
+        StructStorage storage, PortableLayout? layout, bool recordWidth)
         : base(identity, accessibility, PayloadKind.Struct, members, policy, constraints)
     {
+        RecordWidth = recordWidth;
         Layout = layout;
         Storage = storage;
     }
 }
 
-/// <summary>A positional view used to copy unmanaged fields at packed wire offsets.</summary>
-internal sealed class PortableLayout
+/// <summary>One scalar transfer of a portable struct's packed wire.</summary>
+internal sealed class PortableLeafModel : IEquatable<PortableLeafModel>
+{
+    /// <summary>The storage access below the positional view, such as <c>F0</c> or <c>F1.Item2</c>.</summary>
+    internal readonly string Access;
+
+    /// <summary>The C# spelling of the transferred scalar.</summary>
+    internal readonly string Scalar;
+
+    /// <summary>The packed width of the scalar.</summary>
+    internal readonly int Size;
+
+    /// <summary>Whether the field is volatile, whose write snapshots it first.</summary>
+    internal readonly bool Volatile;
+
+    /// <summary>Captures one scalar transfer.</summary>
+    internal PortableLeafModel(string access, string scalar, int size, bool isVolatile)
+    {
+        Access = access;
+        Scalar = scalar;
+        Size = size;
+        Volatile = isVolatile;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(PortableLeafModel? other) => ReferenceEquals(this, other) || other != null && Access == other.Access &&
+        Scalar == other.Scalar && Size == other.Size && Volatile == other.Volatile;
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as PortableLeafModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Access.GetHashCode();
+}
+
+/// <summary>One field of a portable struct's positional storage view.</summary>
+internal sealed class PortableFieldModel : IEquatable<PortableFieldModel>
+{
+    /// <summary>The view field name, such as <c>F0</c>.</summary>
+    internal readonly string Name;
+
+    /// <summary>The C# spelling of the view field's type.</summary>
+    internal readonly string Type;
+
+    /// <summary>Whether the field is volatile.</summary>
+    internal readonly bool Volatile;
+
+    /// <summary>The declared explicit layout offset, or a negative value for a sequential field.</summary>
+    internal readonly int Offset;
+
+    /// <summary>The scalar transfers the field contributes, in wire order.</summary>
+    internal readonly PortableLeafModel[] Leaves;
+
+    /// <summary>Captures one view field.</summary>
+    internal PortableFieldModel(string name, string type, bool isVolatile, int offset, PortableLeafModel[] leaves)
+    {
+        Leaves = leaves;
+        Offset = offset;
+        Volatile = isVolatile;
+        Type = type;
+        Name = name;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(PortableFieldModel? other) => ReferenceEquals(this, other) || other != null && Name == other.Name &&
+        Type == other.Type && Volatile == other.Volatile && Offset == other.Offset &&
+        (ReferenceEquals(Leaves, other.Leaves) || Enumerable.SequenceEqual(Leaves, other.Leaves));
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as PortableFieldModel);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Name.GetHashCode();
+}
+
+/// <summary>The positional transfer layout of a portable unmanaged struct: its view, packed fields and leaves.</summary>
+internal sealed class PortableLayout : IEquatable<PortableLayout>
 {
     /// <summary>The view type name.</summary>
     internal readonly string ViewName;
 
-    /// <summary>The field count, which is also the number of wire slots.</summary>
-    internal readonly int FieldCount;
+    /// <summary>The view's fields in declaration order.</summary>
+    internal readonly PortableFieldModel[] Fields;
+
+    /// <summary>Every scalar transfer in wire order.</summary>
+    internal readonly PortableLeafModel[] Leaves;
+
+    /// <summary>The complete packed wire width.</summary>
+    internal readonly int WireSize;
+
+    /// <summary>The predicted native storage width on a 64-bit runtime.</summary>
+    internal readonly int Size64;
+
+    /// <summary>The predicted native storage width on a 32-bit runtime.</summary>
+    internal readonly int Size32;
+
+    /// <summary>The predicted aggregate alignment on a 64-bit runtime.</summary>
+    internal readonly int Alignment64;
+
+    /// <summary>The predicted aggregate alignment on a 32-bit runtime.</summary>
+    internal readonly int Alignment32;
+
+    /// <summary>Whether the plan describes architecture-tagged storage rather than an explicitly packed struct.</summary>
+    internal readonly bool Tagged;
+
+    /// <summary>Whether every view field can be flattened and the root is not itself a tuple, so the positional view is renderable.</summary>
+    internal readonly bool Complete;
+
+    /// <summary>The declared CLR layout attribute line the view reproduces, or null.</summary>
+    internal readonly string? LayoutAttribute;
 
     /// <summary>Captures a portable layout.</summary>
-    internal PortableLayout(string viewName, int fieldCount)
+    internal PortableLayout(string viewName, PortableFieldModel[] fields, int wireSize, int size64, int size32, int alignment64,
+        int alignment32, bool tagged, bool complete, string? layoutAttribute)
     {
-        FieldCount = fieldCount;
+        LayoutAttribute = layoutAttribute;
+        Complete = complete;
+        Tagged = tagged;
+        Alignment32 = alignment32;
+        Alignment64 = alignment64;
+        Size32 = size32;
+        Size64 = size64;
+        WireSize = wireSize;
+        Fields = fields;
+        Leaves = fields.Length == 0 ? Array.Empty<PortableLeafModel>() : Flatten(fields);
         ViewName = viewName;
     }
+
+    /// <summary>The field count, which is also the number of wire slots.</summary>
+    internal int FieldCount => Fields.Length;
+
+    private static PortableLeafModel[] Flatten(PortableFieldModel[] fields)
+    {
+        int count = 0;
+        for (int index = 0; index < fields.Length; index++)
+            count += fields[index].Leaves.Length;
+        var leaves = new PortableLeafModel[count];
+        int next = 0;
+        for (int index = 0; index < fields.Length; index++)
+            for (int leaf = 0; leaf < fields[index].Leaves.Length; leaf++)
+                leaves[next++] = fields[index].Leaves[leaf];
+        return leaves;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(PortableLayout? other) => ReferenceEquals(this, other) || other != null && ViewName == other.ViewName &&
+        WireSize == other.WireSize && Size64 == other.Size64 && Size32 == other.Size32 && Alignment64 == other.Alignment64 &&
+        Alignment32 == other.Alignment32 && Tagged == other.Tagged && Complete == other.Complete &&
+        LayoutAttribute == other.LayoutAttribute && (ReferenceEquals(Fields, other.Fields) || Enumerable.SequenceEqual(Fields, other.Fields));
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as PortableLayout);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ViewName.GetHashCode();
 }
 
 /// <summary>The dispatch strategy of a Union root.</summary>

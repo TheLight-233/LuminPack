@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using LuminPack.SourceGenerator.Next.Model;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
 
@@ -169,10 +172,11 @@ internal static class TypeModelFactory
                 case PayloadKind.Struct:
                 {
                     MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
-                    PortableLayout? layout = symbol.IsUnmanagedType ? TryPortableLayout(symbol) : null;
+                    PortableLayout? layout = symbol.IsUnmanagedType && generatorType == "Object" ? TryPortableLayout(symbol) : null;
                     StructStorage storage = !symbol.IsUnmanagedType ? StructStorage.ManagedRecord :
                         layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
-                    return new StructModel(identity, accessibility, members, policy, constraints, storage, layout);
+                    return new StructModel(identity, accessibility, members, policy, constraints, storage, layout,
+                        RecordWidthSupported(symbol));
                 }
                 case PayloadKind.Union:
                 {
@@ -764,145 +768,668 @@ internal static class TypeModelFactory
         /// <summary>Classifies unmanaged value storage and detects a layout that needs field-wise packed transfer.</summary>
         /// <param name="symbol">The unmanaged struct.</param>
         /// <returns>The portable layout when one applies, otherwise null for a raw copy.</returns>
+        /// <remarks>A layout is created when the declaration opts into packed storage and its packed wire differs from its native
+        /// storage, or when an unmarked struct with a formatter of its own has different native layouts per pointer width.
+        /// The layout carries the positional view facts; <see cref="PortableLayout.Complete"/> records whether that view can be
+        /// rendered, which the adapter requires.</remarks>
         private PortableLayout? TryPortableLayout(INamedTypeSymbol symbol)
         {
             if (symbol.SpecialType != SpecialType.None || symbol.IsRefLikeType)
                 return null;
-            IFieldSymbol[] fields = symbol.GetMembers().OfType<IFieldSymbol>()
-                .Where(field => !field.IsStatic && !field.IsConst).ToArray();
-            if (fields.Length == 0 || fields.Any(field => field.IsFixedSizeBuffer))
+            int? declared = ReadStructLayoutOption(symbol.GetAttributes());
+            bool optedIn = declared.HasValue ? declared.Value == 1 : symbol.IsUnmanagedType && LayoutStrategy(symbol) == 1;
+            PortablePlan? plan;
+            if (optedIn)
+            {
+                if (GenerationMode(symbol) != "Object")
+                    return null;
+                plan = AnalyzePortable(symbol, strict: true);
+                if (plan?.HasPadding != true)
+                    return null;
+            }
+            else
+            {
+                plan = TryTaggedPlan(symbol);
+                if (plan == null)
+                    return null;
+            }
+            return CreatePortableLayout(symbol, plan);
+        }
+
+        /// <summary>Selects tagged native storage for an unmarked struct whose native layout varies between layout models.</summary>
+        /// <param name="named">The resolved storage type.</param>
+        /// <returns>The tagged plan, or null when the struct is not analyzable, has a single layout or owns no formatter.</returns>
+        private static PortablePlan? TryTaggedPlan(INamedTypeSymbol named)
+        {
+            if (named.TypeKind != TypeKind.Struct || named.SpecialType != SpecialType.None || !named.IsUnmanagedType)
                 return null;
-            (System.Runtime.InteropServices.LayoutKind kind, _, _) = LayoutInfo(symbol);
-            if (kind == System.Runtime.InteropServices.LayoutKind.Auto)
-                return new PortableLayout(symbol.Name + "View", fields.Length);
-            int strategy = LayoutStrategy(symbol);
-            if (strategy == 2)
+            if (LayoutStrategy(named) != 0 || GenerationMode(named) != "Object")
                 return null;
-            if (!MeasureStruct(symbol, new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default), out StructMeasure measure))
+            if (PortableScalarSize(named) != 0 || ContainsTypeParameter(named) || Opaque(named) != null)
                 return null;
-            bool portable = strategy == 1 ? measure.Padding : measure.Size32 != measure.Size64;
-            return portable ? new PortableLayout(symbol.Name + "View", fields.Length) : null;
+            var plan = AnalyzePortable(named, strict: true);
+            if (plan == null || plan.Fields == null || plan.WireSize <= 0 || HasVolatile(plan))
+                return null;
+            plan.Models = BuildModels(plan);
+            if (plan.Models.Length < 2 || !FormatterOwned(named))
+                return null;
+            plan.Tagged = true;
+            return plan;
         }
 
         /// <summary>Resolves the declared unmanaged storage strategy, type first and assembly second.</summary>
         /// <param name="symbol">The unmanaged struct.</param>
         /// <returns>Zero for tagged, one for packed or two for native storage.</returns>
-        private int LayoutStrategy(INamedTypeSymbol symbol)
+        private static int LayoutStrategy(INamedTypeSymbol symbol)
         {
             int? declared = ReadStructLayoutOption(symbol.GetAttributes());
             if (declared.HasValue)
                 return declared.Value;
-            return ReadStructLayoutOption(symbol.ContainingAssembly?.GetAttributes() ?? _compilation.Assembly.GetAttributes()) ?? 0;
+            return ReadStructLayoutOption(symbol.ContainingAssembly.GetAttributes()) ?? 0;
         }
 
-        /// <summary>Measures a struct's packed wire and its predicted native layouts.</summary>
-        /// <param name="symbol">The struct to measure.</param>
-        /// <param name="visiting">The aggregates already on the measurement path.</param>
-        /// <param name="measure">Receives the packed width, native sizes and padding evidence.</param>
-        /// <returns>Whether every storage field has a fixed representation.</returns>
-        private static bool MeasureStruct(INamedTypeSymbol symbol, HashSet<INamedTypeSymbol> visiting, out StructMeasure measure)
+        /// <summary>Recognizes a struct this compilation gives an implicit formatter, so a tagged plan has a writer and reader.</summary>
+        /// <param name="type">The candidate type.</param>
+        /// <returns>Whether the struct behaves like an ordinary local packable struct.</returns>
+        private static bool FormatterOwned(INamedTypeSymbol type)
+            => IsValueTuple(type) || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T ||
+               type.OriginalDefinition.MetadataName == "KeyValuePair`2" &&
+               type.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" ||
+               IsPackable(type) || IsImplicitFormatterType(type);
+
+        /// <summary>Recognizes a top-level source struct without the packable attribute that still receives an implicit formatter.</summary>
+        /// <param name="type">The candidate type.</param>
+        /// <returns>Whether the generator provides it a binary formatter.</returns>
+        private static bool IsImplicitFormatterType(INamedTypeSymbol type)
+            => type.TypeKind == TypeKind.Struct && type.IsUnmanagedType && !type.IsRefLikeType && type.ContainingType == null &&
+               type.SpecialType == SpecialType.None && !type.IsTupleType && type.DeclaringSyntaxReferences.Length != 0 &&
+               !type.IsGenericType && !IsPackable(type) && GenerationMode(type) != "Custom" && Opaque(type) == null;
+
+        /// <summary>Records whether a declaration is a supported fixed record, which gives it the <c>MeasureRecord</c> entry.</summary>
+        /// <param name="symbol">The struct declaration.</param>
+        /// <returns>Whether every instance member is a fixed-width primitive.</returns>
+        private static bool RecordWidthSupported(INamedTypeSymbol symbol)
+            => GenerationMode(symbol) is not ("NonGenerator" or "Custom") && IsFixedRecord(symbol);
+
+        /// <summary>Recognizes a source-declared object record whose every instance field and property is a primitive or enum.</summary>
+        /// <param name="type">The candidate type.</param>
+        /// <returns>Whether the record width is constant, so the measurement entry is selected.</returns>
+        private static bool IsFixedRecord(INamedTypeSymbol type)
         {
-            measure = new StructMeasure();
-            if (!visiting.Add(symbol))
+            if (type.TypeKind is not (TypeKind.Class or TypeKind.Struct) || type.IsAbstract || type.IsStatic || type.IsRefLikeType ||
+                ContainsTypeParameter(type))
                 return false;
-            try
+            var packable = type.GetAttributes().FirstOrDefault(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == PackableAttribute);
+            if (packable == null || packable.ConstructorArguments.Length == 1 &&
+                !(packable.ConstructorArguments[0].Kind == TypedConstantKind.Enum &&
+                  Convert.ToInt32(packable.ConstructorArguments[0].Value, CultureInfo.InvariantCulture) is 0 or 1))
+                return false;
+            for (var current = type; current != null && current.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
+                current = current.BaseType)
             {
-                (System.Runtime.InteropServices.LayoutKind kind, int pack, int declaredSize) = LayoutInfo(symbol);
-                int effectivePack = pack == 0 ? 8 : pack;
-                int end32 = 0, end64 = 0, wire = 0, packedEnd = 0, alignment32 = 1, alignment64 = 1;
-                bool padding = kind == System.Runtime.InteropServices.LayoutKind.Auto;
-                foreach (var field in symbol.GetMembers().OfType<IFieldSymbol>().Where(item => !item.IsStatic && !item.IsConst))
-                {
-                    if (field.IsFixedSizeBuffer ||
-                        !TryMeasure(field.Type, is64Bit: false, visiting, out int size32, out int fieldAlignment32, out int fieldWire) ||
-                        !TryMeasure(field.Type, is64Bit: true, visiting, out int size64, out int fieldAlignment64, out int fieldWire64) ||
-                        fieldWire != fieldWire64)
+                if (!current.Locations.Any(location => location.IsInSource))
+                    return false;
+                foreach (var attribute in current.GetAttributes())
+                    if (attribute.AttributeClass?.ToDisplayString() is UnionAttribute or
+                        "System.Runtime.CompilerServices.UnionAttribute" or "LuminPack.Attribute.LuminPackCompressAttribute" or
+                        "LuminPack.Attribute.LuminPackWideTagAttribute" or "LuminPack.Attribute.LuminPackSingleImplementationAttribute")
                         return false;
-                    int alignmentField32 = Math.Min(effectivePack, fieldAlignment32);
-                    int alignmentField64 = Math.Min(effectivePack, fieldAlignment64);
-                    alignment32 = Math.Max(alignment32, alignmentField32);
-                    alignment64 = Math.Max(alignment64, alignmentField64);
-                    int offset32, offset64;
-                    if (kind == System.Runtime.InteropServices.LayoutKind.Explicit)
+                if (OptionSwitch(current, "WideTag") || OptionSwitch(current, "SingleImplementation"))
+                    return false;
+                if (!SymbolEqualityComparer.Default.Equals(current, type) && current.GetAttributes().Any(attribute =>
+                        attribute.AttributeClass?.ToDisplayString() == PackableAttribute &&
+                        attribute.ConstructorArguments.Length == 1 &&
+                        !(attribute.ConstructorArguments[0].Kind == TypedConstantKind.Enum &&
+                          Convert.ToInt32(attribute.ConstructorArguments[0].Value, CultureInfo.InvariantCulture) == 0)))
+                    return false;
+                foreach (var member in current.GetMembers())
+                {
+                    if (member.IsStatic)
+                        continue;
+                    ITypeSymbol memberType;
+                    switch (member)
                     {
-                        offset32 = offset64 = FieldOffset(field);
-                        if (offset32 < 0)
+                        case IFieldSymbol field:
+                            memberType = field.Type;
+                            break;
+                        case IPropertySymbol property:
+                            memberType = property.Type;
+                            break;
+                        case IEventSymbol:
+                            return false;
+                        default:
+                            continue;
+                    }
+                    if (!IsFixedWidthPrimitive(memberType))
+                        return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Recognizes a fixed-width primitive or an enum over one.</summary>
+        /// <param name="type">The member type.</param>
+        /// <returns>Whether the type is always written at a fixed width.</returns>
+        private static bool IsFixedWidthPrimitive(ITypeSymbol type)
+        {
+            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
+                type = enumeration.EnumUnderlyingType ?? type;
+            return type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Char or SpecialType.System_SByte or
+                SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
+                SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Single or
+                SpecialType.System_Double;
+        }
+
+        /// <summary>Builds the positional view of a portable storage plan.</summary>
+        /// <param name="type">The root declaration.</param>
+        /// <param name="plan">The analyzed storage.</param>
+        /// <returns>The model the adapter maps onto the emitter view.</returns>
+        private static PortableLayout CreatePortableLayout(INamedTypeSymbol type, PortablePlan plan)
+        {
+            // A portable struct with a nested aggregate needs its child view; tuple components flatten into their parent view.
+            bool complete = !type.IsTupleType && plan.Fields != null && plan.Children != null &&
+                plan.Children.All(child => child.Fields == null || IsValueTuple(child.Type));
+            var fields = complete ? new PortableFieldModel[plan.Fields!.Length] : Array.Empty<PortableFieldModel>();
+            for (int index = 0; index < fields.Length; index++)
+            {
+                string name = "F" + index.ToString(CultureInfo.InvariantCulture);
+                var leaves = new List<PortableLeafModel>();
+                FlattenLeaves(plan.Children![index], name, plan.Fields![index].IsVolatile, leaves);
+                fields[index] = new PortableFieldModel(name, FormatterTypeName(plan.Fields[index].Type), plan.Fields[index].IsVolatile,
+                    plan.Fields[index].Offset, leaves.ToArray());
+            }
+            return new PortableLayout(ViewName(type), fields, plan.WireSize, plan.Size64, plan.Size32, plan.Alignment64, plan.Alignment32,
+                plan.Tagged, complete, LayoutAttribute(type));
+        }
+
+        /// <summary>A tuple's components are its own storage fields; a scalar ends the descent at its packed width.</summary>
+        /// <param name="node">The storage node.</param>
+        /// <param name="access">The access below the view.</param>
+        /// <param name="isVolatile">Whether an enclosing field is volatile.</param>
+        /// <param name="leaves">Receives the scalar transfers in wire order.</param>
+        private static void FlattenLeaves(PortablePlan node, string access, bool isVolatile, List<PortableLeafModel> leaves)
+        {
+            if (node.Fields == null)
+            {
+                leaves.Add(new PortableLeafModel(access, FormatterTypeName(node.Type), node.WireSize, isVolatile));
+                return;
+            }
+            if (!IsValueTuple(node.Type))
+                return;
+            for (int index = 0; index < node.Fields.Length; index++)
+                FlattenLeaves(node.Children![index], access + "." + node.Fields[index].Name,
+                    isVolatile || node.Fields[index].IsVolatile, leaves);
+        }
+
+        /// <summary>Spells the deterministic positional view name of a portable struct.</summary>
+        /// <param name="type">The root declaration.</param>
+        /// <returns>The view declaration name.</returns>
+        private static string ViewName(INamedTypeSymbol type)
+        {
+            using var hash = SHA256.Create();
+            string digest = string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(FormatterTypeName(type)))
+                .Select(value => value.ToString("x2", CultureInfo.InvariantCulture)));
+            return "LuminLayout_" + digest + "_" + PortableSlotSuffix(type) + "_LocalPortable" + LocalDeclarationName(type);
+        }
+
+        /// <summary>Spells the canonical Union slot suffix, whose FNV identity is a public override contract.</summary>
+        /// <param name="type">The declared type.</param>
+        /// <returns>The readable identity and its eight-digit hash.</returns>
+        private static string PortableSlotSuffix(INamedTypeSymbol type)
+        {
+            string identity = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            uint hash = 2166136261;
+            foreach (char character in identity)
+            {
+                hash ^= character;
+                hash *= 16777619;
+            }
+            string readable = new string(identity.Where(character => char.IsLetterOrDigit(character) || character == '_').ToArray());
+            return readable + "_" + hash.ToString("x8", CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Spells the local declaration name the layout generator gives a mirrored storage type.</summary>
+        /// <param name="type">The declared type.</param>
+        /// <returns>The mangled local declaration name.</returns>
+        private static string LocalDeclarationName(INamedTypeSymbol type)
+        {
+            string fullName = FormatterTypeName(type);
+            if (fullName.StartsWith("global::", StringComparison.Ordinal))
+                fullName = fullName.Substring(8);
+            var name = new StringBuilder(fullName.Length + 8);
+            foreach (char character in fullName)
+            {
+                // Punctuation such as "::" or ", " maps to one separator; two would form a reserved identifier.
+                if (SyntaxFacts.IsIdentifierPartCharacter(character))
+                    name.Append(character);
+                else if (name.Length == 0 || name[name.Length - 1] != '_')
+                    name.Append('_');
+            }
+            return "Local" + name;
+        }
+
+        /// <summary>Spells the source-ready type name the generated view and leaves use.</summary>
+        /// <param name="type">The referenced type.</param>
+        /// <returns>The fully qualified spelling, with tuples expanded to <c>ValueTuple</c> syntax.</returns>
+        private static string FormatterTypeName(ITypeSymbol type)
+        {
+            if (type is INamedTypeSymbol { IsNativeIntegerType: true } nativeInteger)
+                return nativeInteger.SpecialType == SpecialType.System_UIntPtr ? "global::System.UIntPtr" : "global::System.IntPtr";
+            return ContainsTuple(type) ? BuildTypeName(type) : type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+
+        private static string BuildTypeName(ITypeSymbol type)
+        {
+            switch (type)
+            {
+                case IArrayTypeSymbol array:
+                    var ranks = new StringBuilder();
+                    ITypeSymbol element = array;
+                    while (element is IArrayTypeSymbol level)
+                    {
+                        ranks.Append('[').Append(',', level.Rank - 1).Append(']');
+                        element = level.ElementType;
+                    }
+                    return BuildTypeName(element) + ranks;
+                case IPointerTypeSymbol pointer:
+                    return BuildTypeName(pointer.PointedAtType) + "*";
+                case ITypeParameterSymbol parameter:
+                    return EscapeIdentifier(parameter.Name);
+                case IDynamicTypeSymbol:
+                    return "dynamic";
+                case INamedTypeSymbol named:
+                    return BuildNamedTypeName(named);
+                default:
+                    return type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+        }
+
+        private static string BuildNamedTypeName(INamedTypeSymbol type)
+        {
+            if (type.IsTupleType)
+                return "global::System.ValueTuple<" + string.Join(", ", type.TypeArguments.Select(BuildTypeName)) + ">";
+            if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && type.TypeArguments.Length == 1)
+                return BuildTypeName(type.TypeArguments[0]) + "?";
+            string prefix = type.ContainingType is not null
+                ? BuildNamedTypeName(type.ContainingType) + "."
+                : BuildTypeNamespace(type.ContainingNamespace);
+            string name = prefix + EscapeIdentifier(type.Name);
+            return type.TypeArguments.Length == 0
+                ? name
+                : name + "<" + string.Join(", ", type.TypeArguments.Select(BuildTypeName)) + ">";
+        }
+
+        private static string BuildTypeNamespace(INamespaceSymbol typeNamespace)
+            => typeNamespace == null || typeNamespace.IsGlobalNamespace
+                ? "global::"
+                : BuildTypeNamespace(typeNamespace.ContainingNamespace) + EscapeIdentifier(typeNamespace.Name) + ".";
+
+        private static bool ContainsTuple(ITypeSymbol type)
+        {
+            switch (type)
+            {
+                case IArrayTypeSymbol array:
+                    return ContainsTuple(array.ElementType);
+                case IPointerTypeSymbol pointer:
+                    return ContainsTuple(pointer.PointedAtType);
+                case INamedTypeSymbol named:
+                    return named.IsTupleType || named.ContainingType != null && ContainsTuple(named.ContainingType) ||
+                        named.TypeArguments.Any(ContainsTuple);
+                default:
+                    return false;
+            }
+        }
+
+        private static string EscapeIdentifier(string name)
+            => SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None
+                ? "@" + name
+                : name;
+
+        /// <summary>Builds recursive widths and layout proofs for both architectures.</summary>
+        /// <param name="type">The finite unmanaged storage type.</param>
+        /// <param name="strict">Whether reference-assembly structs must be modeled from known shapes instead of placeholder fields.</param>
+        /// <returns>The storage plan, or null for storage without an architecture-independent scalar representation.</returns>
+        private static PortablePlan? AnalyzePortable(ITypeSymbol type, bool strict)
+        {
+            int scalar = PortableScalarSize(type);
+            if (scalar != 0)
+                return new PortablePlan
+                {
+                    Type = type, WireSize = scalar, Size32 = scalar, Size64 = scalar,
+                    Alignment32 = Math.Min(scalar, 4), Alignment64 = Math.Min(scalar, 8)
+                };
+            if (type is INamedTypeSymbol { TypeKind: TypeKind.Struct } opaqueNamed && Opaque(opaqueNamed) is { } opaque)
+                return new PortablePlan
+                {
+                    Type = type, WireSize = opaque.Size, Size32 = opaque.Size, Size64 = opaque.Size,
+                    Alignment32 = opaque.Alignment32, Alignment64 = opaque.Alignment64
+                };
+            if (type is not INamedTypeSymbol { IsUnmanagedType: true, TypeKind: TypeKind.Struct } named ||
+                GenerationMode(named) == "Custom" ||
+                named.SpecialType is SpecialType.System_IntPtr or SpecialType.System_UIntPtr ||
+                IsRuntimeSizedVector(named) ||
+                named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() ==
+                    "System.Runtime.CompilerServices.InlineArrayAttribute"))
+                return null;
+            var fields = PlanFields(named, strict);
+            if (fields == null)
+                return null;
+            var children = new PortablePlan[fields.Length];
+            for (int index = 0; index < fields.Length; index++)
+            {
+                var child = AnalyzePortable(fields[index].Type, strict);
+                if (child == null)
+                    return null;
+                children[index] = child;
+            }
+            var plan = new PortablePlan
+            {
+                Type = type, Fields = fields, Children = children, WireSize = children.Sum(child => child.WireSize),
+                HasPadding = named.IsTupleType || children.Any(child => child.HasPadding) ||
+                    named.ContainingNamespace.ToDisplayString().StartsWith("System.Runtime.Intrinsics", StringComparison.Ordinal)
+            };
+            (System.Runtime.InteropServices.LayoutKind layoutKind, int declaredPack, int declaredSize) = LayoutInfo(named);
+            int kind = layoutKind == System.Runtime.InteropServices.LayoutKind.Explicit ? 2 :
+                layoutKind == System.Runtime.InteropServices.LayoutKind.Auto || IsValueTuple(named) ? 3 : 0;
+            int pack = declaredPack == 0 ? 8 : declaredPack;
+            plan.Kind = kind;
+            plan.Pack = declaredPack;
+            plan.DeclaredSize = declaredSize;
+            plan.Size32 = plan.MeasurePortable(false, kind, pack, declaredSize, out plan.Alignment32);
+            plan.Size64 = plan.MeasurePortable(true, kind, pack, declaredSize, out plan.Alignment64);
+            plan.HasPadding |= kind == 3 || plan.Size32 != plan.WireSize || plan.Size64 != plan.WireSize;
+            return plan;
+        }
+
+        /// <summary>Recognizes the automatic-layout ValueTuple family regardless of how the compiler spells the type.</summary>
+        /// <param name="type">The storage type.</param>
+        /// <returns>Whether the type is a ValueTuple construction.</returns>
+        private static bool IsValueTuple(ITypeSymbol type)
+            => type is INamedTypeSymbol named && (named.IsTupleType ||
+                named.OriginalDefinition.MetadataName.StartsWith("ValueTuple`", StringComparison.Ordinal) &&
+                named.ContainingNamespace.ToDisplayString() == "System");
+
+        /// <summary>Lists the fields whose layout the plan models, repairing shapes a reference assembly hides.</summary>
+        /// <param name="named">The aggregate.</param>
+        /// <param name="strict">Whether the aggregate must be modeled from facts rather than unreliable reference metadata.</param>
+        /// <returns>The declaration-ordered fields, or null when the storage cannot be modeled.</returns>
+        private static PortablePlanField[]? PlanFields(INamedTypeSymbol named, bool strict)
+        {
+            if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T && named.TypeArguments.Length == 1 &&
+                named.GetMembers("HasValue").OfType<IPropertySymbol>().FirstOrDefault()?.Type is { } boolean)
+                return new[]
+                {
+                    new PortablePlanField { Type = boolean, Name = "hasValue" },
+                    new PortablePlanField { Type = named.TypeArguments[0], Name = "value" }
+                };
+            if (named.OriginalDefinition.MetadataName == "KeyValuePair`2" &&
+                named.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+                return new[]
+                {
+                    new PortablePlanField { Type = named.TypeArguments[0], Name = "key" },
+                    new PortablePlanField { Type = named.TypeArguments[1], Name = "value" }
+                };
+            var fields = StorageFields(named);
+            // SDK reference metadata for framework values may contain dummy fields instead of their real storage.
+            // C# project reference assemblies retain value-type fields, including private ones needed for layout.
+            if (IsReferenceAssembly(named.ContainingAssembly) && !IsValueTuple(named) &&
+                !IsPackable(named) &&
+                (named.ContainingAssembly.Name.StartsWith("System.", StringComparison.Ordinal) ||
+                 named.ContainingAssembly.Name is "mscorlib" or "netstandard"))
+                return null;
+            if (fields.Any(field => field.IsFixedSizeBuffer ||
+                field.Type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer))
+                return null;
+            return fields.Select(field => new PortablePlanField
+            {
+                Type = field.Type, Name = field.Name, IsVolatile = field.IsVolatile, Offset = FieldOffset(field)
+            }).ToArray();
+        }
+
+        /// <summary>Gets physical instance storage without tuple aliases or flattened elements already stored in Rest.</summary>
+        /// <param name="type">The current aggregate storage type.</param>
+        /// <returns>Ordinary fields in declaration order, or tuple fields in component order with Rest last.</returns>
+        private static IFieldSymbol[] StorageFields(INamedTypeSymbol type)
+        {
+            if (!type.IsTupleType)
+                return type.GetMembers().OfType<IFieldSymbol>().Where(field => !field.IsStatic).ToArray();
+            type = type.TupleUnderlyingType ?? type;
+            return type.GetMembers().OfType<IFieldSymbol>()
+                .Where(field => !field.IsStatic && field.Name is
+                    "Item1" or "Item2" or "Item3" or "Item4" or "Item5" or "Item6" or "Item7" or "Rest")
+                .OrderBy(field => field.Name == "Rest" ? 8 : field.Name[4] - '0')
+                .ToArray();
+        }
+
+        /// <summary>Recognizes an assembly that carries only the public shape of its types.</summary>
+        /// <param name="assembly">The declaring assembly.</param>
+        /// <returns>Whether it is marked as a reference assembly.</returns>
+        private static bool IsReferenceAssembly(IAssemblySymbol assembly)
+            => assembly != null && assembly.GetAttributes().Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.ReferenceAssemblyAttribute");
+
+        /// <summary>Recognizes volatile storage anywhere in an analyzed aggregate.</summary>
+        /// <param name="plan">The analyzed storage.</param>
+        /// <returns>Whether any expanded field is volatile.</returns>
+        private static bool HasVolatile(PortablePlan plan)
+        {
+            if (plan.Fields == null)
+                return false;
+            for (int index = 0; index < plan.Fields.Length; index++)
+                if (plan.Fields[index].IsVolatile || HasVolatile(plan.Children![index]))
+                    return true;
+            return false;
+        }
+
+        /// <summary>Recognizes unresolved generic arguments anywhere in a closed construction.</summary>
+        /// <param name="type">The type to inspect.</param>
+        /// <returns>Whether a type parameter remains.</returns>
+        private static bool ContainsTypeParameter(ITypeSymbol type)
+            => type is ITypeParameterSymbol || type is INamedTypeSymbol { IsGenericType: true } named &&
+                named.TypeArguments.Any(ContainsTypeParameter);
+
+        /// <summary>Checks whether any aggregate in the tree uses the runtime's automatic field order.</summary>
+        /// <param name="plan">The analyzed storage.</param>
+        /// <returns>Whether an automatic layout appears.</returns>
+        private static bool HasAutomatic(PortablePlan plan)
+            => plan.Fields != null && (plan.Kind == 3 || plan.Children!.Any(HasAutomatic));
+
+        /// <summary>Places the storage under each layout model and keeps the distinct results.</summary>
+        /// <param name="plan">The analyzed storage.</param>
+        /// <returns>Natural 64-bit, natural 32-bit and, for automatic layouts, the CoreCLR automatic orders, without duplicates.</returns>
+        private static PortableStorageModel[] BuildModels(PortablePlan plan)
+        {
+            var kinds = new List<(bool Is64, bool Auto)> { (true, false), (false, false) };
+            if (HasAutomatic(plan))
+            {
+                kinds.Add((true, true));
+                kinds.Add((false, true));
+            }
+            var models = new List<PortableStorageModel>();
+            foreach (var (is64, auto) in kinds)
+            {
+                var placed = PlacePortable(plan, is64, auto);
+                if (!models.Any(model => model.Size == placed.Size && model.Offsets.AsSpan().SequenceEqual(placed.Offsets)))
+                    models.Add(new PortableStorageModel { Size = placed.Size, Offsets = placed.Offsets });
+            }
+            return models.ToArray();
+        }
+
+        /// <summary>Positions every field of an aggregate under one layout model.</summary>
+        /// <param name="plan">The analyzed storage.</param>
+        /// <param name="is64">Whether eight-byte primitives align to eight bytes.</param>
+        /// <param name="auto">Whether automatic aggregates order fields like CoreCLR.</param>
+        /// <returns>The element size, alignment, and the storage offset of every packed data byte.</returns>
+        private static (int Size, int Alignment, int[] Offsets) PlacePortable(PortablePlan plan, bool is64, bool auto)
+        {
+            if (plan.Fields == null)
+            {
+                var bytes = new int[plan.WireSize];
+                for (int index = 0; index < bytes.Length; index++)
+                    bytes[index] = index;
+                return (plan.WireSize, is64 ? plan.Alignment64 : plan.Alignment32, bytes);
+            }
+            int count = plan.Children!.Length;
+            var places = new (int Size, int Alignment, int[] Offsets)[count];
+            for (int index = 0; index < count; index++)
+                places[index] = PlacePortable(plan.Children[index], is64, auto);
+            int pack = plan.Pack == 0 ? 8 : plan.Pack;
+            var order = Enumerable.Range(0, count).ToList();
+            if (auto && plan.Kind == 3)
+                order = order.OrderBy(index => plan.Children[index].Fields == null ? 0 : 1)
+                    .ThenByDescending(index => plan.Children[index].Fields == null ? places[index].Size : 0).ToList();
+            var offsets = new int[count];
+            int end = 0, alignment = 1;
+            foreach (int index in order)
+            {
+                int fieldAlignment = Math.Max(1, Math.Min(pack, places[index].Alignment));
+                alignment = Math.Max(alignment, fieldAlignment);
+                int offset = plan.Kind == 2 && plan.Fields[index].Offset >= 0
+                    ? plan.Fields[index].Offset
+                    : (end + fieldAlignment - 1) / fieldAlignment * fieldAlignment;
+                offsets[index] = offset;
+                end = Math.Max(end, offset + places[index].Size);
+            }
+            int size = (Math.Max(Math.Max(1, plan.DeclaredSize), end) + alignment - 1) / alignment * alignment;
+            var data = new int[plan.WireSize];
+            int next = 0;
+            for (int index = 0; index < count; index++)
+                foreach (int byteOffset in places[index].Offsets)
+                    data[next++] = offsets[index] + byteOffset;
+            return (size, alignment, data);
+        }
+
+        /// <summary>Obtains fixed scalar widths without consulting the running process's layout.</summary>
+        /// <param name="type">A primitive, enum, or nested storage type.</param>
+        /// <returns>The scalar byte width, or zero for an aggregate.</returns>
+        private static int PortableScalarSize(ITypeSymbol type)
+        {
+            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
+                return PortableScalarSize(enumeration.EnumUnderlyingType!);
+            return type.SpecialType switch
+            {
+                SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
+                SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 => 2,
+                SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
+                SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
+                SpecialType.System_Decimal => 16,
+                _ => 0
+            };
+        }
+
+        /// <summary>Excludes vectors whose physical width can change with the executing JIT's instruction set.</summary>
+        /// <param name="type">The nested storage type.</param>
+        /// <returns>Whether compiler field metadata cannot describe its complete runtime width.</returns>
+        private static bool IsRuntimeSizedVector(INamedTypeSymbol type)
+            => type.MetadataName == "Vector`1" && type.ContainingNamespace.ToDisplayString() == "System.Numerics";
+
+        /// <summary>Emits the ABI-preserving layout attribute line of a declared storage replica.</summary>
+        /// <param name="type">The storage declaration.</param>
+        /// <returns>The attribute line, or null when the declaration states no CLR layout.</returns>
+        private static string? LayoutAttribute(INamedTypeSymbol type)
+        {
+            foreach (var attribute in type.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() != StructLayoutAttribute)
+                    continue;
+                int rawKind = attribute.ConstructorArguments.Length != 0 && attribute.ConstructorArguments[0].Value is int declared
+                    ? declared : 0;
+                string kind = rawKind switch { 0 => "Sequential", 2 => "Explicit", _ => "Auto" };
+                int pack = 0, size = 0, charSet = 0;
+                if (attribute.ConstructorArguments.Length > 1 && attribute.ConstructorArguments[1].Value is int declaredPack)
+                    pack = declaredPack;
+                foreach (var argument in attribute.NamedArguments)
+                {
+                    if (argument.Key == "Pack" && argument.Value.Value is int namedPack)
+                        pack = namedPack;
+                    if (argument.Key == "Size" && argument.Value.Value is int namedSize)
+                        size = namedSize;
+                    if (argument.Key == "CharSet" && argument.Value.Value is int namedCharSet)
+                        charSet = namedCharSet;
+                }
+                var line = new StringBuilder("[global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.");
+                line.Append(kind);
+                if (pack != 0)
+                    line.Append(", Pack = ").Append(pack.ToString(CultureInfo.InvariantCulture));
+                if (size != 0)
+                    line.Append(", Size = ").Append(size.ToString(CultureInfo.InvariantCulture));
+                if (charSet != 0)
+                    line.Append(", CharSet = (global::System.Runtime.InteropServices.CharSet)").Append(charSet.ToString(CultureInfo.InvariantCulture));
+                line.Append(")]");
+                return line.ToString();
+            }
+            return null;
+        }
+
+        /// <summary>One storage field of an analyzed aggregate, independent of the compiler's field symbol.</summary>
+        private sealed class PortablePlanField
+        {
+            internal ITypeSymbol Type = null!;
+            internal string Name = string.Empty;
+            internal bool IsVolatile;
+            internal int Offset = -1;
+        }
+
+        /// <summary>One native layout model: the element width and where each packed data byte sits in it.</summary>
+        private sealed class PortableStorageModel
+        {
+            internal int Size;
+            internal int[] Offsets = Array.Empty<int>();
+        }
+
+        /// <summary>The recursive storage plan of one unmanaged aggregate.</summary>
+        private sealed class PortablePlan
+        {
+            internal ITypeSymbol Type = null!;
+            internal PortablePlanField[]? Fields;
+            internal PortablePlan[]? Children;
+            internal int WireSize;
+            internal int Size32;
+            internal int Size64;
+            internal int Alignment32;
+            internal int Alignment64;
+            internal bool HasPadding;
+            internal int Kind;
+            internal int Pack;
+            internal int DeclaredSize;
+            internal bool Tagged;
+            internal PortableStorageModel[] Models = Array.Empty<PortableStorageModel>();
+
+            /// <summary>Proves contiguous storage, including explicit offsets and trailing padding.</summary>
+            /// <param name="is64Bit">The layout architecture.</param>
+            /// <param name="kind">The declared layout kind.</param>
+            /// <param name="pack">The declared maximum alignment.</param>
+            /// <param name="declaredSize">The explicit minimum storage size.</param>
+            /// <param name="alignment">Receives the aggregate alignment.</param>
+            /// <returns>The predicted aggregate storage size.</returns>
+            internal int MeasurePortable(bool is64Bit, int kind, int pack, int declaredSize, out int alignment)
+            {
+                int end = 0, packedEnd = 0;
+                alignment = 1;
+                for (int index = 0; index < Children!.Length; index++)
+                {
+                    var child = Children[index];
+                    int fieldAlignment = Math.Min(pack, is64Bit ? child.Alignment64 : child.Alignment32);
+                    alignment = Math.Max(alignment, fieldAlignment);
+                    int offset = (end + fieldAlignment - 1) / fieldAlignment * fieldAlignment;
+                    if (kind == 2)
+                    {
+                        offset = Fields![index].Offset;
+                        if (offset < 0)
                         {
-                            padding = true;
-                            offset32 = offset64 = end32;
+                            HasPadding = true;
+                            offset = end;
                         }
                     }
-                    else
-                    {
-                        offset32 = RoundUp(end32, alignmentField32);
-                        offset64 = RoundUp(end64, alignmentField64);
-                    }
-                    padding |= offset32 != packedEnd;
-                    end32 = Math.Max(end32, offset32 + size32);
-                    end64 = Math.Max(end64, offset64 + size64);
-                    packedEnd += fieldWire;
-                    wire += fieldWire;
+                    HasPadding |= offset != packedEnd;
+                    end = Math.Max(end, offset + (is64Bit ? child.Size64 : child.Size32));
+                    packedEnd += child.WireSize;
                 }
-                measure.Padding = padding;
-                measure.Wire = wire;
-                measure.Alignment32 = alignment32;
-                measure.Alignment64 = alignment64;
-                measure.Size32 = Math.Max(Math.Max(1, declaredSize), RoundUp(end32, alignment32));
-                measure.Size64 = Math.Max(Math.Max(1, declaredSize), RoundUp(end64, alignment64));
-                measure.Padding |= measure.Size32 != wire || measure.Size64 != wire;
-                return true;
-            }
-            finally
-            {
-                visiting.Remove(symbol);
+                return Math.Max(Math.Max(1, declaredSize), (end + alignment - 1) / alignment * alignment);
             }
         }
 
-        /// <summary>Measures one storage leaf or aggregate for one pointer width.</summary>
-        /// <param name="type">The storage type.</param>
-        /// <param name="is64Bit">Whether the pointer width is 64 bits.</param>
-        /// <param name="visiting">The aggregates already on the measurement path.</param>
-        /// <param name="size">Receives the value's native size.</param>
-        /// <param name="alignment">Receives the value's natural alignment.</param>
-        /// <param name="wire">Receives the value's packed wire width.</param>
-        /// <returns>Whether the value has a fixed representation.</returns>
-        private static bool TryMeasure(ITypeSymbol type, bool is64Bit, HashSet<INamedTypeSymbol> visiting, out int size,
-            out int alignment, out int wire)
-        {
-            size = alignment = wire = 0;
-            if (Scalar(type) is { } scalar)
-            {
-                size = wire = scalar.Size;
-                alignment = Math.Min(scalar.Size, is64Bit ? 8 : 4);
-                return true;
-            }
-            if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum, EnumUnderlyingType: { } underlying })
-                return TryMeasure(underlying, is64Bit, visiting, out size, out alignment, out wire);
-            if (type.SpecialType is SpecialType.System_IntPtr or SpecialType.System_UIntPtr ||
-                type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer)
-            {
-                size = alignment = wire = is64Bit ? 8 : 4;
-                return true;
-            }
-            if (type is not INamedTypeSymbol named)
-                return false;
-            if (Opaque(named) is { } opaque)
-            {
-                size = wire = opaque.Size;
-                alignment = is64Bit ? opaque.Alignment64 : opaque.Alignment32;
-                return true;
-            }
-            if (named.TypeKind != TypeKind.Struct || named.IsRefLikeType || !named.IsUnmanagedType ||
-                named.GetAttributes().Any(item => item.AttributeClass?.ToDisplayString() ==
-                    "System.Runtime.CompilerServices.InlineArrayAttribute"))
-                return false;
-            if (!MeasureStruct(named, visiting, out StructMeasure measure))
-                return false;
-            size = is64Bit ? measure.Size64 : measure.Size32;
-            alignment = is64Bit ? measure.Alignment64 : measure.Alignment32;
-            wire = measure.Wire;
-            return size > 0;
-        }
 
         /// <summary>Reads the resolved standard struct-layout attribute values.</summary>
         /// <param name="symbol">The unmanaged struct.</param>
@@ -1311,21 +1838,4 @@ internal static class TypeModelFactory
         RecordModel { Versioned: false } => PayloadShape.Inline,
         _ => PayloadShape.MemberEntry,
     };
-
-    /// <summary>Rounds a value up to the next multiple of an alignment.</summary>
-    /// <param name="value">The unaligned value.</param>
-    /// <param name="alignment">The positive alignment.</param>
-    /// <returns>The aligned value.</returns>
-    private static int RoundUp(int value, int alignment) => (value + alignment - 1) / alignment * alignment;
-
-    /// <summary>The measured packed wire and predicted native storage of one struct.</summary>
-    private sealed class StructMeasure
-    {
-        internal int Size32;
-        internal int Size64;
-        internal int Alignment32;
-        internal int Alignment64;
-        internal int Wire;
-        internal bool Padding;
-    }
 }
