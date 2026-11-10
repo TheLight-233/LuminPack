@@ -129,11 +129,18 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <summary>Whether the type has the record measurement entry <c>MeasureRecord</c>, which the original selection gives only to
     /// supported fixed records.</summary>
     internal readonly bool MeasureRecord;
+    /// <summary>The arguments of a raw struct's selected constructor, which its JSON read constructs a fresh value with: a member's
+    /// name, or null for <c>default</c>, per parameter; null when the value is created by its parameterless constructor.</summary>
+    internal readonly string[] ConstructorArguments;
+    /// <summary>The members the selected constructor sets, which the object initializer leaves out.</summary>
+    internal readonly string[] ConstructorMembers;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
-        bool fixedUnionCase, bool measureRecord)
+        bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers)
     {
+        ConstructorArguments = constructorArguments;
+        ConstructorMembers = constructorMembers;
         MeasureRecord = measureRecord;
         FixedUnionCase = fixedUnionCase;
         IsStruct = isStruct;
@@ -162,11 +169,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
+        Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Members.SequenceEqual(other.Members);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as DirectTypeModel);
+
+    private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && left.SequenceEqual(right);
 
     /// <inheritdoc/>
     public override int GetHashCode() => GlobalName.GetHashCode();
@@ -176,9 +186,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// <param name="compilation">The consumer compilation.</param>
     /// <param name="metadata">The project generation settings.</param>
     /// <returns>The model, or null when the type keeps the original pipeline.</returns>
-    /// <param name="nested">Whether the model only measures a raw struct's JSON write for a containing type, which reads none of
-    /// the struct's constructors.</param>
-    internal static DirectTypeModel TryCreate(LuminDataInfo data, Compilation compilation, MetaInfo metadata, bool nested = false)
+    internal static DirectTypeModel TryCreate(LuminDataInfo data, Compilation compilation, MetaInfo metadata)
     {
         if (DirectEmission.Mode == DirectEmissionMode.Off || !GeneratedSourceLayout.Enabled)
             return null;
@@ -221,12 +229,12 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             levels.Add(level);
         }
         bool derived = levels.Count > 1;
-        // A raw struct is copied as one value, so its storage layout option never reaches the binary operations; its constructors
-        // only reach its JSON read.
-        if (!(raw && nested) && (type.InstanceConstructors.Length != 1 || type.InstanceConstructors[0].Parameters.Length != 0 ||
+        // A raw struct is copied as one value, so its constructors only reach its JSON read, which constructs a fresh value with the
+        // selected constructor.
+        if (!raw && (type.InstanceConstructors.Length != 1 || type.InstanceConstructors[0].Parameters.Length != 0 ||
             type.InstanceConstructors[0].DeclaredAccessibility != Accessibility.Public))
             return DirectEmission.Reject<DirectTypeModel>("constructor");
-        var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !(raw && StructLayoutOption(attribute))).ToArray();
+        var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !StructLayoutOption(attribute)).ToArray();
         if (attributes.Length != 1 || !PlainPackable(attributes[0]))
             return DirectEmission.Reject<DirectTypeModel>("type attributes");
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
@@ -241,7 +249,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 continue;
             if (member.GetAttributes().Any(attribute => !Foreign(attribute) &&
                     !(member is IMethodSymbol { MethodKind: MethodKind.Ordinary } && attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.MethodImplAttribute") &&
-                    !(raw && nested && member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
+                    !(raw && member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
                     !(member is IFieldSymbol or IPropertySymbol && attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOrderAttribute" or "LuminPack.Attribute.LuminPackIgnoreAttribute")))
                 return DirectEmission.Reject<DirectTypeModel>("member attributes");
             // An ignored member keeps its storage but is never serialized.
@@ -333,10 +341,19 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             var names = new System.Collections.Generic.HashSet<string>(members.Select(member => member.Name), StringComparer.Ordinal);
             viewElided = Enumerable.Range(0, members.Length).All(index => names.Contains("F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
+        string[] arguments = null, constructed = null;
+        if (data.SelectedConstructor is { Parameters.Count: > 0 } selected)
+        {
+            if (!raw)
+                return DirectEmission.Reject<DirectTypeModel>("constructor");
+            arguments = selected.Parameters.Select(parameter => members.Any(member => member.Name == parameter.MatchingFieldName)
+                ? parameter.MatchingFieldName : null).ToArray();
+            constructed = selected.Parameters.Select(parameter => parameter.MatchingFieldName).Where(name => name != null).ToArray();
+        }
         string helper = GeneratedSourceLayout.JsonHelperName("Json_" + LuminPackExtensionGenerator.SanitizeAssemblyName(globalName));
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
             fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
-            members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type));
+            members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed);
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -448,7 +465,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if (field.FieldType != LuminDataType.Value || field.Type != LuminFiledType.Struct)
                 return DirectEmission.Reject<DirectMember>("struct member");
             // A containing JSON write copies a small struct write inline; only a struct written behind its formatter call is covered.
-            var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(rawStruct, compilation, metadata), compilation, metadata, nested: true);
+            // The struct's own model gives that count.
+            var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(rawStruct, compilation, metadata), compilation, metadata);
             if (nested == null || !nested.IsStruct || nested.View != null || DirectJsonEmitter.WriteCalls(nested) <= 16)
                 return DirectEmission.Reject<DirectMember>("struct member JSON");
             string spelling = rawStruct.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

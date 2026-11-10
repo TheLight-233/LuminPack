@@ -229,6 +229,10 @@ internal static class DirectJsonEmitter
         return body;
     }
 
+    /// <summary>The reused value's member access: a struct read through its selected constructor reaches it without the
+    /// null-forgiving operator.</summary>
+    private static string Value(DirectTypeModel model) => model.ConstructorArguments == null ? "value!." : "value.";
+
     /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
     /// of more than sixteen calls stays behind its formatter's call.</summary>
     internal static int WriteCalls(DirectTypeModel model) => DirectCalls.Count(WriteBody(model, new DirectWriter(-1), model.JsonHelper));
@@ -332,7 +336,7 @@ internal static class DirectJsonEmitter
             else
             {
                 caseLines.Add("if (reuseExisting)");
-                caseLines.Add("\t" + target + " = " + (model.Mirror == null ? "value!." : "reuseLocal.") + member.Name + ";");
+                caseLines.Add("\t" + target + " = " + (model.Mirror == null ? Value(model) : "reuseLocal.") + member.Name + ";");
             }
             if (member.Raw)
             {
@@ -383,14 +387,16 @@ internal static class DirectJsonEmitter
         {
             body.Add("if (!reuseExisting)");
             body.Add("{");
-            // Public fields are set by the object initializer, mirrored members through the layout mirror afterwards.
-            if (members.All(member => member.Mirrored))
-                body.Add("value = new " + model.GlobalName + "();");
+            // Public fields are set by the selected constructor or the object initializer, mirrored members through the layout mirror afterwards.
+            string construction = "value = new " + model.GlobalName + "(" + (model.ConstructorArguments == null ? string.Empty : string.Join(", ", model.ConstructorArguments.Select(name => name == null ? "default" : Camel(name) + "Temp!"))) + ")";
+            var initialized = members.Where(member => !member.Mirrored && (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
+            if (initialized.Length == 0)
+                body.Add(construction + ";");
             else
             {
-                body.Add("value = new " + model.GlobalName + "()");
+                body.Add(construction);
                 body.Add("{");
-                foreach (var member in members.Where(member => !member.Mirrored))
+                foreach (var member in initialized)
                     body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
                 body.Add("};");
             }
@@ -405,7 +411,7 @@ internal static class DirectJsonEmitter
             body.Add("else");
             body.Add("{");
             foreach (var member in members)
-                body.Add((model.Mirror == null ? "value!." : "reuseLocal.") + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                body.Add((model.Mirror == null ? Value(model) : "reuseLocal.") + member.Name + " = " + Camel(member.Name) + "Temp!;");
             body.Add("}");
         }
 
