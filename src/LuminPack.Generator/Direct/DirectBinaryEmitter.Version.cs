@@ -58,7 +58,9 @@ internal sealed class DirectVersionSchema : IEquatable<DirectVersionSchema>
     {
         if (derived || data.isValueType || data.VersionSchemaType == null)
             return DirectEmission.Reject<DirectVersionSchema>("version tolerant: shape");
-        if (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List || member.Raw))
+        if (members.Any(member => member.Kind is DirectMemberKind.Array or DirectMemberKind.List or DirectMemberKind.Stack or
+            DirectMemberKind.SortedSet or DirectMemberKind.SortedList or DirectMemberKind.PairList or DirectMemberKind.NestedList or
+            DirectMemberKind.SparseDictionary || member.Raw))
             return DirectEmission.Reject<DirectVersionSchema>("version tolerant: members");
         // Constant schema bytes are emitted as collection expressions, which the original emits on .NET 8 with C# 12 or later.
         if (!metadata.IsNet8 || metadata.CSharpVersion < (LanguageVersion)1200)

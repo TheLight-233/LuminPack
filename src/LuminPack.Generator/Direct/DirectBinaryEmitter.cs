@@ -315,7 +315,8 @@ internal static partial class DirectBinaryEmitter
         string WriteHint(List<string> body, bool union) => model.HasDictionary ? null :
             (model.StreamRecord || model.MixedRecord) &&
             !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) &&
-            !body.Any(line => line.StartsWith("for (", StringComparison.Ordinal))
+            !body.Any(line => line.StartsWith("for (", StringComparison.Ordinal) || line.StartsWith("foreach (", StringComparison.Ordinal) ||
+                line.StartsWith("static ", StringComparison.Ordinal))
             ? ((model.StreamRecord ? DirectCalls.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
             : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));
 
@@ -804,6 +805,14 @@ internal static partial class DirectBinaryEmitter
             if (IsElementList(member))
             {
                 AddInlineElementListWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
+                index++;
+                if (index < members.Length && !StartsInlineObject(members[index]))
+                    body.Add("");
+                continue;
+            }
+            if (IsCollectionBlock(member))
+            {
+                AddCollectionWrite(body, model, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
                 if (index < members.Length && !StartsInlineObject(members[index]))
                     body.Add("");
@@ -1299,6 +1308,13 @@ internal static partial class DirectBinaryEmitter
                 }
                 continue;
             }
+            if (IsCollectionBlock(member))
+            {
+                AddCollectionWrite(body, model, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
+                if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                    body.Add("");
+                continue;
+            }
             int last = RunEnd(members, index);
             if (last == index)
             {
@@ -1348,7 +1364,7 @@ internal static partial class DirectBinaryEmitter
 
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     private static bool IsInlineSegment(DirectMember member) => member.Kind == DirectMemberKind.Object || IsTextList(member) ||
-        IsElementList(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall;
+        IsElementList(member) || IsCollectionBlock(member) || member.Kind == DirectMemberKind.Array && member.FormatterCall;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(DirectMember member) =>
@@ -1951,6 +1967,12 @@ internal static partial class DirectBinaryEmitter
             }
             // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.
             if (member.Kind == DirectMemberKind.Dictionary)
+            {
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                continue;
+            }
+            // A sorted, paired or nested collection reads through its generated formatter, which keeps its own framing.
+            if (IsCollectionBlock(member))
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
