@@ -494,10 +494,16 @@ internal static class DirectJsonEmitter
             }
             if (model.Mirror != null)
             {
-                body.Add("// Assign private fields.");
-                body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
-                foreach (var member in members.Where(member => member.Mirrored))
-                    body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                // A selected constructor already set its own mirrored members, so only the rest are assigned afterwards.
+                var mirrored = members.Where(member => member.Mirrored &&
+                    (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
+                if (mirrored.Length != 0)
+                {
+                    body.Add("// Assign private fields.");
+                    body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                    foreach (var member in mirrored)
+                        body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                }
             }
             body.Add("}");
             body.Add("else");

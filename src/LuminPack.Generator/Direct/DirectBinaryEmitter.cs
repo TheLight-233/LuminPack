@@ -1050,8 +1050,12 @@ internal static partial class DirectBinaryEmitter
         if (writes)
             result.Insert(union ? 1 : 8, "ref var local = ref " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref Unsafe.AsRef(in value));");
         else
-            result.Insert(result.FindIndex(line => line.StartsWith("var instance = ", StringComparison.Ordinal)) + 1,
-                "var local = " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref instance);");
+        {
+            // A constructed read declares its mirror views itself, so it has no instance local to attach one to.
+            int anchor = result.FindIndex(line => line.StartsWith("var instance = ", StringComparison.Ordinal));
+            if (anchor >= 0)
+                result.Insert(anchor + 1, "var local = " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref instance);");
+        }
         return result;
     }
 
