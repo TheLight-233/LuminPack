@@ -1,5 +1,6 @@
 using System;
 using LuminPack.SourceGenerator.Next.Analysis;
+using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering;
 using LuminPack.SourceGenerator.Next.Rendering.Binary;
@@ -32,22 +33,33 @@ public sealed class NextGenerator : IIncrementalGenerator
             {
                 GeneratorOptions options = GeneratorOptionsFactory.From(attributeContext.SemanticModel.Compilation);
                 var symbol = (INamedTypeSymbol)attributeContext.TargetSymbol;
-                return new ModeledPayload(TypeModelFactory.TryCreate(symbol, attributeContext.SemanticModel.Compilation, options), options);
+                ModelResult result = TypeModelFactory.TryCreate(symbol, attributeContext.SemanticModel.Compilation, options);
+                return new ModeledPayload(result, options, TypeModelFactory.Diagnose(symbol, result.Model));
             })
             .WithTrackingName("LuminPack.Next.PayloadModels");
         context.RegisterSourceOutput(models, static (production, payload) =>
         {
+            foreach (DiagnosticInfo diagnostic in payload.Diagnostics)
+                production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic));
             if (payload.Result.Model is not { } model || !payload.Result.IsComplete)
                 return;
-            var renderContext = new RenderContext(payload.Options, AliasTable.For(payload.Options.AvailableAliases));
-            if (model is UnionModel)
+            try
             {
-                Emit(production, model, renderContext, UnionRenderer.Instance.RenderBinary(model, renderContext), string.Empty);
-                Emit(production, model, renderContext, UnionRenderer.Instance.RenderJson(model, renderContext), ".Json");
-                return;
+                var renderContext = new RenderContext(payload.Options, AliasTable.For(payload.Options.AvailableAliases));
+                if (model is UnionModel)
+                {
+                    Emit(production, model, renderContext, UnionRenderer.Instance.RenderBinary(model, renderContext), string.Empty);
+                    Emit(production, model, renderContext, UnionRenderer.Instance.RenderJson(model, renderContext), ".Json");
+                    return;
+                }
+                Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
+                Emit(production, model, renderContext, JsonRenderer.Instance.Render(model, renderContext), ".Json");
             }
-            Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
-            Emit(production, model, renderContext, JsonRenderer.Instance.Render(model, renderContext), ".Json");
+            catch (Exception error)
+            {
+                production.ReportDiagnostic(DiagnosticDescriptors.Create(
+                    DiagnosticInfo.Unlocated(DiagnosticDescriptors.GeneratorFailure.Id, error.Message)));
+            }
         });
         // The shared formatter owners are collected once: the flag set is order-independent, so the same complete payloads
         // publish the same files and an unchanged set reuses its cached output across edits.
@@ -61,7 +73,18 @@ public sealed class NextGenerator : IIncrementalGenerator
                 return set;
             })
             .WithTrackingName("LuminPack.Next.SharedFormatters");
-        context.RegisterSourceOutput(sharedFormatters, static (production, set) => SharedFormatterPublisher.Publish(production, set));
+        context.RegisterSourceOutput(sharedFormatters, static (production, set) =>
+        {
+            try
+            {
+                SharedFormatterPublisher.Publish(production, set);
+            }
+            catch (Exception error)
+            {
+                production.ReportDiagnostic(DiagnosticDescriptors.Create(
+                    DiagnosticInfo.Unlocated(DiagnosticDescriptors.GeneratorFailure.Id, error.Message)));
+            }
+        });
     }
 
     private static void Emit(SourceProductionContext production, TypeModel model, RenderContext context, string source, string suffix)
@@ -73,8 +96,9 @@ public sealed class NextGenerator : IIncrementalGenerator
 
     private readonly struct ModeledPayload : IEquatable<ModeledPayload>
     {
-        internal ModeledPayload(ModelResult result, GeneratorOptions options)
+        internal ModeledPayload(ModelResult result, GeneratorOptions options, DiagnosticInfo[] diagnostics)
         {
+            Diagnostics = diagnostics;
             Result = result;
             Options = options;
         }
@@ -83,10 +107,29 @@ public sealed class NextGenerator : IIncrementalGenerator
 
         internal GeneratorOptions Options { get; }
 
-        public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options);
+        internal DiagnosticInfo[] Diagnostics { get; }
+
+        public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options) &&
+            SameDiagnostics(Diagnostics, other.Diagnostics);
 
         public override bool Equals(object? obj) => obj is ModeledPayload other && Equals(other);
 
-        public override int GetHashCode() => Result.GetHashCode();
+        public override int GetHashCode()
+        {
+            int hash = Result.GetHashCode() ^ Options.GetHashCode();
+            foreach (DiagnosticInfo diagnostic in Diagnostics)
+                hash ^= diagnostic.GetHashCode();
+            return hash;
+        }
+
+        private static bool SameDiagnostics(DiagnosticInfo[] left, DiagnosticInfo[] right)
+        {
+            if (left.Length != right.Length)
+                return false;
+            for (int index = 0; index < left.Length; index++)
+                if (!left[index].Equals(right[index]))
+                    return false;
+            return true;
+        }
     }
 }

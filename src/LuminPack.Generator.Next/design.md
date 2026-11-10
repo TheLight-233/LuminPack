@@ -196,6 +196,13 @@ writes through an isolated operation state and reads without reader isolation, w
 array reserves its header and expands one element per span slot. Elements with nested objects,
 collections or no string member stay unmapped, as do the remaining concurrent and immutable families.
 
+A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
+constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
+`LuminPack027` and `LuminPack018` at the declarations, and the 220-payload corpus reports none. An
+unexpected rendering failure is reported as `LuminPack099` instead of escaping the pipeline. The
+remaining legacy validation (duplicate member names, Union root and case rules, callback, constructor
+and rent rules, compiled options and bounded sizes) is not ported yet; unmapped shapes stay silent.
+
 All 220 corpus payloads now render, fixed Union cases publish their own `SerializeUnionAt` cursor
 entries, and the collected payload set publishes the corpus's four shared formatter owners. The corpus
 therefore compiles with the Next generator alone. Other collection element types, scalar and built-in
@@ -271,7 +278,7 @@ pipeline; P2 improves the product.
 | M-09 | Shared publication: the corpus formatter owners and the CultureInfo owner are published; serializer facades, formatter dispatch, registration and layout files remain | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
 | M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Old and Next output are byte-identical on the corpus | P1 |
 | M-11 | Declared string profiles, input limits and member-scope profiles | Analysis + Rendering | M-09 | Member and type profile declarations generate correctly | P1 |
-| M-12 | Diagnostics and analyzers for unsupported members, layouts, options and Union cases | Analysis | — | Diagnostics are reported at the declaration, not in generated code | P2 |
+| M-12 | Declaration diagnostics: static types, ref structs, member-count overflow, Union case-count overflow, missing public constructors and unexpected generator failures are reported at the declaration; duplicate names, Union root/case rules, callbacks, constructors, rent, compiled options and bounded sizes remain | Analysis | — | Diagnostics are reported at the declaration, not in generated code | P2 |
 | M-13 | Keyed version tolerance and layout metadata | Model + Rendering | M-07 | Reordered and removed members read correctly | P2 |
 | M-14 | Cross-compilation model reuse: referenced-type invalidation is verified (an enum-underlying-type edit changes the parent's file; a packable child edit marks the child and parent `Modified`), but every compilation change still re-runs every attributed transform | Pipeline | M-09 | An unrelated edit skips model analysis while a referenced-type edit still refreshes its parents | P2 |
 | M-15 | Generated size reduction: shared dispatch, per-call operation selection, facade deduplication | Rendering | M-09 | Generated source per type approaches the old payload output without shared bloat | P2 |

@@ -5,11 +5,13 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
+using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
 
@@ -56,6 +58,53 @@ internal static class TypeModelFactory
         // Project facts are created once per compilation. A caller that supplies different facts on the same compilation
         // gets an isolated run instead of a cache that was built under another caller's facts.
         return session.Options.Equals(options) ? session.Create(symbol, depth: 0) : new Session(compilation, options).Create(symbol, depth: 0);
+    }
+
+    /// <summary>Validates the declaration-level rules the legacy generator reports as errors.</summary>
+    /// <param name="symbol">The attributed type.</param>
+    /// <param name="model">The model analysis produced, or null when the declaration is outside the surface.</param>
+    /// <returns>The captured declaration diagnostics, empty when the declaration is valid.</returns>
+    /// <remarks>Only rules whose legacy meaning is unambiguous are reported here. A shape the renderers do not cover yet stays
+    /// silent; a declaration error is always reported at its source location.</remarks>
+    internal static DiagnosticInfo[] Diagnose(INamedTypeSymbol symbol, TypeModel? model)
+    {
+        var diagnostics = new List<DiagnosticInfo>();
+        if (symbol.IsStatic)
+            diagnostics.Add(Diagnostic(DiagnosticDescriptors.StaticClass, symbol, symbol.ToDisplayString()));
+        if (symbol.IsRefLikeType)
+            diagnostics.Add(Diagnostic(DiagnosticDescriptors.TypeIsRefStruct, symbol, symbol.ToDisplayString()));
+        var attribute = symbol.GetAttributes().FirstOrDefault(item =>
+            item.AttributeClass?.ToDisplayString() == PackableAttribute);
+        string generatorType = attribute == null ? "Object" : GeneratorTypeName(attribute);
+        bool generated = generatorType is not ("NonGenerator" or "Custom");
+        if (generated && model is UnionModel union && union.Cases.Length > 256)
+            diagnostics.Add(Diagnostic(DiagnosticDescriptors.TooManyUnionMembers, symbol, symbol.ToDisplayString(),
+                union.Cases.Length.ToString(CultureInfo.InvariantCulture)));
+        else if (generated && model != null && model.Members.Length > 249)
+            diagnostics.Add(Diagnostic(DiagnosticDescriptors.MembersCountOver250, symbol, symbol.ToDisplayString(),
+                model.Members.Length.ToString(CultureInfo.InvariantCulture)));
+        // A class the generator constructs itself needs a public constructor; a pool rent supplies the instance instead.
+        if (generated && symbol.TypeKind == TypeKind.Class && !symbol.IsAbstract && !symbol.IsStatic &&
+            !symbol.InstanceConstructors.Any(ctor => ctor.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public) &&
+            !symbol.GetMembers().OfType<IMethodSymbol>().Any(method => HasAttribute(method, PoolRentAttribute)))
+            diagnostics.Add(Diagnostic(DiagnosticDescriptors.NoPublicConstructor, symbol, symbol.ToDisplayString()));
+        return diagnostics.ToArray();
+    }
+
+    /// <summary>Captures one diagnostic at a declaration's source location.</summary>
+    /// <param name="descriptor">The diagnostic descriptor.</param>
+    /// <param name="symbol">The declaration the diagnostic points at.</param>
+    /// <param name="arguments">The message arguments.</param>
+    /// <returns>The captured diagnostic.</returns>
+    private static DiagnosticInfo Diagnostic(DiagnosticDescriptor descriptor, ISymbol symbol, params string[] arguments)
+    {
+        Location? location = symbol.Locations.FirstOrDefault(item => item.IsInSource);
+        if (location == null)
+            return DiagnosticInfo.Unlocated(descriptor.Id, arguments);
+        FileLinePositionSpan line = location.GetLineSpan();
+        TextSpan span = location.SourceSpan;
+        return DiagnosticInfo.Located(descriptor.Id, line.Path, span.Start, span.Length, line.StartLinePosition.Line,
+            line.StartLinePosition.Character, line.EndLinePosition.Line, line.EndLinePosition.Character, arguments);
     }
 
     /// <summary>Holds the per-compilation analysis state: the consumer compilation, its project facts and the completed models.</summary>
