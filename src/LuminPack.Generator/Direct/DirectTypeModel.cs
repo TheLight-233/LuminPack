@@ -177,15 +177,33 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     internal readonly bool ReferencePayload;
     /// <summary>The CLR layout attribute line of a declared layout replica, or null.</summary>
     internal readonly string LayoutAttribute;
+    /// <summary>The static pool rent call of a pooled type, such as <c>global::T.Rent()</c>, or null.</summary>
+    internal readonly string Rent;
+    /// <summary>The serialization callbacks, spelled as statements of the write or read root, in declaration order.</summary>
+    internal readonly string[] WriteBefore = System.Array.Empty<string>(), WriteAfter = System.Array.Empty<string>(),
+        ReadBefore = System.Array.Empty<string>(), ReadAfter = System.Array.Empty<string>();
+
+    /// <summary>Whether any serialization callback runs, which keeps the type out of the named member write.</summary>
+    internal bool HasCallbacks => WriteBefore.Length != 0 || WriteAfter.Length != 0 || ReadBefore.Length != 0 || ReadAfter.Length != 0;
 
     private DirectTypeModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         DirectMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
-        DirectVersionSchema version, bool referencePayload, string layoutAttribute)
+        DirectVersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
+        string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null)
     {
         Version = version;
         ReferencePayload = referencePayload;
         LayoutAttribute = layoutAttribute;
+        Rent = rent;
+        if (writeBefore != null)
+            WriteBefore = writeBefore;
+        if (writeAfter != null)
+            WriteAfter = writeAfter;
+        if (readBefore != null)
+            ReadBefore = readBefore;
+        if (readAfter != null)
+            ReadAfter = readAfter;
         Net8 = net8;
         Utf8Literals = utf8Literals;
         ConstructorArguments = constructorArguments;
@@ -197,7 +215,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         ViewElided = viewElided;
         Proven = proven;
         MemberWrite = memberWrite;
-        CamelSnapshots = mirror != null || derived;
+        CamelSnapshots = derived || members.Any(member => member.Mirrored);
         Mirror = mirror;
         MirrorFields = mirrorFields;
         UniqueEntries = uniqueEntries;
@@ -218,6 +236,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
+        Rent == other.Rent && Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
+        Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter) &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
         Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && Equals(Version, other.Version) &&
         ReferencePayload == other.ReferencePayload && LayoutAttribute == other.LayoutAttribute &&
@@ -281,7 +301,9 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         if (type == null || data.generatorType != GeneratorType.Object && !versioned || data.isUnion || data.isGeneric || data.isValueType && !isStruct)
             return DirectEmission.Reject<DirectTypeModel>("type kind: " + (type == null ? "none" : data.isUnion ? "union" : data.isGeneric ? "generic" :
                 data.isValueType ? "struct" : data.generatorType.ToString()));
-        if (data.RentPoolMethod != null || data.callBackMethods.Count != 0 || data.enableBurst)
+        // Callbacks and pool rents shape the binary roots; the version-tolerant roots keep their own body and callbacks there
+        // are not modeled yet.
+        if (data.enableBurst || versioned && (data.RentPoolMethod != null || data.callBackMethods.Count != 0))
             return DirectEmission.Reject<DirectTypeModel>("callbacks, pool or burst");
         if (data.Diagnostics.Length != 0)
             return DirectEmission.Reject<DirectTypeModel>("diagnostics");
@@ -336,6 +358,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
                 continue;
             if (member.GetAttributes().Any(attribute => !Foreign(attribute) &&
                     !(member is IMethodSymbol { MethodKind: MethodKind.Ordinary } && attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.MethodImplAttribute") &&
+                    !(member is IMethodSymbol { MethodKind: MethodKind.Ordinary } && SerializationCallback(attribute)) &&
                     !(member is IMethodSymbol { MethodKind: MethodKind.Constructor } && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute") &&
                     !(member is IFieldSymbol or IPropertySymbol && attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOrderAttribute" or "LuminPack.Attribute.LuminPackIgnoreAttribute") &&
                     !(versioned && member is IFieldSymbol && attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")))
@@ -398,7 +421,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             members.All(member => member.Kind is DirectMemberKind.Fixed or DirectMemberKind.Text);
         // The proven object write needs .NET 8, unsafe code and a non-Unity project, as ProvenObjectWriteProjection checks.
         bool unity = metadata.IsForUnity || metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal));
-        bool proven = strings && !versioned && metadata.IsNet8 && metadata.AllowUnsafe && !unity;
+        bool proven = strings && !versioned && metadata.IsNet8 && metadata.AllowUnsafe && !unity &&
+            data.callBackMethods.Count == 0;
         if (proven && !ProvenWriteProfiles.AreCanonical(compilation))
             return DirectEmission.Reject<DirectTypeModel>("proven object write");
         // JSON read locals are named after the camel-cased member; the presentation renames a leading underscore or a clash.
@@ -418,7 +442,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         string mirror = null;
         string[] mirrorFields = null;
         bool fresh = LuminPackJsonCodeGenerator.CanDeserializeDirectlyIntoFreshResult(data);
-        if (mirrored)
+        // A pooled type declares a mirror even for public fields, which its JSON read uses when it reuses an instance.
+        if (mirrored || data.RentPoolMethod != null)
         {
             // The mirror declares every instance field of the type in storage order, so it must hold exactly the members.
             if (fresh || derived || data.localFields.Count != members.Length ||
@@ -472,11 +497,32 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         var layoutText = new System.Text.StringBuilder();
         StorageLayoutInfo.Get(type).AppendAttribute(layoutText, string.Empty);
         string layoutAttribute = layoutText.Length == 0 ? null : layoutText.ToString().TrimEnd('\r', '\n');
+        // A pooled type rents its instance instead of constructing one, so the selected constructor only shapes its JSON
+        // construction when no pool exists; the callbacks run only in the binary roots.
+        string rent = data.RentPoolMethod == null ? null : globalName + "." + data.RentPoolMethod.Name + "()";
+        if (rent != null)
+            arguments = constructed = null;
+        var writeBefore = new System.Collections.Generic.List<string>();
+        var writeAfter = new System.Collections.Generic.List<string>();
+        var readBefore = new System.Collections.Generic.List<string>();
+        var readAfter = new System.Collections.Generic.List<string>();
+        foreach (var (name, kind, isStatic) in data.callBackMethods)
+        {
+            string call = isStatic ? globalName + "." + name + "();" : "value?." + name + "();";
+            switch (kind)
+            {
+                case SerializeCallBackType.OnSerializing: writeBefore.Add(call); break;
+                case SerializeCallBackType.OnSerialized: writeAfter.Add(call); break;
+                case SerializeCallBackType.OnDeserializing: readBefore.Add(call); break;
+                default: readAfter.Add(call); break;
+            }
+        }
         return new DirectTypeModel(globalName, ReadableTypeName.Of(RootContainerProjection.PayloadKey(globalName)), extension, helper,
             fresh, InterceptionSupport.IsEnabled(metadata.ParseOptions), members, proven, mirror, mirrorFields, derived, isStruct, view, viewElided, fixedUnionCase,
             members.All(member => member.IsFixed) && LuminPackExtensionGenerator.SupportsRecordWidth(type), arguments, constructed,
-            strings && !derived && !versioned, metadata.IsNet8, metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
-            referencePayload, layoutAttribute);
+            strings && !derived && !versioned && data.callBackMethods.Count == 0, metadata.IsNet8,
+            metadata.IsNet8 && metadata.CSharpVersion > LanguageVersion.CSharp10, version,
+            referencePayload, layoutAttribute, rent, writeBefore.ToArray(), writeAfter.ToArray(), readBefore.ToArray(), readAfter.ToArray());
     }
 
     /// <summary>Accepts the project settings the direct emitters were verified against.</summary>
@@ -545,6 +591,14 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     private static bool JsonPolymorphism(AttributeData attribute)
         => attribute.AttributeClass?.ToDisplayString() is "System.Text.Json.Serialization.JsonPolymorphicAttribute" or
             "System.Text.Json.Serialization.JsonDerivedTypeAttribute";
+
+    /// <summary>Whether an attribute marks a serialization callback or a pool rent method, which the generated roots run.</summary>
+    private static bool SerializationCallback(AttributeData attribute) =>
+        attribute.AttributeClass?.ToDisplayString() is "LuminPack.Attribute.LuminPackOnSerializingAttribute"
+            or "LuminPack.Attribute.LuminPackOnSerializedAttribute"
+            or "LuminPack.Attribute.LuminPackOnDeserializingAttribute"
+            or "LuminPack.Attribute.LuminPackOnDeserializedAttribute"
+            or "LuminPack.Attribute.LuminPackPoolRentAttribute";
 
     /// <summary>Accepts a declared member that has no instance storage and is never serialized.</summary>
     private static bool Unserialized(ISymbol member)

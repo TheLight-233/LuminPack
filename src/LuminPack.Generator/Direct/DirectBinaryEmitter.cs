@@ -312,11 +312,13 @@ internal static partial class DirectBinaryEmitter
             var write = Mirrored(model, w, WriteBody(model, w, union: false), writes: true, union: false);
             if (model.Proven)
                 write = ProvenWriteBody(model, w, write, union: false);
+            write = AddCallbacks(write, model.WriteBefore, model.WriteAfter);
             Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
                 WriteHint(write, union: false));
             w.Blank();
             w.Suppressed = !reads;
             var read = Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
+            read = AddReadCallbacks(model, read);
             Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
                 ReadHint(read));
             w.Blank();
@@ -335,12 +337,14 @@ internal static partial class DirectBinaryEmitter
                 // A lone record checks itself, so only a reserved record takes the proven path.
                 if (model.Proven && members.Length != 1)
                     writeUnionBody = ProvenWriteBody(model, w, writeUnionBody, union: true);
+                writeUnionBody = AddCallbacks(writeUnionBody, model.WriteBefore, model.WriteAfter);
                 Method(writeUnionBody, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
                     WriteHint(writeUnionBody, union: true));
             }
             w.Blank();
             w.Suppressed = !reads;
             var readUnionBody = Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
+            readUnionBody = AddReadCallbacks(model, readUnionBody);
             // A declared reference member keeps the Union read behind its outlined entry; a fixed record leaves the hint to the
             // runtime when a contiguous block cannot be proven, as the original expansion does.
             Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
@@ -563,7 +567,7 @@ internal static partial class DirectBinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            string snapshot = Snapshot(model, index);
+            string snapshot = Snapshot(model, index, camel: model.HasCallbacks);
             if (member.Kind == DirectMemberKind.Fixed)
                 terms.Add(member.Width);
             else if (member.Kind == DirectMemberKind.Text)
@@ -629,14 +633,49 @@ internal static partial class DirectBinaryEmitter
             }
             body.Add("// Field: " + member.Name);
             if (member.Kind == DirectMemberKind.Text)
-                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + Snapshot(model, index) + ");");
+                body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks) + ");");
             else
-                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index) + ");");
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + Snapshot(model, index, camel: model.HasCallbacks) + ");");
         }
         if (body[body.Count - 1].Length != 0)
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
         return body;
+    }
+
+    /// <summary>Spells instance creation for a read: the pool rent call of a pooled type, or its parameterless constructor.</summary>
+    private static string NewInstance(DirectTypeModel model) => model.Rent ?? "new " + model.GlobalName + "()";
+
+    /// <summary>Adds the serialization callbacks around a write body: after the value local is bound, and at the end.</summary>
+    private static List<string> AddCallbacks(List<string> body, string[] before, string[] after)
+    {
+        if (before.Length == 0 && after.Length == 0)
+            return body;
+        var result = new List<string>(body.Count + before.Length + after.Length);
+        int anchor = body.FindIndex(line => line.StartsWith("var value = input;", StringComparison.Ordinal));
+        for (int index = 0; index < body.Count; index++)
+        {
+            result.Add(body[index]);
+            if (index == anchor)
+                result.AddRange(before);
+        }
+        if (anchor < 0)
+            result.InsertRange(0, before);
+        result.AddRange(after);
+        return result;
+    }
+
+    /// <summary>Adds the deserialization callbacks around a read body; a constructed read places the completion callback inside
+    /// its branches itself.</summary>
+    private static List<string> AddReadCallbacks(DirectTypeModel model, List<string> body)
+    {
+        if (!model.HasCallbacks || !model.IsStruct && model.ConstructorArguments != null)
+            return body;
+        var result = new List<string>(body.Count + model.ReadBefore.Length + model.ReadAfter.Length);
+        result.AddRange(model.ReadBefore);
+        result.AddRange(body);
+        result.AddRange(model.ReadAfter);
+        return result;
     }
 
     /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in
@@ -1037,7 +1076,8 @@ internal static partial class DirectBinaryEmitter
     /// or the instance, and every member access goes through it.</summary>
     private static List<string> Mirrored(DirectTypeModel model, DirectWriter w, List<string> body, bool writes, bool union)
     {
-        if (model.Mirror == null)
+        // A pool mirror only declares the layout for reuse; public fields keep their direct access.
+        if (model.Mirror == null || !model.Members.Any(member => member.Mirrored))
             return body;
         // The template already spelled these helpers through imported namespaces, so they register no alias.
         const string marshal = "LuminPackMarshal";
@@ -1123,7 +1163,7 @@ internal static partial class DirectBinaryEmitter
         var names = new List<string>();
         for (int index = 0; index < model.Members.Length; index++)
             if (model.Members[index].Kind == DirectMemberKind.Text)
-                names.Add(Snapshot(model, index));
+                names.Add(Snapshot(model, index, camel: model.HasCallbacks));
         string type = model.GlobalName + "?";
         string arguments = string.Join(", ", new[] { "ref writer", "value" }.Concat(names));
         string unsafeName = w.A("Unsafe"), standard = w.A("LuminPackUtf16LengthOptions"), fallback = w.A("LuminPackDefaultOptions");
@@ -1242,6 +1282,8 @@ internal static partial class DirectBinaryEmitter
             body.Add("ref var reuseLocal = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value2!);");
         for (int index = 0; index < members.Length; index++)
             AddConstructedReadExisting(body, members[index], index + 1 < members.Length);
+        foreach (string call in model.ReadAfter)
+            body.Add(call.Replace("value?.", "value2?."));
         body.Add("}");
         body.Add("");
         foreach (var member in members)
@@ -1271,6 +1313,9 @@ internal static partial class DirectBinaryEmitter
             foreach (var member in mirrored)
                 body.Add("local." + member.Name + " = " + Camel(member.Name) + "Temp!;");
         }
+        body.AddRange(model.ReadAfter);
+        if (model.ReadBefore.Length != 0)
+            body.InsertRange(0, model.ReadBefore);
         return body;
     }
 
@@ -1329,7 +1374,7 @@ internal static partial class DirectBinaryEmitter
             body.Add("if (" + Policy() + ".ReadNullMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + "))");
             body.Add("\treturn;");
         }
-        body.Add("var instance = value ??= new " + model.GlobalName + "();");
+        body.Add("var instance = value ??= " + NewInstance(model) + ";");
         int cursors = 0, strings = 0;
         for (int index = 0; index < members.Length; index++)
         {
@@ -1436,7 +1481,7 @@ internal static partial class DirectBinaryEmitter
             body.Add("if (" + Policy() + ".ReadNullMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + "))");
             body.Add("\treturn;");
         }
-        body.Add("var instance = value ??= new " + model.GlobalName + "();");
+        body.Add("var instance = value ??= " + NewInstance(model) + ";");
         int cursors = 0;
         AddStreamRead(body, model, "instance", 0, !union, !union, w, new Dictionary<string, int>(StringComparer.Ordinal), ref cursors);
         while (body.Count != 0 && body[body.Count - 1].Length == 0)
@@ -1470,7 +1515,7 @@ internal static partial class DirectBinaryEmitter
                 body.Add("\t" + owner + "." + member.Name + " = default !;");
                 body.Add("else");
                 body.Add("{");
-                body.Add("var " + name + " = " + owner + "." + member.Name + " ?? new " + member.Nested.GlobalName + "();");
+                body.Add("var " + name + " = " + owner + "." + member.Name + " ?? " + NewInstance(member.Nested) + ";");
                 AddStreamRead(body, member.Nested, name, depth + 1, prove, markerSeen, w, names, ref cursors);
                 body.Add(owner + "." + member.Name + " = " + name + ";");
                 body.Add("}");

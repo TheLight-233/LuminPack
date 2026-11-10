@@ -217,7 +217,7 @@ internal static class DirectJsonEmitter
             return body;
         }
         // A mirrored type's storage is reached through its layout mirror.
-        if (model.Mirror != null)
+        if (model.Mirror != null && model.Members.Any(member => member.Mirrored))
             body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value + "!);");
         body.Add("if (!writer.IsFirstElement)");
         body.Add("\twriter.WriteByteRaw<" + Profile + ">((byte)',');");
@@ -367,6 +367,12 @@ internal static class DirectJsonEmitter
             body.Add("return;");
             body.Add("}");
             body.Add("");
+            // A pooled type rents its instance before deciding whether it is reused, as the original read does.
+            if (model.Rent != null)
+            {
+                body.Add("if (value is null)");
+                body.Add("\tvalue = " + model.Rent + ";");
+            }
             body.Add("bool reuseExisting = value is not null;");
         }
         if (fresh)
@@ -383,7 +389,7 @@ internal static class DirectJsonEmitter
             body.Add("// Temp vars");
             foreach (var member in members)
                 body.Add(member.TypeName + (member.IsFixed ? string.Empty : "?") + " " + Camel(member.Name) + "Temp = default;");
-            if (model.Mirror != null)
+            if (model.Mirror != null && members.Any(member => member.Mirrored))
                 body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
         }
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
@@ -428,7 +434,7 @@ internal static class DirectJsonEmitter
             else
             {
                 caseLines.Add("if (reuseExisting)");
-                caseLines.Add("\t" + target + " = " + (model.Mirror == null ? Value(model) : "reuseLocal.") + member.Name + ";");
+                caseLines.Add("\t" + target + " = " + (model.Mirror == null || !model.Members.Any(member => member.Mirrored) ? Value(model) : "reuseLocal.") + member.Name + ";");
             }
             if (member.Raw)
             {
@@ -482,7 +488,18 @@ internal static class DirectJsonEmitter
             // Public fields are set by the selected constructor or the object initializer, mirrored members through the layout mirror afterwards.
             string construction = "value = new " + model.GlobalName + "(" + (model.ConstructorArguments == null ? string.Empty : string.Join(", ", model.ConstructorArguments.Select(name => name == null ? "default" : Camel(name) + "Temp!"))) + ")";
             var initialized = members.Where(member => !member.Mirrored && (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
-            if (initialized.Length == 0)
+            if (model.Rent != null)
+            {
+                // A pooled type populates the rented instance field by field, mirrored members through the layout mirror.
+                body.Add("value = " + model.Rent + ";");
+                body.Add("// Populate every field on the pooled instance.");
+                bool mirroredStorage = members.Any(member => member.Mirrored);
+                if (model.Mirror != null && mirroredStorage)
+                    body.Add("ref var local = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
+                foreach (var member in members)
+                    body.Add((mirroredStorage && member.Mirrored ? "local." : Value(model)) + member.Name + " = " + Camel(member.Name) + "Temp!;");
+            }
+            else if (initialized.Length == 0)
                 body.Add(construction + ";");
             else
             {
@@ -492,7 +509,7 @@ internal static class DirectJsonEmitter
                     body.Add(member.Name + " = " + Camel(member.Name) + "Temp!,");
                 body.Add("};");
             }
-            if (model.Mirror != null)
+            if (model.Rent == null && model.Mirror != null && members.Any(member => member.Mirrored))
             {
                 // A selected constructor already set its own mirrored members, so only the rest are assigned afterwards.
                 var mirrored = members.Where(member => member.Mirrored &&
@@ -509,7 +526,7 @@ internal static class DirectJsonEmitter
             body.Add("else");
             body.Add("{");
             foreach (var member in members)
-                body.Add((model.Mirror == null ? Value(model) : "reuseLocal.") + member.Name + " = " + Camel(member.Name) + "Temp!;");
+                body.Add((model.Mirror == null || !members.Any(member => member.Mirrored) ? Value(model) : "reuseLocal.") + member.Name + " = " + Camel(member.Name) + "Temp!;");
             body.Add("}");
         }
 
