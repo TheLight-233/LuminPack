@@ -273,6 +273,17 @@ internal static class TypeModelFactory
                 return new ScalarMember(name, storage, policy, builtin, 0, raw: true, builtin: true);
             if (type.SpecialType == SpecialType.System_String)
                 return new TextMember(name, storage, policy);
+            if (type is IArrayTypeSymbol array)
+            {
+                if (array.Rank != 1)
+                {
+                    issues.Add("member '" + name + "' is a multi-dimensional array, which has no modeled sequence form");
+                    return null;
+                }
+                return new CollectionMember(name, storage, policy,
+                    array.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
+                    Reference(array.ElementType));
+            }
 
             if (type is INamedTypeSymbol named)
             {
