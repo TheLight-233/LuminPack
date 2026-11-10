@@ -386,10 +386,11 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } auto &&
                 auto.ContainingType.GetMembers().OfType<IFieldSymbol>().Any(backing => SymbolEqualityComparer.Default.Equals(backing.AssociatedSymbol, auto)))
             {
-                // The setter may be init-only: every auto-property gets a layout mirror, and the binary and JSON paths read and
-                // write it through that mirror, never through the setter.
-                if (auto.GetMethod is not { DeclaredAccessibility: Accessibility.Public } || auto.SetMethod is not { DeclaredAccessibility: Accessibility.Public } ||
-                    auto.GetMethod.GetAttributes().Length != 0 || auto.SetMethod.GetAttributes().Length != 0)
+                // The setter may be init-only or absent: every auto-property gets a layout mirror, and the binary and JSON
+                // paths read and write it through that mirror, never through the setter.
+                if (auto.GetMethod is not { DeclaredAccessibility: Accessibility.Public } ||
+                    auto.SetMethod is { } setter && setter.DeclaredAccessibility != Accessibility.Public ||
+                    auto.GetMethod.GetAttributes().Length != 0 || auto.SetMethod?.GetAttributes().Length > 0)
                     return DirectEmission.Reject<DirectTypeModel>("declared property");
                 fieldsDeclared++;
                 continue;
