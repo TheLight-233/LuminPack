@@ -19,8 +19,13 @@ internal static class DirectStructEmitter
     /// <param name="operations">The operations the project calls; see <see cref="DirectBinaryEmitter.Emit"/>.</param>
     internal static void Emit(DirectTypeModel model, DirectWriter w, GeneratedOperations operations)
     {
+        if (model.ManagedStruct)
+        {
+            DirectBinaryEmitter.EmitStruct(model, w, operations);
+            return;
+        }
         bool portable = model.View != null;
-        int wire = model.Members.Sum(member => member.Size);
+        int wire = portable ? model.PortableView.WireSize : model.Members.Sum(member => member.Size);
         string width = wire.ToString(System.Globalization.CultureInfo.InvariantCulture);
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
@@ -74,20 +79,42 @@ internal static class DirectStructEmitter
             portable ? container + ".RootReadUnion(ref reader, ref value);" : "reader.Read(ref value);");
         Profiled("DeserializeUnion" + suffix, "(scoped ref " + reader + " reader, scoped ref " + type + " value)",
             "DeserializeUnion" + suffix + "(ref reader, ref value);");
-        w.Suppressed = !writes;
-        string evaluator = "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + " value)";
-        Entry("MeasureRecord" + suffix, evaluator, "evaluator.Add(" + (portable ? width : w.A("Unsafe") + ".SizeOf<" + type + ">()") + ");");
-        Profiled("MeasureRecord" + suffix, evaluator, "MeasureRecord" + suffix + "(ref evaluator, ref value);");
+        // The record-width entry is selected per payload, as the original operation filter does.
+        if (model.MeasureRecord)
+        {
+            w.Suppressed = !writes;
+            string evaluator = "(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + type + " value)";
+            Entry("MeasureRecord" + suffix, evaluator, "evaluator.Add(" + (portable ? width : w.A("Unsafe") + ".SizeOf<" + type + ">()") + ");");
+            Profiled("MeasureRecord" + suffix, evaluator, "MeasureRecord" + suffix + "(ref evaluator, ref value);");
+        }
         w.Suppressed = false;
+        // A raw or portable struct with auto-property storage declares the mirror its JSON roots reach it through. The
+        // positional storage view follows it, and stays declared when the projection named the fields directly.
+        if (model.Mirror != null)
+        {
+            w.Line(w.Preserve);
+            if (model.LayoutAttribute != null)
+                w.Line(model.LayoutAttribute);
+            w.Line("private struct " + model.Mirror);
+            w.Open();
+            foreach (string field in model.MirrorFields ?? System.Array.Empty<string>())
+                w.Line("internal " + field + ";");
+            w.Close();
+            if (portable)
+                w.Blank();
+        }
         if (portable)
         {
-            // The positional storage view stays declared when the projection named the fields directly.
             if (model.LayoutAttribute != null)
                 w.Line(model.LayoutAttribute);
             w.Line("private struct " + model.View);
             w.Open();
-            for (int index = 0; index < model.Members.Length; index++)
-                w.Line("internal " + model.Members[index].Scalar + " F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";");
+            foreach (var field in model.PortableView.Fields)
+            {
+                if (field.Offset >= 0)
+                    w.Line("[global::System.Runtime.InteropServices.FieldOffset(" + field.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")]");
+                w.Line("internal " + (field.Volatile ? "volatile " : string.Empty) + field.Type + " " + field.Name + ";");
+            }
             w.Close();
         }
         w.Close();
@@ -165,13 +192,14 @@ internal static class DirectStructEmitter
             string unsafeName = w.A("Unsafe");
             w.Line("int portableIndex = writer.Position;");
             w.Line("ref byte portableWire = ref " + unsafeName + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(writer.Buffer), unchecked((nint)(uint)(portableIndex)));");
+            var snapshots = new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
             w.Line("if (" + unsafeName + ".SizeOf<global::System.IntPtr>() == 8)");
             w.Open();
-            Transfers("portableStorage", (address, field) => unsafeName + ".WriteUnaligned(ref " + address + ", " + field + ");");
+            Transfers("portableStorage", true, (address, field) => unsafeName + ".WriteUnaligned(ref " + address + ", " + field + ");", snapshots);
             w.Close();
             w.Line("else");
             w.Open();
-            Transfers("portableStorage02", (address, field) => w.A("LuminPackWriter") + ".Write(ref " + address + ", " + field + ");");
+            Transfers("portableStorage02", true, (address, field) => w.A("LuminPackWriter") + ".Write(ref " + address + ", " + field + ");", snapshots);
             w.Close();
             w.Blank();
             w.Line("writer.Advance(" + width + ");");
@@ -189,27 +217,39 @@ internal static class DirectStructEmitter
             w.Line("int portableIndex = reader.Position;");
             w.Line("reader.EnsureReadable(portableIndex, " + width + ");");
             w.Line("ref byte portableWire = ref " + unsafeName + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(reader.Buffer), unchecked((nint)(uint)(portableIndex)));");
-            int index = 0;
-            Transfers("portableStorage", (address, field) => field + " = " + (model.Members[index++].IsBoolean
-                ? w.A("LuminPackInputPolicy") + ".ReadBoolean(ref " + address + ");"
-                : w.A("LuminPackReader") + ".Read<" + model.Members[index - 1].Scalar + ">(ref " + address + ");"));
+            Transfers("portableStorage", false, null);
             w.Line("reader.EnsureReadable(" + width + ");");
             w.Line("reader.Cursor = ref " + unsafeName + ".Add(ref reader.Cursor, " + width + ");");
             w.Close();
         }
 
-        // Copies each field at its packed offset, through the positional view unless the projection named the fields directly.
-        void Transfers(string view, System.Func<string, string, string> transfer)
+        // Copies each scalar at its packed offset, through the positional view unless the projection named the fields directly.
+        void Transfers(string view, bool write, System.Func<string, string, string> transfer,
+            System.Collections.Generic.HashSet<string> used = null)
         {
             if (!model.ViewElided)
                 w.Line("ref var " + view + " = ref LuminPackMarshal.As<" + type + ", " + model.View + ">(ref " + w.A("Unsafe") + ".AsRef(in value));");
-            int offset = 0;
-            for (int index = 0; index < model.Members.Length; index++)
+            used ??= new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+            int offset = 0, index = 0;
+            foreach (var leaf in model.PortableView.Leaves)
             {
-                string field = "F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                w.Line(transfer(w.A("Unsafe") + ".Add(ref portableWire, " + offset.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")",
-                    model.ViewElided ? "value." + field : view + "." + field));
-                offset += model.Members[index].Size;
+                string field = model.ViewElided ? "value." + leaf.Access : view + "." + leaf.Access;
+                if (write && leaf.Volatile)
+                {
+                    // A volatile write reads the field once into a snapshot, as a ref to volatile storage is illegal.
+                    string stem = "portableField" + (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "Snapshot";
+                    string snapshot = stem;
+                    for (int count = 2; !used.Add(snapshot); count++)
+                        snapshot = stem + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    w.Line("var " + snapshot + " = " + field + ";");
+                    field = snapshot;
+                }
+                string address = w.A("Unsafe") + ".Add(ref portableWire, " + offset.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")";
+                w.Line(write ? transfer(address, field) : field + " = " + (leaf.Scalar == "bool"
+                    ? w.A("LuminPackInputPolicy") + ".ReadBoolean(ref " + address + ");"
+                    : w.A("LuminPackReader") + ".Read<" + leaf.Scalar + ">(ref " + address + ");"));
+                offset += leaf.Size;
+                index++;
             }
         }
     }

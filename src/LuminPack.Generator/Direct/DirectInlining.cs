@@ -95,7 +95,7 @@ internal static class DirectInlining
     /// <summary>Counts a portable struct operation's template calls: the span index and reference, the advance, the view
     /// (marshal and address) per branch, and per field its offset and transfer in each branch; a read also checks the span and the advance.</summary>
     private static int PortableCount(DirectTypeModel model, bool write)
-        => write ? 7 + 4 * model.Members.Length : 7 + 2 * model.Members.Length;
+        => write ? 7 + 4 * model.PortableView.Leaves.Length : 7 + 2 * model.PortableView.Leaves.Length;
 
     /// <summary>Whether a constructed read keeps its aggressive inlining hint: the null marker, the existing-instance call,
     /// one decode per member and the mirror views of both construction branches.</summary>

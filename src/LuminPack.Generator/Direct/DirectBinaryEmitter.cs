@@ -516,7 +516,7 @@ internal static partial class DirectBinaryEmitter
     }
 
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
-    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, bool union)
+    private static List<string> WriteBody(DirectTypeModel model, DirectWriter w, bool union, bool structValue = false)
     {
         var members = model.Members;
         var body = new List<string>();
@@ -529,7 +529,7 @@ internal static partial class DirectBinaryEmitter
             body.Add("int boundedStart = writer.Position;");
             body.Add("writer.EnsureAdditionalCapacity(" + model.Bounded.Value.ToString(CultureInfo.InvariantCulture) + ");");
         }
-        if (!union)
+        if (!union && !structValue)
         {
             body.Add("if (value is null)");
             body.Add("{");
