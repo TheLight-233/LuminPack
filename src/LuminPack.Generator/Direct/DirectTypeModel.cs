@@ -356,7 +356,7 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         // The constructed read stores each member in a temporary local, so it is limited after the members are reduced.
         var constructedMembers = !raw && selectedConstructor;
         var attributes = type.GetAttributes().Where(attribute => !Foreign(attribute) && !StructLayoutOption(attribute) && !StructLayoutAttribute(attribute)).ToArray();
-        if (attributes.Length != 1 || !(versioned ? VersionedPackable(attributes[0]) : PlainPackable(attributes[0])))
+        if (!PackableAttributes(attributes, versioned))
             return DirectEmission.Reject<DirectTypeModel>("type attributes: " + string.Join("+", attributes.Select(attribute =>
                 attribute.AttributeClass?.Name + "(" + attribute.ConstructorArguments.Length + "," + attribute.NamedArguments.Length + ")")));
         // Members without storage in the instance and without attributes, such as methods, computed properties and static
@@ -569,6 +569,33 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
         => attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE && attribute.NamedArguments.Length == 0 &&
             attribute.ConstructorArguments.All(argument => argument.Kind == TypedConstantKind.Enum &&
                 System.Convert.ToInt64(argument.Value, System.Globalization.CultureInfo.InvariantCulture) == 0);
+
+    /// <summary>Accepts the packable attribute of the generation mode plus an explicit default input policy, whose generated
+    /// roots are identical to an undeclared trusted declaration.</summary>
+    private static bool PackableAttributes(AttributeData[] attributes, bool versioned)
+    {
+        bool packable = false;
+        foreach (var attribute in attributes)
+        {
+            if (versioned ? VersionedPackable(attribute) : PlainPackable(attribute))
+            {
+                if (packable)
+                    return false;
+                packable = true;
+                continue;
+            }
+            if (ExplicitTrustedInput(attribute))
+                continue;
+            return false;
+        }
+        return packable;
+    }
+
+    /// <summary>Accepts <c>[LuminPackOption(UntrustedData = true)]</c>, which restates the default input policy.</summary>
+    private static bool ExplicitTrustedInput(AttributeData attribute)
+        => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOptionAttribute" &&
+            attribute.ConstructorArguments.Length == 0 && attribute.NamedArguments.Length == 1 &&
+            attribute.NamedArguments[0].Key == "UntrustedData" && attribute.NamedArguments[0].Value.Value is true;
 
     /// <summary>Accepts an attribute of another library, such as another serializer's <c>[Key(0)]</c>, which the analysis never reads:
     /// its class name does not start with LuminPack, and its outermost namespace is not LuminPack, System, Microsoft or Unity.</summary>
