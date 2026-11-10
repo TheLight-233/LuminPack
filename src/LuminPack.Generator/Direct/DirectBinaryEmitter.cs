@@ -28,7 +28,7 @@ internal static partial class DirectBinaryEmitter
         bool genericWrite = model.Version != null || model.ProfilePayload || model.InlineArray;
         // A fixed member or an inline object of fixed members needs no profile; anything else, including a string in an inline
         // object, does.
-        bool genericRead = model.Version != null || model.ProfilePayload || model.InlineArray ||
+        bool genericRead = model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
             members.Any(member => member.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Object));
         bool allFixed = members.All(member => member.IsFixed);
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
@@ -373,10 +373,18 @@ internal static partial class DirectBinaryEmitter
             if (generic)
                 w.Indented(() => w.Line(Constraint()));
             w.Open();
-            foreach (string line in body)
+            for (int index = 0; index < body.Count; index++)
             {
+                string line = body[index];
                 if (line.Length == 0)
-                    w.Blank();
+                {
+                    // A blank requested before an opening brace is a separator between two statement blocks, which the
+                    // opening brace would otherwise drop.
+                    if (index + 1 < body.Count && body[index + 1] == "{")
+                        w.HardBlank();
+                    else
+                        w.Blank();
+                }
                 else if (line == "}")
                     w.Close();
                 else if (line == "};")
@@ -626,14 +634,23 @@ internal static partial class DirectBinaryEmitter
             body.Add("writer.Cursor = (byte)" + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
             body.Add("writer.Advance(1);");
         }
-        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal));
+        int ends = 0;
+        AddStreamWrite(body, model, "value", 0, w, new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 }, ref ends);
         ReduceInlineNames(body);
         return body;
     }
 
     /// <summary>Writes the members of a stream record or of one of its inline objects.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="model">The record written at this depth.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="depth">The inline nesting depth, which names the inline locals.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method; the root's own value local holds the
+    /// first occurrence of the list alias name.</param>
+    /// <param name="ends">The exit label counter shared by the whole method.</param>
     private static void AddStreamWrite(List<string> body, DirectTypeModel model, string owner, int depth, DirectWriter w,
-        Dictionary<string, int> names)
+        Dictionary<string, int> names, ref int ends)
     {
         var members = model.Members;
         for (int index = 0; index < members.Length; index++)
@@ -660,10 +677,10 @@ internal static partial class DirectBinaryEmitter
                 body.Add("{");
                 body.Add("writer.Cursor = (byte)" + member.Nested.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
                 body.Add("writer.Advance(1);");
-                AddStreamWrite(body, member.Nested, name, depth + 1, w, names);
+                AddStreamWrite(body, member.Nested, name, depth + 1, w, names, ref ends);
                 body.Add("}");
-                // An inline object leaves a blank line before a following fixed field, as the original template does.
-                if (index + 1 < members.Length && members[index + 1].IsFixed)
+                // An inline object leaves a blank line before a following field unless that field opens another inline object.
+                if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
                     body.Add("");
                 continue;
             }
@@ -671,6 +688,29 @@ internal static partial class DirectBinaryEmitter
             if (member.Kind == DirectMemberKind.Array)
             {
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                continue;
+            }
+            // A list inside an inline object expands its generated null header and span store, whose failure exits through
+            // a method-wide label. Its write needs no profile, unlike its read.
+            if (member.Kind == DirectMemberKind.List)
+            {
+                string local = RoleName(names, "value");
+                body.Add("{");
+                body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+                body.Add("if (" + local + " is null)");
+                body.Add("{");
+                body.Add("writer.EnsureAdditionalCapacity(4);");
+                body.Add("writer.Write(-1);");
+                body.Add("goto end" + ends.ToString(CultureInfo.InvariantCulture) + ";");
+                body.Add("}");
+                body.Add("");
+                body.Add("writer.Write<" + member.Scalar + ">(LuminPackMarshal.GetListSpan(" + local + "), " + local + ".Count);");
+                body.Add("end" + ends.ToString(CultureInfo.InvariantCulture) + ":");
+                body.Add("\t;");
+                body.Add("}");
+                ends++;
+                if (index + 1 < members.Length && !StartsInlineObject(members[index + 1]))
+                    body.Add("");
                 continue;
             }
             int last = RunEnd(members, index);
@@ -700,6 +740,18 @@ internal static partial class DirectBinaryEmitter
         names[raw] = count;
         return count == 1 ? raw : raw + count.ToString(CultureInfo.InvariantCulture);
     }
+
+    /// <summary>Spells a role local without a depth suffix, as the expanded list write names the field alias it holds.</summary>
+    private static string RoleName(Dictionary<string, int> names, string role)
+    {
+        int count = names.TryGetValue(role, out int seen) ? seen + 1 : 1;
+        names[role] = count;
+        return count == 1 ? role : role + count.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Whether a member's write opens with a local declaration, which the presentation keeps directly under the
+    /// preceding block instead of separating it with a blank line.</summary>
+    private static bool StartsInlineObject(DirectMember member) => member.Kind == DirectMemberKind.Object && !member.Nested.MemberWrite;
 
     /// <summary>Drops the depth suffix of an inline local whose purely alphabetic stem is otherwise unused, as the presentation
     /// does.</summary>
@@ -1141,8 +1193,8 @@ internal static partial class DirectBinaryEmitter
                 body.Add("reader.Read<" + Profile + ">(ref " + owner + "." + member.Name + ");");
                 continue;
             }
-            // An array member reads through the same generated formatter its write calls.
-            if (member.Kind == DirectMemberKind.Array)
+            // An array or list member reads through its generated formatter, which keeps its own framing and profile.
+            if (member.Kind is DirectMemberKind.Array or DirectMemberKind.List)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;

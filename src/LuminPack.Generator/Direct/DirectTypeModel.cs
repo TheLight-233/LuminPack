@@ -135,6 +135,10 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
     /// parent's roots generic; a top-level array keeps its own non-generic write.</summary>
     internal bool InlineArray => Members.Any(member => member.Kind == DirectMemberKind.Object &&
         (member.Nested.Members.Any(item => item.Kind == DirectMemberKind.Array) || member.Nested.InlineArray));
+    /// <summary>A list inside an inline object reads through its generated formatter with the operation's profile, which makes
+    /// the parent's read root generic; its write expands inline and needs no profile, as a top-level list does.</summary>
+    internal bool InlineList => Members.Any(member => member.Kind == DirectMemberKind.Object &&
+        (member.Nested.Members.Any(item => item.Kind == DirectMemberKind.List) || member.Nested.InlineList));
     /// <summary>The positional storage view of a portable struct, whose fields are copied one by one at packed wire offsets, or null.</summary>
     internal readonly string View;
     /// <summary>Whether the portable view is elided: every positional view name is also a field name of the struct, so the
@@ -605,7 +609,8 @@ internal sealed class DirectTypeModel : IEquatable<DirectTypeModel>
             var nested = TryCreate(LuminPackSourceGenerator.GetSerializationMetadata(objectType, compilation, metadata), compilation, metadata);
             if (nested == null || nested.IsStruct || nested.Mirror != null || nested.Version != null ||
                 nested.ConstructorArguments != null || nested.Members.Length == 0 ||
-                nested.Members.Any(item => item.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or DirectMemberKind.Object or DirectMemberKind.Array)))
+                nested.Members.Any(item => item.Kind is not (DirectMemberKind.Fixed or DirectMemberKind.Text or DirectMemberKind.Object or
+                    DirectMemberKind.Array or DirectMemberKind.List)))
                 return DirectEmission.Reject<DirectMember>("nested object member");
             bool text = nested.Members.Any(item => item.Kind == DirectMemberKind.Text);
             if (text && (!nested.MemberWrite || nested.Members.Any(item => item.Kind == DirectMemberKind.Object)))

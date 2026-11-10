@@ -233,6 +233,16 @@ internal sealed class DirectWriter
             _pendingBlank = true;
     }
 
+    /// <summary>Appends a blank line at once, which a following opening brace keeps, as the original body separates two
+    /// statement blocks.</summary>
+    internal void HardBlank()
+    {
+        if (Suppressed)
+            return;
+        _pendingBlank = false;
+        _body.Append(Environment.NewLine);
+    }
+
     /// <summary>Opens a brace block.</summary>
     internal void Open()
     {
