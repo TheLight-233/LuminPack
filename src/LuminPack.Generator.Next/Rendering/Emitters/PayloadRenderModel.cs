@@ -35,6 +35,8 @@ internal enum RenderMemberKind : byte
     Parameter,
     /// <summary>A culture-info member, written and read through its shared generated formatter owner.</summary>
     CultureInfo,
+    /// <summary>A framework member, written and read through its shared generated formatter owner.</summary>
+    Special,
     /// <summary>A collection read and written through a generated owner with static element forwarding.</summary>
     ForwardedCollection,
     /// <summary>A <c>ConcurrentQueue&lt;T&gt;</c> member, written in place and read through its shared generated formatter owner.</summary>
@@ -328,7 +330,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ConcurrentQueue or
             RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or
             RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or RenderMemberKind.ImmutableQueue or
             RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag;
@@ -349,7 +351,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind is RenderMemberKind.SortedList or RenderMemberKind.PairList && member.Collection.ValueText ||
         member.Kind == RenderMemberKind.NestedList && member.Nested.ProfilePayload ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.ForwardedCollection ||
+        member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection ||
         (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray &&
             (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload)) ||
         member.Kind == RenderMemberKind.Object && member.Nested.ProfilePayload);

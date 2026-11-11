@@ -480,6 +480,9 @@ internal static class TypeModelFactory
             if (IsCultureInfo(type))
                 return new CultureInfoMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty, CanReuseCultureInfo);
+            if (Special(type) is { } specialKind)
+                return new SpecialMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    specialKind, type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty);
             if (type is IArrayTypeSymbol array)
             {
                 // No shared owner frames an array of culture values, and a payload-long formatter is not published.
@@ -3431,6 +3434,26 @@ internal static class TypeModelFactory
     private static bool IsCultureInfo(ITypeSymbol type)
         => type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } named &&
            named.ContainingNamespace.ToDisplayString() == "System.Globalization" && named.Name == "CultureInfo";
+
+    /// <summary>Recognizes a framework type the shared formatter owners write as one record.</summary>
+    /// <param name="type">The declared member type.</param>
+    /// <returns>The framework formatter, or null for every other type.</returns>
+    private static SpecialKind? Special(ITypeSymbol type)
+    {
+        if (type is not INamedTypeSymbol { IsGenericType: false } named)
+            return null;
+        return (named.ContainingNamespace.ToDisplayString(), named.Name) switch
+        {
+            ("System", "Uri") => SpecialKind.Uri,
+            ("System", "Version") => SpecialKind.Version,
+            ("System.Numerics", "BigInteger") => SpecialKind.BigInteger,
+            ("System.Collections", "BitArray") => SpecialKind.BitArray,
+            ("System.Text", "StringBuilder") => SpecialKind.StringBuilder,
+            ("System", "Type") => SpecialKind.Type,
+            ("System", "TimeZoneInfo") => SpecialKind.TimeZoneInfo,
+            _ => null,
+        };
+    }
 
     /// <summary>Spells a covered fixed scalar.</summary>
     /// <param name="type">The member or leaf type.</param>

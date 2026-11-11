@@ -13,7 +13,9 @@ The corpus now publishes its IntArray, ListOfInt, String and Int shared formatte
 generated trees compile without the legacy generator. Other collection, scalar and dictionary owners, the serializer
 facade, versioned structs, the remaining constructor/callback/pool shapes, the remaining special
 framework types (immutable, concurrent and other original-pipeline families) and analysis diagnostics
-remain on the migration plan. CultureInfo is supported end-to-end as the special-type pilot.
+remain on the migration plan. CultureInfo and the first framework owner group (<c>Uri</c>, <c>Version</c>,
+<c>BigInteger</c>, <c>BitArray</c>, <c>StringBuilder</c>, <c>Type</c> and <c>TimeZoneInfo</c>) are
+supported end-to-end.
 
 ## 1. Design philosophy
 
@@ -328,7 +330,7 @@ pipeline; P2 improves the product.
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
 | M-19 | Untrusted-input fuzzing and one-exception contract | Analysis + Runtime | M-09 | Crafted inputs cannot crash, over-allocate or instantiate undeclared types | P2 |
 | M-20 | JSON name and layout parity with the old pipeline | Rendering | M-10 | JSON payload files are byte-identical on the corpus | P2 |
-| M-21 | Special framework types: CultureInfo, the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for every raw scalar, `string` and string-bearing packable classes, and `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableQueue<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>`/`ConcurrentStack<T>`/`ConcurrentBag<T>` for every raw scalar landed; the remaining element shapes, the other concurrent and immutable collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
+| M-21 | Special framework types: CultureInfo, <c>Uri</c>, <c>Version</c>, <c>BigInteger</c>, <c>BitArray</c>, <c>StringBuilder</c>, <c>Type</c> and <c>TimeZoneInfo</c> as shared owners, the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for every raw scalar, `string` and string-bearing packable classes, and `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableQueue<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>`/`ConcurrentStack<T>`/`ConcurrentBag<T>` for every raw scalar landed; the remaining element shapes, the other concurrent and immutable collections and the other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
 
 ## 6. Decisions and constraints
 

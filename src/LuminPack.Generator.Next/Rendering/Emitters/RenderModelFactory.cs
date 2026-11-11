@@ -344,6 +344,10 @@ internal static class RenderModelFactory
                 return new RenderMember(culture.Name, RenderMemberKind.CultureInfo, culture.Declared, culture.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, culture.Declared), ScalarKind.Other, mirrored,
                     property: property);
+            case SpecialMember special:
+                return new RenderMember(special.Name, RenderMemberKind.Special, special.Kind.ToString(), special.Declared, 0,
+                    "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
+                    property: property);
             case CollectionMember collection:
                 return Collection(collection, extension, options);
             case DictionaryMember dictionary:

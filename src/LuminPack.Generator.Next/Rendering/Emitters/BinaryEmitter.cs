@@ -974,6 +974,13 @@ internal static partial class BinaryEmitter
                 index++;
                 continue;
             }
+            // A framework member writes through its shared formatter owner, which frames its own null record.
+            if (member.Kind == RenderMemberKind.Special)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                index++;
+                continue;
+            }
             // A concurrent queue, immutable stack, list or tree-storage set writes its counted payload in place.
             if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableArray or
                 RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or
@@ -2016,6 +2023,12 @@ internal static partial class BinaryEmitter
                 AddCultureInfoWrite(body, member, owner, w, names, ref ends);
                 continue;
             }
+            // A framework member writes through its shared formatter owner, which frames its own null record.
+            if (member.Kind == RenderMemberKind.Special)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                continue;
+            }
             if (member.Kind == RenderMemberKind.ForwardedCollection)
             {
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
@@ -2188,7 +2201,7 @@ internal static partial class BinaryEmitter
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     private static bool IsInlineSegment(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ConcurrentQueue or
             RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or
             RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or RenderMemberKind.ImmutableQueue or
             RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag;
@@ -2879,6 +2892,12 @@ internal static partial class BinaryEmitter
             }
             // A culture-info member reads through its shared formatter owner, which handles its own null marker.
             if (member.Kind == RenderMemberKind.CultureInfo)
+            {
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                continue;
+            }
+            // A framework member reads through its shared formatter owner, which handles its own null record.
+            if (member.Kind == RenderMemberKind.Special)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;

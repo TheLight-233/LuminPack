@@ -24,6 +24,27 @@ internal enum SharedFormatterKind
 
     /// <summary>The <c>System.Collections.Immutable.ImmutableArray&lt;string&gt;</c> roots and owner class.</summary>
     ImmutableArrayOfString = 32,
+
+    /// <summary>The <c>System.Uri</c> roots and owner class.</summary>
+    Uri = 64,
+
+    /// <summary>The <c>System.Version</c> roots and owner class.</summary>
+    Version = 128,
+
+    /// <summary>The <c>System.Numerics.BigInteger</c> roots and owner class.</summary>
+    BigInteger = 256,
+
+    /// <summary>The <c>System.Collections.BitArray</c> roots and owner class.</summary>
+    BitArray = 512,
+
+    /// <summary>The <c>System.Text.StringBuilder</c> roots and owner class.</summary>
+    StringBuilder = 1024,
+
+    /// <summary>The <c>System.Type</c> roots and owner class.</summary>
+    Type = 2048,
+
+    /// <summary>The <c>System.TimeZoneInfo</c> roots and owner class.</summary>
+    TimeZoneInfo = 4096,
 }
 
 /// <summary>One closed sequence owner the compilation must publish.</summary>
@@ -241,6 +262,10 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                     owners |= SharedFormatterKind.CultureInfo;
                     cultureInfoReuse |= culture.CanReuse;
                     break;
+                // A framework member always publishes its own owner; every direct write path calls the owner in place.
+                case SpecialMember special:
+                    owners |= SpecialFlag(special.Kind);
+                    break;
                 case CollectionMember collection:
                     Collect(collection, options, facts, scalars, ref owners,
                         ref cultureInfoReuse, visited);
@@ -270,6 +295,20 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <returns>Whether the payload renders with the shared culture-info owner.</returns>
     private static bool CultureInfoRenders(TypeModel model) => model is RecordModel { Versioned: false } record &&
         !record.Members.Any(member => member is DictionaryMember);
+
+    /// <summary>Maps a framework member kind onto the owner flag its shared formatter requires.</summary>
+    /// <param name="kind">The framework formatter.</param>
+    /// <returns>The owner flag.</returns>
+    private static SharedFormatterKind SpecialFlag(SpecialKind kind) => kind switch
+    {
+        SpecialKind.Uri => SharedFormatterKind.Uri,
+        SpecialKind.Version => SharedFormatterKind.Version,
+        SpecialKind.BigInteger => SharedFormatterKind.BigInteger,
+        SpecialKind.BitArray => SharedFormatterKind.BitArray,
+        SpecialKind.StringBuilder => SharedFormatterKind.StringBuilder,
+        SpecialKind.Type => SharedFormatterKind.Type,
+        _ => SharedFormatterKind.TimeZoneInfo,
+    };
 
     private static void Collect(CollectionMember member, GeneratorOptions options,
         List<SequenceOwnerFact> facts, List<string> scalars,

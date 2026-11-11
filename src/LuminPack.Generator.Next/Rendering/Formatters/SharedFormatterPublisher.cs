@@ -11,6 +11,13 @@ internal static class SharedFormatterPublisher
 {
     private const string StringHint = "LuminPack.SharedFormatters/String.g.cs";
     private const string CultureInfoHint = "LuminPack.SharedFormatters/CultureInfo.g.cs";
+    private const string UriHint = "LuminPack.SharedFormatters/Uri.g.cs";
+    private const string VersionHint = "LuminPack.SharedFormatters/Version.g.cs";
+    private const string BigIntegerHint = "LuminPack.SharedFormatters/BigInteger.g.cs";
+    private const string BitArrayHint = "LuminPack.SharedFormatters/BitArray.g.cs";
+    private const string StringBuilderHint = "LuminPack.SharedFormatters/StringBuilder.g.cs";
+    private const string TypeHint = "LuminPack.SharedFormatters/Type.g.cs";
+    private const string TimeZoneInfoHint = "LuminPack.SharedFormatters/TimeZoneInfo.g.cs";
     private const string ConcurrentQueueOfStringHint = "LuminPack.SharedFormatters/ConcurrentQueueOfString.g.cs";
     private const string ImmutableArrayOfStringHint = "LuminPack.SharedFormatters/ImmutableArrayOfString.g.cs";
     private const string ImmutableCandidateHint = "LuminPack.SharedFormatters/ImmutableCandidateCache.g.cs";
@@ -27,6 +34,20 @@ internal static class SharedFormatterPublisher
             production.AddSource(StringHint, StringOwnerFile.Render(set, operations));
         if ((set.Owners & SharedFormatterKind.CultureInfo) != 0)
             production.AddSource(CultureInfoHint, CultureInfoOwnerFile.Render(set, operations));
+        if ((set.Owners & SharedFormatterKind.Uri) != 0)
+            production.AddSource(UriHint, UriOwnerFile.Render(set, operations));
+        if ((set.Owners & SharedFormatterKind.Version) != 0)
+            production.AddSource(VersionHint, VersionOwnerFile.Render(set, operations));
+        if ((set.Owners & SharedFormatterKind.BigInteger) != 0)
+            production.AddSource(BigIntegerHint, BigIntegerOwnerFile.Render(set, operations));
+        if ((set.Owners & SharedFormatterKind.BitArray) != 0)
+            production.AddSource(BitArrayHint, BitArrayOwnerFile.Render(set, operations));
+        if ((set.Owners & SharedFormatterKind.StringBuilder) != 0)
+            production.AddSource(StringBuilderHint, StringBuilderOwnerFile.Render(set, operations));
+        if ((set.Owners & SharedFormatterKind.Type) != 0)
+            production.AddSource(TypeHint, TypeOwnerFile.Render(set, operations));
+        if ((set.Owners & SharedFormatterKind.TimeZoneInfo) != 0)
+            production.AddSource(TimeZoneInfoHint, TimeZoneInfoOwnerFile.Render(set, operations));
         if ((set.Owners & SharedFormatterKind.ConcurrentQueueOfString) != 0)
             production.AddSource(ConcurrentQueueOfStringHint, ConcurrentQueueStringOwnerFile.Render(set, operations));
         if ((set.Owners & SharedFormatterKind.ImmutableArrayOfString) != 0)
