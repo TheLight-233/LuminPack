@@ -246,6 +246,10 @@ internal sealed class CallbackModel : IEquatable<CallbackModel>
 /// <summary>An ordinary class record, optionally version-tolerant.</summary>
 internal sealed class RecordModel : TypeModel
 {
+    /// <summary>The first input-selected shape an explicitly untrusted graph reaches, or null.</summary>
+    /// <remarks>A rejected payload publishes its ordinary roots, and every operation fails closed with this reason.</remarks>
+    internal readonly string? Rejection;
+
     /// <summary>The base-first Local declarations of an inherited storage contract.</summary>
     internal readonly StorageMirrorModel[] Mirrors;
     /// <summary>Whether the record writes a version schema prefix.</summary>
@@ -296,9 +300,11 @@ internal sealed class RecordModel : TypeModel
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
-        ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null)
+        ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null,
+        string? rejection = null)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
+        Rejection = rejection;
         Rent = rent;
         Callbacks = callbacks;
         Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
@@ -321,7 +327,7 @@ internal sealed class RecordModel : TypeModel
         other is RecordModel record && base.Equals(other) && Mirrors.SequenceEqual(record.Mirrors) && Versioned == record.Versioned &&
         FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
-        Mirror == record.Mirror && Rent == record.Rent && Equals(Constructor, record.Constructor) &&
+        Mirror == record.Mirror && Rent == record.Rent && Rejection == record.Rejection && Equals(Constructor, record.Constructor) &&
         Equals(Callbacks, record.Callbacks) &&
         MirrorLayout == record.MirrorLayout && Equals(Version, record.Version) &&
         (ReferenceEquals(MirrorFields, record.MirrorFields) || MirrorFields != null && record.MirrorFields != null &&

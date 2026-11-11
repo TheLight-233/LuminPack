@@ -52,10 +52,15 @@ internal static class JsonEmitter
         w.Line("internal static void RootWriteJson" + Arguments(Profile) + "(scoped ref " + jsonWriter + " writer, " + input + type + nullable + " input)");
         w.Indented(() => w.Line(ConstraintLine(true)));
         w.Open();
-        var names = new JsonTable();
-        var writeBody = WriteBody(model, w, helper, names);
-        JsonTable.Resolve(writeBody);
-        Lines(w, writeBody);
+        if (model.Rejection != null)
+            w.Line(BinaryEmitter.RejectUnsupported(model.Rejection));
+        else
+        {
+            var names = new JsonTable();
+            var writeBody = WriteBody(model, w, helper, names);
+            JsonTable.Resolve(writeBody);
+            Lines(w, writeBody);
+        }
         w.Close();
         w.Blank();
         w.Suppressed = !reads;
@@ -63,7 +68,10 @@ internal static class JsonEmitter
         w.Line("internal static void RootReadJson" + Arguments(Profile) + "(scoped ref " + jsonReader + " reader, scoped ref " + type + nullable + " value)");
         w.Indented(() => w.Line(ConstraintLine(true)));
         w.Open();
-        ReadBody(model, w, helper);
+        if (model.Rejection != null)
+            w.Line(BinaryEmitter.RejectUnsupported(model.Rejection));
+        else
+            ReadBody(model, w, helper);
         w.Close();
         w.Suppressed = false;
         w.Close();

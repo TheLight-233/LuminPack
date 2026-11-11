@@ -296,6 +296,13 @@ internal static partial class TypeModelFactory
             string[] constraints = TypeConstraints(symbol);
             PayloadKind kind = Kind(symbol, generatorType);
             WirePolicy policy = TypePolicy(symbol, kind);
+            // An explicit hostile-input declaration rejects input-selected shapes in both directions; the implicit default keeps
+            // them working with checked reads.
+            if (policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit && symbol.TypeKind == TypeKind.Class &&
+                kind != PayloadKind.Union && Rejection(symbol) is { } rejection)
+                return new RecordModel(identity, accessibility, Array.Empty<MemberModel>(), policy, constraints, versioned: false,
+                    fixedUnionCase: false, derived: false, proven: false, recordWidth: false, freshResult: false, mirror: null,
+                    mirrorFields: null, mirrorOffsets: null, mirrorLayout: null, version: null, rejection: rejection);
 
             switch (kind)
             {

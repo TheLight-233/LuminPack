@@ -462,6 +462,9 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>Whether any serialization callback runs, which keeps the type out of the named member write.</summary>
     internal bool HasCallbacks => WriteBefore.Length != 0 || WriteAfter.Length != 0 || ReadBefore.Length != 0 || ReadAfter.Length != 0;
 
+    /// <summary>The reason every operation of an explicitly untrusted payload fails closed, or null.</summary>
+    internal readonly string Rejection;
+
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -473,8 +476,10 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
-        string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null)
+        string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
+        string rejection = null)
     {
+        Rejection = rejection;
         Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
         CircleSlots = circleSlots ?? Array.Empty<int>();
         CircleWidths = circleWidths ?? Array.Empty<int>();

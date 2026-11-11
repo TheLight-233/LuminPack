@@ -21,6 +21,12 @@ internal static partial class BinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="operations">The operations the project calls. The members of the others are left out, as the operation
     /// filter removes them from a finished file; the declarations that hold them stay.</param>
+    /// <summary>Spells the fail-closed body of a rejected payload operation.</summary>
+    /// <param name="reason">The first rejected shape.</param>
+    /// <returns>The statement.</returns>
+    internal static string RejectUnsupported(string reason) => "global::LuminPack.Security.LuminPackInputPolicy.RejectUnsupported(" +
+        Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(reason, true) + ");";
+
     internal static void Emit(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
     {
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
@@ -506,6 +512,9 @@ internal static partial class BinaryEmitter
 
         void Method(List<string> body, string name, bool generic, string parameters, string attribute, string returns = "void")
         {
+            // An explicitly untrusted graph that reaches an input-selected shape fails closed in both directions.
+            if (model.Rejection != null)
+                body = new List<string> { RejectUnsupported(model.Rejection) };
             w.Line(w.Preserve);
             if (attribute != null)
                 w.Line(attribute);
