@@ -178,6 +178,43 @@ public sealed class NextGenerator : IIncrementalGenerator
         });
         InitializeEntries(context, collected, calls, sharedFormatters);
         InitializeBoundedRoots(context, collected, sharedFormatters);
+        InitializeImplicitPayloads(context, collected);
+    }
+
+    /// <summary>Publishes the unannotated classes that complete payloads expand as nested objects.</summary>
+    /// <remarks>Such a class has no declaration of its own to drive a per-payload output, so it is rendered once from the payloads
+    /// that reach it, with the same binary and JSON renderers.</remarks>
+    private static void InitializeImplicitPayloads(IncrementalGeneratorInitializationContext context,
+        IncrementalValueProvider<System.Collections.Immutable.ImmutableArray<ModeledPayload>> collected)
+    {
+        context.RegisterSourceOutput(collected, static (production, payloads) =>
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var pending = new Stack<(TypeModel Model, GeneratorOptions Options)>();
+            foreach (ModeledPayload payload in payloads)
+                if (payload.Result.IsComplete && payload.Result.Model is { } model)
+                    pending.Push((model, payload.Options));
+            while (pending.Count != 0)
+            {
+                var (model, options) = pending.Pop();
+                foreach (MemberModel member in model.Members)
+                    if (member is PayloadMember { Nested: RecordModel { Implicit: true } nested } && seen.Add(nested.Identity.GlobalName))
+                    {
+                        pending.Push((nested, options));
+                        try
+                        {
+                            var renderContext = new RenderContext(options, AliasTable.For(options.AvailableAliases));
+                            Emit(production, nested, renderContext, BinaryRenderer.Instance.Render(nested, renderContext), ".Implicit");
+                            Emit(production, nested, renderContext, JsonRenderer.Instance.Render(nested, renderContext), ".Implicit.Json");
+                        }
+                        catch (Exception error) when (error is not OperationCanceledException)
+                        {
+                            production.ReportDiagnostic(DiagnosticDescriptors.Create(
+                                DiagnosticInfo.Unlocated(DiagnosticDescriptors.GeneratorFailure.Id, error.Message)));
+                        }
+                    }
+            }
+        });
     }
 
     /// <summary>Reports whether a payload is an untrusted record root with declared collection, string or depth limits.</summary>

@@ -168,6 +168,9 @@ internal static partial class TypeModelFactory
                 ValidateImportedStorage(named, member, ref diagnostics);
                 return;
             }
+            // A concrete plain class is expanded inline as a nested object and needs no declaration.
+            if (IsImplicitInlineClass(named))
+                return;
             string name = named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty);
             if (SequenceKind(named) != null || DictionaryKind(named) != null || GenericIdentity.Of(FormatterSpelling(named)) != null)
             {

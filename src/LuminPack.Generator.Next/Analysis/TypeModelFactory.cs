@@ -276,7 +276,8 @@ internal static partial class TypeModelFactory
         {
             var attribute = symbol.GetAttributes().FirstOrDefault(item =>
                 item.AttributeClass?.ToDisplayString() == PackableAttribute);
-            if (attribute == null)
+            // A plain class reached as a member is expanded like a nested object record without its own declaration.
+            if (attribute == null && !IsImplicitInlineClass(symbol))
             {
                 issues.Add("not a LuminPackable declaration");
                 return null;
@@ -303,7 +304,7 @@ internal static partial class TypeModelFactory
                 return null;
             }
 
-            string generatorType = GeneratorTypeName(attribute);
+            string generatorType = attribute == null ? "Object" : GeneratorTypeName(attribute);
             if (generatorType is "NonGenerator" or "Custom")
             {
                 issues.Add("generator type '" + generatorType + "' owns its formatter outside the payload renderers");
@@ -411,7 +412,7 @@ internal static partial class TypeModelFactory
                         constructor, callbacks, rent, (mirror != null || versioned) ? CaptureMirrors(symbol, identity, issues) : Array.Empty<StorageMirrorModel>(),
                         // A declared depth limit counts nesting only on recursive records, including a trusted record read under
                         // a bounded root; without one, recursion keeps only its stack guard.
-                        recursive: IsRecursive(symbol));
+                        recursive: IsRecursive(symbol), implicitPayload: attribute == null);
                 }
             }
         }
@@ -1015,7 +1016,7 @@ internal static partial class TypeModelFactory
             List<string> issues, Path path)
         {
             string name = member.Name;
-            if (!IsPackable(type))
+            if (!IsPackable(type) && !IsImplicitInlineClass(type))
             {
                 // A type that mentions the definition's own parameters is written and read by the generic serializer.
                 if (member.Containing != null && MentionsOwnParameter(type, member.Containing))
@@ -3524,6 +3525,15 @@ internal static partial class TypeModelFactory
     /// <param name="symbol">The candidate type.</param>
     /// <returns>Whether the type declares a generated payload contract.</returns>
     private static bool IsPackable(INamedTypeSymbol symbol) => HasAttribute(symbol, PackableAttribute);
+
+    /// <summary>Whether an unannotated class is expanded inline as a nested object, as the original pipeline does.</summary>
+    /// <param name="type">The member type.</param>
+    /// <returns>Whether the class is a concrete, non-record, non-generic source class of this compilation.</returns>
+    /// <remarks>Abstract and record classes and separately formatted records still require <c>[LuminPackable]</c>.</remarks>
+    private static bool IsImplicitInlineClass(INamedTypeSymbol type) => type.TypeKind == TypeKind.Class && !type.IsAbstract &&
+        !type.IsStatic && !type.IsRecord && !type.IsGenericType && type.SpecialType == SpecialType.None &&
+        type.DeclaringSyntaxReferences.Length != 0 && !IsPackable(type) && !HasAttribute(type, UnionAttribute) &&
+        !(type.ContainingNamespace?.ToDisplayString() ?? string.Empty).StartsWith("System", StringComparison.Ordinal);
 
     private const string CompressAttribute = "LuminPack.Attribute.LuminPackCompressAttribute";
 
