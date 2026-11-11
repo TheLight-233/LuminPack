@@ -361,6 +361,12 @@ internal static class RenderModelFactory
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,
                     0, "global::LuminPack." + element.Owner, ScalarKind.Other, mirrored, nested: element, property: property);
+            case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel nestedRecord } payload when Create(nestedRecord, options) != null:
+                // A nested record that cannot expand in place, such as one reached through mirrored storage, calls its own payload
+                // owner, which writes the same null marker, member count and members.
+                return new RenderMember(payload.Name, RenderMemberKind.Special, ReadableTypeName.Of(payload.Type.GlobalName),
+                    payload.Type.GlobalName, 0, "global::LuminPack." + GeneratedNames.Owner(extension, payload.Type.GlobalName),
+                    ScalarKind.Other, mirrored, property: property, referencePayload: true);
             case CollectionMember collection:
                 return Collection(collection, extension, options);
             case DictionaryMember dictionary:

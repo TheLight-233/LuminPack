@@ -326,7 +326,9 @@ public sealed class NextGenerator : IIncrementalGenerator
         {
             var entries = new List<KeyValuePair<string, RootEntry>>();
             foreach (ModeledPayload payload in input.Left)
-                if (payload.Result.IsComplete && payload.Result.Model is { } model && !model.Identity.IsGeneric)
+                // Only a payload whose roots are actually rendered can bind its calls.
+                if (payload.Result.IsComplete && payload.Result.Model is { } model && !model.Identity.IsGeneric &&
+                    (model is UnionModel or StructModel { StoragePlan: not null } || RenderModelFactory.Create(model, payload.Options) != null))
                 {
                     string type = model.Identity.GlobalName;
                     string profile = model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : RootEntry.DefaultProfile;
