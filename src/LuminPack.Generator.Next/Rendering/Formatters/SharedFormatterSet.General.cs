@@ -69,16 +69,21 @@ internal readonly partial struct SharedFormatterSet
         if (IsEmpty)
             return roots;
         foreach (string owner in Owners ?? System.Array.Empty<string>())
-            roots.Add(ReadableTypeName.Of(owner));
+            roots.Add(GeneratedNames.PayloadKey(owner));
         foreach (string scalar in Scalars ?? System.Array.Empty<string>())
-            roots.Add(ReadableTypeName.Of(scalar.Split('=')[0]));
+            roots.Add(GeneratedNames.PayloadKey(scalar.Split('=')[0]));
         foreach (DictionaryOwnerFact fact in DictionaryOwners ?? System.Array.Empty<DictionaryOwnerFact>())
-            roots.Add(ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)));
+            roots.Add(GeneratedNames.PayloadKey(fact.DeclaredType));
         foreach (SequenceOwnerFact fact in SequenceOwners ?? System.Array.Empty<SequenceOwnerFact>())
-            roots.Add(ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)));
+            roots.Add(GeneratedNames.PayloadKey(fact.DeclaredType));
         foreach (FormatterModel model in GeneralOwners ?? System.Array.Empty<FormatterModel>())
             if (model.Definition != FormatterDefinitions.PayloadReference || model.Payload != null && model.PublishPayload)
-                roots.Add(ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)));
+                roots.Add(GeneratedNames.PayloadKey(model.Type));
+        // Two payloads whose readable names coincide share one owner class name; neither binds statically.
+        var readable = new Dictionary<string, int>(System.StringComparer.Ordinal);
+        foreach (string key in roots)
+            readable[ReadableTypeName.Of(key)] = readable.TryGetValue(ReadableTypeName.Of(key), out int count) ? count + 1 : 1;
+        roots.RemoveWhere(key => readable[ReadableTypeName.Of(key)] > 1);
         return roots;
     }
 

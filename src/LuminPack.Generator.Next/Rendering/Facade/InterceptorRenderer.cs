@@ -658,8 +658,10 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
             return root;
         if (call.Root == null)
             return null;
-        string readable = Emitters.ReadableTypeName.Of(Emitters.GeneratedNames.PayloadKey(call.Payload));
-        return _extension != null && Shared.Contains(readable) ? new RootEntry(readable, RootEntry.DefaultProfile, binary: true,
+        // Shared roots are published by payload key: two payloads whose readable names coincide must not bind each other's owner.
+        string key = Emitters.GeneratedNames.PayloadKey(call.Payload);
+        string readable = Emitters.ReadableTypeName.Of(key);
+        return _extension != null && Shared.Contains(key) ? new RootEntry(readable, RootEntry.DefaultProfile, binary: true,
             json: true, owner: "global::LuminPack.Binary_" + _extension + "_" + readable) : null;
     }
 

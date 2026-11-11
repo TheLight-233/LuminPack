@@ -2184,9 +2184,15 @@ internal static partial class TypeModelFactory
         /// <summary>Recognizes unresolved generic arguments anywhere in a closed construction.</summary>
         /// <param name="type">The type to inspect.</param>
         /// <returns>Whether a type parameter remains.</returns>
-        private static bool ContainsTypeParameter(ITypeSymbol type)
-            => type is ITypeParameterSymbol || type is INamedTypeSymbol { IsGenericType: true } named &&
-                named.TypeArguments.Any(ContainsTypeParameter);
+        private static bool ContainsTypeParameter(ITypeSymbol type) => type switch
+        {
+            ITypeParameterSymbol => true,
+            // An array or pointer of an open element is open as well.
+            IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
+            IPointerTypeSymbol pointer => ContainsTypeParameter(pointer.PointedAtType),
+            INamedTypeSymbol { IsGenericType: true } named => named.TypeArguments.Any(ContainsTypeParameter),
+            _ => false,
+        };
 
         /// <summary>Checks whether any aggregate in the tree uses the runtime's automatic field order.</summary>
         /// <param name="plan">The analyzed storage.</param>

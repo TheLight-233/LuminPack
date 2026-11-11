@@ -76,13 +76,15 @@ internal static class SerializerCallAnalysis
         if (location == null)
             return null;
         // A nullable value root keeps its Nullable spelling; the shorthand loses the distinction in owner names.
-        string spelling = payload is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
-            ? "global::System.Nullable<" + nullable.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ">"
-            : payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        // Nested nullable value types are spelled as Nullable<T> too: owner keys drop '?' annotations, which would merge int? and int.
+        string spelling = payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(PayloadFormat);
         MemberModel? root = TypeModelFactory.TryCreateRoot(payload, context.SemanticModel.Compilation,
             Pipeline.GeneratorOptionsFactory.From(context.SemanticModel.Compilation));
         return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile);
     }
+
+    private static readonly SymbolDisplayFormat PayloadFormat = SymbolDisplayFormat.FullyQualifiedFormat
+        .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.ExpandNullable);
 
     private static bool IsClosed(ITypeSymbol type) => type.TypeKind is not (TypeKind.Error or TypeKind.TypeParameter or TypeKind.Dynamic) &&
         !ContainsTypeParameter(type);

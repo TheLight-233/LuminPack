@@ -61,17 +61,11 @@ internal static class SharedFormatterPublisher
                 ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)) + ".g.cs", render(set, fact, operations));
         }
 
-        bool candidateCache = false;
+        // The immutable candidate cache is declared by the post-initialization facade, as in the original serializer source.
         foreach (SequenceOwnerFact fact in set.SequenceOwners)
         {
             if (general.Contains(GeneratedNames.PayloadKey(fact.DeclaredType)))
                 continue;
-            if (!candidateCache && fact.Family.UsesCandidateCache && (operations & GeneratedOperations.BinaryRead) != 0)
-            {
-                yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/ImmutableCandidateCache.g.cs",
-                    ImmutableHashSetOwnerFile.RenderCache(set));
-                candidateCache = true;
-            }
             RenderSequenceOwner? render = fact.ForwardedType != null ? fact.Family.Forwarded :
                 fact.Element != null ? fact.Family.Payload : fact.Scalar == "string" ? fact.Family.Text : fact.Family.Scalar;
             if (render == null)
@@ -93,12 +87,6 @@ internal static class SharedFormatterPublisher
                     if (json.Length != 0) yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Payload_" + name + ".Json.g.cs", json);
                 }
                 continue;
-            }
-            if (!candidateCache && FormatterRegistry.FindSequence(model.Definition)?.UsesCandidateCache == true &&
-                (operations & GeneratedOperations.BinaryRead) != 0)
-            {
-                yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/ImmutableCandidateCache.g.cs", ImmutableHashSetOwnerFile.RenderCache(set));
-                candidateCache = true;
             }
             yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Default_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)) + ".g.cs",
                 DefaultFormatterOwnerFile.Render(set, model, operations));
