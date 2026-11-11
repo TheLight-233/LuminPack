@@ -131,8 +131,7 @@ internal static class RenderModelFactory
         StringProfile profile = model.Policy.Strings;
         if (profile.Format != 'G' || profile.Precision != byte.MaxValue || profile.Depth != 1024 || profile.Strict)
             return PayloadEmitter.Reject<PayloadRenderModel>("union declared profile");
-        if (profile.Encoding != StringEncoding.Utf16 || profile.Recording != StringRecording.Length)
-            return PayloadEmitter.Reject<PayloadRenderModel>("union compiled profile slots");
+        // A declared string profile selects the root's standard slot; every canonical slot is published either way.
         if (model.Cases.Length == 0)
             return PayloadEmitter.Reject<PayloadRenderModel>("union cases");
         var cases = new UnionRenderCase[model.Cases.Length];
