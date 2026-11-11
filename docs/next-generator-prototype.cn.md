@@ -84,7 +84,8 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 - `FormatterDispatch` 使用默认输入上限和 JSON 编码，尚未编译进程序集声明选项（不受信输入上限、递归深度、严格 JSON 和异常映射），导致
   六项 Safety 测试失败（对应 P1 的显式输入限制与声明 profile）。
 - 独立的 `List<string>` 根在失败前会推进调用方 reader；旧根只在成功时发布游标（一项 Safety 测试）。
-- 含 Packed struct 成员的固定 Union case 通过自身 Union 入口读取，写入不走返回式游标内核。字节不变，旧的内联展开属于 P1 性能项。
+- 记录正文对集合成员（如 Union 值的 List 或 Dictionary）调用其 owner，而旧管线会在原位展开这些写入，因此写入此类记录慢于旧管线（P1 快速路径）。
+- Benchmark 对象图的 JSON 读取比旧管线多分配约 2 KB，来源尚未定位。
 - 根方法名称来自可读类型名，两个读法相同的载荷只有第一个完成绑定，另一个继续走泛型门面。
 - 调用列表是 `ImmutableArray`，每次编辑都会重新计算共享 owner 集合，再由值相等的输出命中缓存。
 - 完整单元测试区域、其他目标框架以及旧生成器的编译错误尚未处理。

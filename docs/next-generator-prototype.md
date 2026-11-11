@@ -89,8 +89,9 @@ The generator benchmarks accept a real corpus and its references:
   and declared profiles).
 - The standalone `List<string>` root advances the caller's reader before a failure; the legacy root publishes its cursor only on
   success (one Safety test).
-- A fixed Union case with a Packed struct member reads through its own Union entry and writes without the returning cursor kernel. The
-  bytes are unchanged; the legacy inline expansion is a P1 performance item.
+- Record bodies call the owners of collection members, such as a list or dictionary of Union values, where the original pipeline
+  expands those writes in place. Writing such records is slower than the original pipeline (P1 fast paths).
+- A JSON read of the benchmark graph allocates about 2 KB more than the original pipeline; the source is not identified yet.
 - Root names are readable type names, so two payloads whose names read the same bind only the first; the other stays on the generic
   facade.
 - The call list is an `ImmutableArray`, so the shared owner set is recomputed on every edit before its value-equal output is cached.
