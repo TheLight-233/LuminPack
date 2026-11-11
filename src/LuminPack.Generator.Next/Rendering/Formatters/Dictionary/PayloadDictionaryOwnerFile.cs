@@ -8,7 +8,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// reader. The JSON form is an array of key and value arrays whose values use the value's own formatter owner.</remarks>
 internal static class PayloadDictionaryOwnerFile
 {
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.CountedWrite(), Read, "value[key!] = itemValue;");
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.DenseWrite(), Read, "value[key!] = itemValue;");
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

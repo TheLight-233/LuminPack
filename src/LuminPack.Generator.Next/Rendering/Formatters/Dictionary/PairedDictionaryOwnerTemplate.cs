@@ -225,6 +225,69 @@ internal sealed partial class PairedDictionaryContext
         W.Line("operationState.CheckBuffer();");
     }
 
+    /// <summary>Emits the original dense write of a nonnull concrete dictionary: its entries are walked in storage order and any
+    /// mutation during the write, including a removal that leaves a free entry, is rejected afterwards.</summary>
+    /// <remarks>A 32-bit process or a dictionary whose storage count differs from its count writes through the sparse
+    /// enumeration fallback. Other families keep the counted enumeration.</remarks>
+    internal void DenseWrite()
+    {
+        if (!Dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) || Source != "value")
+        {
+            CountedWrite();
+            return;
+        }
+        bool rawKey = _contract != null && _contract.Arguments[0] is { Raw: true, Payload: null } && Key != "bool";
+        string marshal = "global::LuminPack.Code.LuminPackMarshal";
+        W.Line("int count = value.Count;");
+        W.Line("operationState.WriteCollectionHeader(count);");
+        W.Line("if (count != 0)");
+        W.Open();
+        W.Line("if (" + Memory + ".SizeOf<global::System.IntPtr>() != 8 || " + marshal + ".GetDictionaryView(value)._count != count)");
+        W.Indented(() => W.Line("WriteSparseDictionary(ref operationState, value);"));
+        W.Line("else");
+        W.Open();
+        W.Line("var dictionaryView = " + marshal + ".GetDictionaryView(value);");
+        W.Line("int version = dictionaryView._version;");
+        W.Line("ref var entryRef = ref " + marshal + ".GetNotNullArrayReference(dictionaryView._entries!);");
+        W.Line("for (int index = 0; index < count; index++)");
+        W.Open();
+        W.Line("operationState.CheckBuffer();");
+        W.Line("ref var entry = ref entryRef;");
+        if (rawKey)
+        {
+            W.Line(marshal + ".CopyBlockUnaligned(ref operationState.Cursor, ref " + Memory + ".As<" + Key + ", byte>(ref entry.Key), (uint)" +
+                Memory + ".SizeOf<" + Key + ">());");
+            W.Line("operationState.Advance(" + Memory + ".SizeOf<" + Key + ">());");
+        }
+        else
+        {
+            W.Line(Key + " key = entry.Key;");
+            WriteMember(Key, "key");
+        }
+        W.Line(Value + " itemValue = entry.Value;");
+        WriteMember(Value, "itemValue");
+        W.Line("entryRef = ref " + Memory + ".Add(ref entryRef, 1);");
+        W.Close();
+        W.Line("if (dictionaryView._version != version || dictionaryView._count != count || dictionaryView._freeCount != 0)");
+        W.Indented(() => W.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();"));
+        W.Close();
+        W.Close();
+        W.Line("operationState.CheckBuffer();");
+        W.Blank();
+        W.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        W.Line("static void WriteSparseDictionary(ref global::LuminPack.Core.LuminPackWriter operationState, " + Dictionary + " source)");
+        W.Open();
+        W.Line("foreach (var item in source)");
+        W.Open();
+        W.Line(Key + " key = item.Key;");
+        WriteMember(Key, "key");
+        W.Line(Value + " itemValue = item.Value;");
+        WriteMember(Value, "itemValue");
+        W.Close();
+        W.Line("operationState.CheckBuffer();");
+        W.Close();
+    }
+
     /// <summary>Emits the write that copies a tree-backed dictionary's pairs once before writing them in order.</summary>
     internal void TreeWrite()
     {
@@ -589,6 +652,12 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("return;");
                     w.Close();
                     w.Blank();
+                    // As the original concrete dictionary read, a derived destination is replaced rather than refilled.
+                    if (fact.Family.JsonReuseStore != null && dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal))
+                    {
+                        w.Line("if (value is not null && value.GetType() != typeof(" + dictionary + "))");
+                        w.Indented(() => w.Line("value = null;"));
+                    }
                     if (fact.Family.JsonReuseStore != null)
                         DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader);
                     if (spec.JsonBefore != null)
