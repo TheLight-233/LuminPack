@@ -84,9 +84,14 @@ The generator benchmarks accept a real corpus and its references:
 
 ### Recorded gaps
 
-- `FormatterDispatch` uses the default input limit and JSON encoding. Declared assembly options such as untrusted input limits,
-  recursion depth, strict JSON and exception mapping are not compiled into it, which fails six Safety tests (P1 explicit input limits
-  and declared profiles).
+- Declared input options are ported but not yet compiled or compared with the original output. The registered dispatch follows
+  the assembly declaration; each concrete root freezes its own input cap and checks nothing when trusted; explicitly untrusted
+  roots read JSON with the strict profile and fail closed on input-selected shapes; declared collection, string and depth limits
+  are checked at the read sites of the root body, and nested reads under a bounded root run as checked copies of their entries.
+  Known differences: only roots with a declared collection, string or depth limit take checked copies; inline children inside a
+  copied trusted payload keep their trusted marker reads; versioned, mirrored, reference-tracked and struct payloads, rejected
+  structs and Union roots are not covered; compressed counts are not checked; stream and async entries are not intercepted and
+  keep the assembly cap; exception mapping is not ported.
 - The standalone `List<string>` root advances the caller's reader before a failure; the legacy root publishes its cursor only on
   success (one Safety test).
 - Record bodies call the owners of collection members, such as a list or dictionary of Union values, where the original pipeline
