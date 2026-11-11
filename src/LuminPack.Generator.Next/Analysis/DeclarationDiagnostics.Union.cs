@@ -36,15 +36,27 @@ internal static partial class TypeModelFactory
                     }
                 if (_unionCandidates == null)
                 {
+                    var declarations = new List<INamedTypeSymbol>();
+                    CollectUnionCandidates(_compilation.Assembly.GlobalNamespace, declarations);
+                    // As the original discovery, a generic declaration contributes the closed constructions the source uses, and
+                    // its open definition only when it is never constructed. The original sorted with the default comparer.
+                    Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> closed = ClosedConstructions();
                     var candidates = new List<INamedTypeSymbol>();
-                    CollectUnionCandidates(_compilation.Assembly.GlobalNamespace, candidates);
-                    _unionCandidates = candidates.OrderBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal).ToArray();
+                    foreach (INamedTypeSymbol declaration in declarations)
+                        if (declaration.Arity != 0 && closed.TryGetValue(declaration, out List<INamedTypeSymbol>? constructions))
+                            candidates.AddRange(constructions);
+                        else
+                            candidates.Add(declaration);
+                    _unionCandidates = candidates.OrderBy(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), Comparer<string>.Default)
+                        .ToArray();
                 }
                 int nextTag = 0;
                 foreach (INamedTypeSymbol candidate in _unionCandidates)
                 {
-                    if (candidate.IsAbstract || candidate.IsStatic || UnionRootMatch(candidate, root.OriginalDefinition) == null ||
-                        cases.Any(item => SymbolEqualityComparer.Default.Equals(item.Type.OriginalDefinition, candidate.OriginalDefinition)))
+                    if (candidate.IsAbstract || candidate.IsStatic || !ValidDerivedCase(candidate, root.OriginalDefinition) ||
+                        cases.Any(item => SymbolEqualityComparer.Default.Equals(item.Type, candidate) ||
+                            (item.Type.IsUnboundGenericType || ContainsTypeParameter(item.Type)) &&
+                            SymbolEqualityComparer.Default.Equals(item.Type.OriginalDefinition, candidate.OriginalDefinition)))
                         continue;
                     while (tags.Contains(nextTag))
                         nextTag++;
@@ -54,6 +66,70 @@ internal static partial class TypeModelFactory
                 UnionCaseDeclaration[] result = cases.ToArray();
                 _unionDeclarations[root] = result;
                 return result;
+            }
+        }
+
+        /// <summary>Applies the original derived-case rule: a case of a closed base is fully closed, and a case of a base over type
+        /// parameters is generic over exactly those parameters, in order, with the same constraints.</summary>
+        private static bool ValidDerivedCase(INamedTypeSymbol candidate, INamedTypeSymbol root)
+        {
+            INamedTypeSymbol? matched = UnionRootMatch(candidate, root);
+            if (matched == null)
+                return false;
+            if (root.Arity == 0)
+                return true;
+            if (matched.TypeArguments.All(argument => argument is not ITypeParameterSymbol))
+                return !ContainsTypeParameter(candidate);
+            if (candidate.TypeParameters.Length != root.Arity)
+                return false;
+            for (int index = 0; index < root.Arity; index++)
+            {
+                if (matched.TypeArguments[index] is not ITypeParameterSymbol parameter || parameter.Ordinal != index)
+                    return false;
+                ITypeParameterSymbol derived = candidate.TypeParameters[index], original = root.TypeParameters[index];
+                if (derived.HasConstructorConstraint != original.HasConstructorConstraint ||
+                    derived.HasReferenceTypeConstraint != original.HasReferenceTypeConstraint ||
+                    derived.HasValueTypeConstraint != original.HasValueTypeConstraint ||
+                    derived.HasUnmanagedTypeConstraint != original.HasUnmanagedTypeConstraint ||
+                    derived.HasNotNullConstraint != original.HasNotNullConstraint ||
+                    !System.Linq.Enumerable.SequenceEqual<ITypeSymbol>(derived.ConstraintTypes, original.ConstraintTypes, SymbolEqualityComparer.Default))
+                    return false;
+            }
+            return true;
+        }
+
+        private Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>? _closedConstructions;
+
+        /// <summary>Indexes the closed constructions of local generic packable declarations that the source names.</summary>
+        /// <returns>The constructions of each generic definition, without duplicates.</returns>
+        private Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> ClosedConstructions()
+        {
+            if (_closedConstructions != null)
+                return _closedConstructions;
+            var result = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
+            var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            foreach (SyntaxTree tree in _compilation.SyntaxTrees)
+            {
+                SemanticModel? model = null;
+                foreach (var name in tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.GenericNameSyntax>())
+                {
+                    model ??= _compilation.GetSemanticModel(tree);
+                    if (model.GetSymbolInfo(name).Symbol is not INamedTypeSymbol { IsGenericType: true } type || ContainsTypeParameter(type) ||
+                        !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) || !IsPackable(type.OriginalDefinition))
+                        continue;
+                    Visit(type);
+                }
+            }
+            _closedConstructions = result;
+            return result;
+
+            void Visit(INamedTypeSymbol type)
+            {
+                if (!seen.Add(type))
+                    return;
+                if (!result.TryGetValue(type.OriginalDefinition, out List<INamedTypeSymbol>? list))
+                    result[type.OriginalDefinition] = list = new List<INamedTypeSymbol>();
+                list.Add(type);
             }
         }
 

@@ -695,10 +695,15 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     /// <summary>The open definition of a generic case, whose partial declaration holds its slots, or null.</summary>
     internal readonly string? Definition;
 
+    /// <summary>The closed owner contract of a closed generic case, whose closed Union entries the dispatch calls, or null.</summary>
+    internal readonly FormatterModel? Closed;
+
     /// <summary>Captures a Union case.</summary>
     internal UnionCaseModel(int tag, TypeIdentity type, UnionCaseRead read, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor,
-        TypeModel? model, string readable, string[] chain, string? @namespace, string arguments = "", string? definition = null)
+        TypeModel? model, string readable, string[] chain, string? @namespace, string arguments = "", string? definition = null,
+        FormatterModel? closed = null)
     {
+        Closed = closed;
         Arguments = arguments;
         Definition = definition;
         Namespace = @namespace;
@@ -718,7 +723,7 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     public bool Equals(UnionCaseModel? other) => ReferenceEquals(this, other) || other != null && Tag == other.Tag && Type.Equals(other.Type) &&
         Read == other.Read && OwnEntry == other.OwnEntry && ReadGeneric == other.ReadGeneric && Sealed == other.Sealed &&
         FixedCursor == other.FixedCursor && Readable == other.Readable && Namespace == other.Namespace && Arguments == other.Arguments &&
-        Definition == other.Definition &&
+        Definition == other.Definition && Equals(Closed, other.Closed) &&
         (ReferenceEquals(Chain, other.Chain) || Enumerable.SequenceEqual(Chain, other.Chain)) && Equals(Model, other.Model);
 
     /// <inheritdoc/>

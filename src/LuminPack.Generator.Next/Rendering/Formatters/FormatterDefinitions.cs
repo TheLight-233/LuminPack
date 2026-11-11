@@ -10,6 +10,10 @@ internal static class FormatterDefinitions
     internal const string Array = "$array";
     internal const string Object = "$object";
     internal const string Registered = "$registered";
+
+    /// <summary>A closed construction of a local generic Union, which forwards to its definition's generic Union roots; the
+    /// formatter's <c>Underlying</c> holds the definition's root stem and the closed type arguments, separated by a bar.</summary>
+    internal const string GenericUnion = "$genericunion";
     internal const string PayloadReference = "$payload";
     private static readonly HashSet<string> Generics = new HashSet<string>(StringComparer.Ordinal)
     {

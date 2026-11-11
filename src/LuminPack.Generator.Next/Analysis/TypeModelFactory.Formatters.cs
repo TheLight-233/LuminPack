@@ -144,6 +144,14 @@ internal static partial class TypeModelFactory
             bool ordinary = named.TypeKind == TypeKind.Class && GenerationMode(named) == "Object" && !HasAttribute(named, UnionAttribute);
             if (path.Active.Contains(named))
                 return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, ordinaryObject: ordinary);
+            // A closed local generic Union dispatches through its definition's generic Union roots, as the original closed root
+            // called the Union's own dispatch.
+            if (SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, _compilation.Assembly) && named.IsGenericType &&
+                HasAttribute(named, UnionAttribute) && !ContainsTypeParameter(named) && IsPackable(named.OriginalDefinition))
+                return new FormatterModel(spelling, FormatterDefinitions.GenericUnion, underlying:
+                    ReadableTypeName.Of(GeneratedNames.PayloadKey(named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) +
+                    "|" + string.Join(", ", named.TypeArguments.Select(argument => argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))),
+                    ordinaryObject: false);
             if (!SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, _compilation.Assembly) || named.IsGenericType && HasAttribute(named, UnionAttribute))
                 return new FormatterModel(spelling, FormatterDefinitions.Registered, rawCollection: rawCollection, layout: layout, ordinaryObject: ordinary);
             if (IsPackable(named))

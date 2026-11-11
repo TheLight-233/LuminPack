@@ -1130,12 +1130,19 @@ internal static partial class TypeModelFactory
                     readGeneric = true;
                     fixedCases.Remove(caseType);
                     string definition = caseType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    // A closed case dispatches to the closed owner's own Union entries, as the original called the closed overloads;
+                    // only an open case writes and reads through its definition's generic entries.
+                    FormatterModel? closed = !ContainsTypeParameter(caseType) && Formatter(caseType, depth, path) is
+                        { Definition: FormatterDefinitions.PayloadReference, Payload: not null } closedOwner ? closedOwner : null;
+                    string caseReadable = closed != null
+                        ? ReadableTypeName.Of(GeneratedNames.PayloadKey(caseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
+                        : ReadableTypeName.Of(GeneratedNames.PayloadKey(definition));
                     try
                     {
                         cases.Add(new UnionCaseModel(tag, Identity(caseType), UnionCaseRead.OwnEntry, ownEntry: true, readGeneric: true,
                             sealedCase: root.TypeKind == TypeKind.Class && !HasDerivedCase(symbols, caseType.OriginalDefinition), fixedCursor: false,
-                            definitionModel.Model, ReadableTypeName.Of(GeneratedNames.PayloadKey(definition)), Chain(caseType.OriginalDefinition),
-                            NamespaceOf(caseType), genericArguments, definition));
+                            definitionModel.Model, caseReadable, Chain(caseType.OriginalDefinition),
+                            NamespaceOf(caseType), closed != null ? string.Empty : genericArguments, definition, closed));
                     }
                     catch (NotSupportedException error)
                     {

@@ -41,8 +41,13 @@ internal readonly partial struct SharedFormatterSet
 
         if (model is UnionModel union)
             foreach (UnionCaseModel item in union.Cases)
+            {
                 if (item.Model != null)
                     CollectGeneral(item.Model, formatters, payloads);
+                // A closed generic case publishes the closed owner whose Union entries its dispatch calls.
+                if (item.Closed != null)
+                    CollectFormatter(item.Closed, formatters, payloads);
+            }
     }
 
     /// <summary>Collects the general contracts one serializer call root requires.</summary>

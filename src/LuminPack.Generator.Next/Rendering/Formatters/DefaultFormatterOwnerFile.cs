@@ -21,6 +21,8 @@ internal static class DefaultFormatterOwnerFile
             return Object(set, model, operations);
         if (model.Definition == FormatterDefinitions.Registered)
             return Registered(set, model, operations);
+        if (model.Definition == FormatterDefinitions.GenericUnion)
+            return GenericUnion(set, model, operations);
         if (model.Definition == FormatterDefinitions.Array)
         {
             if (model.Rank > 1)
@@ -116,6 +118,17 @@ internal static class DefaultFormatterOwnerFile
     /// <param name = "operations">The binary and JSON operations to publish.</param>
     /// <returns>The generated source or selected source-ready name.</returns>
     private static string Registered(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations) => SpecialOwnerFile.Render(set, operations, ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)), model.Type, false, (w, _) => Body(w, false, true, set.Options.RegisterMode != RegisterMode.Disabled, model.Type), (w, _) => Body(w, false, false, set.Options.RegisterMode != RegisterMode.Disabled, model.Type), (w, _) => Body(w, true, true, set.Options.RegisterMode != RegisterMode.Disabled, model.Type), (w, _) => Body(w, true, false, set.Options.RegisterMode != RegisterMode.Disabled, model.Type));
+    /// <summary>Renders a closed generic Union owner whose operations call the definition's generic Union roots.</summary>
+    private static string GenericUnion(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations)
+    {
+        string[] parts = model.Underlying!.Split('|');
+        string Call(string entry, bool write) => "global::LuminPack.LuminPackSerializer." + entry + "_" + parts[0] + "<" + parts[1] +
+            ", TLuminProfile>(ref " + (write ? "writer, in" : "reader, ref") + " value);";
+        return SpecialOwnerFile.Render(set, operations, ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)), model.Type, true,
+            (w, _) => w.Line(Call("Serialize", true)), (w, _) => w.Line(Call("Deserialize", false)),
+            (w, _) => w.Line(Call("SerializeJson", true)), (w, _) => w.Line(Call("DeserializeJson", false)));
+    }
+
     /// <summary>Emits one registered operation without introducing a generated per-payload cache.</summary>
     /// <param name = "w">The generated source writer.</param>
     /// <param name = "json">The json used by this operation.</param>
