@@ -94,9 +94,10 @@ The generator benchmarks accept a real corpus and its references:
   Stream and async calls bind to concrete entries that stage at the payload's cap; compressed members use the compressed kernels.
   Both are not yet verified by tests.
 - With Next, the full unit-test corpus generates with no errors in generated code. The test area itself has not been run.
-- Closed generic payloads still bind through shared owners named by readable type name; when two of them read the same, neither is
-  bound statically. The original binds them to the generic payload roots.
-- Generic Union roots and generic Union cases are not modeled yet (P2).
+- Closed generic payloads bind the generic roots of their definitions. Two closed payloads whose readable names coincide still share
+  an entry name, so only the first binds statically.
+- Generic Union roots, closed and open generic cases, and Union roots with a declared string profile are ported; every payload the
+  original generator emits for the unit-test corpus now has Next output. None of this is verified by tests yet.
 - Struct cases of interface Union roots write and read through the case's payload owner; their bytes have not been compared with
   the original output.
 - The compressed `List<string>` read still uses the caller's reader; the ordinary root publishes its cursor only on success.
