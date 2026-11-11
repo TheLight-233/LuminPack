@@ -1,5 +1,6 @@
 #nullable disable
 using System;
+using LuminPack.SourceGenerator.Next.Model;
 using System.Linq;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
@@ -176,8 +177,9 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
-        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null)
+        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false)
     {
+        Volatile = isVolatile;
         Sequence = sequence;
         ScopeProfile = scopeProfile;
         ReferencePayload = referencePayload;
@@ -202,6 +204,16 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         FieldType = fieldType;
     }
 
+    /// <summary>Applies a declaration-owned profile while sharing the member's immutable operation dependencies.</summary>
+    /// <param name="profile">The closed stateless profile type.</param>
+    /// <returns>The compiled member scope.</returns>
+    internal RenderMember WithScope(string profile) => new RenderMember(Name, Kind, Scalar, TypeName, Size, Formatter, FieldType,
+        Mirrored, Underlying, Raw, Builtin, Nested, FormatterCall, Property, Dictionary, Collection, ValueTypeParameter,
+        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile);
+
+    /// <summary>Whether fixed field access is volatile and excluded from adjacent-field copies.</summary>
+    internal readonly bool Volatile;
+
     /// <summary>Whether the member stores a fixed scalar or raw struct.</summary>
     internal bool IsFixed => Kind == RenderMemberKind.Fixed;
 
@@ -224,7 +236,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
         NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload &&
-        ReferenceEquals(Sequence, other.Sequence) && ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
+        Volatile == other.Volatile && ReferenceEquals(Sequence, other.Sequence) && ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as RenderMember);
@@ -428,6 +440,22 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal string TypeArguments(params string[] extra) => extra.Length == 0 ? TypeParameterList :
         "<" + string.Join(", ", TypeParameters.Concat(extra)) + ">";
 
+    /// <summary>The inheritance-preserving Local storage levels.</summary>
+    internal readonly StorageMirrorModel[] Mirrors;
+
+    /// <summary>The declared circle-reference slots and widths in member order.</summary>
+    internal readonly int[] CircleSlots;
+    internal readonly int[] CircleWidths;
+
+    /// <summary>The number of circle slots, including declared gaps.</summary>
+    internal int CircleSlotCount => CircleSlots.Length == 0 ? 0 : CircleSlots.Max() + 1;
+
+    /// <summary>Whether the compiler supports static constant span collection expressions.</summary>
+    internal readonly bool ConstantSpans;
+
+    /// <summary>Whether the pool expression returns destination storage by reference.</summary>
+    internal readonly bool RentByRef;
+
     /// <summary>The joined constraint clauses, without trailing text, or an empty string.</summary>
     internal string TypeConstraintText => string.Join(" ", TypeConstraints);
 
@@ -445,8 +473,13 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
-        string[] typeConstraints = null, bool trusted = false, string declaredProfile = null)
+        string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null)
     {
+        Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
+        CircleSlots = circleSlots ?? Array.Empty<int>();
+        CircleWidths = circleWidths ?? Array.Empty<int>();
+        ConstantSpans = constantSpans;
+        RentByRef = rentByRef;
         DeclaredProfile = declaredProfile;
         Trusted = trusted;
         TypeConstraints = typeConstraints ?? System.Array.Empty<string>();
@@ -520,7 +553,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && ManagedStruct == other.ManagedStruct &&
         Equals(PortableView, other.PortableView) && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&
-        Rent == other.Rent && Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
+        Rent == other.Rent && RentByRef == other.RentByRef && ConstantSpans == other.ConstantSpans && Same(WriteBefore, other.WriteBefore) && Same(WriteAfter, other.WriteAfter) &&
         Same(ReadBefore, other.ReadBefore) && Same(ReadAfter, other.ReadAfter) && Trusted == other.Trusted &&
         DeclaredProfile == other.DeclaredProfile &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
@@ -532,7 +565,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         UnionCanonical == other.UnionCanonical && UnionStandardBinary == other.UnionStandardBinary && UnionStandardJson == other.UnionStandardJson &&
         UnionTier == other.UnionTier && UnionWide == other.UnionWide && Same(UnionChain, other.UnionChain) && Same(UnionTierCases, other.UnionTierCases) &&
         Same(UnionTierSealed, other.UnionTierSealed) && Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
-        Circle == other.Circle && CircleGuarded == other.CircleGuarded &&
+        Same(Mirrors, other.Mirrors) && Circle == other.Circle && CircleGuarded == other.CircleGuarded && Same(CircleSlots, other.CircleSlots) &&
+        Same(CircleWidths, other.CircleWidths) &&
         Same(UnionCases, other.UnionCases) && Same(TypeParameters, other.TypeParameters) && Same(TypeConstraints, other.TypeConstraints) &&
         (MirrorFields == null ? other.MirrorFields == null : other.MirrorFields != null && MirrorFields.SequenceEqual(other.MirrorFields)) &&
         Same(MirrorOffsets, other.MirrorOffsets) &&

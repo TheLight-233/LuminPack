@@ -33,8 +33,22 @@ Tuple components and nested aggregates retain their physical fields. Empty aggre
 
 The default route recursively publishes its dependencies. An extra closed element combination uses the existing container implementation. The registry uses open type identities and capability names, allowing additional families without a type-family bit limit.
 
+## Declaration and payload contracts
+
+The analysis layer validates the 48 legacy diagnostic descriptors independently of rendering eligibility. The rules cover member storage and names, override annotations, callback accessibility and parameters, constructor selection, pool rental, Union roots and cases, Custom signatures, compiled options, bounded sizes and portable storage. Error declarations suppress their executable output. Diagnostic models retain identifiers, arguments and source coordinates. Publication binds those coordinates and related declarations to the current compilation for IDE code fixes.
+
+Constructor parameters match the serialized member names case-insensitively. Fresh constructed records decode into typed member locals before construction. Existing instances use their original in-place member operations. Managed structs retain their constructor, rental, callback and reference-member reuse facts. Included and readonly fields and automatic properties use Local storage. Inherited mirrors retain separate base-first declarations, explicit offsets and layout attributes. Volatile scalar storage is excluded from adjacent-field block proofs.
+
+Version-tolerant schemas retain revision-1 reads, revision-2 field widths, former-name aliases, one-pass variable-length back-patches and operation-local short-schema fingerprints. Closed schemas use constant metadata when supported by the consumer compiler. Generic schemas initialize metadata through the existing runtime schema APIs for each closed construction. Older compilers retain cached metadata arrays. Reference-tracked records retain sparse slot tables, explicit reference identifiers, early shell registration, same-table reuse and unknown-slot skipping. Child collection and payload operations use their existing concrete static owners.
+
+## Generation-time ownership
+
+Roslyn symbols stay inside compilation-owned or weak analysis caches. The output models retain value-equal facts. Declaration diagnostics, ordered physical storage and optional runtime capabilities are captured once for each analyzed declaration or closed type. Primitive and string members enter their direct analysis path. A shared publication batch accumulates its requirements before deduplication and sorting.
+
+Declared profiles compose the existing stateless string, standard-format, JSON-depth and syntax option types. Nondefault component declarations are deduplicated across payload graphs. The binary write, binary read, JSON write and JSON read operation masks remain independent.
+
 ## Payload and pipeline boundaries
 
 A payload owner is referenced when its modeled body has an implementation. `CanPublish` checks that boundary before a collection publishes a child call. External and generic-Union contracts currently use the explicit typed registration boundary. Registration-disabled operations retain their throwing behavior.
 
-Serializer facade generation, standalone-call discovery, static entry binding, generic Union publication, compiled input policies and the remaining payload-body protocols still require generator integration. The final compatibility review covers generated consumers, legacy cross reads, existing targets and conditional runtime assets.
+Serializer facade generation, standalone-call discovery, static entry binding, generic Union publication and its cached slots, automatic Custom registration, legacy unmanaged root sharing, compiled input limits and pointer-cursor runtime publication still require generator integration. Member-scope propagation through specialized inline collection paths also needs alignment. The final compatibility review covers generated consumers, legacy cross reads, existing targets and conditional runtime assets.

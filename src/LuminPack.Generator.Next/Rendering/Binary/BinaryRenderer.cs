@@ -5,8 +5,7 @@ using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Binary;
 
 /// <summary>Renders binary roots, facades and payload extensions from a model.</summary>
-/// <remarks>Each payload kind has one entry point. Ordinary records go through the direct emitters; Union, reference-tracked
-/// and version-tolerant payloads keep their placeholders until their rendering facts are modeled.</remarks>
+/// <remarks>Each payload kind owns its direct model projection. Union publication is coordinated by UnionRenderer.</remarks>
 internal sealed class BinaryRenderer : IRenderer
 {
     /// <summary>The shared renderer.</summary>

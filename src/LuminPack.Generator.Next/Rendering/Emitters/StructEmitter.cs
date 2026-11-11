@@ -38,7 +38,8 @@ internal static class StructEmitter
         const string writer = "LuminPackWriter", reader = "LuminPackReader";
         string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
         string inline = w.MethodImpl("AggressiveInlining");
-        string Constraint() => "where TLuminProfile : struct, " + w.A("ILuminPackOptions");
+        string Constraint() => ConstraintText("where TLuminProfile : struct, " + w.A("ILuminPackOptions"));
+        string ConstraintText(string profile) => model.TypeConstraintText.Length == 0 ? profile : model.TypeConstraintText + " " + profile;
         string serializer = w.A("LuminPackSerializer");
 
         w.Line("namespace LuminPack");
@@ -102,6 +103,8 @@ internal static class StructEmitter
             if (model.LayoutAttribute != null)
                 w.Line(model.LayoutAttribute);
             w.Line("private struct " + model.Mirror);
+            if (model.TypeConstraintText.Length != 0)
+                w.Indented(() => w.Line(model.TypeConstraintText));
             w.Open();
             BinaryEmitter.MirrorFields(w, model.MirrorFields ?? System.Array.Empty<string>(), model.MirrorOffsets);
             w.Close();
@@ -129,17 +132,18 @@ internal static class StructEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(inline);
-        w.Line("internal static void Write(this ref " + writer + " state, in " + type + " value) => " + serializer + "." + container + ".RootWrite(ref state, in value);");
+        Entry("Write", "(this ref " + writer + " state, in " + type + " value)", serializer + "." + container + ".RootWrite(ref state, in value);");
         w.Line(inline);
-        w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + " value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + serializer + "." + container + ".RootWrite(ref state, in value);"));
+        w.Line("internal static void Write" + model.TypeArguments("TOptions") + "(this ref " + writer + " state, in " + type + " value)");
+        w.Indented(() => w.Line(ConstraintText("where TOptions : struct, " + w.A("ILuminPackOptions")) + " => " + serializer + "." + container + ".RootWrite(ref state, in value);"));
         w.Suppressed = !reads;
         w.Line(inline);
         string read = portable ? container + ".RootRead" : "Deserialize" + suffix;
-        w.Line("internal static void Read(this ref " + reader + " state, ref " + type + " value) => " + serializer + "." + read + "(ref state, ref value);");
+        w.Line("internal static void Read" + model.TypeArguments() + "(this ref " + reader + " state, ref " + type + " value)" +
+            (model.TypeConstraintText.Length == 0 ? string.Empty : " " + model.TypeConstraintText) + " => " + serializer + "." + read + "(ref state, ref value);");
         w.Line(inline);
-        w.Line("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + " value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + serializer + "." + read + "(ref state, ref value);"));
+        w.Line("internal static void Read" + model.TypeArguments("TOptions") + "(this ref " + reader + " state, ref " + type + " value)");
+        w.Indented(() => w.Line(ConstraintText("where TOptions : struct, " + w.A("ILuminPackOptions")) + " => " + serializer + "." + read + "(ref state, ref value);"));
         w.Suppressed = false;
         w.Close();
         w.Close();
@@ -152,12 +156,14 @@ internal static class StructEmitter
         w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("public static void WritePolymorphismValue(ref this " + writer + " writer, scoped in " + type + " input) => " + serializer + ".SerializeUnion(ref writer, input);");
+        w.Line("public static void WritePolymorphismValue" + model.TypeArguments() + "(ref this " + writer + " writer, scoped in " + type + " input)" +
+            (model.TypeConstraintText.Length == 0 ? string.Empty : " " + model.TypeConstraintText) + " => " + serializer + ".SerializeUnion(ref writer, input);");
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("public static void ReadPolymorphismValue(ref this " + reader + " reader, scoped ref " + type + " value) => " + serializer +
+        w.Line("public static void ReadPolymorphismValue" + model.TypeArguments() + "(ref this " + reader + " reader, scoped ref " + type + " value)" +
+            (model.TypeConstraintText.Length == 0 ? string.Empty : " " + model.TypeConstraintText) + " => " + serializer +
             ".DeserializeUnion" + suffix + "(ref reader, ref value);");
         w.Suppressed = false;
         w.Close();
@@ -167,7 +173,8 @@ internal static class StructEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + name + parameters + " => " + body);
+            w.Line("internal static void " + name + model.TypeArguments() + parameters +
+                (model.TypeConstraintText.Length == 0 ? string.Empty : " " + model.TypeConstraintText) + " => " + body);
             w.Blank();
         }
 
@@ -175,7 +182,7 @@ internal static class StructEmitter
         {
             w.Line(w.Preserve);
             w.Line(inline);
-            w.Line("internal static void " + name + "<" + Profile + ">" + parameters);
+            w.Line("internal static void " + name + model.TypeArguments(Profile) + parameters);
             w.Indented(() => w.Line(Constraint() + " => " + body));
             w.Blank();
         }
@@ -185,7 +192,9 @@ internal static class StructEmitter
             w.Line(w.Preserve);
             if (!portable || DirectInlining.PortableWrite(model))
                 w.Line(inline);
-            w.Line("internal static void " + name + "(scoped ref " + writer + " writer, scoped in " + type + " input)");
+            w.Line("internal static void " + name + model.TypeArguments() + "(scoped ref " + writer + " writer, scoped in " + type + " input)");
+            if (model.TypeConstraintText.Length != 0)
+                w.Indented(() => w.Line(model.TypeConstraintText));
             w.Open();
             w.Line("var value = input;");
             if (!portable)
@@ -216,7 +225,9 @@ internal static class StructEmitter
             w.Line(w.Preserve);
             if (DirectInlining.PortableRead(model))
                 w.Line(inline);
-            w.Line("internal static void " + name + "(scoped ref " + reader + " reader, scoped ref " + type + " value)");
+            w.Line("internal static void " + name + model.TypeArguments() + "(scoped ref " + reader + " reader, scoped ref " + type + " value)");
+            if (model.TypeConstraintText.Length != 0)
+                w.Indented(() => w.Line(model.TypeConstraintText));
             w.Open();
             string unsafeName = w.A("Unsafe");
             w.Line("int portableIndex = reader.Position;");

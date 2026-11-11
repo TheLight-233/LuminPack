@@ -94,6 +94,9 @@ internal sealed class WirePolicy : IEquatable<WirePolicy>
     /// <summary>The string profile.</summary>
     internal readonly StringProfile Strings;
 
+    /// <summary>Whether a declaration explicitly owns its serialization profile.</summary>
+    internal readonly bool Declared;
+
     /// <summary>The complete-record byte bound, or null.</summary>
     internal readonly int? Bound;
 
@@ -101,8 +104,9 @@ internal sealed class WirePolicy : IEquatable<WirePolicy>
     internal readonly bool TrackReferences;
 
     /// <summary>Captures a wire policy.</summary>
-    internal WirePolicy(InputPolicy input, StringProfile strings, int? bound, bool trackReferences)
+    internal WirePolicy(InputPolicy input, StringProfile strings, int? bound, bool trackReferences, bool declared = false)
     {
+        Declared = declared;
         TrackReferences = trackReferences;
         Bound = bound;
         Strings = strings;
@@ -111,7 +115,7 @@ internal sealed class WirePolicy : IEquatable<WirePolicy>
 
     /// <inheritdoc/>
     public bool Equals(WirePolicy? other) => ReferenceEquals(this, other) || other != null && Input == other.Input &&
-        Strings.Equals(other.Strings) && Bound == other.Bound && TrackReferences == other.TrackReferences;
+        Strings.Equals(other.Strings) && Bound == other.Bound && TrackReferences == other.TrackReferences && Declared == other.Declared;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as WirePolicy);

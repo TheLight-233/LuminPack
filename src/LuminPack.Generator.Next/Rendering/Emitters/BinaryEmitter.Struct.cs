@@ -24,14 +24,14 @@ internal static partial class BinaryEmitter
     {
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
         var members = model.Members;
-        bool genericWrite = model.ProfilePayload || model.InlineArray;
-        bool genericRead = model.ProfilePayload || model.InlineArray || model.InlineList ||
+        bool genericWrite = model.Version != null || model.ProfilePayload || model.InlineArray;
+        bool genericRead = model.Version != null || model.ProfilePayload || model.InlineArray || model.InlineList ||
             members.Any(member => member.Kind is not (RenderMemberKind.Fixed or RenderMemberKind.Object));
         string type = model.GlobalName, readable = model.Readable, container = "LuminRoots_" + readable;
         const string writer = "LuminPackWriter", reader = "LuminPackReader";
         string Options() => w.A("ILuminPackOptions");
         string Serializer() => w.A("LuminPackSerializer");
-        string Standard() => w.A("LuminPackUtf16LengthOptions");
+        string Standard() => model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : w.A("LuminPackUtf16LengthOptions");
         string Constraint() => "where TLuminProfile : struct, " + Options();
         // Every method of a generic definition repeats its type parameters first, then the operation's profile.
         string Arguments(params string[] extra) => model.TypeArguments(extra);
@@ -78,21 +78,21 @@ internal static partial class BinaryEmitter
         w.Line("internal static partial class " + container);
         w.Open();
         w.Suppressed = !writes;
-        var write = MirroredStruct(model, w, WriteBody(model, w, union: false, structValue: true));
-        Method(w, write, "RootWrite", genericWrite, RootArguments(genericWrite), ConstraintLine(true),
+        var write = AddCallbacks(MirroredStruct(model, w, (model.Version != null ? VersionWriteBody(model, w) : WriteBody(model, w, union: false, structValue: true))), model.WriteBefore, model.WriteAfter);
+        Method(w, write, "RootWrite", genericWrite, RootArguments(genericWrite), ConstraintLine(genericWrite),
             "(scoped ref " + writer + " writer, scoped in " + type + " input)", WriteHint(model, write, union: false, inline));
         w.Blank();
         w.Suppressed = !reads;
-        Method(w, StructReadBody(model, w, union: false), "RootRead", genericRead, RootArguments(genericRead), ConstraintLine(true),
+        Method(w, AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union: false)), "RootRead", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
             "(scoped ref " + reader + " reader, scoped ref " + type + " value)", ReadHint(model, inline));
         w.Blank();
         w.Suppressed = !writes;
-        var unionBody = MirroredStruct(model, w, WriteBody(model, w, union: true, structValue: true));
-        Method(w, unionBody, "RootWriteUnion", genericWrite, RootArguments(genericWrite), ConstraintLine(true),
+        var unionBody = AddCallbacks(MirroredStruct(model, w, (model.Version != null ? VersionWriteBody(model, w) : WriteBody(model, w, union: true, structValue: true))), model.WriteBefore, model.WriteAfter);
+        Method(w, unionBody, "RootWriteUnion", genericWrite, RootArguments(genericWrite), ConstraintLine(genericWrite),
             "(scoped ref " + writer + " writer, scoped in " + type + " input)", WriteHint(model, unionBody, union: true, inline));
         w.Blank();
         w.Suppressed = !reads;
-        Method(w, StructReadBody(model, w, union: true), "RootReadUnion", genericRead, RootArguments(genericRead), ConstraintLine(true),
+        Method(w, AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union: true)), "RootReadUnion", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
             "(scoped ref " + reader + " reader, scoped ref " + type + " value)", ReadHint(model, inline));
         w.Suppressed = false;
         w.Close();
@@ -154,15 +154,17 @@ internal static partial class BinaryEmitter
         w.Indented(() => w.Line(ConstraintLine(true) + " => " + (genericRead ? container + "." + readUnion + "(ref reader, ref value);" :
             "DeserializeUnion" + suffix + Arguments() + "(ref reader, ref value);")));
         w.Suppressed = false;
-        if (model.Mirror != null)
+        if (model.Mirror != null || model.Version != null)
         {
             w.Blank();
             w.Line(w.Preserve);
             if (model.LayoutAttribute != null)
                 w.Line(model.LayoutAttribute);
-            w.Line("private struct " + model.Mirror);
+            w.Line("private struct " + (model.Mirror ?? model.Version.Layout));
+            if (TypeConstraint().Length != 0)
+                w.Indented(() => w.Line(TypeConstraint()));
             w.Open();
-            MirrorFields(w, model.MirrorFields ?? Array.Empty<string>(), model.MirrorOffsets);
+            MirrorFields(w, model.MirrorFields ?? model.Version?.LayoutFields ?? Array.Empty<string>(), model.MirrorOffsets);
             w.Close();
         }
         w.Close();
@@ -206,6 +208,11 @@ internal static partial class BinaryEmitter
         w.Line("public static void ReadPolymorphismValue" + Arguments() + "(ref this " + reader + " reader, scoped ref " + type + " value) => " + Serializer() +
             ".DeserializeUnion" + suffix + Arguments() + "(ref reader, ref value);");
         w.Suppressed = false;
+        if (model.Version != null)
+        {
+            w.Blank();
+            VersionSchemaClass(model, w);
+        }
         w.Close();
         w.Close();
     }
@@ -219,9 +226,9 @@ internal static partial class BinaryEmitter
     {
         var members = model.Members;
         var body = new List<string>();
-        bool constructed = model.ConstructorArguments != null;
+        bool constructed = model.ConstructorArguments != null || model.Rent != null;
         var referenced = members.Where(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Object or
-            RenderMemberKind.Array or RenderMemberKind.List || member.Kind == RenderMemberKind.Parameter).ToArray();
+            RenderMemberKind.Array or RenderMemberKind.List || member.Kind == RenderMemberKind.Parameter || member.ReferencePayload).ToArray();
         var mirrored = members.Where(member => member.Mirrored).ToArray();
         var temps = (constructed ? members : mirrored.Where(member => model.ConstructorMembers == null ||
             !model.ConstructorMembers.Contains(member.Name))).ToArray();
@@ -259,23 +266,29 @@ internal static partial class BinaryEmitter
             if (model.Mirror != null && mirrored.Length != 0)
                 body.Add("ref var reuseLocal = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value2!);");
             for (int index = 0; index < members.Length; index++)
-                AddStructExistingRead(body, members[index], index + 1 < members.Length, w);
+                AddStructExistingRead(body, model, members[index], index + 1 < members.Length, w);
+            foreach (string callback in model.ReadAfter)
+                body.Add(callback.Replace("value.", "value2."));
             body.Add("}");
             body.Add("");
         }
         if (constructed)
         {
             foreach (var member in members)
-                body.Add(member.Kind == RenderMemberKind.Parameter
-                    ? w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader, ref " + Camel(member.Name) + "Temp!);"
-                    : Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
+                AddMemberRead(body, model, member, w, "reader", Camel(member.Name) + "Temp");
             body.Add("// Construct the object and populate its members.");
-            string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
+            string arguments = string.Join(", ", (model.ConstructorArguments ?? Array.Empty<string>()).Select(name =>
                 name == null ? "default" : Camel(name) + "Temp!"));
             string construction = "value = new " + model.GlobalName + "(" + arguments + ")";
             var initialized = members.Where(member => !member.Mirrored &&
                 (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
-            if (initialized.Length == 0)
+            if (model.Rent != null)
+            {
+                body.Add("value = " + (model.RentByRef ? "ref " : string.Empty) + model.Rent + ";");
+                foreach (RenderMember member in members.Where(item => !item.Mirrored))
+                    body.Add("value." + member.Name + " = " + Camel(member.Name) + "Temp!;");
+            }
+            else if (initialized.Length == 0)
                 body.Add(construction + ";");
             else
             {
@@ -292,15 +305,7 @@ internal static partial class BinaryEmitter
         {
             body.Add("var result = new " + model.GlobalName + "();");
             foreach (var member in members)
-            {
-                if (member.Kind == RenderMemberKind.Parameter)
-                    body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader, ref " +
-                        (member.Mirrored ? Camel(member.Name) + "Temp!" : "result." + member.Name + "!") + ");");
-                else if (member.Mirrored)
-                    body.Add(Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
-                else
-                    body.Add("result." + member.Name + " = " + FixedOrTextRead(member, "reader") + ";");
-            }
+                AddMemberRead(body, model, member, w, "reader", member.Mirrored ? Camel(member.Name) + "Temp" : "result." + member.Name);
             body.Add("// Construct the object and populate its members.");
             body.Add("value = result;");
             AddStructMirrorAssignments(body, model, w, mirrored);
@@ -309,7 +314,7 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Reads one member in place for a managed struct's existing-instance path.</summary>
-    private static void AddStructExistingRead(List<string> body, RenderMember member, bool hasNext, CodeWriter w)
+    private static void AddStructExistingRead(List<string> body, PayloadRenderModel model, RenderMember member, bool hasNext, CodeWriter w)
     {
         string owner = member.Mirrored ? "reuseLocal" : "value2!";
         if (member.Kind == RenderMemberKind.Text && member.Mirrored && member.Property)
@@ -333,7 +338,7 @@ internal static partial class BinaryEmitter
             body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, StructProfile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
-        body.Add(owner + "." + member.Name + " = " + FixedOrTextRead(member, "reader2") + ";");
+        AddMemberRead(body, model, member, w, "reader2", owner + "." + member.Name);
     }
 
     /// <summary>Assigns the mirrored members of a fresh struct through its layout mirror.</summary>
@@ -389,7 +394,7 @@ internal static partial class BinaryEmitter
         if (attribute != null)
             w.Line(attribute);
         w.Line("internal static void " + name + arguments + parameters);
-        if (generic)
+        if (constraint.Length != 0)
             w.Indented(() => w.Line(constraint));
         w.Open();
         for (int index = 0; index < body.Count; index++)

@@ -75,7 +75,7 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     /// <summary>Attaches the immutable runtime API facts captured by analysis.</summary>
     /// <param name = "capabilities">The capabilities used by this operation.</param>
     /// <returns>The normalized result of the operation.</returns>
-    internal FormatterModel WithCapabilities(string[] capabilities) => new FormatterModel(Type, Definition, Arguments, Raw, RawCollection, Layout, Payload, Underlying, OrdinaryObject, Rank, FormattedJson, ReuseArraySlots, capabilities, PublishPayload);
+    internal FormatterModel WithCapabilities(string[] capabilities) => capabilities.Length == 0 ? this : new FormatterModel(Type, Definition, Arguments, Raw, RawCollection, Layout, Payload, Underlying, OrdinaryObject, Rank, FormattedJson, ReuseArraySlots, capabilities, PublishPayload);
     /// <inheritdoc/>
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name = "other">The other used by this operation.</param>

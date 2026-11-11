@@ -157,29 +157,41 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     /// <param name="model">The complete payload model.</param>
     /// <param name="options">The project facts of the payload.</param>
     /// <returns>The merged set.</returns>
-    internal SharedFormatterSet Include(TypeModel model, GeneratorOptions options)
+    internal SharedFormatterSet Include(TypeModel model, GeneratorOptions options) => Collect(new[] { model }, options, this);
+
+    /// <summary>Accumulates a publication batch once and sorts its immutable output only after dependency collection.</summary>
+    /// <param name="models">The complete retained payloads.</param>
+    /// <param name="options">The project facts.</param>
+    /// <param name="seed">Existing requirements when one owner adds a dependency.</param>
+    /// <returns>The value-equal complete publication set.</returns>
+    internal static SharedFormatterSet Collect(IEnumerable<TypeModel> models, GeneratorOptions options, SharedFormatterSet seed = default)
     {
-        string extension = Extension ?? GeneratedNames.Extension(options.AssemblyName);
-        int aliases = Extension == null ? options.AvailableAliases : AvailableAliases;
-        bool cultureInfoReuse = CultureInfoReuse;
-        var facts = new List<SequenceOwnerFact>(SequenceOwners ?? Array.Empty<SequenceOwnerFact>());
-        var scalars = new List<string>(Scalars ?? Array.Empty<string>());
-        var owners = new List<string>(Owners ?? Array.Empty<string>());
-        var dictionaries = new List<DictionaryOwnerFact>(DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>());
-        Required(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse);
+        string extension = seed.Extension ?? GeneratedNames.Extension(options.AssemblyName);
+        int aliases = seed.Extension == null ? options.AvailableAliases : seed.AvailableAliases;
+        bool cultureInfoReuse = seed.CultureInfoReuse;
+        var facts = new List<SequenceOwnerFact>(seed.SequenceOwners ?? Array.Empty<SequenceOwnerFact>());
+        var scalars = new List<string>(seed.Scalars ?? Array.Empty<string>());
+        var owners = new List<string>(seed.Owners ?? Array.Empty<string>());
+        var dictionaries = new List<DictionaryOwnerFact>(seed.DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>());
         var general = new Dictionary<string, FormatterModel>(StringComparer.Ordinal);
-        foreach (FormatterModel formatter in GeneralOwners ?? Array.Empty<FormatterModel>())
+        foreach (FormatterModel formatter in seed.GeneralOwners ?? Array.Empty<FormatterModel>())
             general[formatter.Type] = formatter;
-        CollectGeneral(model, general, new HashSet<string>(StringComparer.Ordinal));
-        cultureInfoReuse |= general.Values.Any(formatter => formatter.Supports("CanReuseCultureInfo"));
+        var payloads = new HashSet<string>(StringComparer.Ordinal);
+        var requirements = new HashSet<string>(StringComparer.Ordinal);
+        foreach (TypeModel model in models)
+        {
+            Walk(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
+            CollectGeneral(model, general, payloads);
+        }
         foreach (FormatterModel formatter in general.Values)
+        {
+            cultureInfoReuse |= formatter.Supports("CanReuseCultureInfo");
             if (formatter.Payload != null)
-                Required(formatter.Payload, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse);
-        SequenceOwnerFact[] sequenceOwners = facts.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal)
-            .Select(group => group.First())
-            .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal)
-            .ToArray();
-        return new SharedFormatterSet(extension, owners.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray(), aliases, cultureInfoReuse, sequenceOwners,
+                Walk(formatter.Payload, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
+        }
+        return new SharedFormatterSet(extension, owners.Distinct(StringComparer.Ordinal).OrderBy(owner => owner, StringComparer.Ordinal).ToArray(),
+            aliases, cultureInfoReuse, facts.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal).Select(group => group.First())
+                .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal).ToArray(),
             scalars.Distinct(StringComparer.Ordinal).OrderBy(scalar => scalar, StringComparer.Ordinal).ToArray(),
             dictionaries.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal).Select(group => group.First())
                 .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal).ToArray(),
@@ -258,14 +270,6 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         return true;
     }
 
-    private static void Required(TypeModel model, GeneratorOptions options,
-        List<SequenceOwnerFact> facts, List<string> scalars, List<string> owners, List<DictionaryOwnerFact> dictionaries,
-        ref bool cultureInfoReuse)
-    {
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        Walk(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
-    }
-
     private static void Walk(TypeModel model, GeneratorOptions options, List<SequenceOwnerFact> facts,
         List<string> scalars, List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse,
         HashSet<string> visited)
@@ -283,7 +287,7 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
                     break;
                 // The culture owner is published only when the payload that declares the member actually renders; a
                 // managed struct, a versioned record or a record beside a dictionary keeps the original pipeline.
-                case CultureInfoMember culture when CultureInfoRenders(model):
+                case CultureInfoMember culture:
                     owners.Add(FormatterRegistry.CultureInfo);
                     cultureInfoReuse |= culture.CanReuse;
                     break;
@@ -335,12 +339,6 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
                     Walk(item, options, facts, scalars, owners, dictionaries,
                         ref cultureInfoReuse, visited);
     }
-
-    /// <summary>Whether the direct record renderer covers a payload that declares a culture-info member.</summary>
-    /// <param name="model">The payload that declares the member.</param>
-    /// <returns>Whether the payload renders with the shared culture-info owner.</returns>
-    private static bool CultureInfoRenders(TypeModel model) => model is RecordModel { Versioned: false } record &&
-        !record.Members.Any(member => member is DictionaryMember);
 
     /// <summary>Records the owners one dictionary member requires.</summary>
     /// <param name="member">The dictionary member.</param>

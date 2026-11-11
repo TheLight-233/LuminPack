@@ -20,6 +20,23 @@ internal static class GeneratorOptionsFactory
     /// options are shared by all payloads of one run without retaining a finished compilation.</remarks>
     internal static GeneratorOptions From(Compilation compilation) => Cache.GetValue(compilation, static item => Create(item));
 
+    /// <summary>Reads the registration argument by enum identity across both supported assembly attribute constructors.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>The declared registration mode.</returns>
+    private static RegisterMode Registration(Compilation compilation)
+    {
+        foreach (AttributeData attribute in compilation.Assembly.GetAttributes())
+            if (attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackGeneratorOptionsAttribute")
+                foreach (TypedConstant argument in attribute.ConstructorArguments)
+                    if (argument.Type?.ToDisplayString() == "LuminPack.Attribute.LuminPackRegisterMode" &&
+                        Convert.ToInt32(argument.Value, System.Globalization.CultureInfo.InvariantCulture) == 1)
+                        return RegisterMode.Disabled;
+        return RegisterMode.Enabled;
+    }
+
+    /// <summary>Captures target, language, registration and entry-binding facts.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>The immutable project facts.</returns>
     private static GeneratorOptions Create(Compilation compilation)
     {
         var csharp = compilation as CSharpCompilation;
@@ -34,9 +51,10 @@ internal static class GeneratorOptionsFactory
                     interceptors = true;
             }
         bool net8 = symbols.Contains("NET8_0_OR_GREATER") || symbols.Contains("NET9_0_OR_GREATER") ||
-            symbols.Contains("NET10_0_OR_GREATER");
-        bool unity = symbols.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal));
+            symbols.Contains("NET10_0_OR_GREATER") || symbols.Contains("NET11_0_OR_GREATER");
+        bool unity = symbols.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal)) ||
+            compilation.GetTypeByMetadataName("UnityEngine.Application") != null || compilation.GetTypeByMetadataName("UnityEditor.Editor") != null;
         return new GeneratorOptions(net8, csharp == null ? 0 : (int)csharp.LanguageVersion, csharp?.Options.AllowUnsafe ?? false, unity,
-            RegisterMode.Enabled, availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors);
+            Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors);
     }
 }

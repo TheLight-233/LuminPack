@@ -110,10 +110,19 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
     /// <summary>The former names of each member, which JSON reads accept.</summary>
     internal readonly string[][] OldNames;
 
+    /// <summary>Whether metadata or a raw width depends on a closed generic construction or its runtime layout.</summary>
+    internal readonly bool Dynamic;
+
+    /// <summary>The revision-2 widths, with zero for a runtime-sized raw value.</summary>
+    internal readonly int[] Widths;
+
     /// <summary>Captures a version schema.</summary>
     internal VersionSchemaModel(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes,
-        string[] typeNames, string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames)
+        string[] typeNames, string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames,
+        bool dynamic = false, int[]? widths = null)
     {
+        Dynamic = dynamic;
+        Widths = widths ?? Array.Empty<int>();
         OldNames = oldNames;
         Schema = schema;
         Metadata = metadata;
@@ -128,7 +137,7 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
 
     /// <inheritdoc/>
     public bool Equals(VersionSchemaModel? other) => ReferenceEquals(this, other) || other != null && Schema == other.Schema &&
-        Layout == other.Layout && Metadata.SequenceEqual(other.Metadata) && Prefix.SequenceEqual(other.Prefix) &&
+        Layout == other.Layout && Dynamic == other.Dynamic && Widths.SequenceEqual(other.Widths) && Metadata.SequenceEqual(other.Metadata) && Prefix.SequenceEqual(other.Prefix) &&
         FieldEntries.SequenceEqual(other.FieldEntries) && TempTypes.SequenceEqual(other.TempTypes) &&
         TypeNames.SequenceEqual(other.TypeNames) && QualifiedTypes.SequenceEqual(other.QualifiedTypes) &&
         LayoutFields.SequenceEqual(other.LayoutFields) && OldNames.Length == other.OldNames.Length &&
@@ -237,6 +246,8 @@ internal sealed class CallbackModel : IEquatable<CallbackModel>
 /// <summary>An ordinary class record, optionally version-tolerant.</summary>
 internal sealed class RecordModel : TypeModel
 {
+    /// <summary>The base-first Local declarations of an inherited storage contract.</summary>
+    internal readonly StorageMirrorModel[] Mirrors;
     /// <summary>Whether the record writes a version schema prefix.</summary>
     internal readonly bool Versioned;
 
@@ -285,11 +296,12 @@ internal sealed class RecordModel : TypeModel
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
-        ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null)
+        ConstructorModel? constructor = null, CallbackModel? callbacks = null, string? rent = null, StorageMirrorModel[]? mirrors = null)
         : base(identity, accessibility, PayloadKind.Record, members, policy, constraints)
     {
         Rent = rent;
         Callbacks = callbacks;
+        Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
         Constructor = constructor;
         FixedUnionCase = fixedUnionCase;
         RecordWidth = recordWidth;
@@ -306,7 +318,7 @@ internal sealed class RecordModel : TypeModel
 
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
-        other is RecordModel record && base.Equals(other) && Versioned == record.Versioned &&
+        other is RecordModel record && base.Equals(other) && Mirrors.SequenceEqual(record.Mirrors) && Versioned == record.Versioned &&
         FixedUnionCase == record.FixedUnionCase && Derived == record.Derived &&
         Proven == record.Proven && RecordWidth == record.RecordWidth && FreshResult == record.FreshResult &&
         Mirror == record.Mirror && Rent == record.Rent && Equals(Constructor, record.Constructor) &&
@@ -373,6 +385,21 @@ internal sealed class StructModel : TypeModel
     /// <summary>Whether the declaration registers a serialization callback.</summary>
     internal readonly bool Callbacks;
 
+    /// <summary>The selected constructor used by managed binary and JSON reads.</summary>
+    internal readonly ConstructorModel? Construction;
+
+    /// <summary>The validated callbacks in declaration order.</summary>
+    internal readonly CallbackModel? SerializationCallbacks;
+
+    /// <summary>The complete named schema of a version-tolerant value.</summary>
+    internal readonly VersionSchemaModel? Version;
+
+    /// <summary>The validated static pool rental expression.</summary>
+    internal readonly string? RentCall;
+
+    /// <summary>Whether the pool method returns its destination by reference.</summary>
+    internal readonly bool RentByRef;
+
     /// <summary>Captures a struct.</summary>
     /// <param name="identity">The identity used by this operation.</param>
     /// <param name="accessibility">The accessibility used by this operation.</param>
@@ -392,13 +419,19 @@ internal sealed class StructModel : TypeModel
     /// <param name="mirrorOffsets">The mirror offsets used by this operation.</param>
     /// <param name="mirrorLayout">The mirror layout used by this operation.</param>
     internal StructModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
-        StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks, FormatterStorageModel? storagePlan = null, string? mirror = null, string[]? mirrorFields = null, int[]? mirrorOffsets = null, string? mirrorLayout = null)
+        StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks, FormatterStorageModel? storagePlan = null, string? mirror = null, string[]? mirrorFields = null, int[]? mirrorOffsets = null, string? mirrorLayout = null, ConstructorModel? construction = null, CallbackModel? serializationCallbacks = null,
+        VersionSchemaModel? version = null, string? rentCall = null, bool rentByRef = false)
         : base(identity, accessibility, PayloadKind.Struct, members, policy, constraints)
     {
         Mirror = mirror;
         MirrorFields = mirrorFields;
         MirrorOffsets = mirrorOffsets;
         MirrorLayout = mirrorLayout;
+        Construction = construction;
+        SerializationCallbacks = serializationCallbacks;
+        Version = version;
+        RentCall = rentCall;
+        RentByRef = rentByRef;
         StoragePlan = storagePlan;
         Callbacks = callbacks;
         Constructors = constructors;
@@ -413,7 +446,8 @@ internal sealed class StructModel : TypeModel
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
         other is StructModel model && base.Equals(other) && Storage == model.Storage && RecordWidth == model.RecordWidth &&
         Versioned == model.Versioned && Rent == model.Rent && Constructors == model.Constructors &&
-        Callbacks == model.Callbacks && Equals(Layout, model.Layout) && Equals(StoragePlan, model.StoragePlan) && Mirror == model.Mirror && MirrorLayout == model.MirrorLayout &&
+        Callbacks == model.Callbacks && Equals(Construction, model.Construction) && Equals(SerializationCallbacks, model.SerializationCallbacks) &&
+        Equals(Version, model.Version) && RentCall == model.RentCall && RentByRef == model.RentByRef && Equals(Layout, model.Layout) && Equals(StoragePlan, model.StoragePlan) && Mirror == model.Mirror && MirrorLayout == model.MirrorLayout &&
         (MirrorFields ?? Array.Empty<string>()).SequenceEqual(model.MirrorFields ?? Array.Empty<string>()) &&
         (MirrorOffsets ?? Array.Empty<int>()).SequenceEqual(model.MirrorOffsets ?? Array.Empty<int>());
 
@@ -807,6 +841,8 @@ internal sealed class UnionModel : TypeModel
 /// <summary>A reference-tracked graph node.</summary>
 internal sealed class CircleReferenceModel : TypeModel
 {
+    /// <summary>The inherited Local storage declarations.</summary>
+    internal readonly StorageMirrorModel[] Mirrors;
     /// <summary>Whether the node participates in cycle detection or only reference sharing.</summary>
     internal readonly bool Guarded;
 
@@ -835,15 +871,41 @@ internal sealed class CircleReferenceModel : TypeModel
     /// <summary>The CLR layout attribute line of the storage mirror, or null.</summary>
     internal readonly string? MirrorLayout;
 
+    /// <summary>The explicit wire slot of each member in sorted member order.</summary>
+    internal readonly int[] Slots;
+
+    /// <summary>The raw or length-framed width of each member, with zero for a runtime raw width.</summary>
+    internal readonly int[] Widths;
+
+    /// <summary>The selected construction metadata.</summary>
+    internal readonly ConstructorModel? Construction;
+
+    /// <summary>The validated callbacks.</summary>
+    internal readonly CallbackModel? SerializationCallbacks;
+
+    /// <summary>The static rental expression, or null.</summary>
+    internal readonly string? RentCall;
+
+    /// <summary>Whether rental rebinds destination storage by reference.</summary>
+    internal readonly bool RentByRef;
+
     /// <summary>Captures a reference-tracked node.</summary>
     internal CircleReferenceModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy,
         string[] constraints, bool guarded, bool derived, bool rent, bool selectedConstructor, bool callbacks, bool fieldsInOrder,
-        string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout)
+        string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, int[] slots, int[] widths,
+        ConstructorModel? construction, CallbackModel? serializationCallbacks, string? rentCall, bool rentByRef, StorageMirrorModel[]? mirrors = null)
         : base(identity, accessibility, PayloadKind.CircleReference, members, policy, constraints)
     {
         MirrorLayout = mirrorLayout;
         MirrorOffsets = mirrorOffsets;
         MirrorFields = mirrorFields;
+        Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
+        Slots = slots;
+        Widths = widths;
+        Construction = construction;
+        SerializationCallbacks = serializationCallbacks;
+        RentCall = rentCall;
+        RentByRef = rentByRef;
         FieldsInOrder = fieldsInOrder;
         Callbacks = callbacks;
         SelectedConstructor = selectedConstructor;
@@ -854,9 +916,11 @@ internal sealed class CircleReferenceModel : TypeModel
 
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
-        other is CircleReferenceModel circle && base.Equals(other) && Guarded == circle.Guarded && Derived == circle.Derived &&
+        other is CircleReferenceModel circle && base.Equals(other) && Mirrors.SequenceEqual(circle.Mirrors) && Guarded == circle.Guarded && Derived == circle.Derived &&
         Rent == circle.Rent && SelectedConstructor == circle.SelectedConstructor && Callbacks == circle.Callbacks &&
-        FieldsInOrder == circle.FieldsInOrder && MirrorLayout == circle.MirrorLayout &&
+        FieldsInOrder == circle.FieldsInOrder && Slots.SequenceEqual(circle.Slots) && Widths.SequenceEqual(circle.Widths) &&
+        Equals(Construction, circle.Construction) && Equals(SerializationCallbacks, circle.SerializationCallbacks) &&
+        RentCall == circle.RentCall && RentByRef == circle.RentByRef && MirrorLayout == circle.MirrorLayout &&
         (ReferenceEquals(MirrorFields, circle.MirrorFields) || MirrorFields != null && circle.MirrorFields != null &&
             Enumerable.SequenceEqual(MirrorFields, circle.MirrorFields)) &&
         (ReferenceEquals(MirrorOffsets, circle.MirrorOffsets) || MirrorOffsets != null && circle.MirrorOffsets != null &&

@@ -61,51 +61,25 @@ internal static partial class TypeModelFactory
         return session.Options.Equals(options) ? session.Create(symbol, depth: 0) : new Session(compilation, options).Create(symbol, depth: 0);
     }
 
-    /// <summary>Validates the declaration-level rules the legacy generator reports as errors.</summary>
-    /// <param name="symbol">The attributed type.</param>
-    /// <param name="model">The model analysis produced, or null when the declaration is outside the surface.</param>
-    /// <returns>The captured declaration diagnostics, empty when the declaration is valid.</returns>
-    /// <remarks>Only rules whose legacy meaning is unambiguous are reported here. A shape the renderers do not cover yet stays
-    /// silent; a declaration error is always reported at its source location.</remarks>
-    internal static DiagnosticInfo[] Diagnose(INamedTypeSymbol symbol, TypeModel? model)
+    /// <summary>Captures declaration diagnostics through the compilation-owned analysis cache.</summary>
+    /// <param name="symbol">The attributed declaration.</param>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <param name="options">The immutable project facts.</param>
+    /// <returns>The declaration diagnostics.</returns>
+    internal static DiagnosticInfo[] Diagnose(INamedTypeSymbol symbol, Compilation compilation, GeneratorOptions options)
     {
-        var diagnostics = new List<DiagnosticInfo>();
-        if (symbol.IsStatic)
-            diagnostics.Add(Diagnostic(DiagnosticDescriptors.StaticClass, symbol, symbol.ToDisplayString()));
-        if (symbol.IsRefLikeType)
-            diagnostics.Add(Diagnostic(DiagnosticDescriptors.TypeIsRefStruct, symbol, symbol.ToDisplayString()));
-        var attribute = symbol.GetAttributes().FirstOrDefault(item =>
-            item.AttributeClass?.ToDisplayString() == PackableAttribute);
-        string generatorType = attribute == null ? "Object" : GeneratorTypeName(attribute);
-        bool generated = generatorType is not ("NonGenerator" or "Custom");
-        if (generated && model is UnionModel union && union.Cases.Length > 256)
-            diagnostics.Add(Diagnostic(DiagnosticDescriptors.TooManyUnionMembers, symbol, symbol.ToDisplayString(),
-                union.Cases.Length.ToString(CultureInfo.InvariantCulture)));
-        else if (generated && model != null && model.Members.Length > 249)
-            diagnostics.Add(Diagnostic(DiagnosticDescriptors.MembersCountOver250, symbol, symbol.ToDisplayString(),
-                model.Members.Length.ToString(CultureInfo.InvariantCulture)));
-        // A class the generator constructs itself needs a public constructor; a pool rent supplies the instance instead.
-        if (generated && symbol.TypeKind == TypeKind.Class && !symbol.IsAbstract && !symbol.IsStatic &&
-            !symbol.InstanceConstructors.Any(ctor => ctor.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public) &&
-            !symbol.GetMembers().OfType<IMethodSymbol>().Any(method => HasAttribute(method, PoolRentAttribute)))
-            diagnostics.Add(Diagnostic(DiagnosticDescriptors.NoPublicConstructor, symbol, symbol.ToDisplayString()));
-        return diagnostics.ToArray();
+        Session session = Sessions.GetValue(compilation, item => new Session(item, options));
+        return session.Options.Equals(options) ? session.Diagnose(symbol) : new Session(compilation, options).Diagnose(symbol);
     }
 
-    /// <summary>Captures one diagnostic at a declaration's source location.</summary>
-    /// <param name="descriptor">The diagnostic descriptor.</param>
-    /// <param name="symbol">The declaration the diagnostic points at.</param>
-    /// <param name="arguments">The message arguments.</param>
-    /// <returns>The captured diagnostic.</returns>
-    private static DiagnosticInfo Diagnostic(DiagnosticDescriptor descriptor, ISymbol symbol, params string[] arguments)
+    /// <summary>Captures assembly option errors once for the compilation.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <param name="options">The project facts.</param>
+    /// <returns>The assembly diagnostics.</returns>
+    internal static DiagnosticInfo[] DiagnoseAssembly(Compilation compilation, GeneratorOptions options)
     {
-        Location? location = symbol.Locations.FirstOrDefault(item => item.IsInSource);
-        if (location == null)
-            return DiagnosticInfo.Unlocated(descriptor.Id, arguments);
-        FileLinePositionSpan line = location.GetLineSpan();
-        TextSpan span = location.SourceSpan;
-        return DiagnosticInfo.Located(descriptor.Id, line.Path, span.Start, span.Length, line.StartLinePosition.Line,
-            line.StartLinePosition.Character, line.EndLinePosition.Line, line.EndLinePosition.Character, arguments);
+        Session session = Sessions.GetValue(compilation, item => new Session(item, options));
+        return session.Options.Equals(options) ? session.DiagnoseAssembly() : new Session(compilation, options).DiagnoseAssembly();
     }
 
     /// <summary>Holds the per-compilation analysis state: the consumer compilation, its project facts and the completed models.</summary>
@@ -212,11 +186,11 @@ internal static partial class TypeModelFactory
         {
             MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
             PortableLayout? layout = symbol.IsUnmanagedType && generatorType == "Object" ? TryPortableLayout(symbol) : null;
-            bool nativeContract = symbol.IsUnmanagedType && !ContainsCustomContract(symbol, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+            bool nativeContract = symbol.IsUnmanagedType && generatorType == "Object" &&
+                !ContainsCustomContract(symbol, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             StructStorage storage = !nativeContract ? StructStorage.ManagedRecord :
                 layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
-            // A managed record body is framed by the declaration's constructors, callbacks and rent; a value type that
-            // is version-tolerant writes a schema prefix the struct roots do not reproduce.
+            // Managed and versioned values retain their constructors, callbacks and rental contracts alongside storage facts.
             bool managed = storage == StructStorage.ManagedRecord;
             string? mirror = null, mirrorLayout = null;
             string[]? mirrorFields = null;
@@ -224,11 +198,21 @@ internal static partial class TypeModelFactory
             if (members.Any(member => member.Mirrored))
                 TryMirror(symbol, identity, false, false, policy, members, issues,
                     out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
+            ConstructorModel? construction = SelectedConstructorModel(symbol, members, issues);
+            CallbackModel? callbacks = SerializationCallbacks(symbol, identity.GlobalName);
+            string? rentCall = PoolRent(symbol, identity.GlobalName, issues);
+            if (rentCall != null && construction != null)
+                construction = construction.Rented();
+            bool rentByRef = rentCall != null && symbol.GetMembers().OfType<IMethodSymbol>()
+                .Any(method => HasAttribute(method, PoolRentAttribute) && method.ReturnsByRef);
+            VersionSchemaModel? version = generatorType == "VersionTolerant" ?
+                TryVersionSchema(symbol, identity, members, policy, false, issues) : null;
             return new StructModel(identity, accessibility, members, policy, constraints, storage, layout,
                 RecordWidthSupported(symbol), versioned: generatorType == "VersionTolerant",
                 rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
                 callbacks: managed && Callbacks(symbol), storagePlan: symbol.IsUnmanagedType && generatorType == "Object" ? FormatterStorage(symbol) : null,
-                mirror: mirror, mirrorFields: mirrorFields, mirrorOffsets: mirrorOffsets, mirrorLayout: mirrorLayout);
+                mirror: mirror, mirrorFields: mirrorFields, mirrorOffsets: mirrorOffsets, mirrorLayout: mirrorLayout,
+                construction: construction, serializationCallbacks: callbacks, version: version, rentCall: rentCall, rentByRef: rentByRef);
         }
 
         /// <summary>Classifies one payload and builds the model shared by every payload kind.</summary>
@@ -277,7 +261,7 @@ internal static partial class TypeModelFactory
 
             TypeAccessibility accessibility = symbol.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public
                 ? TypeAccessibility.Public : TypeAccessibility.Internal;
-            string[] constraints = symbol.IsDefinition ? symbol.TypeParameters.Select(parameter => parameter.Name).ToArray() : Array.Empty<string>();
+            string[] constraints = TypeConstraints(symbol);
             PayloadKind kind = Kind(symbol, generatorType);
             WirePolicy policy = TypePolicy(symbol, kind);
 
@@ -311,9 +295,22 @@ internal static partial class TypeModelFactory
                 {
                     MemberModel[] members = Members(symbol, policy, depth, issues, out bool derived, path);
                     MirrorFields(symbol, out string[]? mirrorFields, out int[]? mirrorOffsets, out string? mirrorLayout);
+                    var declarations = Levels(symbol).SelectMany(OrderedStorageMembers).Where(member => TryStorage(member, out _))
+                        .ToDictionary(member => member.Name, StringComparer.Ordinal);
+                    int[] slots = members.Select(member => checked((int)(Order(declarations[member.Name]) ?? 0))).ToArray();
+                    int[] widths = members.Select(member => VersionWidth(VersionFieldType(StorageType(declarations[member.Name])) ?? 19,
+                        StorageType(declarations[member.Name]))).ToArray();
+                    ConstructorModel? construction = SelectedConstructorModel(symbol, members, issues);
+                    CallbackModel? callbacks = SerializationCallbacks(symbol, identity.GlobalName);
+                    string? rent = PoolRent(symbol, identity.GlobalName, issues);
+                    if (rent != null && construction != null)
+                        construction = construction.Rented();
+                    bool rentByRef = rent != null && symbol.GetMembers().OfType<IMethodSymbol>()
+                        .Any(method => HasAttribute(method, PoolRentAttribute) && method.ReturnsByRef);
                     return new CircleReferenceModel(identity, accessibility, members, policy, constraints, IsRecursive(symbol), derived,
                         Rent(symbol), SelectedConstructor(symbol), Callbacks(symbol), FieldsInOrder(symbol, members),
-                        mirrorFields, mirrorOffsets, mirrorLayout);
+                        mirrorFields, mirrorOffsets, mirrorLayout, slots, widths, construction, callbacks, rent, rentByRef,
+                        CaptureMirrors(symbol, identity, issues));
                 }
                 default:
                 {
@@ -324,36 +321,8 @@ internal static partial class TypeModelFactory
                     ConstructorModel? constructor = SelectedConstructorModel(symbol, members, issues);
                     string? rent = PoolRent(symbol, identity.GlobalName, issues);
                     CallbackModel? callbacks = SerializationCallbacks(symbol, identity.GlobalName);
-                    // A version-tolerant root without callbacks covers a plain rent; callbacks keep the original pipeline.
-                    if (versioned && callbacks != null)
-                    {
-                        issues.Add("a version-tolerant record keeps its serialization callbacks outside the direct emitters");
-                        callbacks = null;
-                    }
-                    if (constructor != null)
-                    {
-                        // The constructed read stores each member in a temporary local, which fixed scalars, strings, built-in
-                        // values and type parameters spell.
-                        if (!ConstructedMembers(members))
-                        {
-                            issues.Add("a selected constructor record stores only fixed scalars, strings and type parameters");
-                            constructor = null;
-                        }
-                        else if (policy.Input == InputPolicy.Trusted)
-                        {
-                            issues.Add("a trusted record keeps its checked constructed read outside the direct emitters");
-                            constructor = null;
-                        }
-                        else if (rent != null)
-                            constructor = constructor.Rented();
-                    }
-                    // A pooled type declares its storage mirror even for public fields; a derived type would need its base
-                    // storage as well and keeps the original pipeline.
-                    if (rent != null && derived)
-                    {
-                        issues.Add("a pooled derived record keeps its layout mirror outside the direct emitters");
-                        rent = null;
-                    }
+                    if (constructor != null && rent != null)
+                        constructor = constructor.Rented();
                     // Storage reached through auto-property or included non-public fields needs the legacy layout mirror before
                     // the record emitters can write or read it. Every shape the mirror cannot reproduce stays unmapped.
                     string? mirror = null, mirrorLayout = null;
@@ -381,7 +350,7 @@ internal static partial class TypeModelFactory
                         // A pooled read rents its instance, so it never assigns a fresh result directly.
                         rent == null && CanDeserializeDirectlyIntoFreshResult(symbol, members),
                         mirror, mirrorFields, mirrorOffsets, mirrorLayout, version,
-                        constructor, callbacks, rent);
+                        constructor, callbacks, rent, (mirror != null || versioned) ? CaptureMirrors(symbol, identity, issues) : Array.Empty<StorageMirrorModel>());
                 }
             }
         }
@@ -403,7 +372,7 @@ internal static partial class TypeModelFactory
                 levels.Insert(0, level);
             derived = levels.Count > 1;
 
-            var members = new List<MemberModel>();
+            var members = new List<(MemberModel Model, uint Order)>();
             var names = new HashSet<string>(StringComparer.Ordinal);
             foreach (var level in levels)
             foreach (var member in OrderedStorageMembers(level))
@@ -419,9 +388,11 @@ internal static partial class TypeModelFactory
                     issues.Add("the payload chain declares member '" + model.Name + "' more than once");
                     continue;
                 }
-                members.Add(model);
+                uint order = Order(member) ?? (uint)(member.DeclaringSyntaxReferences.FirstOrDefault()?.Span.Start ?? int.MaxValue);
+                members.Add((model, order));
             }
-            return members.ToArray();
+            members.Sort((left, right) => left.Order.CompareTo(right.Order));
+            return members.Select(item => item.Model).ToArray();
         }
 
         /// <summary>Decides whether a declared member has serialized instance storage and how it is reached.</summary>
@@ -433,23 +404,23 @@ internal static partial class TypeModelFactory
             switch (member)
             {
                 case IFieldSymbol field when !field.IsStatic && !field.IsConst:
-                    if (HasAttribute(field, IgnoreAttribute))
+                    if (field.IsImplicitlyDeclared || HasAttribute(field, IgnoreAttribute))
                         break;
-                    if (field.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public)
+                    if (!field.IsReadOnly && field.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                     {
                         storage = MemberStorage.Field;
                         return true;
                     }
-                    if (HasAttribute(field, IncludeAttribute))
+                    if (HasAttribute(field, IncludeAttribute) || field.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
                     {
                         storage = MemberStorage.IncludedField;
                         return true;
                     }
                     break;
                 case IPropertySymbol property when IsAutoProperty(property):
-                    if (HasAttribute(property, IgnoreAttribute))
+                    if (InvalidOverrideAnnotation(property) != null || HasAttribute(property, IgnoreAttribute))
                         break;
-                    if (property.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public ||
+                    if (property.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal ||
                         HasAttribute(property, IncludeAttribute))
                     {
                         storage = MemberStorage.AutoProperty;
@@ -495,12 +466,15 @@ internal static partial class TypeModelFactory
                     return null;
                 }
                 return new ScalarMember(name, storage, policy, underlying.Keyword, underlying.Size, raw: false, builtin: false,
-                    enumType: type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), underlying: underlying.Keyword);
+                    enumType: type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), underlying: underlying.Keyword,
+                    isVolatile: member is IFieldSymbol { IsVolatile: true });
             }
             if (Scalar(type) is { } scalar)
-                return new ScalarMember(name, storage, policy, scalar.Keyword, scalar.Size, raw: false, builtin: false);
+                return new ScalarMember(name, storage, policy, scalar.Keyword, scalar.Size, raw: false, builtin: false,
+                    isVolatile: member is IFieldSymbol { IsVolatile: true });
             if (Builtin(type) is { } builtin)
-                return new ScalarMember(name, storage, policy, builtin, 0, raw: true, builtin: true);
+                return new ScalarMember(name, storage, policy, builtin, 0, raw: true, builtin: true,
+                    isVolatile: member is IFieldSymbol { IsVolatile: true });
             if (type.SpecialType == SpecialType.System_String)
                 return new TextMember(name, storage, policy);
             if (IsCultureInfo(type))
@@ -1024,33 +998,18 @@ internal static partial class TypeModelFactory
         /// <param name="symbol">The Union root.</param>
         /// <param name="issues">Receives invalid case declarations.</param>
         /// <returns>The declared tag and case type of each attribute.</returns>
-        private static List<(int Tag, INamedTypeSymbol Type)> UnionMembers(INamedTypeSymbol symbol, List<string> issues)
+        private List<(int Tag, INamedTypeSymbol Type)> UnionMembers(INamedTypeSymbol symbol, List<string> issues)
         {
             var cases = new List<(int Tag, INamedTypeSymbol Type)>();
             var tags = new HashSet<int>();
-            foreach (var attribute in symbol.GetAttributes().Where(item => item.AttributeClass?.ToDisplayString() == UnionAttribute))
+            foreach (UnionCaseDeclaration declaration in UnionCaseDeclarations(symbol))
             {
-                if (attribute.ConstructorArguments.Length < 2)
-                    continue;
-                int tag = Convert.ToInt32(attribute.ConstructorArguments[0].Value, CultureInfo.InvariantCulture);
-                if (!tags.Add(tag))
+                if (!tags.Add(declaration.Tag))
                 {
-                    issues.Add("the Union root declares tag " + tag.ToString(CultureInfo.InvariantCulture) + " more than once");
+                    issues.Add("the Union root declares tag " + declaration.Tag.ToString(CultureInfo.InvariantCulture) + " more than once");
                     continue;
                 }
-                if (attribute.ConstructorArguments[1].Value is not INamedTypeSymbol caseType ||
-                    caseType.TypeKind is not (TypeKind.Class or TypeKind.Struct))
-                {
-                    issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " does not name a class or struct case");
-                    continue;
-                }
-                if (caseType.IsGenericType && !SymbolEqualityComparer.Default.Equals(caseType, caseType.OriginalDefinition))
-                {
-                    issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " names the constructed generic case '" +
-                        caseType.ToDisplayString() + "', which has no modeled identity");
-                    continue;
-                }
-                cases.Add((tag, caseType));
+                cases.Add((declaration.Tag, declaration.Type));
             }
             return cases;
         }
@@ -1534,7 +1493,7 @@ internal static partial class TypeModelFactory
             while (scopes.Count != 0)
                 policy = Apply(policy, scopes.Pop());
             if (kind == PayloadKind.CircleReference && !policy.TrackReferences)
-                policy = new WirePolicy(policy.Input, policy.Strings, policy.Bound, trackReferences: true);
+                policy = new WirePolicy(policy.Input, policy.Strings, policy.Bound, trackReferences: true, declared: policy.Declared);
             return policy;
         }
 
@@ -1567,6 +1526,7 @@ internal static partial class TypeModelFactory
             InputPolicy input = policy.Input;
             int? bound = policy.Bound;
             bool changed = false;
+            bool declared = policy.Declared;
 
             foreach (var attribute in symbol.GetAttributes())
             {
@@ -1580,6 +1540,12 @@ internal static partial class TypeModelFactory
                 }
                 if (attributeName != OptionAttribute)
                     continue;
+                if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is
+                    "StringEncoding" or "StringRecording" or "MaxJsonDepth" or "ValidateJsonSyntax" or "StandardFormat"))
+                {
+                    declared = true;
+                    changed = true;
+                }
                 foreach (var argument in attribute.NamedArguments)
                 {
                     switch (argument.Key)
@@ -1623,7 +1589,7 @@ internal static partial class TypeModelFactory
             if (!changed)
                 return policy;
             return new WirePolicy(input, new StringProfile(format, precision, depth, strict, encoding, recording), bound,
-                policy.TrackReferences);
+                policy.TrackReferences, declared);
         }
 
         /// <summary>Classifies unmanaged value storage and detects a layout that needs field-wise packed transfer.</summary>
@@ -2473,19 +2439,11 @@ internal static partial class TypeModelFactory
         /// A mismatched parameter becomes a <c>default</c> argument.</remarks>
         private static ConstructorModel? SelectedConstructorModel(INamedTypeSymbol type, MemberModel[] members, List<string> issues)
         {
-            var publicConstructors = type.InstanceConstructors
-                .Where(constructor => !constructor.IsStatic &&
-                    constructor.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public &&
-                    !constructor.IsImplicitlyDeclared)
-                .ToList();
-            IMethodSymbol? selected = null;
-            if (publicConstructors.Count != 0)
+            IMethodSymbol? selected = SelectConstructor(type, out bool ambiguous);
+            if (ambiguous)
             {
-                var marked = publicConstructors.Where(constructor => HasAttribute(constructor, ConstructorAttribute)).ToList();
-                if (marked.Count == 1)
-                    selected = marked[0];
-                else if (marked.Count == 0 && publicConstructors.Count == 1)
-                    selected = publicConstructors[0];
+                issues.Add("constructor: selection is ambiguous");
+                return null;
             }
             // The generated roots create a parameterless instance; a selected constructor only supplies the arguments when
             // its parameter list is non-empty.
@@ -2533,26 +2491,10 @@ internal static partial class TypeModelFactory
             return names.ToArray();
         }
 
-        /// <summary>Whether every serialized member can be staged in a constructed read's temporary local.</summary>
-        /// <param name="members">The serialized members in wire order.</param>
-        /// <returns>Whether each member is a fixed scalar, a string, a built-in value or a type parameter.</returns>
-        private static bool ConstructedMembers(MemberModel[] members)
-        {
-            foreach (MemberModel member in members)
-            {
-                if (member is TextMember or TypeParameterMember)
-                    continue;
-                if (member is ScalarMember scalar && (!scalar.Raw || scalar.Builtin))
-                    continue;
-                return false;
-            }
-            return true;
-        }
-
         /// <summary>Models the pool rent method of a record.</summary>
         /// <param name="type">The declared payload.</param>
         /// <param name="globalName">The fully qualified payload spelling.</param>
-        /// <param name="issues">Receives the reason a rent that returns by reference is outside the direct emitters.</param>
+        /// <param name="issues">The owning analysis issue collection.</param>
         /// <returns>The static rent call, or null when the payload declares no usable rent method.</returns>
         private static string? PoolRent(INamedTypeSymbol type, string globalName, List<string> issues)
         {
@@ -2566,12 +2508,6 @@ internal static partial class TypeModelFactory
             if (!method.IsStatic || method.Parameters.Length != 0 ||
                 !SymbolEqualityComparer.Default.Equals(method.ReturnType, type))
                 return null;
-            // A rent returning by reference needs its own storage protocol, which the direct read does not spell.
-            if (method.ReturnsByRef)
-            {
-                issues.Add("a pool rent that returns by reference keeps its own storage protocol");
-                return null;
-            }
             return globalName + "." + method.Name + "()";
         }
 
@@ -2595,7 +2531,8 @@ internal static partial class TypeModelFactory
                         continue;
                     if (!ValidCallback(type, method))
                         continue;
-                    string call = method.IsStatic ? globalName + "." + method.Name + "();" : "value?." + method.Name + "();";
+                    string call = method.IsStatic ? globalName + "." + Identifier(method.Name) + "();" :
+                        (type.IsValueType ? "value." : "value?.") + Identifier(method.Name) + "();";
                     switch (name)
                     {
                         case OnSerializingAttribute: writeBefore.Add(call); break;
@@ -2665,7 +2602,8 @@ internal static partial class TypeModelFactory
         /// <param name="fields">Receives the mirror declarations in storage order, or null when they cannot be reproduced.</param>
         /// <param name="offsets">Receives the explicit-layout offset per field, or null for sequential storage.</param>
         /// <param name="layout">Receives the CLR layout attribute line, or null.</param>
-        private static void MirrorFields(INamedTypeSymbol symbol, out string[]? fields, out int[]? offsets, out string? layout)
+        /// <param name="includeBase">Whether this compatibility field list includes inherited storage.</param>
+        private static void MirrorFields(INamedTypeSymbol symbol, out string[]? fields, out int[]? offsets, out string? layout, bool includeBase = true)
         {
             var declarations = new List<string>();
             var positions = new List<int>();
@@ -2684,7 +2622,7 @@ internal static partial class TypeModelFactory
 
             void Collect(INamedTypeSymbol level)
             {
-                if (level.BaseType != null && level.BaseType.SpecialType != SpecialType.System_Object)
+                if (includeBase && level.BaseType != null && level.BaseType.SpecialType != SpecialType.System_Object)
                     Collect(level.BaseType);
                 foreach (ISymbol member in OrderedStorageMembers(level))
                 {
@@ -2699,8 +2637,8 @@ internal static partial class TypeModelFactory
                             continue;
                         storage = property.Type;
                         isValue = property.Type.IsValueType;
-                        offsetOwner = level.GetMembers().OfType<IFieldSymbol>()
-                            .FirstOrDefault(field => SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, property)) ?? member;
+                        if (StorageSnapshots.GetValue(level, CaptureStorage).BackingFields.TryGetValue(property, out IFieldSymbol? backing))
+                            offsetOwner = backing;
                     }
                     else if (member is IFieldSymbol field)
                     {
@@ -2718,7 +2656,8 @@ internal static partial class TypeModelFactory
                     string spelling = storage is IArrayTypeSymbol { Rank: > 1 } multi
                         ? multi.ElementType.ToDisplayString() + "[" + new string(',', multi.Rank - 1) + " ]"
                         : storage.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    declarations.Add(spelling + (IsUnmanagedKeyword(spelling) || isValue ? string.Empty : "?") + " " + Identifier(member.Name));
+                    declarations.Add((member is IFieldSymbol { IsVolatile: true } ? "volatile " : string.Empty) + spelling +
+                        (IsUnmanagedKeyword(spelling) || isValue ? string.Empty : "?") + " " + Identifier(member.Name));
                     positions.Add(FieldOffset(offsetOwner));
                 }
             }
@@ -2783,65 +2722,16 @@ internal static partial class TypeModelFactory
         /// <param name="derived">Whether the record's base type contributes storage.</param>
         /// <param name="issues">Receives the reason the schema is outside the modeled surface.</param>
         /// <returns>The schema model, or null when the record keeps the original pipeline.</returns>
-        /// <remarks>Versioned structs, callbacks, pool rents, base payloads, generic definitions, bounds, non-default profiles and
-        /// every member shape the version emitter does not cover stay unmapped.</remarks>
+        /// <remarks>The schema retains the legacy classification and wire order. Open generic identities use the runtime's
+        /// existing closed-type metadata initialization; closed identities retain constant metadata.</remarks>
         private VersionSchemaModel? TryVersionSchema(INamedTypeSymbol type, TypeIdentity identity, MemberModel[] members,
             WirePolicy policy, bool derived, List<string> issues)
         {
-            if (derived || identity.IsGeneric)
-            {
-                issues.Add("a derived or generic version-tolerant record keeps its schema outside the direct emitters");
-                return null;
-            }
-            // Constant schema bytes are emitted as collection expressions, which the original emits on .NET 8 with C# 12.
-            if (!Options.Net8 || Options.CSharpVersion < 1200)
-            {
-                issues.Add("version tolerant: settings");
-                return null;
-            }
-            if (policy.Bound != null || !policy.Equals(WirePolicy.Default))
-            {
-                issues.Add("a bounded or non-default version-tolerant record keeps its schema outside the direct emitters");
-                return null;
-            }
-            if (Callbacks(type) || Rent(type) || SelectedConstructor(type))
-            {
-                issues.Add("a version-tolerant record with callbacks, a pool rent or a selected constructor keeps its schema outside the direct emitters");
-                return null;
-            }
-            if (!type.InstanceConstructors.Any(constructor => constructor.Parameters.Length == 0 &&
-                constructor.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public))
-            {
-                issues.Add("a version-tolerant record without a public parameterless constructor keeps its schema outside the direct emitters");
-                return null;
-            }
-            if (members.Length > 32)
-            {
-                issues.Add("member count: " + members.Length.ToString(CultureInfo.InvariantCulture));
-                return null;
-            }
-            // The analyzed serialized storage in declaration order; the schema's metadata table follows the wire order.
-            var storage = new List<ISymbol>();
-            foreach (ISymbol declared in OrderedStorageMembers(type))
-                if (TryStorage(declared, out _))
-                    storage.Add(declared);
-            if (storage.Count != members.Length)
-            {
-                issues.Add("version tolerant: shape");
-                return null;
-            }
-            for (int index = 0; index < members.Length; index++)
-                if (storage[index].Name != members[index].Name || Order(storage[index]) is uint declared && declared != (uint)index)
-                {
-                    issues.Add("version tolerant: member order");
-                    return null;
-                }
-            var locals = VersionLocals(type);
-            if (locals.Count != members.Length)
-            {
-                issues.Add("version tolerant: shape");
-                return null;
-            }
+            // Metadata follows wire order, while the Local mirror retains every physical storage slot.
+            var declarations = Levels(type).SelectMany(OrderedStorageMembers).Where(member => TryStorage(member, out _))
+                .ToDictionary(member => member.Name, StringComparer.Ordinal);
+            var storage = members.Select(member => declarations[member.Name]).ToArray();
+            var locals = Levels(type).SelectMany(VersionLocals).ToList();
 
             var names = new HashSet<string>(StringComparer.Ordinal);
             var oldNames = new string[members.Length][];
@@ -2861,11 +2751,6 @@ internal static partial class TypeModelFactory
                     .Where(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")
                     .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value as string)
                     .ToArray();
-                if (aliases.Length != 0 && declared is not IFieldSymbol)
-                {
-                    issues.Add("version tolerant: member attributes '" + declared.Name + "'");
-                    return null;
-                }
                 foreach (string? name in new string?[] { declared.Name }.Concat(aliases))
                 {
                     if (string.IsNullOrEmpty(name) || !names.Add(name!))
@@ -2875,7 +2760,7 @@ internal static partial class TypeModelFactory
                     }
                     try
                     {
-                        new UTF8Encoding(false, true).GetByteCount(name!);
+                        StrictMemberEncoding.GetByteCount(name!);
                     }
                     catch (EncoderFallbackException)
                     {
@@ -2884,7 +2769,7 @@ internal static partial class TypeModelFactory
                     }
                 }
                 int? fieldType = VersionFieldType(memberType);
-                if (fieldType == null || !VersionMemberCovered(members[index], fieldType.Value))
+                if (fieldType == null)
                 {
                     issues.Add("version tolerant: members '" + declared.Name + "'");
                     return null;
@@ -2894,6 +2779,7 @@ internal static partial class TypeModelFactory
                 memberTypes[index] = memberType;
             }
 
+            bool dynamic = false;
             var metadata = new List<byte>();
             var widths = new int[members.Length];
             var entries = new string[members.Length];
@@ -2905,20 +2791,12 @@ internal static partial class TypeModelFactory
                 ITypeSymbol memberType = memberTypes[index];
                 string serialized = oldNames[index].Length == 0 ? members[index].Name : oldNames[index][0];
                 string? typeIdentity = VersionTypeIdentity(memberType);
-                if (typeIdentity == null)
-                {
-                    issues.Add("version tolerant: metadata '" + members[index].Name + "'");
-                    return null;
-                }
+                dynamic |= typeIdentity == null;
                 string representation = VersionRepresentation(fieldTypes[index], members[index].Policy);
                 AppendVersionLength(metadata, serialized);
                 AppendVersionLength(metadata, representation + (VersionIsDirectPrimitive(fieldTypes[index], memberType) ? string.Empty : typeIdentity));
                 widths[index] = VersionWidth(fieldTypes[index], memberType);
-                if (widths[index] == 0)
-                {
-                    issues.Add("version tolerant: widths");
-                    return null;
-                }
+                dynamic |= widths[index] == 0;
                 string[] aliasLiterals = new[] { members[index].Name }.Concat(oldNames[index]).Where(alias => alias != serialized)
                     .Select(VersionLiteral).ToArray();
                 entries[index] = "new global::LuminPack.Core.LuminPackVersionField(" + VersionLiteral(serialized) + ", new string[] " +
@@ -2940,11 +2818,12 @@ internal static partial class TypeModelFactory
                 prefix.Add((byte)width);
             string globalName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             string schema = "global::LuminPack.Generated." + GeneratedNames.Extension(Options.AssemblyName) + ".Version_" +
-                GeneratedNames.Sanitize(globalName);
+                GeneratedNames.Sanitize(globalName) + (identity.TypeParameters.Length == 0 ? string.Empty :
+                    "<" + string.Join(", ", identity.TypeParameters) + ">");
             var layoutFields = locals.Select(local => local.TypeName +
                 (IsUnmanagedKeyword(local.TypeName) || local.IsValue ? string.Empty : "?") + " " + Identifier(local.Name)).ToArray();
             return new VersionSchemaModel(schema, metadata.ToArray(), prefix.ToArray(), entries, tempTypes, typeNames, qualifiedTypes,
-                VersionLayout(type), layoutFields, oldNames);
+                VersionLayout(type), layoutFields, oldNames, dynamic, widths);
         }
 
         /// <summary>Builds the layout mirror a version-tolerant record declares for auto-property and included storage.</summary>
@@ -2971,11 +2850,6 @@ internal static partial class TypeModelFactory
             }
             foreach (MemberModel member in members)
             {
-                if (member.Storage == MemberStorage.AutoProperty && !PublicAutoProperty(type, member.Name))
-                {
-                    issues.Add("member '" + member.Name + "' has a non-public or attributed accessor");
-                    return;
-                }
                 if (!MirrorStorageContains(type, member.Name))
                 {
                     issues.Add("member '" + member.Name + "' is not part of the reconstructed storage");
@@ -3036,26 +2910,14 @@ internal static partial class TypeModelFactory
             int generic = local.IndexOf('<');
             if (generic >= 0)
                 local = local.Substring(0, generic);
-            return "LuminLayout_" + digest + "_" + PortableSlotSuffix(type) + "_Local" + local;
+            return "LuminLayout_" + digest + "_" + PortableSlotSuffix(type) + "_Local" + local +
+                (type.IsDefinition && type.TypeParameters.Length != 0 ? "<" + string.Join(", ", type.TypeParameters.Select(parameter => parameter.Name)) + ">" : string.Empty);
         }
-
-        /// <summary>Whether a modeled member is one of the shapes the version emitter writes and reads.</summary>
-        /// <param name="member">The analyzed member.</param>
-        /// <param name="fieldType">The legacy schema classification of the member's type.</param>
-        /// <returns>Whether the version schema covers the member.</returns>
-        /// <remarks>The legacy direct model rejects every sequence member of a version-tolerant record, including a plain list,
-        /// so only fixed scalars, enums and strings are covered here.</remarks>
-        private static bool VersionMemberCovered(MemberModel member, int fieldType) => member switch
-        {
-            ScalarMember { Raw: false } scalar => scalar.EnumType != null ? fieldType == 14 : fieldType is >= 0 and <= 13,
-            TextMember => fieldType == 12,
-            _ => false,
-        };
 
         /// <summary>Classifies a member's declared type with the legacy schema codes.</summary>
         /// <param name="type">The declared member type.</param>
         /// <returns>The classification, or null for a member the schema does not cover.</returns>
-        private static int? VersionFieldType(ITypeSymbol type)
+        private int? VersionFieldType(ITypeSymbol type)
         {
             switch (type.SpecialType)
             {
@@ -3076,10 +2938,26 @@ internal static partial class TypeModelFactory
             }
             if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum })
                 return 14;
-            if (type is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
-                list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>")
-                return 17;
-            return null;
+            if (type is IArrayTypeSymbol array)
+                return array.ElementType is INamedTypeSymbol element && (FormatterStorage(element) != null || ContainsTypeParameter(element)) ? 19 : 18;
+            if (type is INamedTypeSymbol named)
+            {
+                if (Builtin(named) != null || IsCultureInfo(named) || named.IsAbstract || named.IsRecord ||
+                    FormatterRegistry.HasStandalone(named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name) ||
+                    FormatterDefinitions.HasGeneric(named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name) ||
+                    DictionaryKind(named) != null)
+                    return 19;
+                if (SequenceKind(named) is { } sequence)
+                    return sequence == CollectionKind.List && !(named.TypeArguments[0] is INamedTypeSymbol item &&
+                        (FormatterStorage(item) != null || ContainsTypeParameter(item))) ? 17 : 19;
+                if (named.TypeKind == TypeKind.Struct && FormatterStorage(named) != null)
+                    return 19;
+                if (named.TypeKind == TypeKind.Struct && !named.IsRecord)
+                    return 15;
+                if (IsPackable(named) && !named.IsAbstract)
+                    return 16;
+            }
+            return 19;
         }
 
         /// <summary>Whether the classification byte already identifies the exact primitive type.</summary>
@@ -3121,7 +2999,7 @@ internal static partial class TypeModelFactory
         /// <returns>The width byte value, or zero for a width known only at run time.</returns>
         private static int VersionWidth(int fieldType, ITypeSymbol type)
         {
-            if (fieldType is 12 or 17)
+            if (fieldType is 12 or >= 15)
                 return 255;
             if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum, EnumUnderlyingType: { } underlying })
                 type = underlying;
@@ -3240,16 +3118,11 @@ internal static partial class TypeModelFactory
             mirrorFields = null;
             mirrorOffsets = null;
             mirrorLayout = null;
-            // A versioned record owns a schema-owned mirror; a derived record needs its base storage and keeps the original
-            // pipeline. A selected constructor, callbacks or a rent reach the same mirror the record emitters spell.
-            if (versioned || derived)
+            // Versioned records resolve their schema-owned storage through TryVersionMirror. Inherited storage is also
+            // captured as separate physical levels by CaptureMirrors.
+            if (versioned)
             {
-                issues.Add("a mirrored record that is versioned or derived keeps its layout mirror outside the direct emitters");
-                return;
-            }
-            if (!policy.Equals(WirePolicy.Default))
-            {
-                issues.Add("a mirrored record with a declared profile keeps its layout mirror outside the direct emitters");
+                issues.Add("a versioned record requires its schema-owned storage mirror");
                 return;
             }
             MirrorFields(type, out string[]? fields, out int[]? offsets, out string? layout);
@@ -3261,11 +3134,6 @@ internal static partial class TypeModelFactory
             foreach (MemberModel member in members)
             {
                 // An auto-property is reached through its backing storage, which only the public accessors keep writable.
-                if (member.Storage == MemberStorage.AutoProperty && !PublicAutoProperty(type, member.Name))
-                {
-                    issues.Add("member '" + member.Name + "' has a non-public or attributed accessor");
-                    return;
-                }
                 if (!MirrorStorageContains(type, member.Name))
                 {
                     issues.Add("member '" + member.Name + "' is not part of the reconstructed storage");
@@ -3300,25 +3168,6 @@ internal static partial class TypeModelFactory
                 local = local.Substring(0, generic);
             string parameters = identity.TypeParameters.Length == 0 ? string.Empty : "<" + string.Join(", ", identity.TypeParameters) + ">";
             return "LuminLayout_" + digest + "_" + PortableSlotSuffix(type) + "_Local" + local + parameters;
-        }
-
-        /// <summary>Whether a declared auto-property has public accessors and no accessor attributes.</summary>
-        /// <param name="type">The declared payload.</param>
-        /// <param name="name">The property name.</param>
-        /// <returns>Whether the mirror reaches the property's backing storage without accessor routing.</returns>
-        private static bool PublicAutoProperty(INamedTypeSymbol type, string name)
-        {
-            foreach (INamedTypeSymbol level in Levels(type))
-                foreach (IPropertySymbol property in level.GetMembers().OfType<IPropertySymbol>())
-                {
-                    if (property.Name != name)
-                        continue;
-                    IMethodSymbol? getter = property.GetMethod, setter = property.SetMethod;
-                    return getter is { DeclaredAccessibility: Microsoft.CodeAnalysis.Accessibility.Public } &&
-                        (setter == null || setter.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public) &&
-                        getter.GetAttributes().Length == 0 && (setter == null || setter.GetAttributes().Length == 0);
-                }
-            return false;
         }
 
         /// <summary>Whether the reconstructed storage of a payload declares a member with this name.</summary>
@@ -3361,17 +3210,62 @@ internal static partial class TypeModelFactory
         /// <summary>Enumerates a type's fields and auto-properties in declaration order.</summary>
         /// <param name="type">The type whose storage order is required.</param>
         /// <returns>The declared storage members in source or metadata order.</returns>
-        private static IEnumerable<ISymbol> OrderedStorageMembers(INamedTypeSymbol type)
+        private static IEnumerable<ISymbol> OrderedStorageMembers(INamedTypeSymbol type) =>
+            StorageSnapshots.GetValue(type, CaptureStorage).Members;
+
+        private static readonly ConditionalWeakTable<INamedTypeSymbol, StorageSnapshot> StorageSnapshots =
+            new ConditionalWeakTable<INamedTypeSymbol, StorageSnapshot>();
+
+        /// <summary>Captures physical source or metadata declaration order once for each compiler symbol.</summary>
+        /// <param name="type">The storage declaration.</param>
+        /// <returns>The analysis-only ordered storage snapshot.</returns>
+        private static StorageSnapshot CaptureStorage(INamedTypeSymbol type)
         {
+            var declared = type.GetMembers();
+            var properties = new Dictionary<string, IPropertySymbol>(StringComparer.Ordinal);
+            foreach (ISymbol member in declared)
+                if (member is IPropertySymbol property)
+                    properties[property.Name] = property;
+            var backingFields = new Dictionary<IPropertySymbol, IFieldSymbol>(SymbolEqualityComparer.Default);
+            foreach (ISymbol member in declared)
+            {
+                if (member is not IFieldSymbol field)
+                    continue;
+                if (field.AssociatedSymbol is IPropertySymbol property)
+                    backingFields[property] = field;
+                else if (field.Name.StartsWith("<", StringComparison.Ordinal) && field.Name.EndsWith(">k__BackingField", StringComparison.Ordinal) &&
+                    properties.TryGetValue(field.Name.Substring(1, field.Name.Length - 17), out IPropertySymbol? imported))
+                    backingFields[imported] = field;
+            }
             if (type.DeclaringSyntaxReferences.Length != 0)
-                return type.GetMembers().Where(member => member is IPropertySymbol or IFieldSymbol)
-                    .OrderBy(member => member.DeclaringSyntaxReferences.FirstOrDefault()?.Span.Start ?? int.MaxValue);
-            // Metadata groups properties separately from fields. Field-table order retains each automatic
-            // property's original storage position among ordinary and hidden fields.
-            var properties = type.GetMembers().OfType<IPropertySymbol>().Where(IsAutoProperty)
-                .ToDictionary(property => "<" + property.Name + ">k__BackingField", property => (ISymbol)property, StringComparer.Ordinal);
-            return type.GetMembers().OfType<IFieldSymbol>()
-                .Select(field => properties.TryGetValue(field.Name, out ISymbol? property) ? property : field);
+                return new StorageSnapshot(declared.Where(member => member is IPropertySymbol or IFieldSymbol)
+                    .OrderBy(member => member.DeclaringSyntaxReferences.FirstOrDefault()?.Span.Start ?? int.MaxValue).ToArray(), backingFields);
+            var ordered = new List<ISymbol>();
+            foreach (ISymbol member in declared)
+                if (member is IFieldSymbol field)
+                {
+                    IPropertySymbol? property = field.AssociatedSymbol as IPropertySymbol;
+                    if (property == null && field.Name.StartsWith("<", StringComparison.Ordinal) && field.Name.EndsWith(">k__BackingField", StringComparison.Ordinal))
+                        properties.TryGetValue(field.Name.Substring(1, field.Name.Length - 17), out property);
+                    ordered.Add(property ?? (ISymbol)field);
+                }
+            return new StorageSnapshot(ordered.ToArray(), backingFields);
+        }
+
+        /// <summary>Owns compiler symbols only behind a weak analysis cache.</summary>
+        private sealed class StorageSnapshot
+        {
+            internal readonly ISymbol[] Members;
+            internal readonly Dictionary<IPropertySymbol, IFieldSymbol> BackingFields;
+
+            /// <summary>Captures declaration order and the physical backing storage of automatic properties.</summary>
+            /// <param name="members">The complete physical storage sequence.</param>
+            /// <param name="backingFields">The automatic-property storage index.</param>
+            internal StorageSnapshot(ISymbol[] members, Dictionary<IPropertySymbol, IFieldSymbol> backingFields)
+            {
+                Members = members;
+                BackingFields = backingFields;
+            }
         }
 
         /// <summary>Whether a property is an instance auto-property with compiler-generated backing storage.</summary>
@@ -3381,8 +3275,7 @@ internal static partial class TypeModelFactory
         {
             if (property.IsStatic || property.IsAbstract || property.IsExtern || property.IsIndexer)
                 return false;
-            return property.ContainingType.GetMembers().OfType<IFieldSymbol>()
-                .Any(field => SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, property));
+            return StorageSnapshots.GetValue(property.ContainingType, CaptureStorage).BackingFields.ContainsKey(property);
         }
     }
 

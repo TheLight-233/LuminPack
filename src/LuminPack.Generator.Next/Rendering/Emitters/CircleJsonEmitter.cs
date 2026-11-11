@@ -24,7 +24,7 @@ internal static class CircleJsonEmitter
         bool reads = (operations & GeneratedOperations.JsonRead) != 0;
         string type = model.GlobalName, container = "LuminRoots_" + model.Readable;
         string jsonWriter = w.A("LuminPackJsonWriter"), jsonReader = w.A("LuminPackJsonReader"), options = w.A("ILuminPackOptions");
-        string serializer = w.A("LuminPackSerializer"), standard = w.A("LuminPackUtf16LengthOptions");
+        string serializer = w.A("LuminPackSerializer"), standard = model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : w.A("LuminPackUtf16LengthOptions");
         string constraint = "where TLuminProfile : struct, " + options;
         string inline = w.MethodImpl("AggressiveInlining");
         string helper = Helper(model);
@@ -234,9 +234,14 @@ internal static class CircleJsonEmitter
             body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf8." + Member(member) + ");");
             body.Add("else");
             body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf16." + Member(member) + ");");
+            if (member.Raw)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, in " + access + ");");
+                continue;
+            }
             if (member.IsFixed)
             {
-                body.Add("writer.Write<" + Profile + ">(" + access + ");");
+                body.Add("writer.Write<" + Profile + ">(" + (member.Underlying == null ? access : "(" + member.Underlying + ")" + access) + ");");
                 continue;
             }
             if (member.Kind == RenderMemberKind.Text)
@@ -250,6 +255,11 @@ internal static class CircleJsonEmitter
                 body.Add("writer.Write<" + Profile + ">(" + access + ");");
                 body.Add("}");
                 body.Add("");
+                continue;
+            }
+            if (member.Kind != RenderMemberKind.Object || member.Nested != null && !member.Nested.Circle)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, in " + access + ");");
                 continue;
             }
             var child = member.Nested ?? model;
@@ -303,7 +313,7 @@ internal static class CircleJsonEmitter
         body.Add(type + " preCreatedInstance = value!;");
         body.Add("if (!reuseExisting)");
         body.Add("{");
-        body.Add("preCreatedInstance = new " + type + "();");
+        body.Add("preCreatedInstance = " + CircleBinaryEmitter.NewInstance(model) + ";");
         body.Add("}");
         body.Add("");
         body.Add("value = preCreatedInstance;");
@@ -314,7 +324,7 @@ internal static class CircleJsonEmitter
         {
             var member = members[index];
             temps[index] = Camel(member.Name) + "Temp";
-            body.Add((member.IsFixed ? member.Scalar : member.TypeName + "?") + " " + temps[index] + " = default !;");
+            body.Add(member.TypeName + " " + temps[index] + " = default !;");
         }
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
         body.Add("bool isUtf8 = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
@@ -371,19 +381,23 @@ internal static class CircleJsonEmitter
             body.Add("{");
             body.Add("if (reuseExisting)");
             body.Add("\t" + temps[index] + " = " + Reuse(member) + ";");
-            if (member.IsFixed)
+            if (member.Raw || member.Kind is RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence or RenderMemberKind.CultureInfo)
+            {
+                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + temps[index] + ");");
+            }
+            else if (member.IsFixed)
             {
                 body.Add("if (reader.IsNull())");
                 body.Add("\t" + temps[index] + " = default;");
                 body.Add("else");
-                body.Add("\t" + temps[index] + " = reader.Read<" + member.Scalar + ", " +
-                    (member.IsBoolean ? w.A("LuminPackDefaultOptions") : Profile) + ">();");
+                body.Add("\t" + temps[index] + " = " + (member.Underlying == null ? string.Empty : "(" + member.Scalar + ")") +
+                    "reader.Read<" + (member.Underlying ?? member.Scalar) + ", " + (member.IsBoolean ? w.A("LuminPackDefaultOptions") : Profile) + ">();");
             }
             else
             {
                 body.Add("if (reader.IsNull())");
                 body.Add("{");
-                body.Add(temps[index] + " = null;");
+                body.Add(temps[index] + " = default!;");
                 body.Add("}");
                 body.Add("else");
                 body.Add("{");

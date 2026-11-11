@@ -450,7 +450,7 @@ internal static class JsonEmitter
         var members = model.Members;
         string jsonReader = w.A("LuminPackJsonReader");
         bool fresh = model.FreshResult;
-        bool packed = members.Length >= 4;
+        bool packed = members.Length is >= 4 and <= 32;
         var body = new List<string>();
         if (model.IsStruct)
         {
@@ -636,7 +636,7 @@ internal static class JsonEmitter
             if (model.Rent != null)
             {
                 // A pooled type populates the rented instance field by field, mirrored members through the layout mirror.
-                body.Add("value = " + model.Rent + ";");
+                body.Add("value = " + (model.RentByRef ? "ref " : string.Empty) + model.Rent + ";");
                 body.Add("// Populate every field on the pooled instance.");
                 bool mirroredStorage = members.Any(member => member.Mirrored);
                 if (model.Mirror != null && mirroredStorage)

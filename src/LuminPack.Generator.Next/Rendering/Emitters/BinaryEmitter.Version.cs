@@ -18,6 +18,9 @@ internal static partial class BinaryEmitter
     {
         var members = model.Members;
         var schema = model.Version;
+        if (schema.Dynamic || members.Where((member, index) => schema.Widths[index] == 255)
+            .Any(member => member.Kind is not (RenderMemberKind.Text or RenderMemberKind.List)))
+            return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
         var body = new List<string>
         {
             "var value = input;",
@@ -51,7 +54,7 @@ internal static partial class BinaryEmitter
             }
             body.Add("string " + VersionSnapshot(model, index) + " = value." + members[index].Name + ";");
             terms.Add("4");
-            terms.Add("writer.RecordBound<" + Profile + ">(" + VersionSnapshot(model, index) + ")");
+            terms.Add("writer.RecordBound<" + WriteProfile(model, w, members[index]) + ">(" + VersionSnapshot(model, index) + ")");
         }
         body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
         body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, unchecked((nint)(uint)(" + schema.Schema + ".StorePrefix<" + Profile + ">(ref writer, ref cursor))));");
@@ -67,15 +70,15 @@ internal static partial class BinaryEmitter
                 body.Add("ref byte " + length + " = ref cursor;");
                 body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
                 body.Add(member.Kind == RenderMemberKind.Text
-                    ? "cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + VersionSnapshot(model, index) + ");"
+                    ? "cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + VersionSnapshot(model, index) + ");"
                     : "cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + VersionSnapshot(model, index) + ");");
                 body.Add(w.A("Unsafe") + ".WriteUnaligned(ref " + length + ", (int)" + w.A("Unsafe") + ".ByteOffset(ref " + w.A("Unsafe") + ".Add(ref " + length + ", 4), ref cursor));");
                 continue;
             }
-            int last = RunEnd(members, index);
+            int last = VersionRunEnd(model, index);
             if (last == index)
             {
-                if (member.Size == 8)
+                if (member.Size >= 8 || member.Raw)
                 {
                     body.Add("if (" + w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8)");
                     body.Add("{");
@@ -110,7 +113,7 @@ internal static partial class BinaryEmitter
         if (members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.List) && body[body.Count - 1].Length != 0)
             body.Add("");
         body.Add("writer.Cursor = ref cursor;");
-        return body;
+        return ApplyBoundedWrite(model, body);
     }
 
     /// <summary>Whether a version-tolerant write root keeps its inline hint: its template stays within the sixteen-call budget
@@ -120,7 +123,7 @@ internal static partial class BinaryEmitter
     internal static bool VersionWriteInline(PayloadRenderModel model)
     {
         var members = model.Members;
-        bool group = Enumerable.Range(0, members.Length).Any(index => members[index].IsFixed && RunEnd(members, index) > index);
+        bool group = Enumerable.Range(0, members.Length).Any(index => members[index].IsFixed && VersionRunEnd(model, index) > index);
         return !group && members.Count(member => member.Kind == RenderMemberKind.Text) <= 1;
     }
 
@@ -168,7 +171,7 @@ internal static partial class BinaryEmitter
         body.Add("return;");
         body.Add("}");
         body.Add("");
-        bool allRaw = members.All(member => member.IsFixed);
+        bool allRaw = schema.Widths.All(width => width != 255);
         if (!allRaw && !model.IsStruct)
         {
             // Variable members start from the reused instance's values.
@@ -188,26 +191,33 @@ internal static partial class BinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            bool group = member.IsFixed && RunEnd(members, index) > index;
+            bool group = member.IsFixed && VersionRunEnd(model, index) > index;
             if (separate && !group)
                 body.Add("");
             separate = !member.IsFixed || group;
-            if (member.Kind is RenderMemberKind.Text or RenderMemberKind.List)
+            if (schema.Widths[index] == 255)
             {
                 string length = "length" + index.ToString(CultureInfo.InvariantCulture), end = End();
                 body.Add("int " + length + " = reader.ReadVersionPayloadLength();");
                 body.Add("int " + end + " = reader.Position + " + length + ";");
-                body.Add((member.Kind == RenderMemberKind.Text ? text : member.Formatter) + ".Read<" + Profile + ">(ref reader, ref " + temps[index] + "!);");
+                AddMemberRead(body, model, member, w, "reader", temps[index]);
                 body.Add(Reader() + ".ValidateVersionFieldEnd(reader.Position, " + end + ");");
                 continue;
             }
-            int last = RunEnd(members, index);
+            int last = VersionRunEnd(model, index);
             if (last == index)
             {
                 string size = "Unsafe.SizeOf<" + schema.TypeNames[index] + ">()";
-                body.Add(Reader() + ".ValidateVersionFieldEnd(" + size + ", " + size + ");");
+                if (schema.Widths[index] == 0)
+                {
+                    string length = "length" + index.ToString(CultureInfo.InvariantCulture);
+                    body.Add("int " + length + " = " + size + " < 255 ? " + size + " : reader.ReadVersionPayloadLength();");
+                    body.Add(Reader() + ".ValidateVersionFieldEnd(" + length + ", " + size + ");");
+                }
+                else
+                    body.Add(Reader() + ".ValidateVersionFieldEnd(" + size + ", " + size + ");");
                 body.Add("reader.EnsureReadable(" + size + ");");
-                body.Add("reader.Advance(" + (member.IsBoolean ? Policy() + ".ReadBoolean" : Reader() + ".Read") + "(ref reader.Cursor, out " + temps[index] + "));");
+                body.Add("reader.Advance(" + (member.IsBoolean && !model.Trusted ? Policy() + ".ReadBoolean" : Reader() + ".Read") + "(ref reader.Cursor, out " + temps[index] + "));");
                 continue;
             }
             string width = Width(members, index, last);
@@ -219,7 +229,7 @@ internal static partial class BinaryEmitter
             for (int item = index; item <= last; item++)
             {
                 string at = At(w, cursor, offset, plain: true);
-                body.Add(temps[item] + " = " + (members[item].IsBoolean ? Policy() + ".ReadBoolean(ref " + at + ");"
+                body.Add(temps[item] + " = " + (members[item].IsBoolean && !model.Trusted ? Policy() + ".ReadBoolean(ref " + at + ");"
                     : Reader() + ".Read<" + members[item].Scalar + ">(ref " + at + ");"));
                 offset = Add(offset, members[item].Width);
             }
@@ -254,16 +264,15 @@ internal static partial class BinaryEmitter
         {
             body.Add("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
             body.Add("{");
-            if (members[index].Kind is RenderMemberKind.Text or RenderMemberKind.List)
+            if (schema.Widths[index] == 255)
             {
-                // A string or list is read within a temporary input limit of its recorded payload length.
+                // A variable field is read within a temporary input limit of its recorded payload length.
                 string end = End(), limit = Limit();
                 body.Add("int " + end + " = reader2.Position + length;");
                 body.Add("int " + limit + " = reader2.EnterVersionField(length);");
                 body.Add("try");
                 body.Add("{");
-                body.Add((members[index].Kind == RenderMemberKind.Text ? text : members[index].Formatter) + ".Read<" + Profile + ">(ref reader2, ref " +
-                    temps[index] + "2!);");
+                AddMemberRead(body, model, members[index], w, "reader2", temps[index] + "2");
                 body.Add("}");
                 body.Add("finally");
                 body.Add("{");
@@ -277,7 +286,7 @@ internal static partial class BinaryEmitter
                 string size = "Unsafe.SizeOf<" + schema.TypeNames[index] + ">()";
                 body.Add(Reader() + ".ValidateVersionFieldEnd(length, " + size + ");");
                 body.Add("reader2.EnsureReadable(" + size + ");");
-                body.Add("reader2.Advance(" + (members[index].IsBoolean ? Policy() + ".ReadBoolean" : Reader() + ".Read") + "(ref reader2.Cursor, out " + temps[index] + "2));");
+                body.Add("reader2.Advance(" + (members[index].IsBoolean && !model.Trusted ? Policy() + ".ReadBoolean" : Reader() + ".Read") + "(ref reader2.Cursor, out " + temps[index] + "2));");
             }
             body.Add("}");
             body.Add("");
@@ -303,17 +312,24 @@ internal static partial class BinaryEmitter
         body.Add("}");
         body.Add("");
         bool mirroredMembers = model.Members.Any(member => member.Mirrored);
-        var initializer = members.Where(member => !member.Mirrored).ToArray();
+        var initializer = members.Where(member => !member.Mirrored &&
+            (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(member.Name))).ToArray();
         if (model.IsStruct)
         {
-            // A struct always builds a fresh value and copies its mirrored storage through the layout mirror.
-            AddVersionConstruction(model, body, initializer, temps);
+            if (model.Rent != null)
+            {
+                body.Add("value = " + (model.RentByRef ? "ref " : string.Empty) + model.Rent + ";");
+                for (int index = 0; index < members.Length; index++)
+                    if (!members[index].Mirrored)
+                        body.Add("value." + members[index].Name + " = " + temps[index] + "!;");
+            }
+            else
+                AddVersionConstruction(model, body, initializer, temps);
             if (mirroredMembers)
             {
-                body.Add("// Assign private fields.");
                 body.Add("ref var local = ref LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref value);");
                 for (int index = 0; index < members.Length; index++)
-                    if (members[index].Mirrored)
+                    if (members[index].Mirrored && (model.Rent != null || model.ConstructorMembers == null || !model.ConstructorMembers.Contains(members[index].Name)))
                         body.Add("local." + members[index].Name + " = " + temps[index] + "!;");
             }
             return body;
@@ -339,7 +355,7 @@ internal static partial class BinaryEmitter
                 body.Add("// Assign private fields.");
                 body.Add("ref var local = ref " + "LuminPackMarshal" + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref value!);");
                 for (int index = 0; index < members.Length; index++)
-                    if (members[index].Mirrored)
+                    if (members[index].Mirrored && (model.ConstructorMembers == null || !model.ConstructorMembers.Contains(members[index].Name)))
                         body.Add("local." + members[index].Name + " = " + temps[index] + "!;");
             }
         }
@@ -362,25 +378,26 @@ internal static partial class BinaryEmitter
     /// <param name="temps">The temporary local of each member.</param>
     private static void AddVersionConstruction(PayloadRenderModel model, List<string> body, RenderMember[] initializer, string[] temps)
     {
+        string arguments = model.ConstructorArguments == null ? string.Empty : string.Join(", ", model.ConstructorArguments.Select(name =>
+            name == null ? "default" : temps[Array.FindIndex(model.Members, member => member.Name == name)] + "!"));
         if (initializer.Length == 0)
         {
-            body.Add("value = new " + model.GlobalName + "();");
+            body.Add("value = new " + model.GlobalName + "(" + arguments + ");");
             return;
         }
-        body.Add("value = new " + model.GlobalName + "()");
+        body.Add("value = new " + model.GlobalName + "(" + arguments + ")");
         body.Add("{");
         foreach (var member in initializer)
             body.Add(member.Name + " = " + temps[System.Array.IndexOf(model.Members, member)] + "!,");
         body.Add("};");
     }
 
-    /// <summary>Emits the version-tolerant struct roots, which stay outside the modeled surface.</summary>
+    /// <summary>Emits version-tolerant value roots through their non-nullable state and schema contracts.</summary>
     /// <param name="model">The render model.</param>
     /// <param name="w">The writer.</param>
     /// <param name="operations">The operations the project calls.</param>
     internal static void EmitVersionStruct(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
-    {
-    }
+        => EmitStruct(model, w, operations);
 
     /// <summary>Writes the schema class: the field table, the constant metadata and prefixes, the fingerprint, the short-record
     /// state and the prefix match, write and store, with constant prefixes compared and stored as disjoint words.</summary>
@@ -389,26 +406,39 @@ internal static partial class BinaryEmitter
     private static void VersionSchemaClass(PayloadRenderModel model, CodeWriter w)
     {
         var schema = model.Version;
-        byte[] prefix = schema.Prefix;
+        byte[] prefix = schema.Dynamic ? Array.Empty<byte>() : schema.Prefix;
         string unsafeName = w.A("Unsafe"), writerName = w.A("LuminPackWriter"), readerName = w.A("LuminPackReader"), options = w.A("ILuminPackOptions");
         string inline = w.MethodImpl("AggressiveInlining");
         string length = prefix.Length.ToString(CultureInfo.InvariantCulture);
         string profile = "(ulong)" + writerName + ".BinaryProfile<TOptions>() << 16";
         w.Line("internal static class " + schema.Name);
+        if (model.TypeConstraintText.Length != 0)
+            w.Indented(() => w.Line(model.TypeConstraintText));
         w.Open();
         w.Line("internal static readonly global::LuminPack.Core.LuminPackVersionField[] Fields = new global::LuminPack.Core.LuminPackVersionField[]");
         w.Open();
         foreach (string entry in schema.FieldEntries)
             w.Line(entry);
         w.Close(";");
-        w.Line("internal static global::System.ReadOnlySpan<byte> Metadata => [" + string.Join(", ", schema.Metadata) + "];");
-        w.Line("internal static global::System.ReadOnlySpan<byte> DefaultPrefix => [251, 1, 0, " + model.Members.Length.ToString(CultureInfo.InvariantCulture) +
-            (schema.Metadata.Length == 0 ? string.Empty : ", " + string.Join(", ", schema.Metadata)) + "];");
-        w.Line("internal static global::System.ReadOnlySpan<byte> Prefix => [" + string.Join(", ", prefix) + "];");
+        if (schema.Dynamic)
+        {
+            w.Line("internal static readonly byte[] Metadata = global::LuminPack.Core.LuminPackVersionField.CreateMetadata(Fields);");
+            w.Line("internal static readonly byte[] DefaultPrefix = global::LuminPack.Core.LuminPackVersionField.CreateDefaultPrefix(Metadata, " + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ");");
+            w.Line("internal static readonly byte[] Prefix = global::LuminPack.Core.LuminPackVersionField.CreatePrefix(Metadata, " + model.Members.Length.ToString(CultureInfo.InvariantCulture) +
+                ", new int[] { " + string.Join(", ", schema.Widths.Select((width, index) => width == 0 ? unsafeName + ".SizeOf<" + schema.QualifiedTypes[index] + ">()" :
+                    (width == 255 ? "-1" : width.ToString(CultureInfo.InvariantCulture)))) + " });");
+            w.Line("internal static readonly ulong Fingerprint = global::LuminPack.Core.LuminPackVersionField.Fingerprint(global::System.MemoryExtensions.AsSpan(Prefix, 4));");
+        }
+        else
+        {
+            ConstantBytes("Metadata", schema.Metadata);
+            ConstantBytes("DefaultPrefix", new byte[] { 251, 1, 0, (byte)model.Members.Length }.Concat(schema.Metadata).ToArray());
+            ConstantBytes("Prefix", prefix);
+            w.Line("internal const ulong Fingerprint = 0x" + schema.Fingerprint.ToString("X16", CultureInfo.InvariantCulture) + "UL;");
+        }
         w.Blank();
-        w.Line("internal const ulong Fingerprint = 0x" + schema.Fingerprint.ToString("X16", CultureInfo.InvariantCulture) + "UL;");
         w.Line("internal const byte Count = " + model.Members.Length.ToString(CultureInfo.InvariantCulture) + ";");
-        w.Line("internal static bool Shortens => " + (prefix.Length > 12 ? "true" : "false") + ";");
+        w.Line("internal static bool Shortens => " + (schema.Dynamic ? "Prefix.Length > 12" : prefix.Length > 12 ? "true" : "false") + ";");
         w.Blank();
         w.Line("[global::System.ThreadStatic]");
         w.Line("private static int t_written;");
@@ -528,6 +558,14 @@ internal static partial class BinaryEmitter
         }
         w.Close();
         w.Close();
+
+        void ConstantBytes(string name, byte[] bytes)
+        {
+            string values = string.Join(", ", bytes);
+            w.Line(model.ConstantSpans
+                ? "internal static global::System.ReadOnlySpan<byte> " + name + " => [" + values + "];"
+                : "internal static readonly byte[] " + name + " = new byte[] { " + values + " };");
+        }
     }
 
     /// <summary>Stores a constant prefix as disjoint eight-byte words and at most one value of each narrower width; the binary

@@ -25,17 +25,12 @@ internal static class RenderModelFactory
             return Union(union, options);
         if (model is CircleReferenceModel circle)
             return Circle(circle, options);
-        // A version-tolerant struct writes a schema prefix the struct roots do not reproduce yet.
-        if (model is StructModel { Versioned: true })
+        if (model is StructModel { Versioned: true, Version: null })
             return null;
         bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null } ||
             json && model is StructModel { StoragePlan: not null };
-        // A struct with reference members keeps the record protocol: public fields of fixed scalars, strings and built-in
-        // values only. Mirrored storage, construction, callbacks, rent, a version schema and a bound change that framing and
-        // are not modeled yet.
+        // Managed value types retain record framing together with their construction, callback and storage facts.
         bool managed = model is StructModel { Storage: StructStorage.ManagedRecord } managedStruct &&
-            !managedStruct.Versioned && !managedStruct.Rent && !managedStruct.Constructors && !managedStruct.Callbacks &&
-            !managedStruct.Identity.IsGeneric && managedStruct.Policy.Bound == null &&
             (managedStruct.Mirror != null || managedStruct.Members.All(member => !member.Mirrored));
         PortableLayout? portable = model is StructModel { Storage: StructStorage.PortableUnmanaged } portableStruct
             ? portableStruct.Layout : null;
@@ -49,21 +44,14 @@ internal static class RenderModelFactory
         RecordModel? record = isStruct ? null : (RecordModel)model;
         // A version-tolerant record renders only when its analysis produced the complete schema and rejected every shape the
         // version emitter does not reproduce.
-        if (record is { Versioned: true } versionedRecord && (versionedRecord.Version == null || versionedRecord.Derived))
+        if (record is { Versioned: true } versionedRecord && versionedRecord.Version == null)
             return null;
-        // The version-tolerant body writes its own member schema and does not reproduce the shared culture owner call.
-        if (record is { Versioned: true } && model.Members.Any(member => member is CultureInfoMember))
-            return PayloadEmitter.Reject<PayloadRenderModel>("versioned culture info member");
         StructModel? structure = model as StructModel;
         string? mirror = record?.Mirror ?? structure?.Mirror;
         if (record != null && mirror == null && record.Members.Any(member => member.Mirrored))
             return null;
         if (portable != null && !portable.Fields.All(field => field.Leaves.Length != 0))
             return null;
-        // The dictionary write path owns its member loop and cannot frame a culture-info member, so that record stays with
-        // the original pipeline instead of emitting a partial body.
-        if (model.Members.Any(member => member is CultureInfoMember) && model.Members.Any(member => member is DictionaryMember))
-            return PayloadEmitter.Reject<PayloadRenderModel>("culture info beside a dictionary member");
         string extension = GeneratedNames.Extension(options.AssemblyName);
         var members = new RenderMember[model.Members.Length];
         for (int index = 0; index < members.Length; index++)
@@ -80,9 +68,9 @@ internal static class RenderModelFactory
         string globalName = model.Identity.GlobalName;
         // The selected constructor, pool rent and serialization callbacks scale the record's construction and framing; the
         // direct emitters consume the same facts the legacy model states.
-        ConstructorModel? constructor = record?.Constructor;
-        CallbackModel? callbacks = record?.Callbacks;
-        string? rent = record?.Rent;
+        ConstructorModel? constructor = record?.Constructor ?? structure?.Construction;
+        CallbackModel? callbacks = record?.Callbacks ?? structure?.SerializationCallbacks;
+        string? rent = record?.Rent ?? structure?.RentCall;
         bool hasCallbacks = callbacks != null;
         // The proven object write needs .NET 8, unsafe code and a non-Unity project. The named member write only needs every
         // variable member to be a string, so a project outside those facts still publishes it. A mirrored record reaches
@@ -112,7 +100,7 @@ internal static class RenderModelFactory
             },
             constructorArguments: constructor?.Arguments!, constructorMembers: constructor?.Members!,
             memberWrite: memberWrite, net8: options.Net8,
-            utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: Schema(record?.Version),
+            utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: Schema(record?.Version ?? structure?.Version),
             referencePayload: model.Members.Any(item => item is not ScalarMember),
             layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout ?? structure?.MirrorLayout,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
@@ -120,7 +108,9 @@ internal static class RenderModelFactory
             managedStruct: managed, rent: rent!,
             writeBefore: callbacks?.WriteBefore!, writeAfter: callbacks?.WriteAfter!,
             readBefore: callbacks?.ReadBefore!, readAfter: callbacks?.ReadAfter!,
-            declaredOrder: constructor?.DeclaredOrder!);
+            declaredOrder: constructor?.DeclaredOrder!, rentByRef: structure?.RentByRef ?? false,
+            declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
+            constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!);
     }
 
     /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>
@@ -128,7 +118,7 @@ internal static class RenderModelFactory
     /// <returns>The emitter schema, or null.</returns>
     private static VersionSchema? Schema(VersionSchemaModel? schema) => schema == null ? null :
         new VersionSchema(schema.Schema, schema.Metadata, schema.Prefix, schema.FieldEntries, schema.TempTypes, schema.TypeNames,
-            schema.QualifiedTypes, schema.Layout, schema.LayoutFields, schema.OldNames);
+            schema.QualifiedTypes, schema.Layout, schema.LayoutFields, schema.OldNames, schema.Dynamic, schema.Widths);
 
     /// <summary>Maps a Union root when its declared profile, slots, cases and framing are the ones the direct Union emitters
     /// reproduce.</summary>
@@ -196,11 +186,9 @@ internal static class RenderModelFactory
     /// <returns>The render model, or null when the node's framing is outside the circle emitters.</returns>
     private static PayloadRenderModel? Circle(CircleReferenceModel model, GeneratorOptions options)
     {
-        // A base payload, a rent, a selected constructor, callbacks, a bound, a trusted declaration, a declared string
-        // profile and a mirrored storage that cannot be reproduced exactly all change the framing the circle roots spell.
-        if (model.Derived || model.Rent || model.SelectedConstructor || model.Callbacks || model.MirrorFields == null ||
-            model.Policy.Bound != null || model.Policy.Input == InputPolicy.Trusted || !DefaultProfile(model.Policy.Strings) ||
-            model.Members.Length > 249 || !model.FieldsInOrder)
+        // The reference-tracked renderer requires complete physical storage and the byte-sized object slot surface.
+        if (model.MirrorFields == null || model.Identity.IsGeneric ||
+            model.Members.Length > 249 || model.Slots.Any(slot => slot >= 249))
             return null;
         string extension = GeneratedNames.Extension(options.AssemblyName);
         var members = new RenderMember[model.Members.Length];
@@ -211,21 +199,22 @@ internal static class RenderModelFactory
                 return null;
             members[index] = member;
         }
-        // Reserve-able members may only precede the reference members; a later one would reopen a reservation group.
-        int firstObject = Array.FindIndex(members, member => member.Kind == RenderMemberKind.Object);
-        if (firstObject >= 0 && members.Skip(firstObject).Any(member => !member.IsPayload))
-            return null;
         string globalName = model.Identity.GlobalName;
         string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName));
         return new PayloadRenderModel(globalName, readable, extension,
             GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)), freshResult: false,
-            uniqueEntries: options.Interceptors, members, proven: false, mirror: MirrorName(model, globalName),
+            uniqueEntries: options.Interceptors, members, proven: false, mirror: model.Mirrors.Length == 0 ? MirrorName(model, globalName) : model.Mirrors[model.Mirrors.Length - 1].Name,
             mirrorFields: model.MirrorFields, derived: false, isStruct: false, view: null!, viewElided: false,
-            fixedUnionCase: false, measureRecord: false, constructorArguments: null, constructorMembers: null, memberWrite: false,
+            fixedUnionCase: false, measureRecord: false, constructorArguments: model.Construction?.Arguments!, constructorMembers: model.Construction?.Members!, memberWrite: false,
             net8: options.Net8, utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: null!,
             referencePayload: model.Members.Any(item => item is not ScalarMember), layoutAttribute: model.MirrorLayout,
             circle: true, circleGuarded: model.Guarded, mirrorOffsets: model.MirrorOffsets,
-            typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints);
+            typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
+            rent: model.RentCall!, rentByRef: model.RentByRef, writeBefore: model.SerializationCallbacks?.WriteBefore!,
+            writeAfter: model.SerializationCallbacks?.WriteAfter!, readBefore: model.SerializationCallbacks?.ReadBefore!,
+            readAfter: model.SerializationCallbacks?.ReadAfter!, trusted: model.Policy.Input == InputPolicy.Trusted,
+            declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
+            circleSlots: model.Slots, circleWidths: model.Widths, mirrors: model.Mirrors, bounded: model.Policy.Bound);
     }
 
     /// <summary>Maps one circle member: a fixed scalar of at most four bytes, a string or another reference-tracked node.</summary>
@@ -238,12 +227,6 @@ internal static class RenderModelFactory
     {
         switch (member)
         {
-            case ScalarMember { Raw: false, Size: > 0 and <= 4 } scalar:
-                return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.Scalar, scalar.Scalar, scalar.Size, null!,
-                    FieldType(scalar.Scalar), mirrored: false);
-            case TextMember:
-                return new RenderMember(member.Name, RenderMemberKind.Text, "string", "string", 0, null!, ScalarKind.String,
-                    mirrored: false);
             case PayloadMember { Shape: PayloadShape.ReferenceTracked } payload:
                 // A self member reuses this model; any other member is modeled as its own reference-tracked record.
                 PayloadRenderModel? nested = null;
@@ -257,17 +240,11 @@ internal static class RenderModelFactory
                     return null;
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,
                     0, "global::LuminPack." + GeneratedNames.Owner(extension, payload.Type.GlobalName), ScalarKind.Other,
-                    mirrored: false, nested: nested);
+                    mirrored: member.Mirrored, nested: nested);
             default:
-                return null;
+                return Member(member, extension, options);
         }
     }
-
-    /// <summary>Whether a node inherits the simple string profile the circle roots spell.</summary>
-    /// <param name="profile">The effective string profile.</param>
-    /// <returns>Whether the profile is the canonical default.</returns>
-    private static bool DefaultProfile(StringProfile profile)
-        => profile.Format == 'G' && profile.Precision == byte.MaxValue && profile.Depth == 1024 && !profile.Strict;
 
     /// <summary>Spells the node's storage mirror the way the legacy model names it.</summary>
     /// <param name="model">The normalized node.</param>
@@ -322,24 +299,45 @@ internal static class RenderModelFactory
         return new PortableView(layout.ViewName, fields);
     }
 
+    /// <summary>Projects member operations and their declaration-owned binary scope.</summary>
+    /// <param name="member">The immutable member contract.</param>
+    /// <param name="extension">The generated assembly container.</param>
+    /// <param name="options">The project facts.</param>
+    /// <returns>The complete member operation, or null.</returns>
     internal static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options)
+    {
+        RenderMember? rendered = MemberCore(member, extension, options);
+        return rendered == null || !member.Policy.Declared ? rendered : rendered.WithScope(ProfileNames.Type(member.Policy.Strings));
+    }
+
+    /// <summary>Projects one member's storage and formatter operation.</summary>
+    /// <param name="member">The immutable member contract.</param>
+    /// <param name="extension">The generated assembly container.</param>
+    /// <param name="options">The project facts.</param>
+    /// <returns>The complete member operation, or null.</returns>
+    private static RenderMember? MemberCore(MemberModel member, string extension, GeneratorOptions options)
     {
         // Auto-property and included non-public storage keeps the same wire shapes as a public field; the mirror facts on the
         // payload decide how the emitters reach it.
         bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         switch (member)
         {
+            case TypeParameterMember parameter:
+                return new RenderMember(parameter.Name, RenderMemberKind.Parameter, parameter.ParameterName,
+                    parameter.ParameterName, 0, null!, ScalarKind.Other, mirrored, property: property,
+                    valueTypeParameter: parameter.ValueType, bareParameter: parameter.ParameterName.IndexOf('<') < 0 &&
+                        parameter.ParameterName.IndexOf('[') < 0, referencePayload: parameter.ReferenceType);
             case ScalarMember scalar when scalar.Raw && scalar.Builtin:
                 return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.Scalar, scalar.Scalar, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, scalar.Scalar), ScalarKind.Struct, mirrored,
-                    raw: true, builtin: true, property: property);
+                    raw: true, builtin: true, property: property, isVolatile: scalar.Volatile);
             case ScalarMember scalar:
                 // An enum is stored as its underlying scalar; the binary emitters spell the enum itself, JSON casts through
                 // the underlying keyword.
                 return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.EnumType ?? scalar.Scalar,
                     scalar.EnumType ?? scalar.Scalar, scalar.Size, null!,
                     scalar.EnumType != null ? ScalarKind.Enum : FieldType(scalar.Scalar), mirrored,
-                    underlying: scalar.Underlying, property: property);
+                    underlying: scalar.Underlying, property: property, isVolatile: scalar.Volatile);
             case TextMember:
                 return new RenderMember(member.Name, RenderMemberKind.Text, "string", "string", 0, null!, ScalarKind.String,
                     mirrored, property: property);
@@ -350,7 +348,7 @@ internal static class RenderModelFactory
             case SpecialMember special:
                 return new RenderMember(special.Name, RenderMemberKind.Special, ReadableTypeName.Of(special.Declared), special.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
-                    property: property);
+                    property: property, nullObjectGuard: special.Formatter?.OrdinaryObject == true, referencePayload: special.Nullable);
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,

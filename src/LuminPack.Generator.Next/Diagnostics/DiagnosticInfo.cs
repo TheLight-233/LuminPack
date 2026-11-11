@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.Next.Diagnostics;
 
@@ -35,9 +38,13 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     /// <summary>The declaration's last character.</summary>
     internal readonly int EndCharacter;
 
+    /// <summary>Related source declarations used by the existing code-fix contracts.</summary>
+    internal readonly DiagnosticInfo[] AdditionalLocations;
+
     private DiagnosticInfo(string id, string[] arguments, string? filePath, int spanStart, int spanLength, int startLine,
-        int startCharacter, int endLine, int endCharacter)
+        int startCharacter, int endLine, int endCharacter, DiagnosticInfo[]? additionalLocations = null)
     {
+        AdditionalLocations = additionalLocations ?? Array.Empty<DiagnosticInfo>();
         EndCharacter = endCharacter;
         EndLine = endLine;
         StartCharacter = startCharacter;
@@ -74,6 +81,23 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     internal static DiagnosticInfo Unlocated(string id, params string[] arguments)
         => new DiagnosticInfo(id, arguments, null, 0, 0, 0, 0, 0, 0);
 
+    /// <summary>Captures source coordinates without retaining a syntax tree or compiler location.</summary>
+    /// <param name="id">The stable descriptor identifier.</param>
+    /// <param name="location">The original declaration location.</param>
+    /// <param name="arguments">The formatted message arguments.</param>
+    /// <param name="additional">Related declarations for code fixes.</param>
+    /// <returns>The value-equal diagnostic facts.</returns>
+    internal static DiagnosticInfo Capture(string id, Location? location, string[] arguments, IEnumerable<Location>? additional = null)
+    {
+        DiagnosticInfo[] related = additional == null ? Array.Empty<DiagnosticInfo>() : additional.Where(item => item.IsInSource)
+            .Select(item => Capture(id, item, Array.Empty<string>())).ToArray();
+        if (location?.IsInSource != true)
+            return new DiagnosticInfo(id, arguments, null, 0, 0, 0, 0, 0, 0, related);
+        FileLinePositionSpan line = location.GetLineSpan();
+        return new DiagnosticInfo(id, arguments, line.Path, location.SourceSpan.Start, location.SourceSpan.Length,
+            line.StartLinePosition.Line, line.StartLinePosition.Character, line.EndLinePosition.Line, line.EndLinePosition.Character, related);
+    }
+
     /// <inheritdoc/>
     public bool Equals(DiagnosticInfo other)
     {
@@ -87,7 +111,9 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
         for (int index = 0; index < left.Length; index++)
             if (left[index] != right[index])
                 return false;
-        return true;
+        DiagnosticInfo[] relatedLeft = AdditionalLocations ?? Array.Empty<DiagnosticInfo>();
+        DiagnosticInfo[] relatedRight = other.AdditionalLocations ?? Array.Empty<DiagnosticInfo>();
+        return relatedLeft.SequenceEqual(relatedRight);
     }
 
     /// <inheritdoc/>

@@ -70,14 +70,18 @@ internal sealed class ScalarMember : MemberModel
     /// <summary>The enum's fully qualified spelling when the member is an enum, otherwise null.</summary>
     internal readonly string? EnumType;
 
+    /// <summary>Whether physical field access requires volatile scalar operations.</summary>
+    internal readonly bool Volatile;
+
     /// <summary>The underlying scalar keyword of an enum member, otherwise null.</summary>
     internal readonly string? Underlying;
 
     /// <summary>Captures a scalar member.</summary>
     internal ScalarMember(string name, MemberStorage storage, WirePolicy policy, string scalar, int size, bool raw, bool builtin,
-        string? enumType = null, string? underlying = null)
+        string? enumType = null, string? underlying = null, bool isVolatile = false)
         : base(name, storage, policy)
     {
+        Volatile = isVolatile;
         Builtin = builtin;
         Raw = raw;
         Size = size;
@@ -91,7 +95,7 @@ internal sealed class ScalarMember : MemberModel
     {
         var member = (ScalarMember)other;
         return Scalar == member.Scalar && Size == member.Size && Raw == member.Raw && Builtin == member.Builtin &&
-            EnumType == member.EnumType && Underlying == member.Underlying;
+            EnumType == member.EnumType && Underlying == member.Underlying && Volatile == member.Volatile;
     }
 }
 

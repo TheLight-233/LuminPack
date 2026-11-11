@@ -82,6 +82,8 @@ internal sealed class CodeWriter
     /// <returns>The alias or the fully qualified target.</returns>
     internal string A(string alias)
     {
+        if (alias.StartsWith("global::", StringComparison.Ordinal))
+            return alias;
         int index = PublicationLayout.AliasIndex(alias);
         if ((_available & (1 << index)) == 0)
             return PublicationLayout.AliasTarget(index);

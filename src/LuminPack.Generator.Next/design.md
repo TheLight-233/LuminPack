@@ -312,12 +312,20 @@ The existing specialized-owner parity matrix covered 172 mapped shapes and ident
 formatter route supersedes that source coverage limit. Generated-consumer compilation, cross reads, destination reuse and
 conditional runtime assets still need the final compatibility run. A concurrent bag retains its unspecified read enumeration order.
 
-A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
-constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
-`LuminPack027` and `LuminPack018` at the declarations, and the 220-payload corpus reports none. An
-unexpected rendering failure is reported as `LuminPack099` instead of escaping the pipeline. The
-remaining legacy validation (duplicate member names, Union root and case rules, callback, constructor
-and rent rules, compiled options and bounded sizes) is not ported yet; unmapped shapes stay silent.
+The analysis boundary validates the 48 legacy diagnostic descriptors before creating executable models. Declaration
+checks cover members, callbacks, constructors, rental, Union cases, Custom signatures, compiled options, bounds and
+portable storage. Diagnostic facts remain value-equal and compiler-free. A reporting-only compilation join restores
+current source locations and related declarations for code fixes. Analysis and output cancellation propagate.
+
+Construction metadata includes generic constraints, managed-value constructors and callbacks, static rentals and
+inherited Local storage levels. Version schemas retain closed constants and generic runtime initialization, former
+names, one-pass variable fields and revision-1 reads. Circle models carry sparse slot orders and widths, construction,
+rental and callbacks. Their publication retains explicit identifiers, early reference registration and same-table reuse.
+The source port still requires generated-consumer and wire verification under the owner's deferred-check workflow.
+
+Shared dependencies are accumulated for the complete batch before sorting and deduplication. Ordered physical storage,
+declaration diagnostics and runtime capabilities reuse weak or compilation-owned analysis caches. Output models retain
+no Roslyn symbols. Primitive and string member analysis skips general graph construction.
 
 All 220 corpus payloads now render, fixed Union cases publish their own `SerializeUnionAt` cursor
 entries, and the collected payload set publishes the corpus's four shared formatter owners. The corpus
@@ -382,18 +390,18 @@ pipeline; P2 improves the product.
 
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `String` owner, the per-keyword scalar owners, the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for every raw scalar, `string` and string-bearing packable classes and the `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableQueue<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>`/`ConcurrentStack<T>`/`ConcurrentBag<T>` owners for every raw scalar landed; the other concurrent/immutable families are declared-family guarded and stay unmapped, and other element shapes, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
+| M-01 | Registered formatter families have specialized and default recursive element contracts. Remaining behavior and conditional-runtime integration is tracked by the payload and publication tasks. | Analysis + Rendering | — | Registered families preserve their container algorithms for recursive element contracts | P0 |
 | M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values and recursive entry-owner contracts are published; the final compatibility matrix remains | Rendering/Emitters | M-01 | Dictionary records preserve their entry contracts through specialized or default owners | P0 |
 | M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
-| M-05 | Circle-reference model facts: mirror, slots, guards, reference ids | Model + Rendering | M-06 | Circle payloads generate and compile | P0 |
-| M-06 | Layout mirror: mirror name, field list and explicit offsets for auto-properties and included fields | Model + Rendering | — | Auto-property and included-private payloads generate and compile | P1 |
-| M-07 | Version-tolerant schema: class records and their metadata encoder, prefix, field entries, old names and layout landed; versioned structs, callbacks, rent, generic, bounded and non-default profiles remain | Analysis + Rendering | — | Versioned class records generate the same schema as the old pipeline; remaining version shapes match | P1 |
-| M-08 | Callbacks, selected constructors and pool rent landed for class records; ref-returning rent, constructed collection/payload members, trusted constructed records, derived pooled records and versioned callbacks remain | Analysis + Rendering | M-06 | Callback, constructor and pooled types generate | P1 |
+| M-05 | Circle models carry sparse slots, widths, callbacks, construction and rent facts. Non-generic class publication retains explicit ids, early registration, same-table reuse and unknown-slot skipping. Generic and value-type Circle publication remains. | Analysis + Rendering | M-06 | Reference identity, slot evolution and failure publication match the old pipeline | P0 |
+| M-06 | Local storage models preserve inherited physical levels, hidden fields, automatic properties, readonly storage and explicit offsets. Complete referenced-storage import remains at the external integration boundary. | Analysis + Rendering | — | Storage views preserve the original CLR inheritance and layout contracts | P1 |
+| M-07 | Versioned classes and structs carry constant or generic schemas, former-name aliases, revision-1 reads, revision-2 widths, callback and rental facts, bounds and default recursive field operations. Compression-specific fields and conditional-runtime publication remain. | Analysis + Rendering | M-06 | Versioned records retain schema identities, constructor semantics and one-pass framing | P1 |
+| M-08 | Constructor name matching, generic constraints, compound member locals, managed-struct callbacks, inherited pools and reference-returning value rentals are modeled. Final construction and failed-read equivalence remains unverified. | Analysis + Rendering | M-06 | Fresh construction, target reuse, callbacks and pool ownership preserve their established order | P1 |
 | M-09 | Shared publication: the corpus formatter owners and the CultureInfo owner are published; serializer facades, formatter dispatch, registration and layout files remain | Pipeline | M-01, M-04 | A consumer can call the generated facade without the old generator | P1 |
-| M-10 | Layout pass: line wrapping, alias compaction, JSON name grouping, Union case rows | Rendering | — | Old and Next output are byte-identical on the corpus | P1 |
-| M-11 | Declared string profiles, input limits and member-scope profiles | Analysis + Rendering | M-09 | Member and type profile declarations generate correctly | P1 |
-| M-12 | Declaration diagnostics: static types, ref structs, member-count overflow, Union case-count overflow, missing public constructors and unexpected generator failures are reported at the declaration; duplicate names, Union root/case rules, callbacks, constructors, rent, compiled options and bounded sizes remain | Analysis | — | Diagnostics are reported at the declaration, not in generated code | P2 |
+| M-10 | Presentation layout remains optional. The migration accepts whitespace and line-layout differences. | Rendering | — | Wire bytes and execution behavior preserve the old contracts | P2 |
+| M-11 | Stateless declared profiles and deduplicated format/depth components are published. Specialized inline collection scopes, compiled input limits and pointer-cursor lowering remain. | Analysis + Rendering | M-09 | Declaration-owned options and input checks retain their original boundaries | P1 |
+| M-12 | All 48 legacy descriptors and declaration validation entry points are present. Errors suppress executable output and source positions retain code-fix related locations. The complete diagnostic corpus remains deferred. | Analysis | — | Invalid declarations produce the legacy diagnostic identities and source locations | P1 |
 | M-13 | Keyed version tolerance and layout metadata | Model + Rendering | M-07 | Reordered and removed members read correctly | P2 |
 | M-14 | Cross-compilation model reuse: referenced-type invalidation is verified (an enum-underlying-type edit changes the parent's file; a packable child edit marks the child and parent `Modified`), but every compilation change still re-runs every attributed transform | Pipeline | M-09 | An unrelated edit skips model analysis while a referenced-type edit still refreshes its parents | P2 |
 | M-15 | Generated size reduction: shared dispatch, per-call operation selection, facade deduplication | Rendering | M-09 | Generated source per type approaches the old payload output without shared bloat | P2 |
@@ -401,7 +409,7 @@ pipeline; P2 improves the product.
 | M-17 | ASP.NET Core formatters | Integrations | M-09 | MVC and Minimal API bodies use the generated entries | P2 |
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
 | M-19 | Untrusted-input fuzzing and one-exception contract | Analysis + Runtime | M-09 | Crafted inputs cannot crash, over-allocate or instantiate undeclared types | P2 |
-| M-20 | JSON name and layout parity with the old pipeline | Rendering | M-10 | JSON payload files are byte-identical on the corpus | P2 |
+| M-20 | JSON name and protocol behavior alignment | Rendering | M-10 | JSON values, envelopes, reuse and failure behavior preserve the old contracts | P1 |
 | M-21 | Framework formatter definitions and the scalar catalog have default recursive argument contracts, with retained storage layouts and optional runtime capabilities; final generated-consumer and platform parity remains | Analysis + Rendering | M-01, M-09 | Supported formatter graphs preserve the legacy representation and ownership contracts | P0 |
 
 ## 6. Decisions and constraints

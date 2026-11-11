@@ -4,8 +4,8 @@ using System.Linq;
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>The schema facts of a version-tolerant record, reduced to the strings and bytes its emitted text depends on.</summary>
-/// <remarks>The Next model does not carry the schema bytes, revision prefix or former names yet, so the model factory leaves
-/// <see cref="PayloadRenderModel.Version"/> null. The class remains the renderer's contract for the version migration task.</remarks>
+/// <remarks>Closed schemas carry constant bytes. Generic schemas retain the existing runtime metadata initializer for each
+/// closed construction, including the exact current and former member identities.</remarks>
 internal sealed class VersionSchema : IEquatable<VersionSchema>
 {
     /// <summary>The qualified schema class.</summary>
@@ -41,6 +41,12 @@ internal sealed class VersionSchema : IEquatable<VersionSchema>
     /// <summary>The former names of each member.</summary>
     internal readonly string[][] OldNames;
 
+    /// <summary>Whether metadata or raw widths are initialized per closed construction.</summary>
+    internal readonly bool Dynamic;
+
+    /// <summary>The revision-2 widths, with zero for runtime-sized raw values.</summary>
+    internal readonly int[] Widths;
+
     /// <summary>Captures a version schema.</summary>
     /// <param name="schema">The qualified schema class.</param>
     /// <param name="metadata">The constant member metadata.</param>
@@ -53,8 +59,10 @@ internal sealed class VersionSchema : IEquatable<VersionSchema>
     /// <param name="layoutFields">The layout mirror fields.</param>
     /// <param name="oldNames">The former names of each member.</param>
     internal VersionSchema(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes, string[] typeNames,
-        string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames)
+        string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames, bool dynamic, int[] widths)
     {
+        Dynamic = dynamic;
+        Widths = widths;
         OldNames = oldNames;
         Schema = schema;
         Name = schema.Substring(schema.LastIndexOf(".Version_", StringComparison.Ordinal) + 1);
@@ -81,7 +89,7 @@ internal sealed class VersionSchema : IEquatable<VersionSchema>
     }
 
     /// <inheritdoc/>
-    public bool Equals(VersionSchema? other) => ReferenceEquals(this, other) || other != null && Schema == other.Schema && Layout == other.Layout &&
+    public bool Equals(VersionSchema? other) => ReferenceEquals(this, other) || other != null && Schema == other.Schema && Layout == other.Layout && Dynamic == other.Dynamic && Widths.SequenceEqual(other.Widths) &&
         Metadata.SequenceEqual(other.Metadata) && Prefix.SequenceEqual(other.Prefix) && FieldEntries.SequenceEqual(other.FieldEntries) &&
         TempTypes.SequenceEqual(other.TempTypes) && TypeNames.SequenceEqual(other.TypeNames) && QualifiedTypes.SequenceEqual(other.QualifiedTypes) &&
         LayoutFields.SequenceEqual(other.LayoutFields) && OldNames.Length == other.OldNames.Length &&

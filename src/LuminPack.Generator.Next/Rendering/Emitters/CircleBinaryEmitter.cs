@@ -10,7 +10,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 /// <remarks>A reference-tracked record is <c>[slot count][one width byte per slot][VarInt id][members]</c>. The write reserves the
 /// table and the reserve-able members once, then frames each reference member. The read compares the table as constant words and
 /// fills the object in place, while reference members below the root expand their own read body once.</remarks>
-internal static class CircleBinaryEmitter
+internal static partial class CircleBinaryEmitter
 {
     private const string Profile = "TLuminProfile";
 
@@ -25,13 +25,13 @@ internal static class CircleBinaryEmitter
         const string writer = "LuminPackWriter", reader = "LuminPackReader";
         string Options() => w.A("ILuminPackOptions");
         string Serializer() => w.A("LuminPackSerializer");
-        string Standard() => w.A("LuminPackUtf16LengthOptions");
+        string Standard() => model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : w.A("LuminPackUtf16LengthOptions");
         string Constraint() => "where TLuminProfile : struct, " + Options();
         string inline = w.MethodImpl("AggressiveInlining");
         string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
         string polymorphic = "[" + w.Attribute("MethodImpl") + "(MethodImplOptions.AggressiveInlining)]";
 
-        var write = WriteBody(model, w);
+        var write = BinaryEmitter.ApplyBoundedWrite(model, WriteBody(model, w));
         var readChildren = new List<PayloadRenderModel>();
         var read = ReadBody(model, w, union: false, readChildren);
         var readUnion = ReadBody(model, w, union: true, readChildren);
@@ -101,7 +101,9 @@ internal static class CircleBinaryEmitter
         foreach (var child in readChildren)
             if (child.Mirror != null && child.Mirror != model.Mirror && emitted.Add(child.Mirror))
                 Mirror(prefix + child.Mirror.Substring(prefix.Length), child.MirrorFields, child.MirrorOffsets, child.LayoutAttribute);
-        if (model.Mirror != null)
+        if (model.Mirrors.Length != 0)
+            StorageMirrorEmitter.Emit(w, model.Mirrors);
+        else if (model.Mirror != null)
             Mirror(model.Mirror, model.MirrorFields, model.MirrorOffsets, model.LayoutAttribute);
         w.Close();
         w.Blank();
@@ -236,10 +238,12 @@ internal static class CircleBinaryEmitter
     /// <summary>The record's slot table: the slot count, then each slot width or 255 for a framed payload.</summary>
     internal static byte[] Table(PayloadRenderModel model)
     {
-        var table = new byte[model.Members.Length + 1];
-        table[0] = (byte)model.Members.Length;
+        if (model.CircleWidths.Any(width => width == 0))
+            return null;
+        var table = new byte[model.CircleSlotCount + 1];
+        table[0] = (byte)model.CircleSlotCount;
         for (int index = 0; index < model.Members.Length; index++)
-            table[index + 1] = model.Members[index].IsFixed ? (byte)model.Members[index].Size : (byte)255;
+            table[model.CircleSlots[index] + 1] = (byte)model.CircleWidths[index];
         return table;
     }
 
@@ -247,6 +251,10 @@ internal static class CircleBinaryEmitter
     private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w)
     {
         var members = model.Members;
+        var table = Table(model);
+        if (table == null || model.CircleWidths.Any(width => width > 4 && width != 255) ||
+            members.SkipWhile(member => member.IsFixed || member.Kind == RenderMemberKind.Text).Any(member => member.Kind != RenderMemberKind.Object))
+            return SequentialWriteBody(model, w);
         var body = new List<string>();
         if (model.CircleGuarded)
         {
@@ -272,7 +280,6 @@ internal static class CircleBinaryEmitter
         body.Add("}");
         body.Add("");
         body.Add("ref byte cursor = ref writer.Cursor;");
-        var table = Table(model);
         var snapshots = new string[members.Length];
         var terms = new List<string> { (table.Length + 5).ToString(CultureInfo.InvariantCulture) };
         int lastReserved = -1;
@@ -291,7 +298,7 @@ internal static class CircleBinaryEmitter
             string snapshot = Camel(member.Name) + "Snapshot";
             snapshots[index] = snapshot;
             body.Add("string " + snapshot + " = " + Access(member) + ";");
-            terms.Add("4 + writer.RecordBound<" + Profile + ">(" + snapshot + ")");
+            terms.Add("4 + writer.RecordBound<" + BinaryEmitter.WriteProfile(model, w, member) + ">(" + snapshot + ")");
             lastReserved = index;
         }
         body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
@@ -312,7 +319,7 @@ internal static class CircleBinaryEmitter
             body.Add("// Field: " + member.Name);
             body.Add("ref byte " + length + " = ref cursor;");
             body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, 4);");
-            body.Add("cursor = ref writer.WriteReservedRecordString<" + Profile + ">(ref cursor, " + snapshots[index] + ");");
+            body.Add("cursor = ref writer.WriteReservedRecordString<" + BinaryEmitter.WriteProfile(model, w, member) + ">(ref cursor, " + snapshots[index] + ");");
             body.Add(w.A("Unsafe") + ".WriteUnaligned(ref " + length + ", (int)" + w.A("Unsafe") + ".ByteOffset(ref " + w.A("Unsafe") + ".Add(ref " +
                 length + ", 4), ref cursor));");
         }
@@ -325,7 +332,7 @@ internal static class CircleBinaryEmitter
             var member = members[index];
             string length = Camel(member.Name) + "Length";
             body.Add("int " + length + " = writer.ReserveVersionLength();");
-            body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + Access(member) + ");");
+            body.Add(member.Formatter + ".Write<" + BinaryEmitter.WriteProfile(model, w, member) + ">(ref writer, " + Access(member) + ");");
             body.Add("writer.CompleteVersionLength(" + length + ");");
             body.Add("");
             body.Add("cursor = ref writer.Cursor;");
@@ -411,11 +418,13 @@ internal static class CircleBinaryEmitter
         foreach (string callback in model.ReadBefore)
             body.Add(top ? callback : Rewrite(callback, access, null));
 
-        // The same-table path fills the instance in place.
         var table = Table(model);
+        string memory = w.A("Unsafe");
+        if (table != null && model.ConstructorArguments == null && !model.RentByRef)
+        {
+        // The same-table path fills the instance in place.
         string head = names.Next("head"), same = names.Next("sameTable"), id = names.Next("id"), instance = names.Next("instance");
         body.Add("ref byte " + head + " = ref reader.PeekInput(" + table.Length.ToString(CultureInfo.InvariantCulture) + ", out bool " + same + ");");
-        string memory = w.A("Unsafe");
         string match = table.Length < 8 ? Difference(w, table, head, 4) : "(" + memory + ".SizeOf<nint>() == 8 ? " + Difference(w, table, head, 8) +
             " : " + Difference(w, table, head, 4) + ")";
         body.Add("if (" + same + " && " + match + " == 0)");
@@ -425,7 +434,7 @@ internal static class CircleBinaryEmitter
         body.Add("uint " + id + " = reader.ReadVarIntUInt32();");
         body.Add("if (" + Null("is null") + " || !reader.OptionState.ClaimReference(" + id + ", " + access + "))");
         body.Add("{");
-        body.Add(target + " = new " + type + "();");
+        body.Add(target + " = " + NewInstance(model) + ";");
         body.Add("reader.OptionState.AddObjectReference(" + id + ", " + access + ");");
         body.Add("}");
         body.Add("");
@@ -441,14 +450,14 @@ internal static class CircleBinaryEmitter
         {
             var member = members[index];
             string storage = (member.Mirrored ? local : instance) + "." + member.Name;
-            if (member.IsFixed)
+            if (model.CircleWidths[index] != 255)
             {
                 if (afterPayload)
                 {
                     body.Add("");
                     afterPayload = false;
                 }
-                body.Add(storage + " = reader.Read<" + member.Scalar + ">();");
+                BinaryEmitter.AddMemberRead(body, model, member, w, "reader", storage);
                 continue;
             }
             string end = names.Next("end");
@@ -460,13 +469,13 @@ internal static class CircleBinaryEmitter
                 {
                     string current = names.Next("currentString"), decoded = names.Next("decodedString");
                     body.Add("var " + current + " = " + storage + ";");
-                    body.Add("var " + decoded + " = reader.Read<" + Profile + ">(" + current + ");");
+                    body.Add("var " + decoded + " = reader.Read<" + BinaryEmitter.ReadProfile(model, w, member) + ">(" + current + ");");
                     body.Add("if (!object.ReferenceEquals(" + current + ", " + decoded + "))");
                     body.Add("\t" + storage + " = " + decoded + "!;");
                     body.Add("");
                 }
                 else
-                    body.Add("reader.Read<" + Profile + ">(ref " + storage + ");");
+                    body.Add("reader.Read<" + BinaryEmitter.ReadProfile(model, w, member) + ">(ref " + storage + ");");
             }
             else
                 AppendObjectRead(state, model, member, body, storage, refLocal: true);
@@ -481,6 +490,8 @@ internal static class CircleBinaryEmitter
         body.Add("}");
         body.Add("");
 
+        }
+
         // The fallback reads each slot into a temporary and assigns the object once every slot is consumed.
         body.Add("// Declare locals to hold the field values.");
         var temps = new string[members.Length];
@@ -488,7 +499,7 @@ internal static class CircleBinaryEmitter
         {
             var member = members[index];
             temps[index] = names.Next(Camel(member.Name) + "Temp");
-            body.Add((member.IsFixed ? member.Scalar : member.TypeName + "?") + " " + temps[index] + " = default !;");
+            body.Add(member.TypeName + " " + temps[index] + " = default !;");
         }
         string count = names.Next("count");
         body.Add("if (!reader.TryReadObjectHead(out var " + count + "))");
@@ -506,15 +517,15 @@ internal static class CircleBinaryEmitter
         body.Add("reader.EnsureReadable(" + count + ");");
         string tableName = names.Next("table");
         body.Add("ref byte " + tableName + " = ref reader.PeekInput(" + count + ", out _);");
-        var widths = new string[members.Length];
-        for (int order = 0; order < members.Length; order++)
+        var widths = new string[model.CircleSlotCount];
+        for (int order = 0; order < model.CircleSlotCount; order++)
         {
             widths[order] = names.Next("width" + order.ToString(CultureInfo.InvariantCulture));
             body.Add("int " + widths[order] + " = " + order.ToString(CultureInfo.InvariantCulture) + " < " + count + " ? " + memory + ".Add(ref " +
                 tableName + ", " + order.ToString(CultureInfo.InvariantCulture) + ") : 0;");
         }
         string unknown = names.Next("unknownTable");
-        body.Add("int " + unknown + " = reader.Position + " + members.Length.ToString(CultureInfo.InvariantCulture) + ";");
+        body.Add("int " + unknown + " = reader.Position + " + model.CircleSlotCount.ToString(CultureInfo.InvariantCulture) + ";");
         body.Add("reader.EnsureReadable(" + count + ");");
         body.Add("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)(uint)((" + count + "))));");
         string second = names.Next("id");
@@ -523,7 +534,7 @@ internal static class CircleBinaryEmitter
         body.Add("bool " + reuse + " = " + Null("is not null") + " && !reader.OptionState.IsObjectReferenceRegistered(" + access + ");");
         body.Add("if (!" + reuse + ")");
         body.Add("{");
-        body.Add(target + " = new " + type + "();");
+        body.Add(target + " = " + (model.RentByRef ? "ref " : string.Empty) + NewInstance(model) + ";");
         body.Add("}");
         body.Add("");
         body.Add("reader.OptionState.AddObjectReference(" + second + ", " + target + "!);");
@@ -539,24 +550,30 @@ internal static class CircleBinaryEmitter
             body.Add(temps[index] + " = " + (members[index].Mirrored ? reuseLocal : target + "!") + "." + members[index].Name + ";");
         body.Add("}");
         body.Add("");
-        for (int index = 0; index < members.Length; index++)
+        for (int slot = 0; slot < model.CircleSlotCount; slot++)
         {
-            var member = members[index];
-            body.Add("if (" + widths[index] + " != 0)");
-            body.Add("{");
-            if (member.IsFixed)
+            int index = Array.IndexOf(model.CircleSlots, slot);
+            if (index < 0)
             {
-                body.Add("if (" + widths[index] + " != " + memory + ".SizeOf<" + member.Scalar + ">())");
-                body.Add("\treader.ValidateReferenceWidth(" + widths[index] + ", " + memory + ".SizeOf<" + member.Scalar + ">());");
-                body.Add("reader.EnsureReadable(" + memory + ".SizeOf<" + member.Scalar + ">());");
-                body.Add("reader.Advance(" + w.A("LuminPackReader") + ".Read(ref reader.Cursor, out " + temps[index] + "));");
+                body.Add("reader.SkipReferenceSlot(" + widths[slot] + ");");
+                continue;
+            }
+            var member = members[index];
+            body.Add("if (" + widths[slot] + " != 0)");
+            body.Add("{");
+            if (model.CircleWidths[index] != 255)
+            {
+                body.Add("if (" + widths[slot] + " != " + memory + ".SizeOf<" + member.TypeName + ">())");
+                body.Add("\treader.ValidateReferenceWidth(" + widths[slot] + ", " + memory + ".SizeOf<" + member.TypeName + ">());");
+                body.Add("reader.EnsureReadable(" + memory + ".SizeOf<" + member.TypeName + ">());");
+                BinaryEmitter.AddMemberRead(body, model, member, w, "reader", temps[index]);
             }
             else
             {
                 string end = names.Next(Camel(member.Name) + "End");
-                body.Add("int " + end + " = reader.ReadReferencePayloadLength(" + widths[index] + ") + reader.Position;");
+                body.Add("int " + end + " = reader.ReadReferencePayloadLength(" + widths[slot] + ") + reader.Position;");
                 if (member.Kind == RenderMemberKind.Text)
-                    body.Add("global::LuminPack." + GeneratedNames.Owner(model.Extension, "string") + ".Read<" + Profile + ">(ref reader, ref " +
+                    body.Add("global::LuminPack." + GeneratedNames.Owner(model.Extension, "string") + ".Read<" + BinaryEmitter.ReadProfile(model, w, member) + ">(ref reader, ref " +
                         temps[index] + "!);");
                 else
                     AppendObjectRead(state, model, member, body, temps[index], refLocal: false);
@@ -569,8 +586,8 @@ internal static class CircleBinaryEmitter
             body.Add("}");
             body.Add("");
         }
-        body.Add("if (" + count + " > " + members.Length.ToString(CultureInfo.InvariantCulture) + ")");
-        body.Add("\treader.SkipReferenceSlots(" + unknown + ", " + count + " - " + members.Length.ToString(CultureInfo.InvariantCulture) + ");");
+        body.Add("if (" + count + " > " + model.CircleSlotCount.ToString(CultureInfo.InvariantCulture) + ")");
+        body.Add("\treader.SkipReferenceSlots(" + unknown + ", " + count + " - " + model.CircleSlotCount.ToString(CultureInfo.InvariantCulture) + ");");
         body.Add("// Assign the field value.");
         if (members.Any(member => member.Mirrored))
         {
@@ -578,13 +595,15 @@ internal static class CircleBinaryEmitter
             string assign = names.Next("local");
             body.Add("ref var " + assign + " = ref LuminPackMarshal.As<" + type + ", " + model.Mirror + ">(ref " + target + "!);");
             for (int index = 0; index < members.Length; index++)
-                body.Add((members[index].Mirrored ? assign : access) + "." + members[index].Name + " = " + temps[index] + "!;");
+                if (model.Rent != null || model.ConstructorMembers == null || !model.ConstructorMembers.Contains(members[index].Name))
+                    body.Add((members[index].Mirrored ? assign : access) + "." + members[index].Name + " = " + temps[index] + "!;");
         }
         else
         {
             body.Add("// Assign public fields.");
             for (int index = 0; index < members.Length; index++)
-                body.Add(access + "." + members[index].Name + " = " + temps[index] + "!;");
+                if (model.Rent != null || model.ConstructorMembers == null || !model.ConstructorMembers.Contains(members[index].Name))
+                    body.Add(access + "." + members[index].Name + " = " + temps[index] + "!;");
         }
         foreach (string callback in model.ReadAfter)
             body.Add(Rewrite(callback, access, null));
@@ -600,6 +619,11 @@ internal static class CircleBinaryEmitter
     private static void AppendObjectRead(ReadState state, PayloadRenderModel owner, RenderMember member, List<string> body, string expression,
         bool refLocal)
     {
+        if (member.Kind != RenderMemberKind.Object || member.Nested != null && !member.Nested.Circle)
+        {
+            BinaryEmitter.AddMemberRead(body, owner, member, state.W, "reader", expression);
+            return;
+        }
         var child = member.Nested ?? owner;
         if (state.Stack.Contains(child.GlobalName))
         {

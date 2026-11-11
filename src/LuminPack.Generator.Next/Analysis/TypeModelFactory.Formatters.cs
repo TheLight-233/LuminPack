@@ -23,6 +23,9 @@ internal static partial class TypeModelFactory
         private MemberModel? Classify(ISymbol member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth, List<string> issues, Path path)
         {
             ITypeSymbol type = member is IFieldSymbol field ? field.Type : ((IPropertySymbol)member).Type;
+            if (type is ITypeParameterSymbol || type.TypeKind == TypeKind.Enum ||
+                type.SpecialType == SpecialType.System_String || Scalar(type) != null)
+                return ClassifySpecialized(member, storage, policy, owner, depth, issues, path);
             if (type is not ITypeParameterSymbol && ContainsTypeParameter(type) && MentionsOwnParameter(type, owner))
                 return new TypeParameterMember(member.Name, storage, policy, FormatterSpelling(type), type.IsValueType, type.IsReferenceType);
             FormatterModel? formatter = type is ITypeParameterSymbol ? null : Formatter(type, depth, path);
@@ -57,7 +60,30 @@ internal static partial class TypeModelFactory
         /// <param name = "depth">The depth used by this operation.</param>
         /// <param name = "path">The path used by this operation.</param>
         /// <returns>The normalized result of the operation.</returns>
-        private FormatterModel? Formatter(ITypeSymbol type, int depth, Path path) => FormatterCore(type, depth, path)?.WithCapabilities(FormatterCapabilities.Capture(_compilation, type, Options.Net8, Options.Unity));
+        private FormatterModel? Formatter(ITypeSymbol type, int depth, Path path)
+        {
+            FormatterModel? model = FormatterCore(type, depth, path);
+            return model?.WithCapabilities(Capabilities(type));
+        }
+
+        private readonly Dictionary<ITypeSymbol, string[]> _formatterCapabilities =
+            new Dictionary<ITypeSymbol, string[]>(SymbolEqualityComparer.Default);
+
+        /// <summary>Captures each closed type's optional runtime API signatures once per compilation.</summary>
+        /// <param name="type">The closed formatter type.</param>
+        /// <returns>The shared immutable capability names.</returns>
+        private string[] Capabilities(ITypeSymbol type)
+        {
+            lock (_gate)
+            {
+                if (_formatterCapabilities.TryGetValue(type, out string[]? cached))
+                    return cached;
+            }
+            string[] result = FormatterCapabilities.Capture(_compilation, type, Options.Net8, Options.Unity);
+            lock (_gate)
+                _formatterCapabilities[type] = result;
+            return result;
+        }
         /// <summary>Builds a formatter's representation before attaching optional runtime APIs.</summary>
         /// <param name = "type">The declared type or its source-ready spelling.</param>
         /// <param name = "depth">The depth used by this operation.</param>

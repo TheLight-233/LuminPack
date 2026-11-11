@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using LuminPack.SourceGenerator.Next.Analysis;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
@@ -30,18 +31,51 @@ public sealed class NextGenerator : IIncrementalGenerator
     {
         var models = context.SyntaxProvider.ForAttributeWithMetadataName(PackableAttribute,
             static (node, _) => node is TypeDeclarationSyntax,
-            static (attributeContext, _) =>
+            static (attributeContext, cancellationToken) =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 GeneratorOptions options = GeneratorOptionsFactory.From(attributeContext.SemanticModel.Compilation);
                 var symbol = (INamedTypeSymbol)attributeContext.TargetSymbol;
-                ModelResult result = TypeModelFactory.TryCreate(symbol, attributeContext.SemanticModel.Compilation, options);
-                return new ModeledPayload(result, options, TypeModelFactory.Diagnose(symbol, result.Model));
+                Compilation compilation = attributeContext.SemanticModel.Compilation;
+                try
+                {
+                    DiagnosticInfo[] diagnostics = TypeModelFactory.Diagnose(symbol, compilation, options);
+                    bool errors = DiagnosticDescriptors.HasErrors(diagnostics) ||
+                        DiagnosticDescriptors.HasErrors(TypeModelFactory.DiagnoseAssembly(compilation, options));
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ModelResult result = errors ? ModelResult.Unsupported("invalid serialization declaration") :
+                        TypeModelFactory.TryCreate(symbol, compilation, options);
+                    return new ModeledPayload(result, options, diagnostics);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception error) when (error is not OperationCanceledException)
+                {
+                    DiagnosticInfo diagnostic = DiagnosticInfo.Capture(DiagnosticDescriptors.GeneratorFailure.Id,
+                        symbol.Locations.Length == 0 ? null : symbol.Locations[0], new[] { error.GetType().FullName + ": " + error.Message });
+                    return new ModeledPayload(ModelResult.Unsupported("declaration analysis failed"), options, new[] { diagnostic });
+                }
             })
             .WithTrackingName("LuminPack.Next.PayloadModels");
+        var assemblyDiagnostics = context.CompilationProvider.Select(static (compilation, _) =>
+            TypeModelFactory.DiagnoseAssembly(compilation, GeneratorOptionsFactory.From(compilation)))
+            .WithComparer(DiagnosticInfoComparer.Instance);
+        context.RegisterSourceOutput(assemblyDiagnostics.Combine(context.CompilationProvider), static (production, input) =>
+        {
+            foreach (DiagnosticInfo diagnostic in input.Left)
+                production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic, input.Right));
+        });
+        var declarationDiagnostics = models.Select(static (payload, _) => payload.Diagnostics)
+            .WithComparer(DiagnosticInfoComparer.Instance);
+        context.RegisterSourceOutput(declarationDiagnostics.Combine(context.CompilationProvider), static (production, input) =>
+        {
+            foreach (DiagnosticInfo diagnostic in input.Left)
+                production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic, input.Right));
+        });
         context.RegisterSourceOutput(models, static (production, payload) =>
         {
-            foreach (DiagnosticInfo diagnostic in payload.Diagnostics)
-                production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic));
             if (payload.Result.Model is not { } model || !payload.Result.IsComplete)
                 return;
             try
@@ -56,22 +90,40 @@ public sealed class NextGenerator : IIncrementalGenerator
                 Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
                 Emit(production, model, renderContext, JsonRenderer.Instance.Render(model, renderContext), ".Json");
             }
-            catch (Exception error)
+            catch (Exception error) when (error is not OperationCanceledException)
             {
                 production.ReportDiagnostic(DiagnosticDescriptors.Create(
                     DiagnosticInfo.Unlocated(DiagnosticDescriptors.GeneratorFailure.Id, error.Message)));
             }
         });
-        // The shared formatter owners are collected once: the flag set is order-independent, so the same complete payloads
+        var collected = models.Collect();
+        var profiles = collected.Select(static (payloads, _) =>
+        {
+            var retained = new List<TypeModel>();
+            foreach (ModeledPayload payload in payloads)
+                if (payload.Result.IsComplete && payload.Result.Model is { } model)
+                    retained.Add(model);
+            return ProfileSource.Render(retained);
+        });
+        context.RegisterSourceOutput(profiles, static (production, source) =>
+        {
+            if (source.Length != 0)
+                production.AddSource("LuminPack.Profiles.g.cs", source);
+        });
+        // The shared formatter owners are collected once. Sorted requirements are order-independent, so the same complete payloads
         // publish the same files and an unchanged set reuses its cached output across edits.
-        var sharedFormatters = models.Collect()
+        var sharedFormatters = collected
             .Select(static (payloads, _) =>
             {
-                SharedFormatterSet set = SharedFormatterSet.Empty;
+                var retained = new List<TypeModel>();
+                GeneratorOptions? options = null;
                 foreach (ModeledPayload payload in payloads)
                     if (payload.Result.Model is { } model && payload.Result.IsComplete)
-                        set = set.Include(model, payload.Options);
-                return set;
+                    {
+                        retained.Add(model);
+                        options ??= payload.Options;
+                    }
+                return options == null ? SharedFormatterSet.Empty : SharedFormatterSet.Collect(retained, options);
             })
             .WithTrackingName("LuminPack.Next.SharedFormatters");
         context.RegisterSourceOutput(sharedFormatters, static (production, set) =>
@@ -80,7 +132,7 @@ public sealed class NextGenerator : IIncrementalGenerator
             {
                 SharedFormatterPublisher.Publish(production, set, GeneratedOperations.All);
             }
-            catch (Exception error)
+            catch (Exception error) when (error is not OperationCanceledException)
             {
                 production.ReportDiagnostic(DiagnosticDescriptors.Create(
                     DiagnosticInfo.Unlocated(DiagnosticDescriptors.GeneratorFailure.Id, error.Message)));

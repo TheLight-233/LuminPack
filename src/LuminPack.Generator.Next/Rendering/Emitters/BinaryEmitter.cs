@@ -223,7 +223,9 @@ internal static partial class BinaryEmitter
             w.Indented(() => w.Line(ConstraintLine(true) + " => MeasureRecord" + suffix + Arguments() + "(ref evaluator, ref value);"));
         }
         w.Suppressed = false;
-        if ((model.Mirror ?? model.Version?.Layout) != null)
+        if (model.Mirrors.Length != 0)
+            StorageMirrorEmitter.Emit(w, model.Mirrors);
+        else if ((model.Mirror ?? model.Version?.Layout) != null)
         {
             // The root-private layout mirror that the operations reach auto-property and included non-public storage through;
             // a version-tolerant record always declares it.
@@ -508,8 +510,8 @@ internal static partial class BinaryEmitter
             if (attribute != null)
                 w.Line(attribute);
             w.Line("internal static " + returns + " " + name + (generic ? Arguments(Profile) : Arguments()) + parameters);
-            if (generic)
-                w.Indented(() => w.Line(ConstraintLine(true)));
+            if (generic || TypeConstraint().Length != 0)
+                w.Indented(() => w.Line(ConstraintLine(generic)));
             w.Open();
             for (int index = 0; index < body.Count; index++)
             {
@@ -581,6 +583,9 @@ internal static partial class BinaryEmitter
     /// <summary>Spells the proof that a run of fixed fields is laid out contiguously on a 64-bit target.</summary>
     private static string Proof(CodeWriter w, RenderMember[] members, int first, int last, string owner, bool readOnly)
     {
+        for (int index = first; index <= last; index++)
+            if (members[index].Volatile)
+                return "false";
         var terms = new List<string> { w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" };
         for (int index = first; index < last; index++)
             terms.Add(w.A("Unsafe") + ".ByteOffset(ref " + Bytes(w, members[index], owner, readOnly) + ", ref " + Bytes(w, members[index + 1], owner, readOnly) +
@@ -592,7 +597,7 @@ internal static partial class BinaryEmitter
     private static int RunEnd(RenderMember[] members, int first)
     {
         int last = first;
-        while (last + 1 < members.Length && members[last + 1].IsFixed)
+        while (!members[first].Volatile && last + 1 < members.Length && members[last + 1].IsFixed && !members[last + 1].Volatile)
             last++;
         return last;
     }
@@ -834,13 +839,13 @@ internal static partial class BinaryEmitter
 
     /// <summary>The profile a member's write kernels consume: its own declaration, the containing type's declaration, or the
     /// operation's profile.</summary>
-    private static string WriteProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
+    internal static string WriteProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? ScopedProfile(w, member.ScopeProfile) :
         model.DeclaredProfile != null ? ScopedProfile(w, model.DeclaredProfile) : Profile;
 
     /// <summary>The profile a plain string read consumes: a declared profile is passed without the fixed wrapper, as the
     /// member and type projections do.</summary>
-    private static string ReadProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
+    internal static string ReadProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? w.A(member.ScopeProfile) :
         model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : Profile;
 
@@ -857,8 +862,9 @@ internal static partial class BinaryEmitter
         var result = new List<string>(body.Count + before.Length + after.Length);
         int anchor = body.FindIndex(line => line.StartsWith("var value = input;", StringComparison.Ordinal));
         // A bounded root runs its callbacks after reserving the guarantee, as the completed-buffer lifecycle requires.
-        if (anchor >= 0 && anchor + 1 < body.Count && body[anchor + 1].StartsWith("int boundedStart", StringComparison.Ordinal))
-            anchor += 2;
+        int bounded = body.FindIndex(line => line.StartsWith("int boundedStart", StringComparison.Ordinal));
+        if (bounded >= 0)
+            anchor = bounded + 1;
         for (int index = 0; index < body.Count; index++)
         {
             result.Add(body[index]);
@@ -875,7 +881,7 @@ internal static partial class BinaryEmitter
     /// its branches itself.</summary>
     private static List<string> AddReadCallbacks(PayloadRenderModel model, List<string> body)
     {
-        if (!model.HasCallbacks || !model.IsStruct && model.ConstructorArguments != null)
+        if (!model.HasCallbacks || model.Version == null && !model.IsStruct && model.ConstructorArguments != null)
             return body;
         var result = new List<string>(body.Count + model.ReadBefore.Length + model.ReadAfter.Length);
         result.AddRange(model.ReadBefore);
@@ -951,7 +957,7 @@ internal static partial class BinaryEmitter
             // A formatter-call array is a plain call beside the value members, which keeps no separating blank line.
             if (member.Kind == RenderMemberKind.Array && member.FormatterCall)
             {
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -964,7 +970,7 @@ internal static partial class BinaryEmitter
             }
             if (member.Kind == RenderMemberKind.ForwardedCollection)
             {
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -978,7 +984,7 @@ internal static partial class BinaryEmitter
             // A framework member writes through its shared formatter owner, which frames its own null record.
             if (member.Kind == RenderMemberKind.Special)
             {
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -1559,7 +1565,7 @@ internal static partial class BinaryEmitter
             // An array member writes through its generated formatter, which keeps its own framing and profile.
             if (member.Kind == RenderMemberKind.Array)
             {
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             // A culture-info member expands the shared owner's write body in place, as the legacy direct record does.
@@ -1571,12 +1577,12 @@ internal static partial class BinaryEmitter
             // A framework member writes through its shared formatter owner, which frames its own null record.
             if (member.Kind == RenderMemberKind.Special)
             {
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             if (member.Kind == RenderMemberKind.ForwardedCollection)
             {
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             if (member.Kind == RenderMemberKind.Sequence)
@@ -1840,10 +1846,23 @@ internal static partial class BinaryEmitter
             result.Add(System.Text.RegularExpressions.Regex.Replace(line, pattern, "local.$1"));
         if (writes)
         {
-            // A version-tolerant struct has no null handling, so its mirror view follows the value local at once.
-            int at = model.Version != null && model.IsStruct ? 1 : (union ? 1 : 8);
-            if (at > result.Count)
-                at = result.Count;
+            // Bind the Local view after the complete null branch and any leading capacity guarantee.
+            int at = 1;
+            int nullTest = result.FindIndex(line => line == "if (value is null)");
+            if (nullTest >= 0)
+            {
+                int nesting = 0;
+                for (int index = nullTest + 1; index < result.Count; index++)
+                {
+                    if (result[index] == "{")
+                        nesting++;
+                    else if (result[index] == "}" && --nesting == 0)
+                    {
+                        at = index + 1;
+                        break;
+                    }
+                }
+            }
             result.Insert(at, "ref var local = ref " + marshal + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref Unsafe.AsRef(in value));");
         }
         else
@@ -2028,7 +2047,8 @@ internal static partial class BinaryEmitter
             body.Add(TempType(member) + " " + Camel(member.Name) + "Temp = default !;");
         if (!union)
         {
-            body.Add("if (" + policy + ".ReadNullMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + "))");
+            body.Add(model.Trusted ? "if (reader.Read<byte>() == 255)" :
+                "if (" + policy + ".ReadNullMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + "))");
             body.Add("{");
             body.Add("return;");
             body.Add("}");
@@ -2052,12 +2072,7 @@ internal static partial class BinaryEmitter
         body.Add("}");
         body.Add("");
         foreach (var member in members)
-        {
-            if (member.Kind == RenderMemberKind.Parameter)
-                body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader, ref " + Camel(member.Name) + "Temp!);");
-            else
-                body.Add(Camel(member.Name) + "Temp = " + FixedOrTextRead(member, "reader") + ";");
-        }
+            AddMemberRead(body, model, member, w, "reader", Camel(member.Name) + "Temp");
         body.Add("// Construct the object and populate its members.");
         string arguments = string.Join(", ", model.ConstructorArguments.Select(name =>
             name == null ? "default" : Camel(name) + "Temp!"));
@@ -2114,7 +2129,7 @@ internal static partial class BinaryEmitter
             body.Add(w.A("LuminPackSerializer") + ".Deserialize" + MemberArguments(member, Profile) + "(ref reader2, ref " + owner + "." + member.Name + "!);");
             return;
         }
-        body.Add(owner + "." + member.Name + " = " + FixedOrTextRead(member, "reader2") + ";");
+        AddMemberRead(body, model, member, w, "reader2", owner + "." + member.Name);
     }
 
     /// <summary>Spells a fixed or string member's read from the given reader expression.</summary>
@@ -2244,7 +2259,7 @@ internal static partial class BinaryEmitter
                 body.Add(Policy() + ".ReadBooleans(ref reader, ref instance." + member.Name + "!);");
             else
             {
-                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref instance." + member.Name + "!);");
+                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref instance." + member.Name + "!);");
                 // A Boolean list carries unmanaged values, so an untrusted read still checks the decoded bytes.
                 if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
                     body.Add(Policy() + ".CheckBooleans(instance." + member.Name + "!);");
@@ -2389,32 +2404,32 @@ internal static partial class BinaryEmitter
             // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.
             if (member.Kind == RenderMemberKind.Dictionary)
             {
-                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A culture-info member reads through its shared formatter owner, which handles its own null marker.
             if (member.Kind == RenderMemberKind.CultureInfo)
             {
-                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A framework member reads through its shared formatter owner, which handles its own null record.
             if (member.Kind == RenderMemberKind.Special)
             {
-                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                AddMemberRead(body, model, member, w, "reader", owner + "." + member.Name);
                 continue;
             }
             // A concurrent queue, immutable array, stack or list reads through its shared formatter owner, which frames its
             // own null record.
             if (member.Kind is RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence)
             {
-                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A sorted, paired or nested collection reads through its generated formatter, which keeps its own framing.
             if (IsCollectionBlock(member))
             {
-                body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // An array or list member reads through its generated formatter, which keeps its own framing and profile.
@@ -2424,7 +2439,7 @@ internal static partial class BinaryEmitter
                     body.Add(Policy() + ".ReadBooleans(ref reader, ref " + owner + "." + member.Name + "!);");
                 else
                 {
-                    body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                    body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                     if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
                         body.Add(Policy() + ".CheckBooleans(" + owner + "." + member.Name + "!);");
                 }
