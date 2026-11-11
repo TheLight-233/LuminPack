@@ -92,15 +92,31 @@ internal static class ClosedGenericOwnerFile
                 w.Close();
             }
 
+            // As the original compound read, a string component starts from the existing component and keeps it when the text is
+            // equal; the string operation keeps its own inlining budget.
+            bool pair = model.Definition == GenericIdentity.KeyValuePair;
+            bool compound = false;
             for (int i = 0; i < model.Arguments.Length; i++)
             {
                 FormatterModel argument = model.Arguments[i];
-                string seed = argument.Type == "string" && tuple ? (reference ? "value is null ? default! : value." + names[i] : "value." + names[i]) : "default!";
+                bool text = argument.Type == "string" && (tuple || pair);
+                string seed = text ? (reference ? "value is null ? default! : value." + names[i] : "value." + names[i]) : "default!";
                 w.Line(argument.Type + " item" + i + " = " + seed + ";");
-                FormatterElementEmitter.Read(w, set, argument, "item" + i);
+                if (text)
+                {
+                    w.Line("item" + i + " = ReadCompoundString(ref reader, item" + i + ");");
+                    compound = true;
+                }
+                else
+                    FormatterElementEmitter.Read(w, set, argument, "item" + i);
             }
 
             Assign(w);
+            if (compound)
+            {
+                w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+                w.Line("static string ReadCompoundString(ref global::LuminPack.Core.LuminPackReader stringReader, string text) => stringReader.Read<TLuminProfile>(text)!;");
+            }
         }
 
         void JsonWrite(CodeWriter w, SpecialOwnerContext c)

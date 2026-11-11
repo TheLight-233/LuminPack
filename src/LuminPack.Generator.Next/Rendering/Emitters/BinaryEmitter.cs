@@ -1862,7 +1862,8 @@ internal static partial class BinaryEmitter
             if (model.LayoutAttribute != null)
                 w.Line(model.LayoutAttribute);
             w.Line(w.Preserve);
-            w.Line("private class " + model.Mirror);
+            // A struct is reinterpreted in place, so its mirror is a struct, as in the original layout declarations.
+            w.Line((model.IsStruct ? "private struct " : "private class ") + model.Mirror);
             if (model.TypeConstraintText.Length != 0)
                 w.Indented(() => w.Line(model.TypeConstraintText));
             w.Open();
