@@ -69,6 +69,34 @@ internal sealed class CodeWriter
     /// <summary>Discards lines and alias uses while set, for the members of operations the project does not call.</summary>
     internal bool Suppressed;
 
+    private static readonly Regex MemberAccess = new(@"(?<=[\w\)\]!>])\.([A-Za-z_][A-Za-z0-9_]*)\b");
+
+    /// <summary>Escapes a member whose name is a reserved C# keyword where the line accesses it.</summary>
+    /// <param name="text">The line.</param>
+    /// <returns>The line with <c>@</c>-escaped keyword members.</returns>
+    /// <remarks>A reserved keyword never follows a member-access dot in valid source, so the escape cannot change other code;
+    /// JSON property names are string literals and keep the declared spelling.</remarks>
+    internal static string EscapeKeywordMembers(string text)
+    {
+        // A member-named table field is declared under the member's name as well.
+        text = StaticDeclaration.Replace(text, match => Keyword(match.Groups[2].Value)
+            ? match.Groups[1].Value + "@" + match.Groups[2].Value + match.Groups[3].Value : match.Value);
+        // An object initializer assigns the member by its name at the start of the line; `this` assignments stay as they are.
+        text = InitializerAssignment.Replace(text, match => match.Groups[2].Value != "this" && Keyword(match.Groups[2].Value)
+            ? match.Groups[1].Value + "@" + match.Groups[2].Value + match.Groups[3].Value : match.Value);
+        if (text.IndexOf('.') < 0)
+            return text;
+        return MemberAccess.Replace(text, match => Keyword(match.Groups[1].Value) ? ".@" + match.Groups[1].Value : match.Value);
+    }
+
+    private static readonly Regex StaticDeclaration = new(@"^(\s*(?:internal|private|public) static [^=(]*\s)([A-Za-z_][A-Za-z0-9_]*)(\s*(?:=|\{))");
+
+    private static readonly Regex InitializerAssignment = new(@"^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*=[^=>])");
+
+    /// <summary>Whether a name is a reserved C# keyword.</summary>
+    private static bool Keyword(string name) => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.IsReservedKeyword(
+        Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name));
+
     /// <summary>Whether the file holds JSON operations, whose compressed members keep their ordinary owner.</summary>
     internal bool Json;
 
@@ -145,6 +173,7 @@ internal sealed class CodeWriter
             return;
         if (text.IndexOf(RenderMember.CompressedOwner) >= 0)
             text = CompressedCall(text);
+        text = EscapeKeywordMembers(text);
         if (_pendingBlank)
         {
             _body.Append(Environment.NewLine);
