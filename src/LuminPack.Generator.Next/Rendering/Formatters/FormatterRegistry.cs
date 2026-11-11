@@ -171,6 +171,21 @@ internal static class FormatterRegistry
             writeMember: Adapt(ImmutableTreeMemberWriter.Write), usesCandidateCache: true),
     };
 
+    private static readonly Dictionary<string, DictionaryFormatter> Dictionaries = new Dictionary<string, DictionaryFormatter>(StringComparer.Ordinal)
+    {
+        ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render),
+    };
+
+    /// <summary>Finds the dictionary definition behind a declared dictionary spelling.</summary>
+    /// <param name="declaredType">The declared dictionary spelling.</param>
+    /// <returns>The registered dictionary, or null.</returns>
+    internal static DictionaryFormatter? FindDictionary(string declaredType)
+    {
+        string type = GeneratedNames.PayloadKey(declaredType);
+        int generic = type.IndexOf('<');
+        return generic > 0 && Dictionaries.TryGetValue(type.Substring(0, generic), out var formatter) ? formatter : null;
+    }
+
     /// <summary>Finds a registered open sequence by its fully qualified type definition.</summary>
     /// <param name="definition">The namespace and name of the type definition.</param>
     /// <returns>The registered sequence, or null.</returns>

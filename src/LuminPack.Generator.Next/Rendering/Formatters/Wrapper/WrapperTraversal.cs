@@ -1,5 +1,6 @@
 #nullable disable
 using System.Collections.Generic;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 

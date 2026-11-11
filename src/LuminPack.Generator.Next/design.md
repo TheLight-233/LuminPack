@@ -253,6 +253,16 @@ variants of these families, the small-hash-set grouped write that depends on an 
 types, `Nullable<T>`, tuples, `KeyValuePair<TKey, TValue>` and `Lazy<T>` are not ported yet. This batch
 was written without a build or parity run.
 
+`Dictionary<TKey, TValue>` is the first registered dictionary definition: `FormatterRegistry.FindDictionary`
+resolves it, `SharedFormatterSet` collects `DictionaryOwnerFact` entries (a raw scalar or `string` key and value)
+and `SharedFormatterPublisher` publishes `DictionaryOwnerFile`. The owner writes packed raw pairs or key and value
+entries through the dense 64-bit entry view with an enumerating fallback, reads a reused destination through the
+raw refill or a staged read and a fresh one directly into its entry storage before rebuilding buckets, and keeps
+the JSON array-of-pairs form. Not ported: sparse nullable values, the interface key reuse and slot-reuse read
+paths, union and packable value slots, `SortedDictionary`, `SortedList` owners, `ConcurrentDictionary`,
+`ImmutableDictionary`, `ImmutableSortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary` and the dictionary
+interfaces.
+
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
 `LuminPack027` and `LuminPack018` at the declarations, and the 220-payload corpus reports none. An

@@ -97,9 +97,13 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <summary>The raw scalar element owners, sorted by keyword.</summary>
     internal readonly string[] Scalars;
 
+    /// <summary>The dictionary owners, sorted by declared dictionary spelling.</summary>
+    internal readonly DictionaryOwnerFact[] DictionaryOwners;
+
     private SharedFormatterSet(string extension, string[] owners, int availableAliases, bool cultureInfoReuse,
-        SequenceOwnerFact[] sequenceOwners, string[] scalars)
+        SequenceOwnerFact[] sequenceOwners, string[] scalars, DictionaryOwnerFact[] dictionaryOwners)
     {
+        DictionaryOwners = dictionaryOwners;
         Scalars = scalars;
         SequenceOwners = sequenceOwners;
         CultureInfoReuse = cultureInfoReuse;
@@ -114,7 +118,7 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <summary>Whether the set publishes no owner file.</summary>
     internal bool IsEmpty => string.IsNullOrEmpty(Extension) ||
         (Owners == null || Owners.Length == 0) && (SequenceOwners == null || SequenceOwners.Length == 0) &&
-        (Scalars == null || Scalars.Length == 0);
+        (Scalars == null || Scalars.Length == 0) && (DictionaryOwners == null || DictionaryOwners.Length == 0);
 
     /// <summary>Adds the owners one complete payload model requires.</summary>
     /// <param name="model">The complete payload model.</param>
@@ -128,19 +132,23 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         var facts = new List<SequenceOwnerFact>(SequenceOwners ?? Array.Empty<SequenceOwnerFact>());
         var scalars = new List<string>(Scalars ?? Array.Empty<string>());
         var owners = new List<string>(Owners ?? Array.Empty<string>());
-        Required(model, options, facts, scalars, owners, ref cultureInfoReuse);
+        var dictionaries = new List<DictionaryOwnerFact>(DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>());
+        Required(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse);
         SequenceOwnerFact[] sequenceOwners = facts.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal)
             .ToArray();
         return new SharedFormatterSet(extension, owners.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray(), aliases, cultureInfoReuse, sequenceOwners,
-            scalars.Distinct(StringComparer.Ordinal).OrderBy(scalar => scalar, StringComparer.Ordinal).ToArray());
+            scalars.Distinct(StringComparer.Ordinal).OrderBy(scalar => scalar, StringComparer.Ordinal).ToArray(),
+            dictionaries.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal).Select(group => group.First())
+                .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal).ToArray());
     }
 
     /// <inheritdoc/>
     public bool Equals(SharedFormatterSet other) => Extension == other.Extension && SameStrings(Owners, other.Owners) &&
         AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse &&
-        SameFacts(SequenceOwners, other.SequenceOwners) && SameStrings(Scalars, other.Scalars);
+        SameFacts(SequenceOwners, other.SequenceOwners) && SameStrings(Scalars, other.Scalars) &&
+        SameDictionaries(DictionaryOwners, other.DictionaryOwners);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is SharedFormatterSet other && Equals(other);
@@ -157,6 +165,9 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         if (Scalars != null)
             for (int index = 0; index < Scalars.Length; index++)
                 hash ^= Scalars[index] == null ? 0 : Scalars[index].GetHashCode();
+        if (DictionaryOwners != null)
+            for (int index = 0; index < DictionaryOwners.Length; index++)
+                hash ^= DictionaryOwners[index].GetHashCode();
         foreach (string owner in Owners ?? Array.Empty<string>())
             hash ^= owner.GetHashCode();
         return hash;
@@ -169,6 +180,18 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     }
 
     private static bool SameFacts(SequenceOwnerFact[] left, SequenceOwnerFact[] right)
+    {
+        if (left == null || left.Length == 0)
+            return right == null || right.Length == 0;
+        if (right == null || left.Length != right.Length)
+            return false;
+        for (int index = 0; index < left.Length; index++)
+            if (!left[index].Equals(right[index]))
+                return false;
+        return true;
+    }
+
+    private static bool SameDictionaries(DictionaryOwnerFact[] left, DictionaryOwnerFact[] right)
     {
         if (left == null || left.Length == 0)
             return right == null || right.Length == 0;
@@ -193,14 +216,15 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     }
 
     private static void Required(TypeModel model, GeneratorOptions options,
-        List<SequenceOwnerFact> facts, List<string> scalars, List<string> owners, ref bool cultureInfoReuse)
+        List<SequenceOwnerFact> facts, List<string> scalars, List<string> owners, List<DictionaryOwnerFact> dictionaries,
+        ref bool cultureInfoReuse)
     {
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        Walk(model, options, facts, scalars, owners, ref cultureInfoReuse, visited);
+        Walk(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
     }
 
     private static void Walk(TypeModel model, GeneratorOptions options, List<SequenceOwnerFact> facts,
-        List<string> scalars, List<string> owners, ref bool cultureInfoReuse,
+        List<string> scalars, List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse,
         HashSet<string> visited)
     {
         if (!visited.Add(model.Identity.GlobalName))
@@ -225,15 +249,14 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                     owners.Add(GeneratedNames.PayloadKey(special.Declared));
                     break;
                 case CollectionMember collection:
-                    Collect(collection, options, facts, scalars, owners,
+                    Collect(collection, options, facts, scalars, owners, dictionaries,
                         ref cultureInfoReuse, visited);
                     break;
-                case DictionaryMember { KeyText: true }:
-                case DictionaryMember { ValueText: true }:
-                    owners.Add(FormatterRegistry.String);
+                case DictionaryMember dictionary:
+                    CollectDictionary(dictionary, scalars, owners, dictionaries);
                     break;
                 case PayloadMember { Nested: { } nested }:
-                    Walk(nested, options, facts, scalars, owners,
+                    Walk(nested, options, facts, scalars, owners, dictionaries,
                         ref cultureInfoReuse, visited);
                     break;
             }
@@ -244,7 +267,7 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         if (model is UnionModel union)
             for (int index = 0; index < union.Cases.Length; index++)
                 if (union.Cases[index].Model is { } item)
-                    Walk(item, options, facts, scalars, owners,
+                    Walk(item, options, facts, scalars, owners, dictionaries,
                         ref cultureInfoReuse, visited);
     }
 
@@ -254,9 +277,32 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     private static bool CultureInfoRenders(TypeModel model) => model is RecordModel { Versioned: false } record &&
         !record.Members.Any(member => member is DictionaryMember);
 
+    /// <summary>Records the owners one dictionary member requires.</summary>
+    /// <param name="member">The dictionary member.</param>
+    /// <param name="scalars">The raw scalar owners collected so far.</param>
+    /// <param name="owners">The standalone owners collected so far.</param>
+    /// <param name="dictionaries">The dictionary owners collected so far.</param>
+    private static void CollectDictionary(DictionaryMember member, List<string> scalars, List<string> owners,
+        List<DictionaryOwnerFact> dictionaries)
+    {
+        if (member.KeyText || member.ValueText)
+            owners.Add(FormatterRegistry.String);
+        // Sparse nullable values keep an inline entry layout without a shared owner.
+        if (member.Sparse || member.Kind != DictionaryKind.Dictionary || FormatterRegistry.FindDictionary(member.DeclaredType) is not { } family)
+            return;
+        string? key = member.KeyText ? "string" : member.KeyType, value = member.ValueText ? "string" : member.ValueType;
+        if (key == null || value == null)
+            return;
+        dictionaries.Add(new DictionaryOwnerFact(family, member.DeclaredType, key, value));
+        if (!member.KeyText)
+            AddScalar(scalars, key);
+        if (!member.ValueText)
+            AddScalar(scalars, value);
+    }
+
     private static void Collect(CollectionMember member, GeneratorOptions options,
         List<SequenceOwnerFact> facts, List<string> scalars,
-        List<string> owners, ref bool cultureInfoReuse, HashSet<string> visited)
+        List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited)
     {
         var definition = FormatterRegistry.FindSequence(member);
         if (definition != null)
@@ -284,8 +330,8 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
             }
         }
         if (member.ForwardedElement is { } element)
-            Collect(element, options, facts, scalars, owners, ref cultureInfoReuse, visited);
+            Collect(element, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
         if (member.Nested is { } nested)
-            Walk(nested, options, facts, scalars, owners, ref cultureInfoReuse, visited);
+            Walk(nested, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
     }
 }
