@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -345,7 +346,7 @@ internal static class RenderModelFactory
                     "global::LuminPack." + GeneratedNames.Owner(extension, culture.Declared), ScalarKind.Other, mirrored,
                     property: property);
             case SpecialMember special:
-                return new RenderMember(special.Name, RenderMemberKind.Special, special.Kind.ToString(), special.Declared, 0,
+                return new RenderMember(special.Name, RenderMemberKind.Special, ReadableTypeName.Of(special.Declared), special.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
                     property: property);
             case CollectionMember collection:
@@ -371,30 +372,18 @@ internal static class RenderModelFactory
                 member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored, property: property);
         // A concurrent or immutable sequence publishes an owner per closed element type: a raw scalar or shared string
         // variant, or a packable element whose record body the owner expands in place.
-        if (member.Kind is CollectionKind.Concurrent or CollectionKind.Immutable)
+        if (FormatterRegistry.FindSequence(member)?.WriteMember != null)
         {
             // The analysis group also covers families this renderer does not reproduce yet.
-            SequenceFamily? family = SupportedFamily(member);
+            SequenceFormatter? family = SupportedFamily(member);
             if (family == null)
                 return null;
-            RenderMemberKind kind = family switch
-            {
-                SequenceFamily.ConcurrentQueue => RenderMemberKind.ConcurrentQueue,
-                SequenceFamily.ConcurrentStack => RenderMemberKind.ConcurrentStack,
-                SequenceFamily.ConcurrentBag => RenderMemberKind.ConcurrentBag,
-                SequenceFamily.ImmutableStack => RenderMemberKind.ImmutableStack,
-                SequenceFamily.ImmutableList => RenderMemberKind.ImmutableList,
-                SequenceFamily.ImmutableHashSet => RenderMemberKind.ImmutableHashSet,
-                SequenceFamily.ImmutableSortedSet => RenderMemberKind.ImmutableSortedSet,
-                SequenceFamily.ImmutableQueue => RenderMemberKind.ImmutableQueue,
-                _ => RenderMemberKind.ImmutableArray,
-            };
             // A packable element carries its declared spelling in Scalar, so the nested model decides the shape first.
             if (member.Nested != null)
-                return PayloadElement(member, family.Value, formatter, mirrored, property, options);
+                return PayloadElement(member, family, formatter, mirrored, property, options);
             return member.Scalar == null ? null :
-                new RenderMember(member.Name, kind, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored, property: property);
+                new RenderMember(member.Name, RenderMemberKind.Sequence, member.Scalar, member.DeclaredType, 0, formatter,
+                    ScalarKind.Other, mirrored, property: property, sequence: family);
         }
         if (member.Scalar == null)
             return null;
@@ -403,18 +392,6 @@ internal static class RenderModelFactory
             case CollectionKind.Array:
                 return new RenderMember(member.Name, RenderMemberKind.Array, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Array, mirrored, raw: member.Raw, formatterCall: member.FormatterCall, property: property);
-            case CollectionKind.Stack:
-                // A stack owner transfers a keyword or string element; any other shape keeps the original pipeline.
-                if (member.Scalar != "string" && FieldType(member.Scalar) == ScalarKind.Other)
-                    return null;
-                return new RenderMember(member.Name, RenderMemberKind.Stack, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored, raw: true, property: property);
-            case CollectionKind.SortedSet:
-                // The ordered tree kernel stores raw unmanaged scalars only.
-                if (FieldType(member.Scalar) == ScalarKind.Other)
-                    return null;
-                return new RenderMember(member.Name, RenderMemberKind.SortedSet, member.Scalar, member.DeclaredType, 0, formatter,
-                    ScalarKind.Other, mirrored, raw: true, property: property);
             case CollectionKind.List:
             case CollectionKind.NestedList:
                 // A list of key/value pairs writes each pair's key and value in one checkable loop.
@@ -505,27 +482,14 @@ internal static class RenderModelFactory
     /// <param name="property">Whether the member is an auto-property.</param>
     /// <param name="options">The project facts, which decide whether the element payload is covered.</param>
     /// <returns>The render member, or null when the element's record body is outside the direct emitters.</returns>
-    private static RenderMember? PayloadElement(CollectionMember member, SequenceFamily family, string formatter, bool mirrored,
+    private static RenderMember? PayloadElement(CollectionMember member, SequenceFormatter family, string formatter, bool mirrored,
         bool property, GeneratorOptions options)
     {
         PayloadRenderModel? element = SequenceElement(member.Nested, options);
         if (element == null)
             return null;
-        RenderMemberKind kind = family switch
-        {
-            SequenceFamily.ConcurrentQueue => RenderMemberKind.ConcurrentQueue,
-            SequenceFamily.ConcurrentStack => RenderMemberKind.ConcurrentStack,
-            SequenceFamily.ConcurrentBag => RenderMemberKind.ConcurrentBag,
-            SequenceFamily.ImmutableArray => RenderMemberKind.ImmutableArray,
-            SequenceFamily.ImmutableStack => RenderMemberKind.ImmutableStack,
-            SequenceFamily.ImmutableList => RenderMemberKind.ImmutableList,
-            SequenceFamily.ImmutableHashSet => RenderMemberKind.ImmutableHashSet,
-            SequenceFamily.ImmutableSortedSet => RenderMemberKind.ImmutableSortedSet,
-            SequenceFamily.ImmutableQueue => RenderMemberKind.ImmutableQueue,
-            _ => RenderMemberKind.ImmutableList,
-        };
-        return new RenderMember(member.Name, kind, member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored,
-            nested: element, property: property);
+        return new RenderMember(member.Name, RenderMemberKind.Sequence, member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored,
+            nested: element, property: property, sequence: family);
     }
 
     /// <summary>Resolves the sequence family a concurrent or immutable member declares.</summary>
@@ -535,54 +499,18 @@ internal static class RenderModelFactory
     /// concurrent queue, stack and bag, the immutable array, stack, list, queue, hash set and sorted set; the other families stay
     /// unmapped instead of rendering with the wrong storage protocol. The concurrent stack and bag and the immutable stack, list,
     /// queue and both sets currently support raw scalar elements only, so their string and packable elements stay unmapped.</remarks>
-    internal static SequenceFamily? SupportedFamily(CollectionMember member)
+    internal static SequenceFormatter? SupportedFamily(CollectionMember member)
     {
-        string family = SequenceFamilyName(member.DeclaredType);
-        if (member.Kind == CollectionKind.Concurrent)
-            return family switch
-            {
-                // The queue publishes raw scalar, string and packable-element owners.
-                "ConcurrentQueue" => SequenceFamily.ConcurrentQueue,
-                // The stack and the bag currently publish the raw scalar owner only.
-                "ConcurrentStack" when member.Nested == null && member.Scalar is not (null or "string") =>
-                    SequenceFamily.ConcurrentStack,
-                "ConcurrentBag" when member.Nested == null && member.Scalar is not (null or "string") =>
-                    SequenceFamily.ConcurrentBag,
-                _ => null,
-            };
-        if (member.Kind != CollectionKind.Immutable)
+        var family = FormatterRegistry.FindSequence(member);
+        if (family == null)
             return null;
-        if (family == "ImmutableArray")
-            return SequenceFamily.ImmutableArray;
-        if (member.Nested != null || member.Scalar == null || member.Scalar == "string")
-            return null;
-        return family switch
-        {
-            "ImmutableStack" => SequenceFamily.ImmutableStack,
-            "ImmutableList" => SequenceFamily.ImmutableList,
-            "ImmutableHashSet" => SequenceFamily.ImmutableHashSet,
-            "ImmutableSortedSet" => SequenceFamily.ImmutableSortedSet,
-            "ImmutableQueue" => SequenceFamily.ImmutableQueue,
-            _ => null,
-        };
-    }
-
-    /// <summary>Whether a concurrent or immutable sequence belongs to the families the sequence owners reproduce.</summary>
-    /// <param name="member">The sequence member.</param>
-    /// <returns>Whether the declared family is supported for the member's element form.</returns>
-    internal static bool IsSupportedSequence(CollectionMember member) => SupportedFamily(member) != null;
-
-    /// <summary>Extracts the simple name of a declared sequence family.</summary>
-    /// <param name="declaredType">The declared spelling, such as <c>global::...ImmutableArray&lt;int&gt;</c>.</param>
-    /// <returns>The family name without namespace or type arguments.</returns>
-    private static string SequenceFamilyName(string declaredType)
-    {
-        string text = GeneratedNames.PayloadKey(declaredType);
-        int generic = text.IndexOf('<');
-        if (generic >= 0)
-            text = text.Substring(0, generic);
-        int dot = text.LastIndexOf('.');
-        return dot < 0 ? text : text.Substring(dot + 1);
+        if (member.ForwardedElement != null)
+            return family.Forwarded == null ? null : family;
+        if (member.Nested != null)
+            return family.Payload == null ? null : family;
+        if (member.Scalar == "string")
+            return family.Text == null ? null : family;
+        return member.Scalar == null ? null : family;
     }
 
     /// <summary>Builds the render model of a sequence's payload element.</summary>

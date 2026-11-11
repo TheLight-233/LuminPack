@@ -11,10 +11,11 @@ internal static class ConcurrentQueueStringOwnerFile
 {
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
+    /// <param name="fact">The closed sequence owner.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set, GeneratedOperations operations) =>
-        Render(set, "global::System.Collections.Concurrent.ConcurrentQueue<string>", "string", stringElement: true, operations);
+    internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
+        Render(set, fact.DeclaredType, "string", stringElement: true, operations);
 
     /// <summary>Renders a queue whose element operations use a concrete static owner.</summary>
     /// <param name="set">The required owners and the extension container.</param>

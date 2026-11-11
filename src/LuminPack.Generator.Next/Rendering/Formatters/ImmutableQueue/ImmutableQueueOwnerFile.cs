@@ -85,114 +85,11 @@ internal static class ImmutableQueueOwnerFile
                     w.Line("goto operationComplete_RootWrite;");
                     w.Close();
                     w.Blank();
-                    w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(value, out var forwards, out var backwards, out var reverse))");
-                    w.Open();
-                    w.Line("int countPosition = operationState.BeginCollection();");
-                    w.Line("int count = 0;");
-                    w.Line("foreach (var item in forwards!)");
-                    w.Open();
-                    w.Line("operationState.CheckBuffer();");
-                    w.Line("count++;");
-                    w.Line("var v = item;");
-                    if (boolean)
-                    {
-                        w.Line("ref readonly bool " + firstAlias + " = ref v;");
-                        w.Line("operationState.Write(in " + firstAlias + ");");
-                    }
-                    else
-                        w.Line("operationState.Write(in v);");
-                    w.Close();
-                    w.Line("if (reverse)");
-                    w.Open();
-                    w.Line("operationState.CopyTo(ref operationStateFallback);");
-                    w.Line("count += WriteReversed(ref operationStateFallback, backwards!);");
-                    w.Line("operationStateFallback.CopyTo(ref operationState);");
-                    w.Close();
-                    w.Line("else");
-                    w.Open();
-                    w.Line("foreach (var item2 in backwards!)");
-                    w.Open();
-                    w.Line("operationState.CheckBuffer();");
-                    w.Line("count++;");
-                    w.Line("var v2 = item2;");
-                    if (boolean)
-                    {
-                        w.Line("ref readonly bool " + secondAlias + " = ref v2;");
-                        w.Line("operationState.Write(in " + secondAlias + ");");
-                    }
-                    else
-                        w.Line("operationState.Write(in v2);");
-                    w.Close();
-                    w.Close();
-                    w.Line("operationState.EndCollection(countPosition, count);");
-                    w.Line("operationState.CheckBuffer();");
-                    w.Close();
-                    w.Line("else");
-                    w.Open();
-                    w.Line("int countPosition2 = operationState.BeginCollection();");
-                    w.Line("int count2 = 0;");
-                    w.Line("foreach (var item3 in value)");
-                    w.Open();
-                    w.Line("operationState.CheckBuffer();");
-                    w.Line("count2++;");
-                    w.Line("var v3 = item3;");
-                    if (boolean)
-                    {
-                        w.Line("ref readonly bool " + thirdAlias + " = ref v3;");
-                        w.Line("operationState.Write(in " + thirdAlias + ");");
-                    }
-                    else
-                        w.Line("operationState.Write(in v3);");
-                    w.Close();
-                    w.Line("operationState.EndCollection(countPosition2, count2);");
-                    w.Line("operationState.CheckBuffer();");
-                    w.Close();
-                    w.Blank();
-                    w.Line(w.MethodImpl("NoInlining"));
-                    w.Line("static int WriteReversed(ref " + writer + " writer2, " + stack + " stack)");
-                    w.Open();
-                    w.Line("var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count3);");
-                    w.Line("try");
-                    w.Open();
-                    w.Line("int reversedCount = new global::System.ReadOnlySpan<" + scalar + ">(items, 0, count3).Length;");
-                    w.Line("long reversedBytes = reversedCount * ((long)(" + memory + ".SizeOf<" + scalar + ">()));");
-                    w.Line("if (writer2.TryEnsureCapacity(reversedBytes))");
-                    w.Open();
-                    w.Line("foreach (var item4 in new global::System.ReadOnlySpan<" + scalar + ">(items, 0, count3))");
-                    w.Open();
-                    w.Line("var v4 = item4;");
-                    if (boolean)
-                    {
-                        w.Line("ref readonly bool " + reversedAlias + " = ref v4;");
-                        w.Line("writer2.Write(in " + reversedAlias + ");");
-                    }
-                    else
-                        w.Line("writer2.Write(in v4);");
-                    w.Close();
-                    w.Close();
-                    w.Line("else");
-                    w.Open();
-                    w.Line("foreach (var item5 in new global::System.ReadOnlySpan<" + scalar + ">(items, 0, count3))");
-                    w.Open();
-                    w.Line("writer2.CheckBuffer();");
-                    w.Line("var v5 = item5;");
-                    if (boolean)
-                    {
-                        w.Line("ref readonly bool " + checkedAlias + " = ref v5;");
-                        w.Line("writer2.Write(in " + checkedAlias + ");");
-                    }
-                    else
-                        w.Line("writer2.Write(in v5);");
-                    w.Close();
-                    w.Close();
-                    w.Line("return count3;");
-                    w.Close();
-                    w.Line("finally");
-                    w.Open();
-                    w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(items, " +
-                        "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + scalar + ">());");
-                    w.Close();
-                    w.Close();
+                    var traversal = new global::System.Collections.Generic.List<string>();
+                    ImmutableQueueTraversal.Write(traversal, scalar, "value", w, firstAlias, secondAlias, thirdAlias,
+                        reversedAlias, checkedAlias);
+                    foreach (string line in traversal)
+                        w.Line(line);
                     w.Blank();
                     w.Line("operationComplete_RootWrite:");
                     w.Indented(() => w.Line(";"));

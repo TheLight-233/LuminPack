@@ -1,6 +1,7 @@
 #nullable disable
 using System;
 using System.Linq;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 /// <summary>How a member's binary record is stored.</summary>
@@ -18,10 +19,6 @@ internal enum RenderMemberKind : byte
     Dictionary,
     /// <summary>A packable class of this assembly whose members are written inline in the parent record.</summary>
     Object,
-    /// <summary>A <c>Stack&lt;T&gt;</c> of raw scalars, written from its storage span.</summary>
-    Stack,
-    /// <summary>A <c>SortedSet&lt;T&gt;</c> of raw scalars, written through the tree storage helper.</summary>
-    SortedSet,
     /// <summary>A <c>SortedList&lt;TKey, TValue&gt;</c> written as paired entries.</summary>
     SortedList,
     /// <summary>A <c>List&lt;KeyValuePair&lt;TKey, TValue&gt;&gt;</c> written as paired entries.</summary>
@@ -39,62 +36,8 @@ internal enum RenderMemberKind : byte
     Special,
     /// <summary>A collection read and written through a generated owner with static element forwarding.</summary>
     ForwardedCollection,
-    /// <summary>A <c>ConcurrentQueue&lt;T&gt;</c> member, written in place and read through its shared generated formatter owner.</summary>
-    ConcurrentQueue,
-    /// <summary>An <c>ImmutableArray&lt;T&gt;</c> member, written in place and read through its shared generated formatter owner.</summary>
-    ImmutableArray,
-    /// <summary>An <c>ImmutableStack&lt;T&gt;</c> member, written in place and read through its shared generated formatter owner.</summary>
-    ImmutableStack,
-    /// <summary>An <c>ImmutableList&lt;T&gt;</c> member, written from pooled storage and read through its shared generated formatter owner.</summary>
-    ImmutableList,
-    /// <summary>An <c>ImmutableHashSet&lt;T&gt;</c> member, written through the tree-storage helper and read through its shared
-    /// generated formatter owner.</summary>
-    ImmutableHashSet,
-    /// <summary>An <c>ImmutableSortedSet&lt;T&gt;</c> member, written through the tree-storage helper and read through its shared
-    /// generated formatter owner.</summary>
-    ImmutableSortedSet,
-    /// <summary>An <c>ImmutableQueue&lt;T&gt;</c> member, written through its two-stack traversal and read through its shared
-    /// generated formatter owner.</summary>
-    ImmutableQueue,
-    /// <summary>A <c>ConcurrentStack&lt;T&gt;</c> member, written from a reversed snapshot and read through its shared generated
-    /// formatter owner.</summary>
-    ConcurrentStack,
-    /// <summary>A <c>ConcurrentBag&lt;T&gt;</c> member, written from its frozen snapshot and read through its shared generated
-    /// formatter owner.</summary>
-    ConcurrentBag,
-}
-
-/// <summary>The sequence families the shared formatter owners reproduce.</summary>
-internal enum SequenceFamily : byte
-{
-    /// <summary>A <c>System.Collections.Concurrent.ConcurrentQueue&lt;T&gt;</c>.</summary>
-    ConcurrentQueue,
-    /// <summary>A <c>System.Collections.Concurrent.BlockingCollection&lt;T&gt;</c>.</summary>
-    BlockingCollection,
-    /// <summary>A single-dimensional array.</summary>
-    Array,
-    /// <summary>A <c>System.Collections.Generic.List&lt;T&gt;</c>.</summary>
-    List,
-    /// <summary>A <c>System.Collections.Immutable.ImmutableArray&lt;T&gt;</c>.</summary>
-    ImmutableArray,
-    /// <summary>A <c>System.Collections.Immutable.ImmutableStack&lt;T&gt;</c>.</summary>
-    ImmutableStack,
-    /// <summary>A <c>System.Collections.Immutable.ImmutableList&lt;T&gt;</c>.</summary>
-    ImmutableList,
-    /// <summary>A <c>System.Collections.Immutable.ImmutableHashSet&lt;T&gt;</c>.</summary>
-    ImmutableHashSet,
-    /// <summary>A <c>System.Collections.Immutable.ImmutableSortedSet&lt;T&gt;</c>.</summary>
-    ImmutableSortedSet,
-    /// <summary>A <c>System.Collections.Immutable.ImmutableQueue&lt;T&gt;</c>.</summary>
-    ImmutableQueue,
-    /// <summary>A <c>System.Collections.Concurrent.ConcurrentStack&lt;T&gt;</c>.</summary>
-    ConcurrentStack,
-    /// <summary>A <c>System.Collections.Concurrent.ConcurrentBag&lt;T&gt;</c>.</summary>
-    ConcurrentBag,
-    /// <summary>A <c>System.Collections.Generic.Stack&lt;T&gt;</c>.</summary>
-    Stack,
-    /// <summary>A <c>System.Collections.Generic.SortedSet&lt;T&gt;</c>.</summary>
-    SortedSet,
+    /// <summary>A sequence whose formatter owns its inline write and static read.</summary>
+    Sequence,
 }
 
 /// <summary>The entry shape of a sorted or paired collection member.</summary>
@@ -226,12 +169,16 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// containing record's profile.</summary>
     internal readonly string ScopeProfile;
 
+    /// <summary>The registered sequence implementation, when the member uses a family formatter.</summary>
+    internal readonly SequenceFormatter Sequence;
+
     /// <summary>Captures one member.</summary>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
-        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null)
+        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null)
     {
+        Sequence = sequence;
         ScopeProfile = scopeProfile;
         ReferencePayload = referencePayload;
         NullObjectGuard = nullObjectGuard;
@@ -277,7 +224,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
         NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload &&
-        ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
+        ReferenceEquals(Sequence, other.Sequence) && ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as RenderMember);
@@ -328,12 +275,9 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// collection that writes through the writer in place.</summary>
     private static bool Segment(RenderMember member) => member.Kind == RenderMemberKind.Object || InlineBlock(member) ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
+        member.Kind is RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ConcurrentQueue or
-            RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or
-            RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or RenderMemberKind.ImmutableQueue or
-            RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag;
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
@@ -352,7 +296,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind == RenderMemberKind.NestedList && member.Nested.ProfilePayload ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection ||
-        (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray &&
+        (member.Kind == RenderMemberKind.Sequence && member.Sequence.ProfileElements &&
             (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload)) ||
         member.Kind == RenderMemberKind.Object && member.Nested.ProfilePayload);
 
@@ -367,11 +311,10 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>Whether the write body contains an element loop or expands an inline object that does, which leaves native
     /// inlining to the runtime.</summary>
     internal bool ElementList => Members.Any(member => member.Kind == RenderMemberKind.List && member.Nested != null ||
-        member.Kind == RenderMemberKind.ImmutableArray && member.Nested != null ||
-        member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
-            RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary or
-            RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableQueue or
-            RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag ||
+        member.Kind == RenderMemberKind.Sequence && member.Sequence.PayloadLoops && member.Nested != null ||
+        member.Kind is RenderMemberKind.SortedList or
+            RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
+        member.Kind == RenderMemberKind.Sequence && member.Sequence.AlwaysLoops ||
         member.Kind == RenderMemberKind.Object && member.Nested.ElementList);
     /// <summary>Whether a Boolean array or list member takes the checked read completion, whose inlined root renames the
     /// instance local.</summary>

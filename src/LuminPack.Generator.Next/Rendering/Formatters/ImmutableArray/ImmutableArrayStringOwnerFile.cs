@@ -10,13 +10,12 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// record needs it.</remarks>
 internal static class ImmutableArrayStringOwnerFile
 {
-    private const string Array = "global::System.Collections.Immutable.ImmutableArray<string>";
-
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
+    /// <param name="fact">The closed sequence owner.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set, GeneratedOperations operations)
+    internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
         var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
@@ -35,10 +34,12 @@ internal static class ImmutableArrayStringOwnerFile
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
+        string array = fact.DeclaredType;
+        string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(array));
         string element = "global::LuminPack.Binary_" + extension + "_String";
-        string owner = "Binary_" + extension + "_ImmutableArrayOfString";
+        string owner = "Binary_" + extension + "_" + readable;
 
-        return FormatterOwnerFile.Render(w, operations, "internal static partial class LuminRoots_ImmutableArrayOfString", "internal static partial class " + owner,
+        return FormatterOwnerFile.Render(w, operations, "internal static partial class LuminRoots_" + readable, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
 
         void EmitBinaryWrite(FormatterSection section)
@@ -48,17 +49,17 @@ internal static class ImmutableArrayStringOwnerFile
                 case FormatterSection.Entries:
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void Serialize_ImmutableArrayOfString(");
+                    w.Line("internal static void Serialize_" + readable + "(");
                     w.Line("    scoped ref " + writer + " writer,");
-                    w.Line("    scoped in " + Array + " input)");
-                    w.Line("        => LuminRoots_ImmutableArrayOfString.RootWrite<" + utf16 + ">(ref writer, in input);");
+                    w.Line("    scoped in " + array + " input)");
+                    w.Line("        => LuminRoots_" + readable + ".RootWrite<" + utf16 + ">(ref writer, in input);");
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void Serialize_ImmutableArrayOfString<TLuminProfile>(");
+                    w.Line("internal static void Serialize_" + readable + "<TLuminProfile>(");
                     w.Line("    scoped ref " + writer + " writer,");
-                    w.Line("    scoped in " + Array + " input)");
-                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ImmutableArrayOfString.RootWrite<TLuminProfile>(ref writer, in input);");
+                    w.Line("    scoped in " + array + " input)");
+                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_" + readable + ".RootWrite<TLuminProfile>(ref writer, in input);");
                     w.Blank();
                     break;
                 case FormatterSection.Roots:
@@ -67,7 +68,7 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line(inline);
                     w.Line("internal static void RootWrite<TLuminProfile>(");
                     w.Line("    scoped ref " + writer + " writer,");
-                    w.Line("    scoped in " + Array + " input)");
+                    w.Line("    scoped in " + array + " input)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line("var value = input;");
@@ -91,14 +92,14 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line(inline);
                     w.Line("internal static void Write(");
                     w.Line("    this ref " + writer + " state,");
-                    w.Line("    in " + Array + " value)");
-                    w.Line("        => " + serializer + ".LuminRoots_ImmutableArrayOfString.RootWrite<" + utf16 + ">(ref state, in value);");
+                    w.Line("    in " + array + " value)");
+                    w.Line("        => " + serializer + ".LuminRoots_" + readable + ".RootWrite<" + utf16 + ">(ref state, in value);");
                     w.Blank();
                     w.Line(inline);
                     w.Line("internal static void Write<TOptions>(");
                     w.Line("    this ref " + writer + " state,");
-                    w.Line("    in " + Array + " value)");
-                    w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_ImmutableArrayOfString.RootWrite<TOptions>(ref state, in value);");
+                    w.Line("    in " + array + " value)");
+                    w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_" + readable + ".RootWrite<TOptions>(ref state, in value);");
                     w.Blank();
                     break;
             }
@@ -111,17 +112,17 @@ internal static class ImmutableArrayStringOwnerFile
                 case FormatterSection.Entries:
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void Deserialize_ImmutableArrayOfString(");
+                    w.Line("internal static void Deserialize_" + readable + "(");
                     w.Line("    scoped ref " + reader + " reader,");
-                    w.Line("    scoped ref " + Array + " value)");
-                    w.Line("        => LuminRoots_ImmutableArrayOfString.RootRead<" + utf16 + ">(ref reader, ref value);");
+                    w.Line("    scoped ref " + array + " value)");
+                    w.Line("        => LuminRoots_" + readable + ".RootRead<" + utf16 + ">(ref reader, ref value);");
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void Deserialize_ImmutableArrayOfString<TLuminProfile>(");
+                    w.Line("internal static void Deserialize_" + readable + "<TLuminProfile>(");
                     w.Line("    scoped ref " + reader + " reader,");
-                    w.Line("    scoped ref " + Array + " value)");
-                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ImmutableArrayOfString.RootRead<TLuminProfile>(ref reader, ref value);");
+                    w.Line("    scoped ref " + array + " value)");
+                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_" + readable + ".RootRead<TLuminProfile>(ref reader, ref value);");
                     w.Blank();
                     break;
                 case FormatterSection.Roots:
@@ -130,7 +131,7 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead<TLuminProfile>(");
                     w.Line("    scoped ref " + reader + " reader,");
-                    w.Line("    scoped ref " + Array + " value)");
+                    w.Line("    scoped ref " + array + " value)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line(reader + " operationState = default;");
@@ -188,7 +189,7 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Blank();
                     w.Line("if (array.Length == 0)");
                     w.Open();
-                    w.Line("value = " + Array + ".Empty;");
+                    w.Line("value = " + array + ".Empty;");
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
@@ -205,14 +206,14 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line(inline);
                     w.Line("internal static void Read(");
                     w.Line("    this ref " + reader + " state,");
-                    w.Line("    ref " + Array + " value)");
-                    w.Line("        => " + serializer + ".LuminRoots_ImmutableArrayOfString.RootRead<" + utf16 + ">(ref state, ref value);");
+                    w.Line("    ref " + array + " value)");
+                    w.Line("        => " + serializer + ".LuminRoots_" + readable + ".RootRead<" + utf16 + ">(ref state, ref value);");
                     w.Blank();
                     w.Line(inline);
                     w.Line("internal static void Read<TOptions>(");
                     w.Line("    this ref " + reader + " state,");
-                    w.Line("    ref " + Array + " value)");
-                    w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_ImmutableArrayOfString.RootRead<TOptions>(ref state, ref value);");
+                    w.Line("    ref " + array + " value)");
+                    w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_" + readable + ".RootRead<TOptions>(ref state, ref value);");
                     w.Blank();
                     break;
             }
@@ -225,17 +226,17 @@ internal static class ImmutableArrayStringOwnerFile
                 case FormatterSection.Entries:
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void SerializeJson_ImmutableArrayOfString(");
+                    w.Line("internal static void SerializeJson_" + readable + "(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
-                    w.Line("    scoped in " + Array + " input)");
-                    w.Line("        => LuminRoots_ImmutableArrayOfString.RootWriteJson<" + utf16 + ">(ref writer, in input);");
+                    w.Line("    scoped in " + array + " input)");
+                    w.Line("        => LuminRoots_" + readable + ".RootWriteJson<" + utf16 + ">(ref writer, in input);");
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void SerializeJson_ImmutableArrayOfString<TLuminProfile>(");
+                    w.Line("internal static void SerializeJson_" + readable + "<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
-                    w.Line("    scoped in " + Array + " input)");
-                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ImmutableArrayOfString.RootWriteJson<TLuminProfile>(ref writer, in input);");
+                    w.Line("    scoped in " + array + " input)");
+                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_" + readable + ".RootWriteJson<TLuminProfile>(ref writer, in input);");
                     w.Blank();
                     break;
                 case FormatterSection.Roots:
@@ -243,7 +244,7 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line(preserve);
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
-                    w.Line("    scoped in " + Array + " input)");
+                    w.Line("    scoped in " + array + " input)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line("var value = input;");
@@ -281,14 +282,14 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line(inline);
                     w.Line("internal static void Write(");
                     w.Line("    this ref " + jsonWriter + " state,");
-                    w.Line("    in " + Array + " value)");
-                    w.Line("        => " + serializer + ".LuminRoots_ImmutableArrayOfString.RootWriteJson<" + utf16 + ">(ref state, in value);");
+                    w.Line("    in " + array + " value)");
+                    w.Line("        => " + serializer + ".LuminRoots_" + readable + ".RootWriteJson<" + utf16 + ">(ref state, in value);");
                     w.Blank();
                     w.Line(inline);
                     w.Line("internal static void Write<TOptions>(");
                     w.Line("    this ref " + jsonWriter + " state,");
-                    w.Line("    in " + Array + " value)");
-                    w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_ImmutableArrayOfString.RootWriteJson<TOptions>(ref state, in value);");
+                    w.Line("    in " + array + " value)");
+                    w.Line("    where TOptions : struct, " + options + " => " + serializer + ".LuminRoots_" + readable + ".RootWriteJson<TOptions>(ref state, in value);");
                     w.Blank();
                     break;
             }
@@ -301,17 +302,17 @@ internal static class ImmutableArrayStringOwnerFile
                 case FormatterSection.Entries:
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void DeserializeJson_ImmutableArrayOfString(");
+                    w.Line("internal static void DeserializeJson_" + readable + "(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
-                    w.Line("    scoped ref " + Array + " value)");
-                    w.Line("        => LuminRoots_ImmutableArrayOfString.RootReadJson<" + utf16 + ">(ref reader, ref value);");
+                    w.Line("    scoped ref " + array + " value)");
+                    w.Line("        => LuminRoots_" + readable + ".RootReadJson<" + utf16 + ">(ref reader, ref value);");
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void DeserializeJson_ImmutableArrayOfString<TLuminProfile>(");
+                    w.Line("internal static void DeserializeJson_" + readable + "<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
-                    w.Line("    scoped ref " + Array + " value)");
-                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_ImmutableArrayOfString.RootReadJson<TLuminProfile>(ref reader, ref value);");
+                    w.Line("    scoped ref " + array + " value)");
+                    w.Line("    where TLuminProfile : struct, " + options + " => LuminRoots_" + readable + ".RootReadJson<TLuminProfile>(ref reader, ref value);");
                     w.Blank();
                     break;
                 case FormatterSection.Roots:
@@ -319,7 +320,7 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line(preserve);
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
-                    w.Line("    scoped ref " + Array + " value)");
+                    w.Line("    scoped ref " + array + " value)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line("if (reader.IsNull())");
@@ -331,7 +332,7 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     w.Line("if (!reader.Read<TLuminProfile>() || reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
                     w.Open();
-                    w.Line("value = " + Array + ".Empty;");
+                    w.Line("value = " + array + ".Empty;");
                     w.Line("return;");
                     w.Close();
                     w.Blank();
@@ -361,7 +362,7 @@ internal static class ImmutableArrayStringOwnerFile
                     w.Line("while (reader.Read<TLuminProfile>());");
                     w.Line("if (count == 0)");
                     w.Open();
-                    w.Line("value = " + Array + ".Empty;");
+                    w.Line("value = " + array + ".Empty;");
                     w.Line("return;");
                     w.Close();
                     w.Blank();
@@ -379,23 +380,23 @@ internal static class ImmutableArrayStringOwnerFile
                 }
                 case FormatterSection.Owner:
                     w.Line(inline);
-                    w.Line("internal static void Read(this ref " + jsonReader + " state, ref " + Array + " value)");
+                    w.Line("internal static void Read(this ref " + jsonReader + " state, ref " + array + " value)");
                     w.Open();
                     w.Line("if (state.CurrentTokenType == " + jsonReader + ".JsonTokenType.None && !state.Read<" + utf16 + ">())");
                     w.Line("    " + exception + ".ThrowFormatException(\"JSON input does not contain a value.\");");
-                    w.Line(serializer + ".LuminRoots_ImmutableArrayOfString.RootReadJson<" + utf16 + ">(ref state, ref value);");
+                    w.Line(serializer + ".LuminRoots_" + readable + ".RootReadJson<" + utf16 + ">(ref state, ref value);");
                     w.Line("state.CompleteValue();");
                     w.Close();
                     w.Blank();
                     w.Line(inline);
                     w.Line("internal static void Read<TOptions>(");
                     w.Line("    this ref " + jsonReader + " state,");
-                    w.Line("    ref " + Array + " value)");
+                    w.Line("    ref " + array + " value)");
                     w.Line("    where TOptions : struct, " + options);
                     w.Open();
                     w.Line("if (state.CurrentTokenType == " + jsonReader + ".JsonTokenType.None && !state.Read<TOptions>())");
                     w.Line("    " + exception + ".ThrowFormatException(\"JSON input does not contain a value.\");");
-                    w.Line(serializer + ".LuminRoots_ImmutableArrayOfString.RootReadJson<TOptions>(ref state, ref value);");
+                    w.Line(serializer + ".LuminRoots_" + readable + ".RootReadJson<TOptions>(ref state, ref value);");
                     w.Line("state.CompleteValue();");
                     w.Close();
                     w.Blank();

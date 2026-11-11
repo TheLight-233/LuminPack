@@ -313,10 +313,7 @@ internal static class JsonEmitter
                 body.Add("");
                 continue;
             }
-            if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
-                RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or
-                RenderMemberKind.ImmutableSortedSet or RenderMemberKind.ImmutableQueue or RenderMemberKind.ConcurrentStack or
-                RenderMemberKind.ConcurrentBag)
+            if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence)
             {
                 // The owner frames the null value itself, so the member copies its storage and calls the owner directly.
                 string temp = names.Next("temp");
@@ -576,10 +573,7 @@ internal static class JsonEmitter
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("break;");
             }
-            else if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
-                RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or
-                RenderMemberKind.ImmutableSortedSet or RenderMemberKind.ImmutableQueue or RenderMemberKind.ConcurrentStack or
-                RenderMemberKind.ConcurrentBag)
+            else if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence)
             {
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("break;");

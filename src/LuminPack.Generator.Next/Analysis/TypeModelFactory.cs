@@ -8,6 +8,7 @@ using System.Text;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -480,9 +481,9 @@ internal static class TypeModelFactory
             if (IsCultureInfo(type))
                 return new CultureInfoMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty, CanReuseCultureInfo);
-            if (Special(type) is { } specialKind)
+            if (FormatterRegistry.HasStandalone(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)))
                 return new SpecialMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    specialKind, type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty);
+                    type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty);
             if (type is IArrayTypeSymbol array)
             {
                 // No shared owner frames an array of culture values, and a payload-long formatter is not published.
@@ -585,7 +586,7 @@ internal static class TypeModelFactory
             }
             if (kind is CollectionKind.Concurrent or CollectionKind.List or CollectionKind.NestedList or CollectionKind.Blocking &&
                 TryForwardedCollection(item) is { } child &&
-                (kind != CollectionKind.Concurrent || type.OriginalDefinition.MetadataName == "ConcurrentQueue`1"))
+                FormatterRegistry.FindSequence(type.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + type.OriginalDefinition.Name)?.Forwarded != null)
                 return new CollectionMember(name, storage, policy, declared, kind, element, forwardedElement: child);
             if (kind is not (CollectionKind.List or CollectionKind.NestedList))
                 return new CollectionMember(name, storage, policy, declared, kind, element);
@@ -654,24 +655,17 @@ internal static class TypeModelFactory
                 return null;
 
             var definition = named.OriginalDefinition;
-            string family = definition.MetadataName;
-            string ns = definition.ContainingNamespace.ToDisplayString();
-            CollectionKind kind;
-            if (family == "List`1" && ns == "System.Collections.Generic")
-                kind = CollectionKind.List;
-            else if (family == "ConcurrentQueue`1" && ns == "System.Collections.Concurrent")
-                kind = CollectionKind.Concurrent;
-            else if (family == "BlockingCollection`1" && ns == "System.Collections.Concurrent")
-                kind = CollectionKind.Blocking;
-            else
+            var formatter = FormatterRegistry.FindSequence(definition.ContainingNamespace.ToDisplayString() + "." + definition.Name);
+            if (formatter == null)
                 return null;
+            CollectionKind kind = formatter.Kind;
 
             ITypeSymbol item = named.TypeArguments[0];
             var child = TryForwardedCollection(item);
             var element = Scalar(item);
-            bool text = kind is CollectionKind.Concurrent or CollectionKind.Blocking or CollectionKind.List &&
+            bool text = formatter.Text != null &&
                 item.SpecialType == SpecialType.System_String;
-            if (element == null && child == null && !text)
+            if (element == null && (child == null || formatter.Forwarded == null) && !text)
                 return null;
 
             return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default, DeclaredType(named), kind,
@@ -3435,26 +3429,6 @@ internal static class TypeModelFactory
         => type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } named &&
            named.ContainingNamespace.ToDisplayString() == "System.Globalization" && named.Name == "CultureInfo";
 
-    /// <summary>Recognizes a framework type the shared formatter owners write as one record.</summary>
-    /// <param name="type">The declared member type.</param>
-    /// <returns>The framework formatter, or null for every other type.</returns>
-    private static SpecialKind? Special(ITypeSymbol type)
-    {
-        if (type is not INamedTypeSymbol { IsGenericType: false } named)
-            return null;
-        return (named.ContainingNamespace.ToDisplayString(), named.Name) switch
-        {
-            ("System", "Uri") => SpecialKind.Uri,
-            ("System", "Version") => SpecialKind.Version,
-            ("System.Numerics", "BigInteger") => SpecialKind.BigInteger,
-            ("System.Collections", "BitArray") => SpecialKind.BitArray,
-            ("System.Text", "StringBuilder") => SpecialKind.StringBuilder,
-            ("System", "Type") => SpecialKind.Type,
-            ("System", "TimeZoneInfo") => SpecialKind.TimeZoneInfo,
-            _ => null,
-        };
-    }
-
     /// <summary>Spells a covered fixed scalar.</summary>
     /// <param name="type">The member or leaf type.</param>
     /// <returns>The scalar keyword and packed width, or null for every other type.</returns>
@@ -3527,31 +3501,14 @@ internal static class TypeModelFactory
     {
         if (!type.IsGenericType || type.TypeArguments.Length != 1)
             return null;
-        string @namespace = type.OriginalDefinition.ContainingNamespace.ToDisplayString();
-        string name = type.OriginalDefinition.Name;
-        if (@namespace == "System.Collections.Generic")
-        {
-            switch (name)
-            {
-                case "List":
-                    return type.TypeArguments[0] is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } inner &&
-                        inner.OriginalDefinition.Name == "List" &&
-                        inner.OriginalDefinition.ContainingNamespace.ToDisplayString() == "System.Collections.Generic"
-                        ? CollectionKind.NestedList : CollectionKind.List;
-                case "Stack":
-                    return CollectionKind.Stack;
-                case "SortedSet":
-                    return CollectionKind.SortedSet;
-            }
-        }
-        if (@namespace == "System.Collections.Immutable" &&
-            name is "ImmutableArray" or "ImmutableList" or "ImmutableHashSet" or "ImmutableSortedSet" or "ImmutableQueue" or "ImmutableStack")
-            return CollectionKind.Immutable;
-        if (@namespace == "System.Collections.Concurrent" && name == "BlockingCollection")
-            return CollectionKind.Blocking;
-        if (@namespace == "System.Collections.Concurrent" && name is "ConcurrentBag" or "ConcurrentQueue" or "ConcurrentStack")
-            return CollectionKind.Concurrent;
-        return null;
+        var definition = type.OriginalDefinition;
+        var formatter = FormatterRegistry.FindSequence(definition.ContainingNamespace.ToDisplayString() + "." + definition.Name);
+        if (formatter?.Kind == CollectionKind.List && type.TypeArguments[0] is INamedTypeSymbol inner &&
+            FormatterRegistry.FindSequence(inner.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." +
+                inner.OriginalDefinition.Name)?.Kind == CollectionKind.List)
+            return CollectionKind.NestedList;
+        return formatter?.Kind;
+
     }
 
     /// <summary>Classifies a declared dictionary family.</summary>

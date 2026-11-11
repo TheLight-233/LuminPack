@@ -71,6 +71,8 @@
 
 ## 生成器
 
+Next 管线的 Formatter 移植流程参见[移植指南](generator-formatter-porting.cn.md)。
+
 每个使用 LuminPack 的编译中运行三个增量生成器。
 
 | 生成器 | 输出 |

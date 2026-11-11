@@ -71,6 +71,8 @@ Binary and JSON readers constructed from a buffer bind its reader reference cont
 
 ## Generator
 
+Formatter migration into the Next pipeline follows the [formatter porting guide](generator-formatter-porting.md).
+
 Three incremental generators run in every consuming compilation.
 
 | Generator | Output |

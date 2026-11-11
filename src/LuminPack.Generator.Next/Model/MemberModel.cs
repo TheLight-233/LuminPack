@@ -142,39 +142,11 @@ internal sealed class CultureInfoMember : MemberModel
     }
 }
 
-/// <summary>The framework reference or struct types with a self-contained generated formatter.</summary>
-internal enum SpecialKind
-{
-    /// <summary><c>System.Uri</c>, stored as its original string.</summary>
-    Uri,
-
-    /// <summary><c>System.Version</c>, stored as four raw components.</summary>
-    Version,
-
-    /// <summary><c>System.Numerics.BigInteger</c>, stored as its signed little-endian bytes.</summary>
-    BigInteger,
-
-    /// <summary><c>System.Collections.BitArray</c>, stored as its word-rounded bit storage.</summary>
-    BitArray,
-
-    /// <summary><c>System.Text.StringBuilder</c>, stored as a counted character payload.</summary>
-    StringBuilder,
-
-    /// <summary><c>System.Type</c>, stored as its assembly-qualified name.</summary>
-    Type,
-
-    /// <summary><c>System.TimeZoneInfo</c>, stored as its serialized snapshot text.</summary>
-    TimeZoneInfo,
-}
-
 /// <summary>A framework member written and read through its shared generated formatter owner.</summary>
 internal sealed class SpecialMember : MemberModel
 {
     /// <summary>The fully qualified spelling of the declared member type.</summary>
     internal readonly string Declared;
-
-    /// <summary>The framework formatter the member uses.</summary>
-    internal readonly SpecialKind Kind;
 
     /// <summary>Whether the declaration admits null.</summary>
     internal readonly bool Nullable;
@@ -183,13 +155,12 @@ internal sealed class SpecialMember : MemberModel
     internal readonly bool Property;
 
     /// <summary>Captures a framework member.</summary>
-    internal SpecialMember(string name, MemberStorage storage, WirePolicy policy, string declared, SpecialKind kind, bool nullable,
+    internal SpecialMember(string name, MemberStorage storage, WirePolicy policy, string declared, bool nullable,
         bool property)
         : base(name, storage, policy)
     {
         Property = property;
         Nullable = nullable;
-        Kind = kind;
         Declared = declared;
     }
 
@@ -197,7 +168,7 @@ internal sealed class SpecialMember : MemberModel
     protected override bool EqualsCore(MemberModel other)
     {
         var member = (SpecialMember)other;
-        return Declared == member.Declared && Kind == member.Kind && Nullable == member.Nullable && Property == member.Property;
+        return Declared == member.Declared && Nullable == member.Nullable && Property == member.Property;
     }
 }
 

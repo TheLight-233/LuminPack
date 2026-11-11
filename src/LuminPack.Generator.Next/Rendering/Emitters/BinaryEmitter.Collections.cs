@@ -9,8 +9,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 internal static partial class BinaryEmitter
 {
     /// <summary>Whether a member writes its own block in place instead of entering the surrounding reservation.</summary>
-    private static bool IsCollectionBlock(RenderMember member) => member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or
-        RenderMemberKind.SortedList or RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary;
+    private static bool IsCollectionBlock(RenderMember member) => member.Kind is RenderMemberKind.SortedList or RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary;
 
     /// <summary>Writes one collection member in place: its null header, its payload and its exit label.</summary>
     /// <param name="body">The body lines.</param>
@@ -28,12 +27,8 @@ internal static partial class BinaryEmitter
     {
         switch (member.Kind)
         {
-            case RenderMemberKind.Stack:
-                AddStackWrite(body, member, owner, w, names, ref ends);
-                break;
-            case RenderMemberKind.SortedSet:
-                AddSortedSetWrite(body, member, owner, w, names, ref ends);
-                break;
+
+
             case RenderMemberKind.SortedList:
                 AddSortedListWrite(body, model, member, owner, w, names, ref ends);
                 break;
@@ -49,49 +44,9 @@ internal static partial class BinaryEmitter
         }
     }
 
-    /// <summary>Writes a stack's storage span as one batch, as the original operation does.</summary>
-    private static void AddStackWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
-        Dictionary<string, int> names, ref int ends)
-    {
-        string local = RoleName(names, "value");
-        string span = RoleName(names, "span");
-        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
-        ends++;
-        body.Add("{");
-        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
-        AddCollectionNull(body, local, exit, w, reserve: false, countMarker: false);
-        body.Add("");
-        body.Add("var " + span + " = " + w.A("LuminPackMarshal") + ".GetStackSpan(" + w.A("Unsafe") + ".AsRef(in " + local + "));");
-        body.Add(w.A("LuminPackWriter") + ".Write(");
-        body.Add("\twriter.Reserve(writer.Position, " + w.A("LuminPackWriter") + ".Size(" + span + ", " + span + ".Length, true, false)),");
-        body.Add("\t" + span + ",");
-        body.Add("\t" + span + ".Length,");
-        body.Add("\ttrue,");
-        body.Add("\tfalse,");
-        body.Add("\tout var spanOffset);");
-        body.Add("writer.Advance(spanOffset);");
-        body.Add("writer.CheckBuffer();");
-        body.Add(exit + ":");
-        body.Add("\t;");
-        body.Add("}");
-    }
 
-    /// <summary>Writes a sorted set of raw scalars through the tree storage helper.</summary>
-    private static void AddSortedSetWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
-        Dictionary<string, int> names, ref int ends)
-    {
-        string local = RoleName(names, "value");
-        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
-        ends++;
-        body.Add("{");
-        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
-        AddCollectionNull(body, local, exit, w, reserve: true, countMarker: false);
-        body.Add("");
-        body.Add("global::LuminPack.Utility.LuminTreeStorage.WriteRaw(ref writer, " + local + ");");
-        body.Add(exit + ":");
-        body.Add("\t;");
-        body.Add("}");
-    }
+
+
 
     /// <summary>Writes a sorted list's stored key and value arrays as paired entries, with an array-pool fallback.</summary>
     private static void AddSortedListWrite(List<string> body, PayloadRenderModel model, RenderMember member, string owner, CodeWriter w,
@@ -311,7 +266,7 @@ internal static partial class BinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="reserve">Whether the header reserves its own four bytes before storing.</param>
     /// <param name="countMarker">Whether the header stores the list's negative count instead of the null collection code.</param>
-    private static void AddCollectionNull(List<string> body, string value, string exit, CodeWriter w, bool reserve, bool countMarker)
+    internal static void AddCollectionNull(List<string> body, string value, string exit, CodeWriter w, bool reserve, bool countMarker)
     {
         body.Add("if (" + value + " is null)");
         body.Add("{");
