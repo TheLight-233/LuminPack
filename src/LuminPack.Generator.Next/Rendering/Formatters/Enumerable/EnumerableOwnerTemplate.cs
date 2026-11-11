@@ -65,11 +65,20 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>The statement that appends the staged JSON element <c>item</c> to <c>value</c>.</summary>
     internal string JsonAdd { get; }
 
-    internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd)
+    /// <summary>Emits the JSON destination preparation in place of the default create-or-clear, when the sequence is staged.</summary>
+    internal Action<EnumerableOwnerContext>? JsonBefore { get; }
+
+    /// <summary>Emits the statements that publish the staged JSON elements after the element loop.</summary>
+    internal Action<EnumerableOwnerContext>? JsonAfter { get; }
+
+    internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
+        Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null)
     {
         WriteBody = writeBody;
         ReadBody = readBody;
         JsonAdd = jsonAdd;
+        JsonBefore = jsonBefore;
+        JsonAfter = jsonAfter;
     }
 }
 
@@ -348,10 +357,15 @@ internal static class EnumerableOwnerTemplate
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     w.Blank();
-                    w.Line("if (value is null)");
-                    w.Indented(() => w.Line("value = new " + sequence + "();"));
-                    w.Line("else");
-                    w.Indented(() => w.Line("value.Clear();"));
+                    if (spec.JsonBefore != null)
+                        spec.JsonBefore(context);
+                    else
+                    {
+                        w.Line("if (value is null)");
+                        w.Indented(() => w.Line("value = new " + sequence + "();"));
+                        w.Line("else");
+                        w.Indented(() => w.Line("value.Clear();"));
+                    }
                     w.Blank();
                     w.Line("while (reader.Read<TLuminProfile>())");
                     w.Open();
@@ -363,6 +377,7 @@ internal static class EnumerableOwnerTemplate
                     w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
                     w.Line(spec.JsonAdd);
                     w.Close();
+                    spec.JsonAfter?.Invoke(context);
                     w.Close();
                     w.Blank();
                     break;

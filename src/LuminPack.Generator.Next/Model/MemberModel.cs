@@ -249,6 +249,9 @@ internal enum CollectionKind
 
     /// <summary>A <c>Queue&lt;T&gt;</c>.</summary>
     Queue,
+
+    /// <summary>A list-backed object-model wrapper or collection builder.</summary>
+    Wrapper,
 }
 
 /// <summary>The stored entry shape of a paired, nested or sorted sequence member.</summary>

@@ -570,7 +570,7 @@ internal static class TypeModelFactory
             if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
             // A linked list, hash set or queue of raw scalars transfers its elements through the shared formatter owner.
-            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue && Scalar(item) is { } enumerableItem)
+            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper && Scalar(item) is { } enumerableItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: enumerableItem.Keyword);
             // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && Scalar(item) is { } sequenceItem)
