@@ -3,12 +3,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Separates fixed memory kernels from complete advancing Writer and Reader operations.</summary>
-internal sealed class BinaryMemoryProjection : NodeRewriter
+internal sealed class BinaryMemoryProjection : CSharpSyntaxRewriter
 {
     /// <summary>Projects the former fixed-storage call shapes to one memory-kernel family.</summary>
     /// <param name="node">The original fixed read or write.</param>

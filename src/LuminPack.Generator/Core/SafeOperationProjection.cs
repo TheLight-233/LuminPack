@@ -12,7 +12,7 @@ namespace LuminPack.SourceGenerator;
 /// Untrusted records use the ordinary wire format and the ordinary writers. Reads keep their original bodies; checks are
 /// inserted at the actual read sites with the root's limits frozen as constants. Unsupported shapes fail closed.
 /// </remarks>
-internal sealed class SafeOperationProjection : NodeRewriter
+internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
 {
     internal const string Policy = "global::LuminPack.Security.LuminPackInputPolicy";
     private readonly SafeReadProjection _reads;

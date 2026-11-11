@@ -6,7 +6,6 @@ using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -93,7 +92,7 @@ internal static class RecursiveTypeAnalysis
 /// <summary>Bounds the stack depth of recursive operations so a forged or very deep graph fails instead of ending the process.</summary>
 /// <remarks>Binary write operations of recursive payloads also check output capacity on every re-entry. Fixed-width members carry no per-value
 /// check, and a chain of fixed-width nodes has no collection or string boundary that would grow owned storage.</remarks>
-internal sealed class RecursionGuardProjection : NodeRewriter
+internal sealed class RecursionGuardProjection : CSharpSyntaxRewriter
 {
     private static readonly HashSet<string> Roots = new(StringComparer.Ordinal)
     {

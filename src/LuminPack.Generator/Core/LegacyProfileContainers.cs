@@ -51,7 +51,7 @@ internal static class LegacyProfileContainers
             method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync";
 
     /// <summary>Retargets profile convenience calls while preserving state-entry calls.</summary>
-    private sealed class Calls : NodeRewriter
+    private sealed class Calls : CSharpSyntaxRewriter
     {
         private readonly HashSet<string> _names;
         private readonly string _entry;
@@ -74,7 +74,7 @@ internal static class LegacyProfileContainers
             var name = node.Expression switch
             {
                 GenericNameSyntax simple => simple,
-                MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } access when SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") => generic,
+                MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } access when access.Expression.ToString() == "global::LuminPack.LuminPackSerializer" => generic,
                 _ => null
             };
             if (name == null || name.TypeArgumentList.Arguments.Count != 1 || !_names.Contains(name.Identifier.ValueText) ||

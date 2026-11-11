@@ -194,6 +194,18 @@ internal sealed class SharedFacadeProjection
         return method.NormalizeWhitespace().ToFullString();
     }
 
+    /// <summary>Describes a parameter retained from the original facade template.</summary>
+    /// <param name="name">The template parameter name.</param>
+    /// <returns>A description of the parameter's operation role.</returns>
+    private static string ParameterDescription(string name) => name switch
+    {
+        "value" => "The payload to write, evaluate or populate.",
+        "writerBuffer" => "The exclusively owned output buffer and operation state.",
+        "readerBuffer" => "The input buffer and its existing operation state.",
+        "stream" => "The stream retained by the caller.",
+        "cancellationToken" => "The cancellation token observed by the stream operation.",
+        _ => "The original input for this convenience operation."
+    };
 
     /// <summary>Builds the constrained, allocation-free adapter contract.</summary>
     /// <param name="scoped">Whether the target state APIs use scoped references.</param>
@@ -246,7 +258,7 @@ internal sealed class SharedFacadeProjection
     }
 
     /// <summary>Normalizes only proven payload slots and exact concrete state calls in generated templates.</summary>
-    private sealed class NormalizeBody : NodeRewriter
+    private sealed class NormalizeBody : CSharpSyntaxRewriter
     {
         private readonly string _type;
         private readonly string _profile;
@@ -295,7 +307,7 @@ internal sealed class SharedFacadeProjection
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            if (node.Expression is not MemberAccessExpressionSyntax access || !SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") ||
+            if (node.Expression is not MemberAccessExpressionSyntax access || access.Expression.ToString() != "global::LuminPack.LuminPackSerializer" ||
                 access.Name is not GenericNameSyntax generic || generic.TypeArgumentList.Arguments.Count is not (1 or 2) ||
                 generic.TypeArgumentList.Arguments.Last().ToString() != _profile ||
                 generic.TypeArgumentList.Arguments.Count == 2 && generic.TypeArgumentList.Arguments[0].ToString() != _type ||

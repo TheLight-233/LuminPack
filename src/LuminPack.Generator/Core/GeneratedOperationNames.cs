@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -58,7 +57,7 @@ internal static class GeneratedOperationNames
         .Select(identifier => identifier.Identifier.ValueText), StringComparer.Ordinal);
 
     /// <summary>Reserves each method's existing identifiers before choosing presentation names for its private locals.</summary>
-    private sealed class MethodNames : NodeRewriter
+    private sealed class MethodNames : CSharpSyntaxRewriter
     {
         /// <summary>Changes only fully marked local identities within one complete operation.</summary>
         /// <param name="node">The original method declaration and unchanged signature.</param>
@@ -114,7 +113,7 @@ internal static class GeneratedOperationNames
     }
 
     /// <summary>Removes reserved spellings from generated locals that no role annotation could follow to the final source.</summary>
-    private sealed class ReservedLocals : NodeRewriter
+    private sealed class ReservedLocals : CSharpSyntaxRewriter
     {
         /// <summary>Selects names for one method's reserved locals; member names and signatures keep their spelling.</summary>
         /// <param name="node">The completed method declaration.</param>

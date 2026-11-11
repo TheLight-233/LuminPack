@@ -258,6 +258,19 @@ public static partial class LuminPackCodeGenerator
         return offset + " + " + size;
     }
 
+    /// <summary>Finds the next mergeable field in the supplied metadata.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="index">The position at which the operation starts.</param>
+    /// <returns>The result of the operation.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int FindNextMergeableField(LuminDataInfo data, int index)
+    {
+        for (int i = index + 1; i < data.fields.Count && IsMergeableField(data.fields[i]); i++)
+        {
+            index++;
+        }
+        return index;
+    }
 
     /// <summary>Finds the next mergeable field in the supplied metadata.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>

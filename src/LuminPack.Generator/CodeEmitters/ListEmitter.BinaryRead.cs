@@ -18,6 +18,13 @@ public static partial class ListEmitter
         GenerateDeserializeCodeCore(fieldData, sb, freshValue: false);
     }
 
+    /// <summary>Appends binary reading statements for list values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        GenerateFreshDeserializeCode(fieldData, sb, useArrayDataIntrinsic: false);
+    }
 
     /// <summary>Appends fresh-list reading statements using only APIs available on the selected target.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>

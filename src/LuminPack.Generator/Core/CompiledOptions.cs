@@ -21,7 +21,7 @@ internal sealed class CompiledOptions
     internal readonly CompiledInputPolicy Input;
     internal string ScopeTypeName => IsDeclared ? "global::LuminPack.Option.LuminPackFixedOptions<" + TypeName + ">" : TypeName;
     internal int Mode => Recording == 2 ? 4 + Encoding : (Encoding == 1 ? 2 : 0) | (Recording == 0 ? 1 : 0);
-
+    internal int HeaderLength => Recording == 2 ? Encoding == 0 ? 10 : 5 : Recording == 1 ? Encoding == 0 ? 1 : 2 : Encoding == 0 ? 8 : 4;
     internal string Identity => "E" + Encoding + "R" + Recording + "F" + ((int)Format).ToString(CultureInfo.InvariantCulture) +
         "P" + Precision + "D" + (Depth < 0 ? "N" + -(long)Depth : Depth.ToString(CultureInfo.InvariantCulture)) + "V" + (Strict ? "1" : "0") + Input.Identity;
     private string StringsType => "global::LuminPack.Option." + (Recording == 2 ? Encoding == 0 ? "LuminPackUtf8VarIntOptions" : "LuminPackUtf16VarIntOptions" : Mode == 1 ? "LuminPackUtf8LengthOptions" :

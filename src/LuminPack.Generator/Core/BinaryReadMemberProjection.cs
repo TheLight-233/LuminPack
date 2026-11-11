@@ -3,12 +3,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Separates large sibling member reads in binary methods that would otherwise exhaust the native optimizer.</summary>
-internal sealed class BinaryReadMemberProjection : NodeRewriter
+internal sealed class BinaryReadMemberProjection : CSharpSyntaxRewriter
 {
     private const int WideReaderLocals = 384;
     private const int LargeMemberLocals = 64;

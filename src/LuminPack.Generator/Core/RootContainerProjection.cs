@@ -130,4 +130,17 @@ internal static class RootContainerProjection
     /// <returns>The payload key.</returns>
     internal static string PayloadKey(string type) => type.Replace("global::", string.Empty).Replace("?", string.Empty).Replace(" ", string.Empty);
 
+    /// <summary>Derives a stable suffix from a key that is not a type, such as an interception signature.</summary>
+    /// <param name="payload">The key.</param>
+    /// <returns>Sixteen hexadecimal digits of the key's 64-bit FNV-1a hash.</returns>
+    internal static string Hash(string payload)
+    {
+        ulong hash = 14695981039346656037UL;
+        foreach (char character in payload)
+        {
+            hash ^= character;
+            hash *= 1099511628211UL;
+        }
+        return hash.ToString("x16");
+    }
 }

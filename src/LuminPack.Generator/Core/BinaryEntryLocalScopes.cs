@@ -18,7 +18,7 @@ internal static class BinaryEntryLocalScopes
         => BinaryEntryCursorLocals.NormalizeRoot(new StateTemporaries().Visit(root));
 
     /// <summary>Preserves a parameter reader's caller-wide value escape context for expanded span storage.</summary>
-    private sealed class StateTemporaries : NodeRewriter
+    private sealed class StateTemporaries : CSharpSyntaxRewriter
     {
         /// <summary>Skips operation bodies that cannot require binary reader escape-scope normalization.</summary>
         /// <param name="node">The projected method.</param>

@@ -13,7 +13,7 @@ internal sealed partial class CompiledOperationProjection
     /// <summary>Retains declaration-owned registration and adds its existing closed-profile counterpart.</summary>
     /// <param name="members">The destination registration container.</param>
     /// <param name="method">The original typed delegate registration.</param>
-    private void AppendRegistration(List<MemberDeclarationSyntax> members, MethodDeclarationSyntax method)
+    private static void AppendRegistration(List<MemberDeclarationSyntax> members, MethodDeclarationSyntax method)
     {
         members.Add(method);
         var registration = method.WithTypeParameterList(method.TypeParameterList.AddParameters(SyntaxFactory.TypeParameter("TOptions")))
@@ -24,7 +24,7 @@ internal sealed partial class CompiledOperationProjection
         registration = profiled.IsEquivalentTo(registration) ? Forwarder(registration, method) : profiled;
         registration = registration.WithLeadingTrivia(registration.GetLeadingTrivia().AddRange(SyntaxFactory.ParseLeadingTrivia(
             "/// <typeparam name=\"TOptions\">The stateless profile used by these closed delegates.</typeparam>\n")));
-        members.Add(Normalize(registration).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
+        members.Add(registration.NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
     }
 
     /// <summary>Forwards a profile overload whose body is identical to the original registration.</summary>
@@ -42,7 +42,7 @@ internal sealed partial class CompiledOperationProjection
     }
 
     /// <summary>Targets the closed-profile table without changing the original delegate registration signature.</summary>
-    private sealed class RegistryProfile : NodeRewriter
+    private sealed class RegistryProfile : CSharpSyntaxRewriter
     {
         private readonly string _profile;
         /// <summary>Captures the stateless profile parameter.</summary>
@@ -52,7 +52,7 @@ internal sealed partial class CompiledOperationProjection
         /// <param name="node">An original registration call.</param>
         /// <returns>The same call targeting the closed-profile table.</returns>
         public override SyntaxNode VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
-            => SyntaxText.Is(node.Expression, "global::LuminPack.Code.LuminPackFormatterRegistry")
+            => node.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry"
                 ? node.WithExpression(SyntaxFactory.ParseExpression("global::LuminPack.Code.LuminPackFormatterRegistry<" + _profile + ">")) : base.VisitMemberAccessExpression(node);
     }
 

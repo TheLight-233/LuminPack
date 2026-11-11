@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Specializes generated state calls using stateless compile-time option profiles.</summary>
-internal sealed class CompiledOptionProjection : NodeRewriter
+internal sealed class CompiledOptionProjection : CSharpSyntaxRewriter
 {
     private readonly CompiledOptions _options;
     private readonly string _state;
@@ -61,7 +61,7 @@ internal sealed class CompiledOptionProjection : NodeRewriter
     public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
         if (_methods == ReaderMethods && node.Expression is MemberAccessExpressionSyntax stableAccess &&
-            SyntaxText.Is(stableAccess.Expression, "global::LuminPack.Code.LuminPackMarshal") &&
+            stableAccess.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" &&
             stableAccess.Name is GenericNameSyntax { Identifier.ValueText: "TryReadStableStringKeys" } stableKernel &&
             stableKernel.TypeArgumentList.Arguments.Count == 1 && node.ArgumentList.Arguments.Count == 3 &&
             IsReceiver(node.ArgumentList.Arguments[0].Expression))
@@ -69,7 +69,7 @@ internal sealed class CompiledOptionProjection : NodeRewriter
             return node.WithExpression(stableAccess.WithName(stableKernel.WithTypeArgumentList(stableKernel.TypeArgumentList.WithArguments(
                 stableKernel.TypeArgumentList.Arguments.Add(SyntaxFactory.ParseTypeName(_profileType))))));
         }
-        if (node.Expression is MemberAccessExpressionSyntax inputAccess && SyntaxText.Is(inputAccess.Expression, "global::LuminPack.Security.LuminPackInputPolicy") &&
+        if (node.Expression is MemberAccessExpressionSyntax inputAccess && inputAccess.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" &&
             inputAccess.Name.Identifier.ValueText is "ReadString" or "ReadStrings" or "ReadJsonToken" or "ReadJsonValue" or "ReadJsonString" or "TryReadJsonProperty" or "TryReadOrderedJsonProperty" or "ReadStringRecord" or "ReadNextJsonFloat" or "RejectUnknownJson" or "ReadJsonNameUtf8" or "ReadJsonNameUtf16" &&
             inputAccess.Name is GenericNameSyntax inputKernel && node.ArgumentList.Arguments.Count > 0 && IsReceiver(node.ArgumentList.Arguments[0].Expression))
         {
@@ -192,7 +192,7 @@ internal sealed class CompiledOptionFieldScope : IDisposable
     }
 
     /// <summary>Marks one member's existing formatter boundary without adding an execution-time configuration change.</summary>
-    private sealed class MemberCalls : NodeRewriter
+    private sealed class MemberCalls : CSharpSyntaxRewriter
     {
         private readonly string _profile;
         private readonly string _payload;

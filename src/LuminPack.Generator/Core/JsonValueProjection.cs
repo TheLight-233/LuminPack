@@ -3,12 +3,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Uses the same complete value vocabulary for statically selected JSON and binary operations.</summary>
-internal sealed class JsonValueProjection : NodeRewriter
+internal sealed class JsonValueProjection : CSharpSyntaxRewriter
 {
     private static readonly HashSet<string> Writes = new("WriteString WriteFormattedValue WriteInt WriteUInt WriteByte WriteSByte WriteShort WriteUShort WriteLong WriteULong WriteFloat WriteDouble WriteDecimal WriteChar WriteBool WriteDateTime WriteDateTimeOffset WriteGuid WriteTimeSpan".Split(' '));
     private static readonly Dictionary<string, string> Reads = new()

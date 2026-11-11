@@ -42,6 +42,10 @@ namespace LuminPack.Code
         /// <summary>Stores the name space.</summary>
         public string NameSpace = "Your Data NameSpace";
 
+        /// <summary>Stores the show nested fields.</summary>
+        [System.NonSerialized]
+        //ForUnity
+        public bool ShowNestedFields = false;
 
 
         /// <summary>Stores the field type.</summary>
@@ -66,10 +70,12 @@ namespace LuminPack.Code
         public string ClassGenericType;
         /// <summary>Stores the belong class name.</summary>
         public string belongClassName;
-
+        /// <summary>Stores the belong class field name.</summary>
+        public string belongClassFieldName;
         /// <summary>Gets or sets the selected constructor.</summary>
         public LuminConstructorData SelectedConstructor { get; set; }
-
+        /// <summary>Stores the construct parameter count.</summary>
+        public int ConstructParameterCount = 0;
 
         //Attribute
         /// <summary>Stores the order.</summary>

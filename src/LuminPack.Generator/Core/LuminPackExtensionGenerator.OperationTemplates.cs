@@ -25,8 +25,6 @@ public static partial class LuminPackExtensionGenerator
         // Only valid non-Union packable roots declare a JSON helper. Built-in and Union
         // operations already have their final container shape and need no helper projection.
         bool projectJsonHelper = false;
-        // A root's operations end here, before its layouts and views; built-in operations are not shared.
-        int operationsEnd = -1;
         if (type is INamedTypeSymbol named && CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
         {
             // Preserve the original generic definition's wire decisions. Analyzing a closed
@@ -42,7 +40,6 @@ public static partial class LuminPackExtensionGenerator
             GenerateRootBinaryExtensions(body, data, name, metadata, SupportsFixedVersionPrefix(data, compilation),
                 guardNestedReads || CompiledOptions.Resolve(type, compilation).Input.Enabled);
             GenerateRootJsonExtensions(body, data, name, metadata);
-            operationsEnd = body.Length;
             var registry = new LuminPackLocalLayoutGenerator.LocalLayoutRegistry();
             LuminPackLocalLayoutGenerator.AppendRootLocalClass(body, registry, data);
             LuminPackLocalLayoutGenerator.AppendNestedLocalClasses(body, registry, data.fields);
@@ -53,40 +50,12 @@ public static partial class LuminPackExtensionGenerator
             GenerateFormatterExtensions(body, CreateOperationField(type, compilation, metadata), metadata, new HashSet<string>(StringComparer.Ordinal));
         }
         PortableStructEmitter.AppendViews(body, type);
-        var template = ParseTemplate(body, operationsEnd, compilation, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None));
+        string source = GenerateExtension(body, GetExtensionClassName(compilation));
         bool ownsExternalHelper = type is INamedTypeSymbol external &&
             CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(external) &&
             !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly);
+        var template = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetCompilationUnitRoot();
         return projectJsonHelper ? JsonOperationTemplates.Prepare(template, ownsExternalHelper) : template;
-    }
-
-    /// <summary>Parses a template whose leading operations are the text the serializer projection of the same root parses.</summary>
-    /// <param name="body">The operations followed by layouts and views.</param>
-    /// <param name="operationsEnd">The length of a root's operations, or -1 for a built-in operation.</param>
-    /// <param name="compilation">The current consumer compilation.</param>
-    /// <param name="options">The template parse options.</param>
-    /// <returns>The operations' shared tree with the separately parsed layouts and views appended to its container.</returns>
-    /// <remarks>A root's projection parses <see cref="CodeGenerator"/> output, which is exactly the extension holding these operations,
-    /// so that unit is parsed once for both. Members are complete declarations, so parsing the two parts separately yields the
-    /// tokens of one parse.</remarks>
-    private static CompilationUnitSyntax ParseTemplate(StringBuilder body, int operationsEnd, Compilation compilation, CSharpParseOptions options)
-    {
-        string className = GetExtensionClassName(compilation);
-        if (operationsEnd < 0)
-            return CSharpSyntaxTree.ParseText(GenerateExtension(body, className), options).GetCompilationUnitRoot();
-        if (operationsEnd == 0 || operationsEnd == body.Length)
-            return EmitterSyntax.Parse(compilation, GenerateExtension(body, className), options);
-        var operations = EmitterSyntax.Parse(compilation, GenerateExtension(new StringBuilder(body.ToString(0, operationsEnd)), className), options);
-        var rest = CSharpSyntaxTree.ParseText(GenerateExtension(new StringBuilder(body.ToString(operationsEnd, body.Length - operationsEnd)),
-            className), options).GetCompilationUnitRoot();
-        var container = Container(operations);
-        var appended = Container(rest);
-        if (container == null || appended == null)
-            return CSharpSyntaxTree.ParseText(GenerateExtension(body, className), options).GetCompilationUnitRoot();
-        return operations.ReplaceNode(container, container.WithMembers(container.Members.AddRange(appended.Members)));
-
-        static ClassDeclarationSyntax Container(CompilationUnitSyntax unit)
-            => unit.Members.OfType<NamespaceDeclarationSyntax>().SelectMany(ns => ns.Members.OfType<ClassDeclarationSyntax>()).FirstOrDefault();
     }
 
     /// <summary>Attaches runtime capabilities, canonical cursor dispatch and collection reuse facts to a built-in formatter operation.</summary>

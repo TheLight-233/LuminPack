@@ -630,6 +630,16 @@ internal static class EmitterTypeTraits
                 method.ReturnsVoid && method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
     }
 
+    /// <summary>Recognizes framework comparisons whose generator selection excludes user comparison callbacks.</summary>
+    /// <param name="element">The closed element formatter.</param>
+    /// <param name="compilation">The consuming compilation identifying its actual core library.</param>
+    /// <returns>Whether this is string or an already supported comparable framework scalar.</returns>
+    private static bool IsFrameworkComparison(ITypeSymbol element, Compilation compilation)
+        => element?.SpecialType == SpecialType.System_String || IsKnownScalar(element) &&
+           SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly) &&
+           element is INamedTypeSymbol named && named.AllInterfaces.Any(contract =>
+               contract.OriginalDefinition.ToDisplayString() == "System.IComparable<T>" &&
+               SymbolEqualityComparer.Default.Equals(contract.TypeArguments[0], element));
 
     /// <summary>Identifies a source-declared generated object whose binary record width depends only on whether the root is null.</summary>
     /// <param name="type">The closed dispatch type.</param>

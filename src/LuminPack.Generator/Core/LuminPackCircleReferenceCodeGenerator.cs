@@ -194,6 +194,10 @@ public static class LuminPackCircleReferenceCodeGenerator
         Flush();
     }
 
+    /// <summary>Appends binary deserialization statements for the analyzed type.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb) => GenerateDeserializeCode(data, sb, false);
 
     /// <summary>Appends binary deserialization statements, with a same-table path that reads into the object like an ordinary record.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>

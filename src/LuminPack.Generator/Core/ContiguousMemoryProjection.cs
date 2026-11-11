@@ -3,12 +3,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Collapses former array/span implementation variants onto the shared contiguous memory core.</summary>
-internal sealed class ContiguousMemoryProjection : NodeRewriter
+internal sealed class ContiguousMemoryProjection : CSharpSyntaxRewriter
 {
     /// <summary>Retains old template framing while removing the corresponding state-specific runtime APIs.</summary>
     /// <param name="node">An original array or span implementation call.</param>

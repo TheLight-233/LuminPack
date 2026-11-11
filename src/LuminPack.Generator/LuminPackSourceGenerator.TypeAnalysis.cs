@@ -9,6 +9,33 @@ namespace LuminPack.SourceGenerator
         public sealed partial class LuminPackSourceGenerator : IIncrementalGenerator
     {
 
+        /// <summary>Obtains the type with attribute for the supplied input.</summary>
+        /// <param name="context">The context used for analysis, source production, or initialization.</param>
+        /// <param name="metadataName">The metadata name used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
+        internal static INamedTypeSymbol? GetTypeWithAttribute(
+            GeneratorSyntaxContext context,
+            string metadataName)
+        {
+            if (context.Node is not TypeDeclarationSyntax typeDeclaration)
+                return null;
+
+            var symbol = context.SemanticModel.GetDeclaredSymbol(typeDeclaration) as INamedTypeSymbol;
+            if (symbol == null)
+                return null;
+
+            foreach (var attribute in symbol.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                    == "global::" + metadataName &&
+                    attribute.ApplicationSyntaxReference is { } declaration &&
+                    ReferenceEquals(declaration.SyntaxTree, typeDeclaration.SyntaxTree) &&
+                    typeDeclaration.AttributeLists.Any(list => list.Span.Contains(declaration.Span)))
+                    return symbol;
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Recursively unwraps array and list containers to the innermost element type,

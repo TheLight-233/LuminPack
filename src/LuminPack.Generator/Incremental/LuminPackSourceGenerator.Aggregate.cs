@@ -16,9 +16,8 @@ public sealed partial class LuminPackSourceGenerator
     /// <param name="context">The incremental initialization context.</param>
     /// <param name="metaProvider">The shared project generation settings.</param>
     /// <param name="outputs">The source groups owned by this publisher.</param>
-    /// <param name="types">The completed per-type roots and Union contributions.</param>
     private static void InitializeAggregatePipeline(IncrementalGeneratorInitializationContext context,
-        IncrementalValueProvider<MetaInfo> metaProvider, GeneratorOutput outputs, IncrementalValuesProvider<FrozenTypeEmission> types)
+        IncrementalValueProvider<MetaInfo> metaProvider, GeneratorOutput outputs)
     {
         var serializerFragments = new SerializerFacadeCache();
         var invocationSupport = new InvocationSupportCache();
@@ -45,13 +44,8 @@ public sealed partial class LuminPackSourceGenerator
 
         // Operations the project never calls are left out of the published files.
         var called = context.CompilationProvider.Select(static (compilation, _) => GeneratedOperationUsage.For(compilation));
-        var forwarding = context.CompilationProvider.Combine(metaProvider).Combine(types.Collect()).Combine(aggregateResults)
-            .Select(static (input, cancellationToken) => StateForwardingPlan.Build(input.Left.Left.Left, input.Left.Left.Right.ParseOptions,
-                input.Left.Right, input.Right.Files, cancellationToken));
-        LuminPackFormatterGenerator.PublishTypeFiles(context, types, called, forwarding, outputs);
         var aggregateFiles = aggregateResults.Combine(metaProvider).Combine(called).SelectMany((result, _) =>
             JoinSameNames(result.Left.Left.Files.SelectMany(file => SelectFiles(file, result.Left.Right, outputs, result.Right.ForPayload(file.Payload))), result.Left.Right))
-            .Combine(forwarding).Select(static (pair, _) => pair.Right.Apply(pair.Left))
             .WithTrackingName("LuminPack.Incremental.AggregateFiles");
         context.RegisterSourceOutput(aggregateFiles.Combine(GeneratedSourceLayout.AvailableAliases(context)), static (output, input) =>
         {

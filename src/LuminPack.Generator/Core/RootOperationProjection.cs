@@ -4,12 +4,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Separates stable state entry signatures from the single execution body of each selected contract.</summary>
-internal sealed class RootOperationProjection : NodeRewriter
+internal sealed class RootOperationProjection : CSharpSyntaxRewriter
 {
     /// <summary>Resolves closed extension shells through the actual specialized forwarders rather than guessing root arity.</summary>
     /// <param name="node">The complete contribution after profile specialization.</param>
@@ -39,7 +38,7 @@ internal sealed class RootOperationProjection : NodeRewriter
             string state = Normalize(shell.ParameterList.Parameters[0].Type);
             string payload = Normalize(shell.ParameterList.Parameters[1].Type);
             var calls = shell.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
-                call.Expression is MemberAccessExpressionSyntax access && SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") ||
+                call.Expression is MemberAccessExpressionSyntax access && access.Expression.ToString() == "global::LuminPack.LuminPackSerializer" ||
                 call.Expression is SimpleNameSyntax simple && (simple.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal) ||
                     simple.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson")).ToArray();
             return shell.ReplaceNodes(calls, (old, call) =>
@@ -210,7 +209,7 @@ internal sealed class RootOperationProjection : NodeRewriter
         if (!element.ToString().StartsWith("global::System.Collections.Generic.KeyValuePair<", StringComparison.Ordinal))
             return method;
         var pair = element.DescendantNodesAndSelf().OfType<GenericNameSyntax>().First();
-        if (!pair.TypeArgumentList.Arguments.Any(argument => argument is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.StringKeyword) || SyntaxText.Is(argument, "global::System.String")))
+        if (!pair.TypeArgumentList.Arguments.Any(argument => argument is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.StringKeyword) || argument.ToString() == "global::System.String"))
             return method;
         string helper = "ReadPairElement";
         int suffix = 2;

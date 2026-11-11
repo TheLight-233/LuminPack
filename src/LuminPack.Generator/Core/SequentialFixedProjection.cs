@@ -4,12 +4,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Lowers fixed batches to the single-value memory core without emitting arity-specific runtime APIs.</summary>
-internal sealed class SequentialFixedProjection : NodeRewriter
+internal sealed class SequentialFixedProjection : CSharpSyntaxRewriter
 {
     private int _next;
 
@@ -17,20 +16,13 @@ internal sealed class SequentialFixedProjection : NodeRewriter
     /// <param name="node">The generated statement block.</param>
     /// <returns>The same storage operations using only the scalar architecture-aware kernel.</returns>
     public override SyntaxNode VisitBlock(BlockSyntax node)
-    {
-        var statements = RewriteStatements(node.Statements);
-        return statements == node.Statements ? node : node.WithStatements(statements);
-    }
+        => node.WithStatements(RewriteStatements(node.Statements));
 
     /// <summary>Keeps batch reads and writes inside their selected switch arm.</summary>
     /// <param name="node">The selected section and its original statements.</param>
     /// <returns>The same section with scalar operations at their original execution boundary.</returns>
     public override SyntaxNode VisitSwitchSection(SwitchSectionSyntax node)
-    {
-        var statements = RewriteStatements(node.Statements);
-        // Labels are not visited by this pass, so an unchanged statement list leaves the section unchanged.
-        return statements == node.Statements ? node : node.WithStatements(statements);
-    }
+        => node.WithStatements(RewriteStatements(node.Statements));
 
     /// <summary>Lowers only direct statement expressions without hoisting work out of nested branches.</summary>
     /// <param name="originalStatements">The statements in one execution scope.</param>
@@ -47,7 +39,7 @@ internal sealed class SequentialFixedProjection : NodeRewriter
                     child is not LocalFunctionStatementSyntax && child is not AnonymousFunctionExpressionSyntax)
                     .OfType<InvocationExpressionSyntax>().FirstOrDefault(candidate =>
                         candidate.Expression is MemberAccessExpressionSyntax access &&
-                        (SyntaxText.Is(access.Expression, "global::LuminPack.Core.LuminPackWriter") || SyntaxText.Is(access.Expression, "global::LuminPack.Core.LuminPackReader")) &&
+                        access.Expression.ToString() is "global::LuminPack.Core.LuminPackWriter" or "global::LuminPack.Core.LuminPackReader" &&
                         access.Name.Identifier.ValueText is "Write" or "Read" && candidate.ArgumentList.Arguments.Count > 2 &&
                         candidate.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword));
                 if (call == null)
@@ -80,6 +72,6 @@ internal sealed class SequentialFixedProjection : NodeRewriter
             if (statement != null)
                 statements.Add(statement);
         }
-        return StatementLists.Rebuild(originalStatements, statements);
+        return SyntaxFactory.List(statements);
     }
 }

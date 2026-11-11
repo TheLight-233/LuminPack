@@ -594,7 +594,7 @@ internal sealed class BinaryEntryInlining
 
     /// <summary>Replaces the shared outlined span-record copy with the inline stores of a sequence element record.</summary>
     /// <remarks>The payload width was already proved by the enclosing record reservation; only the call differs.</remarks>
-    private sealed class InlineSpanRecordWrites : NodeRewriter
+    private sealed class InlineSpanRecordWrites : CSharpSyntaxRewriter
     {
         /// <summary>Selects a captured raw contiguous record call on the shared writer type.</summary>
         /// <param name="node">The expanded invocation.</param>

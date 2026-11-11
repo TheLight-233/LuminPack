@@ -100,15 +100,7 @@ internal sealed class PortableStructPlan
     /// <param name="type">The unmanaged declaration.</param>
     /// <returns>Zero for tagged, one for packed, or two for native storage.</returns>
     private static int LayoutStrategy(INamedTypeSymbol type)
-        => ReadStructLayout(type.GetAttributes()) ?? AssemblyLayouts.GetValue(type.ContainingAssembly,
-            static assembly => new System.Runtime.CompilerServices.StrongBox<int?>(ReadStructLayout(assembly.GetAttributes()))).Value ?? 0;
-
-    /// <summary>The assembly-wide layout strategy, read once per assembly symbol rather than for every checked struct.</summary>
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IAssemblySymbol, System.Runtime.CompilerServices.StrongBox<int?>> AssemblyLayouts = new();
-
-    /// <summary>The simple name of the option attribute, compared before formatting a candidate's full name.</summary>
-    private static readonly string OptionAttributeName = LuminPack.SourceGenerator.CompiledOptions.AttributeName.Substring(
-        LuminPack.SourceGenerator.CompiledOptions.AttributeName.LastIndexOf('.') + 1);
+        => ReadStructLayout(type.GetAttributes()) ?? ReadStructLayout(type.ContainingAssembly.GetAttributes()) ?? 0;
 
     /// <summary>Reads an explicitly supplied layout strategy.</summary>
     /// <param name="attributes">The declaration's attributes.</param>
@@ -117,8 +109,7 @@ internal sealed class PortableStructPlan
     {
         int? value = null;
         foreach (var attribute in attributes)
-            if (attribute.AttributeClass is { } attributeClass && attributeClass.Name == OptionAttributeName &&
-                attributeClass.ToDisplayString() == LuminPack.SourceGenerator.CompiledOptions.AttributeName)
+            if (attribute.AttributeClass?.ToDisplayString() == LuminPack.SourceGenerator.CompiledOptions.AttributeName)
                 foreach (var argument in attribute.NamedArguments)
                     if (argument.Key == "StructLayout" && argument.Value.Value is int selected)
                         value = selected;

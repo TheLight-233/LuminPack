@@ -28,6 +28,26 @@ public static partial class LuminPackSerializerGenerator
     // A primitive-only generated object or raw enum whose exact width needs no traversal.
     [ThreadStatic] private static bool _currentFixedRecord;
 
+    /// <summary>Builds the serializer facade for the types reachable in the compilation.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <param name="reachability">The reachability used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
+    public static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
+        => GenerateSerializerClass(compilation, metaInfo, reachability, new SerializerFacadeCache());
+
+    /// <summary>Builds the legacy facade from independently cached concrete overload and XML fragments.</summary>
+    /// <param name="compilation">The compilation supplying current semantic facts.</param>
+    /// <param name="metaInfo">The current generation settings.</param>
+    /// <param name="reachability">The existing reachability filter.</param>
+    /// <param name="fragments">The generator-instance cache for concrete facade contributions.</param>
+    /// <returns>The exact legacy serializer source.</returns>
+    internal static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability, SerializerFacadeCache fragments)
+    {
+        var parts = BuildSerializerParts(compilation, metaInfo, reachability, fragments);
+        return fragments.Assemble(parts.Header, parts.Blocks.Select(block => block.Value).ToArray(), parts.Tail)
+            .Replace("    public static class LuminPackSerializer", "    public static partial class LuminPackSerializer");
+    }
 
     /// <summary>Emits common helpers and independently cached concrete partial declarations.</summary>
     /// <param name="compilation">The current consumer compilation.</param>
@@ -351,7 +371,7 @@ public static partial class LuminPackSerializerGenerator
         if (RequiresStationaryInput(compilation, metadata))
             root = (CompilationUnitSyntax)new PinnedReaderProjection(metadata.AllowUnsafe).Visit(root);
         root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(root);
-        root = root.NormalizeGenerated(Environment.NewLine).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine));
+        root = root.NormalizeWhitespace("    ", Environment.NewLine).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine));
         string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata, navigationTargets);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
     }
@@ -360,7 +380,7 @@ public static partial class LuminPackSerializerGenerator
     /// <remarks>The Serializer declares same-named operations for every payload, so each facade call made C# overload resolution
     /// examine all of them. The completed contribution recorded the single root each operation calls; calling it directly binds
     /// within the payload's root container and runs the same code.</remarks>
-    private sealed class FacadeRootCalls : NodeRewriter
+    private sealed class FacadeRootCalls : CSharpSyntaxRewriter
     {
         private readonly LazyForwardingTargets _targets;
 
@@ -387,7 +407,7 @@ public static partial class LuminPackSerializerGenerator
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            if (result.Expression is not MemberAccessExpressionSyntax access || !SyntaxText.Is(access.Expression, "global::LuminPack.LuminPackSerializer") ||
+            if (result.Expression is not MemberAccessExpressionSyntax access || access.Expression.ToString() != "global::LuminPack.LuminPackSerializer" ||
                 access.Name.Identifier.ValueText is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson") ||
                 access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: > 1 } || result.ArgumentList.Arguments.Count != 2 ||
                 result.ArgumentList.Arguments[0] is not { Expression: IdentifierNameSyntax state } first || !first.RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ||

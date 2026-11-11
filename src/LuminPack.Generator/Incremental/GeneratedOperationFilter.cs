@@ -23,12 +23,12 @@ internal static class GeneratedOperationFilter
     {
         if (operations == GeneratedOperations.All || string.IsNullOrEmpty(source))
             return source;
-        var root = PublishedSyntax.Take(source) ?? CSharpSyntaxTree.ParseText(source, options).GetCompilationUnitRoot();
+        var root = CSharpSyntaxTree.ParseText(source, options).GetCompilationUnitRoot();
         var candidates = root.DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax or TypeDeclarationSyntax)
             .OfType<MemberDeclarationSyntax>().Where(member => (Operation(member) & ~operations) != 0 && (Operation(member) & operations) == 0)
             .ToList();
         if (candidates.Count == 0)
-            return PublishedSyntax.Attach(source, root);
+            return source;
 
         // Keep a removal that remaining code still names, until nothing more is kept.
         var removed = new HashSet<MemberDeclarationSyntax>(candidates);
@@ -50,10 +50,7 @@ internal static class GeneratedOperationFilter
                     changed = true;
                 }
         }
-        if (removed.Count == 0)
-            return PublishedSyntax.Attach(source, root);
-        var filtered = root.RemoveNodes(removed, SyntaxRemoveOptions.KeepNoTrivia)!;
-        return PublishedSyntax.Attach(filtered.ToFullString(), filtered);
+        return removed.Count == 0 ? source : root.RemoveNodes(removed, SyntaxRemoveOptions.KeepNoTrivia)!.ToFullString();
     }
 
     /// <summary>Classifies a generated member by the operation it implements.</summary>

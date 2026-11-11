@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.Code.Core;
 
 /// <summary>Separates an already-fitting pure leaf record from its original complete capacity fallback.</summary>
-internal sealed class ProvenLeafWriteProjection : NodeRewriter
+internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
 {
     private readonly Compilation _compilation;
     private readonly MetaInfo _metadata;
@@ -197,7 +197,7 @@ internal sealed class ProvenLeafWriteProjection : NodeRewriter
     }
 
     /// <summary>Widens every addition before evaluating the original complete bound.</summary>
-    private sealed class WideBound : NodeRewriter
+    private sealed class WideBound : CSharpSyntaxRewriter
     {
         /// <summary>Retains complete positive terms without the original checked-int narrowing.</summary>
         /// <param name="node">The original checked reservation expression.</param>
@@ -220,7 +220,7 @@ internal sealed class ProvenLeafWriteProjection : NodeRewriter
     }
 
     /// <summary>Removes only the checks, pure captures and null exit already discharged by the complete proof.</summary>
-    private sealed class HotElement : NodeRewriter
+    private sealed class HotElement : CSharpSyntaxRewriter
     {
         private readonly HashSet<SyntaxNode> _removed;
 
@@ -236,7 +236,7 @@ internal sealed class ProvenLeafWriteProjection : NodeRewriter
     }
 
     /// <summary>Keeps original completion labels distinct from their enclosing specialized operation.</summary>
-    private sealed class ColdLabels : NodeRewriter
+    private sealed class ColdLabels : CSharpSyntaxRewriter
     {
         private readonly string _prefix;
 

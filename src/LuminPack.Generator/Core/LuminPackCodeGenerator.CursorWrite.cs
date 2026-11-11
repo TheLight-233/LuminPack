@@ -299,16 +299,6 @@ public static partial class LuminPackCodeGenerator
     /// <param name="field">The wire field.</param>
     /// <returns>0 when unbounded, 1 for fixed raw storage, 2 for a string, 3 for a raw array and 4 for a raw list.</returns>
     internal static int ReservedKind(LuminDataField field)
-        => ReservedKinds.GetValue(field, static item => new System.Runtime.CompilerServices.StrongBox<int>(ComputeReservedKind(item))).Value;
-
-    /// <summary>Memoizes each member's write kind; emitters ask for it repeatedly while grouping adjacent members.</summary>
-    /// <remarks>Member metadata is created for one analysis and finished before emission, so a member's kind cannot change.</remarks>
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<LuminDataField, System.Runtime.CompilerServices.StrongBox<int>> ReservedKinds = new();
-
-    /// <summary>Classifies how a member's write can reserve its bound.</summary>
-    /// <param name="field">The member.</param>
-    /// <returns>The reserved write kind, or zero.</returns>
-    private static int ComputeReservedKind(LuminDataField field)
     {
         if (field.IsCompress || field.IsVolatile || field.TypeSymbol == null ||
             PortableStructPlan.TryCreate(field.TypeSymbol) != null || PortableStructPlan.RequiresClosedDispatch(field.TypeSymbol))
@@ -397,6 +387,15 @@ public static partial class LuminPackCodeGenerator
         builder.AppendLine(indent + "}");
     }
 
+    /// <summary>Spells a dictionary member's key and value types.</summary>
+    /// <param name="field">A raw-pair dictionary member.</param>
+    /// <returns>The fully qualified key and value type arguments.</returns>
+    private static string PairTypes(LuminDataField field)
+    {
+        var dictionary = (Microsoft.CodeAnalysis.INamedTypeSymbol)field.TypeSymbol;
+        return dictionary.TypeArguments[0].ToDisplayString(Microsoft.CodeAnalysis.SymbolDisplayFormat.FullyQualifiedFormat) + ", " +
+               dictionary.TypeArguments[1].ToDisplayString(Microsoft.CodeAnalysis.SymbolDisplayFormat.FullyQualifiedFormat);
+    }
 
     /// <summary>Accepts only elements the raw collection path copies as their native storage.</summary>
     /// <param name="element">The element type.</param>

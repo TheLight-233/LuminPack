@@ -85,12 +85,12 @@ internal static class JsonOperationTemplates
                 type.Identifier.ValueText.StartsWith("Version_", StringComparison.Ordinal));
         var support = root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(helpers)));
         support = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation))
-            .Visit(support).NormalizeGenerated(Environment.NewLine);
+            .Visit(support).NormalizeWhitespace("    ", Environment.NewLine);
         return GeneratedSourceDocumentation.CompleteRoot(support).ToFullString();
     }
 
     /// <summary>Qualifies every reference to a helper-owned member with the helper's own type identity.</summary>
-    private sealed class MemberQualifier : NodeRewriter
+    private sealed class MemberQualifier : CSharpSyntaxRewriter
     {
         private readonly HashSet<string> _members;
         private readonly ExpressionSyntax _qualified;

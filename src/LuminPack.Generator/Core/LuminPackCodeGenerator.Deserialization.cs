@@ -10,6 +10,12 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackCodeGenerator
 {
 
+    /// <summary>Appends binary deserialization statements for the analyzed type.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="polymorphism">The polymorphism used by this operation.</param>
+    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb, bool polymorphism = false) =>
+        GenerateDeserializeCode(data, sb, polymorphism, false);
 
     /// <summary>Retains typed nested boundaries for independent external-input child accounting.</summary>
     /// <param name="data">The original serialized contract.</param>

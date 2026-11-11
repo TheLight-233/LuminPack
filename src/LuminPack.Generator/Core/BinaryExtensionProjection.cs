@@ -147,7 +147,7 @@ internal static class BinaryExtensionProjection
     }
 
     /// <summary>Uses the public advancing vocabulary after all profile and dispatch decisions are complete.</summary>
-    internal sealed class Calls : NodeRewriter
+    internal sealed class Calls : CSharpSyntaxRewriter
     {
         private HashSet<string> _states;
 
@@ -191,7 +191,7 @@ internal static class BinaryExtensionProjection
                 if (access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } kernelProfile &&
                     kernelProfile.TypeArgumentList.Arguments[0] is QualifiedNameSyntax
                     { Right: GenericNameSyntax { Identifier.ValueText: "LuminPackFixedOptions", TypeArgumentList.Arguments.Count: 1 } scope } qualified &&
-                    SyntaxText.Is(qualified.Left, "global::LuminPack.Option"))
+                    qualified.Left.ToString() == "global::LuminPack.Option")
                     access = access.WithName(kernelProfile.WithTypeArgumentList(SyntaxFactory.TypeArgumentList(scope.TypeArgumentList.Arguments)));
                 if (name == "ReadStringRecord" && rewritten.ArgumentList.Arguments.Count == 0)
                     rewritten = rewritten.WithArgumentList(rewritten.ArgumentList.AddArguments(SyntaxFactory.Argument(SyntaxFactory.ParseExpression("(string?)null"))));

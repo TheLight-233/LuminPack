@@ -4,7 +4,6 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -77,7 +76,7 @@ internal static class BinaryEntryCursorAliases
     }
 
     /// <summary>Substitutes collision-free local expressions while leaving member names untouched.</summary>
-    private sealed class AliasRewriter : NodeRewriter
+    private sealed class AliasRewriter : CSharpSyntaxRewriter
     {
         private readonly HashSet<string> _aliases;
         private readonly string _state;

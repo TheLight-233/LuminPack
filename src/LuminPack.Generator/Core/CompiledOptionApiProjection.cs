@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Removes runtime configuration arguments while preserving operation-state ownership and cleanup.</summary>
-internal sealed class CompiledOptionApiProjection : NodeRewriter
+internal sealed class CompiledOptionApiProjection : CSharpSyntaxRewriter
 {
     private readonly CompiledOptions _options;
     private HashSet<string> _parameters = new HashSet<string>(StringComparer.Ordinal);
@@ -118,4 +118,11 @@ internal sealed class CompiledOptionApiProjection : NodeRewriter
         _ => "default(" + _options.TypeName + ")." + name
     });
 
+    /// <summary>Projects one complete generated syntax tree under its already resolved declaration policy.</summary>
+    /// <param name="source">The original generator output.</param>
+    /// <param name="options">The complete root profile.</param>
+    /// <param name="parseOptions">The consuming language and preprocessor settings.</param>
+    /// <returns>Generated source using compiled configuration.</returns>
+    internal static string Rewrite(string source, CompiledOptions options, CSharpParseOptions parseOptions)
+        => new CompiledOptionApiProjection(options).Visit(CSharpSyntaxTree.ParseText(source, parseOptions).GetRoot()).ToFullString();
 }

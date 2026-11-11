@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.Code.Core;
 
 /// <summary>Outlines the original complete capacity path after proving a pure object record already fits.</summary>
-internal sealed class ProvenObjectWriteProjection : NodeRewriter
+internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
 {
     private readonly Compilation _compilation;
     private readonly MetaInfo _metadata;
@@ -266,7 +266,7 @@ internal sealed class ProvenObjectWriteProjection : NodeRewriter
     }
 
     /// <summary>Widens the complete positive bound before any checked-int arithmetic.</summary>
-    private sealed class WideBound : NodeRewriter
+    private sealed class WideBound : CSharpSyntaxRewriter
     {
         /// <summary>Preserves the expression without its earlier integer narrowing.</summary>
         /// <param name="node">The original checked bound.</param>
@@ -289,7 +289,7 @@ internal sealed class ProvenObjectWriteProjection : NodeRewriter
     }
 
     /// <summary>Removes only original nodes discharged by the complete proof.</summary>
-    private sealed class ProvenBody : NodeRewriter
+    private sealed class ProvenBody : CSharpSyntaxRewriter
     {
         private readonly HashSet<SyntaxNode> _removed;
 

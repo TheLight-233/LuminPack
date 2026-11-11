@@ -121,6 +121,111 @@ public static partial class LuminPackCodeGenerator
         }
     }
 
+    /// <summary>Determines whether the supplied value has the reference generic type classification.</summary>
+    /// <param name="genericType">The generic type used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
+    public static bool IsReferenceGenericType(LuminGenericsType? genericType)
+    {
+        switch (genericType)
+        {
+            case LuminGenericsType.Byte:
+                return false;
+            case LuminGenericsType.SByte:
+                return false;
+            case LuminGenericsType.Bool:
+                return false;
+            case LuminGenericsType.Short:
+                return false;
+            case LuminGenericsType.UShort:
+                return false;
+            case LuminGenericsType.Int:
+                return false;
+            case LuminGenericsType.UInt:
+                return false;
+            case LuminGenericsType.Long:
+                return false;
+            case LuminGenericsType.ULong:
+                return false;
+            case LuminGenericsType.Float:
+                return false;
+            case LuminGenericsType.Double:
+                return false;
+            case LuminGenericsType.Decimal:
+                return false;
+            case LuminGenericsType.Enum:
+                return false;
+            case LuminGenericsType.Char:
+                return false;
+            case LuminGenericsType.String:
+                return true;
+            case LuminGenericsType.Class:
+                return true;
+            case LuminGenericsType.Struct:
+                return true;
+            case LuminGenericsType.List:
+                return true;
+            case LuminGenericsType.Array:
+                return true;
+            case LuminGenericsType.Null:
+                return true;
+            default:
+                {
+                    return LuminPackExceptionHelper.ThrowInvalidOperationException<bool>();
+                }
+        }
+    }
+
+    /// <summary>Determines whether the supplied value has the reference filed type classification.</summary>
+    /// <param name="filedType">The filed type used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
+    public static bool IsReferenceFiledType(LuminFiledType filedType)
+    {
+        switch (filedType)
+        {
+            case LuminFiledType.Byte:
+                return false;
+            case LuminFiledType.SByte:
+                return false;
+            case LuminFiledType.Bool:
+                return false;
+            case LuminFiledType.Short:
+                return false;
+            case LuminFiledType.UShort:
+                return false;
+            case LuminFiledType.Int:
+                return false;
+            case LuminFiledType.UInt:
+                return false;
+            case LuminFiledType.Long:
+                return false;
+            case LuminFiledType.ULong:
+                return false;
+            case LuminFiledType.Float:
+                return false;
+            case LuminFiledType.Double:
+                return false;
+            case LuminFiledType.Decimal:
+                return false;
+            case LuminFiledType.Char:
+                return false;
+            case LuminFiledType.String:
+                return true;
+            case LuminFiledType.Class:
+                return true;
+            case LuminFiledType.Struct:
+                return true;
+            case LuminFiledType.List:
+                return true;
+            case LuminFiledType.Array:
+                return true;
+            case LuminFiledType.Enum:
+                return false;
+            default:
+                {
+                    return LuminPackExceptionHelper.ThrowInvalidOperationException<bool>();
+                }
+        }
+    }
 
     /// <summary>Determines whether the supplied value has the unmanaged filed type classification.</summary>
     /// <param name="filedType">The filed type used by this operation.</param>
@@ -205,6 +310,17 @@ public static partial class LuminPackCodeGenerator
         return false;
     }
 
+    /// <summary>Determines whether the supplied value has the string list classification.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
+    private static bool IsStringList(LuminDataField field)
+    {
+        if (field.Type == LuminFiledType.List && field.GenericType.Count == 1)
+        {
+            return field.GenericType[0] == LuminGenericsType.String;
+        }
+        return false;
+    }
 
     /// <summary>Determines whether the supplied value has the exact managed array type classification.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>

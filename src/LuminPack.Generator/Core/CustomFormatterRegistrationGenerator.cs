@@ -9,7 +9,24 @@ namespace LuminPack.Code.Core;
 /// <summary>Emits the module initializer that registers every valid Custom formatter type.</summary>
 internal static class CustomFormatterRegistrationGenerator
 {
-
+    /// <summary>
+    /// Generates the registration source for the valid Custom models, or an empty string when
+    /// there is nothing to register.
+    /// </summary>
+    /// <param name="models">The models used by this operation.</param>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <param name="isUnity">The is unity used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
+    internal static string Generate(
+        IReadOnlyList<CustomFormatterModel> models,
+        Compilation compilation,
+        MetaInfo metaInfo,
+        bool isUnity)
+    {
+        return GenerateBlocks(models.Where(static model => !model.HasErrors && model.RegisterTier > 0)
+            .Select(model => GenerateRegistrationBlock(model.TypeName, model.RegisterTier)).ToArray(), compilation, metaInfo, isUnity);
+    }
 
     /// <summary>Assembles the unchanged registry wrapper around cached registration contributions.</summary>
     /// <param name="blocks">Valid registration blocks in legacy declared-type order.</param>

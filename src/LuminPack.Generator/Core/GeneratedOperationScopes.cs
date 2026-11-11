@@ -3,7 +3,6 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -21,7 +20,7 @@ internal static class GeneratedOperationScopes
     internal static SyntaxNode RemoveEmptyScopes(SyntaxNode root) => new EmptyScopes().Visit(root);
 
     /// <summary>Inlines nested statement blocks whose removal cannot change any name's scope or a local's lifetime.</summary>
-    private sealed class EmptyScopes : NodeRewriter
+    private sealed class EmptyScopes : CSharpSyntaxRewriter
     {
         /// <summary>Moves the statements of declaration-free inner blocks into the enclosing block.</summary>
         /// <param name="node">The generated block to visit.</param>
@@ -56,7 +55,7 @@ internal static class GeneratedOperationScopes
     }
 
     /// <summary>Retains the innermost block when its parent contains no other statement.</summary>
-    private sealed class BlockChains : NodeRewriter
+    private sealed class BlockChains : CSharpSyntaxRewriter
     {
         /// <summary>Removes one empty outer scope while retaining the contained statement block.</summary>
         /// <param name="node">The generated block to visit.</param>

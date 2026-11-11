@@ -4,12 +4,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Stores fixed literal markers directly while retaining the original checked Debug advancement.</summary>
-internal sealed class BinaryLiteralWriteProjection : NodeRewriter
+internal sealed class BinaryLiteralWriteProjection : CSharpSyntaxRewriter
 {
     private HashSet<string> _writers = new HashSet<string>(StringComparer.Ordinal);
 

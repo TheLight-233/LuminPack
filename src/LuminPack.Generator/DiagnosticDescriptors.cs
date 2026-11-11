@@ -150,6 +150,11 @@ internal static class DiagnosticDescriptors
         "ref struct member is not serializable",
         "Member '{1}' on '{0}' has ref struct type '{2}', which cannot be serialized.");
 
+    /// <summary>Stores the net standard class or struct member field cant include.</summary>
+    public static readonly DiagnosticDescriptor NetStandardClassOrStructMemberFieldCantInclude = Warning(
+        "LuminPack021",
+        "[LuminPackInclude] requires a runtime accessor",
+        "Member '{1}' on '{0}' uses [LuminPackInclude], which is unavailable for this target framework.");
 
     /// <summary>Stores the circular reference and version tolerant required order.</summary>
     public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantRequiredOrder = Error(

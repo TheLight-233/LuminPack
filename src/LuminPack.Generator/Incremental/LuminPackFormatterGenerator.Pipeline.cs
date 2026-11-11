@@ -7,7 +7,6 @@ using System.Threading;
 using LuminPack.Code;
 using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator;
@@ -18,17 +17,15 @@ public sealed partial class LuminPackFormatterGenerator
     /// <param name="context">The generator pipeline registration context.</param>
     /// <param name="metadata">Value-compared project generation settings.</param>
     /// <param name="outputs">The source groups the publishing generator owns.</param>
-    /// <returns>The completed type contributions before publication.</returns>
-    internal static IncrementalValuesProvider<FrozenTypeEmission> InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
+    internal static void InitializeTypePipeline(IncrementalGeneratorInitializationContext context,
         IncrementalValueProvider<MetaInfo> metadata, GeneratorOutput outputs)
     {
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
         var aliases = GeneratedSourceLayout.AvailableAliases(context);
-        // Roslyn's attribute index binds only declarations whose attribute names can match, instead of every attributed type.
-        var types = context.SyntaxProvider.ForAttributeWithMetadataName(LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE,
-            static (node, _) => node is TypeDeclarationSyntax,
-            static (syntax, _) => syntax.TargetSymbol as INamedTypeSymbol)
+        var types = context.SyntaxProvider.CreateSyntaxProvider(
+            static (node, _) => node is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
+            static (syntax, _) => LuminPackSourceGenerator.GetTypeWithAttribute(syntax, LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE))
             .Where(static symbol => symbol != null)
             .Select(static (symbol, _) => symbol!)
             .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
@@ -78,8 +75,30 @@ public sealed partial class LuminPackFormatterGenerator
             }
         }
 
+        // The binary generator publishes a type's binary roots and Union slots, the JSON generator its JSON roots and slots,
+        // each as one file per type; layout mirrors and diagnostics stay with the formatter generator.
+        bool binary = (outputs & GeneratorOutput.Binary) != 0, json = (outputs & GeneratorOutput.Json) != 0;
+        if (binary || json)
+        {
+            // Operations the project never calls are left out of the published files.
+            var called = context.CompilationProvider.Select(static (compilation, _) => GeneratedOperationUsage.For(compilation));
+            var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Combine(called)
+                .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json, pair.Right.ForPayload(pair.Left.Payload)));
+            context.RegisterSourceOutput(sources.Combine(aliases), static (output, input) =>
+            {
+                Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
+                try
+                {
+                    output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    output.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratorFailure, Location.None, exception.GetType().FullName + ": " + exception.Message));
+                }
+            });
+        }
         if ((outputs & GeneratorOutput.Formatter) == 0)
-            return emissions;
+            return;
 
         // Exact weak tree handles let stable diagnostics remain independent of Compilation changes.
         var diagnostics = emissions.Select(static (value, _) => value.Diagnostics).Where(static values => !values.IsDefaultOrEmpty);
@@ -103,38 +122,6 @@ public sealed partial class LuminPackFormatterGenerator
         context.RegisterSourceOutput(layouts.SelectMany(static (result, _) => result.Diagnostics), static (output, diagnostic) =>
         {
             output.ReportDiagnostic(diagnostic.MaterializeSource());
-        });
-        return emissions;
-    }
-
-    /// <summary>Publishes the selected type roots and Union slots, one file per type and format.</summary>
-    /// <param name="context">The incremental generator context.</param>
-    /// <param name="emissions">The completed type contributions.</param>
-    /// <param name="called">The operations retained by the consumer.</param>
-    /// <param name="forwarding">The shared state forwarding decisions.</param>
-    /// <param name="outputs">The source groups owned by this publisher.</param>
-    internal static void PublishTypeFiles(IncrementalGeneratorInitializationContext context, IncrementalValuesProvider<FrozenTypeEmission> emissions,
-        IncrementalValueProvider<GeneratedOperationUsage> called, IncrementalValueProvider<StateForwardingPlan> forwarding, GeneratorOutput outputs)
-    {
-        bool binary = (outputs & GeneratorOutput.Binary) != 0, json = (outputs & GeneratorOutput.Json) != 0;
-        if (!binary && !json)
-            return;
-
-        var sources = emissions.Where(static value => !string.IsNullOrEmpty(value.Extension)).Combine(called)
-            .SelectMany((pair, _) => TypeFiles(pair.Left, binary, json, outputs != GeneratorOutput.Binary && outputs != GeneratorOutput.Json,
-                pair.Right.ForPayload(pair.Left.Payload)))
-            .Combine(forwarding).Select(static (pair, _) => pair.Right.Apply(pair.Left));
-        context.RegisterSourceOutput(sources.Combine(GeneratedSourceLayout.AvailableAliases(context)), static (output, input) =>
-        {
-            Interlocked.Increment(ref IncrementalGenerationMetrics.PackableOutputCallbacks);
-            try
-            {
-                output.AddSource(input.Left.Name, GeneratedSourceLayout.Apply(input.Left.Text, input.Right));
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                output.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratorFailure, Location.None, exception.GetType().FullName + ": " + exception.Message));
-            }
         });
     }
 
@@ -168,10 +155,7 @@ public sealed partial class LuminPackFormatterGenerator
                 CompilationTypeAnalysisCache.GetOrCreate(compilation).IndexReachableTypes(emittedTypes.EmittedTypes
                     .Where(type => !LuminPackExtensionGenerator.ContainsTypeParameter(type)));
             extension = LuminPackExtensionGenerator.CodeGenerator(data, metadata, compilation);
-            // The root's operation template starts from the same text, so the two share one parse.
-            if (!string.IsNullOrEmpty(extension))
-                extension = SerializerCoreProjection.Project(EmitterSyntax.Parse(compilation, extension,
-                    metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)), compilation, metadata, operations);
+            extension = SerializerCoreProjection.Project(extension, compilation, metadata, operations);
             union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata,
                 emittedTypes?.EmittedTypes) : string.Empty;
             if (!string.IsNullOrEmpty(union))
@@ -225,17 +209,11 @@ public sealed partial class LuminPackFormatterGenerator
     /// <returns>The files of the selected formats.</returns>
     private static IEnumerable<FrozenGeneratedSource> TypeFiles(FrozenTypeEmission value, bool binary, bool json, bool combined, GeneratedOperations called)
     {
+        // The binary part also holds the helpers both formats share, so only its operations are filtered out.
+        json &= (called & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) != 0;
         var options = value.Layouts.Options;
         var roots = GeneratedFormatPartition.Get(value.Extension, options);
         var union = string.IsNullOrEmpty(value.Union) ? null : GeneratedFormatPartition.Get(value.Union, options);
-        // The binary part also holds the helpers both formats share, so only its operations are filtered out.
-        if (json && (called & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) == 0)
-        {
-            // This publisher owns the JSON parts, so it releases their syntax although it publishes nothing.
-            PublishedSyntax.Take(roots.Json);
-            PublishedSyntax.Take(union?.Json);
-            json = false;
-        }
         string name = value.HintName + ".g.cs";
         if (binary && GeneratedOperationFilter.Apply(GeneratedSourceMerge.Join(roots.Shared, union?.Shared, options), called, options) is { Length: > 0 } binaryText)
             yield return new FrozenGeneratedSource(name, binaryText);

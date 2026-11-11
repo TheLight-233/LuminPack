@@ -9,31 +9,22 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Propagates compiled profiles through concrete, recursive and ordinary virtual operations.</summary>
-internal sealed partial class CompiledOperationProjection : NodeRewriter
+internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
 {
     private readonly Compilation _compilation;
     private readonly CompiledOptions _default;
     private readonly IReadOnlyDictionary<string, ITypeSymbol> _types;
-    private readonly bool _normalizeMembers;
     internal const string UnionRootAnnotation = "LuminPack.CompiledUnionRoot";
 
     /// <summary>Captures current type identities only for this syntax projection.</summary>
     /// <param name="compilation">The current consumer compilation.</param>
     /// <param name="fallback">The declaration profile for a facade or generic fallback.</param>
-    /// <param name="normalizeMembers">Whether each projected member is formatted here; false when the caller formats the whole unit.</param>
-    internal CompiledOperationProjection(Compilation compilation, CompiledOptions fallback, bool normalizeMembers = true)
+    internal CompiledOperationProjection(Compilation compilation, CompiledOptions fallback)
     {
         _compilation = compilation;
         _default = fallback;
-        _normalizeMembers = normalizeMembers;
         _types = CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypesByName;
     }
-
-    /// <summary>Formats one projected member unless the caller formats the whole unit afterwards.</summary>
-    /// <typeparam name="T">The member syntax type.</typeparam>
-    /// <param name="member">A member built from factory or reparsed syntax.</param>
-    /// <returns>The formatted member, or the same member when formatting is deferred.</returns>
-    private T Normalize<T>(T member) where T : SyntaxNode => _normalizeMembers ? member.NormalizeWhitespace() : member;
 
     /// <summary>Moves each complete operation body into a profile-generic operation, retaining thin declaration-default entries.</summary>
     /// <param name="node">A Serializer, dispatch, JSON cache or generated Union declaration.</param>
@@ -122,12 +113,12 @@ internal sealed partial class CompiledOperationProjection : NodeRewriter
     private static bool HasProfileWork(MethodDeclarationSyntax method) => method.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
         call.Expression is MemberAccessExpressionSyntax access &&
         (access.Name.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) ||
-         SyntaxText.Is(access.Expression, "global::LuminPack.Security.LuminPackInputPolicy") && access.Name.Identifier.ValueText == "CheckInputProfile" ||
-         SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackMarshal") && access.Name.Identifier.ValueText == "TryReadStableStringKeys" ||
+         access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" && access.Name.Identifier.ValueText == "CheckInputProfile" ||
+         access.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" && access.Name.Identifier.ValueText == "TryReadStableStringKeys" ||
          access.Name.Identifier.ValueText is "Serialize" or "SerializeMember" or "Deserialize" or "DeserializeUnion" or "MeasureRecord" ||
          // A version prefix stamps and compares the binary profile even when every member is raw.
          access.Name.Identifier.ValueText is "TryReadPrefix" or "WritePrefix" or "StorePrefix" ||
-         SyntaxText.Is(access.Expression, "global::LuminPack.Code.LuminPackFormatterRegistry") ||
+         access.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry" ||
          (CompiledOptionProjection.WriterMethods.Contains(access.Name.Identifier.ValueText) || CompiledOptionProjection.ReaderMethods.Contains(access.Name.Identifier.ValueText) ||
           CompiledOptionProjection.EvaluatorMethods.Contains(access.Name.Identifier.ValueText)) &&
          !(access.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments[0].ToString().Contains("LuminPackFixedOptions"))));

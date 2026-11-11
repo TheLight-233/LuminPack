@@ -13,7 +13,16 @@ namespace LuminPack.Code.Core;
 
 public static partial class LuminPackExtensionGenerator
 {
-
+    /// <summary>Separates no-owner formatter bodies from generic dispatch and static registration.</summary>
+    /// <param name="compilation">The current consuming compilation.</param>
+    /// <param name="metadata">Current generation settings.</param>
+    /// <param name="reachability">The formatter roots, or null for an unfiltered analysis view.</param>
+    /// <param name="cache">Generator-instance type and dispatch contribution caches.</param>
+    /// <param name="cancellationToken">Stops obsolete generation between complete formatter contributions.</param>
+    /// <returns>Independently comparable partial extension files.</returns>
+    internal static ImmutableArray<FrozenGeneratedSource> GenerateInvocationFiles(Compilation compilation, MetaInfo metadata,
+        ReachabilityAnalysis reachability, InvocationSupportCache cache, CancellationToken cancellationToken = default)
+        => GenerateInvocationFiles(compilation, metadata, reachability, cache, out _, cancellationToken);
 
     /// <summary>Emits formatter contributions and exposes their completed, symbol-free root facts.</summary>
     /// <param name="compilation">The current consuming compilation.</param>
@@ -43,8 +52,7 @@ public static partial class LuminPackExtensionGenerator
             .OrderBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal).GroupBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .Select(group => group.First()).ToArray();
         string extension = GetExtensionClassName(compilation);
-        var files = new List<FrozenGeneratedSource>();
-        var payloadTypes = new Dictionary<int, ITypeSymbol>();
+        var files = ImmutableArray.CreateBuilder<FrozenGeneratedSource>();
         var rootTargets = new Dictionary<string, LazyForwardingTargets>(StringComparer.Ordinal);
         var jsonDefinitions = new HashSet<string>(StringComparer.Ordinal);
         var unionDefinitions = new HashSet<string>(StringComparer.Ordinal);
@@ -60,7 +68,6 @@ public static partial class LuminPackExtensionGenerator
             var fragment = fragments[position];
             if (!string.IsNullOrEmpty(fragment.Extension))
             {
-                payloadTypes.Add(files.Count, type);
                 files.Add(new FrozenGeneratedSource(GeneratedFileNames.Formatter(type, name), fragment.Extension, payload: name));
                 rootTargets[name] = LazyForwardingTargets.Read(fragment.Extension, name);
             }
@@ -95,14 +102,11 @@ public static partial class LuminPackExtensionGenerator
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        // Closed roots that differ only in unmanaged type arguments forward to one generic root.
-        UnmanagedRootSharing.Apply(files, payloadTypes, compilation, metadata, cache.Sharing);
-        cancellationToken.ThrowIfCancellationRequested();
         foreach (var part in DispatchFiles(compilation, metadata, cache))
             files.Add(part);
         files.Add(new FrozenGeneratedSource(GeneratedFileNames.Shared("FormatterBridges"), SerializerCoreProjection.Bridges(extension, metadata)));
         navigationTargets = rootTargets;
-        return files.ToImmutableArray();
+        return files.ToImmutable();
 
         FrozenTypeEmission Fragment(ITypeSymbol type)
         {

@@ -219,9 +219,9 @@ internal static class SerializerCoreProjection
             .AddMembers(container.WithMembers(SyntaxFactory.List(support))));
         var projected = root.WithMembers(SyntaxFactory.List(namespaces))
             .AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("global::LuminPack.Generated")));
-        var projectedTree = GeneratedBinding.Tree(projected, metadata.ParseOptions);
-        var rewritten = GeneratedBinding.Restore(new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree), compilation).Visit(projectedTree.GetRoot()));
-        rewritten = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(closedRoot, compilation), normalizeMembers: false).Visit(rewritten);
+        var projectedTree = CSharpSyntaxTree.Create(projected, metadata.ParseOptions);
+        var rewritten = new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree), compilation).Visit(projectedTree.GetRoot());
+        rewritten = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(closedRoot, compilation)).Visit(rewritten);
         rewritten = BinaryEntryLocalScopes.NormalizeRoot(rewritten);
         rewritten = GeneratedOperationScopes.Rewrite(rewritten);
         rewritten = GeneratedOperationNames.Rewrite(rewritten);
@@ -253,7 +253,7 @@ internal static class SerializerCoreProjection
         rewritten = GeneratedOperationNames.RewriteReservedLocals(rewritten);
         rewritten = GeneratedOperationScopes.RemoveEmptyScopes(rewritten);
         rewritten = new BinaryReadMemberProjection(types).Visit(rewritten);
-        var normalized = (CompilationUnitSyntax)rewritten.NormalizeGenerated(Environment.NewLine);
+        var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
         var forwardingRoot = normalized;
         if (InterceptionSupport.IsEnabled(metadata.ParseOptions))
             normalized = UniqueStateEntries.Apply(normalized, compilation, metadata);
@@ -286,8 +286,8 @@ internal static class SerializerCoreProjection
         var sourceRoot = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetCompilationUnitRoot()
             .AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("global::LuminPack")).NormalizeWhitespace()
                 .WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
-        var tree = GeneratedBinding.Tree(sourceRoot, metadata.ParseOptions);
-        var rewritten = GeneratedBinding.Restore(new CallRewriter(compilation.AddSyntaxTrees(tree).GetSemanticModel(tree), compilation).Visit(tree.GetRoot()));
+        var tree = CSharpSyntaxTree.Create(sourceRoot, metadata.ParseOptions);
+        var rewritten = new CallRewriter(compilation.AddSyntaxTrees(tree).GetSemanticModel(tree), compilation).Visit(tree.GetRoot());
         return new JsonValueProjection().Visit(new BinaryExtensionProjection.Calls().Visit(new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation)).Visit(rewritten))))))).ToFullString();
     }
 
@@ -339,7 +339,7 @@ internal static class SerializerCoreProjection
     };
 
     /// <summary>Changes calls only when their receiver or explicit first argument is a runtime state struct.</summary>
-    private sealed class CallRewriter : NodeRewriter
+    private sealed class CallRewriter : CSharpSyntaxRewriter
     {
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, OperationCatalog> Catalogs = new();
         private readonly SemanticModel _model;
@@ -435,7 +435,7 @@ internal static class SerializerCoreProjection
                 }
             }
             if (node.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SerializeUnion" } union &&
-                SyntaxText.Is(union.Expression, "global::LuminPack.LuminPackSerializer"))
+                union.Expression.ToString() == "global::LuminPack.LuminPackSerializer")
                 return WithoutUnionInputReference((InvocationExpressionSyntax)base.VisitInvocationExpression(node));
             if (node.Expression is not MemberAccessExpressionSyntax access || !BinaryOperationPlan.IsOperation(access.Name.Identifier.ValueText))
                 return base.VisitInvocationExpression(node);

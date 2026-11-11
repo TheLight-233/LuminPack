@@ -16,7 +16,10 @@ namespace LuminPack.SourceGenerator
         public const string LUMIN_PACKABLE_ATTRIBUTE = "LuminPack.Attribute.LuminPackableAttribute";
         /// <summary>Stores the lumin union attribute.</summary>
         public const string LUMIN_UNION_ATTRIBUTE = "LuminPack.Attribute.LuminPackUnionAttribute";
-
+        /// <summary>Stores the lumin generated namespace.</summary>
+        public const string LUMIN_GENERATED_NAMESPACE = "LuminPack.Generated";
+        /// <summary>Stores the lumin registers namespace.</summary>
+        public const string LUMIN_REGISTERS_NAMESPACE = "LuminPackRegisters";
 
         [ThreadStatic]
         private static AnalysisState _analysisState;
@@ -61,7 +64,8 @@ namespace LuminPack.SourceGenerator
         private static ISymbol _mainSymbol => _analysisState.MainSymbol;
         /// <summary>Gets the location.</summary>
         private static Location _location => _analysisState.Location;
-
+        /// <summary>Gets the metadata.</summary>
+        private static MetaInfo _metadata => _analysisState.Metadata;
         /// <summary>Gets the processed types.</summary>
         private static HashSet<INamedTypeSymbol> ProcessedTypes => _analysisState.ProcessedTypes;
 
@@ -101,8 +105,8 @@ namespace LuminPack.SourceGenerator
                 }).WithComparer(MetaInfoValueComparer.Instance).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
 
 
-            var types = LuminPackFormatterGenerator.InitializeTypePipeline(context, metaInfo, outputs);
-            InitializeAggregatePipeline(context, metaInfo, outputs, types);
+            LuminPackFormatterGenerator.InitializeTypePipeline(context, metaInfo, outputs);
+            InitializeAggregatePipeline(context, metaInfo, outputs);
         }
     }
 }

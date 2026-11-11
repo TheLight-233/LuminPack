@@ -43,6 +43,42 @@ internal static class CustomFormatterAnalyzer
     internal static string DeserializeJsonSignature(string typeName) =>
         $"static void {DeserializeJsonName}(ref global::LuminPack.Core.LuminPackJsonReader reader, ref {typeName} value)";
 
+    /// <summary>
+    /// Collects and validates every Custom formatter type declared in the compilation's own
+    /// assembly. Returns the models plus the diagnostics to report.
+    /// </summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="reportDiagnostic">The report diagnostic used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
+    internal static List<CustomFormatterModel> AnalyzeAll(
+        Compilation compilation,
+        Action<Diagnostic> reportDiagnostic)
+    {
+        var models = new List<CustomFormatterModel>();
+
+        foreach (ProjectTypeData declared in CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes)
+        {
+            INamedTypeSymbol type = declared.Symbol;
+            if (!HasPackableAttribute(type))
+                continue;
+            if (TypeMetaChecker.CheckGeneratorType(type) != GeneratorType.Custom)
+                continue;
+
+            // Only types declared in this assembly get generated/registered here; Unity
+            // references plug-in assemblies into every compilation and must not duplicate.
+            if (!SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
+                continue;
+
+            var model = Analyze(type);
+            models.Add(model);
+            foreach (Diagnostic diagnostic in CollectDiagnostics(model))
+            {
+                reportDiagnostic(diagnostic);
+            }
+        }
+
+        return models;
+    }
 
     /// <summary>Analyzes  and records the resulting metadata or diagnostics.</summary>
     /// <param name="type">The type or symbol to analyze.</param>
@@ -234,4 +270,12 @@ internal static class CustomFormatterAnalyzer
             attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
     }
 
+    /// <summary>Determines whether packable attribute are present.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
+    private static bool HasPackableAttribute(INamedTypeSymbol type)
+    {
+        return type.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE);
+    }
 }

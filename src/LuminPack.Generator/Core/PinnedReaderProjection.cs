@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.Code.Core;
 
 /// <summary>Keeps managed input stationary for the lifetime of a pointer-based compatibility-target reader.</summary>
-internal sealed class PinnedReaderProjection : NodeRewriter
+internal sealed class PinnedReaderProjection : CSharpSyntaxRewriter
 {
     private readonly bool _allowUnsafe;
     private bool _pinned;

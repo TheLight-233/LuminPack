@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.SourceGenerator;
 
 /// <summary>Checks selected input sizes before facade staging, transcoding or initial token scanning.</summary>
-internal sealed class SafeFacadeProjection : NodeRewriter
+internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
 {
     private readonly CompiledOptions _options;
     private readonly bool _generic;
@@ -76,7 +76,7 @@ internal sealed class SafeFacadeProjection : NodeRewriter
     }
 
     /// <summary>Selects the strict untrusted JSON profile for a concrete facade's document reads.</summary>
-    private sealed class JsonProfile : NodeRewriter
+    private sealed class JsonProfile : CSharpSyntaxRewriter
     {
         private readonly string _declared, _strict;
         /// <summary>Captures both profile spellings.</summary><param name="declared">The binary profile.</param><param name="strict">The JSON profile.</param>

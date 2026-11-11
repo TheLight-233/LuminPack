@@ -15,7 +15,17 @@ namespace LuminPack.SourceGenerator;
 /// <summary>Describes concrete serializer overloads using the formatter's actual serialization contract.</summary>
 internal static class LuminPackSerializerDocumentation
 {
-
+    /// <summary>Adds type links, member contracts, layout details, and overload usage to serializer XML comments.</summary>
+    /// <param name="source">The generated serializer facade.</param>
+    /// <param name="types">The concrete types for which overloads were emitted.</param>
+    /// <param name="compilation">The compilation supplying the member symbols.</param>
+    /// <param name="metadata">The consuming compilation's generation settings.</param>
+    /// <returns>The serializer source with expanded XML documentation and unchanged executable tokens.</returns>
+    internal static string Enhance(string source, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
+    {
+        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetCompilationUnitRoot();
+        return Enhance(root, types, compilation, metadata);
+    }
 
     /// <summary>Documents a projected state implementation without reparsing its complete method bodies.</summary>
     /// <param name="root">The normalized source with documentation parsing enabled.</param>
@@ -287,7 +297,7 @@ internal static class LuminPackSerializerDocumentation
             remarks.Add(new XElement("para", "Writes to the supplied IBufferWriter<byte> and advances it by the produced byte count; the destination remains caller-owned."));
         if (parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Modifiers.Any(SyntaxKind.RefKeyword)))
             remarks.Add(new XElement("para", "Populates the supplied value by reference; formatter-specific merge and reuse rules apply.",
-                SyntaxText.Is(method.ReturnType, "void") ? string.Empty : " The return value reports consumed bytes" +
+                method.ReturnType.ToString() == "void" ? string.Empty : " The return value reports consumed bytes" +
                     (json ? " in the selected UTF-8 or UTF-16 input representation, including any transcoding performed by a character-input overload" : string.Empty) + "."));
         if (method.Identifier.ValueText.Contains("Async"))
             remarks.Add(new XElement("para", "Reads or writes the caller-owned stream asynchronously; cancellation is observed through cancellationToken."));

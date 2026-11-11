@@ -13,7 +13,13 @@ namespace LuminPack.Code.Core;
 /// <summary>Provides lumin pack json code generator functionality.</summary>
 public static class LuminPackJsonCodeGenerator
 {
-
+    /// <summary>Performs the compute utf8 hash step for the current operation.</summary>
+    /// <param name="str">The str used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
+    internal unsafe static ulong ComputeUtf8Hash(string str)
+    {
+        return ComputeUtf8BytesHash(Encoding.UTF8.GetBytes(str));
+    }
 
     /// <summary>Hashes already encoded name bytes without allocating the same payload again.</summary>
     /// <param name="bytes">The complete UTF-8 encoding.</param>
@@ -348,6 +354,17 @@ public static class LuminPackJsonCodeGenerator
         };
     }
 
+    /// <summary>Builds the json methods source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="classGlobalName">The class global name used by this operation.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    public static void GenerateJsonMethods(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
+    {
+        GenerateJsonSerialize(sb, data, classGlobalName, metaInfo);
+        sb.AppendLine();
+        GenerateJsonDeserialize(sb, data, classGlobalName, metaInfo);
+    }
 
     /// <summary>Appends JSON serialization statements for the analyzed type.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
@@ -1037,7 +1054,9 @@ public static class LuminPackJsonCodeGenerator
 /// <summary>Provides lumin pack json circle reference code generator functionality.</summary>
 public static class LuminPackJsonCircleReferenceCodeGenerator
 {
+    private const string JSON_ID_FIELD = "$id";
 
+    private const string JSON_REF_FIELD = "$ref";
 
     /// <summary>Builds the static utf8 fields for circle reference source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>

@@ -97,6 +97,11 @@ public static partial class LuminPackExtensionGenerator
             EmitterTypeTraits.IsDirectRecord(type) || EmitterTypeTraits.IsKnownScalar(type));
     }
 
+    /// <summary>Determines whether the supplied value has the static formatter candidate classification.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
+    internal static bool IsStaticFormatterCandidate(ITypeSymbol type)
+        => IsStaticFormatterCandidate(type, analysis: null);
 
     /// <summary>Determines whether a type has a generated or built-in formatter in the current compilation.</summary>
     /// <param name="type">The type or symbol to analyze.</param>

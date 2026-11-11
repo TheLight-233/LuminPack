@@ -5,14 +5,13 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 internal sealed partial class StaticSerializerBinding
 {
     /// <summary>Closes a source body while retaining the original overload and argument binding.</summary>
-    private sealed class WrapperBody : NodeRewriter
+    private sealed class WrapperBody : CSharpSyntaxRewriter
     {
         private readonly StaticSerializerBinding _owner;
         private readonly Wrapper _wrapper;

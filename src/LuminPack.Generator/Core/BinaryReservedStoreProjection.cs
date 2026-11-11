@@ -1,12 +1,11 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
 /// <summary>Stores explicitly typed fixed records after all reservation and layout proofs have finished.</summary>
-internal sealed class BinaryReservedStoreProjection : NodeRewriter
+internal sealed class BinaryReservedStoreProjection : CSharpSyntaxRewriter
 {
     private readonly Compilation _compilation;
 

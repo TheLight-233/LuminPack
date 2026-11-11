@@ -12,7 +12,8 @@ public sealed class LuminConstructorData
     public bool IsMarkedWithAttribute { get; set; }
     /// <summary>Gets or sets the accessibility.</summary>
     public Accessibility Accessibility { get; set; }
-
+    /// <summary>Gets the parameter count.</summary>
+    public int ParameterCount => Parameters.Count;
 }
 
 /// <summary>Provides constructor parameter functionality.</summary>

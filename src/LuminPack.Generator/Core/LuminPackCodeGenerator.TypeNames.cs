@@ -8,6 +8,13 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackCodeGenerator
 {
 
+    /// <summary>Obtains the enum type name for the supplied input.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <returns>The result of the operation.</returns>
+    private static string GetEnumTypeName(LuminDataField field)
+    {
+        return $"{field.EnumType}";
+    }
 
     /// <summary>Obtains the field local variable type for the supplied input.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>
@@ -49,6 +56,39 @@ public static partial class LuminPackCodeGenerator
         };
     }
 
+    /// <summary>Obtains the enum type name for the supplied input.</summary>
+    /// <param name="genericType">The generic type used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
+    private static string GetEnumTypeName(LuminEnumFieldType genericType)
+    {
+        switch (genericType)
+        {
+            case LuminEnumFieldType.Byte:
+                return "byte";
+            case LuminEnumFieldType.SByte:
+                return "sbyte";
+            case LuminEnumFieldType.Short:
+                return "short";
+            case LuminEnumFieldType.UShort:
+                return "ushort";
+            case LuminEnumFieldType.Int:
+                return "int";
+            case LuminEnumFieldType.UInt:
+                return "uint";
+            case LuminEnumFieldType.Long:
+                return "long";
+            case LuminEnumFieldType.ULong:
+                return "ulong";
+            case LuminEnumFieldType.Float:
+                return "float";
+            case LuminEnumFieldType.Double:
+                return "double";
+            default:
+                {
+                    return LuminPackExceptionHelper.ThrowInvalidOperationException<string>();
+                }
+        }
+    }
 
     /// <summary>Obtains the full generic type name for the supplied input.</summary>
     /// <param name="genericTypes">The generic types used by this operation.</param>

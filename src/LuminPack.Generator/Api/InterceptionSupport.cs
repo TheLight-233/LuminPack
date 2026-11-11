@@ -34,7 +34,7 @@ internal static class InterceptionSupport
     /// <summary>Checks the compiler's native interception capability and namespace opt-in.</summary>
     /// <param name="options">The consumer's parse settings.</param>
     /// <returns>Whether versioned compiler interception can be emitted.</returns>
-    internal static bool UsesCompilerInterceptors(CSharpParseOptions options)
+    private static bool UsesCompilerInterceptors(CSharpParseOptions options)
         => LocationMethod != null && options != null && (int)options.LanguageVersion >= 1100 && options.Features.Any(pair =>
             pair.Key is "InterceptorsNamespaces" or "InterceptorsPreviewNamespaces" &&
             pair.Value.Split(';').Any(value => value.Trim() == "LuminPack"));
