@@ -6,6 +6,7 @@ using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering;
 using LuminPack.SourceGenerator.Next.Rendering.Binary;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Rendering.Facade;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using LuminPack.SourceGenerator.Next.Rendering.Json;
 using LuminPack.SourceGenerator.Next.Rendering.Union;
@@ -110,20 +111,29 @@ public sealed class NextGenerator : IIncrementalGenerator
             if (source.Length != 0)
                 production.AddSource("LuminPack.Profiles.g.cs", source);
         });
+        // Ordinary facade calls are discovered per call site. Their non-packable closed roots join the shared owner requirements.
+        var calls = context.SyntaxProvider.CreateSyntaxProvider(static (node, _) => SerializerCallAnalysis.IsCandidate(node),
+                static (syntax, cancellationToken) => SerializerCallAnalysis.Analyze(syntax, cancellationToken))
+            .Where(static call => call != null)
+            .Select(static (call, _) => call!)
+            .WithTrackingName("LuminPack.Next.SerializerCalls")
+            .Collect();
+        var projectOptions = context.CompilationProvider.Select(static (compilation, _) => GeneratorOptionsFactory.From(compilation));
         // The shared formatter owners are collected once. Sorted requirements are order-independent, so the same complete payloads
         // publish the same files and an unchanged set reuses its cached output across edits.
-        var sharedFormatters = collected
-            .Select(static (payloads, _) =>
+        var sharedFormatters = collected.Combine(calls).Combine(projectOptions)
+            .Select(static (input, _) =>
             {
                 var retained = new List<TypeModel>();
-                GeneratorOptions? options = null;
-                foreach (ModeledPayload payload in payloads)
+                foreach (ModeledPayload payload in input.Left.Left)
                     if (payload.Result.Model is { } model && payload.Result.IsComplete)
-                    {
                         retained.Add(model);
-                        options ??= payload.Options;
-                    }
-                return options == null ? SharedFormatterSet.Empty : SharedFormatterSet.Collect(retained, options);
+                var roots = new List<MemberModel>();
+                foreach (SerializerCallModel call in input.Left.Right)
+                    if (call.Root != null)
+                        roots.Add(call.Root);
+                return retained.Count == 0 && roots.Count == 0 ? SharedFormatterSet.Empty :
+                    SharedFormatterSet.Collect(retained, input.Right, roots: roots);
             })
             .WithTrackingName("LuminPack.Next.SharedFormatters");
         context.RegisterSourceOutput(sharedFormatters, static (production, set) =>
@@ -131,6 +141,55 @@ public sealed class NextGenerator : IIncrementalGenerator
             try
             {
                 SharedFormatterPublisher.Publish(production, set, GeneratedOperations.All);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                production.ReportDiagnostic(DiagnosticDescriptors.Create(
+                    DiagnosticInfo.Unlocated(DiagnosticDescriptors.GeneratorFailure.Id, error.Message)));
+            }
+        });
+        InitializeEntries(context, collected, calls, sharedFormatters);
+    }
+
+    /// <summary>Publishes the generic facade and binds closed ordinary calls to the concrete roots of complete payloads and
+    /// published shared owners.</summary>
+    /// <remarks>The facade is post-initialization source, so calls bind against it while this generator runs. Each call site is
+    /// analyzed independently; the interception file depends only on the value-equal call list and root catalog.</remarks>
+    private static void InitializeEntries(IncrementalGeneratorInitializationContext context,
+        IncrementalValueProvider<System.Collections.Immutable.ImmutableArray<ModeledPayload>> collected,
+        IncrementalValueProvider<System.Collections.Immutable.ImmutableArray<SerializerCallModel>> calls,
+        IncrementalValueProvider<SharedFormatterSet> sharedFormatters)
+    {
+        context.RegisterPostInitializationOutput(static production =>
+        {
+            production.AddSource("LuminPack.Serializer.g.cs", SerializerFacadeSource.Binary);
+            production.AddSource("LuminPack.Serializer.Json.g.cs", SerializerFacadeSource.Json);
+            production.AddSource("LuminPack.FormatterDispatch.g.cs", SerializerFacadeSource.Dispatch);
+        });
+        var enabled = context.CompilationProvider.Select(static (compilation, _) =>
+            GeneratorOptionsFactory.From(compilation).Interceptors && SerializerCallAnalysis.Supported);
+        var roots = collected.Combine(sharedFormatters).Select(static (input, _) =>
+        {
+            var entries = new List<KeyValuePair<string, RootEntry>>();
+            foreach (ModeledPayload payload in input.Left)
+                if (payload.Result.IsComplete && payload.Result.Model is { } model && !model.Identity.IsGeneric)
+                {
+                    string type = model.Identity.GlobalName;
+                    string profile = model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : RootEntry.DefaultProfile;
+                    entries.Add(new KeyValuePair<string, RootEntry>(type,
+                        new RootEntry(ReadableTypeName.Of(GeneratedNames.PayloadKey(type)), profile, binary: true, json: true)));
+                }
+            return new RootCatalog(entries, input.Right.PublishedRoots(), input.Right.Extension);
+        });
+        context.RegisterSourceOutput(calls.Combine(roots).Combine(enabled), static (production, input) =>
+        {
+            if (!input.Right)
+                return;
+            try
+            {
+                string source = InterceptorRenderer.Render(input.Left.Left, input.Left.Right);
+                if (source.Length != 0)
+                    production.AddSource("LuminPack.Interceptors.g.cs", source);
             }
             catch (Exception error) when (error is not OperationCanceledException)
             {

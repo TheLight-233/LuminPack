@@ -20,9 +20,9 @@ internal static partial class TypeModelFactory
         /// <param name = "issues">The issues used by this operation.</param>
         /// <param name = "path">The path used by this operation.</param>
         /// <returns>The normalized result of the operation.</returns>
-        private MemberModel? Classify(ISymbol member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth, List<string> issues, Path path)
+        private MemberModel? Classify(MemberSite member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth, List<string> issues, Path path)
         {
-            ITypeSymbol type = member is IFieldSymbol field ? field.Type : ((IPropertySymbol)member).Type;
+            ITypeSymbol type = member.Type;
             if (type is ITypeParameterSymbol || type.TypeKind == TypeKind.Enum ||
                 type.SpecialType == SpecialType.System_String || Scalar(type) != null)
                 return ClassifySpecialized(member, storage, policy, owner, depth, issues, path);

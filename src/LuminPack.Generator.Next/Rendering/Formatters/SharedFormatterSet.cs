@@ -164,7 +164,8 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     /// <param name="options">The project facts.</param>
     /// <param name="seed">Existing requirements when one owner adds a dependency.</param>
     /// <returns>The value-equal complete publication set.</returns>
-    internal static SharedFormatterSet Collect(IEnumerable<TypeModel> models, GeneratorOptions options, SharedFormatterSet seed = default)
+    internal static SharedFormatterSet Collect(IEnumerable<TypeModel> models, GeneratorOptions options, SharedFormatterSet seed = default,
+        IEnumerable<MemberModel>? roots = null)
     {
         string extension = seed.Extension ?? GeneratedNames.Extension(options.AssemblyName);
         int aliases = seed.Extension == null ? options.AvailableAliases : seed.AvailableAliases;
@@ -182,6 +183,11 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         {
             Walk(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
             CollectGeneral(model, general, payloads);
+        }
+        foreach (MemberModel root in roots ?? Array.Empty<MemberModel>())
+        {
+            WalkRoot(root, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
+            CollectGeneralMember(root, general, payloads);
         }
         foreach (FormatterModel formatter in general.Values)
         {
@@ -278,58 +284,7 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
             return;
         bool text = false;
         for (int index = 0; index < model.Members.Length; index++)
-        {
-            MemberModel member = model.Members[index];
-            switch (member)
-            {
-                case TextMember:
-                    text = true;
-                    break;
-                // The culture owner is published only when the payload that declares the member actually renders; a
-                // managed struct, a versioned record or a record beside a dictionary keeps the original pipeline.
-                case CultureInfoMember culture:
-                    owners.Add(FormatterRegistry.CultureInfo);
-                    cultureInfoReuse |= culture.CanReuse;
-                    break;
-                // A framework member always publishes its own owner; every direct write path calls the owner in place.
-                case ScalarMember { Builtin: true } builtin:
-                    AddScalar(scalars, builtin.Scalar);
-                    break;
-                case SpecialMember special when special.Formatter == null:
-                    owners.Add(GeneratedNames.PayloadKey(special.Declared));
-                    // A closed generic owner calls the element owners of its arguments.
-                    if (GenericIdentity.TryParse(GeneratedNames.PayloadKey(special.Declared), out string definition, out string[] arguments))
-                    {
-                        foreach (string argument in arguments)
-                        {
-                            if (argument == "string")
-                                owners.Add(FormatterRegistry.String);
-                            else
-                                AddScalar(scalars, argument);
-                        }
-                        // A grouping and a lookup write their elements through the enumerable owner, and a lookup through the grouping owner.
-                        if (definition is GenericIdentity.Grouping or GenericIdentity.Lookup &&
-                            FormatterRegistry.FindSequence("System.Collections.Generic.IEnumerable") is { } enumerable)
-                        {
-                            facts.Add(SequenceOwnerFact.ForScalar(enumerable, GroupingOwnerFile.Sequence(arguments[1]), arguments[1]));
-                            if (definition == GenericIdentity.Lookup)
-                                owners.Add("System.Linq.IGrouping<" + arguments[0] + "," + arguments[1] + ">");
-                        }
-                    }
-                    break;
-                case CollectionMember collection:
-                    Collect(collection, options, facts, scalars, owners, dictionaries,
-                        ref cultureInfoReuse, visited);
-                    break;
-                case DictionaryMember dictionary:
-                    CollectDictionary(dictionary, options, scalars, owners, dictionaries, facts, ref cultureInfoReuse, visited);
-                    break;
-                case PayloadMember { Nested: { } nested }:
-                    Walk(nested, options, facts, scalars, owners, dictionaries,
-                        ref cultureInfoReuse, visited);
-                    break;
-            }
-        }
+            WalkMember(model.Members[index], options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited, ref text);
         // A circle reference read and a version-tolerant record read call the shared string formatter owner.
         if (text && (model is CircleReferenceModel || model is RecordModel { Version: not null }))
             owners.Add(FormatterRegistry.String);
@@ -338,6 +293,81 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
                 if (union.Cases[index].Model is { } item)
                     Walk(item, options, facts, scalars, owners, dictionaries,
                         ref cultureInfoReuse, visited);
+    }
+
+    /// <summary>Records the owners one member requires.</summary>
+    private static void WalkMember(MemberModel member, GeneratorOptions options, List<SequenceOwnerFact> facts, List<string> scalars,
+        List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited, ref bool text)
+    {
+        switch (member)
+        {
+            case TextMember:
+                text = true;
+                break;
+            // The culture owner is published only when the payload that declares the member actually renders; a
+            // managed struct, a versioned record or a record beside a dictionary keeps the original pipeline.
+            case CultureInfoMember culture:
+                owners.Add(FormatterRegistry.CultureInfo);
+                cultureInfoReuse |= culture.CanReuse;
+                break;
+            // A framework member always publishes its own owner; every direct write path calls the owner in place.
+            case ScalarMember { Builtin: true } builtin:
+                AddScalar(scalars, builtin.Scalar);
+                break;
+            case SpecialMember special when special.Formatter == null:
+                owners.Add(GeneratedNames.PayloadKey(special.Declared));
+                // A closed generic owner calls the element owners of its arguments.
+                if (GenericIdentity.TryParse(GeneratedNames.PayloadKey(special.Declared), out string definition, out string[] arguments))
+                {
+                    foreach (string argument in arguments)
+                    {
+                        if (argument == "string")
+                            owners.Add(FormatterRegistry.String);
+                        else
+                            AddScalar(scalars, argument);
+                    }
+                    // A grouping and a lookup write their elements through the enumerable owner, and a lookup through the grouping owner.
+                    if (definition is GenericIdentity.Grouping or GenericIdentity.Lookup &&
+                        FormatterRegistry.FindSequence("System.Collections.Generic.IEnumerable") is { } enumerable)
+                    {
+                        facts.Add(SequenceOwnerFact.ForScalar(enumerable, GroupingOwnerFile.Sequence(arguments[1]), arguments[1]));
+                        if (definition == GenericIdentity.Lookup)
+                            owners.Add("System.Linq.IGrouping<" + arguments[0] + "," + arguments[1] + ">");
+                    }
+                }
+                break;
+            case CollectionMember collection:
+                Collect(collection, options, facts, scalars, owners, dictionaries,
+                    ref cultureInfoReuse, visited);
+                break;
+            case DictionaryMember dictionary:
+                CollectDictionary(dictionary, options, scalars, owners, dictionaries, facts, ref cultureInfoReuse, visited);
+                break;
+            case PayloadMember { Nested: { } nested }:
+                Walk(nested, options, facts, scalars, owners, dictionaries,
+                    ref cultureInfoReuse, visited);
+                break;
+        }
+    }
+
+    /// <summary>Records the owner a closed serializer call root requires: its own standalone, scalar, sequence or dictionary owner.</summary>
+    private static void WalkRoot(MemberModel member, GeneratorOptions options, List<SequenceOwnerFact> facts, List<string> scalars,
+        List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited)
+    {
+        bool text = false;
+        switch (member)
+        {
+            // A root string or raw scalar is written by its shared owner, which a payload member reaches only through a record body.
+            case TextMember:
+                owners.Add(FormatterRegistry.String);
+                return;
+            case ScalarMember { Builtin: false, EnumType: null } scalar:
+                AddScalar(scalars, scalar.Scalar);
+                return;
+            default:
+                WalkMember(member, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited, ref text);
+                return;
+        }
     }
 
     /// <summary>Records the owners one dictionary member requires.</summary>

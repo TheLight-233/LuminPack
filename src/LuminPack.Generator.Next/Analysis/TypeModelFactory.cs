@@ -66,6 +66,19 @@ internal static partial class TypeModelFactory
     /// <param name="compilation">The consuming compilation.</param>
     /// <param name="options">The immutable project facts.</param>
     /// <returns>The declaration diagnostics.</returns>
+    /// <summary>Models the closed root type of an ordinary serializer call as the member shape that publishes its shared owner.</summary>
+    /// <param name="type">The closed call payload type.</param>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <param name="options">The project facts.</param>
+    /// <returns>The root member, or null when the type is a packable payload, unsupported or not completely modeled.</returns>
+    /// <remarks>A packable payload publishes its own roots from its type model. Any other root is classified exactly like a
+    /// field of that type, so it reuses the specialized and default formatter contracts of members.</remarks>
+    internal static MemberModel? TryCreateRoot(ITypeSymbol type, Compilation compilation, GeneratorOptions options)
+    {
+        Session session = Sessions.GetValue(compilation, item => new Session(item, options));
+        return session.Options.Equals(options) ? session.ClassifyRoot(type) : new Session(compilation, options).ClassifyRoot(type);
+    }
+
     internal static DiagnosticInfo[] Diagnose(INamedTypeSymbol symbol, Compilation compilation, GeneratorOptions options)
     {
         Session session = Sessions.GetValue(compilation, item => new Session(item, options));
@@ -104,6 +117,20 @@ internal static partial class TypeModelFactory
         /// <param name="depth">The number of nested payload expansions already entered.</param>
         /// <returns>The analysis result.</returns>
         internal ModelResult Create(INamedTypeSymbol symbol, int depth) => Analyze(symbol, depth, new Path());
+
+        /// <summary>Classifies a closed call root as an unnamed field of its type under the assembly policy.</summary>
+        /// <param name="type">The closed call payload type.</param>
+        /// <returns>The complete root member, or null.</returns>
+        internal MemberModel? ClassifyRoot(ITypeSymbol type)
+        {
+            if (type is INamedTypeSymbol { IsGenericType: false } named && IsPackable(named))
+                return null;
+            var issues = new List<string>();
+            WirePolicy policy = Apply(WirePolicy.Default, _compilation.Assembly);
+            MemberModel? model = Classify(new MemberSite("Root", type, isVolatile: false, containing: null), MemberStorage.Field, policy,
+                _compilation.GetSpecialType(SpecialType.System_Object), depth: 0, issues, new Path());
+            return issues.Count == 0 ? model : null;
+        }
 
         /// <summary>Whether the referenced runtime exposes the validated culture-info cache the shared owner uses.</summary>
         private bool CanReuseCultureInfo => _canReuseCultureInfo ??= CultureInfoCacheAvailable();
@@ -380,7 +407,7 @@ internal static partial class TypeModelFactory
                 if (!TryStorage(member, out MemberStorage storage))
                     continue;
                 WirePolicy policy = MemberPolicy(member, ownerPolicy);
-                MemberModel? model = Classify(member, storage, policy, symbol, depth, issues, path);
+                MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path);
                 if (model == null)
                     continue;
                 if (!names.Add(model.Name))
@@ -441,10 +468,10 @@ internal static partial class TypeModelFactory
         /// <param name="issues">Receives the reason an unsupported member is omitted.</param>
         /// <param name="path">The payloads on the current expansion path.</param>
         /// <returns>The member model, or null when the type is outside the modeled surface.</returns>
-        private MemberModel? ClassifySpecialized(ISymbol member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth,
+        private MemberModel? ClassifySpecialized(MemberSite member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth,
             List<string> issues, Path path)
         {
-            ITypeSymbol type = member is IFieldSymbol field ? field.Type : ((IPropertySymbol)member).Type;
+            ITypeSymbol type = member.Type;
             string name = member.Name;
 
             if (type is ITypeParameterSymbol parameter)
@@ -467,14 +494,14 @@ internal static partial class TypeModelFactory
                 }
                 return new ScalarMember(name, storage, policy, underlying.Keyword, underlying.Size, raw: false, builtin: false,
                     enumType: type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), underlying: underlying.Keyword,
-                    isVolatile: member is IFieldSymbol { IsVolatile: true });
+                    isVolatile: member.Volatile);
             }
             if (Scalar(type) is { } scalar)
                 return new ScalarMember(name, storage, policy, scalar.Keyword, scalar.Size, raw: false, builtin: false,
-                    isVolatile: member is IFieldSymbol { IsVolatile: true });
+                    isVolatile: member.Volatile);
             if (Builtin(type) is { } builtin)
                 return new ScalarMember(name, storage, policy, builtin, 0, raw: true, builtin: true,
-                    isVolatile: member is IFieldSymbol { IsVolatile: true });
+                    isVolatile: member.Volatile);
             if (type.SpecialType == SpecialType.System_String)
                 return new TextMember(name, storage, policy);
             if (IsCultureInfo(type))
@@ -947,14 +974,14 @@ internal static partial class TypeModelFactory
         /// <param name="issues">Receives the reason a nested payload is not expanded.</param>
         /// <param name="path">The payloads on the current expansion path.</param>
         /// <returns>The payload member.</returns>
-        private MemberModel? Payload(ISymbol member, INamedTypeSymbol type, MemberStorage storage, WirePolicy policy, int depth,
+        private MemberModel? Payload(MemberSite member, INamedTypeSymbol type, MemberStorage storage, WirePolicy policy, int depth,
             List<string> issues, Path path)
         {
             string name = member.Name;
             if (!IsPackable(type))
             {
                 // A type that mentions the definition's own parameters is written and read by the generic serializer.
-                if (MentionsOwnParameter(type, member.ContainingType))
+                if (member.Containing != null && MentionsOwnParameter(type, member.Containing))
                     return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
                 issues.Add("member '" + name + "' has the unsupported type '" + type.ToDisplayString() + "'");
                 return null;

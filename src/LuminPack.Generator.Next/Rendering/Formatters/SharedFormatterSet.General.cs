@@ -45,6 +45,43 @@ internal readonly partial struct SharedFormatterSet
                     CollectGeneral(item.Model, formatters, payloads);
     }
 
+    /// <summary>Collects the general contracts one serializer call root requires.</summary>
+    /// <param name="member">The root member.</param>
+    /// <param name="formatters">The formatters used by this operation.</param>
+    /// <param name="payloads">The payloads used by this operation.</param>
+    private static void CollectGeneralMember(MemberModel member, Dictionary<string, FormatterModel> formatters, HashSet<string> payloads)
+    {
+        if (member is SpecialMember { Formatter: { } formatter })
+            CollectFormatter(formatter, formatters, payloads);
+        if (member is PayloadMember { Nested: { } nested })
+            CollectGeneral(nested, formatters, payloads);
+        if (member is CollectionMember { Nested: { } element })
+            CollectGeneral(element, formatters, payloads);
+        if (member is DictionaryMember { Nested: { } value })
+            CollectGeneral(value, formatters, payloads);
+    }
+
+    /// <summary>Lists the root identifiers whose <c>Serialize_</c>, <c>Deserialize_</c> and JSON roots this set publishes.</summary>
+    /// <returns>The readable root names, derived exactly as the publisher names its owners.</returns>
+    internal HashSet<string> PublishedRoots()
+    {
+        var roots = new HashSet<string>(System.StringComparer.Ordinal);
+        if (IsEmpty)
+            return roots;
+        foreach (string owner in Owners ?? System.Array.Empty<string>())
+            roots.Add(ReadableTypeName.Of(owner));
+        foreach (string scalar in Scalars ?? System.Array.Empty<string>())
+            roots.Add(ReadableTypeName.Of(scalar.Split('=')[0]));
+        foreach (DictionaryOwnerFact fact in DictionaryOwners ?? System.Array.Empty<DictionaryOwnerFact>())
+            roots.Add(ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)));
+        foreach (SequenceOwnerFact fact in SequenceOwners ?? System.Array.Empty<SequenceOwnerFact>())
+            roots.Add(ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)));
+        foreach (FormatterModel model in GeneralOwners ?? System.Array.Empty<FormatterModel>())
+            if (model.Definition != FormatterDefinitions.PayloadReference || model.Payload != null && model.PublishPayload)
+                roots.Add(ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)));
+        return roots;
+    }
+
     /// <summary>Visits each closed contract once, retaining a complete definition when a cycle previously contributed a reference.</summary>
     /// <param name = "model">The normalized formatter or storage contract.</param>
     /// <param name = "formatters">The formatters used by this operation.</param>
