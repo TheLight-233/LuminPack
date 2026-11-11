@@ -103,9 +103,14 @@ internal sealed class WirePolicy : IEquatable<WirePolicy>
     /// <summary>Whether the payload tracks object references.</summary>
     internal readonly bool TrackReferences;
 
+    /// <summary>The frozen external-input limits of an untrusted read.</summary>
+    internal readonly InputLimits Limits;
+
     /// <summary>Captures a wire policy.</summary>
-    internal WirePolicy(InputPolicy input, StringProfile strings, int? bound, bool trackReferences, bool declared = false)
+    internal WirePolicy(InputPolicy input, StringProfile strings, int? bound, bool trackReferences, bool declared = false,
+        InputLimits? limits = null)
     {
+        Limits = limits ?? InputLimits.Unbounded;
         Declared = declared;
         TrackReferences = trackReferences;
         Bound = bound;
@@ -113,9 +118,18 @@ internal sealed class WirePolicy : IEquatable<WirePolicy>
         Input = input;
     }
 
+    /// <summary>Gets the profile of JSON documents declared hostile: the strict grammar and the untrusted depth bound.</summary>
+    /// <remarks>An implicit untrusted default keeps the declared JSON profile; an explicit untrusted declaration or limit selects
+    /// strict JSON. Binary reads keep the declared profile.</remarks>
+    internal StringProfile JsonInput => Input == InputPolicy.Trusted || !Limits.Explicit ||
+        Strings.Strict && Strings.Depth > 0 && Strings.Depth <= Limits.Depth ? Strings :
+        new StringProfile(Strings.Format, Strings.Precision, Strings.Depth > 0 && Strings.Depth <= Limits.Depth ? Strings.Depth : Limits.Depth,
+            strict: true, Strings.Encoding, Strings.Recording);
+
     /// <inheritdoc/>
     public bool Equals(WirePolicy? other) => ReferenceEquals(this, other) || other != null && Input == other.Input &&
-        Strings.Equals(other.Strings) && Bound == other.Bound && TrackReferences == other.TrackReferences && Declared == other.Declared;
+        Strings.Equals(other.Strings) && Bound == other.Bound && TrackReferences == other.TrackReferences && Declared == other.Declared &&
+        Limits.Equals(other.Limits);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as WirePolicy);

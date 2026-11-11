@@ -11,11 +11,14 @@ internal static class ProfileSource
 {
     /// <summary>Collects and renders the immutable component declarations used by complete payload graphs.</summary>
     /// <param name="models">The retained payloads.</param>
+    /// <param name="assembly">The consuming assembly's policy, whose profile keys the registered fallback.</param>
     /// <returns>The shared component source, or an empty string.</returns>
-    internal static string Render(IEnumerable<TypeModel> models)
+    internal static string Render(IEnumerable<TypeModel> models, WirePolicy? assembly = null)
     {
         var components = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var visited = new HashSet<string>(StringComparer.Ordinal);
+        if (assembly != null)
+            Add(assembly.Strings, components);
         foreach (TypeModel model in models)
             Collect(model, components, visited);
         if (components.Count == 0)
@@ -35,6 +38,8 @@ internal static class ProfileSource
         if (!visited.Add(model.Identity.GlobalName))
             return;
         Add(model.Policy.Strings, components);
+        // An explicitly untrusted root reads JSON with the strict grammar and its depth bound.
+        Add(model.Policy.JsonInput, components);
         foreach (MemberModel member in model.Members)
         {
             Add(member.Policy.Strings, components);

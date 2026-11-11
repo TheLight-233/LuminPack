@@ -1511,20 +1511,6 @@ namespace LuminPack
             internal static void Serialize<T, TLuminProfile>(scoped ref LuminPackWriter writer, scoped in T value)
                 where TLuminProfile : struct, ILuminPackOptions => SerializeRegistered<T, TLuminProfile>(ref writer, in value);
 
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            private static void SerializeRegistered<T, TLuminProfile>(scoped ref LuminPackWriter writer, scoped in T value)
-                where TLuminProfile : struct, ILuminPackOptions
-            {
-                global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, LuminPackUtf16LengthOptions>>.TryGetCachedValue<T>(out var registration);
-                if (registration.WriteValue == null)
-                {
-                    LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");
-                    return;
-                }
-
-                ((global::LuminPack.Code.LuminPackWriteDelegate<T>)registration.WriteValue)(ref writer, in value);
-            }
-
             [@Preserve]
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void Deserialize<T>(scoped ref LuminPackReader reader, scoped ref T value)
@@ -1534,20 +1520,6 @@ namespace LuminPack
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void Deserialize<T, TLuminProfile>(scoped ref LuminPackReader reader, scoped ref T value)
                 where TLuminProfile : struct, ILuminPackOptions => DeserializeRegistered<T, TLuminProfile>(ref reader, ref value);
-
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            private static void DeserializeRegistered<T, TLuminProfile>(scoped ref LuminPackReader reader, scoped ref T value)
-                where TLuminProfile : struct, ILuminPackOptions
-            {
-                global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, LuminPackUtf16LengthOptions>>.TryGetCachedValue<T>(out var registration);
-                if (registration.ReadValue == null)
-                {
-                    LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");
-                    return;
-                }
-
-                ((global::LuminPack.Code.LuminPackReadDelegate<T>)registration.ReadValue)(ref reader, ref value);
-            }
 
             [@Preserve]
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1559,20 +1531,6 @@ namespace LuminPack
             internal static void SerializeJson<T, TLuminProfile>(scoped ref LuminPackJsonWriter writer, scoped in T value)
                 where TLuminProfile : struct, ILuminPackOptions => SerializeJsonRegistered<T, TLuminProfile>(ref writer, in value);
 
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            private static void SerializeJsonRegistered<T, TLuminProfile>(scoped ref LuminPackJsonWriter writer, scoped in T value)
-                where TLuminProfile : struct, ILuminPackOptions
-            {
-                global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, LuminPackUtf16LengthOptions>>.TryGetCachedJsonValue<T>(out var registration);
-                if (registration.WriteValueJson == null)
-                {
-                    LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");
-                    return;
-                }
-
-                ((global::LuminPack.Code.LuminPackJsonWriteDelegate<T>)registration.WriteValueJson)(ref writer, in value);
-            }
-
             [@Preserve]
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static void DeserializeJson<T>(scoped ref LuminPackJsonReader reader, scoped ref T value)
@@ -1583,20 +1541,6 @@ namespace LuminPack
             internal static void DeserializeJson<T, TLuminProfile>(scoped ref LuminPackJsonReader reader, scoped ref T value)
                 where TLuminProfile : struct, ILuminPackOptions => DeserializeJsonRegistered<T, TLuminProfile>(ref reader, ref value);
 
-            [MethodImpl(MethodImplOptions.NoInlining)]
-            private static void DeserializeJsonRegistered<T, TLuminProfile>(scoped ref LuminPackJsonReader reader, scoped ref T value)
-                where TLuminProfile : struct, ILuminPackOptions
-            {
-                global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, LuminPackUtf16LengthOptions>>.TryGetCachedJsonValue<T>(out var registration);
-                if (registration.ReadValueJson == null)
-                {
-                    LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");
-                    return;
-                }
-
-                ((global::LuminPack.Code.LuminPackJsonReadDelegate<T>)registration.ReadValueJson)(ref reader, ref value);
-            }
-
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             internal static bool LuminPackShouldResetMember<T>(ref LuminPackReader reader)
             {
@@ -1604,18 +1548,8 @@ namespace LuminPack
                 return true;
             }
 
-            internal static LuminPackStringEncoding LuminPackJsonEncoding<T>()
-                => (LuminPackStringEncoding)1;
-
             internal static LuminPackStringEncoding LuminPackJsonEncoding<T, TOptions>() where TOptions : struct, ILuminPackOptions
                 => typeof(TOptions) == typeof(LuminPackDeclaredOptions) ? LuminPackJsonEncoding<T>() : default(TOptions).StringEncoding;
-
-            internal static bool LuminPackJsonReadBoundary<T>(ref LuminPackJsonReader reader, bool complete)
-            {
-                LuminPackInputPolicy.CheckInput(reader.Buffer.Length, 2147483647);
-                if (complete) { reader.EnsureEndOfDocument<LuminPackUtf16LengthOptions>(); return true; }
-                return reader.Read<LuminPackUtf16LengthOptions>();
-            }
 
             internal static bool LuminPackJsonReadBoundary<T, TOptions>(
                 ref LuminPackJsonReader reader,
@@ -1629,9 +1563,6 @@ namespace LuminPack
                 }
                 return reader.Read<TOptions>();
             }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            internal static int LuminPackInputLimit<T>() => 2147483647;
         }
     }
 }";

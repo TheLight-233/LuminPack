@@ -98,13 +98,18 @@ public sealed class NextGenerator : IIncrementalGenerator
             }
         });
         var collected = models.Collect();
-        var profiles = collected.Select(static (payloads, _) =>
+        // The assembly declaration selects the registered fallback profile, the default JSON encoding and the input cap.
+        var assemblyPolicy = context.CompilationProvider.Select(static (compilation, _) => TypeModelFactory.AssemblyPolicy(compilation));
+        context.RegisterSourceOutput(assemblyPolicy, static (production, policy) =>
+            production.AddSource("LuminPack.FormatterDispatch.Options.g.cs", DispatchOptionsSource.Render(ProfileNames.Type(policy.Strings),
+                policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1, policy.Input == InputPolicy.Untrusted, policy.Limits.Input)));
+        var profiles = collected.Combine(assemblyPolicy).Select(static (input, _) =>
         {
             var retained = new List<TypeModel>();
-            foreach (ModeledPayload payload in payloads)
+            foreach (ModeledPayload payload in input.Left)
                 if (payload.Result.IsComplete && payload.Result.Model is { } model)
                     retained.Add(model);
-            return ProfileSource.Render(retained);
+            return ProfileSource.Render(retained, input.Right);
         });
         context.RegisterSourceOutput(profiles, static (production, source) =>
         {
@@ -176,8 +181,14 @@ public sealed class NextGenerator : IIncrementalGenerator
                 {
                     string type = model.Identity.GlobalName;
                     string profile = model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : RootEntry.DefaultProfile;
+                    // The original concrete facade froze the payload's own cap and checked nothing for a trusted payload.
+                    WirePolicy policy = model.Policy;
+                    StringProfile jsonInput = policy.JsonInput;
                     entries.Add(new KeyValuePair<string, RootEntry>(type,
-                        new RootEntry(ReadableTypeName.Of(GeneratedNames.PayloadKey(type)), profile, binary: true, json: true)));
+                        new RootEntry(ReadableTypeName.Of(GeneratedNames.PayloadKey(type)), profile, binary: true, json: true,
+                            limit: policy.Input == InputPolicy.Untrusted ? policy.Limits.Input : null,
+                            encoding: policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1,
+                            jsonReadProfile: jsonInput.Equals(policy.Strings) ? null : ProfileNames.Type(jsonInput))));
                 }
             return new RootCatalog(entries, input.Right.PublishedRoots(), input.Right.Extension);
         });

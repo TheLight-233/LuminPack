@@ -95,6 +95,11 @@ internal static partial class TypeModelFactory
         return session.Options.Equals(options) ? session.DiagnoseAssembly() : new Session(compilation, options).DiagnoseAssembly();
     }
 
+    /// <summary>Resolves the consuming assembly's own declared policy, which the registered fallback and generic entries use.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>The value-equal assembly policy.</returns>
+    internal static WirePolicy AssemblyPolicy(Compilation compilation) => Session.Apply(WirePolicy.Default, compilation.Assembly);
+
     /// <summary>Holds the per-compilation analysis state: the consumer compilation, its project facts and the completed models.</summary>
     private sealed partial class Session
     {
@@ -1535,7 +1540,8 @@ internal static partial class TypeModelFactory
             while (scopes.Count != 0)
                 policy = Apply(policy, scopes.Pop());
             if (kind == PayloadKind.CircleReference && !policy.TrackReferences)
-                policy = new WirePolicy(policy.Input, policy.Strings, policy.Bound, trackReferences: true, declared: policy.Declared);
+                policy = new WirePolicy(policy.Input, policy.Strings, policy.Bound, trackReferences: true, declared: policy.Declared,
+                    limits: policy.Limits);
             return policy;
         }
 
@@ -1557,7 +1563,7 @@ internal static partial class TypeModelFactory
         /// <param name="policy">The inherited policy.</param>
         /// <param name="symbol">The assembly, type, field or property that declares the options.</param>
         /// <returns>The overlaid policy, or the inherited instance when nothing is declared.</returns>
-        private static WirePolicy Apply(WirePolicy policy, ISymbol symbol)
+        internal static WirePolicy Apply(WirePolicy policy, ISymbol symbol)
         {
             char format = policy.Strings.Format;
             byte precision = policy.Strings.Precision;
@@ -1566,6 +1572,7 @@ internal static partial class TypeModelFactory
             StringEncoding encoding = policy.Strings.Encoding;
             StringRecording recording = policy.Strings.Recording;
             InputPolicy input = policy.Input;
+            InputLimits limits = policy.Limits;
             int? bound = policy.Bound;
             bool changed = false;
             bool declared = policy.Declared;
@@ -1594,6 +1601,24 @@ internal static partial class TypeModelFactory
                     {
                         case "UntrustedData" when argument.Value.Value is bool untrusted:
                             input = untrusted ? InputPolicy.Untrusted : InputPolicy.Trusted;
+                            limits = limits.With(explicitInput: untrusted);
+                            changed = true;
+                            break;
+                        // Only the limits enforced by generated checks are frozen here; each one declares hostile input.
+                        case "MaxInputBytes" when argument.Value.Value is int maxInput:
+                            limits = limits.With(input: maxInput, explicitInput: true);
+                            changed = true;
+                            break;
+                        case "MaxCollectionLength" when argument.Value.Value is int maxCollection:
+                            limits = limits.With(collection: maxCollection, explicitInput: true);
+                            changed = true;
+                            break;
+                        case "MaxStringLength" when argument.Value.Value is int maxString:
+                            limits = limits.With(@string: maxString, explicitInput: true);
+                            changed = true;
+                            break;
+                        case "MaxDepth" when argument.Value.Value is int maxDepth:
+                            limits = limits.With(depth: maxDepth, explicitInput: true);
                             changed = true;
                             break;
                         case "StringEncoding" when argument.Value.Value is not null:
@@ -1631,7 +1656,7 @@ internal static partial class TypeModelFactory
             if (!changed)
                 return policy;
             return new WirePolicy(input, new StringProfile(format, precision, depth, strict, encoding, recording), bound,
-                policy.TrackReferences, declared);
+                policy.TrackReferences, declared, limits);
         }
 
         /// <summary>Classifies unmanaged value storage and detects a layout that needs field-wise packed transfer.</summary>

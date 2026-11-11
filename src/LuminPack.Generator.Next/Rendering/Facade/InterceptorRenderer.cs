@@ -28,9 +28,23 @@ internal sealed class RootEntry : IEquatable<RootEntry>
     /// <summary>The profile substituted for calls without a profile when the payload declares none.</summary>
     internal const string DefaultProfile = "global::LuminPack.Option.LuminPackUtf16LengthOptions";
 
+    /// <summary>The payload's own frozen input cap; null for a trusted payload, whose entries check no input size.</summary>
+    /// <remarks>Shared owners keep the assembly cap through the generic dispatch selector.</remarks>
+    internal readonly int? Limit;
+
+    /// <summary>The payload's JSON encoding, used to bound character input: zero for UTF-8, one for UTF-16.</summary>
+    internal readonly int Encoding;
+
+    /// <summary>The strict profile that replaces the declared profile in JSON reads of an explicitly untrusted payload, or null.</summary>
+    internal readonly string? JsonReadProfile;
+
     /// <summary>Describes a published root.</summary>
-    internal RootEntry(string readable, string declaredProfile, bool binary, bool json, string? owner = null)
+    internal RootEntry(string readable, string declaredProfile, bool binary, bool json, string? owner = null, int? limit = null,
+        int encoding = 1, string? jsonReadProfile = null)
     {
+        Limit = limit;
+        Encoding = encoding;
+        JsonReadProfile = jsonReadProfile;
         Owner = owner;
         Readable = readable;
         DeclaredProfile = declaredProfile;
@@ -40,7 +54,8 @@ internal sealed class RootEntry : IEquatable<RootEntry>
 
     /// <inheritdoc/>
     public bool Equals(RootEntry? other) => other != null && Readable == other.Readable && DeclaredProfile == other.DeclaredProfile &&
-        Binary == other.Binary && Json == other.Json && Owner == other.Owner;
+        Binary == other.Binary && Json == other.Json && Owner == other.Owner && Limit == other.Limit && Encoding == other.Encoding &&
+        JsonReadProfile == other.JsonReadProfile;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as RootEntry);
@@ -97,7 +112,9 @@ internal static class InterceptorRenderer
         {
             RootEntry root = group.First().Root;
             // An open profile is forwarded through a generic interceptor of the facade method's arity.
-            string profile = group.Key.OpenProfile ? "TLuminProfile" : group.Key.Profile ?? root.DeclaredProfile;
+            // A JSON read of an explicitly untrusted payload replaces only its declared profile with the strict one.
+            string profile = group.Key.OpenProfile ? "TLuminProfile" : group.Key.Profile ??
+                (IsJsonRead(group.Key.Api) ? root.JsonReadProfile ?? root.DeclaredProfile : root.DeclaredProfile);
             foreach (string location in group.Select(item => item.Call.Location).Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal))
                 w.Append("        ").Append(location).Append('\n');
             Interceptor(w, group.Key.Api, group.Key.Payload, root.Readable, profile, index++, group.Key.OpenProfile);
@@ -138,6 +155,30 @@ namespace LuminPack
     public static partial class LuminPackSerializer
     {
 ";
+
+    /// <summary>Whether an API reads a JSON document.</summary>
+    /// <param name="api">The intercepted overload.</param>
+    /// <returns>Whether the overload deserializes JSON.</returns>
+    private static bool IsJsonRead(SerializerApi api) => api is SerializerApi.DeserializeJsonReader or SerializerApi.DeserializeJsonString or
+        SerializerApi.DeserializeJsonBytes or SerializerApi.DeserializeJsonChars or SerializerApi.DeserializeJsonBuffer or
+        SerializerApi.DeserializeJsonStringRef or SerializerApi.DeserializeJsonBytesRef or SerializerApi.DeserializeJsonCharsRef or
+        SerializerApi.DeserializeJsonBufferRef;
+
+    /// <summary>Applies the root's input boundary: a frozen cap, the shared assembly selector, or no check for a trusted payload.</summary>
+    /// <param name="text">The entry template.</param>
+    /// <param name="type">The payload spelling.</param>
+    /// <param name="root">The published root.</param>
+    /// <returns>The template with its input checks resolved.</returns>
+    private static string Limits(string text, string type, RootEntry root)
+    {
+        if (root.Owner != null)
+            return text.Replace("%LIMIT%", "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()")
+                .Replace("%ENCODING%", "(int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<" + type + ">()");
+        if (root.Limit is not { } limit)
+            return string.Join("\n", text.Split('\n').Where(line => line.IndexOf("%LIMIT%", StringComparison.Ordinal) < 0));
+        return text.Replace("%LIMIT%", limit.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Replace("%ENCODING%", root.Encoding.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
 
     private static void Interceptor(StringBuilder w, SerializerApi api, string type, string readable, string profile, int index,
         bool openProfile)
@@ -252,7 +293,6 @@ namespace LuminPack
             "LuminPackSerializer.Serialize_" + root.Readable + "<TLuminProfile>(ref writer, in value);";
         string read = root.Owner != null ? root.Owner + ".Read<TLuminProfile>(ref reader, ref value);" :
             "LuminPackSerializer.Deserialize_" + root.Readable + "<TLuminProfile>(ref reader, ref value);";
-        string limit = "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()";
         string text = @"
             public static byte[] Serialize<TLuminProfile>(in %TYPE% value)
                 where TLuminProfile : struct, ILuminPackOptions
@@ -362,7 +402,7 @@ namespace LuminPack
                 return value;
             }
 ";
-        w.Append(text.Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read).Replace("%LIMIT%", limit).Replace("\r\n", "\n"));
+        w.Append(Limits(text.Replace("\r\n", "\n"), type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));
     }
 
     private static void JsonEntries(StringBuilder w, string type, RootEntry root)
@@ -371,8 +411,6 @@ namespace LuminPack
             "LuminPackSerializer.SerializeJson_" + root.Readable + "<TLuminProfile>(ref writer, in value);";
         string read = root.Owner != null ? root.Owner + ".Read<TLuminProfile>(ref reader, ref value);" :
             "LuminPackSerializer.DeserializeJson_" + root.Readable + "<TLuminProfile>(ref reader, ref value);";
-        string limit = "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()";
-        string encoding = "(int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<" + type + ">()";
         string text = @"
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static string SerializeJson<TLuminProfile>(%TYPE% value)
@@ -535,8 +573,7 @@ namespace LuminPack
                 return value;
             }
 ";
-        w.Append(text.Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read).Replace("%LIMIT%", limit)
-            .Replace("%ENCODING%", encoding).Replace("\r\n", "\n"));
+        w.Append(Limits(text.Replace("\r\n", "\n"), type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));
     }
 }
 
