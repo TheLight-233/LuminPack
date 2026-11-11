@@ -8,7 +8,9 @@ internal static class JsonNames
     /// <summary>Spells a member's table suffix, keeping a leading <c>U_</c> from colliding with the UTF-8 prefix.</summary>
     /// <param name="name">The member name.</param>
     /// <returns>The table suffix.</returns>
-    internal static string MemberSuffix(string name) => name.TrimStart('U').StartsWith("_", System.StringComparison.Ordinal) ? "U" + name : name;
+    internal static string MemberSuffix(string name) => name.TrimStart('U').StartsWith("_", System.StringComparison.Ordinal) ||
+        // A field cannot share the name of its name-table class.
+        name is "Utf8" or "Utf16" or "Utf8Head" or "Utf16Head" ? "U" + name : name;
 
     /// <summary>Computes the XxHash3 of a UTF-8 name.</summary>
     /// <param name="bytes">The encoded name.</param>

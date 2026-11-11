@@ -479,7 +479,7 @@ internal static class JsonEmitter
             // A struct reuses its existing storage when any reference member is already set. A type parameter may hold a
             // reference, so its check keeps a runtime value-type test.
             var referenced = members.Where(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.Object or
-                RenderMemberKind.Array or RenderMemberKind.List || member.Kind == RenderMemberKind.Parameter).ToArray();
+                RenderMemberKind.Array or RenderMemberKind.List || member.Kind == RenderMemberKind.Parameter && !member.ValueTypeParameter).ToArray();
             string reuse = referenced.Length == 0 ? "false" : string.Join(" || ", referenced.Select(member =>
                 (member.Kind == RenderMemberKind.Parameter && member.BareParameter && !member.ValueTypeParameter
                     ? "(!typeof(" + member.Scalar + ").IsValueType && (object? )"
