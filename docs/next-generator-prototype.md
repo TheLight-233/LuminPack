@@ -90,19 +90,21 @@ The generator benchmarks accept a real corpus and its references:
   are checked at the read sites of the root body, and nested reads under a bounded root run as checked copies of their entries.
   Known differences: only roots with a declared collection, string or depth limit take checked copies; inline children inside a
   copied trusted payload keep their trusted marker reads; versioned, mirrored, reference-tracked and struct payloads, rejected
-  structs and Union roots are not covered; compressed counts are not checked; stream and async entries are not intercepted and
-  keep the assembly cap, which fails one Safety test; exception mapping is not ported.
-- Members marked `[LuminPackCompress]` are written and read through the plain collection path. The original pipeline uses the
-  compressed kernels, so these payloads are not wire-compatible with the original output, and a forged compressed count fails
-  with a different exception type (one Safety test).
+  structs and Union roots are not covered; compressed counts are not checked under a bounded root; exception mapping is not ported.
+  Stream and async calls bind to concrete entries that stage at the payload's cap; compressed members use the compressed kernels.
+  Both are not yet verified by tests.
+- With Next, the full unit-test corpus generates with no errors in generated code. The test area itself has not been run.
+- Closed generic payloads still bind through shared owners named by readable type name; when two of them read the same, neither is
+  bound statically. The original binds them to the generic payload roots.
+- Generic Union roots and generic Union cases are not modeled yet (P2).
+- Struct cases of interface Union roots write and read through the case's payload owner; their bytes have not been compared with
+  the original output.
 - The compressed `List<string>` read still uses the caller's reader; the ordinary root publishes its cursor only on success.
 - Record bodies call the owners of collection members, such as a list or dictionary of Union values, where the original pipeline
   expands those writes in place. Writing such records is slower than the original pipeline (P1 fast paths).
 - A JSON read of the benchmark graph allocates about 2 KB more than the original pipeline; the source is not identified yet.
-- Root names are readable type names, so two payloads whose names read the same bind only the first; the other stays on the generic
-  facade.
 - The call list is an `ImmutableArray`, so the shared owner set is recomputed on every edit before its value-equal output is cached.
-- The full unit-test area, other target frameworks and the legacy generator's compile errors were not addressed.
+- Other target frameworks and the legacy generator's compile errors were not addressed.
 
 ## P0 high priority
 
