@@ -481,6 +481,9 @@ internal static class TypeModelFactory
             if (IsCultureInfo(type))
                 return new CultureInfoMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty, CanReuseCultureInfo);
+            // A key and value pair, a nullable or lazy value or a tuple of raw scalars and strings has a closed generic owner.
+            if (GenericIdentity.Of(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)) is { } genericIdentity)
+                return new SpecialMember(name, storage, policy, "global::" + genericIdentity, false, storage == MemberStorage.AutoProperty);
             if (FormatterRegistry.HasStandalone(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty)))
                 return new SpecialMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     type.NullableAnnotation == NullableAnnotation.Annotated, storage == MemberStorage.AutoProperty);
@@ -570,7 +573,7 @@ internal static class TypeModelFactory
             if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
             // A linked list, hash set or queue of raw scalars transfers its elements through the shared formatter owner.
-            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper && Scalar(item) is { } enumerableItem)
+            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper or CollectionKind.Interface && Scalar(item) is { } enumerableItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: enumerableItem.Keyword);
             // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && Scalar(item) is { } sequenceItem)
@@ -3543,6 +3546,9 @@ internal static class TypeModelFactory
                     return Model.DictionaryKind.SortedDictionary;
                 case "SortedList":
                     return Model.DictionaryKind.SortedList;
+                case "IDictionary":
+                case "IReadOnlyDictionary":
+                    return Model.DictionaryKind.Interface;
             }
         }
         if (@namespace == "System.Collections.ObjectModel" && name == "ReadOnlyDictionary")
@@ -3551,7 +3557,7 @@ internal static class TypeModelFactory
             return Model.DictionaryKind.Frozen;
         if (@namespace == "System.Collections.Concurrent" && name == "ConcurrentDictionary")
             return Model.DictionaryKind.Concurrent;
-        if (@namespace == "System.Collections.Immutable" && name is "ImmutableDictionary" or "ImmutableSortedDictionary")
+        if (@namespace == "System.Collections.Immutable" && name is "ImmutableDictionary" or "ImmutableSortedDictionary" or "IImmutableDictionary")
             return Model.DictionaryKind.Immutable;
         return null;
     }

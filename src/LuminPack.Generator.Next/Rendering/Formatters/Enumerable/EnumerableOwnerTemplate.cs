@@ -71,9 +71,13 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Emits the statements that publish the staged JSON elements after the element loop.</summary>
     internal Action<EnumerableOwnerContext>? JsonAfter { get; }
 
+    /// <summary>Whether the sequence exposes a count that short-circuits an empty JSON array.</summary>
+    internal bool JsonCount { get; }
+
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
-        Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null)
+        Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true)
     {
+        JsonCount = jsonCount;
         WriteBody = writeBody;
         ReadBody = readBody;
         JsonAdd = jsonAdd;
@@ -283,11 +287,14 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("if (value.Count == 0)");
-                    w.Open();
-                    w.Line("writer.WriteArrayEnd<TLuminProfile>();");
-                    w.Line("return;");
-                    w.Close();
+                    if (spec.JsonCount)
+                    {
+                        w.Line("if (value.Count == 0)");
+                        w.Open();
+                        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                        w.Line("return;");
+                        w.Close();
+                    }
                     w.Blank();
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in value)");

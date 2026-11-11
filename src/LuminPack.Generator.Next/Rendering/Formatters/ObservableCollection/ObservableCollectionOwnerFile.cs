@@ -1,3 +1,5 @@
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>ObservableCollection&lt;T&gt;</c> of raw scalars.</summary>

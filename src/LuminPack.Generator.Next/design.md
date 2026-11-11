@@ -263,9 +263,18 @@ the JSON array-of-pairs form. `SortedDictionary`, `ConcurrentDictionary`, `Immut
 `PairedDictionaryOwnerTemplate` in the same folder and are called through the forwarded-collection member form:
 the tree families copy their pairs once and build through the tree storage helpers, the concurrent one counts its
 enumeration and creates through the collection-access helper, the read-only wrapper reads through the concrete
-`Dictionary` owner, and the frozen one walks its key and value arrays. Not ported: sparse nullable values, the
-string-key and slot-reuse read paths, union and packable value slots, the `SortedList` owner, the frozen raw pair
-write and rented builder (optional runtime capabilities) and the dictionary interfaces.
+`Dictionary` owner, and the frozen one walks its key and value arrays. `SortedList` (storage write, staged
+sorted fill), the `IDictionary`, `IReadOnlyDictionary` and `IImmutableDictionary` interfaces and the list of raw
+key and value pairs use the same template. The sequence interfaces (`IEnumerable`, `ICollection`,
+`IReadOnlyCollection`, `IList`, `IReadOnlyList`, `ISet`, `IReadOnlySet`, `IImmutableList`, `IImmutableSet`,
+`IImmutableQueue`, `IImmutableStack`) of raw scalars share the enumerable template with an exact-runtime-type
+write. The closed generic framework types `KeyValuePair`, `Nullable`, `Lazy`, `Tuple` and `ValueTuple` (with a
+string item) of raw scalars and strings publish a standalone owner through `GenericIdentity` and
+`GenericOwnerFile`. Not ported: sparse nullable dictionary values, the string-key, matching-pair and ordered-append
+reuse read paths, union and packable value slots, the frozen raw pair write and rented builder (optional runtime
+capabilities), reuse of known list and array targets by the sequence interfaces, `FrozenSet`, `PriorityQueue`,
+the memory and segment types, the lookup and grouping interfaces, nested lists, and the string and packable
+element variants of the sequence families.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,

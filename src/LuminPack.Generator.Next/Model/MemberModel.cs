@@ -252,6 +252,9 @@ internal enum CollectionKind
 
     /// <summary>A list-backed object-model wrapper or collection builder.</summary>
     Wrapper,
+
+    /// <summary>A sequence or set interface.</summary>
+    Interface,
 }
 
 /// <summary>The stored entry shape of a paired, nested or sorted sequence member.</summary>
@@ -378,6 +381,9 @@ internal enum DictionaryKind
 
     /// <summary>A <c>FrozenDictionary&lt;TKey, TValue&gt;</c>.</summary>
     Frozen,
+
+    /// <summary>A mutable dictionary interface.</summary>
+    Interface,
 }
 
 /// <summary>A keyed member.</summary>

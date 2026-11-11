@@ -144,6 +144,28 @@ internal static class FormatterRegistry
             writeMember: Adapt(WrapperMemberWriter.Write), alwaysLoops: true),
         ["System.Runtime.CompilerServices.ReadOnlyCollectionBuilder"] = new SequenceFormatter(CollectionKind.Wrapper, ReadOnlyCollectionBuilderOwnerFile.Render,
             writeMember: Adapt(WrapperMemberWriter.WriteBuilder)),
+        ["System.Collections.Generic.IEnumerable"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderEnumerable,
+            writeMember: Adapt(InterfaceMemberWriter.Write), alwaysLoops: true),
+        ["System.Collections.Generic.ICollection"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderCollection,
+            writeMember: Adapt(InterfaceMemberWriter.Write), alwaysLoops: true),
+        ["System.Collections.Generic.IReadOnlyCollection"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderCollection,
+            writeMember: Adapt(InterfaceMemberWriter.Write), alwaysLoops: true),
+        ["System.Collections.Generic.IList"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderList,
+            writeMember: Adapt(InterfaceMemberWriter.Write), alwaysLoops: true),
+        ["System.Collections.Generic.IReadOnlyList"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderList,
+            writeMember: Adapt(InterfaceMemberWriter.Write), alwaysLoops: true),
+        ["System.Collections.Generic.ISet"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderSet,
+            writeMember: Adapt(InterfaceMemberWriter.WriteSet), alwaysLoops: true),
+        ["System.Collections.Generic.IReadOnlySet"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderSet,
+            writeMember: Adapt(InterfaceMemberWriter.WriteSet), alwaysLoops: true),
+        ["System.Collections.Immutable.IImmutableList"] = new SequenceFormatter(CollectionKind.Interface, ImmutableInterfaceOwnerFile.RenderList,
+            writeMember: Adapt(InterfaceMemberWriter.WriteCounted), alwaysLoops: true),
+        ["System.Collections.Immutable.IImmutableSet"] = new SequenceFormatter(CollectionKind.Interface, ImmutableInterfaceOwnerFile.RenderSet,
+            writeMember: Adapt(InterfaceMemberWriter.WriteCounted), alwaysLoops: true),
+        ["System.Collections.Immutable.IImmutableQueue"] = new SequenceFormatter(CollectionKind.Interface, ImmutableInterfaceOwnerFile.RenderQueue,
+            writeMember: Adapt(InterfaceMemberWriter.WriteCounted), alwaysLoops: true),
+        ["System.Collections.Immutable.IImmutableStack"] = new SequenceFormatter(CollectionKind.Interface, ImmutableInterfaceOwnerFile.RenderStack,
+            writeMember: Adapt(InterfaceMemberWriter.WriteCounted), alwaysLoops: true),
         ["System.Collections.Generic.SortedSet"] = new SequenceFormatter(CollectionKind.SortedSet, SortedSetOwnerFile.Render,
             writeMember: Adapt(SortedSetMemberWriter.Write), alwaysLoops: true),
         ["System.Collections.Concurrent.BlockingCollection"] = new SequenceFormatter(CollectionKind.Blocking, BlockingCollectionOwnerFile.Render,
@@ -175,12 +197,19 @@ internal static class FormatterRegistry
     {
         ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render),
         ["System.Collections.Generic.SortedDictionary"] = new DictionaryFormatter(SortedDictionaryOwnerFile.Render),
+        ["System.Collections.Generic.SortedList"] = new DictionaryFormatter(SortedListOwnerFile.Render),
         ["System.Collections.Concurrent.ConcurrentDictionary"] = new DictionaryFormatter(ConcurrentDictionaryOwnerFile.Render),
         ["System.Collections.Immutable.ImmutableDictionary"] = new DictionaryFormatter(ImmutableDictionaryOwnerFile.Render),
         ["System.Collections.Immutable.ImmutableSortedDictionary"] = new DictionaryFormatter(ImmutableSortedDictionaryOwnerFile.Render),
         ["System.Collections.ObjectModel.ReadOnlyDictionary"] = new DictionaryFormatter(ReadOnlyDictionaryOwnerFile.Render, forwardsToDictionary: true),
+        ["System.Collections.Generic.IDictionary"] = new DictionaryFormatter(DictionaryInterfaceOwnerFile.RenderMutable, forwardsToDictionary: true),
+        ["System.Collections.Generic.IReadOnlyDictionary"] = new DictionaryFormatter(DictionaryInterfaceOwnerFile.RenderMutable, forwardsToDictionary: true),
+        ["System.Collections.Immutable.IImmutableDictionary"] = new DictionaryFormatter(DictionaryInterfaceOwnerFile.RenderImmutable),
         ["System.Collections.Frozen.FrozenDictionary"] = new DictionaryFormatter(FrozenDictionaryOwnerFile.Render),
     };
+
+    /// <summary>The owner of a list of key and value pairs.</summary>
+    internal static readonly DictionaryFormatter PairList = new DictionaryFormatter(PairListOwnerFile.Render);
 
     /// <summary>Finds the dictionary definition behind a declared dictionary spelling.</summary>
     /// <param name="declaredType">The declared dictionary spelling.</param>
@@ -213,7 +242,7 @@ internal static class FormatterRegistry
     /// <summary>Tests whether a framework type has a standalone formatter.</summary>
     /// <param name="type">The normalized type identity.</param>
     /// <returns>Whether the type has a registered owner.</returns>
-    internal static bool HasStandalone(string type) => Standalone.ContainsKey(type);
+    internal static bool HasStandalone(string type) => Standalone.ContainsKey(type) || GenericIdentity.Of(type) == type;
 
     /// <summary>Renders a registered standalone owner.</summary>
     /// <param name="type">The normalized type identity.</param>
@@ -221,7 +250,7 @@ internal static class FormatterRegistry
     /// <param name="operations">The selected operations.</param>
     /// <returns>The complete source file.</returns>
     internal static string RenderStandalone(string type, SharedFormatterSet set, GeneratedOperations operations) =>
-        Standalone[type](set, operations);
+        Standalone.TryGetValue(type, out var render) ? render(set, operations) : GenericOwnerFile.Render(type, set, operations);
 
     /// <summary>Adapts writers that do not need the element nesting or cursor and span counters.</summary>
     /// <param name="write">The formatter's member writer.</param>

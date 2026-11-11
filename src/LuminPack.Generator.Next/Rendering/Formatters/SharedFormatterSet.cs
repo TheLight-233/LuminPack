@@ -247,6 +247,15 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                 // A framework member always publishes its own owner; every direct write path calls the owner in place.
                 case SpecialMember special:
                     owners.Add(GeneratedNames.PayloadKey(special.Declared));
+                    // A closed generic owner calls the element owners of its arguments.
+                    if (GenericIdentity.TryParse(GeneratedNames.PayloadKey(special.Declared), out _, out string[] arguments))
+                        foreach (string argument in arguments)
+                        {
+                            if (argument == "string")
+                                owners.Add(FormatterRegistry.String);
+                            else
+                                AddScalar(scalars, argument);
+                        }
                     break;
                 case CollectionMember collection:
                     Collect(collection, options, facts, scalars, owners, dictionaries,
@@ -311,6 +320,18 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         List<SequenceOwnerFact> facts, List<string> scalars,
         List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited)
     {
+        // A list of raw key and value pairs publishes its own pair owner.
+        if (member.Shape is { EntryType: not null, Key: not null } pair && (pair.ValueText || pair.Value != null))
+        {
+            string pairValue = pair.ValueText ? "string" : pair.Value!;
+            dictionaries.Add(new DictionaryOwnerFact(FormatterRegistry.PairList, member.DeclaredType, pair.Key, pairValue));
+            AddScalar(scalars, pair.Key);
+            if (pair.ValueText)
+                owners.Add(FormatterRegistry.String);
+            else
+                AddScalar(scalars, pairValue);
+            return;
+        }
         var definition = FormatterRegistry.FindSequence(member);
         if (definition != null)
         {
