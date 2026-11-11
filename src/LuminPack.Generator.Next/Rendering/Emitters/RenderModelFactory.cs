@@ -442,6 +442,12 @@ internal static class RenderModelFactory
                 return new RenderMember(member.Name, RenderMemberKind.SparseDictionary, member.DeclaredType, member.DeclaredType, 0,
                     formatter, ScalarKind.Other, mirrored, raw: true, property: property,
                     collection: new RenderCollection(member.KeyType!, member.ValueType!, false));
+            // A registered paired family reads and writes through its shared owner.
+            case DictionaryKind.SortedDictionary or DictionaryKind.Concurrent or DictionaryKind.Immutable or DictionaryKind.ReadOnly or
+                DictionaryKind.Frozen when (member.KeyText || member.KeyType != null) && (member.ValueText || member.ValueType != null) &&
+                FormatterRegistry.FindDictionary(member.DeclaredType) != null:
+                return new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.DeclaredType, member.DeclaredType, 0,
+                    formatter, ScalarKind.Other, mirrored, property: property);
             case DictionaryKind.Dictionary when member.KeyText || member.KeyType != null:
                 return new RenderMember(member.Name, RenderMemberKind.Dictionary, member.DeclaredType, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, raw: true, property: property,

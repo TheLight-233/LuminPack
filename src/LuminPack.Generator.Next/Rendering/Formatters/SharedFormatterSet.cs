@@ -288,12 +288,19 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         if (member.KeyText || member.ValueText)
             owners.Add(FormatterRegistry.String);
         // Sparse nullable values keep an inline entry layout without a shared owner.
-        if (member.Sparse || member.Kind != DictionaryKind.Dictionary || FormatterRegistry.FindDictionary(member.DeclaredType) is not { } family)
+        if (member.Sparse || FormatterRegistry.FindDictionary(member.DeclaredType) is not { } family)
             return;
         string? key = member.KeyText ? "string" : member.KeyType, value = member.ValueText ? "string" : member.ValueType;
         if (key == null || value == null)
             return;
         dictionaries.Add(new DictionaryOwnerFact(family, member.DeclaredType, key, value));
+        // A wrapper reads through the concrete dictionary owner of the same entries.
+        if (family.ForwardsToDictionary)
+        {
+            string concrete = "global::System.Collections.Generic.Dictionary<" + key + ", " + value + ">";
+            if (FormatterRegistry.FindDictionary(concrete) is { } dictionary)
+                dictionaries.Add(new DictionaryOwnerFact(dictionary, concrete, key, value));
+        }
         if (!member.KeyText)
             AddScalar(scalars, key);
         if (!member.ValueText)

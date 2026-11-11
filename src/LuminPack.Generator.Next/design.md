@@ -258,10 +258,14 @@ resolves it, `SharedFormatterSet` collects `DictionaryOwnerFact` entries (a raw 
 and `SharedFormatterPublisher` publishes `DictionaryOwnerFile`. The owner writes packed raw pairs or key and value
 entries through the dense 64-bit entry view with an enumerating fallback, reads a reused destination through the
 raw refill or a staged read and a fresh one directly into its entry storage before rebuilding buckets, and keeps
-the JSON array-of-pairs form. Not ported: sparse nullable values, the interface key reuse and slot-reuse read
-paths, union and packable value slots, `SortedDictionary`, `SortedList` owners, `ConcurrentDictionary`,
-`ImmutableDictionary`, `ImmutableSortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary` and the dictionary
-interfaces.
+the JSON array-of-pairs form. `SortedDictionary`, `ConcurrentDictionary`, `ImmutableDictionary`,
+`ImmutableSortedDictionary`, `ReadOnlyDictionary` and `FrozenDictionary` of raw scalar or string entries share
+`PairedDictionaryOwnerTemplate` in the same folder and are called through the forwarded-collection member form:
+the tree families copy their pairs once and build through the tree storage helpers, the concurrent one counts its
+enumeration and creates through the collection-access helper, the read-only wrapper reads through the concrete
+`Dictionary` owner, and the frozen one walks its key and value arrays. Not ported: sparse nullable values, the
+string-key and slot-reuse read paths, union and packable value slots, the `SortedList` owner, the frozen raw pair
+write and rented builder (optional runtime capabilities) and the dictionary interfaces.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,

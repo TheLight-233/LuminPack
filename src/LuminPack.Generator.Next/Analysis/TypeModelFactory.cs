@@ -699,7 +699,17 @@ internal static class TypeModelFactory
                 return new DictionaryMember(name, storage, policy, declared, kind, key, value);
             }
             if (kind != Model.DictionaryKind.Dictionary)
+            {
+                // The paired owners of the other families store each entry as a raw scalar or a string.
+                bool otherKeyText = type.TypeArguments[0].SpecialType == SpecialType.System_String;
+                bool otherValueText = type.TypeArguments[1].SpecialType == SpecialType.System_String;
+                var otherKey = otherKeyText ? null : Scalar(type.TypeArguments[0], allowBoolean: false);
+                var otherValue = otherValueText ? null : Scalar(type.TypeArguments[1], allowBoolean: false);
+                if ((otherKeyText || otherKey != null) && (otherValueText || otherValue != null))
+                    return new DictionaryMember(name, storage, policy, declared, kind, key, value, keyText: otherKeyText,
+                        valueText: otherValueText, keyType: otherKey?.Keyword, valueType: otherValue?.Keyword);
                 return new DictionaryMember(name, storage, policy, declared, kind, key, value);
+            }
             // A dictionary writes fused entries when a string member bounds its record, or paired records when both key and
             // value are raw scalars.
             int reserved = ReservedKind(type);
@@ -3535,6 +3545,10 @@ internal static class TypeModelFactory
                     return Model.DictionaryKind.SortedList;
             }
         }
+        if (@namespace == "System.Collections.ObjectModel" && name == "ReadOnlyDictionary")
+            return Model.DictionaryKind.ReadOnly;
+        if (@namespace == "System.Collections.Frozen" && name == "FrozenDictionary")
+            return Model.DictionaryKind.Frozen;
         if (@namespace == "System.Collections.Concurrent" && name == "ConcurrentDictionary")
             return Model.DictionaryKind.Concurrent;
         if (@namespace == "System.Collections.Immutable" && name is "ImmutableDictionary" or "ImmutableSortedDictionary")

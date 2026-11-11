@@ -372,6 +372,12 @@ internal enum DictionaryKind
 
     /// <summary>An immutable dictionary.</summary>
     Immutable,
+
+    /// <summary>A <c>ReadOnlyDictionary&lt;TKey, TValue&gt;</c>.</summary>
+    ReadOnly,
+
+    /// <summary>A <c>FrozenDictionary&lt;TKey, TValue&gt;</c>.</summary>
+    Frozen,
 }
 
 /// <summary>A keyed member.</summary>

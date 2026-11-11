@@ -18,7 +18,14 @@ internal sealed class DictionaryFormatter
 
     /// <summary>Registers a dictionary definition.</summary>
     /// <param name="entries">The owner renderer for raw scalar and string entries.</param>
-    internal DictionaryFormatter(RenderDictionaryOwner entries) => Entries = entries;
+    internal DictionaryFormatter(RenderDictionaryOwner entries, bool forwardsToDictionary = false)
+    {
+        Entries = entries;
+        ForwardsToDictionary = forwardsToDictionary;
+    }
+
+    /// <summary>Whether the owner reads through the concrete <c>Dictionary&lt;TKey, TValue&gt;</c> owner of the same entries.</summary>
+    internal bool ForwardsToDictionary { get; }
 }
 
 /// <summary>One closed dictionary owner the compilation must publish.</summary>

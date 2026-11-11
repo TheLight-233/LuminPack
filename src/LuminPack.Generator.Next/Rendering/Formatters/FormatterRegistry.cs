@@ -174,6 +174,12 @@ internal static class FormatterRegistry
     private static readonly Dictionary<string, DictionaryFormatter> Dictionaries = new Dictionary<string, DictionaryFormatter>(StringComparer.Ordinal)
     {
         ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render),
+        ["System.Collections.Generic.SortedDictionary"] = new DictionaryFormatter(SortedDictionaryOwnerFile.Render),
+        ["System.Collections.Concurrent.ConcurrentDictionary"] = new DictionaryFormatter(ConcurrentDictionaryOwnerFile.Render),
+        ["System.Collections.Immutable.ImmutableDictionary"] = new DictionaryFormatter(ImmutableDictionaryOwnerFile.Render),
+        ["System.Collections.Immutable.ImmutableSortedDictionary"] = new DictionaryFormatter(ImmutableSortedDictionaryOwnerFile.Render),
+        ["System.Collections.ObjectModel.ReadOnlyDictionary"] = new DictionaryFormatter(ReadOnlyDictionaryOwnerFile.Render, forwardsToDictionary: true),
+        ["System.Collections.Frozen.FrozenDictionary"] = new DictionaryFormatter(FrozenDictionaryOwnerFile.Render),
     };
 
     /// <summary>Finds the dictionary definition behind a declared dictionary spelling.</summary>
