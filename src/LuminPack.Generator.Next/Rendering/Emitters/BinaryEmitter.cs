@@ -976,7 +976,8 @@ internal static partial class BinaryEmitter
             }
             // A concurrent queue, immutable stack, list or tree-storage set writes its counted payload in place.
             if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableArray or
-                RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet)
+                RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or
+                RenderMemberKind.ImmutableQueue or RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag)
             {
                 if (member.Kind == RenderMemberKind.ImmutableArray)
                     AddImmutableArrayWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
@@ -984,6 +985,12 @@ internal static partial class BinaryEmitter
                     AddImmutableListWrite(body, member, "value", w, names, ref ends);
                 else if (member.Kind is RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet)
                     AddTreeStorageSequenceWrite(body, member, "value", w, names, ref ends);
+                else if (member.Kind == RenderMemberKind.ImmutableQueue)
+                    AddImmutableQueueWrite(body, member, "value", w, names, ref ends);
+                else if (member.Kind == RenderMemberKind.ConcurrentStack)
+                    AddConcurrentStackWrite(body, member, "value", w, names, ref ends);
+                else if (member.Kind == RenderMemberKind.ConcurrentBag)
+                    AddConcurrentBagWrite(body, member, "value", w, names, ref ends);
                 else
                     AddCountedSequenceWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
                 index++;
@@ -1278,6 +1285,237 @@ internal static partial class BinaryEmitter
         body.Add("}");
         body.Add("");
         body.Add("global::LuminPack.Utility.LuminTreeStorage.WriteRaw(ref writer, " + local + ");");
+        body.Add(exit + ":");
+        body.Add("\t;");
+        body.Add("}");
+    }
+
+    /// <summary>Expands an immutable-queue member's shared write body in place: the null collection header, then the two-stack
+    /// traversal whose backwards stack may be written through a reversal lease.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The immutable-queue member.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit-label counter shared by the whole method.</param>
+    private static void AddImmutableQueueWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
+        Dictionary<string, int> names, ref int ends)
+    {
+        string local = RoleName(names, "value");
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        string element = member.Scalar!;
+        bool boolean = element == "bool";
+        // The two traversed stacks and the enumerator fallback each isolate their element alias, as the presentation does.
+        string firstAlias = null, secondAlias = null, thirdAlias = null, reversedAlias = null, checkedAlias = null;
+        if (boolean)
+        {
+            firstAlias = RoleName(names, "value");
+            secondAlias = RoleName(names, "value");
+            thirdAlias = RoleName(names, "value");
+            reversedAlias = RoleName(names, "value");
+            checkedAlias = RoleName(names, "value");
+        }
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + " is null)");
+        body.Add("{");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add(w.A("Unsafe") + ".WriteUnaligned(ref writer.Cursor, " + w.A("LuminPackCode") + ".NullCollection);");
+        body.Add("writer.Advance(4);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add(w.A("LuminPackWriter") + " operationState = default;");
+        body.Add(w.A("LuminPackWriter") + " operationStateFallback = default;");
+        body.Add("writer.CopyTo(ref operationState);");
+        body.Add("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(" + local +
+            ", out var forwards, out var backwards, out var reverse))");
+        body.Add("{");
+        body.Add("int countPosition = operationState.BeginCollection();");
+        body.Add("int count = 0;");
+        body.Add("foreach (var item in forwards!)");
+        body.Add("{");
+        body.Add("operationState.CheckBuffer();");
+        body.Add("count++;");
+        body.Add("var v = item;");
+        body.Add(boolean
+            ? "ref readonly bool " + firstAlias + " = ref v;"
+            : "operationState.Write(in v);");
+        if (boolean)
+            body.Add("operationState.Write(in " + firstAlias + ");");
+        body.Add("}");
+        body.Add("if (reverse)");
+        body.Add("{");
+        body.Add("operationState.CopyTo(ref operationStateFallback);");
+        body.Add("count += WriteReversed(ref operationStateFallback, backwards!);");
+        body.Add("operationStateFallback.CopyTo(ref operationState);");
+        body.Add("}");
+        body.Add("else");
+        body.Add("{");
+        body.Add("foreach (var item2 in backwards!)");
+        body.Add("{");
+        body.Add("operationState.CheckBuffer();");
+        body.Add("count++;");
+        body.Add("var v2 = item2;");
+        body.Add(boolean
+            ? "ref readonly bool " + secondAlias + " = ref v2;"
+            : "operationState.Write(in v2);");
+        if (boolean)
+            body.Add("operationState.Write(in " + secondAlias + ");");
+        body.Add("}");
+        body.Add("}");
+        body.Add("operationState.EndCollection(countPosition, count);");
+        body.Add("operationState.CheckBuffer();");
+        body.Add("}");
+        body.Add("else");
+        body.Add("{");
+        body.Add("int countPosition2 = operationState.BeginCollection();");
+        body.Add("int count2 = 0;");
+        body.Add("foreach (var item3 in " + local + ")");
+        body.Add("{");
+        body.Add("operationState.CheckBuffer();");
+        body.Add("count2++;");
+        body.Add("var v3 = item3;");
+        body.Add(boolean
+            ? "ref readonly bool " + thirdAlias + " = ref v3;"
+            : "operationState.Write(in v3);");
+        if (boolean)
+            body.Add("operationState.Write(in " + thirdAlias + ");");
+        body.Add("}");
+        body.Add("operationState.EndCollection(countPosition2, count2);");
+        body.Add("operationState.CheckBuffer();");
+        body.Add("}");
+        body.Add(w.MethodImpl("NoInlining"));
+        body.Add("static int WriteReversed(ref " + w.A("LuminPackWriter") + " writer2, global::System.Collections.Immutable.ImmutableStack<" +
+            element + "> stack)");
+        body.Add("{");
+        body.Add("var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count3);");
+        body.Add("try");
+        body.Add("{");
+        body.Add("{");
+        body.Add("int reversedCount = new global::System.ReadOnlySpan<" + element + ">(items, 0, count3).Length;");
+        body.Add("long reversedBytes = reversedCount * ((long)(" + w.A("Unsafe") + ".SizeOf<" + element + ">()));");
+        body.Add("if (writer2.TryEnsureCapacity(reversedBytes))");
+        body.Add("{");
+        body.Add("foreach (var item4 in new global::System.ReadOnlySpan<" + element + ">(items, 0, count3))");
+        body.Add("{");
+        body.Add("\t;");
+        body.Add("var v4 = item4;");
+        body.Add(boolean
+            ? "ref readonly bool " + reversedAlias + " = ref v4;"
+            : "writer2.Write(in v4);");
+        if (boolean)
+            body.Add("writer2.Write(in " + reversedAlias + ");");
+        body.Add("}");
+        body.Add("}");
+        body.Add("else");
+        body.Add("{");
+        body.Add("foreach (var item5 in new global::System.ReadOnlySpan<" + element + ">(items, 0, count3))");
+        body.Add("{");
+        body.Add("writer2.CheckBuffer();");
+        body.Add("var v5 = item5;");
+        body.Add(boolean
+            ? "ref readonly bool " + checkedAlias + " = ref v5;"
+            : "writer2.Write(in v5);");
+        if (boolean)
+            body.Add("writer2.Write(in " + checkedAlias + ");");
+        body.Add("}");
+        body.Add("}");
+        body.Add("}");
+        body.Add("return count3;");
+        body.Add("}");
+        body.Add("finally");
+        body.Add("{");
+        body.Add("global::System.Buffers.ArrayPool<" + element + ">.Shared.Return(items, " +
+            "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + element + ">());");
+        body.Add("}");
+        body.Add("}");
+        body.Add("operationState.CopyTo(ref writer);");
+        body.Add(exit + ":");
+        body.Add("\t;");
+        body.Add("}");
+    }
+
+    /// <summary>Expands a concurrent-stack member's shared write body in place: the null collection header, then one snapshot
+    /// reversed to the bottom-up order the record stores.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The concurrent-stack member.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit-label counter shared by the whole method.</param>
+    private static void AddConcurrentStackWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
+        Dictionary<string, int> names, ref int ends)
+    {
+        string local = RoleName(names, "value");
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + " is null)");
+        body.Add("{");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add(w.A("Unsafe") + ".WriteUnaligned(ref writer.Cursor, " + w.A("LuminPackCode") + ".NullCollection);");
+        body.Add("writer.Advance(4);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(" + local + ", out var count);");
+        body.Add("try");
+        body.Add("{");
+        body.Add("global::System.MemoryExtensions.Reverse(global::System.MemoryExtensions.AsSpan(snapshot, 0, count));");
+        body.Add("{");
+        body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = new global::System.ReadOnlySpan<" + member.Scalar +
+            ">(snapshot, 0, count);");
+        body.Add("writer.Write<" + member.Scalar + ">(items, items.Length);");
+        body.Add("}");
+        body.Add("}");
+        body.Add("finally");
+        body.Add("{");
+        body.Add("global::System.Buffers.ArrayPool<" + member.Scalar + ">.Shared.Return(snapshot, false);");
+        body.Add("}");
+        body.Add(exit + ":");
+        body.Add("\t;");
+        body.Add("}");
+    }
+
+    /// <summary>Expands a concurrent-bag member's shared write body in place: the null collection header, the validated raw
+    /// fast path, then one frozen snapshot.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The concurrent-bag member.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit-label counter shared by the whole method.</param>
+    private static void AddConcurrentBagWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
+        Dictionary<string, int> names, ref int ends)
+    {
+        string local = RoleName(names, "value");
+        string exit = "end" + ends.ToString(CultureInfo.InvariantCulture);
+        ends++;
+        body.Add("{");
+        body.Add("ref readonly " + member.TypeName + " " + local + " = ref " + owner + "." + member.Name + ";");
+        body.Add("if (" + local + " is null)");
+        body.Add("{");
+        body.Add("writer.EnsureAdditionalCapacity(4);");
+        body.Add(w.A("Unsafe") + ".WriteUnaligned(ref writer.Cursor, " + w.A("LuminPackCode") + ".NullCollection);");
+        body.Add("writer.Advance(4);");
+        body.Add("goto " + exit + ";");
+        body.Add("}");
+        body.Add("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteConcurrentBagRaw(ref writer, " + local + "))");
+        body.Add("    goto " + exit + ";");
+        body.Add("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentConcurrentBagSnapshot(" + local +
+            ", out int count, out bool pooled);");
+        body.Add("try");
+        body.Add("{");
+        body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = new global::System.ReadOnlySpan<" + member.Scalar +
+            ">(snapshot, 0, count);");
+        body.Add("writer.Write<" + member.Scalar + ">(items, items.Length);");
+        body.Add("}");
+        body.Add("finally");
+        body.Add("{");
+        body.Add("if (pooled)");
+        body.Add("    global::System.Buffers.ArrayPool<" + member.Scalar + ">.Shared.Return(snapshot, false);");
+        body.Add("}");
         body.Add(exit + ":");
         body.Add("\t;");
         body.Add("}");
@@ -1795,6 +2033,24 @@ internal static partial class BinaryEmitter
                 AddImmutableListWrite(body, member, owner, w, names, ref ends);
                 continue;
             }
+            // An immutable queue writes its two-stack traversal through the isolated writer and reads through its shared owner.
+            if (member.Kind == RenderMemberKind.ImmutableQueue)
+            {
+                AddImmutableQueueWrite(body, member, owner, w, names, ref ends);
+                continue;
+            }
+            // A concurrent stack writes its reversed snapshot and reads through its shared owner.
+            if (member.Kind == RenderMemberKind.ConcurrentStack)
+            {
+                AddConcurrentStackWrite(body, member, owner, w, names, ref ends);
+                continue;
+            }
+            // A concurrent bag writes its validated raw fast path or its frozen snapshot and reads through its shared owner.
+            if (member.Kind == RenderMemberKind.ConcurrentBag)
+            {
+                AddConcurrentBagWrite(body, member, owner, w, names, ref ends);
+                continue;
+            }
             // A tree-storage set writes its tree storage through the shared raw kernel and reads through its shared owner.
             if (member.Kind is RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet)
             {
@@ -1934,7 +2190,8 @@ internal static partial class BinaryEmitter
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
             RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or
-            RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet;
+            RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or RenderMemberKind.ImmutableQueue or
+            RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag;
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(RenderMember member) =>
@@ -2629,7 +2886,8 @@ internal static partial class BinaryEmitter
             // A concurrent queue, immutable array, stack or list reads through its shared formatter owner, which frames its
             // own null record.
             if (member.Kind is RenderMemberKind.ForwardedCollection or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or
-                RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet)
+                RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or
+                RenderMemberKind.ImmutableQueue or RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;

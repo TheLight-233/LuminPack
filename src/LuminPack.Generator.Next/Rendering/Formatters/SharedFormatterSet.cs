@@ -277,14 +277,16 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     {
         if (member.ForwardedElement is { } element)
         {
-            var family = member.Kind switch
+            SequenceFamily? family = member.Kind switch
             {
                 CollectionKind.Array => SequenceFamily.Array,
-                CollectionKind.Concurrent => SequenceFamily.ConcurrentQueue,
                 CollectionKind.Blocking => SequenceFamily.BlockingCollection,
+                // Only the families with a published forwarded owner participate; the remaining ones stay unmapped.
+                CollectionKind.Concurrent or CollectionKind.Immutable => RenderModelFactory.SupportedFamily(member),
                 _ => SequenceFamily.List,
             };
-            facts.Add(SequenceOwnerFact.ForForwarding(family, member.DeclaredType, element.DeclaredType));
+            if (family is { } forwarded)
+                facts.Add(SequenceOwnerFact.ForForwarding(forwarded, member.DeclaredType, element.DeclaredType));
             Collect(element, options, facts, scalars, ref owners, ref cultureInfoReuse, visited);
         }
         else if (member.Kind == CollectionKind.Blocking && member.Scalar is { } blockingElement)

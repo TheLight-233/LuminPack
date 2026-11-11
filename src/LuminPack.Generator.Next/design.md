@@ -224,12 +224,14 @@ normalization (52/52). The binary write delegates to `LuminTreeStorage.WriteRaw`
 weak reuse candidate before creating the set, and the JSON write copies the tree before its element
 loop.
 
-`ImmutableSortedSet<T>` follows the same shape with its ordered comparer: a thirteen-record corpus
-renders 53 files with zero compile errors and matches the legacy output after whitespace normalization
-(52/52), including the `Min`-based candidate check, the ordered fast path, the builder fallback and the
-measurement entry. `ImmutableQueue`, `ImmutableSortedDictionary`, `ConcurrentStack` and `ConcurrentBag`
-remain unmapped instead of borrowing the wrong storage protocol, as do string and packable stack, list
-or set elements.
+`ImmutableQueue<T>`, `ConcurrentStack<T>` and `ConcurrentBag<T>` now have their shared owners and
+render paths for every raw scalar element: the queue traverses its two stacks and stages a reversed
+backwards stack through a reversal lease with a capacity pre-check, the stack writes one reversed
+snapshot and restores order after a JSON read, and the bag tries the validated raw freeze and
+otherwise writes one leased snapshot. These three element shapes were ported in a batch without a
+build or parity run, so their verification is still pending. `ImmutableSortedDictionary` and the
+dictionary families remain unmapped instead of borrowing the wrong storage protocol, as do string
+and packable stack, bag or queue elements outside the concurrent queue.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
@@ -302,7 +304,7 @@ pipeline; P2 improves the product.
 
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
-| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `String` owner, the per-keyword scalar owners, the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for every raw scalar, `string` and string-bearing packable classes and the `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>` owners for every raw scalar landed; the other concurrent/immutable families are declared-family guarded and stay unmapped, and other element shapes, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
+| M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `String` owner, the per-keyword scalar owners, the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for every raw scalar, `string` and string-bearing packable classes and the `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableQueue<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>`/`ConcurrentStack<T>`/`ConcurrentBag<T>` owners for every raw scalar landed; the other concurrent/immutable families are declared-family guarded and stay unmapped, and other element shapes, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
 | M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values; no shared dictionary owner is published yet | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
 | M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
@@ -322,7 +324,7 @@ pipeline; P2 improves the product.
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
 | M-19 | Untrusted-input fuzzing and one-exception contract | Analysis + Runtime | M-09 | Crafted inputs cannot crash, over-allocate or instantiate undeclared types | P2 |
 | M-20 | JSON name and layout parity with the old pipeline | Rendering | M-10 | JSON payload files are byte-identical on the corpus | P2 |
-| M-21 | Special framework types: CultureInfo, the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for every raw scalar, `string` and string-bearing packable classes, and `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>` for every raw scalar landed; the remaining element shapes, the other concurrent and immutable collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
+| M-21 | Special framework types: CultureInfo, the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for every raw scalar, `string` and string-bearing packable classes, and `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableQueue<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>`/`ConcurrentStack<T>`/`ConcurrentBag<T>` for every raw scalar landed; the remaining element shapes, the other concurrent and immutable collections and other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
 
 ## 6. Decisions and constraints
 

@@ -51,6 +51,15 @@ internal enum RenderMemberKind : byte
     /// <summary>An <c>ImmutableSortedSet&lt;T&gt;</c> member, written through the tree-storage helper and read through its shared
     /// generated formatter owner.</summary>
     ImmutableSortedSet,
+    /// <summary>An <c>ImmutableQueue&lt;T&gt;</c> member, written through its two-stack traversal and read through its shared
+    /// generated formatter owner.</summary>
+    ImmutableQueue,
+    /// <summary>A <c>ConcurrentStack&lt;T&gt;</c> member, written from a reversed snapshot and read through its shared generated
+    /// formatter owner.</summary>
+    ConcurrentStack,
+    /// <summary>A <c>ConcurrentBag&lt;T&gt;</c> member, written from its frozen snapshot and read through its shared generated
+    /// formatter owner.</summary>
+    ConcurrentBag,
 }
 
 /// <summary>The sequence families the shared formatter owners reproduce.</summary>
@@ -74,6 +83,12 @@ internal enum SequenceFamily : byte
     ImmutableHashSet,
     /// <summary>A <c>System.Collections.Immutable.ImmutableSortedSet&lt;T&gt;</c>.</summary>
     ImmutableSortedSet,
+    /// <summary>A <c>System.Collections.Immutable.ImmutableQueue&lt;T&gt;</c>.</summary>
+    ImmutableQueue,
+    /// <summary>A <c>System.Collections.Concurrent.ConcurrentStack&lt;T&gt;</c>.</summary>
+    ConcurrentStack,
+    /// <summary>A <c>System.Collections.Concurrent.ConcurrentBag&lt;T&gt;</c>.</summary>
+    ConcurrentBag,
 }
 
 /// <summary>The entry shape of a sorted or paired collection member.</summary>
@@ -311,7 +326,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary ||
         member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
             RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or
-            RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet;
+            RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet or RenderMemberKind.ImmutableQueue or
+            RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag;
     /// <summary>Whether every member is a write segment or a fixed scalar, which takes the stream record protocol alone: a
     /// member count, then each member, with no reservation.</summary>
     internal bool StreamRecord => (ManagedStruct || !IsStruct) && Members.Any(Segment) && Members.All(member => member.IsFixed || Segment(member));
@@ -348,7 +364,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind == RenderMemberKind.ImmutableArray && member.Nested != null ||
         member.Kind is RenderMemberKind.Stack or RenderMemberKind.SortedSet or RenderMemberKind.SortedList or
             RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary or
-            RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack ||
+            RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableQueue or
+            RenderMemberKind.ConcurrentStack or RenderMemberKind.ConcurrentBag ||
         member.Kind == RenderMemberKind.Object && member.Nested.ElementList);
     /// <summary>Whether a Boolean array or list member takes the checked read completion, whose inlined root renames the
     /// instance local.</summary>

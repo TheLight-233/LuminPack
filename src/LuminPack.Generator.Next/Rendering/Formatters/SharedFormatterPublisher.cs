@@ -91,11 +91,20 @@ internal static class SharedFormatterPublisher
                     case SequenceFamily.ConcurrentQueue:
                         production.AddSource(hint, ConcurrentQueueOwnerFile.Render(set, fact, operations));
                         break;
+                    case SequenceFamily.ConcurrentStack:
+                        production.AddSource(hint, ConcurrentStackOwnerFile.Render(set, fact, operations));
+                        break;
+                    case SequenceFamily.ConcurrentBag:
+                        production.AddSource(hint, ConcurrentBagOwnerFile.Render(set, fact, operations));
+                        break;
                     case SequenceFamily.ImmutableArray:
                         production.AddSource(hint, ImmutableArrayOwnerFile.Render(set, fact, operations));
                         break;
                     case SequenceFamily.ImmutableStack:
                         production.AddSource(hint, ImmutableStackOwnerFile.Render(set, fact, operations));
+                        break;
+                    case SequenceFamily.ImmutableQueue:
+                        production.AddSource(hint, ImmutableQueueOwnerFile.Render(set, fact, operations));
                         break;
                     case SequenceFamily.ImmutableList:
                         production.AddSource(hint, ImmutableListOwnerFile.Render(set, fact, operations));

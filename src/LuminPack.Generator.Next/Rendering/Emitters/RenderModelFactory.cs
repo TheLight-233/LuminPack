@@ -376,10 +376,13 @@ internal static class RenderModelFactory
             RenderMemberKind kind = family switch
             {
                 SequenceFamily.ConcurrentQueue => RenderMemberKind.ConcurrentQueue,
+                SequenceFamily.ConcurrentStack => RenderMemberKind.ConcurrentStack,
+                SequenceFamily.ConcurrentBag => RenderMemberKind.ConcurrentBag,
                 SequenceFamily.ImmutableStack => RenderMemberKind.ImmutableStack,
                 SequenceFamily.ImmutableList => RenderMemberKind.ImmutableList,
                 SequenceFamily.ImmutableHashSet => RenderMemberKind.ImmutableHashSet,
                 SequenceFamily.ImmutableSortedSet => RenderMemberKind.ImmutableSortedSet,
+                SequenceFamily.ImmutableQueue => RenderMemberKind.ImmutableQueue,
                 _ => RenderMemberKind.ImmutableArray,
             };
             // A packable element carries its declared spelling in Scalar, so the nested model decides the shape first.
@@ -501,11 +504,14 @@ internal static class RenderModelFactory
         RenderMemberKind kind = family switch
         {
             SequenceFamily.ConcurrentQueue => RenderMemberKind.ConcurrentQueue,
+            SequenceFamily.ConcurrentStack => RenderMemberKind.ConcurrentStack,
+            SequenceFamily.ConcurrentBag => RenderMemberKind.ConcurrentBag,
             SequenceFamily.ImmutableArray => RenderMemberKind.ImmutableArray,
             SequenceFamily.ImmutableStack => RenderMemberKind.ImmutableStack,
             SequenceFamily.ImmutableList => RenderMemberKind.ImmutableList,
             SequenceFamily.ImmutableHashSet => RenderMemberKind.ImmutableHashSet,
             SequenceFamily.ImmutableSortedSet => RenderMemberKind.ImmutableSortedSet,
+            SequenceFamily.ImmutableQueue => RenderMemberKind.ImmutableQueue,
             _ => RenderMemberKind.ImmutableList,
         };
         return new RenderMember(member.Name, kind, member.Scalar, member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored,
@@ -516,14 +522,24 @@ internal static class RenderModelFactory
     /// <param name="member">The sequence member.</param>
     /// <returns>The supported family, or null when the declared family, element form or string element is not reproduced.</returns>
     /// <remarks>The analysis group covers every concurrent and immutable collection, while the shared owners currently cover the
-    /// queue, the array, the stack, the list, the hash set and the sorted set; the other families stay unmapped instead of
-    /// rendering with the wrong storage protocol. The stack, the list and both sets currently support raw scalar elements only,
-    /// so their string and packable elements stay unmapped.</remarks>
+    /// concurrent queue, stack and bag, the immutable array, stack, list, queue, hash set and sorted set; the other families stay
+    /// unmapped instead of rendering with the wrong storage protocol. The concurrent stack and bag and the immutable stack, list,
+    /// queue and both sets currently support raw scalar elements only, so their string and packable elements stay unmapped.</remarks>
     internal static SequenceFamily? SupportedFamily(CollectionMember member)
     {
         string family = SequenceFamilyName(member.DeclaredType);
         if (member.Kind == CollectionKind.Concurrent)
-            return family == "ConcurrentQueue" ? SequenceFamily.ConcurrentQueue : null;
+            return family switch
+            {
+                // The queue publishes raw scalar, string and packable-element owners.
+                "ConcurrentQueue" => SequenceFamily.ConcurrentQueue,
+                // The stack and the bag currently publish the raw scalar owner only.
+                "ConcurrentStack" when member.Nested == null && member.Scalar is not (null or "string") =>
+                    SequenceFamily.ConcurrentStack,
+                "ConcurrentBag" when member.Nested == null && member.Scalar is not (null or "string") =>
+                    SequenceFamily.ConcurrentBag,
+                _ => null,
+            };
         if (member.Kind != CollectionKind.Immutable)
             return null;
         if (family == "ImmutableArray")
@@ -536,6 +552,7 @@ internal static class RenderModelFactory
             "ImmutableList" => SequenceFamily.ImmutableList,
             "ImmutableHashSet" => SequenceFamily.ImmutableHashSet,
             "ImmutableSortedSet" => SequenceFamily.ImmutableSortedSet,
+            "ImmutableQueue" => SequenceFamily.ImmutableQueue,
             _ => null,
         };
     }
