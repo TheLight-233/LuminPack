@@ -364,6 +364,10 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
             case ScalarMember { Builtin: false, EnumType: null } scalar:
                 AddScalar(scalars, scalar.Scalar);
                 return;
+            // A root enum is written by the scalar owner of the enum, whose JSON form is its underlying number.
+            case ScalarMember { Builtin: false, EnumType: { } enumType, Underlying: { } underlying }:
+                AddScalar(scalars, enumType + "=" + underlying);
+                return;
             default:
                 WalkMember(member, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited, ref text);
                 return;
@@ -476,7 +480,7 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
                 fact = SequenceOwnerFact.ForScalar(definition, member.DeclaredType, "string");
             else if (member.Nested == null && member.Shape == null && !member.FormatterCall &&
                 member.Scalar is ("bool" or "byte" or "sbyte" or "short" or "ushort" or "char" or "int" or "uint" or
-                    "long" or "ulong" or "float" or "double" or "decimal"))
+                    "long" or "ulong" or "float" or "double" or "decimal" or "nint" or "nuint"))
                 fact = SequenceOwnerFact.ForScalar(definition, member.DeclaredType, member.Scalar);
             // A list or array of an unmanaged struct, enum or framework built-in stores its span directly as well.
             else if (member.Nested == null && member.Shape == null && !member.FormatterCall && !member.ElementText &&

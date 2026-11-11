@@ -35,6 +35,9 @@ internal enum SerializerApi
     /// <summary><c>int Deserialize&lt;T&gt;(LuminBufferWriter, ref T)</c>.</summary>
     DeserializeBufferRef,
 
+    /// <summary><c>int Deserialize&lt;T&gt;(ReadOnlySequence&lt;byte&gt;, ref T)</c>.</summary>
+    DeserializeSequenceRef,
+
     /// <summary><c>void Serialize&lt;T&gt;(ref LuminPackWriter, scoped in T)</c>.</summary>
     SerializeWriter,
 

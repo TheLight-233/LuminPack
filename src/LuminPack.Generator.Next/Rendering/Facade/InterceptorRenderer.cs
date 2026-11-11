@@ -64,6 +64,12 @@ internal sealed class RootEntry : IEquatable<RootEntry>
         Json = json;
     }
 
+    /// <summary>Copies the entry under another entry name; the roots it calls keep their names.</summary>
+    /// <param name="readable">The entry name.</param>
+    /// <returns>The renamed entry.</returns>
+    internal RootEntry WithReadable(string readable) => new(readable, DeclaredProfile, Binary, Json, Owner, Limit, Encoding, JsonReadProfile,
+        RootName, RootArguments, GenericUnion);
+
     /// <inheritdoc/>
     public bool Equals(RootEntry? other) => other != null && Readable == other.Readable && DeclaredProfile == other.DeclaredProfile &&
         Binary == other.Binary && Json == other.Json && Owner == other.Owner && Limit == other.Limit && Encoding == other.Encoding &&
@@ -95,19 +101,32 @@ internal static class InterceptorRenderer
         foreach (SerializerCallModel call in calls)
             if (roots.Find(call) is { } root && (call.Json ? root.Json : root.Binary))
                 bound.Add((call, root));
-        // Each root name binds one payload spelling; another spelling that reads the same is left on the generic facade.
-        var claimed = new Dictionary<string, string>(StringComparer.Ordinal);
-        bound = bound.Where(item => claimed.TryGetValue(item.Root.Readable, out string? payload)
-            ? payload == item.Call.Payload : (claimed[item.Root.Readable] = item.Call.Payload) != null).ToList();
+        // Payloads whose readable names coincide, such as two generic definitions of the same name, keep one entry each: the
+        // first payload in ordinal order keeps the name and the others are numbered, as the original numbered its intercepts.
+        // Their roots resolve by the payload type, so only the entry names change. Spellings of the same type, such as tuple
+        // element names, bind the same entry.
+        var numbered = new Dictionary<string, RootEntry>(StringComparer.Ordinal);
+        foreach (var name in bound.GroupBy(item => item.Root.Readable, StringComparer.Ordinal))
+        {
+            int number = 1;
+            foreach (string payload in name.Select(item => Emitters.GeneratedNames.CanonicalKey(item.Call.Payload)).Distinct(StringComparer.Ordinal)
+                .OrderBy(item => item, StringComparer.Ordinal))
+            {
+                RootEntry root = name.First(item => Emitters.GeneratedNames.CanonicalKey(item.Call.Payload) == payload).Root;
+                numbered[payload] = number == 1 ? root : root.WithReadable(root.Readable + number.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                number++;
+            }
+        }
+        bound = bound.Select(item => (item.Call, numbered[Emitters.GeneratedNames.CanonicalKey(item.Call.Payload)])).ToList();
         if (bound.Count == 0)
             return string.Empty;
         var w = new StringBuilder(16384);
         w.Append(Header);
-        // Concrete entries, one owner per payload.
-        foreach (var payload in bound.GroupBy(item => item.Call.Payload, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
+        // Concrete entries, one owner per payload, spelled as its first call in ordinal order spells it.
+        foreach (var payload in bound.GroupBy(item => item.Root.Readable, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             RootEntry root = payload.First().Root;
-            string type = payload.Key;
+            string type = payload.Select(item => item.Call.Payload).OrderBy(item => item, StringComparer.Ordinal).First();
             w.Append("        internal static partial class LuminEntry_").Append(root.Readable).Append('\n');
             w.Append("        {\n");
             if (payload.Any(item => !item.Call.Json))
@@ -249,6 +268,10 @@ namespace LuminPack
             case SerializerApi.DeserializeBufferRef:
                 signature = "int " + name + "(LuminBufferWriter bufferWriter, ref " + type + " value)";
                 call = entry + ".Deserialize<" + profile + ">(bufferWriter, ref value)";
+                break;
+            case SerializerApi.DeserializeSequenceRef:
+                signature = "int " + name + "(global::System.Buffers.ReadOnlySequence<byte> buffer, ref " + type + " value)";
+                call = entry + ".Deserialize<" + profile + ">(buffer, ref value)";
                 break;
             case SerializerApi.SerializeWriter:
                 signature = "void " + name + "(ref LuminPackWriter state, scoped in " + type + " value)";
@@ -399,6 +422,42 @@ namespace LuminPack
                 %TYPE% value = default!;
                 Deserialize<TLuminProfile>(buffer, ref value);
                 return value;
+            }
+
+            public static int Deserialize<TLuminProfile>(global::System.Buffers.ReadOnlySequence<byte> buffer, ref %TYPE% value)
+                where TLuminProfile : struct, ILuminPackOptions
+            {
+                LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);
+                if (!buffer.IsSingleSegment)
+                {
+                    var staging = LuminBufferWriterPool.Rent();
+                    try
+                    {
+                        staging.LoadSequence(in buffer);
+                        var reader = new LuminPackReader(staging);
+                        %READ%
+                        return reader.Position;
+                    }
+                    finally
+                    {
+                        LuminBufferWriterPool.Return(staging);
+                    }
+                }
+
+                {
+                    var state = LuminPackReaderOptionalState.Lease(ref _threadStaticReaderOptionalState);
+                    var single = buffer.FirstSpan;
+                    var reader = new LuminPackReader(ref single, state);
+                    try
+                    {
+                        %READ%
+                        return reader.Position;
+                    }
+                    finally
+                    {
+                        state.Release();
+                    }
+                }
             }
 
             public static int Deserialize<TLuminProfile>(LuminBufferWriter bufferWriter, ref %TYPE% value)
@@ -639,6 +698,9 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
     private readonly KeyValuePair<string, RootEntry>[] _entries;
 
     private readonly string[] _shared;
+
+    /// <summary>The shared root keys by their spelling-independent key.</summary>
+    private readonly Dictionary<string, string> _canonical;
     private readonly string? _extension;
 
     /// <summary>Captures the roots in ordinal key order.</summary>
@@ -650,6 +712,10 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
         _extension = extension;
         _shared = shared.Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToArray();
         Shared = new HashSet<string>(_shared, StringComparer.Ordinal);
+        _canonical = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string key in _shared)
+            if (!_canonical.ContainsKey(Emitters.GeneratedNames.CanonicalKey(key)))
+                _canonical.Add(Emitters.GeneratedNames.CanonicalKey(key), key);
         _entries = entries.GroupBy(pair => pair.Key, StringComparer.Ordinal).Select(group => group.First())
             .OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
         Map = _entries.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
@@ -672,6 +738,9 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
         // closed root. Shared roots are published by payload key: two payloads whose readable names coincide must not bind each
         // other's owner.
         string key = Emitters.GeneratedNames.PayloadKey(call.Payload);
+        // A call spells tuples and native integers with C# syntax; the owner requirement spells their metadata names.
+        if (!Shared.Contains(key) && _canonical.TryGetValue(Emitters.GeneratedNames.CanonicalKey(call.Payload), out string? published))
+            key = published;
         string readable = Emitters.ReadableTypeName.Of(key);
         // A generic Union has no closed owner; its closed uses dispatch through the generic root, as in the original.
         if (call.Definition != null && Map.TryGetValue(call.Definition, out RootEntry? union) && union.GenericUnion)

@@ -67,6 +67,122 @@ internal static class GeneratedNames
     /// <param name="type">The payload spelling.</param>
     /// <returns>The key without global qualification, nullability or spacing.</returns>
     internal static string PayloadKey(string type) => type.Replace("global::", string.Empty).Replace("?", string.Empty).Replace(" ", string.Empty);
+
+    /// <summary>Reduces a payload spelling to a key that does not depend on how the type was written.</summary>
+    /// <param name="type">The payload spelling, as a call site or an owner requirement spells it.</param>
+    /// <returns>The key, with tuple syntax spelled as <c>System.ValueTuple</c>, tuple element names dropped and native integers
+    /// spelled as <c>System.IntPtr</c> and <c>System.UIntPtr</c>.</returns>
+    /// <remarks>Call sites spell tuples and native integers with their C# keywords, while owner requirements spell their
+    /// metadata names; both must find the same owner.</remarks>
+    internal static string CanonicalKey(string type)
+    {
+        string text = type.Replace("global::", string.Empty).Replace("?", string.Empty);
+        int index = 0;
+        var key = new StringBuilder(text.Length + 16);
+        Canonical(text, ref index, key, stop: '\0');
+        return key.ToString();
+    }
+
+    private static void Canonical(string text, ref int index, StringBuilder key, char stop)
+    {
+        var token = new StringBuilder();
+        void Flush()
+        {
+            string word = token.ToString();
+            key.Append(word == "nint" ? "System.IntPtr" : word == "nuint" ? "System.UIntPtr" : word);
+            token.Clear();
+        }
+        while (index < text.Length && text[index] != stop)
+        {
+            char current = text[index];
+            if (current == '(')
+            {
+                Flush();
+                index++;
+                key.Append("System.ValueTuple<");
+                bool first = true;
+                while (index < text.Length && text[index] != ')')
+                {
+                    if (!first)
+                        key.Append(',');
+                    first = false;
+                    // One tuple element: its type, then an optional element name after a top-level space.
+                    var element = new StringBuilder();
+                    Canonical(text, ref index, element, stop: ',', tupleElement: true);
+                    key.Append(element);
+                    if (index < text.Length && text[index] == ',')
+                        index++;
+                }
+                index++;
+                key.Append('>');
+                continue;
+            }
+            if (current is '<' or '>' or ',' or '[' or ']')
+            {
+                Flush();
+                key.Append(current);
+                index++;
+                if (current == '<')
+                {
+                    Canonical(text, ref index, key, stop: '>');
+                    if (index < text.Length)
+                    {
+                        key.Append('>');
+                        index++;
+                    }
+                }
+                continue;
+            }
+            if (current != ' ')
+                token.Append(current);
+            else
+                Flush();
+            index++;
+        }
+        Flush();
+    }
+
+    private static void Canonical(string text, ref int index, StringBuilder key, char stop, bool tupleElement)
+    {
+        // A tuple element ends at a top-level comma or at the closing parenthesis; a trailing name follows the last space.
+        int depth = 0, start = index;
+        while (index < text.Length)
+        {
+            char current = text[index];
+            if (current is '<' or '(' or '[')
+                depth++;
+            else if (current is '>' or ']' || current == ')' && depth > 0)
+                depth--;
+            else if (depth == 0 && (current == stop || current == ')'))
+                break;
+            index++;
+        }
+        string element = text.Substring(start, index - start).Trim();
+        int name = LastTopLevelSpace(element);
+        if (name > 0)
+            element = element.Substring(0, name);
+        int inner = 0;
+        Canonical(element, ref inner, key, stop: '\0');
+    }
+
+    private static int LastTopLevelSpace(string element)
+    {
+        int depth = 0, found = -1;
+        for (int index = 0; index < element.Length; index++)
+        {
+            char current = element[index];
+            if (current is '<' or '(' or '[')
+                depth++;
+            else if (current is '>' or ')' or ']')
+                depth--;
+            else if (current == ' ' && depth == 0)
+                found = index;
+        }
+        // A space directly after a comma inside the type is not a name separator; only a space followed by an identifier at the
+        // end qualifies.
+        return found > 0 && found < element.Length - 1 && char.IsLetter(element[found + 1]) && element.IndexOf(',', found) < 0 &&
+            element.IndexOf('>', found) < 0 ? found : -1;
+    }
 }
 
 /// <summary>Spells a payload type as a short identifier for generated members and containers.</summary>
