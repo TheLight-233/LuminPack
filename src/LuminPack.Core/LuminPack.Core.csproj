@@ -35,8 +35,9 @@
             Omitting OutputItemType=Analyzer means the compiler never executes it;
             NuGet pack still converts the project reference to a package dependency.
             Private=false also keeps the generator DLL out of runtime output.
+            LuminPackLegacyGeneratorReference=false lets a Next generator build skip the legacy generator project.
         -->
-    <ProjectReference Include="..\LuminPack.Generator\LuminPack.Generator.csproj" Private="false" />
+    <ProjectReference Include="..\LuminPack.Generator\LuminPack.Generator.csproj" Private="false" Condition="'$(LuminPackLegacyGeneratorReference)' != 'false'" />
     <None Include="../../README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
