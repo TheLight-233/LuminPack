@@ -123,7 +123,9 @@ internal static partial class TypeModelFactory
             if (FormatterRegistry.HasStandalone(definition))
                 return new FormatterModel(spelling, definition);
             FormatterStorageModel? layout = FormatterStorage(named);
-            bool rawCollection = named.IsUnmanagedType && layout == null && !ContainsCustomContract(named, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+            // Nullable<T> is not an unmanaged type argument, so its collections keep their element operations.
+            bool rawCollection = named.IsUnmanagedType && named.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T && layout == null &&
+                !ContainsCustomContract(named, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             if (FormatterDefinitions.HasGeneric(definition) || FormatterRegistry.FindSequence(definition) != null || FormatterRegistry.FindDictionary(spelling) != null)
             {
                 var arguments = new FormatterModel[named.Arity];

@@ -62,7 +62,7 @@ internal static class SerializerCallAnalysis
             // An open profile keeps the operation's profile parameter; the payload must still be closed.
             if (method.TypeArguments[1] is ITypeParameterSymbol)
                 openProfile = true;
-            else if (!IsClosed(method.TypeArguments[1]))
+            else if (!IsClosed(method.TypeArguments[1]) || !Accessible(method.TypeArguments[1]))
                 return null;
             else
                 profile = method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -85,6 +85,17 @@ internal static class SerializerCallAnalysis
 
     private static readonly SymbolDisplayFormat PayloadFormat = SymbolDisplayFormat.FullyQualifiedFormat
         .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.ExpandNullable);
+
+    /// <summary>Whether generated code outside the declaring type can name the type: a private or protected nested type keeps
+    /// its call on the facade.</summary>
+    private static bool Accessible(ITypeSymbol type)
+    {
+        for (ITypeSymbol? current = type; current != null; current = current.ContainingType)
+            if (current.DeclaredAccessibility is Microsoft.CodeAnalysis.Accessibility.Private or Microsoft.CodeAnalysis.Accessibility.Protected or
+                Microsoft.CodeAnalysis.Accessibility.ProtectedAndInternal)
+                return false;
+        return type is not INamedTypeSymbol named || named.TypeArguments.All(Accessible);
+    }
 
     private static bool IsClosed(ITypeSymbol type) => type.TypeKind is not (TypeKind.Error or TypeKind.TypeParameter or TypeKind.Dynamic) &&
         !ContainsTypeParameter(type);
