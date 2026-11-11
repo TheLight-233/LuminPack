@@ -257,7 +257,10 @@ internal static class DictionaryOwnerFile
                     w.Open();
                     w.Line(reader + " operationState = default;");
                     w.Line("reader.CopyTo(ref operationState);");
-                    w.Line("int length = operationState.ReadLength(" + minimum + ");");
+                    // The original Dictionary, SortedDictionary and SortedList reads took TryReadCollectionHead: one byte per entry.
+                        w.Line("int length = operationState.ReadLength(" + (minimum.Split('+').Any(part => part.Trim() != "0") && (dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", System.StringComparison.Ordinal) ||
+                            dictionary.StartsWith("global::System.Collections.Generic.SortedDictionary<", System.StringComparison.Ordinal) ||
+                            dictionary.StartsWith("global::System.Collections.Generic.SortedList<", System.StringComparison.Ordinal)) ? "1" : minimum) + ");");
                     w.Line("if (length < 0)");
                     w.Open();
                     w.Line("value = null;");

@@ -323,6 +323,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether the JSON read refills an exact-length array of packable elements in place.</summary>
     internal bool ArrayReuse { get; }
 
+    /// <summary>Whether the JSON read stages a concurrent stack in a pooled block and publishes it even on failure.</summary>
+    internal bool ConcurrentStackStaging { get; }
+
     /// <summary>Whether the sequence exposes a count that short-circuits an empty JSON array.</summary>
     internal bool JsonCount { get; }
 
@@ -340,8 +343,9 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="jsonAddBody">The json add body used by this operation.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
-        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false)
+        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false, bool concurrentStackStaging = false)
     {
+        ConcurrentStackStaging = concurrentStackStaging;
         ArrayReuse = arrayReuse;
         ListReuse = listReuse;
         JsonAddBody = jsonAddBody;
@@ -688,6 +692,56 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
+                    if (spec.ConcurrentStackStaging && context.Supports("StageConcurrentStack"))
+                    {
+                        // The original read stages the elements in a pooled block and publishes what it read even when the
+                        // document fails, before rethrowing.
+                        string pool = "global::System.Buffers.ArrayPool<" + scalar + ">.Shared";
+                        w.Line("if (value is null)");
+                        w.Line("    value = new " + sequence + "();");
+                        w.Line("else");
+                        w.Line("    value.Clear();");
+                        w.Line("var items = " + pool + ".Rent(16);");
+                        w.Line("int count = 0;");
+                        w.Line("try");
+                        w.Open();
+                        w.Line("try");
+                        w.Open();
+                        w.Line("while (reader.Read<TLuminProfile>())");
+                        w.Open();
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
+                        w.Line("    break;");
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
+                        w.Line("    continue;");
+                        w.Line(scalar + " item = default!;");
+                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                        w.Line("if (count == items.Length)");
+                        w.Open();
+                        w.Line("var larger = " + pool + ".Rent(checked(count * 2));");
+                        w.Line("global::System.Array.Copy(items, larger, count);");
+                        w.Line(pool + ".Return(items, true);");
+                        w.Line("items = larger;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("items[count++] = item;");
+                        w.Close();
+                        w.Close();
+                        w.Line("catch (global::System.Exception error)");
+                        w.Open();
+                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, items, count, false);");
+                        w.Line("global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(error);");
+                        w.Close();
+                        w.Blank();
+                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, items, count, true);");
+                        w.Close();
+                        w.Line("finally");
+                        w.Open();
+                        w.Line(pool + ".Return(items, true);");
+                        w.Close();
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     if (spec.ArrayReuse && context.Payload != null)
                     {
                         // The original array read refills an existing array of the same exact length in place and otherwise

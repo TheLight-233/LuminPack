@@ -59,15 +59,18 @@ internal static class TimeZoneInfoOwnerFile
 
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
-        if (context.Supports("CanReadJsonTimeZoneInfo"))
-        {
-            w.Line("value = reader.ReadTimeZoneInfo<" + context.Profile + ">();");
-            return;
-        }
+        // The original read returns a JSON null before either path.
         w.Line("if (reader.IsNull())");
         w.Open();
         w.Line("value = null;");
         w.Line("return;");
+        if (context.Supports("CanReadJsonTimeZoneInfo"))
+        {
+            w.Close();
+            w.Blank();
+            w.Line("value = reader.ReadTimeZoneInfo<" + context.Profile + ">();");
+            return;
+        }
         w.Close();
         w.Blank();
         w.Line("var source = reader.Read<string, " + context.Profile + ">();");

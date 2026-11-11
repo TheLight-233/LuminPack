@@ -32,7 +32,7 @@ internal static partial class SortedListOwnerFile
         w.Line("value.Clear();");
         w.Line("for (int index = 0; index < length; index++)");
         w.Open();
-        if (c.Key == "string")
+        if (c.Key == "string" || c.Key.StartsWith("global::System.Nullable<", System.StringComparison.Ordinal))
         {
             w.Line("string? priorKey = index < reuseCount ? keys[index] : null;");
             w.Line("string key = priorKey!;");
@@ -47,7 +47,7 @@ internal static partial class SortedListOwnerFile
         }
 
         c.ReadMember(c.Value, "item");
-        if (c.Key == "string")
+        if (c.Key == "string" || c.Key.StartsWith("global::System.Nullable<", System.StringComparison.Ordinal))
             w.Line("if (key is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(\"key\");");
         w.Line("keys[index] = key;");
         w.Line("values[index] = item;");

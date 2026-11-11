@@ -108,7 +108,7 @@ internal static class FrameworkScalarBody
         };
         foreach (string method in reads)
             text = text.Replace("reader." + method + "(", "reader." + method + "<TLuminProfile>(");
-        text = text.Replace("reader.ReadString()", "ReadText<TLuminProfile>(ref reader)");
+        text = text.Replace("reader.ReadString()", "reader.Read<string, TLuminProfile>()");
         text = text.Replace("reader.Option.StringEncoding", "default(TLuminProfile).StringEncoding");
         foreach (string line in text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
             if (line.Length != 0)
@@ -121,7 +121,7 @@ internal static class FrameworkScalarBody
     /// <param name = "second">The second used by this operation.</param>
     private static void AppendPropertyChoice(StringBuilder sb, string first, string second)
     {
-        sb.AppendLine("string propertyName = ReadText<TLuminProfile>(ref reader);");
+        sb.AppendLine("string propertyName = reader.Read<string, TLuminProfile>();");
         sb.AppendLine("int propertyChoice = propertyName == \"" + first + "\" ? 1 : propertyName == \"" + second + "\" ? 2 : 0;");
     }
 

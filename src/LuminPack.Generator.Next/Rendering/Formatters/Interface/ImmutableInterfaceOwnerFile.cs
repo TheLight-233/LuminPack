@@ -16,7 +16,7 @@ internal static class ImmutableInterfaceOwnerFile
     private static readonly EnumerableOwnerSpec ListSpec = new EnumerableOwnerSpec(Write, c => Read(c, Builder),
         "staged.Add(item);", BeforeBuilder, AfterBuilder);
 
-    private static readonly EnumerableOwnerSpec QueueSpec = new EnumerableOwnerSpec(Write, c => Read(c, Queue),
+    private static readonly EnumerableOwnerSpec QueueSpec = new EnumerableOwnerSpec(QueueWrite, c => Read(c, Queue),
         "staged = staged.Enqueue(item);", c => c.W.Line("var staged = " + Namespace + "ImmutableQueue<" + c.Scalar + ">.Empty;"),
         c => c.W.Line("value = staged;"), jsonCount: false);
 
@@ -64,6 +64,65 @@ internal static class ImmutableInterfaceOwnerFile
         c.Sequence.Contains("Stack") ? "ImmutableStack" : "ImmutableList";
 
     private static void Write(EnumerableOwnerContext c) => c.CountedWrite("value");
+
+    /// <summary>Writes a concrete string queue through its two stacks, as the original traversal did, so a queue whose back stack
+    /// is not cached is not materialized by serialization; other queues keep the counted enumeration.</summary>
+    private static void QueueWrite(EnumerableOwnerContext c)
+    {
+        if (!c.Text || !c.Sequence.StartsWith("global::System.Collections.Immutable.ImmutableQueue<", System.StringComparison.Ordinal))
+        {
+            c.CountedWrite("value");
+            return;
+        }
+        var w = c.W;
+        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(value, out var forwards, out var backwards, out var reverse))");
+        w.Open();
+        w.Line("global::LuminPack.Core.LuminPackWriter operationStateFallback = default;");
+        w.Line("int countPosition = operationState.BeginCollection();");
+        w.Line("int count = 0;");
+        w.Line("foreach (var item in forwards!)");
+        w.Open();
+        w.Line("count++;");
+        w.Line("operationState.Write<TLuminProfile>(item);");
+        w.Close();
+        w.Line("if (reverse)");
+        w.Open();
+        w.Line("operationState.CopyTo(ref operationStateFallback);");
+        w.Line("count += WriteReversed(ref operationStateFallback, backwards!);");
+        w.Line("operationStateFallback.CopyTo(ref operationState);");
+        w.Close();
+        w.Line("else");
+        w.Open();
+        w.Line("foreach (var item2 in backwards!)");
+        w.Open();
+        w.Line("count++;");
+        w.Line("operationState.Write<TLuminProfile>(item2);");
+        w.Close();
+        w.Close();
+        w.Line("operationState.EndCollection(countPosition, count);");
+        w.Line("operationState.CheckBuffer();");
+        w.Close();
+        w.Line("else");
+        w.Open();
+        c.CountedWrite("value");
+        w.Close();
+        w.Blank();
+        w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        w.Line("static int WriteReversed(ref global::LuminPack.Core.LuminPackWriter writer2, global::System.Collections.Immutable.ImmutableStack<string> stack)");
+        w.Open();
+        w.Line("var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count3);");
+        w.Line("try");
+        w.Open();
+        w.Line("foreach (var item4 in new global::System.ReadOnlySpan<string>(items, 0, count3))");
+        w.Indented(() => w.Line("writer2.Write<TLuminProfile>(item4);"));
+        w.Line("return count3;");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("global::System.Buffers.ArrayPool<string>.Shared.Return(items, true);");
+        w.Close();
+        w.Close();
+    }
 
     private static void Read(EnumerableOwnerContext c, System.Action<EnumerableOwnerContext> build)
     {

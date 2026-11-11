@@ -92,7 +92,7 @@ internal static partial class SortedListOwnerFile
         w.Line(c.Value + " v = default !;");
         c.ReadMember(c.Key, "k");
         c.ReadMember(c.Value, "v");
-        if (c.Key == "string")
+        if (c.Key == "string" || c.Key.StartsWith("global::System.Nullable<", System.StringComparison.Ordinal))
         {
             w.Line("if (k is null)");
             w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(\"key\");"));
