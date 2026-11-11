@@ -1041,15 +1041,25 @@ internal static partial class TypeModelFactory
                 ModelResult analyzed = Analyze(caseType, 0, path);
                 TypeModel? caseModel = analyzed.Model;
                 bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
-                if (!ownEntry && (caseModel == null || !analyzed.IsComplete || caseModel is UnionModel || caseModel is StructModel ||
-                    caseModel.Members.Length == 0 || caseModel.Members.Any(member => member.Mirrored) ||
-                    caseModel.Members.Any(member => member is not ScalarMember) || SelectedConstructor(caseType)))
+                bool expandable = caseModel != null && analyzed.IsComplete && caseModel is not (UnionModel or StructModel) &&
+                    caseModel.Members.Length != 0 && !caseModel.Members.Any(member => member.Mirrored) &&
+                    caseModel.Members.All(member => member is ScalarMember) && !SelectedConstructor(caseType);
+                // A complete local record whose fixed body this pipeline does not expand inline reads through its own Union
+                // entry. The case bytes are the same; only the dispatch arm calls the published entry instead of the inline body.
+                if (!ownEntry && !expandable && caseModel is RecordModel && analyzed.IsComplete &&
+                    SymbolEqualityComparer.Default.Equals(caseType.ContainingAssembly, _compilation.Assembly) &&
+                    !ContainsTypeParameter(caseType) && GenerationMode(caseType) != "Custom")
+                    ownEntry = true;
+                if (!ownEntry && !expandable)
                 {
                     issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " case read: '" +
                         caseType.ToDisplayString() + "' is not a fixed record this pipeline expands");
                     caseReadGeneric = true;
                 }
                 readGeneric |= caseReadGeneric;
+                // The root writes through the returning cursor kernel only when the case record publishes SerializeUnionAt.
+                if (fixedCases.Contains(caseType) && caseModel is not RecordModel { FixedUnionCase: true })
+                    fixedCases.Remove(caseType);
                 bool sealedCase = root.TypeKind == TypeKind.Class && !HasDerivedCase(symbols, caseType.OriginalDefinition);
                 try
                 {

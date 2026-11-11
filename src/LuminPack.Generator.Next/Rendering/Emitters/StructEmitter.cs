@@ -131,7 +131,6 @@ internal static class StructEmitter
         w.Line("internal static partial class " + model.Owner);
         w.Open();
         w.Suppressed = !writes;
-        w.Line(inline);
         Entry("Write", "(this ref " + writer + " state, in " + type + " value)", serializer + "." + container + ".RootWrite(ref state, in value);");
         w.Line(inline);
         w.Line("internal static void Write" + model.TypeArguments("TOptions") + "(this ref " + writer + " state, in " + type + " value)");
