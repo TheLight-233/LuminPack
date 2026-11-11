@@ -43,9 +43,10 @@ internal static class SharedFormatterPublisher
         // A concurrent or immutable sequence publishes one owner per closed sequence type, keyed by its declared spelling.
         if (set.SequenceOwners != null)
         {
-            // The set owner reuses a weak candidate cache that is shared by every closed set of the compilation.
+            // A tree-storage set owner reuses a weak candidate cache that is shared by every closed set of the compilation.
             for (int index = 0; index < set.SequenceOwners.Length; index++)
-                if (set.SequenceOwners[index].Family == SequenceFamily.ImmutableHashSet && set.SequenceOwners[index].Element == null)
+                if (set.SequenceOwners[index].Family is SequenceFamily.ImmutableHashSet or SequenceFamily.ImmutableSortedSet &&
+                    set.SequenceOwners[index].Element == null)
                 {
                     production.AddSource(ImmutableCandidateHint, ImmutableHashSetOwnerFile.RenderCache(set));
                     break;
@@ -77,6 +78,9 @@ internal static class SharedFormatterPublisher
                         break;
                     case SequenceFamily.ImmutableHashSet:
                         production.AddSource(hint, ImmutableHashSetOwnerFile.Render(set, fact));
+                        break;
+                    case SequenceFamily.ImmutableSortedSet:
+                        production.AddSource(hint, ImmutableSortedSetOwnerFile.Render(set, fact));
                         break;
                 }
             }

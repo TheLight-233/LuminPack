@@ -314,7 +314,8 @@ internal static class JsonEmitter
                 continue;
             }
             if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
-                RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet)
+                RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or
+                RenderMemberKind.ImmutableSortedSet)
             {
                 // The owner frames the null value itself, so the member copies its storage and calls the owner directly.
                 string temp = names.Next("temp");
@@ -575,7 +576,8 @@ internal static class JsonEmitter
                 caseLines.Add("break;");
             }
             else if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
-                RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet)
+                RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or
+                RenderMemberKind.ImmutableSortedSet)
             {
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("break;");
