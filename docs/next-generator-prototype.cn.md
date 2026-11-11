@@ -39,15 +39,65 @@ P0 为当前高优先级，每跑通一条完整调用链即可开始对应的�
 
 已经跑通的场景持续用于测量，其余原型场景按批次补齐。
 
+## 原型状态
+
+P0 调用入口层已经完成。引用 `LuminPack.Generator.Next` 的消费者可以直接调用常规 `LuminPackSerializer` API，每个闭合调用都绑定到
+Next 生成的正文。
+
+- 二进制与 JSON 泛型门面（包括 `Register` 和仅注册的 `FormatterDispatch`）作为 post-initialization 源码发布，调用点在生成器运行时
+  即可完成绑定。
+- 语法 provider 把每个闭合调用记录为值相等的事实：重载、载荷、闭合或声明 profile（或开放的 profile 类型参数），以及编译器提供的拦截位置。
+- 拦截器转发到每个载荷的 `LuminEntry_` owner，其正文沿用既有具体入口的形态。可打包载荷调用自身的 `Serialize_`/`Deserialize_`
+  根方法；其他闭合根按同类型字段进行分类，加入共享 owner 需求，并调用 owner 的静态 `Write`/`Read`。没有已发布根方法的调用继续走泛型门面。
+- 目前静态绑定后端只有 compiler interception。IL 改写、旧编译器及其他后端组合仍属于 P2。
+
+### 运行原型
+
+运行时 Benchmark 项目默认选择 Next，并在启动时打印实际使用的生成器。BenchmarkDotNet 的子项目构建沿用同一选择。
+
+```bash
+dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --verify-fixtures
+dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --verify-roundtrip
+dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
+```
+
+旧生成器基线使用 `-p:LuminPackGenerator=Legacy`。当前分支上旧生成器项目无法编译，因此需要通过
+`-p:LuminPackLegacyAnalyzer=<LuminPack.Generator.dll 路径>` 传入预先构建的旧分析器。Next 及预构建分析器的构建会向 `LuminPack.Core`
+传递 `LuminPackLegacyGeneratorReference=false`，跳过其用于打包的旧生成器项目引用。
+
+单元测试通过 `-p:LuminPackGenerator=Next` 选择 Next，默认仍为 Legacy。可与测试区域组合使用，例如
+`-p:LuminPackGenerator=Next -p:LuminPackTestArea=Safety -f net10.0`。
+
+生成器 Benchmark 支持真实语料及其引用：
+`GeneratorBenchmarks --corpus benchmarks/LuminPack.Benchmark --refs <Benchmark 输出目录> --old-dll <旧分析器>`。
+
+### 已验证状态
+
+- Benchmark 语料和单元测试 Safety 语料仅使用 Next 编译，生成代码错误为零。
+- 四个 Benchmark 夹具在 Next 与旧生成器下产生逐字节一致的 LuminPack 二进制和 JSON 载荷。
+- `--verify-roundtrip` 在没有任何注册的情况下通过全新读取、已有目标读取、声明与显式 profile、`LuminBufferWriter`、
+  `IBufferWriter<byte>` 和 JSON 检查。
+- Safety 测试区域在 Next 下通过 94 项中的 87 项。
+
+### 已记录缺口
+
+- `FormatterDispatch` 使用默认输入上限和 JSON 编码，尚未编译进程序集声明选项（不受信输入上限、递归深度、严格 JSON 和异常映射），导致
+  六项 Safety 测试失败（对应 P1 的显式输入限制与声明 profile）。
+- 独立的 `List<string>` 根在失败前会推进调用方 reader；旧根只在成功时发布游标（一项 Safety 测试）。
+- 含 Packed struct 成员的固定 Union case 通过自身 Union 入口读取，写入不走返回式游标内核。字节不变，旧的内联展开属于 P1 性能项。
+- 根方法名称来自可读类型名，两个读法相同的载荷只有第一个完成绑定，另一个继续走泛型门面。
+- 调用列表是 `ImmutableArray`，每次编辑都会重新计算共享 owner 集合，再由值相等的输出命中缓存。
+- 完整单元测试区域、其他目标框架以及旧生成器的编译错误尚未处理。
+
 ## P0 高优先级
 
 ### 常规调用入口和静态绑定
 
-- [ ] 打通 `LuminPackSerializer` 的常规二进制与 JSON API，使调用到达 Next 生成的具体根方法。
-- [ ] 覆盖隐式类型调用、显式载荷类型调用，以及显式载荷加 profile 调用。
-- [ ] 接通分配返回、调用者持有的 `LuminBufferWriter` 和已有目标反序列化入口。
-- [ ] 优先接入覆盖这些调用的现代 compiler interceptor 或已有具体静态入口，完整后端组合按 P2 推进。
-- [ ] 补齐这些入口实际需要的类型发现、闭合操作发现、owner 发布和支持声明。
+- [x] 打通 `LuminPackSerializer` 的常规二进制与 JSON API，使调用到达 Next 生成的具体根方法。
+- [x] 覆盖隐式类型调用、显式载荷类型调用，以及显式载荷加 profile 调用。
+- [x] 接通分配返回、调用者持有的 `LuminBufferWriter` 和已有目标反序列化入口。
+- [x] 优先接入覆盖这些调用的现代 compiler interceptor 或已有具体静态入口，完整后端组合按 P2 推进。
+- [x] 补齐这些入口实际需要的类型发现、闭合操作发现、owner 发布和支持声明。
 
 完成条件是代表性消费者可以直接调用常规 API，并能确认调用绑定到 Next 生成正文。
 
@@ -65,21 +115,21 @@ P0 为当前高优先级，每跑通一条完整调用链即可开始对应的�
 
 现有基准依赖继承和接口多态。`SimpleBenchmark` 使用继承、Packed 的 `Transform` 和含 Union 值的字典。`SerializeBenchmark` 与 `JsonBenchmark` 使用 `CharacterSaveData` 对象图。`PolymorphismBenchmark` 使用抽象类根、接口根及 Union 集合。
 
-- [ ] 完成这些非泛型 Union 的自动发现、标签、虚分发、分支读写和依赖发布。
-- [ ] 覆盖 `List<IFoo>`、`Dictionary<int, IFoo>` 和继承成员。
+- [x] 完成这些非泛型 Union 的自动发现、标签、虚分发、分支读写和依赖发布。
+- [x] 覆盖 `List<IFoo>`、`Dictionary<int, IFoo>` 和继承成员。
 - [ ] 修复实际分支所需的构造、Local 镜像、固定游标和 profile 连接。
-- [ ] 保留现有窄/宽标签、分层写分发及字段布局契约。
+- [x] 保留现有窄/宽标签、分层写分发及字段布局契约。
 
 完成条件是上述基准模型能以原有数据结构运行。基准中用到的 Union 与 Packed 存储属于 P0。
 
 ### 原型范围内的行为正确性
 
 - [ ] 对齐 null、空集合、成员顺序、数组形状和基础 JSON 表示。
-- [ ] 对齐常规构造、已有目标复用、缓冲区增长及状态发布。
+- [x] 对齐常规构造、已有目标复用、缓冲区增长及状态发布。
 - [ ] 保留默认 Reader 检查、Boolean 检查、已有容量检查和栈保护。
-- [ ] 对齐基准使用的 `LuminPackUtf16LengthOptions` 与 `LuminPackDefaultOptions` 调用。
+- [x] 对齐基准使用的 `LuminPackUtf16LengthOptions` 与 `LuminPackDefaultOptions` 调用。
 - [ ] 对用到的 Native、Packed、Tagged 类型核对单值与集合表示。
-- [ ] 保持普通调用的具体静态路径，显式和 Custom 注册继续使用原有类型化委托边界。
+- [x] 保持普通调用的具体静态路径，显式和 Custom 注册继续使用原有类型化委托边界。
 
 完整诊断边界与协议组合按 P2 推进。原型遇到的生成错误和行为错误在此修复。
 
@@ -87,21 +137,21 @@ P0 为当前高优先级，每跑通一条完整调用链即可开始对应的�
 
 运行时 Benchmark 项目当前引用旧生成器 Analyzer。提供可识别的 Next 选择方式，并保留旧版基线的运行方式。
 
-- [ ] 明确基准实际加载的 Analyzer 和生成正文身份。
-- [ ] 先跑通 `SimpleBenchmark`，随后接通 `SerializeBenchmark`、`JsonBenchmark` 和 `PolymorphismBenchmark`。
-- [ ] 复用原有模型、随机种子、数据、profile 和基准配置。
-- [ ] 使常规应用与基准共用正常调用链。
-- [ ] 在同机、同输入、同次运行条件下记录相对参考实现的耗时比、重复样本离散程度、分配和有效载荷大小。
+- [x] 明确基准实际加载的 Analyzer 和生成正文身份。
+- [x] 先跑通 `SimpleBenchmark`，随后接通 `SerializeBenchmark`、`JsonBenchmark` 和 `PolymorphismBenchmark`。
+- [x] 复用原有模型、随机种子、数据、profile 和基准配置。
+- [x] 使常规应用与基准共用正常调用链。
+- [x] 在同机、同输入、同次运行条件下记录相对参考实现的耗时比、重复样本离散程度、分配和有效载荷大小。
 
 完成条件是可以重复测量 Next 的序列化与反序列化，并能解释调用链和输入条件。
 
 ### 生成器基准和集中联调
 
-- [ ] 接通已有 GeneratorBenchmarks，分别记录完整生成、无关编辑、成员编辑的时间与分配。
+- [x] 接通已有 GeneratorBenchmarks，分别记录完整生成、无关编辑、成员编辑的时间与分配。
 - [ ] 记录生成文件数、源码体积和实际保留的操作集合。
-- [ ] 批量完成一组相关 P0 代码后，集中构建 Next 和代表性消费者，修复阻塞编译及基本读写的问题。
-- [ ] 对代表性模型做有限的基本读写、复用和旧格式互读检查，然后开展 Benchmark。
-- [ ] 将每次测量涉及的目标、载荷、profile 和生成器身份保留在结果中。
+- [x] 批量完成一组相关 P0 代码后，集中构建 Next 和代表性消费者，修复阻塞编译及基本读写的问题。
+- [x] 对代表性模型做有限的基本读写、复用和旧格式互读检查，然后开展 Benchmark。
+- [x] 将每次测量涉及的目标、载荷、profile 和生成器身份保留在结果中。
 
 分别记录源码静态检查、消费者运行、运行时 Benchmark 和生成器 Benchmark 的结果。完整迁移和全平台回归继续推进期间，原型可先用于技术验证。
 
@@ -144,12 +194,12 @@ P1 的执行顺序由实用性和基准结果决定。直接阻塞实际使用�
 
 ## 原型完成条件
 
-- [ ] 一个常规消费者可以调用 Next 的公共 API。
+- [x] 一个常规消费者可以调用 Next 的公共 API。
 - [ ] 常见 class/struct、继承、自动属性、闭合泛型、集合和嵌套元素可以生成完整正文并运行。
-- [ ] 现有基准依赖的非泛型 Union 和 Packed 类型可以运行。
-- [ ] 常规二进制和 JSON 写入、读取、已有目标和复用缓冲区入口可以运行。
-- [ ] 运行时 Benchmark 与生成器 Benchmark 均可执行，结果能够确认使用 Next。
-- [ ] 基本有效性检查已完成，并列明实际覆盖范围与剩余缺口。
+- [x] 现有基准依赖的非泛型 Union 和 Packed 类型可以运行。
+- [x] 常规二进制和 JSON 写入、读取、已有目标和复用缓冲区入口可以运行。
+- [x] 运行时 Benchmark 与生成器 Benchmark 均可执行，结果能够确认使用 Next。
+- [x] 基本有效性检查已完成，并列明实际覆盖范围与剩余缺口。
 
 达到这些条件后，优先利用原型开展测量和改进，继续按 P1、P2 扩展覆盖。
 
