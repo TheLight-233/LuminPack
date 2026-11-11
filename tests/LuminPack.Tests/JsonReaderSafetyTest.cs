@@ -207,7 +207,10 @@ internal static class JsonReaderSafetyTest
             ["one"] = [1, 2, 3],
             ["two"] = [4, 5]
         };
-        var dictionaryResult = RoundTrip(dictionary);
+        // Generic payload APIs need a concrete call site for the generator to emit this payload's roots.
+        string dictionaryJson = LuminPackSerializer.SerializeJson(dictionary);
+        var dictionaryResult = global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, List<int>>>(dictionaryJson,
+            static (string concreteReadInput, ref Dictionary<string, List<int>> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert(dictionaryResult is not null &&
                dictionaryResult.Count == dictionary.Count &&
                dictionaryResult.All(item => item.Value.SequenceEqual(dictionary[item.Key])),
