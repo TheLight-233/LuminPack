@@ -308,6 +308,8 @@ internal static class RenderModelFactory
     internal static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options)
     {
         RenderMember? rendered = MemberCore(member, extension, options);
+        if (rendered != null && member.Compressed)
+            rendered = rendered.Compressed("global::LuminPack." + GeneratedNames.Owner(extension, rendered.TypeName));
         return rendered == null || !member.Policy.Declared ? rendered : rendered.WithScope(ProfileNames.Type(member.Policy.Strings));
     }
 

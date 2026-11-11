@@ -40,7 +40,19 @@ internal abstract class MemberModel : IEquatable<MemberModel>
 
     /// <inheritdoc/>
     public bool Equals(MemberModel? other) => ReferenceEquals(this, other) || other != null && other.GetType() == GetType() &&
-        Name == other.Name && Storage == other.Storage && Policy.Equals(other.Policy) && EqualsCore(other);
+        Name == other.Name && Storage == other.Storage && Policy.Equals(other.Policy) && Compressed == other.Compressed && EqualsCore(other);
+
+    /// <summary>Whether a <c>[LuminPackCompress]</c> declaration writes and reads the member through its compressed kernels.</summary>
+    internal bool Compressed { get; private set; }
+
+    /// <summary>Copies the member with its compressed binary representation.</summary>
+    /// <returns>The compressed member.</returns>
+    internal MemberModel WithCompression()
+    {
+        var copy = (MemberModel)MemberwiseClone();
+        copy.Compressed = true;
+        return copy;
+    }
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MemberModel);

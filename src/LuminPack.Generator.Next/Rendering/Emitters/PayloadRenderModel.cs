@@ -204,6 +204,19 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         FieldType = fieldType;
     }
 
+    /// <summary>Marks the owner spelling of a compressed member, which the source writer resolves per file.</summary>
+    internal const char CompressedOwner = '\u0002';
+
+    /// <summary>Projects a compressed collection member onto an opaque owner call.</summary>
+    /// <param name="owner">The collection's generated owner.</param>
+    /// <returns>A member the emitters treat as a framework member: never merged into fixed runs or inline collection bodies.</returns>
+    /// <remarks>Its binary calls become the owner's <c>WriteValueWithCompress</c> and <c>ReadValueWithCompress</c> extensions, as
+    /// the original record writes them; its JSON calls keep the ordinary owner.</remarks>
+    internal RenderMember Compressed(string owner) => new RenderMember(Name, RenderMemberKind.Special, Scalar, TypeName, Size,
+        owner + CompressedOwner, FieldType, Mirrored, Underlying, raw: false, builtin: false, nested: null, formatterCall: false, Property,
+        dictionary: null, collection: null, ValueTypeParameter, BareParameter, NullObjectGuard, referencePayload: true, ScopeProfile,
+        sequence: null, Volatile);
+
     /// <summary>Applies a declaration-owned profile while sharing the member's immutable operation dependencies.</summary>
     /// <param name="profile">The closed stateless profile type.</param>
     /// <returns>The compiled member scope.</returns>

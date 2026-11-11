@@ -21,7 +21,7 @@ internal static class PayloadEmitter
     {
         if (model.UnionRoot)
             return string.Empty;
-        var writer = new CodeWriter(aliases) { Scoped = model.Net8 };
+        var writer = new CodeWriter(aliases) { Scoped = model.Net8, Json = json };
         if (json)
         {
             if (model.Circle)
@@ -68,6 +68,33 @@ internal sealed class CodeWriter
 
     /// <summary>Discards lines and alias uses while set, for the members of operations the project does not call.</summary>
     internal bool Suppressed;
+
+    /// <summary>Whether the file holds JSON operations, whose compressed members keep their ordinary owner.</summary>
+    internal bool Json;
+
+    /// <summary>Resolves a compressed member's owner call for this file.</summary>
+    /// <param name="text">The line.</param>
+    /// <returns>The binary compressed extension call, or the ordinary JSON owner call.</returns>
+    private string CompressedCall(string text)
+    {
+        int mark = text.IndexOf(RenderMember.CompressedOwner);
+        if (Json)
+            return text.Remove(mark, 1);
+        int start = text.LastIndexOf(' ', mark) + 1;
+        string indent = text.Substring(0, start);
+        string rest = text.Substring(mark + 1);
+        bool write = rest.StartsWith(".Write<", StringComparison.Ordinal);
+        int open = rest.IndexOf('(');
+        string arguments = rest.Substring(open + 1, rest.LastIndexOf(')') - open - 1);
+        int comma = arguments.IndexOf(',');
+        string state = arguments.Substring(0, comma).Trim();
+        if (state.StartsWith("ref ", StringComparison.Ordinal))
+            state = state.Substring(4);
+        string target = arguments.Substring(comma + 1).Trim();
+        if (target.StartsWith("in ", StringComparison.Ordinal))
+            target = target.Substring(3);
+        return indent + (write ? state + ".WriteValueWithCompress(" + target + ");" : state + ".ReadValueWithCompress(" + target + ");");
+    }
 
     /// <summary>Whether state and payload parameters keep their <c>scoped</c> modifier.</summary>
     internal bool Scoped = true;
@@ -116,6 +143,8 @@ internal sealed class CodeWriter
         // A collection-limit placeholder that no root projection resolved adds no statement.
         if (Suppressed || text.Length != 0 && text[0] == '\u0001')
             return;
+        if (text.IndexOf(RenderMember.CompressedOwner) >= 0)
+            text = CompressedCall(text);
         if (_pendingBlank)
         {
             _body.Append(Environment.NewLine);

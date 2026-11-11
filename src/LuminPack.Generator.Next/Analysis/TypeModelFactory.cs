@@ -444,6 +444,9 @@ internal static partial class TypeModelFactory
                 MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path);
                 if (model == null)
                     continue;
+                // An array or list of unmanaged elements declared compressed keeps the compressed binary representation.
+                if (HasAttribute(member, CompressAttribute) && CompressibleCollection(StorageType(member)))
+                    model = model.WithCompression();
                 if (!names.Add(model.Name))
                 {
                     issues.Add("the payload chain declares member '" + model.Name + "' more than once");
@@ -3515,6 +3518,19 @@ internal static partial class TypeModelFactory
     /// <param name="symbol">The candidate type.</param>
     /// <returns>Whether the type declares a generated payload contract.</returns>
     private static bool IsPackable(INamedTypeSymbol symbol) => HasAttribute(symbol, PackableAttribute);
+
+    private const string CompressAttribute = "LuminPack.Attribute.LuminPackCompressAttribute";
+
+    /// <summary>Whether a declared member type is an array or list of unmanaged elements, which the compressed kernels accept.</summary>
+    /// <param name="type">The declared member type.</param>
+    /// <returns>Whether the compress declaration applies.</returns>
+    private static bool CompressibleCollection(ITypeSymbol type) => type switch
+    {
+        IArrayTypeSymbol { Rank: 1 } array => array.ElementType.IsUnmanagedType,
+        INamedTypeSymbol { TypeArguments.Length: 1 } list when list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
+            => list.TypeArguments[0].IsUnmanagedType,
+        _ => false,
+    };
 
     /// <summary>Reads a packable declaration's generation mode.</summary>
     /// <param name="symbol">The candidate type.</param>
