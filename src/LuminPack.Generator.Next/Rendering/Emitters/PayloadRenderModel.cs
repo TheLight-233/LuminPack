@@ -379,7 +379,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly bool Circle;
     /// <summary>Whether a declaration disables hostile-input handling for this type's roots, whose reads then keep the plain
     /// marker, batch and Boolean checks of the trusted template.</summary>
-    internal readonly bool Trusted;
+    internal bool Trusted { get; private set; }
     /// <summary>The imported string options type a type-level declaration owns, or null when the roots take the operation's
     /// profile. Its member writes also fix the record's string operations to that profile.</summary>
     internal readonly string DeclaredProfile;
@@ -466,10 +466,28 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly string Rejection;
 
     /// <summary>The frozen limits of an untrusted root, or null for a trusted one.</summary>
-    internal readonly InputLimits Limits;
+    internal InputLimits Limits { get; private set; }
 
     /// <summary>Whether the root reaches itself, so its read counts nesting against a declared depth limit.</summary>
-    internal readonly bool Recursive;
+    internal bool Recursive { get; private set; }
+
+    /// <summary>The bounded root whose checked copies receive this body's nested reads, or null.</summary>
+    internal InputRedirect Redirect { get; private set; }
+
+    /// <summary>Copies the model for a read under a bounded root's frozen limits.</summary>
+    /// <param name="limits">The root's limits.</param>
+    /// <param name="recursive">Whether this payload reaches itself, which applies the root's depth limit.</param>
+    /// <param name="redirect">The root's checked-copy context.</param>
+    /// <returns>An untrusted copy whose nested reads go to the root's checked copies.</returns>
+    internal PayloadRenderModel WithInput(InputLimits limits, bool recursive, InputRedirect redirect)
+    {
+        var copy = (PayloadRenderModel)MemberwiseClone();
+        copy.Trusted = false;
+        copy.Limits = limits;
+        copy.Recursive = recursive;
+        copy.Redirect = redirect;
+        return copy;
+    }
 
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,

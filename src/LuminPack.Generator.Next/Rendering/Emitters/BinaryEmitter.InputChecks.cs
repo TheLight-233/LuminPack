@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
@@ -49,8 +48,11 @@ internal static partial class BinaryEmitter
     {
         InputLimits limits = read ? model.Limits : null;
         var result = new List<string>(body.Count + 4);
-        foreach (string line in body)
+        // Under a bounded root, a nested read whose own entry applies other checks runs as the root's checked copy.
+        InputRedirect redirect = read ? model.Redirect : null;
+        for (int index = 0; index < body.Count; index++)
         {
+            string line = body[index];
             if (line.Length != 0 && line[0] == CollectionCheck)
             {
                 // A count beyond the declared limit fails after the kernel has bounded it by the input.
@@ -58,7 +60,13 @@ internal static partial class BinaryEmitter
                     result.Add(w.A("LuminPackInputPolicy") + ".CheckLength(" + line.Substring(1) + ", " + Literal(limits.Collection) + ");");
                 continue;
             }
-            result.Add(limits != null && limits.String != int.MaxValue ? StringLimit(line, w, limits.String) : line);
+            if (limits != null)
+                line = InputReadRenderer.Project(line, limits, w.A("LuminPackInputPolicy"));
+            // A raw primitive collection keeps its runtime kernel; the placeholder after it checks the count.
+            bool rawCollection = index + 1 < body.Count && body[index + 1].Length != 0 && body[index + 1][0] == CollectionCheck;
+            if (redirect != null && !rawCollection)
+                line = redirect.Apply(line);
+            result.Add(line);
         }
         if (limits == null || !model.Recursive || limits.Depth == int.MaxValue)
             return result;
@@ -112,75 +120,6 @@ internal static partial class BinaryEmitter
         }
         checkedBody.Add(exit);
         return checkedBody;
-    }
-
-    /// <summary>Redirects the string reads of one line to the checked adapters with the frozen string limit.</summary>
-    /// <param name="line">The body line.</param>
-    /// <param name="w">The file writer.</param>
-    /// <param name="limit">The declared string limit.</param>
-    /// <returns>The checked line.</returns>
-    /// <remarks>A string record reads through <c>reader.Read&lt;TProfile&gt;(ref storage)</c>, and a reused string through
-    /// <c>reader.Read&lt;TProfile&gt;(current)</c>; scalar reads carry no argument and stay unchanged.</remarks>
-    private static string StringLimit(string line, CodeWriter w, int limit)
-    {
-        const string call = "reader.Read<";
-        int search = 0;
-        StringBuilder rewritten = null;
-        int copied = 0;
-        while ((search = line.IndexOf(call, search, StringComparison.Ordinal)) >= 0)
-        {
-            // The receiver must be the reader itself, not a member that ends in the same name.
-            if (search > 0 && (char.IsLetterOrDigit(line[search - 1]) || line[search - 1] is '_' or '.'))
-            {
-                search += call.Length;
-                continue;
-            }
-            int open = search + call.Length - 1;
-            int close = Matching(line, open, '<', '>');
-            if (close < 0 || close + 1 >= line.Length || line[close + 1] != '(')
-            {
-                search += call.Length;
-                continue;
-            }
-            int end = Matching(line, close + 1, '(', ')');
-            string profile = line.Substring(open + 1, close - open - 1);
-            string argument = end < 0 ? string.Empty : line.Substring(close + 2, end - close - 2);
-            if (end < 0 || argument.Length == 0 || argument.IndexOf(',') >= 0)
-            {
-                search += call.Length;
-                continue;
-            }
-            string policy = w.A("LuminPackInputPolicy");
-            string replacement = argument.StartsWith("ref ", StringComparison.Ordinal)
-                ? policy + ".ReadStringRecord<" + profile + ">(ref reader, " + argument + ", " + Literal(limit) + ")"
-                : policy + ".ReadString<" + profile + ">(ref reader, " + argument + ", " + Literal(limit) + ")";
-            rewritten ??= new StringBuilder(line.Length + 64);
-            rewritten.Append(line, copied, search - copied).Append(replacement);
-            copied = end + 1;
-            search = end + 1;
-        }
-        if (rewritten == null)
-            return line;
-        return rewritten.Append(line, copied, line.Length - copied).ToString();
-    }
-
-    /// <summary>Finds the bracket that closes the one at a position.</summary>
-    /// <param name="text">The text.</param>
-    /// <param name="open">The opening bracket position.</param>
-    /// <param name="opening">The opening bracket.</param>
-    /// <param name="closing">The closing bracket.</param>
-    /// <returns>The closing position, or -1.</returns>
-    private static int Matching(string text, int open, char opening, char closing)
-    {
-        int depth = 0;
-        for (int index = open; index < text.Length; index++)
-        {
-            if (text[index] == opening)
-                depth++;
-            else if (text[index] == closing && --depth == 0)
-                return index;
-        }
-        return -1;
     }
 
     /// <summary>Formats a frozen limit.</summary>

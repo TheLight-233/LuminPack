@@ -88,7 +88,9 @@ public sealed class NextGenerator : IIncrementalGenerator
                     Emit(production, model, renderContext, UnionRenderer.Instance.RenderJson(model, renderContext), ".Json");
                     return;
                 }
-                Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
+                // A bounded untrusted root's binary file is rendered with the shared owners, whose read bodies it copies.
+                if (!BoundedRoot(model))
+                    Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
                 Emit(production, model, renderContext, JsonRenderer.Instance.Render(model, renderContext), ".Json");
             }
             catch (Exception error) when (error is not OperationCanceledException)
@@ -154,6 +156,95 @@ public sealed class NextGenerator : IIncrementalGenerator
             }
         });
         InitializeEntries(context, collected, calls, sharedFormatters);
+        InitializeBoundedRoots(context, collected, sharedFormatters);
+    }
+
+    /// <summary>Reports whether a payload is an untrusted record root with declared collection, string or depth limits.</summary>
+    /// <param name="model">The payload.</param>
+    /// <returns>Whether its reads take checked copies of their nested reads.</returns>
+    private static bool BoundedRoot(TypeModel model) => model is RecordModel { Rejection: null, Versioned: false } &&
+        model.Policy.Input == InputPolicy.Untrusted && model.Policy.Limits.Bounded;
+
+    /// <summary>Renders each bounded untrusted root's binary file and the checked copies of the nested reads it reaches.</summary>
+    /// <remarks>Under declared limits, a nested read whose own entry applies other checks runs as a copy of that entry's read
+    /// body with the root's limits frozen, as the original input readers did. The copies need the shared owner bodies, so these
+    /// roots are rendered here instead of in the per-payload output.</remarks>
+    private static void InitializeBoundedRoots(IncrementalGeneratorInitializationContext context,
+        IncrementalValueProvider<System.Collections.Immutable.ImmutableArray<ModeledPayload>> collected,
+        IncrementalValueProvider<SharedFormatterSet> sharedFormatters)
+    {
+        context.RegisterSourceOutput(collected.Combine(sharedFormatters), static (production, input) =>
+        {
+            var roots = new List<(RecordModel Model, GeneratorOptions Options)>();
+            foreach (ModeledPayload payload in input.Left)
+                if (payload.Result.IsComplete && payload.Result.Model is RecordModel record && BoundedRoot(record))
+                    roots.Add((record, payload.Options));
+            if (roots.Count == 0)
+                return;
+            try
+            {
+                SharedFormatterSet set = input.Right;
+                var sources = new List<string>();
+                foreach (var source in SharedFormatterPublisher.Render(set, GeneratedOperations.All))
+                    sources.Add(source.Value);
+                // Scalar owners keep their lowered calls, as raw scalar reads need no input checks.
+                var scalars = new HashSet<string>(StringComparer.Ordinal);
+                foreach (string scalar in set.Scalars)
+                    scalars.Add(ReadableTypeName.Of(GeneratedNames.PayloadKey(scalar.Split('=')[0])));
+                foreach (var (root, options) in roots)
+                {
+                    PayloadRenderModel? rootModel = RenderModelFactory.Create(root, options);
+                    if (rootModel == null)
+                        continue;
+                    var payloads = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
+                    var copyable = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (ModeledPayload payload in input.Left)
+                        if (payload.Result.IsComplete && payload.Result.Model is RecordModel { Rejection: null, Versioned: false } record &&
+                            RenderModelFactory.Create(record, options) is { Circle: false, IsStruct: false, Mirror: null, Version: null } candidate &&
+                            candidate.Mirrors.Length == 0)
+                        {
+                            payloads[candidate.Readable] = candidate;
+                            copyable.Add(candidate.Readable);
+                        }
+                    foreach (string source in sources)
+                        foreach (string owner in RootsDeclaredIn(source))
+                            if (!scalars.Contains(owner))
+                                copyable.Add(owner);
+                    var redirect = new InputRedirect(rootModel.Readable, GeneratedNames.Extension(options.AssemblyName), root.Policy.Limits, copyable);
+                    string file = PayloadEmitter.Render(rootModel.WithInput(root.Policy.Limits, root.Recursive, redirect), json: false,
+                        options.AvailableAliases, GeneratedOperations.All);
+                    var renderContext = new RenderContext(options, AliasTable.For(options.AvailableAliases));
+                    Emit(production, root, renderContext, file, string.Empty);
+                    Emit(production, root, renderContext, InputReadRenderer.RenderCopies(redirect, payloads, sources, options.AvailableAliases,
+                        GeneratedOperations.All), ".InputReads");
+                }
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                production.ReportDiagnostic(DiagnosticDescriptors.Create(
+                    DiagnosticInfo.Unlocated(DiagnosticDescriptors.GeneratorFailure.Id, error.Message)));
+            }
+        });
+    }
+
+    /// <summary>Lists the root containers a shared owner file declares.</summary>
+    /// <param name="source">The owner file.</param>
+    /// <returns>The readable names of its <c>LuminRoots_</c> containers that publish a root read.</returns>
+    private static IEnumerable<string> RootsDeclaredIn(string source)
+    {
+        const string declaration = " class LuminRoots_";
+        int search = 0;
+        while ((search = source.IndexOf(declaration, search, StringComparison.Ordinal)) >= 0)
+        {
+            int start = search + declaration.Length, end = start;
+            while (end < source.Length && (char.IsLetterOrDigit(source[end]) || source[end] == '_'))
+                end++;
+            search = end;
+            int next = source.IndexOf(declaration, end, StringComparison.Ordinal);
+            string block = next < 0 ? source.Substring(end) : source.Substring(end, next - end);
+            if (block.Contains(" RootRead<TLuminProfile>(") || block.Contains(" RootRead("))
+                yield return source.Substring(start, end - start);
+        }
     }
 
     /// <summary>Publishes the generic facade and binds closed ordinary calls to the concrete roots of complete payloads and

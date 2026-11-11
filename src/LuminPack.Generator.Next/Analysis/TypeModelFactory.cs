@@ -390,8 +390,9 @@ internal static partial class TypeModelFactory
                         rent == null && CanDeserializeDirectlyIntoFreshResult(symbol, members),
                         mirror, mirrorFields, mirrorOffsets, mirrorLayout, version,
                         constructor, callbacks, rent, (mirror != null || versioned) ? CaptureMirrors(symbol, identity, issues) : Array.Empty<StorageMirrorModel>(),
-                        // Without a declared depth limit, recursion keeps only its stack guard.
-                        recursive: policy.Input == InputPolicy.Untrusted && policy.Limits.Depth != int.MaxValue && IsRecursive(symbol));
+                        // A declared depth limit counts nesting only on recursive records, including a trusted record read under
+                        // a bounded root; without one, recursion keeps only its stack guard.
+                        recursive: IsRecursive(symbol));
                 }
             }
         }
