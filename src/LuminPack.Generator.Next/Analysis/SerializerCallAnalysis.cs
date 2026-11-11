@@ -34,7 +34,8 @@ internal static class SerializerCallAnalysis
             SimpleNameSyntax simple => simple,
             _ => null,
         };
-        return name != null && name.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson";
+        return name != null && name.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or
+            "SerializeAsync" or "DeserializeAsync";
     }
 
     /// <summary>Binds one candidate call.</summary>
@@ -162,6 +163,12 @@ internal static class SerializerCallAnalysis
                     "LuminBufferWriter" => SerializerApi.DeserializeJsonBufferRef,
                     _ => null,
                 };
+            case "SerializeAsync" when parameters.Length == 3 && First() == "Stream" && parameters[1].Type is ITypeParameterSymbol:
+                return SerializerApi.SerializeStream;
+            case "DeserializeAsync" when parameters.Length == 2 && First() == "Stream":
+                return SerializerApi.DeserializeStream;
+            case "DeserializeAsync" when parameters.Length == 3 && First() == "Stream" && parameters[1].Type is ITypeParameterSymbol:
+                return SerializerApi.DeserializeStreamValue;
             default:
                 return null;
         }

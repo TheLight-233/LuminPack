@@ -171,6 +171,11 @@ namespace LuminPack
     /// <returns>The template with its input checks resolved.</returns>
     private static string Limits(string text, string type, RootEntry root)
     {
+        // A stream read stages at most the frozen cap; a trusted payload keeps the assembly selector there, as the original
+        // concrete facade only replaced that argument under an input policy.
+        text = text.Replace("%STREAMLIMIT%", root.Owner == null && root.Limit is { } streamLimit
+            ? streamLimit.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()");
         if (root.Owner != null)
             return text.Replace("%LIMIT%", "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()")
                 .Replace("%ENCODING%", "(int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<" + type + ">()");
@@ -189,6 +194,22 @@ namespace LuminPack
         string signature, call;
         switch (api)
         {
+            case SerializerApi.SerializeStream:
+                signature = "global::System.Threading.Tasks.ValueTask " + name + "(global::System.IO.Stream stream, " + type +
+                    " value, global::System.Threading.CancellationToken cancellationToken)";
+                call = entry + ".SerializeAsync<" + profile + ">(stream, value, cancellationToken)";
+                break;
+            case SerializerApi.DeserializeStream:
+                signature = "global::System.Threading.Tasks.ValueTask<" + type + "> " + name +
+                    "(global::System.IO.Stream stream, global::System.Threading.CancellationToken cancellationToken)";
+                call = entry + ".DeserializeAsync<" + profile + ">(stream, cancellationToken)";
+                break;
+            case SerializerApi.DeserializeStreamValue:
+                // The value argument is a compatibility parameter: the result is deserialized independently.
+                signature = "global::System.Threading.Tasks.ValueTask<" + type + "> " + name + "(global::System.IO.Stream stream, " + type +
+                    " value, global::System.Threading.CancellationToken cancellationToken)";
+                call = entry + ".DeserializeAsync<" + profile + ">(stream, cancellationToken)";
+                break;
             case SerializerApi.SerializeArray:
                 signature = "byte[] " + name + "(in " + type + " value)";
                 call = entry + ".Serialize<" + profile + ">(in value)";
@@ -400,6 +421,29 @@ namespace LuminPack
                 %TYPE% value = default!;
                 Deserialize<TLuminProfile>(bufferWriter, ref value);
                 return value;
+            }
+
+            public static async global::System.Threading.Tasks.ValueTask SerializeAsync<TLuminProfile>(global::System.IO.Stream stream, %TYPE% value, global::System.Threading.CancellationToken cancellationToken)
+                where TLuminProfile : struct, ILuminPackOptions
+            {
+                var writerBuffer = LuminBufferWriterPool.Rent();
+                try
+                {
+                    Serialize<TLuminProfile>(in value, writerBuffer);
+                    await writerBuffer.WriteToAndResetAsync(stream, cancellationToken).ConfigureAwait(false);
+                    await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    LuminBufferWriterPool.Return(writerBuffer);
+                }
+            }
+
+            public static async global::System.Threading.Tasks.ValueTask<%TYPE%> DeserializeAsync<TLuminProfile>(global::System.IO.Stream stream, global::System.Threading.CancellationToken cancellationToken)
+                where TLuminProfile : struct, ILuminPackOptions
+            {
+                using var data = await global::LuminPack.Utility.LuminPackStreamInput.ReadAsync(stream, %STREAMLIMIT%, cancellationToken).ConfigureAwait(false);
+                return Deserialize<TLuminProfile>(data.Span);
             }
 ";
         w.Append(Limits(text.Replace("\r\n", "\n"), type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));

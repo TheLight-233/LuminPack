@@ -5,6 +5,15 @@ namespace LuminPack.SourceGenerator.Next.Model;
 /// <summary>A public <c>LuminPackSerializer</c> overload that a closed call can bind to a concrete root.</summary>
 internal enum SerializerApi
 {
+    /// <summary><c>ValueTask SerializeAsync&lt;T&gt;(Stream, T, CancellationToken)</c>.</summary>
+    SerializeStream,
+
+    /// <summary><c>ValueTask&lt;T&gt; DeserializeAsync&lt;T&gt;(Stream, CancellationToken)</c>.</summary>
+    DeserializeStream,
+
+    /// <summary><c>ValueTask&lt;T&gt; DeserializeAsync&lt;T&gt;(Stream, T, CancellationToken)</c>.</summary>
+    DeserializeStreamValue,
+
     /// <summary><c>byte[] Serialize&lt;T&gt;(in T)</c>.</summary>
     SerializeArray,
 
