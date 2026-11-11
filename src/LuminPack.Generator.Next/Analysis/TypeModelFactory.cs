@@ -535,6 +535,8 @@ internal static class TypeModelFactory
                     scalar: declared, raw: true, formatterCall: true);
             if (Scalar(array.ElementType) is { } scalar)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, scalar: scalar.Keyword);
+            if (array.IsSZArray && TryForwardedCollection(array.ElementType) is { } child)
+                return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, forwardedElement: child);
             return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
                 scalar: declared, formatterCall: true);
         }
@@ -631,10 +633,15 @@ internal static class TypeModelFactory
         /// <returns>The child owner requirements, or null if the family or element is not yet supported.</returns>
         private static CollectionMember? TryForwardedCollection(ITypeSymbol type)
         {
-            if (type is IArrayTypeSymbol { IsSZArray: true } array && Scalar(array.ElementType) is { } scalar)
-                return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default,
-                    type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
-                    Reference(array.ElementType), scalar: scalar.Keyword, raw: true);
+            if (type is IArrayTypeSymbol { IsSZArray: true } array)
+            {
+                var scalar = Scalar(array.ElementType);
+                var nested = scalar == null ? TryForwardedCollection(array.ElementType) : null;
+                return scalar == null && nested == null ? null :
+                    new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default,
+                        type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
+                        Reference(array.ElementType), scalar: scalar?.Keyword, forwardedElement: nested);
+            }
 
             if (type is not INamedTypeSymbol { Arity: 1 } named || named.IsUnboundGenericType)
                 return null;

@@ -279,6 +279,7 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         {
             var family = member.Kind switch
             {
+                CollectionKind.Array => SequenceFamily.Array,
                 CollectionKind.Concurrent => SequenceFamily.ConcurrentQueue,
                 CollectionKind.Blocking => SequenceFamily.BlockingCollection,
                 _ => SequenceFamily.List,

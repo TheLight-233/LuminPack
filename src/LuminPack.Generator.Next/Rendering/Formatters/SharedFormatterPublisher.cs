@@ -61,9 +61,12 @@ internal static class SharedFormatterPublisher
                 }
                 if (fact.ForwardedType != null)
                 {
-                    string source = fact.Family == SequenceFamily.ConcurrentQueue
-                        ? ConcurrentQueueForwardingOwnerFile.Render(set, fact, operations)
-                        : ListForwardingOwnerFile.Render(set, fact, operations);
+                    string source = fact.Family switch
+                    {
+                        SequenceFamily.Array => ArrayForwardingOwnerFile.Render(set, fact, operations),
+                        SequenceFamily.ConcurrentQueue => ConcurrentQueueForwardingOwnerFile.Render(set, fact, operations),
+                        _ => ListForwardingOwnerFile.Render(set, fact, operations),
+                    };
                     production.AddSource(hint, source);
                     continue;
                 }
