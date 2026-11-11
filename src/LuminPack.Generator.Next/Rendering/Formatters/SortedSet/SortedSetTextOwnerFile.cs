@@ -55,7 +55,10 @@ internal static class SortedSetTextOwnerFile
         w.Line("value.Clear();");
         if (c.ContiguousLayout)
         {
+            // The fallback keeps its rented storage in its own block, because the branches above declare the same local.
+            w.Open();
             c.PooledRead(() => AddPrefix("length"));
+            w.Close();
             return;
         }
         w.Line("for (int index = 0; index < length; index++)");
