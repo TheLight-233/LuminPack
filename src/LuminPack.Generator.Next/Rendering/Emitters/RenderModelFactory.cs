@@ -437,6 +437,11 @@ internal static class RenderModelFactory
             return FormatterRegistry.FindDictionary(member.DeclaredType) != null && SequenceElement(member.Nested, options) != null ?
                 new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.DeclaredType, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property) : null;
+        // An enum or framework built-in entry is stored through the dictionary owner, whose entry store spells the type.
+        if (member.KeyOwned != null || member.ValueOwned != null)
+            return FormatterRegistry.FindDictionary(member.DeclaredType) != null ?
+                new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.DeclaredType, member.DeclaredType, 0, formatter,
+                    ScalarKind.Other, mirrored, property: property) : null;
         switch (member.Kind)
         {
             case DictionaryKind.SortedList when member.KeyType != null && member.ValueType != null:

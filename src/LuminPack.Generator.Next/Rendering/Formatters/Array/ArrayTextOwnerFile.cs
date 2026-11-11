@@ -10,7 +10,7 @@ internal static class ArrayTextOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(c => c.CountedWrite("value"), Read, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged.ToArray();"), jsonCount: false);
+        c => c.W.Line("value = staged.ToArray();"), jsonCount: false, compressEntries: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

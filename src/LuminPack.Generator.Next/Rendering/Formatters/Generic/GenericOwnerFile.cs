@@ -41,6 +41,9 @@ internal static class GenericOwnerFile
                     (w, c) => ValueRead(w, c, args[0], "value = new " + declared + "(item);", "value = null;", null),
                     (w, c) => ValueJsonWrite(w, c, args[0], "value is null", "value.Value", extension, true),
                     (w, c) => LazyJsonRead(w, c, args[0], declared, extension));
+            case GenericIdentity.Grouping:
+            case GenericIdentity.Lookup:
+                return GroupingOwnerFile.Render(definition, args, declared, shortName, set, operations);
             case GenericIdentity.Memory:
             case GenericIdentity.ReadOnlyMemory:
             case GenericIdentity.ArraySegment:
@@ -55,10 +58,10 @@ internal static class GenericOwnerFile
         }
     }
 
-    private static string Owner(string extension, string type) => "global::LuminPack." + GeneratedNames.Owner(extension, type);
+    internal static string Owner(string extension, string type) => "global::LuminPack." + GeneratedNames.Owner(extension, type);
 
     // Writes one item through the raw scalar store or the profile's string store.
-    private static void WriteItem(CodeWriter w, SpecialOwnerContext c, string type, string local)
+    internal static void WriteItem(CodeWriter w, SpecialOwnerContext c, string type, string local)
     {
         if (type == "string")
             w.Line("writer.Write<" + c.Profile + ">(" + local + ");");
@@ -70,7 +73,7 @@ internal static class GenericOwnerFile
     }
 
     // Reads one item into an assignable local.
-    private static void ReadItem(CodeWriter w, SpecialOwnerContext c, string type, string local)
+    internal static void ReadItem(CodeWriter w, SpecialOwnerContext c, string type, string local)
     {
         if (type == "string")
             w.Line("reader.Read<" + c.Profile + ">(ref " + local + ");");
@@ -78,7 +81,7 @@ internal static class GenericOwnerFile
             w.Line("reader.Read(ref global::System.Runtime.CompilerServices.Unsafe.As<" + type + ", byte>(ref " + local + "), global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + type + ">());");
     }
 
-    private static string Declare(string type, string local) =>
+    internal static string Declare(string type, string local) =>
         type == "string" ? "string? " + local + " = null;" : type + " " + local + " = default;";
 
     private static void PairWrite(CodeWriter w, SpecialOwnerContext c, string[] args)

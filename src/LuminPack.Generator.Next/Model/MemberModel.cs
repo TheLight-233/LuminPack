@@ -333,12 +333,17 @@ internal sealed class CollectionMember : MemberModel
     /// <summary>The child collection whose generated owner reads and writes each element.</summary>
     internal readonly CollectionMember? ForwardedElement;
 
+    /// <summary>The shared scalar owner identity of an enum or framework built-in raw element, or null: the element spelling, then
+    /// <c>=</c> and the underlying keyword for an enum.</summary>
+    internal readonly string? OwnedScalar;
+
     /// <summary>Captures a sequence member.</summary>
     internal CollectionMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, CollectionKind kind, TypeRef element,
         string? scalar = null, bool raw = false, bool formatterCall = false, bool elementText = false, TypeModel? nested = null,
-        CollectionShape? shape = null, CollectionMember? forwardedElement = null)
+        CollectionShape? shape = null, CollectionMember? forwardedElement = null, string? ownedScalar = null)
         : base(name, storage, policy)
     {
+        OwnedScalar = ownedScalar;
         ForwardedElement = forwardedElement;
         Shape = shape;
         Nested = nested;
@@ -357,7 +362,8 @@ internal sealed class CollectionMember : MemberModel
         var member = (CollectionMember)other;
         return DeclaredType == member.DeclaredType && Kind == member.Kind && Element.Equals(member.Element) &&
             Scalar == member.Scalar && Raw == member.Raw && FormatterCall == member.FormatterCall &&
-            ElementText == member.ElementText && Equals(Nested, member.Nested) && Equals(Shape, member.Shape) && Equals(ForwardedElement, member.ForwardedElement);
+            ElementText == member.ElementText && OwnedScalar == member.OwnedScalar && Equals(Nested, member.Nested) && Equals(Shape, member.Shape) &&
+            Equals(ForwardedElement, member.ForwardedElement);
     }
 }
 
@@ -428,12 +434,20 @@ internal sealed class DictionaryMember : MemberModel
     /// <summary>The normalized model of a packable class value, which the dictionary owner expands in place, or null.</summary>
     internal readonly TypeModel? Nested;
 
+    /// <summary>The shared scalar owner identity of an enum or framework built-in key, or null.</summary>
+    internal readonly string? KeyOwned;
+
+    /// <summary>The shared scalar owner identity of an enum or framework built-in value, or null.</summary>
+    internal readonly string? ValueOwned;
+
     /// <summary>Captures a dictionary member.</summary>
     internal DictionaryMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, DictionaryKind kind, TypeRef key,
         TypeRef value, bool pair = false, bool keyText = false, bool valueText = false, bool sparse = false, string? keyType = null,
-        string? valueType = null, TypeModel? nested = null)
+        string? valueType = null, TypeModel? nested = null, string? keyOwned = null, string? valueOwned = null)
         : base(name, storage, policy)
     {
+        KeyOwned = keyOwned;
+        ValueOwned = valueOwned;
         Nested = nested;
         ValueType = valueType;
         KeyType = keyType;
@@ -453,7 +467,8 @@ internal sealed class DictionaryMember : MemberModel
         var member = (DictionaryMember)other;
         return DeclaredType == member.DeclaredType && Kind == member.Kind && Key.Equals(member.Key) && Value.Equals(member.Value) &&
             Pair == member.Pair && KeyText == member.KeyText && ValueText == member.ValueText && Sparse == member.Sparse &&
-            KeyType == member.KeyType && ValueType == member.ValueType && Equals(Nested, member.Nested);
+            KeyType == member.KeyType && ValueType == member.ValueType && Equals(Nested, member.Nested) && KeyOwned == member.KeyOwned &&
+            ValueOwned == member.ValueOwned;
     }
 }
 

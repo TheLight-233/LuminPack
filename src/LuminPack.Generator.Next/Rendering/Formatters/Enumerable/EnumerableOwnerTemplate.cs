@@ -188,9 +188,14 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether the sequence exposes a count that short-circuits an empty JSON array.</summary>
     internal bool JsonCount { get; }
 
+    /// <summary>Whether the owner also declares the compressed entry points a forwarding parent calls, which equal the plain ones.</summary>
+    internal bool CompressEntries { get; }
+
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
-        Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true)
+        Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
+        bool compressEntries = false)
     {
+        CompressEntries = compressEntries;
         JsonCount = jsonCount;
         WriteBody = writeBody;
         ReadBody = readBody;
@@ -266,6 +271,23 @@ internal static class EnumerableOwnerTemplate
                     w.Line("    scoped in " + sequence + " input)");
                     w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite" + (text ? "<TLuminProfile>" : "") + "(ref writer, input);");
                     w.Blank();
+                    if (spec.CompressEntries)
+                    {
+                        w.Line(preserve);
+                        w.Line(inline);
+                        w.Line("internal static void SerializeWithCompress(");
+                        w.Line("    scoped ref " + writer + " writer,");
+                        w.Line("    scoped in " + sequence + " input)");
+                        w.Line("        => " + roots + ".RootWrite" + (text ? "<" + utf16 + ">" : "") + "(ref writer, input);");
+                        w.Blank();
+                        w.Line(preserve);
+                        w.Line(inline);
+                        w.Line("internal static void SerializeWithCompress<TLuminProfile>(");
+                        w.Line("    scoped ref " + writer + " writer,");
+                        w.Line("    scoped in " + sequence + " input)");
+                        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite" + (text ? "<TLuminProfile>" : "") + "(ref writer, input);");
+                        w.Blank();
+                    }
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
@@ -331,6 +353,23 @@ internal static class EnumerableOwnerTemplate
                     w.Line("    scoped ref " + sequence + " value)");
                     w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootRead" + (text ? "<TLuminProfile>" : "") + "(ref reader, ref value);");
                     w.Blank();
+                    if (spec.CompressEntries)
+                    {
+                        w.Line(preserve);
+                        w.Line(inline);
+                        w.Line("internal static void DeserializeWithCompress(");
+                        w.Line("    scoped ref " + reader + " reader,");
+                        w.Line("    scoped ref " + sequence + " value)");
+                        w.Line("        => " + roots + ".RootRead" + (text ? "<" + utf16 + ">" : "") + "(ref reader, ref value);");
+                        w.Blank();
+                        w.Line(preserve);
+                        w.Line(inline);
+                        w.Line("internal static void DeserializeWithCompress<TLuminProfile>(");
+                        w.Line("    scoped ref " + reader + " reader,");
+                        w.Line("    scoped ref " + sequence + " value)");
+                        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootRead" + (text ? "<TLuminProfile>" : "") + "(ref reader, ref value);");
+                        w.Blank();
+                    }
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);

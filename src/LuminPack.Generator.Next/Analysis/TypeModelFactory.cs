@@ -543,8 +543,13 @@ internal static class TypeModelFactory
                     scalar: declared, raw: true, formatterCall: true);
             if (Scalar(array.ElementType) is { } scalar)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, scalar: scalar.Keyword);
-            if (array.IsSZArray && TryForwardedCollection(array.ElementType) is { } child)
+            if (array.IsSZArray && TryForwardedCollection(array.ElementType, depth, issues, path, name) is { } child)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, forwardedElement: child);
+            // An array of unmanaged elements stores its span directly, like a list of them.
+            if (array.IsSZArray && IsReservedElement(array.ElementType))
+                return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
+                    scalar: array.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    ownedScalar: ScalarFormatter(array.ElementType));
             // An array of strings transfers its elements through the shared string owner.
             if (array.IsSZArray && array.ElementType.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, scalar: "string",
@@ -554,8 +559,9 @@ internal static class TypeModelFactory
                 ElementModel(packable, depth, issues, path, name) is { } nested)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
                     scalar: packable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested, formatterCall: true);
-            return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
-                scalar: declared, formatterCall: true);
+            // Any other element (nullable values, arrays of unsupported shapes, object) has no shared owner, so the member stays
+            // unmodeled and the record keeps the original pipeline instead of calling an owner nothing publishes.
+            return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element);
         }
 
         /// <summary>Models a generic sequence member of a covered family.</summary>
@@ -574,8 +580,9 @@ internal static class TypeModelFactory
             string declared = DeclaredType(type);
             ITypeSymbol item = type.TypeArguments[0];
             TypeRef element = Reference(item);
-            if (kind == CollectionKind.Stack && Scalar(item) is { } stackItem)
-                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: stackItem.Keyword, raw: true);
+            if (kind == CollectionKind.Stack && RawElement(item) is { } stackItem)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: stackItem.Spelling, raw: true,
+                    ownedScalar: stackItem.Owned);
             // A stack of strings transfers its elements through the shared string owner.
             if (kind == CollectionKind.Stack && item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true, raw: true);
@@ -583,17 +590,22 @@ internal static class TypeModelFactory
             // A sorted set of strings counts its in-order enumeration through the shared string owner.
             if (kind == CollectionKind.SortedSet && item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
-            if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
-                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
+            if (kind == CollectionKind.SortedSet && RawElement(item) is { } setItem)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Spelling, raw: true,
+                    ownedScalar: setItem.Owned);
             // A linked list, hash set or queue of raw scalars transfers its elements through the shared formatter owner.
-            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper or CollectionKind.Interface or CollectionKind.Frozen && Scalar(item) is { } enumerableItem)
-                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: enumerableItem.Keyword);
+            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper or CollectionKind.Interface or CollectionKind.Frozen && RawElement(item) is { } enumerableItem)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: enumerableItem.Spelling,
+                    ownedScalar: enumerableItem.Owned);
             // The same families transfer string elements one at a time through the shared string owner.
             if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper or
                 CollectionKind.Interface or CollectionKind.Frozen && item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
             // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.
-            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && Scalar(item) is { } sequenceItem)
+            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && RawElement(item) is { } rawSequenceItem)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: rawSequenceItem.Spelling,
+                    ownedScalar: rawSequenceItem.Owned);
+            if (kind == CollectionKind.Blocking && Scalar(item) is { } sequenceItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: sequenceItem.Keyword);
             // A concurrent or immutable sequence of strings transfers its elements through the shared string owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && item.SpecialType == SpecialType.System_String)
@@ -610,7 +622,7 @@ internal static class TypeModelFactory
                     scalar: sequenceElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested);
             }
             if (kind is CollectionKind.Concurrent or CollectionKind.List or CollectionKind.NestedList or CollectionKind.Blocking &&
-                TryForwardedCollection(item) is { } child &&
+                TryForwardedCollection(item, depth, issues, path, name) is { } child &&
                 FormatterRegistry.FindSequence(type.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + type.OriginalDefinition.Name)?.Forwarded != null)
                 return new CollectionMember(name, storage, policy, declared, kind, element, forwardedElement: child);
             if (kind is not (CollectionKind.List or CollectionKind.NestedList))
@@ -621,7 +633,7 @@ internal static class TypeModelFactory
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: scalar.Keyword);
             if (IsReservedElement(item))
                 return new CollectionMember(name, storage, policy, declared, kind, element,
-                    scalar: item.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+                    scalar: item.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), ownedScalar: ScalarFormatter(item));
             // A list of strings writes its payload through one span call and reads through its element formatter.
             if (item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
@@ -664,16 +676,24 @@ internal static class TypeModelFactory
         /// <summary>Describes a collection that can be reached through a static element owner.</summary>
         /// <param name="type">The closed element type of the enclosing collection.</param>
         /// <returns>The child owner requirements, or null if the family or element is not yet supported.</returns>
-        private static CollectionMember? TryForwardedCollection(ITypeSymbol type)
+        private CollectionMember? TryForwardedCollection(ITypeSymbol type, int depth, List<string> issues, Path path, string memberName)
         {
             if (type is IArrayTypeSymbol { IsSZArray: true } array)
             {
                 var scalar = Scalar(array.ElementType);
-                var nested = scalar == null ? TryForwardedCollection(array.ElementType) : null;
-                return scalar == null && nested == null ? null :
-                    new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default,
-                        type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
-                        Reference(array.ElementType), scalar: scalar?.Keyword, forwardedElement: nested);
+                bool arrayText = scalar == null && array.ElementType.SpecialType == SpecialType.System_String;
+                var arrayNested = scalar == null && !arrayText ? TryForwardedCollection(array.ElementType, depth, issues, path, memberName) : null;
+                TypeModel? arrayPayload = null;
+                INamedTypeSymbol? arrayPacked = scalar == null && !arrayText && arrayNested == null ? LocalPackableClass(array.ElementType) : null;
+                if (arrayPacked != null)
+                    arrayPayload = ElementModel(arrayPacked, depth, issues, path, memberName);
+                if (scalar == null && !arrayText && arrayNested == null && arrayPayload == null)
+                    return null;
+                return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default,
+                    type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
+                    Reference(array.ElementType),
+                    scalar: arrayText ? "string" : arrayPayload != null ? arrayPacked!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) : scalar?.Keyword,
+                    elementText: arrayText, forwardedElement: arrayNested, nested: arrayPayload);
             }
 
             if (type is not INamedTypeSymbol { Arity: 1 } named || named.IsUnboundGenericType)
@@ -686,15 +706,20 @@ internal static class TypeModelFactory
             CollectionKind kind = formatter.Kind;
 
             ITypeSymbol item = named.TypeArguments[0];
-            var child = TryForwardedCollection(item);
             var element = Scalar(item);
-            bool text = formatter.Text != null &&
-                item.SpecialType == SpecialType.System_String;
-            if (element == null && (child == null || formatter.Forwarded == null) && !text)
+            bool text = formatter.Text != null && item.SpecialType == SpecialType.System_String;
+            var child = element == null && !text && formatter.Forwarded != null ?
+                TryForwardedCollection(item, depth, issues, path, memberName) : null;
+            TypeModel? payload = null;
+            INamedTypeSymbol? packed = element == null && !text && child == null && formatter.Payload != null ? LocalPackableClass(item) : null;
+            if (packed != null)
+                payload = ElementModel(packed, depth, issues, path, memberName);
+            if (element == null && child == null && !text && payload == null)
                 return null;
 
             return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default, DeclaredType(named), kind,
-                Reference(item), scalar: text ? "string" : element?.Keyword, elementText: text, forwardedElement: child);
+                Reference(item), scalar: text ? "string" : payload != null ? packed!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) : element?.Keyword,
+                elementText: text, forwardedElement: child, nested: payload);
         }
 
         /// <summary>Models a dictionary, sorted list or sparse dictionary member.</summary>
@@ -736,11 +761,12 @@ internal static class TypeModelFactory
                 // The paired owners of the other families store each entry as a raw scalar or a string.
                 bool otherKeyText = type.TypeArguments[0].SpecialType == SpecialType.System_String;
                 bool otherValueText = type.TypeArguments[1].SpecialType == SpecialType.System_String;
-                var otherKey = otherKeyText ? null : Scalar(type.TypeArguments[0], allowBoolean: false);
-                var otherValue = otherValueText ? null : Scalar(type.TypeArguments[1], allowBoolean: false);
+                var otherKey = otherKeyText ? null : RawEntry(type.TypeArguments[0]);
+                var otherValue = otherValueText ? null : RawEntry(type.TypeArguments[1]);
                 if ((otherKeyText || otherKey != null) && (otherValueText || otherValue != null))
                     return new DictionaryMember(name, storage, policy, declared, kind, key, value, keyText: otherKeyText,
-                        valueText: otherValueText, keyType: otherKey?.Keyword, valueType: otherValue?.Keyword);
+                        valueText: otherValueText, keyType: otherKey?.Spelling, valueType: otherValue?.Spelling,
+                        keyOwned: otherKey?.Owned, valueOwned: otherValue?.Owned);
                 return new DictionaryMember(name, storage, policy, declared, kind, key, value);
             }
             // A dictionary writes fused entries when a string member bounds its record, or paired records when both key and
@@ -748,11 +774,11 @@ internal static class TypeModelFactory
             int reserved = ReservedKind(type);
             bool keyText = type.TypeArguments[0].SpecialType == SpecialType.System_String;
             bool valueText = type.TypeArguments[1].SpecialType == SpecialType.System_String;
-            var keyRaw = keyText ? null : Scalar(type.TypeArguments[0], allowBoolean: false);
-            var valueRaw = valueText ? null : Scalar(type.TypeArguments[1], allowBoolean: false);
+            var keyRaw = keyText ? null : RawEntry(type.TypeArguments[0]);
+            var valueRaw = valueText ? null : RawEntry(type.TypeArguments[1]);
             if (reserved is 5 or 6 && (keyText || keyRaw != null) && (valueText || valueRaw != null))
                 return new DictionaryMember(name, storage, policy, declared, kind, key, value, pair: reserved == 5, keyText, valueText,
-                    keyType: keyRaw?.Keyword, valueType: valueRaw?.Keyword);
+                    keyType: keyRaw?.Spelling, valueType: valueRaw?.Spelling, keyOwned: keyRaw?.Owned, valueOwned: valueRaw?.Owned);
             // A dictionary whose value is a nullable raw scalar writes sparse entries with a varint key and the fixed value.
             if (reserved == 0 && Scalar(type.TypeArguments[1]) == null &&
                 type.TypeArguments[1] is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } nullable &&
@@ -839,6 +865,41 @@ internal static class TypeModelFactory
             if (HasAttribute(named, UnionAttribute) || HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute"))
                 return false;
             return TryPortableLayout(named) == null;
+        }
+
+        /// <summary>Classifies an element the raw sequence owners store as native storage: a scalar keyword, an enum or a framework
+        /// built-in.</summary>
+        /// <param name="element">The element type.</param>
+        /// <returns>The element spelling and its shared scalar owner identity, or null for every other element.</returns>
+        private (string Spelling, string? Owned)? RawElement(ITypeSymbol element)
+        {
+            if (Scalar(element) is { } scalar)
+                return (scalar.Keyword, null);
+            if (element.NullableAnnotation == NullableAnnotation.Annotated || element.IsRefLikeType || !element.IsUnmanagedType)
+                return null;
+            // An enum or framework built-in has a shared scalar owner; a packable struct that is plain unmanaged storage has the owner
+            // of its own payload, which the empty identity stands for.
+            if (ScalarFormatter(element) is { } owned)
+                return (element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), owned);
+            return IsReservedElement(element) && element is INamedTypeSymbol { TypeKind: TypeKind.Struct } ?
+                (element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), string.Empty) : null;
+        }
+
+        /// <summary>Classifies a dictionary key or value stored as native storage: a non-Boolean scalar keyword, an enum or a framework
+        /// built-in.</summary>
+        /// <param name="entry">The key or value type.</param>
+        /// <returns>The spelling and shared scalar owner identity, or null for every other type.</returns>
+        private (string Spelling, string? Owned)? RawEntry(ITypeSymbol entry)
+            => entry.SpecialType == SpecialType.System_Boolean ? null : RawElement(entry);
+
+        /// <summary>Whether a raw element is an enum or a framework built-in, whose shared scalar owner the element JSON calls.</summary>
+        /// <param name="element">The raw element type.</param>
+        /// <returns>The scalar owner identity, or null when no shared scalar owner serves the element.</returns>
+        private static string? ScalarFormatter(ITypeSymbol element)
+        {
+            if (element is INamedTypeSymbol { TypeKind: TypeKind.Enum, EnumUnderlyingType: { } underlying } enumType && Scalar(underlying) is { } keyword)
+                return enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + "=" + keyword.Keyword;
+            return Builtin(element);
         }
 
         /// <summary>Whether a generic declaration still dispatches its unmanaged storage through a closed formatter.</summary>

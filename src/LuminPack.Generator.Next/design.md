@@ -280,17 +280,36 @@ reference tuple; the original pipeline blits its raw struct memory including the
 wire, so that case intentionally differs from the original bytes.
 
 Packable class values of the keyed families (all but `SortedList` and `PriorityQueue`) expand their record body in place through the
-same paired template. Not ported: a list or array of arrays of packable classes, nested lists, the lookup and grouping interfaces, the string-key,
-matching-pair and ordered-append reuse read paths, the frozen raw pair write and rented builder, the small-hash-set grouped
-write and other optional runtime capabilities, reuse of known list and array targets by the sequence interfaces, and memory
-reuse of existing storage. A value tuple of raw scalars only keeps the original pipeline.
+same paired template. A list or array of arrays of strings or packable classes forwards to the child array owner, which carries
+the compressed entry points a forwarding parent calls. The lookup and grouping interfaces publish a standalone owner whose
+elements go through the enumerable owner.
+
+## Analysis outcomes
+
+The analysis now classifies a raw element in one place (`RawElement`): a scalar keyword, an enum (identified with its
+underlying keyword so its JSON owner casts through it), a framework built-in (`Guid`, `DateTime`, `DateTimeOffset`,
+`TimeSpan`, whose JSON owner parses their string form) or a plain unmanaged packable struct. Lists, arrays, the stack, queue,
+set, immutable, concurrent, wrapper, interface and frozen families take such elements, and every keyed family takes them as
+keys and values. A member that no owner covers is left unmodeled, so its record keeps the original pipeline instead of calling
+an owner nothing publishes: an array of nullable values or of any other unsupported element, a list of nullable values or
+of `object`, a list or dictionary whose element or value is a dictionary, a dictionary whose value is a collection, a
+`SortedList` with a string key, and a member whose type is itself a packable class or struct (the record emitters do not
+expand a nested payload member outside the circle-reference framing). Multi-dimensional arrays still call their legacy owner.
+
+Fixes found by the wider parity matrix: the shared scalar owner for the built-ins was missing from the JSON roots, the
+immutable array measure added the element width instead of the count width, and the array forwarding owner passed an in
+argument to a by-value root.
+
+Not ported: the string-key, matching-pair and ordered-append reuse read paths, the frozen raw pair write and rented builder,
+the small-hash-set grouped write and other optional runtime capabilities, reuse of known list and array targets by the
+sequence interfaces, and memory reuse of existing storage. A value tuple of raw scalars only keeps the original pipeline.
 
 These batches build with zero errors. An in-process parity run generated one record per type shape with the Next and the
 legacy generators, compiled both, and compared the binary bytes, the JSON text and the cross round trip (each side reads the
-other's bytes and writes them back): 126 shapes, populated and with null members, covering these families and the earlier
-ones (lists, arrays, concurrent queue, immutable array, the framework types), were byte-identical in binary and JSON. A
-concurrent bag of strings compares equal on write, but its read order is unspecified, so its round trip is not stable.
-Reuse of an existing destination and the platform fallbacks were not exercised.
+other's bytes and writes them back): 172 mapped shapes, populated and with null members, were byte-identical in binary and
+JSON, and 12 further shapes stay on the original pipeline. A concurrent bag of strings compares equal on write, but its read
+order is unspecified, so its round trip is not stable. Reuse of an existing destination and the platform fallbacks were not
+exercised.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,

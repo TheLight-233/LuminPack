@@ -19,7 +19,7 @@ internal static class SharedFormatterPublisher
             production.AddSource("LuminPack.SharedFormatters/" + ReadableTypeName.Of(owner) + ".g.cs",
                 FormatterRegistry.RenderStandalone(owner, set, operations));
         foreach (string scalar in set.Scalars)
-            production.AddSource("LuminPack.SharedFormatters/Scalar_" + ReadableTypeName.Of(scalar) + ".g.cs",
+            production.AddSource("LuminPack.SharedFormatters/Scalar_" + ReadableTypeName.Of(scalar.Split('=')[0]) + ".g.cs",
                 ScalarOwnerFile.Render(set, scalar, operations));
 
         foreach (DictionaryOwnerFact fact in set.DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>())

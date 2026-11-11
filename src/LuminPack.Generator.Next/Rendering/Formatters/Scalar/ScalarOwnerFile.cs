@@ -13,8 +13,12 @@ internal static class ScalarOwnerFile
     /// <param name="scalar">The scalar keyword, such as <c>long</c>.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set, string scalar, GeneratedOperations operations)
+    internal static string Render(SharedFormatterSet set, string identity, GeneratedOperations operations)
     {
+        // An enum scalar carries its underlying keyword after an equals sign; its JSON form is that number.
+        int equals = identity.IndexOf('=');
+        string scalar = equals < 0 ? identity : identity.Substring(0, equals);
+        string? underlying = equals < 0 ? null : identity.Substring(equals + 1);
         var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         string writer = w.A("LuminPackWriter");
@@ -149,7 +153,7 @@ internal static class ScalarOwnerFile
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line("var value = input;");
-                    w.Line("writer.Write<TLuminProfile>(value);");
+                    w.Line("writer.Write<TLuminProfile>(" + (underlying != null ? "(" + underlying + ")value" : "value") + ");");
                     w.Close();
                     w.Blank();
                     break;
@@ -192,7 +196,15 @@ internal static class ScalarOwnerFile
                     w.Line(inline);
                     w.Line("internal static void RootReadJson<TLuminProfile>(scoped ref " + jsonReader + " reader, scoped ref " + scalar +
                         " value)");
-                    w.Line("    where TLuminProfile : struct, " + options + " => value = reader.Read<" + scalar + ", " + readJson + ">();");
+                    // The framework built-ins are stored as strings in the JSON form and parsed back.
+                    string text = "reader.Read<string, " + readJson + ">()!";
+                    string read = underlying != null ? "(" + scalar + ")reader.Read<" + underlying + ", " + readJson + ">();" :
+                        scalar == "global::System.Guid" ? "global::System.Guid.Parse(" + text + ");" :
+                        scalar == "global::System.TimeSpan" ? "global::System.TimeSpan.Parse(" + text + ");" :
+                        scalar is "global::System.DateTime" or "global::System.DateTimeOffset" ?
+                            scalar + ".Parse(" + text + ", null, global::System.Globalization.DateTimeStyles.RoundtripKind);" :
+                        "reader.Read<" + scalar + ", " + readJson + ">();";
+                    w.Line("    where TLuminProfile : struct, " + options + " => value = " + read);
                     w.Blank();
                     break;
                 }

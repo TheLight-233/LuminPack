@@ -69,7 +69,7 @@ internal static class ImmutableArrayOwnerFile
                     w.Line("    scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator,");
                     w.Line("    scoped ref " + sequence + " value)");
                     w.Open();
-                    w.Line("evaluator.Add(sizeof(" + scalar + "));");
+                    w.Line("evaluator.Add(sizeof(int));");
                     w.Line("if (value.IsDefault)");
                     w.Line("    return;");
                     w.Line("evaluator.Add(checked(value.Length * " + memory + ".SizeOf<" + scalar + ">()));");

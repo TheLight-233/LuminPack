@@ -29,6 +29,12 @@ internal static class GenericIdentity
     /// <summary>The value tuple definition.</summary>
     internal const string ValueTuple = "System.ValueTuple";
 
+    /// <summary>The grouping definition.</summary>
+    internal const string Grouping = "System.Linq.IGrouping";
+
+    /// <summary>The lookup definition.</summary>
+    internal const string Lookup = "System.Linq.ILookup";
+
     /// <summary>The writable memory definition.</summary>
     internal const string Memory = "System.Memory";
 
@@ -79,6 +85,7 @@ internal static class GenericIdentity
         {
             Nullable => arguments.Length == 1 && arguments[0] != "string",
             Lazy or Memory or ReadOnlyMemory or ArraySegment or ReadOnlySequence => arguments.Length == 1,
+            Grouping or Lookup => arguments.Length == 2,
             KeyValuePair => arguments.Length == 2,
             Tuple => arguments.Length is >= 1 and <= 7,
             // A value tuple of raw scalars only keeps the raw struct storage of the original pipeline; one with a string item is

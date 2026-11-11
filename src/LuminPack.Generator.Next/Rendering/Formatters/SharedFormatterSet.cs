@@ -245,10 +245,14 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                     cultureInfoReuse |= culture.CanReuse;
                     break;
                 // A framework member always publishes its own owner; every direct write path calls the owner in place.
+                case ScalarMember { Builtin: true } builtin:
+                    AddScalar(scalars, builtin.Scalar);
+                    break;
                 case SpecialMember special:
                     owners.Add(GeneratedNames.PayloadKey(special.Declared));
                     // A closed generic owner calls the element owners of its arguments.
-                    if (GenericIdentity.TryParse(GeneratedNames.PayloadKey(special.Declared), out _, out string[] arguments))
+                    if (GenericIdentity.TryParse(GeneratedNames.PayloadKey(special.Declared), out string definition, out string[] arguments))
+                    {
                         foreach (string argument in arguments)
                         {
                             if (argument == "string")
@@ -256,6 +260,15 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                             else
                                 AddScalar(scalars, argument);
                         }
+                        // A grouping and a lookup write their elements through the enumerable owner, and a lookup through the grouping owner.
+                        if (definition is GenericIdentity.Grouping or GenericIdentity.Lookup &&
+                            FormatterRegistry.FindSequence("System.Collections.Generic.IEnumerable") is { } enumerable)
+                        {
+                            facts.Add(SequenceOwnerFact.ForScalar(enumerable, GroupingOwnerFile.Sequence(arguments[1]), arguments[1]));
+                            if (definition == GenericIdentity.Lookup)
+                                owners.Add("System.Linq.IGrouping<" + arguments[0] + "," + arguments[1] + ">");
+                        }
+                    }
                     break;
                 case CollectionMember collection:
                     Collect(collection, options, facts, scalars, owners, dictionaries,
@@ -302,6 +315,11 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
             {
                 if (member.KeyText)
                     owners.Add(FormatterRegistry.String);
+                else if (member.KeyOwned != null)
+                {
+                    if (member.KeyOwned.Length != 0)
+                        AddScalar(scalars, member.KeyOwned);
+                }
                 else if (member.KeyType != null)
                     AddScalar(scalars, member.KeyType);
                 dictionaries.Add(new DictionaryOwnerFact(payloadFamily, member.DeclaredType, member.KeyText ? "string" : member.KeyType!,
@@ -340,10 +358,10 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
             if (FormatterRegistry.FindDictionary(concrete) is { } dictionary)
                 dictionaries.Add(new DictionaryOwnerFact(dictionary, concrete, key, value));
         }
-        if (!member.KeyText)
-            AddScalar(scalars, key);
-        if (!member.ValueText)
-            AddScalar(scalars, value);
+        if (!member.KeyText && member.KeyOwned != string.Empty)
+            AddScalar(scalars, member.KeyOwned ?? key);
+        if (!member.ValueText && member.ValueOwned != string.Empty)
+            AddScalar(scalars, member.ValueOwned ?? value);
     }
 
     private static void Collect(CollectionMember member, GeneratorOptions options,
@@ -377,14 +395,21 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                 member.Scalar is ("bool" or "byte" or "sbyte" or "short" or "ushort" or "char" or "int" or "uint" or
                     "long" or "ulong" or "float" or "double" or "decimal"))
                 fact = SequenceOwnerFact.ForScalar(definition, member.DeclaredType, member.Scalar);
+            // A list or array of an unmanaged struct, enum or framework built-in stores its span directly as well.
+            else if (member.Nested == null && member.Shape == null && !member.FormatterCall && !member.ElementText &&
+                (member.Kind is CollectionKind.List or CollectionKind.Array || member.OwnedScalar != null) && member.Scalar != null &&
+                member.Scalar.StartsWith("global::", StringComparison.Ordinal))
+                fact = SequenceOwnerFact.ForScalar(definition, member.DeclaredType, member.Scalar);
 
             if (fact is { } required)
             {
                 facts.Add(required);
                 if (required.Scalar == "string")
                     owners.Add(FormatterRegistry.String);
-                else if (required.Scalar != null)
+                else if (required.Scalar != null && !required.Scalar.StartsWith("global::", StringComparison.Ordinal))
                     AddScalar(scalars, required.Scalar);
+                else if (required.Scalar != null && !string.IsNullOrEmpty(member.OwnedScalar))
+                    AddScalar(scalars, member.OwnedScalar!);
             }
         }
         if (member.ForwardedElement is { } element)
