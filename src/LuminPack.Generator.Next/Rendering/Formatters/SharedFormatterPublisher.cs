@@ -28,6 +28,15 @@ internal static class SharedFormatterPublisher
     /// <remarks>Bounded untrusted roots copy owner read bodies from the same text that is published.</remarks>
     internal static IEnumerable<KeyValuePair<string, string>> Render(SharedFormatterSet set, GeneratedOperations operations)
     {
+        // Two requirements that differ only in annotations name the same owner class; it is published once.
+        var hints = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var source in RenderAll(set, operations))
+            if (hints.Add(source.Key))
+                yield return source;
+    }
+
+    private static IEnumerable<KeyValuePair<string, string>> RenderAll(SharedFormatterSet set, GeneratedOperations operations)
+    {
         if (set.IsEmpty || operations == GeneratedOperations.None)
             yield break;
         var general = new HashSet<string>(StringComparer.Ordinal);
