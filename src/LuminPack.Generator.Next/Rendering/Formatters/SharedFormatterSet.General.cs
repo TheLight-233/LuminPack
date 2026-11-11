@@ -77,7 +77,9 @@ internal readonly partial struct SharedFormatterSet
         foreach (SequenceOwnerFact fact in SequenceOwners ?? System.Array.Empty<SequenceOwnerFact>())
             roots.Add(GeneratedNames.PayloadKey(fact.DeclaredType));
         foreach (FormatterModel model in GeneralOwners ?? System.Array.Empty<FormatterModel>())
-            if (model.Definition != FormatterDefinitions.PayloadReference || model.Payload != null && model.PublishPayload)
+            // A registered formatter has no generated owner, so it publishes no root.
+            if (model.Definition != FormatterDefinitions.Registered &&
+                (model.Definition != FormatterDefinitions.PayloadReference || model.Payload != null && model.PublishPayload))
                 roots.Add(GeneratedNames.PayloadKey(model.Type));
         // Two payloads whose readable names coincide share one owner class name; neither binds statically.
         var readable = new Dictionary<string, int>(System.StringComparer.Ordinal);

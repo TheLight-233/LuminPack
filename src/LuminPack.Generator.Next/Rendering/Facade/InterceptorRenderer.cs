@@ -38,6 +38,9 @@ internal sealed class RootEntry : IEquatable<RootEntry>
     /// <summary>The strict profile that replaces the declared profile in JSON reads of an explicitly untrusted payload, or null.</summary>
     internal readonly string? JsonReadProfile;
 
+    /// <summary>Whether the entry is a generic Union definition, whose closed uses always bind its generic roots.</summary>
+    internal readonly bool GenericUnion;
+
     /// <summary>The root method stem, which differs from the entry name for a closed generic payload.</summary>
     internal readonly string RootName;
 
@@ -46,8 +49,9 @@ internal sealed class RootEntry : IEquatable<RootEntry>
 
     /// <summary>Describes a published root.</summary>
     internal RootEntry(string readable, string declaredProfile, bool binary, bool json, string? owner = null, int? limit = null,
-        int encoding = 1, string? jsonReadProfile = null, string? rootName = null, string rootArguments = "")
+        int encoding = 1, string? jsonReadProfile = null, string? rootName = null, string rootArguments = "", bool genericUnion = false)
     {
+        GenericUnion = genericUnion;
         RootName = rootName ?? readable;
         RootArguments = rootArguments;
         Limit = limit;
@@ -664,18 +668,23 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
     {
         if (Map.TryGetValue(call.Payload, out RootEntry? root))
             return root;
-        // A closed generic payload calls its definition's generic roots from an entry named for the closed type.
-        if (call.Definition != null && Map.TryGetValue(call.Definition, out RootEntry? definition) && definition.Owner == null)
-            return new RootEntry(Emitters.ReadableTypeName.Of(Emitters.GeneratedNames.PayloadKey(call.Payload)), definition.DeclaredProfile,
-                definition.Binary, definition.Json, limit: definition.Limit, encoding: definition.Encoding,
-                jsonReadProfile: definition.JsonReadProfile, rootName: definition.RootName, rootArguments: call.TypeArguments + ", ");
-        if (call.Root == null)
-            return null;
-        // Shared roots are published by payload key: two payloads whose readable names coincide must not bind each other's owner.
+        // A closed payload binds its closed shared owner, which renders the closed members concretely, as the original binds a
+        // closed root. Shared roots are published by payload key: two payloads whose readable names coincide must not bind each
+        // other's owner.
         string key = Emitters.GeneratedNames.PayloadKey(call.Payload);
         string readable = Emitters.ReadableTypeName.Of(key);
-        return _extension != null && Shared.Contains(key) ? new RootEntry(readable, RootEntry.DefaultProfile, binary: true,
-            json: true, owner: "global::LuminPack.Binary_" + _extension + "_" + readable) : null;
+        // A generic Union has no closed owner; its closed uses dispatch through the generic root, as in the original.
+        if (call.Definition != null && Map.TryGetValue(call.Definition, out RootEntry? union) && union.GenericUnion)
+            return new RootEntry(readable, union.DeclaredProfile, union.Binary, union.Json, limit: union.Limit, encoding: union.Encoding,
+                jsonReadProfile: union.JsonReadProfile, rootName: union.RootName, rootArguments: call.TypeArguments + ", ");
+        if (call.Root != null && _extension != null && Shared.Contains(key))
+            return new RootEntry(readable, RootEntry.DefaultProfile, binary: true, json: true, owner: "global::LuminPack.Binary_" + _extension + "_" + readable);
+        // Without a closed owner, a closed generic payload calls its definition's generic roots from an entry named for the closed type.
+        if (call.Definition != null && Map.TryGetValue(call.Definition, out RootEntry? definition) && definition.Owner == null)
+            return new RootEntry(readable, definition.DeclaredProfile, definition.Binary, definition.Json, limit: definition.Limit,
+                encoding: definition.Encoding, jsonReadProfile: definition.JsonReadProfile, rootName: definition.RootName,
+                rootArguments: call.TypeArguments + ", ");
+        return null;
     }
 
     /// <inheritdoc/>

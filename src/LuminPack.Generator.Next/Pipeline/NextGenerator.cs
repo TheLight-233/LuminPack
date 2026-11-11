@@ -345,7 +345,8 @@ public sealed class NextGenerator : IIncrementalGenerator
                         new RootEntry(ReadableTypeName.Of(GeneratedNames.PayloadKey(type)), profile, binary: true, json: true,
                             limit: policy.Input == InputPolicy.Untrusted ? policy.Limits.Input : null,
                             encoding: policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1,
-                            jsonReadProfile: jsonInput.Equals(policy.Strings) ? null : ProfileNames.Type(jsonInput))));
+                            jsonReadProfile: jsonInput.Equals(policy.Strings) ? null : ProfileNames.Type(jsonInput),
+                            genericUnion: model is UnionModel && model.Identity.IsGeneric)));
                 }
             return new RootCatalog(entries, input.Right.PublishedRoots(), input.Right.Extension);
         });
