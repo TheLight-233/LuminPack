@@ -319,9 +319,11 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the marked case switch of a read root, fresh or seeded from an existing instance.</summary>
-    private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters, string slotPrefix)
+    private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters, string slotPrefix,
+        string? freshTarget = null, string? freshExit = null)
     {
-        string target = reuse ? "value2" : "value";
+        string target = reuse ? "value2" : freshTarget ?? "value";
+        string exit = freshExit ?? "return" + (reuse ? " " + target : string.Empty) + ";";
         foreach (var item in model.UnionCases)
         {
             int member = counters.Members++;
@@ -335,7 +337,7 @@ internal static class UnionEmitter
                 w.Line(w.A("LuminPackSerializer") + ".DeserializeUnion" + (model.UniqueEntries ? "_" + item.Readable : string.Empty) +
                     (item.ReadGeneric ? "<" + Profile + ">" : string.Empty) + "(ref " + reader + ", ref member" + Number(member) + ");");
                 w.Line(target + " = member" + Number(member) + ";");
-                w.Line("return" + (reuse ? " " + target : string.Empty) + ";");
+                w.Line(exit);
                 w.Close();
                 w.Blank();
                 continue;
@@ -354,7 +356,7 @@ internal static class UnionEmitter
                 w.Line(line);
             w.Blank();
             w.Line(target + " = member" + Number(member) + ";");
-            w.Line("return" + (reuse ? " " + target : string.Empty) + ";");
+            w.Line(exit);
             w.Close();
             w.Blank();
         }
@@ -367,15 +369,38 @@ internal static class UnionEmitter
         w.Line("((" + "global::LuminPack.Code.LuminPackReadDelegate<" + model.GlobalName + ">)registeredFormatter" + (reuse ? "2" : string.Empty) +
             ".ReadValue)(ref " + reader + ", ref registeredValue" + (reuse ? "2" : string.Empty) + ");");
         w.Line(target + " = registeredValue" + (reuse ? "2" : string.Empty) + ";");
-        w.Line("return" + (reuse ? " " + target : string.Empty) + ";");
+        w.Line(exit);
         w.Close();
         w.Blank();
         w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(" + (reuse ? "tag2" : "tag") + ", typeof(" + model.GlobalName + "));");
-        w.Line("return" + (reuse ? " " + target : string.Empty) + ";");
+        w.Line(exit);
         w.Close();
     }
 
     /// <summary>Renames the locals of one expanded case body to the running switch names.</summary>
+    /// <summary>Emits one fresh Union element read in place: the header check and the case arms, each ending at a label.</summary>
+    /// <param name="model">The Union root render model.</param>
+    /// <param name="w">The owner writer, whose operation profile is <c>TLuminProfile</c> and whose reader is <c>reader</c>.</param>
+    /// <param name="target">The local that receives the element.</param>
+    /// <param name="label">The label every arm jumps to after assigning the element.</param>
+    /// <param name="reader">The reader local.</param>
+    /// <remarks>This is the original fresh Union loop: a collection reading into a new storage array expands the dispatch per
+    /// element instead of calling the root's read entry.</remarks>
+    internal static void FreshElementRead(PayloadRenderModel model, CodeWriter w, string target, string label, string reader = "reader")
+    {
+        w.Line("if (!" + reader + "." + (model.UnionWide ? "TryPeekWideUnionHeader" : "TryPeekUnionHeader") + "(out var tag))");
+        w.Open();
+        w.Line(target + " = default;");
+        w.Line("goto " + label + ";");
+        w.Close();
+        w.Blank();
+        w.Line("// Union cases");
+        w.Line("switch (tag)");
+        w.Open();
+        ReadArms(model, w, false, reader, new SwitchCounters(), "LuminPackUnionSerialize_" + model.UnionSuffix, target, "goto " + label + ";");
+        w.Close();
+    }
+
     private static List<string> Rename(List<string> body, int member, int instance, int cursors, ref int cursorCount, string reader, bool reuse)
     {
         string memberName = "member" + Number(member);

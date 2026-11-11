@@ -51,6 +51,11 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Checks the exact runtime API facts of this keyed family.</summary>
     internal bool Supports(string capability) => _set.FindFormatter(Dictionary)?.Supports(capability) == true;
     /// <summary>Whether both entry operations are raw unmanaged scalar stores.</summary>
+    /// <summary>The Union root render model of the value, from the payload element or the closed contract, or null.</summary>
+    internal PayloadRenderModel? UnionValue => Payload is { UnionRoot: true } payload ? payload :
+        _contract is { Arguments.Length: 2 } && _contract.Arguments[1].Payload is UnionModel union && _set.Options != null &&
+        RenderModelFactory.Create(union, _set.Options) is { UnionRoot: true } rendered ? rendered : null;
+
     /// <summary>Whether matching keys may seed a string or ordinary object value.</summary>
     internal bool ReferenceValue => Value == "string" || Payload != null || _contract?.Arguments[1].OrdinaryObject == true;
 

@@ -32,6 +32,11 @@ internal static class ContiguousOwnerFile
         FormatterModel element = model.Arguments[0];
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
         bool reference = shape is ContiguousShape.Array or ContiguousShape.List;
+        // A Union element of a list keeps the original fresh loop, which needs the root's case arms.
+        PayloadRenderModel? freshUnion = element.Payload is UnionModel union && set.Options != null && set.Options.Net8
+            ? RenderModelFactory.Create(union, set.Options) : null;
+        if (freshUnion is { UnionRoot: false })
+            freshUnion = null;
         bool scalarElements = shape == ContiguousShape.ReadOnlySequence;
         bool raw = element.RawCollection && !scalarElements;
         FormatterStorageModel? layout = scalarElements ? null : element.Layout;
@@ -119,6 +124,27 @@ internal static class ContiguousOwnerFile
         void BinaryRead(CodeWriter w, SpecialOwnerContext c)
         {
             string minimum = raw ? Unsafe + ".SizeOf<" + element.Type + ">()" : layout != null ? "0" : FormatterElementEmitter.Minimum(element);
+            if (shape == ContiguousShape.List && freshUnion != null)
+            {
+                // The original fresh Union loop: a new list reads into its fresh storage array and expands the dispatch per element.
+                w.Line("if (value is null)");
+                w.Open();
+                w.Line("int freshLength = reader.ReadLength(" + minimum + ");");
+                w.Line("if (freshLength < 0)");
+                w.Indented(() => w.Line("return;"));
+                w.Line("var freshItems = reader.CreateFreshListArray<" + element.Type + ">(freshLength, out value);");
+                w.Line("ref var first = ref " + MemoryMarshal + ".GetArrayDataReference(freshItems);");
+                w.Line("for (int i = 0; i < freshLength; i++)");
+                w.Open();
+                w.Line(element.Type + " item = default!;");
+                UnionEmitter.FreshElementRead(freshUnion, w, "item", "freshEnd");
+                w.Line("freshEnd:");
+                w.Line(Unsafe + ".Add(ref first, i) = item;");
+                w.Close();
+                w.Line("return;");
+                w.Close();
+                w.Blank();
+            }
             w.Line("int length = reader.ReadLength(" + minimum + ");");
             w.Line("if (length < 0)");
             w.Open();

@@ -33,6 +33,11 @@ internal static class PayloadDictionaryOwnerFile
         c.ReadExistingDictionary();
         w.Line("goto operationComplete_RootRead;");
         w.Close();
+        if (c.UnionValue is { } union && c.Dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", System.StringComparison.Ordinal))
+        {
+            FreshUnionDictionary(c, union);
+            return;
+        }
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Dictionary + "(length);"));
         w.Line("else");
@@ -46,5 +51,53 @@ internal static class PayloadDictionaryOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line("value.Add(k!, v);");
         w.Close();
+    }
+
+    /// <summary>The original fresh dictionary of Union values: entries are written into the new dictionary's storage with the
+    /// Union dispatch expanded per value, the buckets are rebuilt once, and a 32-bit process keeps ordinary insertion.</summary>
+    private static void FreshUnionDictionary(PairedDictionaryContext c, PayloadRenderModel union)
+    {
+        var w = c.W;
+        w.Line("if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)");
+        w.Open();
+        w.Line("var fallback = new " + c.Dictionary + "(length);");
+        w.Line("for (int index = 0; index < length; index++)");
+        w.Open();
+        w.Line(c.Key + " k = default !;");
+        w.Line(c.Value + " v = default !;");
+        c.ReadMember(c.Key, "k");
+        c.ReadMember(c.Value, "v");
+        w.Line("fallback.Add(k!, v);");
+        w.Close();
+        w.Line("value = fallback;");
+        w.Line("goto operationComplete_RootRead;");
+        w.Close();
+        w.Blank();
+        w.Line("var result = new " + c.Dictionary + "(length);");
+        w.Line("var dictionaryView = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(result);");
+        w.Line("var entries = dictionaryView._entries!;");
+        w.Line("for (int index = 0; index < length; index++)");
+        w.Open();
+        w.Line(c.Key + " key = default !;");
+        w.Line(c.Value + " itemValue = default !;");
+        c.ReadMember(c.Key, "key");
+        UnionEmitter.FreshElementRead(union, w, "itemValue", "freshEnd", "operationState");
+        w.Line("freshEnd:");
+        w.Line("ref var entry = ref entries[index];");
+        w.Line("entry.Key = key;");
+        w.Line("entry.Value = itemValue;");
+        w.Close();
+        w.Blank();
+        w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(dictionaryView, length))");
+        w.Open();
+        w.Line("var rebuilt = new " + c.Dictionary + "(length);");
+        w.Line("for (int index = 0; index < length; index++)");
+        w.Open();
+        w.Line("ref var entry = ref entries[index];");
+        w.Line("rebuilt.Add(entry.Key, entry.Value);");
+        w.Close();
+        w.Line("result = rebuilt;");
+        w.Close();
+        w.Line("value = result;");
     }
 }
