@@ -23,8 +23,11 @@ internal static class SharedFormatterPublisher
                 ScalarOwnerFile.Render(set, scalar, operations));
 
         foreach (DictionaryOwnerFact fact in set.DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>())
+        {
+            var render = fact.Element != null || fact.ForwardedValue ? fact.Family.Payload ?? fact.Family.Entries : fact.Family.Entries;
             production.AddSource("LuminPack.SharedFormatters/Dictionary_" +
-                ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)) + ".g.cs", (fact.Element != null ? fact.Family.Payload ?? fact.Family.Entries : fact.Family.Entries)(set, fact, operations));
+                ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)) + ".g.cs", render(set, fact, operations));
+        }
 
         bool candidateCache = false;
         foreach (SequenceOwnerFact fact in set.SequenceOwners)

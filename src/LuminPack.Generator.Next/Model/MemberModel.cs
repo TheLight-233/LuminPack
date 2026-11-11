@@ -331,18 +331,27 @@ internal sealed class CollectionMember : MemberModel
     internal readonly CollectionShape? Shape;
 
     /// <summary>The child collection whose generated owner reads and writes each element.</summary>
-    internal readonly CollectionMember? ForwardedElement;
+    internal readonly MemberModel? ForwardedElement;
 
     /// <summary>The shared scalar owner identity of an enum or framework built-in raw element, or null: the element spelling, then
     /// <c>=</c> and the underlying keyword for an enum.</summary>
     internal readonly string? OwnedScalar;
 
+    /// <summary>The multidimensional array rank, or zero for other sequences.</summary>
+    internal readonly int ArrayRank;
+
+    /// <summary>Whether binary reading may reuse the referenced runtime's array slots.</summary>
+    internal readonly bool ReuseArraySlots;
+
     /// <summary>Captures a sequence member.</summary>
     internal CollectionMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, CollectionKind kind, TypeRef element,
         string? scalar = null, bool raw = false, bool formatterCall = false, bool elementText = false, TypeModel? nested = null,
-        CollectionShape? shape = null, CollectionMember? forwardedElement = null, string? ownedScalar = null)
+        CollectionShape? shape = null, MemberModel? forwardedElement = null, string? ownedScalar = null,
+        int arrayRank = 0, bool reuseArraySlots = false)
         : base(name, storage, policy)
     {
+        ArrayRank = arrayRank;
+        ReuseArraySlots = reuseArraySlots;
         OwnedScalar = ownedScalar;
         ForwardedElement = forwardedElement;
         Shape = shape;
@@ -363,7 +372,8 @@ internal sealed class CollectionMember : MemberModel
         return DeclaredType == member.DeclaredType && Kind == member.Kind && Element.Equals(member.Element) &&
             Scalar == member.Scalar && Raw == member.Raw && FormatterCall == member.FormatterCall &&
             ElementText == member.ElementText && OwnedScalar == member.OwnedScalar && Equals(Nested, member.Nested) && Equals(Shape, member.Shape) &&
-            Equals(ForwardedElement, member.ForwardedElement);
+            Equals(ForwardedElement, member.ForwardedElement) && ArrayRank == member.ArrayRank &&
+            ReuseArraySlots == member.ReuseArraySlots;
     }
 }
 
@@ -425,6 +435,9 @@ internal sealed class DictionaryMember : MemberModel
     /// <summary>Whether the value is a nullable raw scalar, whose entries are sparse.</summary>
     internal readonly bool Sparse;
 
+    /// <summary>The recursively modeled collection value, or null for a scalar or payload value.</summary>
+    internal readonly MemberModel? ForwardedValue;
+
     /// <summary>The raw key spelling, or null when the key is a string or unsupported.</summary>
     internal readonly string? KeyType;
 
@@ -443,9 +456,11 @@ internal sealed class DictionaryMember : MemberModel
     /// <summary>Captures a dictionary member.</summary>
     internal DictionaryMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, DictionaryKind kind, TypeRef key,
         TypeRef value, bool pair = false, bool keyText = false, bool valueText = false, bool sparse = false, string? keyType = null,
-        string? valueType = null, TypeModel? nested = null, string? keyOwned = null, string? valueOwned = null)
+        string? valueType = null, TypeModel? nested = null, string? keyOwned = null, string? valueOwned = null,
+        MemberModel? forwardedValue = null)
         : base(name, storage, policy)
     {
+        ForwardedValue = forwardedValue;
         KeyOwned = keyOwned;
         ValueOwned = valueOwned;
         Nested = nested;
@@ -468,7 +483,7 @@ internal sealed class DictionaryMember : MemberModel
         return DeclaredType == member.DeclaredType && Kind == member.Kind && Key.Equals(member.Key) && Value.Equals(member.Value) &&
             Pair == member.Pair && KeyText == member.KeyText && ValueText == member.ValueText && Sparse == member.Sparse &&
             KeyType == member.KeyType && ValueType == member.ValueType && Equals(Nested, member.Nested) && KeyOwned == member.KeyOwned &&
-            ValueOwned == member.ValueOwned;
+            ValueOwned == member.ValueOwned && Equals(ForwardedValue, member.ForwardedValue);
     }
 }
 

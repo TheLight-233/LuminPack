@@ -96,6 +96,16 @@ internal static class GenericIdentity
         return supported ? definition + "<" + string.Join(",", arguments) + ">" : null;
     }
 
+    /// <summary>Recognizes the canonical spelling of a supported nullable scalar.</summary>
+    /// <param name="type">The generated element spelling.</param>
+    /// <returns>The nullable owner identity, or null.</returns>
+    internal static string? NullableScalar(string? type)
+    {
+        if (type == null || !type.StartsWith("global::" + Nullable + "<", StringComparison.Ordinal))
+            return null;
+        return Of(type);
+    }
+
     /// <summary>Splits an identity into its definition and arguments.</summary>
     /// <param name="identity">The normalized identity.</param>
     /// <param name="definition">Receives the definition.</param>

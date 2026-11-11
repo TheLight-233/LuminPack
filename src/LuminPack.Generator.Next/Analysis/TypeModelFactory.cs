@@ -536,11 +536,26 @@ internal static class TypeModelFactory
         private MemberModel ArrayMember(string name, MemberStorage storage, WirePolicy policy, IArrayTypeSymbol array, int depth,
             List<string> issues, Path path)
         {
-            string declared = array.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            string declared = DeclaredType(array);
             TypeRef element = Reference(array.ElementType);
             if (array.Rank != 1)
+            {
+                if (array.ElementType.SpecialType == SpecialType.System_String)
+                    return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
+                        scalar: "string", elementText: true, formatterCall: true, arrayRank: array.Rank,
+                        reuseArraySlots: array.Rank == 2 && HasStringMatrixReader(_compilation));
+                if (RawElement(array.ElementType) is { } raw && raw.Owned != string.Empty)
+                    return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
+                        scalar: raw.Spelling, raw: true, formatterCall: true, ownedScalar: raw.Owned,
+                        arrayRank: array.Rank, reuseArraySlots: Scalar(array.ElementType) != null || Builtin(array.ElementType) != null);
+                if (NullableSequenceElement(array.ElementType) is { } nullableItem)
+                    return new CollectionMember(name, storage, policy, declared,
+                        CollectionKind.Array, element, scalar: nullableItem, formatterCall: true, arrayRank: array.Rank);
+                return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, arrayRank: array.Rank);
+            }
+            if (array.IsSZArray && NullableSequenceElement(array.ElementType) is { } nullable)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
-                    scalar: declared, raw: true, formatterCall: true);
+                    scalar: nullable, raw: true);
             if (Scalar(array.ElementType) is { } scalar)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, scalar: scalar.Keyword);
             if (array.IsSZArray && TryForwardedCollection(array.ElementType, depth, issues, path, name) is { } child)
@@ -559,7 +574,7 @@ internal static class TypeModelFactory
                 ElementModel(packable, depth, issues, path, name) is { } nested)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
                     scalar: packable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested, formatterCall: true);
-            // Any other element (nullable values, arrays of unsupported shapes, object) has no shared owner, so the member stays
+            // Any other element (unsupported nullable values, arrays of unsupported shapes, object) has no shared owner, so the member stays
             // unmodeled and the record keeps the original pipeline instead of calling an owner nothing publishes.
             return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element);
         }
@@ -580,6 +595,9 @@ internal static class TypeModelFactory
             string declared = DeclaredType(type);
             ITypeSymbol item = type.TypeArguments[0];
             TypeRef element = Reference(item);
+            if (kind == CollectionKind.List && NullableSequenceElement(item) is { } nullable)
+                return new CollectionMember(name, storage, policy, declared,
+                    kind, element, scalar: nullable, raw: true);
             if (kind == CollectionKind.Stack && RawElement(item) is { } stackItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: stackItem.Spelling, raw: true,
                     ownedScalar: stackItem.Owned);
@@ -676,27 +694,24 @@ internal static class TypeModelFactory
         /// <summary>Describes a collection that can be reached through a static element owner.</summary>
         /// <param name="type">The closed element type of the enclosing collection.</param>
         /// <returns>The child owner requirements, or null if the family or element is not yet supported.</returns>
-        private CollectionMember? TryForwardedCollection(ITypeSymbol type, int depth, List<string> issues, Path path, string memberName)
+        private MemberModel? TryForwardedCollection(ITypeSymbol type, int depth, List<string> issues, Path path, string memberName)
         {
-            if (type is IArrayTypeSymbol { IsSZArray: true } array)
+            if (type is IArrayTypeSymbol array && (array.IsSZArray || array.Rank > 1))
             {
-                var scalar = Scalar(array.ElementType);
-                bool arrayText = scalar == null && array.ElementType.SpecialType == SpecialType.System_String;
-                var arrayNested = scalar == null && !arrayText ? TryForwardedCollection(array.ElementType, depth, issues, path, memberName) : null;
-                TypeModel? arrayPayload = null;
-                INamedTypeSymbol? arrayPacked = scalar == null && !arrayText && arrayNested == null ? LocalPackableClass(array.ElementType) : null;
-                if (arrayPacked != null)
-                    arrayPayload = ElementModel(arrayPacked, depth, issues, path, memberName);
-                if (scalar == null && !arrayText && arrayNested == null && arrayPayload == null)
-                    return null;
-                return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default,
-                    type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
-                    Reference(array.ElementType),
-                    scalar: arrayText ? "string" : arrayPayload != null ? arrayPacked!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) : scalar?.Keyword,
-                    elementText: arrayText, forwardedElement: arrayNested, nested: arrayPayload);
+                var modeled = (CollectionMember)ArrayMember(string.Empty, MemberStorage.Field, WirePolicy.Default, array, depth, issues, path);
+                return modeled.Scalar != null || modeled.ForwardedElement != null ? modeled : null;
             }
 
-            if (type is not INamedTypeSymbol { Arity: 1 } named || named.IsUnboundGenericType)
+            if (type is not INamedTypeSymbol named || named.IsUnboundGenericType)
+                return null;
+            if (named.Arity == 2 && DictionaryKind(named) == Model.DictionaryKind.Dictionary)
+            {
+                var modeled = (DictionaryMember)DictionaryMember(string.Empty, MemberStorage.Field, WirePolicy.Default, named,
+                    Model.DictionaryKind.Dictionary, depth, issues, path);
+                return modeled.Nested == null && (modeled.KeyText || modeled.KeyType != null) && (modeled.ValueText || modeled.ValueType != null)
+                    ? modeled : null;
+            }
+            if (named.Arity != 1)
                 return null;
 
             var definition = named.OriginalDefinition;
@@ -706,6 +721,9 @@ internal static class TypeModelFactory
             CollectionKind kind = formatter.Kind;
 
             ITypeSymbol item = named.TypeArguments[0];
+            if (kind == CollectionKind.List && NullableSequenceElement(item) is { } nullable)
+                return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default, DeclaredType(named), kind,
+                    Reference(item), scalar: nullable, raw: true);
             var element = Scalar(item);
             bool text = formatter.Text != null && item.SpecialType == SpecialType.System_String;
             var child = element == null && !text && formatter.Forwarded != null ?
@@ -734,6 +752,18 @@ internal static class TypeModelFactory
         {
             string declared = DeclaredType(type);
             TypeRef key = Reference(type.TypeArguments[0]), value = Reference(type.TypeArguments[1]);
+            if (kind == Model.DictionaryKind.Dictionary)
+            {
+                bool textKey = type.TypeArguments[0].SpecialType == SpecialType.System_String;
+                var rawKey = textKey ? null : RawEntry(type.TypeArguments[0]);
+                if ((textKey || rawKey is { Owned: not "" }) &&
+                    TryForwardedCollection(type.TypeArguments[1], depth, issues, path, name) is { } child)
+                {
+                    string childType = child is CollectionMember sequence ? sequence.DeclaredType : ((DictionaryMember)child).DeclaredType;
+                    return new DictionaryMember(name, storage, policy, declared, kind, key, value, keyText: textKey,
+                        keyType: rawKey?.Spelling, keyOwned: rawKey?.Owned, valueType: childType, forwardedValue: child);
+                }
+            }
             // A packable class value is expanded in place by the dictionary owner, whatever the raw or string key.
             if (kind != Model.DictionaryKind.SortedList && LocalPackableClass(type.TypeArguments[1]) is { } packable)
             {
@@ -747,12 +777,13 @@ internal static class TypeModelFactory
             // A sorted list of a raw key and a raw or string value writes both stored arrays as paired entries.
             if (kind == Model.DictionaryKind.SortedList)
             {
-                var sortedKey = Scalar(type.TypeArguments[0], allowBoolean: false);
+                bool sortedKeyText = type.TypeArguments[0].SpecialType == SpecialType.System_String;
+                var sortedKey = sortedKeyText ? null : Scalar(type.TypeArguments[0], allowBoolean: false);
                 bool sortedValueText = type.TypeArguments[1].SpecialType == SpecialType.System_String;
                 var sortedValue = sortedValueText ? null : Scalar(type.TypeArguments[1], allowBoolean: false);
-                if (sortedKey != null && (sortedValueText || sortedValue != null))
-                    return new DictionaryMember(name, storage, policy, declared, kind, key, value, keyText: false,
-                        valueText: sortedValueText, keyType: sortedKey.Value.Keyword,
+                if ((sortedKeyText || sortedKey != null) && (sortedValueText || sortedValue != null))
+                    return new DictionaryMember(name, storage, policy, declared, kind, key, value, keyText: sortedKeyText,
+                        valueText: sortedValueText, keyType: sortedKey?.Keyword,
                         valueType: sortedValueText ? "string" : sortedValue.GetValueOrDefault().Keyword);
                 return new DictionaryMember(name, storage, policy, declared, kind, key, value);
             }
@@ -3509,10 +3540,13 @@ internal static class TypeModelFactory
         return false;
     }
 
-    /// <summary>Spells a collection or dictionary exactly as the declaration names it.</summary>
+    /// <summary>Spells a collection type with explicit nullable value arguments for stable owner identities.</summary>
     /// <param name="type">The declared type.</param>
     /// <returns>The fully qualified spelling.</returns>
-    private static string DeclaredType(INamedTypeSymbol type) => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    private static string DeclaredType(ITypeSymbol type) => type.ToDisplayString(CollectionDisplay);
+
+    private static readonly SymbolDisplayFormat CollectionDisplay = SymbolDisplayFormat.FullyQualifiedFormat
+        .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.ExpandNullable);
 
     /// <summary>Builds a symbol-free reference to a declared type.</summary>
     /// <param name="type">The referenced type.</param>
@@ -3535,6 +3569,13 @@ internal static class TypeModelFactory
     private static bool IsCultureInfo(ITypeSymbol type)
         => type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } named &&
            named.ContainingNamespace.ToDisplayString() == "System.Globalization" && named.Name == "CultureInfo";
+
+    /// <summary>Normalizes a nullable element whose underlying value has a shared scalar owner.</summary>
+    /// <param name="element">The declared collection element.</param>
+    /// <returns>The canonical nullable spelling, or null for an unsupported element.</returns>
+    private static string? NullableSequenceElement(ITypeSymbol element) =>
+        element is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable &&
+        Scalar(nullable.TypeArguments[0]) is { } scalar ? "global::System.Nullable<" + scalar.Keyword + ">" : null;
 
     /// <summary>Spells a covered fixed scalar.</summary>
     /// <param name="type">The member or leaf type.</param>
@@ -3600,6 +3641,35 @@ internal static class TypeModelFactory
             "System.Numerics.Vector4" or "System.Numerics.Quaternion" or "System.Numerics.Plane" => (16, 4, 4),
             _ => null,
         };
+
+    /// <summary>Checks both projected overloads for selecting and reading existing matrix slots.</summary>
+    /// <param name="compilation">The consumer's runtime and framework metadata.</param>
+    /// <returns>Whether the complete slot selection and read API is available.</returns>
+    private static bool HasStringMatrixReader(Compilation compilation)
+    {
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var text = compilation.GetSpecialType(SpecialType.System_String);
+        var span = compilation.GetTypeByMetadataName("System.Span`1")?.Construct(text);
+        if (reader == null || options == null || span == null)
+            return false;
+        var matrix = compilation.CreateArrayTypeSymbol(text, 2);
+        bool BothProfiles(string name, System.Func<IMethodSymbol, bool> signature)
+        {
+            var methods = reader.GetMembers(name).OfType<IMethodSymbol>().Where(m => !m.IsStatic && !m.ReturnsByRef &&
+                !m.ReturnsByRefReadonly && m.DeclaredAccessibility == Accessibility.Public && signature(m)).ToArray();
+            return methods.Any(m => m.Arity == 0) && methods.Any(m => m.Arity == 1 && m.TypeParameters[0].HasValueTypeConstraint &&
+                !m.TypeParameters[0].HasUnmanagedTypeConstraint && m.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(m.TypeParameters[0].ConstraintTypes[0], options));
+        }
+        return BothProfiles("TryGetStringMatrixSlots", m => m.ReturnType.SpecialType == SpecialType.System_Boolean &&
+            m.Parameters.Length == 4 && m.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, matrix) &&
+            m.Parameters[1].RefKind == RefKind.None && m.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+            m.Parameters[2].RefKind == RefKind.None && m.Parameters[2].Type.SpecialType == SpecialType.System_Int32 &&
+            m.Parameters[3].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(m.Parameters[3].Type, span)) &&
+            BothProfiles("ReadStrings", m => m.ReturnsVoid && m.Parameters.Length == 1 && m.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, span));
+    }
 
     /// <summary>Classifies a declared sequence family.</summary>
     /// <param name="type">The declared member type.</param>

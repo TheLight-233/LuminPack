@@ -125,6 +125,9 @@ internal static class FormatterRegistry
     private static readonly SequenceFormatter Array = new SequenceFormatter(CollectionKind.Array, ArrayScalarOwnerFile.Render,
         text: ArrayTextOwnerFile.Render, payload: ArrayTextOwnerFile.Render, forwarded: ArrayForwardingOwnerFile.Render);
 
+    private static readonly SequenceFormatter RectangularArray = new SequenceFormatter(CollectionKind.Array,
+        RectangularArrayOwnerFile.Render, text: RectangularArrayOwnerFile.Render);
+
     private static readonly Dictionary<string, SequenceFormatter> Sequences = new Dictionary<string, SequenceFormatter>(StringComparer.Ordinal)
     {
         ["System.Collections.Generic.List"] = new SequenceFormatter(CollectionKind.List, ListScalarOwnerFile.Render,
@@ -253,7 +256,7 @@ internal static class FormatterRegistry
     internal static SequenceFormatter? FindSequence(CollectionMember member)
     {
         if (member.Kind == CollectionKind.Array)
-            return Array;
+            return member.ArrayRank > 1 ? RectangularArray : Array;
         string type = GeneratedNames.PayloadKey(member.DeclaredType);
         int generic = type.IndexOf('<');
         return generic < 0 ? null : FindSequence(type.Substring(0, generic));

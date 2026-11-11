@@ -42,12 +42,15 @@ internal sealed class PairedDictionaryContext
 
     private readonly Dictionary<string, int> _writeNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
     private readonly Dictionary<string, int> _readNames = new Dictionary<string, int>(StringComparer.Ordinal);
+    private readonly bool _forwardedValue;
     private int _ends, _cursors, _spans, _readCursors, _readStrings, _readEnds;
 
     internal PairedDictionaryContext(CodeWriter writer, string dictionary, string key, string value, string memory, string extension,
-        string source = "value", string keyMember = "Key", string valueMember = "Value", PayloadRenderModel? payload = null)
+        string source = "value", string keyMember = "Key", string valueMember = "Value", PayloadRenderModel? payload = null,
+        bool forwardedValue = false)
     {
         Payload = payload;
+        _forwardedValue = forwardedValue;
         Source = source;
         KeyMember = keyMember;
         ValueMember = valueMember;
@@ -77,6 +80,11 @@ internal sealed class PairedDictionaryContext
             foreach (string line in body)
                 W.Line(line);
         }
+        else if (_forwardedValue && type == Value)
+        {
+            W.Line("operationState.CheckBuffer();");
+            W.Line(GenericOwnerFile.Owner(Extension, Value) + ".Write<TLuminProfile>(ref operationState, in " + expression + ");");
+        }
         else if (type != "string")
         {
             W.Line("operationState.CheckBuffer();");
@@ -104,6 +112,9 @@ internal sealed class PairedDictionaryContext
             W.Line(destination + " = payloadItem;");
             W.Close();
         }
+        else if (_forwardedValue && type == Value)
+            ForwardedElementRead.Emit(W, Value, "operationState", destination,
+                GenericOwnerFile.Owner(Extension, Value) + ".Read<TLuminProfile>(ref operationState, ref " + destination + ");");
         else if (type == "string")
             W.Line("operationState.Read<TLuminProfile>(ref " + destination + ");");
         else
@@ -262,10 +273,10 @@ internal static class PairedDictionaryOwnerTemplate
         string keyOwner = "global::LuminPack." + GeneratedNames.Owner(extension, key);
         string valueOwner = fact.Element != null ? "global::LuminPack." + fact.Element.Owner : "global::LuminPack." + GeneratedNames.Owner(extension, value);
         string minimum = (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
-            (value != "string" && fact.Element == null ? memory + ".SizeOf<" + value + ">()" : "1");
+            (value != "string" && fact.Element == null && !fact.ForwardedValue ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
         var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,
-            fact.Element);
+            fact.Element, fact.ForwardedValue);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -362,7 +373,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("    scoped ref " + dictionary + " value)");
                     w.Line(generic + options);
                     w.Open();
-                    if (fact.Element != null)
+                    if (fact.Element != null || fact.ForwardedValue)
                         w.Line("ref var operationState = ref reader;");
                     else
                     {
@@ -383,7 +394,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));
-                    if (fact.Element == null)
+                    if (fact.Element == null && !fact.ForwardedValue)
                         w.Line("operationState.CopyTo(ref reader);");
                     w.Close();
                     w.Blank();

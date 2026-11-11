@@ -31,6 +31,7 @@ internal static class ListScalarOwnerFile
         string extension = set.Extension!;
 
         string scalar = fact.Scalar!;
+        bool nullable = GenericIdentity.NullableScalar(scalar) != null;
         string collection = fact.DeclaredType;
         string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(collection));
         string elementOwner = "global::LuminPack." + GeneratedNames.Owner(extension, scalar);
@@ -107,29 +108,42 @@ internal static class ListScalarOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("writer.Write<" + scalar + ">(" + formatter + ".GetListSpan(value), value.Count);");
+                    if (nullable)
+                    {
+                        w.Line("var payload = " + formatter + ".GetListSpan(value);");
+                        w.Line("int bytes = " + writer + ".Size<" + scalar + ">(value.Count, true, false);");
+                        w.Line("writer.AdvanceSafe(" + writer + ".Write<" + scalar +
+                            ">(writer.Reserve(writer.Position, bytes), payload, value.Count, true, false));");
+                    }
+                    else
+                        w.Line("writer.Write<" + scalar + ">(" + formatter + ".GetListSpan(value), value.Count);");
                     w.Close();
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
                     w.Line("internal static void RootWriteCompressed(scoped ref " + writer + " writer, " + collection + " input)");
                     w.Open();
-                    w.Line("var value = input;");
-                    w.Line("if (value is null)");
-                    w.Open();
-                    w.Line("writer.WriteNullCollectionHeader();");
-                    w.Line("return;");
-                    w.Close();
-                    w.Blank();
-                    w.Line("var span = " + formatter + ".GetListSpan(" + memory + ".AsRef(in value));");
-                    w.Line(writer + ".Write(");
-                    w.Line("    writer.Reserve(writer.Position, " + writer + ".Size(span, span.Length, true, true)),");
-                    w.Line("    span,");
-                    w.Line("    span.Length,");
-                    w.Line("    true,");
-                    w.Line("    true,");
-                    w.Line("    out var spanOffset);");
-                    w.Line("writer.Advance(spanOffset);");
+                    if (nullable)
+                        w.Line("RootWrite(ref writer, input);");
+                    else
+                    {
+                        w.Line("var value = input;");
+                        w.Line("if (value is null)");
+                        w.Open();
+                        w.Line("writer.WriteNullCollectionHeader();");
+                        w.Line("return;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("var span = " + formatter + ".GetListSpan(" + memory + ".AsRef(in value));");
+                        w.Line(writer + ".Write(");
+                        w.Line("    writer.Reserve(writer.Position, " + writer + ".Size(span, span.Length, true, true)),");
+                        w.Line("    span,");
+                        w.Line("    span.Length,");
+                        w.Line("    true,");
+                        w.Line("    true,");
+                        w.Line("    out var spanOffset);");
+                        w.Line("writer.Advance(spanOffset);");
+                    }
                     w.Close();
                     w.Blank();
                     break;
@@ -231,25 +245,30 @@ internal static class ListScalarOwnerFile
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + collection + " value)");
                     w.Open();
-                    w.Line("if (!reader.PeekCollectionHeader(out var length))");
-                    w.Open();
-                    w.Line("value = null;");
-                    w.Line("reader.EnsureReadable(4);");
-                    w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, 4);");
-                    w.Line("return;");
-                    w.Close();
-                    w.Blank();
-                    w.Line("if (value is null)");
-                    w.Open();
-                    w.Line("value = new " + collection + "(length);");
-                    w.Close();
-                    w.Blank();
-                    w.Line("global::System.Span<" + scalar + "> span = " + marshal + ".CreateSpan<" + scalar + ">(ref " + memory + ".As<byte, " + scalar + ">(ref reader.Cursor), 0);");
-                    w.Line("span = " + formatter + ".GetListSpan(" + memory + ".AsRef(in value), length);");
-                    w.Line(reader + ".Read(reader.GetSpan().Slice(reader.Position), ref span, 0, true, true, out var spanOffset);");
-                    w.Line(formatter + ".SetListSize(" + memory + ".AsRef(in value), length);");
-                    w.Line("reader.EnsureReadable(spanOffset);");
-                    w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)(uint)((spanOffset))));");
+                    if (nullable)
+                        w.Line("RootRead(ref reader, ref value);");
+                    else
+                    {
+                        w.Line("if (!reader.PeekCollectionHeader(out var length))");
+                        w.Open();
+                        w.Line("value = null;");
+                        w.Line("reader.EnsureReadable(4);");
+                        w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, 4);");
+                        w.Line("return;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("if (value is null)");
+                        w.Open();
+                        w.Line("value = new " + collection + "(length);");
+                        w.Close();
+                        w.Blank();
+                        w.Line("global::System.Span<" + scalar + "> span = " + marshal + ".CreateSpan<" + scalar + ">(ref " + memory + ".As<byte, " + scalar + ">(ref reader.Cursor), 0);");
+                        w.Line("span = " + formatter + ".GetListSpan(" + memory + ".AsRef(in value), length);");
+                        w.Line(reader + ".Read(reader.GetSpan().Slice(reader.Position), ref span, 0, true, true, out var spanOffset);");
+                        w.Line(formatter + ".SetListSize(" + memory + ".AsRef(in value), length);");
+                        w.Line("reader.EnsureReadable(spanOffset);");
+                        w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)(uint)((spanOffset))));");
+                    }
                     w.Close();
                     w.Blank();
                     w.Line(preserve);

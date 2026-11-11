@@ -51,13 +51,18 @@ internal readonly struct DictionaryOwnerFact : IEquatable<DictionaryOwnerFact>
     /// <summary>The packable value's render model, which the owner expands in place, or null.</summary>
     internal readonly PayloadRenderModel? Element;
 
-    /// <summary>Captures a dictionary of raw scalar or string entries.</summary>
+    /// <summary>Whether the value calls another collection owner.</summary>
+    internal readonly bool ForwardedValue;
+
+    /// <summary>Captures a dictionary of raw scalar, string or forwarded entries.</summary>
     /// <param name="family">The declared dictionary family.</param>
     /// <param name="declaredType">The declared dictionary spelling.</param>
     /// <param name="key">The key keyword or <c>string</c>.</param>
     /// <param name="value">The value keyword or <c>string</c>.</param>
-    internal DictionaryOwnerFact(DictionaryFormatter family, string declaredType, string key, string value, PayloadRenderModel? element = null)
+    internal DictionaryOwnerFact(DictionaryFormatter family, string declaredType, string key, string value, PayloadRenderModel? element = null,
+        bool forwardedValue = false)
     {
+        ForwardedValue = forwardedValue;
         Element = element;
         Family = family;
         DeclaredType = declaredType;
@@ -67,7 +72,7 @@ internal readonly struct DictionaryOwnerFact : IEquatable<DictionaryOwnerFact>
 
     /// <inheritdoc/>
     public bool Equals(DictionaryOwnerFact other) => Family == other.Family && DeclaredType == other.DeclaredType &&
-        Key == other.Key && Value == other.Value && Equals(Element, other.Element);
+        Key == other.Key && Value == other.Value && Equals(Element, other.Element) && ForwardedValue == other.ForwardedValue;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is DictionaryOwnerFact other && Equals(other);

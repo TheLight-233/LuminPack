@@ -26,9 +26,17 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
     /// <summary>The element type whose generated owner handles the element.</summary>
     internal readonly string? ForwardedType;
 
+    /// <summary>The multidimensional rank, or zero for other sequence families.</summary>
+    internal readonly int ArrayRank;
+
+    /// <summary>Whether the binary reader can fill an existing array.</summary>
+    internal readonly bool ReuseArraySlots;
+
     private SequenceOwnerFact(SequenceFormatter family, string declaredType, string? scalar, PayloadRenderModel? element,
-        string? forwardedType = null)
+        string? forwardedType = null, int arrayRank = 0, bool reuseArraySlots = false)
     {
+        ArrayRank = arrayRank;
+        ReuseArraySlots = reuseArraySlots;
         ForwardedType = forwardedType;
         Element = element;
         Scalar = scalar;
@@ -60,9 +68,18 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
     internal static SequenceOwnerFact ForForwarding(SequenceFormatter family, string declaredType, string elementType)
         => new SequenceOwnerFact(family, declaredType, null, null, elementType);
 
+    /// <summary>Captures the rank and reuse capabilities of a rectangular array owner.</summary>
+    /// <param name="family">The registered formatter.</param>
+    /// <param name="member">The analyzed array.</param>
+    /// <returns>The closed formatter request.</returns>
+    internal static SequenceOwnerFact ForRectangularArray(SequenceFormatter family, CollectionMember member) =>
+        new SequenceOwnerFact(family, member.DeclaredType, member.Scalar, null,
+            arrayRank: member.ArrayRank, reuseArraySlots: member.ReuseArraySlots);
+
     /// <inheritdoc/>
     public bool Equals(SequenceOwnerFact other) => Family == other.Family && DeclaredType == other.DeclaredType &&
-        Scalar == other.Scalar && Equals(Element, other.Element) && ForwardedType == other.ForwardedType;
+        Scalar == other.Scalar && Equals(Element, other.Element) && ForwardedType == other.ForwardedType &&
+        ArrayRank == other.ArrayRank && ReuseArraySlots == other.ReuseArraySlots;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is SequenceOwnerFact other && Equals(other);
@@ -70,7 +87,7 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
     /// <inheritdoc/>
     public override int GetHashCode() => (DeclaredType == null ? 0 : DeclaredType.GetHashCode()) ^
         (Scalar == null ? 0 : Scalar.GetHashCode()) ^ (Element == null ? 0 : Element.GetHashCode()) ^
-        (ForwardedType == null ? 0 : ForwardedType.GetHashCode()) ^ (Family == null ? 0 : Family.GetHashCode());
+        (ForwardedType == null ? 0 : ForwardedType.GetHashCode()) ^ (Family == null ? 0 : Family.GetHashCode()) ^ ArrayRank ^ (ReuseArraySlots ? 1 : 0);
 }
 
 /// <summary>The value-equal publication decision for the shared formatter owners.</summary>
@@ -341,7 +358,16 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         string? key = member.KeyText ? "string" : member.KeyType, value = member.ValueText ? "string" : member.ValueType;
         if (key == null || value == null)
             return;
-        dictionaries.Add(new DictionaryOwnerFact(family, member.DeclaredType, key, value));
+        if (member.ForwardedValue is { } forwarded && !RenderModelFactory.CanForward(forwarded, options))
+            return;
+        dictionaries.Add(new DictionaryOwnerFact(family, member.DeclaredType, key, value, forwardedValue: member.ForwardedValue != null));
+        if (member.ForwardedValue != null)
+        {
+            if (!member.KeyText)
+                AddScalar(scalars, member.KeyOwned ?? key);
+            CollectForwarded(member.ForwardedValue, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
+            return;
+        }
         if (member.Sparse)
         {
             // The JSON roots call the nullable owner of the value, which in turn calls the scalar owner of its payload.
@@ -384,8 +410,11 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         if (definition != null)
         {
             SequenceOwnerFact? fact = null;
-            if (member.ForwardedElement is { } child && definition.Forwarded != null)
-                fact = SequenceOwnerFact.ForForwarding(definition, member.DeclaredType, child.DeclaredType);
+            if (member.ArrayRank > 1 && member.Scalar != null)
+                fact = SequenceOwnerFact.ForRectangularArray(definition, member);
+            else if (member.ForwardedElement is { } child && definition.Forwarded != null && RenderModelFactory.CanForward(child, options))
+                fact = SequenceOwnerFact.ForForwarding(definition, member.DeclaredType,
+                    child is CollectionMember sequence ? sequence.DeclaredType : ((DictionaryMember)child).DeclaredType);
             else if (member.Nested != null && definition.Payload != null &&
                 RenderModelFactory.SequenceElement(member.Nested, options) is { } payload)
                 fact = SequenceOwnerFact.ForPayload(definition, member.DeclaredType, payload);
@@ -406,6 +435,12 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                 facts.Add(required);
                 if (required.Scalar == "string")
                     owners.Add(FormatterRegistry.String);
+                else if (GenericIdentity.NullableScalar(required.Scalar) is { } nullable &&
+                    GenericIdentity.TryParse(nullable, out _, out string[] arguments))
+                {
+                    owners.Add(nullable);
+                    AddScalar(scalars, arguments[0]);
+                }
                 else if (required.Scalar != null && !required.Scalar.StartsWith("global::", StringComparison.Ordinal))
                     AddScalar(scalars, required.Scalar);
                 else if (required.Scalar != null && !string.IsNullOrEmpty(member.OwnedScalar))
@@ -413,8 +448,18 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
             }
         }
         if (member.ForwardedElement is { } element)
-            Collect(element, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
+            CollectForwarded(element, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
         if (member.Nested is { } nested)
             Walk(nested, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
+    }
+
+    /// <summary>Publishes the static owner of a collection nested within another collection.</summary>
+    private static void CollectForwarded(MemberModel member, GeneratorOptions options, List<SequenceOwnerFact> facts,
+        List<string> scalars, List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited)
+    {
+        if (member is CollectionMember sequence)
+            Collect(sequence, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
+        else if (member is DictionaryMember dictionary)
+            CollectDictionary(dictionary, options, scalars, owners, dictionaries, facts, ref cultureInfoReuse, visited);
     }
 }

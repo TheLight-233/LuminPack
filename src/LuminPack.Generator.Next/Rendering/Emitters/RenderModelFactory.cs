@@ -349,6 +349,10 @@ internal static class RenderModelFactory
                 return new RenderMember(special.Name, RenderMemberKind.Special, ReadableTypeName.Of(special.Declared), special.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
                     property: property);
+            case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
+                when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
+                return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,
+                    0, "global::LuminPack." + element.Owner, ScalarKind.Other, mirrored, nested: element, property: property);
             case CollectionMember collection:
                 return Collection(collection, extension, options);
             case DictionaryMember dictionary:
@@ -367,7 +371,11 @@ internal static class RenderModelFactory
     {
         bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, member.DeclaredType);
-        if (member.ForwardedElement != null || member.Kind == CollectionKind.Blocking && member.Scalar != null)
+        if (member.ForwardedElement is { } child && !CanForward(child, options))
+            return null;
+        if (member.ForwardedElement != null || member.ArrayRank > 1 && member.Scalar != null ||
+            member.Kind is CollectionKind.Array or CollectionKind.List && GenericIdentity.NullableScalar(member.Scalar) != null ||
+            member.Kind == CollectionKind.Blocking && member.Scalar != null)
             return new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.Element.GlobalName,
                 member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored, property: property);
         // A concurrent or immutable sequence publishes an owner per closed element type: a raw scalar or shared string
@@ -438,7 +446,9 @@ internal static class RenderModelFactory
                 new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.DeclaredType, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property) : null;
         // An enum or framework built-in entry is stored through the dictionary owner, whose entry store spells the type.
-        if (member.KeyOwned != null || member.ValueOwned != null)
+        if (member.ForwardedValue is { } child && !CanForward(child, options))
+            return null;
+        if (member.KeyOwned != null || member.ValueOwned != null || member.ForwardedValue != null)
             return FormatterRegistry.FindDictionary(member.DeclaredType) != null ?
                 new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.DeclaredType, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, property: property) : null;
@@ -453,7 +463,7 @@ internal static class RenderModelFactory
                     formatter, ScalarKind.Other, mirrored, raw: true, property: property,
                     collection: new RenderCollection(member.KeyType!, member.ValueType!, false));
             // A registered paired family reads and writes through its shared owner.
-            case DictionaryKind.SortedDictionary or DictionaryKind.Concurrent or DictionaryKind.Immutable or DictionaryKind.ReadOnly or
+            case DictionaryKind.SortedList or DictionaryKind.SortedDictionary or DictionaryKind.Concurrent or DictionaryKind.Immutable or DictionaryKind.ReadOnly or
                 DictionaryKind.Frozen or DictionaryKind.Interface or DictionaryKind.Priority when (member.KeyText || member.KeyType != null) && (member.ValueText || member.ValueType != null) &&
                 FormatterRegistry.FindDictionary(member.DeclaredType) != null:
                 return new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.DeclaredType, member.DeclaredType, 0,
@@ -467,6 +477,15 @@ internal static class RenderModelFactory
                 return null;
         }
     }
+
+    /// <summary>Checks that each recursively referenced collection can publish its static owner.</summary>
+    internal static bool CanForward(MemberModel member, GeneratorOptions options) => member switch
+    {
+        CollectionMember { ForwardedElement: { } child } => CanForward(child, options),
+        CollectionMember { Nested: { } nested } => SequenceElement(nested, options) != null,
+        DictionaryMember { ForwardedValue: { } child } => CanForward(child, options),
+        _ => true,
+    };
 
     /// <summary>Builds the render model of a list element, which the loop expands in place.</summary>
     /// <param name="model">The element payload model, or null.</param>

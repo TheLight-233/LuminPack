@@ -30,6 +30,7 @@ internal static class ArrayScalarOwnerFile
         string extension = set.Extension!;
 
         string scalar = fact.Scalar!;
+        bool nullable = GenericIdentity.NullableScalar(scalar) != null;
         string collection = fact.DeclaredType;
         string readable = ReadableTypeName.Of(GeneratedNames.PayloadKey(collection));
         string elementOwner = "global::LuminPack." + GeneratedNames.Owner(extension, scalar);
@@ -99,23 +100,36 @@ internal static class ArrayScalarOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("writer.Write<" + scalar + ">(value.AsSpan(), value.Length);");
+                    if (nullable)
+                    {
+                        w.Line("var payload = value.AsSpan();");
+                        w.Line("int bytes = " + writer + ".Size<" + scalar + ">(value.Length, true, false);");
+                        w.Line("writer.AdvanceSafe(" + writer + ".Write<" + scalar +
+                            ">(writer.Reserve(writer.Position, bytes), payload, value.Length, true, false));");
+                    }
+                    else
+                        w.Line("writer.Write<" + scalar + ">(value.AsSpan(), value.Length);");
                     w.Close();
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
                     w.Line("internal static void RootWriteCompressed(scoped ref " + writer + " writer, " + collection + " input)");
                     w.Open();
-                    w.Line("var value = input;");
-                    w.Line(writer + ".Write(");
-                    w.Line("    writer.Reserve(writer.Position, " + writer + ".Size(value.AsSpan(), (value is null ? -1 : value.Length), true, true)),");
-                    w.Line("    value.AsSpan(),");
-                    w.Line("    (value is null ? -1 : value.Length),");
-                    w.Line("    true,");
-                    w.Line("    true,");
-                    w.Line("    out var length);");
-                    w.Line("writer.Advance(length);");
-                    w.Line("writer.CheckBuffer();");
+                    if (nullable)
+                        w.Line("RootWrite(ref writer, input);");
+                    else
+                    {
+                        w.Line("var value = input;");
+                        w.Line(writer + ".Write(");
+                        w.Line("    writer.Reserve(writer.Position, " + writer + ".Size(value.AsSpan(), (value is null ? -1 : value.Length), true, true)),");
+                        w.Line("    value.AsSpan(),");
+                        w.Line("    (value is null ? -1 : value.Length),");
+                        w.Line("    true,");
+                        w.Line("    true,");
+                        w.Line("    out var length);");
+                        w.Line("writer.Advance(length);");
+                        w.Line("writer.CheckBuffer();");
+                    }
                     w.Close();
                     w.Blank();
                     break;
@@ -203,9 +217,14 @@ internal static class ArrayScalarOwnerFile
                     w.Line(inline);
                     w.Line("internal static void RootReadCompressed(scoped ref " + reader + " reader, scoped ref " + collection + " value)");
                     w.Open();
-                    w.Line(reader + ".Read(reader.GetSpan().Slice(reader.Position), ref value, 0, true, true, out var length);");
-                    w.Line("reader.EnsureReadable(length);");
-                    w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)(uint)((length))));");
+                    if (nullable)
+                        w.Line("RootRead(ref reader, ref value);");
+                    else
+                    {
+                        w.Line(reader + ".Read(reader.GetSpan().Slice(reader.Position), ref value, 0, true, true, out var length);");
+                        w.Line("reader.EnsureReadable(length);");
+                        w.Line("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)(uint)((length))));");
+                    }
                     w.Close();
                     w.Blank();
                     break;
