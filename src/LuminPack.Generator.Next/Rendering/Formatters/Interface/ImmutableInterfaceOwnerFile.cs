@@ -133,7 +133,90 @@ internal static class ImmutableInterfaceOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
+        if (c.Text && (c.Sequence.StartsWith(Namespace + "ImmutableHashSet<", System.StringComparison.Ordinal) ||
+            c.Sequence.StartsWith(Namespace + "ImmutableSortedSet<", System.StringComparison.Ordinal)))
+        {
+            CandidateTextSetRead(c);
+            return;
+        }
         c.PooledRead(() => build(c));
+    }
+
+    /// <summary>Reads a concrete string set through the weak candidate cache, as the original read did: the destination or the
+    /// last completed set is kept when every decoded string is the same instance it already holds (and a sorted set is still in
+    /// its comparer's order); otherwise the decoded strings build a new set, which becomes the next candidate.</summary>
+    private static void CandidateTextSetRead(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        bool sorted = c.Sequence.StartsWith(Namespace + "ImmutableSortedSet<", System.StringComparison.Ordinal);
+        string candidate = "LuminImmutableCandidate<" + c.Sequence + ">";
+        string comparer = sorted ? "global::System.Collections.Generic.Comparer<string>.Default" : "global::System.Collections.Generic.EqualityComparer<string>.Default";
+        string tree = "global::LuminPack.Utility.LuminTreeStorage";
+        w.Line("var items = global::System.Buffers.ArrayPool<string>.Shared.Rent(length);");
+        w.Line("try");
+        w.Open();
+        w.Line("bool fromCache = value is null;");
+        w.Line("var candidate = value;");
+        w.Line("if (candidate is null)");
+        w.Line("    " + candidate + ".Last.TryGetTarget(out candidate);");
+        w.Line("bool same = candidate is not null &&");
+        w.Line("    candidate.Count == length &&");
+        w.Line("    object.ReferenceEquals(candidate.KeyComparer, " + comparer + ");");
+        w.Line("bool hasPrior = same;");
+        w.Line("if (hasPrior && !fromCache)");
+        w.Line("    " + tree + ".CopyTo(candidate!, items);");
+        w.Line("for (int i = 0; i < length; i++)");
+        w.Open();
+        w.Line("string prior = hasPrior ? fromCache && i == 0 ? CandidateFirst(candidate!) : items[i] : default!;");
+        w.Line("string selected = prior;");
+        w.Line("operationState.Read<TLuminProfile>(ref selected);");
+        w.Line("if (!object.ReferenceEquals(prior, selected))");
+        w.Open();
+        w.Line("same = false;");
+        w.Line("if (fromCache)");
+        w.Line("    hasPrior = false;");
+        w.Close();
+        w.Line("else if (hasPrior && fromCache && i == 0)");
+        w.Line("    " + tree + ".CopyTo(candidate!, items);");
+        w.Line("items[i] = selected;");
+        w.Close();
+        w.Blank();
+        if (sorted)
+        {
+            w.Line("if (same)");
+            w.Open();
+            w.Line("var comparer = " + comparer + ";");
+            w.Line("for (int i2 = 1; i2 < length; i2++)");
+            w.Line("    if (comparer.Compare(items[i2 - 1], items[i2]) >= 0)");
+            w.Line("    {");
+            w.Line("        same = false;");
+            w.Line("        break;");
+            w.Line("    }");
+            w.Close();
+            w.Blank();
+        }
+        w.Line("if (same)");
+        w.Open();
+        w.Line(candidate + ".Last.SetTarget(candidate!);");
+        w.Line("value = candidate!;");
+        w.Line("goto operationComplete_RootRead;");
+        w.Close();
+        w.Blank();
+        w.Line("var completed = " + tree + (sorted ? ".CreateImmutableSortedSet(items, length);" : ".CreateFrameworkImmutableHashSet(items, length);"));
+        w.Line(candidate + ".Last.SetTarget(completed);");
+        w.Line("value = completed;");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("global::System.Buffers.ArrayPool<string>.Shared.Return(items, true);");
+        w.Close();
+        w.Blank();
+        w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        w.Line("static string CandidateFirst(" + c.Sequence + " candidate2)");
+        w.Open();
+        w.Line("using var entries = candidate2.GetEnumerator();");
+        w.Line("return entries.MoveNext() ? entries.Current : default!;");
+        w.Close();
     }
 
     private static void Builder(EnumerableOwnerContext c)
