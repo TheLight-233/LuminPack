@@ -275,19 +275,56 @@ internal static class InputReadRenderer
             .Append(valueType).Append(" value)\n");
         helper.Append("                where TLuminProfile : struct, global::LuminPack.Option.ILuminPackOptions\n");
         helper.Append("            {\n");
-        if (UsesPrivateMembers(container, body))
-            // A body that reaches its own class's private members keeps that class: it forwards to the target's own entry.
+        // Internal members of the target's class stay reachable through the class; private methods move with the body under a
+        // helper-specific name, as the original expansion copies an operation's local operations. Private state or types keep
+        // the body in its class, which then forwards to the target's own entry.
+        List<Declaration> declarations = Declarations(container);
+        var companions = new List<string>();
+        var renames = new Dictionary<string, string>(StringComparer.Ordinal);
+        bool forward = false;
+        var pending = new Queue<string>();
+        pending.Enqueue(body);
+        while (pending.Count != 0 && !forward)
+        {
+            string text = pending.Dequeue();
+            foreach (Declaration declaration in declarations)
+            {
+                if (renames.ContainsKey(declaration.Name) || !Uses(text, declaration.Name))
+                    continue;
+                if (!declaration.Private)
+                {
+                    renames[declaration.Name] = "LuminRoots_" + target + "." + declaration.Name;
+                    continue;
+                }
+                if (declaration.Text == null)
+                {
+                    forward = true;
+                    break;
+                }
+                renames[declaration.Name] = "Read_" + target + "_" + declaration.Name;
+                companions.Add(declaration.Text);
+                pending.Enqueue(declaration.Text);
+            }
+        }
+        if (forward)
             helper.Append("                global::LuminPack.").Append(redirect.OwnerPrefix).Append(target)
                 .Append(".Read<TLuminProfile>(ref reader, ref value);\n");
         else
             foreach (string raw in body.Split('\n'))
             {
-                string line = raw.TrimEnd('\r');
+                string line = Rename(raw.TrimEnd('\r'), renames);
                 if (!projected)
                     line = redirect.Apply(Project(line, redirect.Limits, Policy));
                 helper.Append(line).Append('\n');
             }
         helper.Append("            }\n");
+        if (!forward)
+            foreach (string companion in companions)
+            {
+                helper.Append('\n');
+                foreach (string raw in companion.Split('\n'))
+                    helper.Append(redirect.Apply(Project(Rename(raw.TrimEnd('\r'), renames), redirect.Limits, Policy))).Append('\n');
+            }
         return helper.ToString();
     }
 
@@ -307,53 +344,147 @@ internal static class InputReadRenderer
         return value.Substring(0, name).Trim();
     }
 
-    /// <summary>Reports whether a body calls or names a member declared in its own class other than through a qualification.</summary>
-    /// <param name="container">The class block.</param>
-    /// <param name="body">The method body.</param>
-    /// <returns>Whether the body cannot leave its class.</returns>
-    private static bool UsesPrivateMembers(string container, string body)
+    /// <summary>One member declared directly in a root container.</summary>
+    private sealed class Declaration
     {
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (string line in container.Split('\n'))
+        internal Declaration(string name, bool isPrivate, string text)
         {
-            string text = line.Trim();
-            int open = text.IndexOf('(');
-            bool declaration = text.StartsWith("internal ", StringComparison.Ordinal) || text.StartsWith("private ", StringComparison.Ordinal) ||
-                text.StartsWith("public ", StringComparison.Ordinal);
-            if (!declaration)
-                continue;
-            int classKeyword = text.IndexOf(" class ", StringComparison.Ordinal);
-            if (classKeyword >= 0)
+            Name = name;
+            Private = isPrivate;
+            Text = text;
+        }
+
+        /// <summary>The member name.</summary>
+        internal readonly string Name;
+
+        /// <summary>Whether the member is private to its class.</summary>
+        internal readonly bool Private;
+
+        /// <summary>The complete declaration of a private method, or null for a type, field or other member.</summary>
+        internal readonly string Text;
+    }
+
+    /// <summary>Lists the members declared directly in a root container.</summary>
+    /// <param name="container">The class block, from its opening brace.</param>
+    /// <returns>The member declarations.</returns>
+    private static List<Declaration> Declarations(string container)
+    {
+        var result = new List<Declaration>();
+        int depth = 0;
+        for (int index = 0; index < container.Length; index++)
+        {
+            char c = container[index];
+            if (c is '"' or '\'')
             {
-                string rest = text.Substring(classKeyword + 7);
-                names.Add(new string(rest.TakeWhile(c => char.IsLetterOrDigit(c) || c == '_').ToArray()));
+                for (index++; index < container.Length && container[index] != c; index++)
+                    if (container[index] == '\\')
+                        index++;
                 continue;
             }
-            if (open <= 0)
+            if (c == '{')
+                depth++;
+            else if (c == '}')
+                depth--;
+            if (c != '\n' || depth != 1)
                 continue;
-            string head = text.Substring(0, open);
-            int generic = head.IndexOf('<');
+            int next = index + 1;
+            int end = container.IndexOf('\n', next);
+            string text = (end < 0 ? container.Substring(next) : container.Substring(next, end - next)).Trim();
+            bool isPrivate = text.StartsWith("private ", StringComparison.Ordinal);
+            if (!isPrivate && !text.StartsWith("internal ", StringComparison.Ordinal) && !text.StartsWith("public ", StringComparison.Ordinal))
+                continue;
+            int typeKeyword = text.IndexOf(" class ", StringComparison.Ordinal);
+            if (typeKeyword < 0)
+                typeKeyword = text.IndexOf(" struct ", StringComparison.Ordinal);
+            if (typeKeyword >= 0)
+            {
+                string rest = text.Substring(text.IndexOf(' ', typeKeyword + 1) + 1);
+                result.Add(new Declaration(new string(rest.TakeWhile(item => char.IsLetterOrDigit(item) || item == '_').ToArray()), true, null));
+                continue;
+            }
+            int open = text.IndexOf('(');
+            int assignment = text.IndexOf('=');
+            if (open <= 0 || assignment >= 0 && assignment < open)
+            {
+                // A field or property: its name precedes the initializer, the terminator or the accessor block.
+                string head = text.Split(new[] { '=', ';', '{' }, 2)[0].Trim();
+                result.Add(new Declaration(head.Substring(head.LastIndexOf(' ') + 1), true, null));
+                continue;
+            }
+            string signature = text.Substring(0, open);
+            int generic = signature.IndexOf('<');
             if (generic >= 0)
-                head = head.Substring(0, generic);
-            int space = head.LastIndexOf(' ');
-            string name = head.Substring(space + 1);
-            if (name.Length != 0 && name != "RootRead")
-                names.Add(name);
+                signature = signature.Substring(0, generic);
+            string name = signature.Substring(signature.LastIndexOf(' ') + 1);
+            string declaration = null;
+            if (isPrivate)
+            {
+                // The declaration starts at its attributes and ends at its body's closing brace or expression terminator.
+                int start = next;
+                while (start > 1)
+                {
+                    int previous = container.LastIndexOf('\n', start - 2);
+                    string attribute = container.Substring(previous + 1, start - previous - 2).Trim();
+                    if (!attribute.StartsWith("[", StringComparison.Ordinal))
+                        break;
+                    start = previous + 1;
+                }
+                int parameters = container.IndexOf('(', next);
+                int close = Matching(container, parameters, '(', ')');
+                int brace = close < 0 ? -1 : container.IndexOf('{', close);
+                int arrow = close < 0 ? -1 : container.IndexOf("=>", close, StringComparison.Ordinal);
+                int finish = arrow >= 0 && (brace < 0 || arrow < brace) ? container.IndexOf(';', arrow) :
+                    brace < 0 ? -1 : Matching(container, brace, '{', '}');
+                if (finish > 0)
+                    declaration = container.Substring(start, finish - start + 1);
+            }
+            result.Add(new Declaration(name, isPrivate, declaration));
         }
-        foreach (string name in names)
+        return result;
+    }
+
+    /// <summary>Reports whether text names an unqualified identifier.</summary>
+    /// <param name="text">The text.</param>
+    /// <param name="name">The identifier.</param>
+    /// <returns>Whether the identifier occurs on its own.</returns>
+    private static bool Uses(string text, string name) => Find(text, name, 0) >= 0;
+
+    /// <summary>Finds an unqualified identifier occurrence.</summary>
+    /// <param name="text">The text.</param>
+    /// <param name="name">The identifier.</param>
+    /// <param name="start">The search start.</param>
+    /// <returns>The position, or -1.</returns>
+    private static int Find(string text, string name, int start)
+    {
+        int search = start;
+        while ((search = text.IndexOf(name, search, StringComparison.Ordinal)) >= 0)
+        {
+            int after = search + name.Length;
+            bool startBoundary = search == 0 || !(char.IsLetterOrDigit(text[search - 1]) || text[search - 1] is '_' or '.');
+            bool endBoundary = after >= text.Length || !(char.IsLetterOrDigit(text[after]) || text[after] == '_');
+            if (startBoundary && endBoundary)
+                return search;
+            search = after;
+        }
+        return -1;
+    }
+
+    /// <summary>Renames unqualified member references of one line.</summary>
+    /// <param name="line">The line.</param>
+    /// <param name="renames">The new spelling of each member.</param>
+    /// <returns>The renamed line.</returns>
+    private static string Rename(string line, Dictionary<string, string> renames)
+    {
+        foreach (var rename in renames)
         {
             int search = 0;
-            while ((search = body.IndexOf(name, search, StringComparison.Ordinal)) >= 0)
+            while ((search = Find(line, rename.Key, search)) >= 0)
             {
-                int after = search + name.Length;
-                bool startBoundary = search == 0 || !(char.IsLetterOrDigit(body[search - 1]) || body[search - 1] is '_' or '.');
-                bool endBoundary = after >= body.Length || !(char.IsLetterOrDigit(body[after]) || body[after] == '_');
-                if (startBoundary && endBoundary)
-                    return true;
-                search = after;
+                line = line.Substring(0, search) + rename.Value + line.Substring(search + rename.Key.Length);
+                search += rename.Value.Length;
             }
         }
-        return false;
+        return line;
     }
 
     /// <summary>Finds a class declaration by name.</summary>
