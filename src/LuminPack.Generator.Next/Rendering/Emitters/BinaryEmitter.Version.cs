@@ -19,7 +19,8 @@ internal static partial class BinaryEmitter
         var members = model.Members;
         var schema = model.Version;
         if (schema.Dynamic || members.Where((member, index) => schema.Widths[index] == 255)
-            .Any(member => member.Kind is not (RenderMemberKind.Text or RenderMemberKind.List)))
+            .Any(member => member.Kind != RenderMemberKind.Text && !(member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string")))
+            // Only a raw list of unmanaged elements is captured as a reserved span; record and string lists stream.
             return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
         var body = new List<string>
         {
