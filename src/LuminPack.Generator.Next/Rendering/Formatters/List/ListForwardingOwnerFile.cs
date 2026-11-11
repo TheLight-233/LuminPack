@@ -251,6 +251,31 @@ internal static class ListForwardingOwnerFile
         w.Line("internal static void " + method + "<TOptions>(scoped ref " + reader + " reader, ref " + collection + " value)");
         w.Line("    where TOptions : struct, " + options);
         w.Open();
+        if (stringElements)
+        {
+            // A string list reads through an isolated copy of the reader and publishes its cursor only after the last element,
+            // so a failure leaves the caller's reader where it was.
+            string complete = "operationComplete_" + method;
+            w.Line(reader + " operationState = default;");
+            w.Line("reader.CopyTo(ref operationState);");
+            w.Line("int length = operationState.ReadLength(1);");
+            w.Line("if (length < 0)");
+            w.Open();
+            w.Line("value = null;");
+            w.Line("goto " + complete + ";");
+            w.Close();
+            w.Blank();
+            w.Line("value ??= new " + collection + "(length);");
+            w.Line("var span = " + marshal + ".GetListSpan(value, length);");
+            w.Line("operationState.ReadStrings<TOptions>(span);");
+            w.Blank();
+            w.Line(complete + ":");
+            w.Line("    ;");
+            w.Line("operationState.CopyTo(ref reader);");
+            w.Close();
+            w.Blank();
+            return;
+        }
         w.Line("int length = reader.ReadLength(1);");
         w.Line("if (length < 0)");
         w.Open();
@@ -259,16 +284,11 @@ internal static class ListForwardingOwnerFile
         w.Close();
         w.Line("value ??= new " + collection + "(length);");
         w.Line("var span = " + marshal + ".GetListSpan(value, length);");
-        if (stringElements)
-            w.Line("reader.ReadStrings<TOptions>(span);");
-        else
-        {
-            w.Line("foreach (ref var item in span)");
-            w.Open();
-            ForwardedElementRead.Emit(w, item, "reader", "item",
-                element + "." + operation + "<TOptions>(ref reader, ref item);", compressed);
-            w.Close();
-        }
+        w.Line("foreach (ref var item in span)");
+        w.Open();
+        ForwardedElementRead.Emit(w, item, "reader", "item",
+            element + "." + operation + "<TOptions>(ref reader, ref item);", compressed);
+        w.Close();
         w.Close();
         w.Blank();
     }
