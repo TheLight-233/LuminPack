@@ -95,6 +95,25 @@ internal static partial class TypeModelFactory
         return session.Options.Equals(options) ? session.DiagnoseAssembly() : new Session(compilation, options).DiagnoseAssembly();
     }
 
+    /// <summary>Finds the registration a valid Custom declaration publishes.</summary>
+    /// <param name="symbol">The attributed type.</param>
+    /// <param name="options">The project facts.</param>
+    /// <param name="json">Whether the type declares the complete JSON pair.</param>
+    /// <returns>The fully qualified type to register, or null when the type registers nothing.</returns>
+    /// <remarks>The binary pair is required and the JSON pair is registered only when both methods exist; registration is
+    /// disabled by the assembly option. Signature errors are reported separately and suppress the registration.</remarks>
+    internal static string? CustomRegistration(INamedTypeSymbol symbol, GeneratorOptions options, out bool json)
+    {
+        json = false;
+        if (options.RegisterMode == RegisterMode.Disabled || GenerationMode(symbol) != "Custom")
+            return null;
+        bool Declares(string name) => symbol.GetMembers(name).OfType<IMethodSymbol>().Any(method => method.MethodKind == MethodKind.Ordinary);
+        if (!Declares("Serialize") || !Declares("Deserialize"))
+            return null;
+        json = Declares("SerializeJson") && Declares("DeserializeJson");
+        return symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    }
+
     /// <summary>Resolves the consuming assembly's own declared policy, which the registered fallback and generic entries use.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <returns>The value-equal assembly policy.</returns>

@@ -46,7 +46,11 @@ public sealed class NextGenerator : IIncrementalGenerator
                     cancellationToken.ThrowIfCancellationRequested();
                     ModelResult result = errors ? ModelResult.Unsupported("invalid serialization declaration") :
                         TypeModelFactory.TryCreate(symbol, compilation, options);
-                    return new ModeledPayload(result, options, diagnostics);
+                    // A valid Custom declaration registers its own static operations.
+                    string? custom = DiagnosticDescriptors.HasErrors(diagnostics) ? null :
+                        TypeModelFactory.CustomRegistration(symbol, options, out bool customJson) is { } customType
+                            ? CustomRegistrationSource.Block(customType, customJson) : null;
+                    return new ModeledPayload(result, options, diagnostics, custom);
                 }
                 catch (OperationCanceledException)
                 {
@@ -100,6 +104,23 @@ public sealed class NextGenerator : IIncrementalGenerator
             }
         });
         var collected = models.Collect();
+        var customRegistrations = collected.Select(static (payloads, _) =>
+        {
+            var blocks = new List<string>();
+            GeneratorOptions? options = null;
+            foreach (ModeledPayload payload in payloads)
+                if (payload.CustomRegistration != null)
+                {
+                    blocks.Add(payload.CustomRegistration);
+                    options = payload.Options;
+                }
+            return options == null ? string.Empty : CustomRegistrationSource.Render(blocks, options.AssemblyName, options.Unity);
+        });
+        context.RegisterSourceOutput(customRegistrations, static (production, source) =>
+        {
+            if (source.Length != 0)
+                production.AddSource("LuminPack.CustomFormatterRegistry.g.cs", source);
+        });
         // The assembly declaration selects the registered fallback profile, the default JSON encoding and the input cap.
         var assemblyPolicy = context.CompilationProvider.Select(static (compilation, _) => TypeModelFactory.AssemblyPolicy(compilation));
         context.RegisterSourceOutput(assemblyPolicy, static (production, policy) =>
@@ -310,8 +331,9 @@ public sealed class NextGenerator : IIncrementalGenerator
 
     private readonly struct ModeledPayload : IEquatable<ModeledPayload>
     {
-        internal ModeledPayload(ModelResult result, GeneratorOptions options, DiagnosticInfo[] diagnostics)
+        internal ModeledPayload(ModelResult result, GeneratorOptions options, DiagnosticInfo[] diagnostics, string? customRegistration = null)
         {
+            CustomRegistration = customRegistration;
             Diagnostics = diagnostics;
             Result = result;
             Options = options;
@@ -323,8 +345,11 @@ public sealed class NextGenerator : IIncrementalGenerator
 
         internal DiagnosticInfo[] Diagnostics { get; }
 
+        /// <summary>The registration block of a valid Custom declaration, or null.</summary>
+        internal string? CustomRegistration { get; }
+
         public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options) &&
-            SameDiagnostics(Diagnostics, other.Diagnostics);
+            CustomRegistration == other.CustomRegistration && SameDiagnostics(Diagnostics, other.Diagnostics);
 
         public override bool Equals(object? obj) => obj is ModeledPayload other && Equals(other);
 
