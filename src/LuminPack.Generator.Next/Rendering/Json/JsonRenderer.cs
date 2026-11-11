@@ -30,6 +30,6 @@ internal sealed class JsonRenderer : IRenderer
     {
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
         return direct == null ? string.Empty : PayloadEmitter.Render(direct, json: true, context.Options.AvailableAliases,
-            (GeneratedOperations)(int)context.Operations);
+            context.Operations);
     }
 }

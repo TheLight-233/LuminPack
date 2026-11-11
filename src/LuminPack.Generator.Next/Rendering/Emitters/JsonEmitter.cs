@@ -313,7 +313,7 @@ internal static class JsonEmitter
                 body.Add("");
                 continue;
             }
-            if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
+            if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.ForwardedCollection or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
                 RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or
                 RenderMemberKind.ImmutableSortedSet)
             {
@@ -575,7 +575,7 @@ internal static class JsonEmitter
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("break;");
             }
-            else if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
+            else if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.ForwardedCollection or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or
                 RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or
                 RenderMemberKind.ImmutableSortedSet)
             {

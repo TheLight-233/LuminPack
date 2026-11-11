@@ -560,10 +560,10 @@ internal static class TypeModelFactory
             if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
             // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.
-            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && Scalar(item) is { } sequenceItem)
+            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && Scalar(item) is { } sequenceItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: sequenceItem.Keyword);
             // A concurrent or immutable sequence of strings transfers its elements through the shared string owner.
-            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && item.SpecialType == SpecialType.System_String)
+            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
             // A concurrent or immutable sequence of packable classes expands each element's record body through the sequence owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && LocalPackableClass(item) is { } sequenceElement)
@@ -574,6 +574,10 @@ internal static class TypeModelFactory
                 return new CollectionMember(name, storage, policy, declared, kind, element,
                     scalar: sequenceElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested);
             }
+            if (kind is CollectionKind.Concurrent or CollectionKind.List or CollectionKind.NestedList or CollectionKind.Blocking &&
+                TryForwardedCollection(item) is { } child &&
+                (kind != CollectionKind.Concurrent || type.OriginalDefinition.MetadataName == "ConcurrentQueue`1"))
+                return new CollectionMember(name, storage, policy, declared, kind, element, forwardedElement: child);
             if (kind is not (CollectionKind.List or CollectionKind.NestedList))
                 return new CollectionMember(name, storage, policy, declared, kind, element);
 
@@ -620,6 +624,44 @@ internal static class TypeModelFactory
                     scalar: elementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested);
             }
             return new CollectionMember(name, storage, policy, declared, kind, element);
+        }
+
+        /// <summary>Describes a collection that can be reached through a static element owner.</summary>
+        /// <param name="type">The closed element type of the enclosing collection.</param>
+        /// <returns>The child owner requirements, or null if the family or element is not yet supported.</returns>
+        private static CollectionMember? TryForwardedCollection(ITypeSymbol type)
+        {
+            if (type is IArrayTypeSymbol { IsSZArray: true } array && Scalar(array.ElementType) is { } scalar)
+                return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default,
+                    type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), CollectionKind.Array,
+                    Reference(array.ElementType), scalar: scalar.Keyword, raw: true);
+
+            if (type is not INamedTypeSymbol { Arity: 1 } named || named.IsUnboundGenericType)
+                return null;
+
+            var definition = named.OriginalDefinition;
+            string family = definition.MetadataName;
+            string ns = definition.ContainingNamespace.ToDisplayString();
+            CollectionKind kind;
+            if (family == "List`1" && ns == "System.Collections.Generic")
+                kind = CollectionKind.List;
+            else if (family == "ConcurrentQueue`1" && ns == "System.Collections.Concurrent")
+                kind = CollectionKind.Concurrent;
+            else if (family == "BlockingCollection`1" && ns == "System.Collections.Concurrent")
+                kind = CollectionKind.Blocking;
+            else
+                return null;
+
+            ITypeSymbol item = named.TypeArguments[0];
+            var child = TryForwardedCollection(item);
+            var element = Scalar(item);
+            bool text = kind is CollectionKind.Concurrent or CollectionKind.Blocking or CollectionKind.List &&
+                item.SpecialType == SpecialType.System_String;
+            if (element == null && child == null && !text)
+                return null;
+
+            return new CollectionMember(string.Empty, MemberStorage.Field, WirePolicy.Default, DeclaredType(named), kind,
+                Reference(item), scalar: text ? "string" : element?.Keyword, elementText: text, forwardedElement: child);
         }
 
         /// <summary>Models a dictionary, sorted list or sparse dictionary member.</summary>
@@ -974,7 +1016,7 @@ internal static class TypeModelFactory
         private static bool ProfilePayload(TypeModel model) => model.Members.Any(member => member switch
         {
             TextMember or TypeParameterMember => true,
-            CollectionMember { Scalar: "string" } => true,
+            CollectionMember { Scalar: "string" } or CollectionMember { ForwardedElement: not null } => true,
             CollectionMember collection => collection.Nested != null && ProfilePayload(collection.Nested),
             DictionaryMember dictionary => dictionary.KeyText || dictionary.ValueText,
             PayloadMember { Shape: PayloadShape.Inline, Nested: { } nested } => ProfilePayload(nested),
@@ -3471,6 +3513,8 @@ internal static class TypeModelFactory
         if (@namespace == "System.Collections.Immutable" &&
             name is "ImmutableArray" or "ImmutableList" or "ImmutableHashSet" or "ImmutableSortedSet" or "ImmutableQueue" or "ImmutableStack")
             return CollectionKind.Immutable;
+        if (@namespace == "System.Collections.Concurrent" && name == "BlockingCollection")
+            return CollectionKind.Blocking;
         if (@namespace == "System.Collections.Concurrent" && name is "ConcurrentBag" or "ConcurrentQueue" or "ConcurrentStack")
             return CollectionKind.Concurrent;
         return null;

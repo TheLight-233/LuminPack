@@ -1,30 +1,7 @@
-using System;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering;
-
-/// <summary>The operations the consumer calls, which select the emitted entries.</summary>
-[Flags]
-internal enum OperationSet
-{
-    /// <summary>No operation is referenced.</summary>
-    None = 0,
-
-    /// <summary>Binary write roots.</summary>
-    BinaryWrite = 1,
-
-    /// <summary>Binary read roots.</summary>
-    BinaryRead = 2,
-
-    /// <summary>JSON write roots.</summary>
-    JsonWrite = 4,
-
-    /// <summary>JSON read roots.</summary>
-    JsonRead = 8,
-
-    /// <summary>Every operation.</summary>
-    All = BinaryWrite | BinaryRead | JsonWrite | JsonRead,
-}
 
 /// <summary>The immutable facts one rendered file depends on.</summary>
 internal sealed class RenderContext
@@ -36,10 +13,10 @@ internal sealed class RenderContext
     internal readonly AliasTable Aliases;
 
     /// <summary>The operations to emit.</summary>
-    internal readonly OperationSet Operations;
+    internal readonly GeneratedOperations Operations;
 
     /// <summary>Captures a render context.</summary>
-    internal RenderContext(GeneratorOptions options, AliasTable aliases, OperationSet operations = OperationSet.All)
+    internal RenderContext(GeneratorOptions options, AliasTable aliases, GeneratedOperations operations = GeneratedOperations.All)
     {
         Operations = operations;
         Aliases = aliases;

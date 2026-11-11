@@ -207,6 +207,9 @@ internal enum CollectionKind
 
     /// <summary>A concurrent collection.</summary>
     Concurrent,
+
+    /// <summary>A <c>BlockingCollection&lt;T&gt;</c>.</summary>
+    Blocking,
 }
 
 /// <summary>The stored entry shape of a paired, nested or sorted sequence member.</summary>
@@ -279,12 +282,16 @@ internal sealed class CollectionMember : MemberModel
     /// <summary>The stored entry shape of a paired, nested or sorted list, or null.</summary>
     internal readonly CollectionShape? Shape;
 
+    /// <summary>The child collection whose generated owner reads and writes each element.</summary>
+    internal readonly CollectionMember? ForwardedElement;
+
     /// <summary>Captures a sequence member.</summary>
     internal CollectionMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, CollectionKind kind, TypeRef element,
         string? scalar = null, bool raw = false, bool formatterCall = false, bool elementText = false, TypeModel? nested = null,
-        CollectionShape? shape = null)
+        CollectionShape? shape = null, CollectionMember? forwardedElement = null)
         : base(name, storage, policy)
     {
+        ForwardedElement = forwardedElement;
         Shape = shape;
         Nested = nested;
         ElementText = elementText;
@@ -302,7 +309,7 @@ internal sealed class CollectionMember : MemberModel
         var member = (CollectionMember)other;
         return DeclaredType == member.DeclaredType && Kind == member.Kind && Element.Equals(member.Element) &&
             Scalar == member.Scalar && Raw == member.Raw && FormatterCall == member.FormatterCall &&
-            ElementText == member.ElementText && Equals(Nested, member.Nested) && Equals(Shape, member.Shape);
+            ElementText == member.ElementText && Equals(Nested, member.Nested) && Equals(Shape, member.Shape) && Equals(ForwardedElement, member.ForwardedElement);
     }
 }
 

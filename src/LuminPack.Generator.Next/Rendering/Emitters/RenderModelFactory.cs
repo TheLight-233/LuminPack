@@ -362,6 +362,9 @@ internal static class RenderModelFactory
     {
         bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, member.DeclaredType);
+        if (member.ForwardedElement != null || member.Kind == CollectionKind.Blocking && member.Scalar != null)
+            return new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.Element.GlobalName,
+                member.DeclaredType, 0, formatter, ScalarKind.Other, mirrored, property: property);
         // A concurrent or immutable sequence publishes an owner per closed element type: a raw scalar or shared string
         // variant, or a packable element whose record body the owner expands in place.
         if (member.Kind is CollectionKind.Concurrent or CollectionKind.Immutable)

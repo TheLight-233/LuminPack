@@ -32,6 +32,6 @@ internal sealed class BinaryRenderer : IRenderer
     {
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
         return direct == null ? string.Empty : PayloadEmitter.Render(direct, json: false, context.Options.AvailableAliases,
-            (GeneratedOperations)(int)context.Operations);
+            context.Operations);
     }
 }

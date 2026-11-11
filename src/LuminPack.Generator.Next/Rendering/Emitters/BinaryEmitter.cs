@@ -961,6 +961,12 @@ internal static partial class BinaryEmitter
                 index++;
                 continue;
             }
+            if (member.Kind == RenderMemberKind.ForwardedCollection)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                index++;
+                continue;
+            }
             // A culture-info member expands the shared owner's write body in place, as the legacy direct record does.
             if (member.Kind == RenderMemberKind.CultureInfo)
             {
@@ -1772,6 +1778,11 @@ internal static partial class BinaryEmitter
                 AddCultureInfoWrite(body, member, owner, w, names, ref ends);
                 continue;
             }
+            if (member.Kind == RenderMemberKind.ForwardedCollection)
+            {
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                continue;
+            }
             // A concurrent queue or immutable stack writes its counted enumeration in place and reads through its shared owner.
             if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableStack)
             {
@@ -1921,7 +1932,7 @@ internal static partial class BinaryEmitter
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
     private static bool IsInlineSegment(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.ConcurrentQueue or
             RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or RenderMemberKind.ImmutableList or
             RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet;
 
@@ -2617,7 +2628,7 @@ internal static partial class BinaryEmitter
             }
             // A concurrent queue, immutable array, stack or list reads through its shared formatter owner, which frames its
             // own null record.
-            if (member.Kind is RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or
+            if (member.Kind is RenderMemberKind.ForwardedCollection or RenderMemberKind.ConcurrentQueue or RenderMemberKind.ImmutableArray or RenderMemberKind.ImmutableStack or
                 RenderMemberKind.ImmutableList or RenderMemberKind.ImmutableHashSet or RenderMemberKind.ImmutableSortedSet)
             {
                 body.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + owner + "." + member.Name + "!);");

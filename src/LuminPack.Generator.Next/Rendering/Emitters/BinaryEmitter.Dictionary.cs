@@ -33,7 +33,9 @@ internal static partial class BinaryEmitter
                     body.Add("writer.Cursor = ref cursor;");
                     current = false;
                 }
-                if (IsTextList(member))
+                if (member.Kind == RenderMemberKind.ForwardedCollection)
+                    body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, value." + member.Name + ");");
+                else if (IsTextList(member))
                     AddInlineListWrite(body, member, "value", w, names, ref ends, ref spans);
                 else if (IsElementList(member))
                     AddInlineElementListWrite(body, member, "value", 0, w, names, ref ends, ref cursors, ref spans);
@@ -91,7 +93,7 @@ internal static partial class BinaryEmitter
     /// <summary>Whether a member writes in place through the writer rather than at the cursor: an inline object, a string
     /// list or a list whose elements expand their record body.</summary>
     private static bool IsWriterBlock(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
-        IsElementList(member) || IsCollectionBlock(member);
+        IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.ForwardedCollection;
 
     /// <summary>Writes one fused-entry dictionary member at the cursor: the kernel under a UTF-16 record profile and the
     /// original operation as its fallback.</summary>

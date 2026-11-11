@@ -77,7 +77,7 @@ public sealed class NextGenerator : IIncrementalGenerator
         {
             try
             {
-                SharedFormatterPublisher.Publish(production, set);
+                SharedFormatterPublisher.Publish(production, set, GeneratedOperations.All);
             }
             catch (Exception error)
             {

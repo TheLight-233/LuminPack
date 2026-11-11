@@ -35,9 +35,9 @@ internal sealed class UnionRenderer : IRenderer
             return string.Empty;
         var writer = new CodeWriter(context.Options.AvailableAliases) { Scoped = direct.Net8 };
         if (json)
-            UnionEmitter.EmitJson(direct, writer, (GeneratedOperations)(int)context.Operations);
+            UnionEmitter.EmitJson(direct, writer, context.Operations);
         else
-            UnionEmitter.EmitBinary(direct, writer, (GeneratedOperations)(int)context.Operations);
+            UnionEmitter.EmitBinary(direct, writer, context.Operations);
         return PublicationLayout.LayOutLines(writer.Complete(json));
     }
 }
