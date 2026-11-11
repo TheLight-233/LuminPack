@@ -239,6 +239,19 @@ a build or parity run, so their verification is still pending. `ImmutableSortedD
 dictionary families remain unmapped instead of borrowing the wrong storage protocol, as do packable
 stack or bag elements, sorted-set strings and the remaining generic sequence families.
 
+`LinkedList<T>`, `HashSet<T>` and `Queue<T>` of raw scalars are registered as well, through the shared
+enumerable owner template in `Rendering/Formatters/Enumerable`: the family supplies its binary write and
+read bodies, and the template owns the four operations, the entry points, the owner forwarders and the
+JSON roots. The linked list walks its nodes and links the pooled block through `FillLinkedList`; the hash
+set writes through `WriteHashSetRaw` and reads entries in place before `RebuildHashSetBuckets`; the queue
+stores the head, tail and size words and the two circular segments, with the pooled-array fallback below
+NET8. The string and packable element variants of these families, the small-hash-set grouped write that
+depends on an optional runtime capability, `Collection<T>`, `ObservableCollection<T>`,
+`ReadOnlyCollection<T>`, `ReadOnlyObservableCollection<T>`, `ReadOnlyCollectionBuilder<T>`,
+`PriorityQueue<TElement, TPriority>`, `FrozenSet<T>`, the interface collections, the memory and segment
+types, `Nullable<T>`, tuples, `KeyValuePair<TKey, TValue>` and `Lazy<T>` are not ported yet. This batch
+was written without a build or parity run.
+
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
 `LuminPack027` and `LuminPack018` at the declarations, and the 220-payload corpus reports none. An

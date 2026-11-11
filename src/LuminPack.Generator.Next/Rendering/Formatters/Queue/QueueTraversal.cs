@@ -1,0 +1,74 @@
+#nullable disable
+using System.Collections.Generic;
+
+namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
+
+/// <summary>Emits the shared storage write used by queue roots and inline members.</summary>
+internal static class QueueTraversal
+{
+    /// <summary>Writes a nonnull queue of raw scalars through the caller's isolated operation state.</summary>
+    /// <param name="body">The generated statements.</param>
+    /// <param name="element">The scalar element type.</param>
+    /// <param name="local">The nonnull queue expression.</param>
+    /// <param name="memory">The spelling of the unsafe memory helper.</param>
+    /// <param name="marshal">The spelling of the memory marshal helper.</param>
+    /// <remarks>The wire is the element count, the head, tail and size storage words (zero, zero, count), then the live elements
+    /// in dequeue order, which the circular storage splits into at most two copied segments. Runtimes without storage access copy
+    /// the queue into one pooled array instead.</remarks>
+    internal static void Write(List<string> body, string element, string local, string memory, string marshal)
+    {
+        body.Add("int queueSize = " + local + ".Count;");
+        body.Add("int countPosition = operationState.BeginCollection();");
+        body.Add("if (queueSize != 0)");
+        body.Add("{");
+        body.Add("int queuePayload = checked(queueSize * " + memory + ".SizeOf<" + element + ">());");
+        body.Add("operationState.EnsureAdditionalCapacity(checked(sizeof(int) * 3 + queuePayload));");
+        body.Add("int queueZero = 0;");
+        body.Add("operationState.Write(in queueZero);");
+        body.Add("operationState.Write(in queueZero);");
+        body.Add("operationState.Write(in queueSize);");
+        body.Add("#if NET8_0_OR_GREATER");
+        body.Add("global::LuminPack.Code.LuminPackMarshal.GetQueueSize(" + local + ", out _, out var queueHead, out _);");
+        body.Add("var queueStorage = global::LuminPack.Code.LuminPackMarshal.GetQueueSpan(" + local + ");");
+        body.Add("var queueFirstLength = global::System.Math.Min(queueSize, queueStorage.Length - queueHead);");
+        body.Add("var queueFirst = queueStorage.Slice(queueHead, queueFirstLength);");
+        body.Add("var queueSecond = queueStorage.Slice(0, queueSize - queueFirstLength);");
+        body.Add("int queueFirstBytes = checked(queueFirst.Length * " + memory + ".SizeOf<" + element + ">());");
+        body.Add("if (queueFirstBytes != 0)");
+        body.Add("{");
+        body.Add("global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(");
+        body.Add("    ref operationState.Cursor,");
+        body.Add("    ref " + memory + ".As<" + element + ", byte>(ref " + marshal + ".GetReference(queueFirst)),");
+        body.Add("    (uint)queueFirstBytes);");
+        body.Add("}");
+        body.Add("int queueSecondBytes = queuePayload - queueFirstBytes;");
+        body.Add("if (queueSecondBytes != 0)");
+        body.Add("{");
+        body.Add("global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(");
+        body.Add("    ref " + memory + ".Add(ref operationState.Cursor, (nint)(uint)queueFirstBytes),");
+        body.Add("    ref " + memory + ".As<" + element + ", byte>(ref " + marshal + ".GetReference(queueSecond)),");
+        body.Add("    (uint)queueSecondBytes);");
+        body.Add("}");
+        body.Add("#else");
+        body.Add("var queueBuffer = global::System.Buffers.ArrayPool<" + element + ">.Shared.Rent(queueSize);");
+        body.Add("try");
+        body.Add("{");
+        body.Add(local + ".CopyTo(queueBuffer, 0);");
+        body.Add("global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(");
+        body.Add("    ref operationState.Cursor,");
+        body.Add("    ref " + memory + ".As<" + element + ", byte>(ref queueBuffer[0]),");
+        body.Add("    (uint)queuePayload);");
+        body.Add("}");
+        body.Add("finally");
+        body.Add("{");
+        // The pooled copy holds raw scalars only, so it carries no managed references to clear.
+        body.Add("global::System.Buffers.ArrayPool<" + element + ">.Shared.Return(queueBuffer, false);");
+        body.Add("}");
+        body.Add("#endif");
+        body.Add("operationState.Advance(queuePayload);");
+        body.Add("}");
+        body.Add("");
+        body.Add("operationState.EndCollection(countPosition, queueSize);");
+        body.Add("operationState.CheckBuffer();");
+    }
+}

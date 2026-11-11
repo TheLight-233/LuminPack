@@ -240,6 +240,15 @@ internal enum CollectionKind
 
     /// <summary>A <c>BlockingCollection&lt;T&gt;</c>.</summary>
     Blocking,
+
+    /// <summary>A <c>LinkedList&lt;T&gt;</c>.</summary>
+    Linked,
+
+    /// <summary>A <c>HashSet&lt;T&gt;</c>.</summary>
+    HashSet,
+
+    /// <summary>A <c>Queue&lt;T&gt;</c>.</summary>
+    Queue,
 }
 
 /// <summary>The stored entry shape of a paired, nested or sorted sequence member.</summary>

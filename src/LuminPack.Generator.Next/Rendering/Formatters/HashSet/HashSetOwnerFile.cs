@@ -1,0 +1,49 @@
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+
+namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
+
+/// <summary>Renders the shared binary and JSON formatter owner of one closed <c>HashSet&lt;T&gt;</c> of raw scalars.</summary>
+/// <remarks>The members mirror the legacy hash-set operations. The binary write copies the live entries through the shared raw
+/// kernel; the binary read creates a presized set, reads each element straight into its entry and rebuilds the buckets, which
+/// requires the payload to hold unique values, while an empty payload reuses and clears a non-null destination.</remarks>
+internal static class HashSetOwnerFile
+{
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);");
+
+    /// <summary>Renders the file.</summary>
+    /// <param name="set">The required owners and the extension container.</param>
+    /// <param name="fact">The closed sequence owner.</param>
+    /// <param name="operations">The operations requested for this owner.</param>
+    /// <returns>The complete source.</returns>
+    internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
+        EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
+
+    private static void Write(EnumerableOwnerContext c)
+    {
+        c.W.Line("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref operationState, value);");
+    }
+
+    private static void Read(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("if (length == 0)");
+        w.Open();
+        w.Line("value ??= new " + c.Sequence + "(0);");
+        w.Line("value.Clear();");
+        w.Line("goto operationComplete_RootRead;");
+        w.Close();
+        w.Blank();
+        w.Line("value = new " + c.Sequence + "(length);");
+        w.Blank();
+        w.Line("var setView = global::LuminPack.Code.LuminPackMarshal.GetHashSetView(value);");
+        w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(setView._entries);");
+        w.Line("for (int index = 0; index < length; index++)");
+        w.Open();
+        w.Line("ref var entry = ref " + c.Memory + ".Add(ref entryRef, (nint)(uint)index);");
+        w.Line("operationState.Read(ref " + c.Memory + ".As<" + c.Scalar + ", byte>(ref entry.Value), " + c.Memory + ".SizeOf<" +
+            c.Scalar + ">());");
+        w.Close();
+        w.Blank();
+        w.Line("global::LuminPack.Code.LuminPackMarshal.RebuildHashSetBuckets(setView, length);");
+    }
+}
