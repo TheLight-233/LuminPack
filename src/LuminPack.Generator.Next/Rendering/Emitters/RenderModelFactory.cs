@@ -331,6 +331,11 @@ internal static class RenderModelFactory
                 return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.Scalar, scalar.Scalar, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, scalar.Scalar), ScalarKind.Struct, mirrored,
                     raw: true, builtin: true, property: property, isVolatile: scalar.Volatile);
+            case ScalarMember scalar when scalar.Raw:
+                // A raw declared struct is fixed storage of its runtime width; JSON writes it through the struct's owner.
+                return new RenderMember(scalar.Name, RenderMemberKind.Fixed, scalar.Scalar, scalar.Scalar, 0,
+                    "global::LuminPack." + GeneratedNames.Owner(extension, scalar.Scalar), ScalarKind.Struct, mirrored,
+                    raw: true, property: property, isVolatile: scalar.Volatile);
             case ScalarMember scalar:
                 // An enum is stored as its underlying scalar; the binary emitters spell the enum itself, JSON casts through
                 // the underlying keyword.

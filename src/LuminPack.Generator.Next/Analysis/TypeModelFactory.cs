@@ -1018,6 +1018,13 @@ internal static partial class TypeModelFactory
                 issues.Add("member '" + name + "': " + nested.Reason);
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
             }
+            // A struct whose own root copies its storage as one value is raw fixed storage of the containing record, as in the
+            // original pipeline: fixed cursors, field-group copies and Union cursor kernels include it with Unsafe.SizeOf.
+            if (nested.Model is StructModel { Storage: StructStorage.RawUnmanaged, StoragePlan: null, Versioned: false, Mirror: null,
+                    Callbacks: false, Rent: false } &&
+                type.NullableAnnotation != NullableAnnotation.Annotated)
+                return new ScalarMember(name, storage, policy, type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), 0,
+                    raw: true, builtin: false, isVolatile: member.Volatile);
             return new PayloadMember(name, storage, policy, Reference(type), ShapeOf(nested.Model), nested.Model);
         }
 
@@ -1344,17 +1351,15 @@ internal static partial class TypeModelFactory
         /// <summary>Finds the nearest base Union root that declares the given case.</summary>
         /// <param name="type">The candidate case.</param>
         /// <returns>The declaring root, or null when the type is not a declared case.</returns>
-        private static INamedTypeSymbol? FixedUnionRoot(INamedTypeSymbol type)
+        private INamedTypeSymbol? FixedUnionRoot(INamedTypeSymbol type)
         {
             for (var parent = type.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object;
                 parent = parent.BaseType)
             {
                 if (!parent.IsAbstract || parent.IsGenericType || !IsPackable(parent))
                     continue;
-                if (parent.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == UnionAttribute &&
-                        attribute.ConstructorArguments.Length >= 2 &&
-                        attribute.ConstructorArguments[1].Value is INamedTypeSymbol declared &&
-                        SymbolEqualityComparer.Default.Equals(declared, type)))
+                // Explicit and discovered cases are both declared cases; the root's own analysis uses the same list.
+                if (UnionCaseDeclarations(parent).Any(declaration => SymbolEqualityComparer.Default.Equals(declaration.Type, type)))
                     return parent;
             }
             return null;

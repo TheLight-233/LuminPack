@@ -42,6 +42,9 @@ internal static partial class TypeModelFactory
                 return null;
             }
 
+            // Raw struct storage keeps its fixed member shape; its owner still serves JSON and standalone calls.
+            if (specialized is ScalarMember { Raw: true, Builtin: false } && specializedIssues.Count == 0)
+                return specialized;
             bool genericContract = formatter != null && (RequiresDefault(formatter) || missingElementBody);
             if (!genericContract && specialized != null && specializedIssues.Count == 0 && RenderModelFactory.Member(specialized, GeneratedNames.Extension(Options.AssemblyName), Options) != null)
                 return specialized;

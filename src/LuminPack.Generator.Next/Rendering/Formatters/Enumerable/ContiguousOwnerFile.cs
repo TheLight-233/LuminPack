@@ -246,6 +246,35 @@ internal static class ContiguousOwnerFile
             w.Line("return;");
             w.Close();
             w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
+            if (shape == ContiguousShape.List)
+            {
+                // The original list read streams its elements once: no lookahead count, existing elements are read in place and
+                // the tail is trimmed.
+                w.Line("if (value is null || value.GetType() != typeof(" + model.Type + "))");
+                w.Open();
+                w.Line("value = new " + model.Type + "(reader.GetArrayCapacityHint<TLuminProfile>(10));");
+                w.Close();
+                w.Blank();
+                w.Line("int count = 0;");
+                w.Line("while (reader.Read<TLuminProfile>())");
+                w.Open();
+                w.Line("if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+                w.Indented(() => w.Line("break;"));
+                w.Line("if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ObjectEnd)");
+                w.Indented(() => w.Line("continue;"));
+                w.Line(element.Type + " item = count < value.Count ? value[count] : default!;");
+                w.Line(FormatterElementEmitter.Owner(set, element) + ".Read<TLuminProfile>(ref reader, ref item);");
+                w.Line("if (count < value.Count)");
+                w.Indented(() => w.Line("value[count] = item;"));
+                w.Line("else");
+                w.Indented(() => w.Line("value.Add(item);"));
+                w.Line("count++;");
+                w.Close();
+                w.Blank();
+                w.Line("if (count < value.Count)");
+                w.Indented(() => w.Line("value.RemoveRange(count, value.Count - count);"));
+                return;
+            }
             w.Line("int length = reader.CountArrayElements<TLuminProfile>();");
             Prepare(w);
             w.Line("for (int index = 0; index < length; index++)");
