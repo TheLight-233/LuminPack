@@ -78,7 +78,7 @@ internal static class StackStringOwnerFile
                     w.Line("foreach (var item in value)");
                     w.Open();
                     w.Line("var temp = item;");
-                    w.Line(element + ".MeasureRecord_String<" + utf16 + ">(ref evaluator, ref temp);");
+                    w.Line(serializer + ".MeasureRecord_String<" + utf16 + ">(ref evaluator, ref temp);");
                     w.Close();
                     w.Close();
                     w.Blank();

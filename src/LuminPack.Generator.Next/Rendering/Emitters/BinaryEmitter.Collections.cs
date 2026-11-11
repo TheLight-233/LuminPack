@@ -39,7 +39,9 @@ internal static partial class BinaryEmitter
                 AddNestedListWrite(body, member, owner, depth, w, names, ref ends, ref cursors, ref spans);
                 break;
             default:
-                AddSparseDictionaryWrite(body, member, owner, w, names, ref ends);
+                // A nullable value is framed by its owner (a null marker, or a memberless header and the payload), so the sparse
+                // dictionary writes through its shared owner like the other keyed collections.
+                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
                 break;
         }
     }

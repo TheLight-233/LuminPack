@@ -495,7 +495,7 @@ internal static class TypeModelFactory
                     issues.Add("member '" + name + "' is a CultureInfo array, which has no shared formatter owner");
                     return null;
                 }
-                return ArrayMember(name, storage, policy, array);
+                return ArrayMember(name, storage, policy, array, depth, issues, path);
             }
 
             if (type is INamedTypeSymbol named)
@@ -533,7 +533,8 @@ internal static class TypeModelFactory
         /// <returns>The sequence member.</returns>
         /// <remarks>A one-dimensional array of raw scalars stores its span directly; every other array writes through its
         /// generated formatter, and a multi-dimensional array keeps its runtime-sized raw path.</remarks>
-        private static MemberModel ArrayMember(string name, MemberStorage storage, WirePolicy policy, IArrayTypeSymbol array)
+        private MemberModel ArrayMember(string name, MemberStorage storage, WirePolicy policy, IArrayTypeSymbol array, int depth,
+            List<string> issues, Path path)
         {
             string declared = array.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             TypeRef element = Reference(array.ElementType);
@@ -544,6 +545,15 @@ internal static class TypeModelFactory
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, scalar: scalar.Keyword);
             if (array.IsSZArray && TryForwardedCollection(array.ElementType) is { } child)
                 return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, forwardedElement: child);
+            // An array of strings transfers its elements through the shared string owner.
+            if (array.IsSZArray && array.ElementType.SpecialType == SpecialType.System_String)
+                return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element, scalar: "string",
+                    elementText: true, formatterCall: true);
+            // An array of packable classes expands each element's record body through the array owner.
+            if (array.IsSZArray && LocalPackableClass(array.ElementType) is { } packable &&
+                ElementModel(packable, depth, issues, path, name) is { } nested)
+                return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
+                    scalar: packable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), nested: nested, formatterCall: true);
             return new CollectionMember(name, storage, policy, declared, CollectionKind.Array, element,
                 scalar: declared, formatterCall: true);
         }
@@ -590,7 +600,8 @@ internal static class TypeModelFactory
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
             // A concurrent or immutable sequence of packable classes expands each element's record body through the sequence owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Linked or CollectionKind.HashSet or
-                CollectionKind.Wrapper or CollectionKind.Interface or CollectionKind.Frozen && LocalPackableClass(item) is { } sequenceElement)
+                CollectionKind.Wrapper or CollectionKind.Interface or CollectionKind.Frozen or CollectionKind.Queue or CollectionKind.Stack or
+                CollectionKind.SortedSet && LocalPackableClass(item) is { } sequenceElement)
             {
                 TypeModel? nested = ElementModel(sequenceElement, depth, issues, path, name);
                 if (nested == null)

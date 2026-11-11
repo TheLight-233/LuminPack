@@ -295,7 +295,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         member.Kind is RenderMemberKind.SortedList or RenderMemberKind.PairList && member.Collection.ValueText ||
         member.Kind == RenderMemberKind.NestedList && member.Nested.ProfilePayload ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection ||
+        member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.SparseDictionary ||
         (member.Kind == RenderMemberKind.Sequence && member.Sequence.ProfileElements &&
             (member.Scalar == "string" || member.Nested != null && member.Nested.ProfilePayload)) ||
         member.Kind == RenderMemberKind.Object && member.Nested.ProfilePayload);

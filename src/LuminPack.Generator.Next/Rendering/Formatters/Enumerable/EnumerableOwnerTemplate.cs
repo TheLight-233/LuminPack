@@ -67,6 +67,27 @@ internal sealed class EnumerableOwnerContext
         W.Line("operationState.CheckBuffer();");
     }
 
+    /// <summary>Emits the bottom-first packable write of a nonnull stack through <c>operationState</c>.</summary>
+    /// <param name="local">The nonnull stack expression.</param>
+    /// <param name="concurrent">Whether the stack is a concurrent stack.</param>
+    internal void StackPayloadWrite(string local, bool concurrent)
+    {
+        var body = new List<string>();
+        OrderedPayloadTraversal.WriteStack(body, Payload!, local, concurrent, W, _writeNames, ref _ends, ref _cursors, ref _spans);
+        foreach (string line in body)
+            W.Line(line);
+    }
+
+    /// <summary>Emits the packable write of a nonnull queue through <c>operationState</c>.</summary>
+    /// <param name="local">The nonnull queue expression.</param>
+    internal void QueuePayloadWrite(string local)
+    {
+        var body = new List<string>();
+        OrderedPayloadTraversal.WriteQueue(body, Payload!, local, W, _writeNames, ref _ends, ref _cursors, ref _spans);
+        foreach (string line in body)
+            W.Line(line);
+    }
+
     /// <summary>Emits the read of one element into an assignable location.</summary>
     /// <param name="destination">The assignable destination.</param>
     internal void ReadElement(string destination)

@@ -22,6 +22,11 @@ internal static class QueueOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
+        if (c.Payload != null)
+        {
+            c.QueuePayloadWrite("value");
+            return;
+        }
         var traversal = new List<string>();
         QueueTraversal.Write(traversal, c.Scalar, "value", c.Memory, c.Marshal);
         foreach (string line in traversal)
@@ -55,13 +60,13 @@ internal static class QueueOwnerFile
         w.Line("if (storedSize != length || storedHead < 0 || storedTail < 0)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidRange(storedSize, length);"));
         w.Blank();
-        if (c.Text)
+        if (c.Counted)
         {
-            // A string element is read and enqueued one at a time.
+            // A string or packable element is read and enqueued one at a time.
             w.Line("for (int index = 0; index < length; index++)");
             w.Open();
-            w.Line("string item = default;");
-            w.Line("operationState.Read<TLuminProfile>(ref item);");
+            w.Line(scalar + " item = default;");
+            c.ReadElement("item");
             w.Line("value.Enqueue(item);");
             w.Close();
             return;

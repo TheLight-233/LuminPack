@@ -10,6 +10,10 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <c>Add</c>. The JSON form is an array of key and value arrays.</remarks>
 internal static class DictionaryOwnerFile
 {
+    // The original pipeline stores a nullable of a payload of at most four bytes as its raw struct.
+    private static bool RawNullable(string member) => member.EndsWith("?", System.StringComparison.Ordinal) &&
+        member.Substring(0, member.Length - 1) is "bool" or "byte" or "sbyte" or "short" or "ushort" or "char" or "int" or "uint" or "float";
+
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
     /// <param name="fact">The closed dictionary owner.</param>
@@ -32,15 +36,18 @@ internal static class DictionaryOwnerFile
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
         string key = fact.Key, value = fact.Value;
-        bool rawKey = key != "string", rawValue = value != "string", pair = rawKey && rawValue;
+        // A nullable raw value makes the entries sparse: it is stored with the core store of the whole nullable storage.
+        bool sparse = value.EndsWith("?", System.StringComparison.Ordinal);
+        bool rawKey = key != "string", rawValue = value != "string", pair = rawKey && rawValue && !sparse;
         string dictionary = fact.DeclaredType;
         string type = ReadableTypeName.Of(GeneratedNames.PayloadKey(dictionary));
         string roots = "LuminRoots_" + type;
         string owner = "Binary_" + extension + "_" + type;
         string keyOwner = "global::LuminPack." + GeneratedNames.Owner(extension, key);
-        string valueOwner = "global::LuminPack." + GeneratedNames.Owner(extension, value);
+        string valueOwner = "global::LuminPack." + GeneratedNames.Owner(extension,
+            sparse ? "System.Nullable<" + value.Substring(0, value.Length - 1) + ">" : value);
         string entry = "global::System.Collections.Generic.KeyValuePair<" + key + ", " + value + ">";
-        string minimum = (rawKey ? memory + ".SizeOf<" + key + ">()" : "1") + " + " + (rawValue ? memory + ".SizeOf<" + value + ">()" : "1");
+        string minimum = (rawKey ? memory + ".SizeOf<" + key + ">()" : "1") + " + " + (rawValue && (!sparse || RawNullable(value)) ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
@@ -49,7 +56,17 @@ internal static class DictionaryOwnerFile
         // Writes one entry member to the isolated operation state.
         void WriteMember(string state, string member, string expression)
         {
-            if (!(member == "string"))
+            if (member.EndsWith("?", System.StringComparison.Ordinal))
+            {
+                w.Line(state + ".CheckBuffer();");
+                // A nullable of at most four payload bytes is stored as its raw struct; a wider one is framed by its owner: a null
+                // marker, or a memberless header and the payload.
+                if (RawNullable(member))
+                    w.Line(state + ".Advance(global::LuminPack.Core.LuminPackWriter.Write(ref " + state + ".Cursor, " + expression + "));");
+                else
+                    w.Line(valueOwner + ".Write<TLuminProfile>(ref " + state + ", " + expression + ");");
+            }
+            else if (!(member == "string"))
             {
                 w.Line(state + ".CheckBuffer();");
                 w.Line(state + ".Write(in " + expression + ");");
@@ -61,7 +78,11 @@ internal static class DictionaryOwnerFile
         // Reads one entry member from the isolated operation state into an assignable location.
         void ReadMember(string state, string member, string destination)
         {
-            if (member == "string")
+            if (RawNullable(member))
+                w.Line(state + ".Read(ref " + memory + ".As<" + member + ", byte>(ref " + destination + "), " + memory + ".SizeOf<" + member + ">());");
+            else if (member.EndsWith("?", System.StringComparison.Ordinal))
+                w.Line(valueOwner + ".Read<TLuminProfile>(ref " + state + ", ref " + destination + ");");
+            else if (member == "string")
                 w.Line(state + ".Read<TLuminProfile>(ref " + destination + ");");
             else
                 w.Line(state + ".Read(ref " + memory + ".As<" + member + ", byte>(ref " + destination + "), " + memory + ".SizeOf<" + member + ">());");

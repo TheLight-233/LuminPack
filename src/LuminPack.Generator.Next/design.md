@@ -272,18 +272,24 @@ record body on the caller's reader (`List` has its own payload owner). The close
 `ArraySegment` and `ReadOnlySequence` publish a standalone owner through `GenericIdentity` and `GenericOwnerFile`,
 and the Unity native-owner objects forward to the Unity runtime module.
 
-Not ported: sparse nullable dictionary values, the string-key, matching-pair and ordered-append reuse read paths,
-union and packable dictionary value slots, the frozen raw pair write and rented builder, the small-hash-set grouped
-write and other optional runtime capabilities, reuse of known list and array targets by the sequence interfaces,
-packable elements of `Stack`, `Queue`, `ConcurrentStack`, `SortedSet`, arrays and nested lists, the lookup and
-grouping interfaces and memory reuse of existing storage. A value tuple keeps the original pipeline, which stores its raw
-struct memory (including string references), so an item-wise owner would change the wire.
+Sparse nullable dictionary values use the dictionary owner: a nullable of a payload of at most four bytes is stored as its
+raw struct and a wider one through the nullable owner, as the original pipeline does. Arrays of strings and of packable
+classes, `Stack`, `Queue` and `ConcurrentStack` of packable classes, and `Stack` of strings publish owners through the
+enumerable template and the ordered payload traversal. A value tuple with a string item is written item by item like a
+reference tuple; the original pipeline blits its raw struct memory including the string reference, which is not a usable
+wire, so that case intentionally differs from the original bytes.
+
+Not ported: packable dictionary values, a list of arrays, nested lists, the lookup and grouping interfaces, the string-key,
+matching-pair and ordered-append reuse read paths, the frozen raw pair write and rented builder, the small-hash-set grouped
+write and other optional runtime capabilities, reuse of known list and array targets by the sequence interfaces, and memory
+reuse of existing storage. A value tuple of raw scalars only keeps the original pipeline.
 
 These batches build with zero errors. An in-process parity run generated one record per type shape with the Next and the
 legacy generators, compiled both, and compared the binary bytes, the JSON text and the cross round trip (each side reads the
-other's bytes and writes them back): 74 shapes with populated and with null members, covering the families above, were
-byte-identical in binary and JSON. A concurrent bag of strings compares equal on write, but its read order is unspecified, so
-its round trip is not stable. Reuse of an existing destination, sparse values and the platform fallbacks were not exercised.
+other's bytes and writes them back): 118 shapes, populated and with null members, covering these families and the earlier
+ones (lists, arrays, concurrent queue, immutable array, the framework types), were byte-identical in binary and JSON. A
+concurrent bag of strings compares equal on write, but its read order is unspecified, so its round trip is not stable.
+Reuse of an existing destination and the platform fallbacks were not exercised.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,

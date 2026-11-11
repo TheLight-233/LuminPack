@@ -81,9 +81,9 @@ internal static class GenericIdentity
             Lazy or Memory or ReadOnlyMemory or ArraySegment or ReadOnlySequence => arguments.Length == 1,
             KeyValuePair => arguments.Length == 2,
             Tuple => arguments.Length is >= 1 and <= 7,
-            // The original pipeline stores a value tuple as its raw struct memory, which includes string references, so the
-            // value tuple keeps the original pipeline instead of publishing an item-wise owner with a different wire.
-            ValueTuple => false,
+            // A value tuple of raw scalars only keeps the raw struct storage of the original pipeline; one with a string item is
+            // managed, so its items are written one at a time like a reference tuple's.
+            ValueTuple => arguments.Length is >= 2 and <= 7 && arguments.Any(argument => argument == "string"),
             _ => false,
         };
         return supported ? definition + "<" + string.Join(",", arguments) + ">" : null;

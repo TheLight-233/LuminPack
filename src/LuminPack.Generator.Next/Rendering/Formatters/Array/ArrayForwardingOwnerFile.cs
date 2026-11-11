@@ -256,7 +256,7 @@ internal static class ArrayForwardingOwnerFile
         void WriteForwarder(string state, string method)
         {
             w.Line("internal static void Write<TOptions>(ref " + state + " writer, in " + collection + " value)");
-            w.Line("    where TOptions : struct, " + options + " => " + root + "." + method + "<TOptions>(ref writer, in value);");
+            w.Line("    where TOptions : struct, " + options + " => " + root + "." + method + "<TOptions>(ref writer, " + (method == "RootWriteJson" ? "value" : "in value") + ");");
             w.Blank();
         }
     }

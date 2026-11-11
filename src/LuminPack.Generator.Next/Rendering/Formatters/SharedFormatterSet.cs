@@ -296,13 +296,21 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     {
         if (member.KeyText || member.ValueText)
             owners.Add(FormatterRegistry.String);
-        // Sparse nullable values keep an inline entry layout without a shared owner.
-        if (member.Sparse || FormatterRegistry.FindDictionary(member.DeclaredType) is not { } family)
+        if (FormatterRegistry.FindDictionary(member.DeclaredType) is not { } family)
             return;
         string? key = member.KeyText ? "string" : member.KeyType, value = member.ValueText ? "string" : member.ValueType;
         if (key == null || value == null)
             return;
         dictionaries.Add(new DictionaryOwnerFact(family, member.DeclaredType, key, value));
+        if (member.Sparse)
+        {
+            // The JSON roots call the nullable owner of the value, which in turn calls the scalar owner of its payload.
+            string inner = value.Substring(0, value.Length - 1);
+            owners.Add("System.Nullable<" + inner + ">");
+            AddScalar(scalars, inner);
+            AddScalar(scalars, key);
+            return;
+        }
         // A wrapper reads through the concrete dictionary owner of the same entries.
         if (family.ForwardsToDictionary)
         {

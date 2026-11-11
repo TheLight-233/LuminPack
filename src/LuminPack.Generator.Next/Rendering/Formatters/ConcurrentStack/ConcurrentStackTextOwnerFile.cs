@@ -42,6 +42,11 @@ internal static class ConcurrentStackTextOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
+        if (c.Payload != null)
+        {
+            c.StackPayloadWrite("value", true);
+            return;
+        }
         var lines = new List<string>();
         WriteLines(lines, "value");
         foreach (string line in lines)
@@ -69,7 +74,7 @@ internal static class ConcurrentStackTextOwnerFile
         w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
-        w.Line("var staged = new global::System.Collections.Generic.List<string>();");
+        w.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();");
     }
 
     private static void After(EnumerableOwnerContext c) =>
