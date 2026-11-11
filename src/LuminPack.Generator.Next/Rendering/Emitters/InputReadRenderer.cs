@@ -166,6 +166,13 @@ internal static class InputReadRenderer
     /// <c>reader.Read&lt;TProfile&gt;(current)</c>; scalar reads carry no argument and stay unchanged.</remarks>
     private static string Strings(string line, string reader, string policy, int limit)
     {
+        // A string block and a string owner read take the limit too, as the original matrix and element reads did.
+        line = System.Text.RegularExpressions.Regex.Replace(line,
+            @"(?<![\w.])" + System.Text.RegularExpressions.Regex.Escape(reader) + @"\.ReadStrings<([^>]+)>\(([^()]*)\)",
+            match => policy + ".ReadStrings<" + match.Groups[1].Value + ">(ref " + reader + ", " + match.Groups[2].Value + ", " + Literal(limit) + ")");
+        line = System.Text.RegularExpressions.Regex.Replace(line,
+            @"global::LuminPack\.Binary_\w+_String\.Read<([^>]+)>\(ref " + System.Text.RegularExpressions.Regex.Escape(reader) + @", (ref [^;]+)\);",
+            match => policy + ".ReadStringRecord<" + match.Groups[1].Value + ">(ref " + reader + ", " + match.Groups[2].Value + ", " + Literal(limit) + ");");
         string call = reader + ".Read<";
         int search = 0;
         while ((search = line.IndexOf(call, search, StringComparison.Ordinal)) >= 0)

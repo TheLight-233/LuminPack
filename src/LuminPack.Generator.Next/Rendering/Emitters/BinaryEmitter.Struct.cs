@@ -304,6 +304,8 @@ internal static partial class BinaryEmitter
         else
         {
             body.Add("var result = new " + model.GlobalName + "();");
+            foreach (var member in members.Where(item => item.SeedExisting && !item.Mirrored))
+                body.Add("result." + member.Name + " = value." + member.Name + ";");
             foreach (var member in members)
                 AddMemberRead(body, model, member, w, "reader", member.Mirrored ? Camel(member.Name) + "Temp" : "result." + member.Name);
             body.Add("// Construct the object and populate its members.");

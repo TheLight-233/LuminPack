@@ -164,6 +164,10 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal readonly bool BareParameter;
     /// <summary>Whether a payload member of a reference type is preceded by a null object marker, whose read resets the member.</summary>
     internal readonly bool NullObjectGuard;
+
+    /// <summary>Whether the member is a managed struct whose own read reuses the references the existing value holds, so a
+    /// fresh enclosing struct starts it from the existing member, as the original expanded read reused them.</summary>
+    internal readonly bool SeedExisting;
     /// <summary>Whether the member's declared type is a reference type, whose temporary local carries the nullable annotation.</summary>
     internal readonly bool ReferencePayload;
     /// <summary>The imported string options type a member-level declaration owns, or null when the member inherits the
@@ -177,8 +181,10 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
-        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false)
+        bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false,
+        bool seedExisting = false)
     {
+        SeedExisting = seedExisting;
         Volatile = isVolatile;
         Sequence = sequence;
         ScopeProfile = scopeProfile;

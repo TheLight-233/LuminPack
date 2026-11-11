@@ -663,6 +663,24 @@ internal static class PairedDictionaryOwnerTemplate
                     }
                     if (fact.Family.JsonReuseStore != null)
                         DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader);
+                    else if (dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
+                        dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal))
+                    {
+                        // As the original interface read, an existing Dictionary of the exact type keeps its matching values.
+                        string concrete = "global::System.Collections.Generic.Dictionary<" + key + ", " + value + ">";
+                        w.Line("if (value is " + concrete + " existingDictionary && existingDictionary.GetType() == typeof(" + concrete + "))");
+                        w.Open();
+                        w.Line("ReadExistingDictionary(ref reader, existingDictionary);");
+                        w.Line("return;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+                        w.Line("static void ReadExistingDictionary(ref " + jsonReader + " reader, " + concrete + " value)");
+                        w.Open();
+                        DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, "value[key] = itemValue;", jsonReader);
+                        w.Close();
+                        w.Blank();
+                    }
                     if (spec.JsonBefore != null)
                         spec.JsonBefore(context);
                     else

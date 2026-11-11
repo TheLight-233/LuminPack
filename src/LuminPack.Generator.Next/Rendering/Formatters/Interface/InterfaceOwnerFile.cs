@@ -12,15 +12,15 @@ internal static class InterfaceOwnerFile
 {
     private static readonly EnumerableOwnerSpec ArraySpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadArray, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged;"), jsonCount: false);
+        c => c.W.Line("value = staged;"), jsonCount: false, interfaceListReuse: true);
 
     private static readonly EnumerableOwnerSpec CountedArraySpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadArray, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged;"));
+        c => c.W.Line("value = staged;"), interfaceListReuse: true);
 
     private static readonly EnumerableOwnerSpec ListSpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadList, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged;"));
+        c => c.W.Line("value = staged;"), interfaceListReuse: true);
 
     private static readonly EnumerableOwnerSpec SetSpec = new EnumerableOwnerSpec(c => WriteLines(c, true), ReadSet, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">();"),

@@ -353,7 +353,8 @@ internal static class RenderModelFactory
             case SpecialMember special:
                 return new RenderMember(special.Name, RenderMemberKind.Special, ReadableTypeName.Of(special.Declared), special.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
-                    property: property, nullObjectGuard: special.Formatter?.OrdinaryObject == true, referencePayload: special.Nullable);
+                    property: property, nullObjectGuard: special.Formatter?.OrdinaryObject == true, referencePayload: special.Nullable,
+                    seedExisting: special.Formatter?.Payload is StructModel { Storage: StructStorage.ManagedRecord });
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,

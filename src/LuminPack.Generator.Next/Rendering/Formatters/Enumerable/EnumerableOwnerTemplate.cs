@@ -326,6 +326,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether the JSON read stages a concurrent stack in a pooled block and publishes it even on failure.</summary>
     internal bool ConcurrentStackStaging { get; }
 
+    /// <summary>Whether an interface JSON read of packable elements reuses an existing exact array or list.</summary>
+    internal bool InterfaceListReuse { get; }
+
     /// <summary>Whether the sequence exposes a count that short-circuits an empty JSON array.</summary>
     internal bool JsonCount { get; }
 
@@ -343,8 +346,9 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="jsonAddBody">The json add body used by this operation.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
-        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false, bool concurrentStackStaging = false)
+        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false, bool concurrentStackStaging = false, bool interfaceListReuse = false)
     {
+        InterfaceListReuse = interfaceListReuse;
         ConcurrentStackStaging = concurrentStackStaging;
         ArrayReuse = arrayReuse;
         ListReuse = listReuse;
@@ -692,6 +696,51 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
+                    if (spec.InterfaceListReuse && (context.Payload != null || context.Forwarded))
+                    {
+                        // The original interface read refills an existing array of the same exact length in place and otherwise
+                        // streams into an existing list of the exact type, or a new one, whose tail it trims.
+                        string list = "global::System.Collections.Generic.List<" + scalar + ">";
+                        w.Line("if (value is " + scalar + "[] existingArray && existingArray.GetType() == typeof(" + scalar + "[]) &&");
+                        w.Line("    reader.CountArrayElements<TLuminProfile>() == existingArray.Length)");
+                        w.Open();
+                        w.Line("for (int i = 0; i < existingArray.Length; i++)");
+                        w.Open();
+                        w.Line("reader.Read<TLuminProfile>();");
+                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref existingArray[i]);");
+                        w.Close();
+                        w.Blank();
+                        w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
+                        w.Line("return;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("var list = value as " + list + ";");
+                        w.Line("if (list is null || list.GetType() != typeof(" + list + "))");
+                        w.Line("    list = new " + list + "(reader.GetArrayCapacityHint<TLuminProfile>(10));");
+                        w.Blank();
+                        w.Line("int count = 0;");
+                        w.Line("while (reader.Read<TLuminProfile>())");
+                        w.Open();
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
+                        w.Line("    break;");
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
+                        w.Line("    continue;");
+                        w.Line(scalar + " item = count < list.Count ? list[count] : default!;");
+                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                        w.Line("if (count < list.Count)");
+                        w.Line("    list[count] = item;");
+                        w.Line("else");
+                        w.Line("    list.Add(item);");
+                        w.Line("count++;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("if (count < list.Count)");
+                        w.Line("    list.RemoveRange(count, list.Count - count);");
+                        w.Line("value = list;");
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     if (spec.ConcurrentStackStaging && context.Supports("StageConcurrentStack"))
                     {
                         // The original read stages the elements in a pooled block and publishes what it read even when the
