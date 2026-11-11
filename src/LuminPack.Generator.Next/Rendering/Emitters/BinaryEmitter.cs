@@ -516,7 +516,17 @@ internal static partial class BinaryEmitter
             if (model.Rejection != null)
                 body = new List<string> { RejectUnsupported(model.Rejection) };
             else
+            {
                 body = InputChecks(model, w, body, read: parameters.Contains(" reader, "));
+                // A recursive payload's root operations start with the stack guard; a write also checks its buffer first.
+                if (model.Recursive && name is "RootWrite" or "RootRead" or "RootWriteUnion" or "RootReadUnion")
+                {
+                    body = new List<string>(body);
+                    body.Insert(0, w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
+                    if (parameters.Contains(" writer, "))
+                        body.Insert(1, "writer.CheckBuffer();");
+                }
+            }
             w.Line(w.Preserve);
             if (attribute != null)
                 w.Line(attribute);

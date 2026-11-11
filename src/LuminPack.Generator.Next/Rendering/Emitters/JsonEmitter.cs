@@ -56,6 +56,9 @@ internal static class JsonEmitter
             w.Line(BinaryEmitter.RejectUnsupported(model.Rejection));
         else
         {
+            // A recursive payload's root operations start with the stack guard.
+            if (model.Recursive)
+                w.Line(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
             var names = new JsonTable();
             var writeBody = WriteBody(model, w, helper, names);
             JsonTable.Resolve(writeBody);
@@ -71,7 +74,11 @@ internal static class JsonEmitter
         if (model.Rejection != null)
             w.Line(BinaryEmitter.RejectUnsupported(model.Rejection));
         else
+        {
+            if (model.Recursive)
+                w.Line(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
             ReadBody(model, w, helper);
+        }
         w.Close();
         w.Suppressed = false;
         w.Close();
