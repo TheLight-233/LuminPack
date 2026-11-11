@@ -90,7 +90,7 @@ The generator benchmarks accept a real corpus and its references:
   are checked at the read sites of the root body, and nested reads under a bounded root run as checked copies of their entries.
   Known differences: only roots with a declared collection, string or depth limit take checked copies; inline children inside a
   copied trusted payload keep their trusted marker reads; versioned, mirrored, reference-tracked and struct payloads, rejected
-  structs and Union roots are not covered; compressed counts are not checked under a bounded root; exception mapping is not ported.
+  structs and Union roots are not covered.
   Stream and async calls bind to concrete entries that stage at the payload's cap; compressed members use the compressed kernels.
   Both are not yet verified by tests.
 - With Next, the full unit-test corpus generates with no errors in generated code. The test area itself has not been run.

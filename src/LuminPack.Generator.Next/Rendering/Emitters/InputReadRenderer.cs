@@ -101,6 +101,16 @@ internal static class InputReadRenderer
         if (limits.Collection != int.MaxValue)
             foreach (string reader in Readers)
             {
+                // A compressed payload's element count is not bounded by its input bytes; its header is checked before the
+                // kernel allocates, as the original projection checks the compressed read's input.
+                string compressed = reader + ".ReadValueWithCompress(";
+                int site = line.IndexOf(compressed, StringComparison.Ordinal);
+                // Record bodies still spell the compressed read as its marked owner call, which the source writer resolves later.
+                if (site < 0 && reader == "reader" && line.IndexOf(RenderMember.CompressedOwner + ".Read<", StringComparison.Ordinal) >= 0)
+                    site = line.Length - line.TrimStart().Length;
+                if (site >= 0 && (site == 0 || !(char.IsLetterOrDigit(line[site - 1]) || line[site - 1] is '_' or '.')))
+                    line = line.Substring(0, site) + policy + ".CheckCompressedCount(" + reader + ".GetSpan().Slice(" + reader + ".Position), " +
+                        Literal(limits.Collection) + "); " + line.Substring(site);
                 line = Kernel(line, reader, "ReadLength", policy, limits.Collection, defaultMinimum: true);
                 line = Kernel(line, reader, "TryReadCollectionHead", policy, limits.Collection, defaultMinimum: false);
                 line = Kernel(line, reader, "PeekCollectionHeader", policy, limits.Collection, defaultMinimum: false);
