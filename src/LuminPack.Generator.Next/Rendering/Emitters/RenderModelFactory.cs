@@ -110,7 +110,8 @@ internal static class RenderModelFactory
             readBefore: callbacks?.ReadBefore!, readAfter: callbacks?.ReadAfter!,
             declaredOrder: constructor?.DeclaredOrder!, rentByRef: structure?.RentByRef ?? false,
             declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
-            constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection);
+            constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection,
+            limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null, recursive: record?.Recursive ?? false);
     }
 
     /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>

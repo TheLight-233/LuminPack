@@ -37,6 +37,7 @@ internal static partial class BinaryEmitter
         if (member.Kind == RenderMemberKind.Array && member.Scalar == "bool" && !model.Trusted)
         {
             body.Add(w.A("LuminPackInputPolicy") + ".ReadBooleans(ref " + state + ", ref " + target + "!);");
+            AddCollectionCheck(body, member, target);
             return;
         }
         if (member.Kind == RenderMemberKind.Object || member.NullObjectGuard)
@@ -50,6 +51,7 @@ internal static partial class BinaryEmitter
             body.Add("{");
         }
         body.Add(member.Formatter + ".Read<" + profile + ">(ref " + state + ", ref " + target + "!);");
+        AddCollectionCheck(body, member, target);
         if (member.Kind == RenderMemberKind.Object || member.NullObjectGuard)
             body.Add("}");
     }

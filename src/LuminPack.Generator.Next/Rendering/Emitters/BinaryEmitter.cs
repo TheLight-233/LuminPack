@@ -515,6 +515,8 @@ internal static partial class BinaryEmitter
             // An explicitly untrusted graph that reaches an input-selected shape fails closed in both directions.
             if (model.Rejection != null)
                 body = new List<string> { RejectUnsupported(model.Rejection) };
+            else
+                body = InputChecks(model, w, body, read: parameters.Contains(" reader, "));
             w.Line(w.Preserve);
             if (attribute != null)
                 w.Line(attribute);
@@ -2265,10 +2267,14 @@ internal static partial class BinaryEmitter
                 // Included non-public fields pass their mirror storage by reference, as public fields do.
                 body.Add("reader.Read<" + ReadProfile(model, w, member) + ">(ref instance." + member.Name + ");");
             else if (member.Kind == RenderMemberKind.Array && member.Scalar == "bool" && !trusted)
+            {
                 body.Add(Policy() + ".ReadBooleans(ref reader, ref instance." + member.Name + "!);");
+                AddCollectionCheck(body, member, "instance." + member.Name);
+            }
             else
             {
                 body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref instance." + member.Name + "!);");
+                AddCollectionCheck(body, member, "instance." + member.Name);
                 // A Boolean list carries unmanaged values, so an untrusted read still checks the decoded bytes.
                 if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
                     body.Add(Policy() + ".CheckBooleans(instance." + member.Name + "!);");
@@ -2445,10 +2451,14 @@ internal static partial class BinaryEmitter
             if (member.Kind is RenderMemberKind.Array or RenderMemberKind.List)
             {
                 if (member.Kind == RenderMemberKind.Array && member.Scalar == "bool" && !trusted)
+                {
                     body.Add(Policy() + ".ReadBooleans(ref reader, ref " + owner + "." + member.Name + "!);");
+                    AddCollectionCheck(body, member, owner + "." + member.Name);
+                }
                 else
                 {
                     body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                    AddCollectionCheck(body, member, owner + "." + member.Name);
                     if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
                         body.Add(Policy() + ".CheckBooleans(" + owner + "." + member.Name + "!);");
                 }

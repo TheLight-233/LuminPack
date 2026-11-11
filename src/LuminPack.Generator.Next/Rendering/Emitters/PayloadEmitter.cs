@@ -113,7 +113,8 @@ internal sealed class CodeWriter
     /// <param name="text">The line.</param>
     internal void Line(string text)
     {
-        if (Suppressed)
+        // A collection-limit placeholder that no root projection resolved adds no statement.
+        if (Suppressed || text.Length != 0 && text[0] == '\u0001')
             return;
         if (_pendingBlank)
         {

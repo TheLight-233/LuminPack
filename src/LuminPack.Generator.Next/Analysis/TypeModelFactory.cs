@@ -389,7 +389,9 @@ internal static partial class TypeModelFactory
                         // A pooled read rents its instance, so it never assigns a fresh result directly.
                         rent == null && CanDeserializeDirectlyIntoFreshResult(symbol, members),
                         mirror, mirrorFields, mirrorOffsets, mirrorLayout, version,
-                        constructor, callbacks, rent, (mirror != null || versioned) ? CaptureMirrors(symbol, identity, issues) : Array.Empty<StorageMirrorModel>());
+                        constructor, callbacks, rent, (mirror != null || versioned) ? CaptureMirrors(symbol, identity, issues) : Array.Empty<StorageMirrorModel>(),
+                        // Without a declared depth limit, recursion keeps only its stack guard.
+                        recursive: policy.Input == InputPolicy.Untrusted && policy.Limits.Depth != int.MaxValue && IsRecursive(symbol));
                 }
             }
         }

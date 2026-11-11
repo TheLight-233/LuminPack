@@ -465,6 +465,12 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>The reason every operation of an explicitly untrusted payload fails closed, or null.</summary>
     internal readonly string Rejection;
 
+    /// <summary>The frozen limits of an untrusted root, or null for a trusted one.</summary>
+    internal readonly InputLimits Limits;
+
+    /// <summary>Whether the root reaches itself, so its read counts nesting against a declared depth limit.</summary>
+    internal readonly bool Recursive;
+
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -477,8 +483,10 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
-        string rejection = null)
+        string rejection = null, InputLimits limits = null, bool recursive = false)
     {
+        Limits = limits;
+        Recursive = recursive;
         Rejection = rejection;
         Mirrors = mirrors ?? Array.Empty<StorageMirrorModel>();
         CircleSlots = circleSlots ?? Array.Empty<int>();
