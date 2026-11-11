@@ -20,6 +20,12 @@ internal static class HashSetOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
+        // The raw kernel needs unmanaged elements; strings are counted while the set is enumerated.
+        if (c.Counted)
+        {
+            c.CountedWrite("value");
+            return;
+        }
         c.W.Line("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref operationState, value);");
     }
 
@@ -40,8 +46,7 @@ internal static class HashSetOwnerFile
         w.Line("for (int index = 0; index < length; index++)");
         w.Open();
         w.Line("ref var entry = ref " + c.Memory + ".Add(ref entryRef, (nint)(uint)index);");
-        w.Line("operationState.Read(ref " + c.Memory + ".As<" + c.Scalar + ", byte>(ref entry.Value), " + c.Memory + ".SizeOf<" +
-            c.Scalar + ">());");
+        c.ReadElement("entry.Value");
         w.Close();
         w.Blank();
         w.Line("global::LuminPack.Code.LuminPackMarshal.RebuildHashSetBuckets(setView, length);");

@@ -29,6 +29,18 @@ internal static class GenericIdentity
     /// <summary>The value tuple definition.</summary>
     internal const string ValueTuple = "System.ValueTuple";
 
+    /// <summary>The writable memory definition.</summary>
+    internal const string Memory = "System.Memory";
+
+    /// <summary>The read-only memory definition.</summary>
+    internal const string ReadOnlyMemory = "System.ReadOnlyMemory";
+
+    /// <summary>The array segment definition.</summary>
+    internal const string ArraySegment = "System.ArraySegment";
+
+    /// <summary>The read-only sequence definition.</summary>
+    internal const string ReadOnlySequence = "System.Buffers.ReadOnlySequence";
+
     /// <summary>Tests whether an argument is a raw scalar keyword.</summary>
     /// <param name="argument">The argument spelling.</param>
     /// <returns>Whether the argument is a raw scalar keyword.</returns>
@@ -66,11 +78,12 @@ internal static class GenericIdentity
         bool supported = definition switch
         {
             Nullable => arguments.Length == 1 && arguments[0] != "string",
-            Lazy => arguments.Length == 1,
+            Lazy or Memory or ReadOnlyMemory or ArraySegment or ReadOnlySequence => arguments.Length == 1,
             KeyValuePair => arguments.Length == 2,
             Tuple => arguments.Length is >= 1 and <= 7,
-            // A value tuple of raw scalars only keeps the raw storage layout of the original pipeline.
-            ValueTuple => arguments.Length is >= 2 and <= 7 && arguments.Any(argument => argument == "string"),
+            // The original pipeline stores a value tuple as its raw struct memory, which includes string references, so the
+            // value tuple keeps the original pipeline instead of publishing an item-wise owner with a different wire.
+            ValueTuple => false,
             _ => false,
         };
         return supported ? definition + "<" + string.Join(",", arguments) + ">" : null;

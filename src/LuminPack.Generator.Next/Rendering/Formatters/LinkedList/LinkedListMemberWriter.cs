@@ -35,11 +35,14 @@ internal static class LinkedListMemberWriter
         body.Add("int count = 0;");
         body.Add("for (var node = " + local + ".First; node is not null; node = node.Next)");
         body.Add("{");
-        body.Add("writer.CheckBuffer();");
+        if (member.Scalar != "string")
+            body.Add("writer.CheckBuffer();");
         body.Add("count++;");
         body.Add("var v = node.Value;");
         // A Boolean element writes through a read-only alias, as the legacy element write does.
-        if (member.Scalar == "bool")
+        if (member.Scalar == "string")
+            body.Add("writer.Write<TLuminProfile>(v);");
+        else if (member.Scalar == "bool")
         {
             string element = BinaryEmitter.RoleName(names, "value");
             body.Add("ref readonly bool " + element + " = ref v;");

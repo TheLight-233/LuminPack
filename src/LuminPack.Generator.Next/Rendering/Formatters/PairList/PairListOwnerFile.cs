@@ -1,3 +1,4 @@
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>List&lt;KeyValuePair&lt;TKey, TValue&gt;&gt;</c> whose key is a raw scalar and

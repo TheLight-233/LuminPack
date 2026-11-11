@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -21,8 +22,104 @@ internal sealed class EnumerableOwnerContext
     /// <summary>The spelling of the memory marshal helper.</summary>
     internal string Marshal { get; }
 
-    internal EnumerableOwnerContext(CodeWriter writer, string sequence, string scalar, string memory, string marshal)
+    /// <summary>Whether the element is a string, which uses the operation's profile.</summary>
+    internal bool Text => Scalar == "string";
+
+    /// <summary>The packable element's render model, or null when the element is a raw scalar or a string.</summary>
+    internal PayloadRenderModel? Payload { get; }
+
+    /// <summary>Whether the element is written one at a time through the profile instead of as raw storage.</summary>
+    internal bool Counted => Text || Payload != null;
+
+    private readonly Dictionary<string, int> _writeNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
+    private readonly Dictionary<string, int> _readNames = new Dictionary<string, int>(StringComparer.Ordinal);
+    private int _ends, _cursors, _spans, _readCursors, _readStrings, _readEnds;
+
+    /// <summary>Emits the counted enumeration write of a nonnull sequence expression through <c>operationState</c>.</summary>
+    /// <param name="local">The nonnull sequence expression.</param>
+    internal void CountedWrite(string local)
     {
+        if (Payload == null)
+        {
+            var lines = new List<string>();
+            InterfaceTraversal.Counted(lines, Scalar, local);
+            foreach (string line in lines)
+                W.Line(line);
+            return;
+        }
+        W.Line("int countPosition = operationState.BeginCollection();");
+        W.Line("int count = 0;");
+        W.Line("foreach (var item in " + local + ")");
+        W.Open();
+        var body = new List<string>();
+        string elementExit = "end" + _ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _ends++;
+        body.Add("operationState.CheckBuffer();");
+        body.Add("count++;");
+        body.Add("var v = item;");
+        BinaryEmitter.AddSequenceElementWrite(body, Payload, "v", elementExit, "operationState", 0, W, _writeNames, ref _ends,
+            ref _cursors, ref _spans);
+        foreach (string line in body)
+            W.Line(line);
+        W.Close();
+        W.Blank();
+        W.Line("operationState.EndCollection(countPosition, count);");
+        W.Line("operationState.CheckBuffer();");
+    }
+
+    /// <summary>Emits the read of one element into an assignable location.</summary>
+    /// <param name="destination">The assignable destination.</param>
+    internal void ReadElement(string destination)
+    {
+        if (Payload != null)
+        {
+            // The element body is expanded in place on the caller's reader, which operationState aliases.
+            W.Open();
+            W.Line(Scalar + " payloadItem = default !;");
+            var body = new List<string>();
+            BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
+                ref _readEnds);
+            foreach (string line in body)
+                W.Line(line);
+            W.Line(destination + " = payloadItem;");
+            W.Close();
+        }
+        else if (Text)
+            W.Line("operationState.Read<TLuminProfile>(ref " + destination + ");");
+        else
+            W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
+    }
+
+    /// <summary>Emits the read of <c>length</c> elements into a span.</summary>
+    /// <param name="span">The destination span expression.</param>
+    internal void ReadBlock(string span)
+    {
+        if (Payload != null)
+        {
+            W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
+            W.Open();
+            ReadElement(span + "[blockIndex]");
+            W.Close();
+            return;
+        }
+        if (Text)
+        {
+            W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
+            W.Indented(() => W.Line("operationState.Read<TLuminProfile>(ref " + span + "[blockIndex]);"));
+            return;
+        }
+        W.Line("operationState.Read(");
+        W.Indented(() =>
+        {
+            W.Line("ref " + Memory + ".As<" + Scalar + ", byte>(ref " + Marshal + ".GetReference(" + span + ")),");
+            W.Line("unchecked(length * " + Memory + ".SizeOf<" + Scalar + ">()));");
+        });
+    }
+
+    internal EnumerableOwnerContext(CodeWriter writer, string sequence, string scalar, string memory, string marshal,
+        PayloadRenderModel? payload = null)
+    {
+        Payload = payload;
         W = writer;
         Sequence = sequence;
         Scalar = scalar;
@@ -38,17 +135,13 @@ internal sealed class EnumerableOwnerContext
         W.Line("try");
         W.Open();
         W.Line("global::System.Span<" + Scalar + "> items = pooled.AsSpan(0, length);");
-        W.Line("operationState.Read(");
-        W.Indented(() =>
-        {
-            W.Line("ref " + Memory + ".As<" + Scalar + ", byte>(ref " + Marshal + ".GetReference(items)),");
-            W.Line("unchecked(length * " + Memory + ".SizeOf<" + Scalar + ">()));");
-        });
+        ReadBlock("items");
         consume();
         W.Close();
         W.Line("finally");
         W.Open();
-        W.Line("global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Return(pooled, false);");
+        // A pooled string block holds references, so it is cleared when it returns.
+        W.Line("global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Return(pooled, " + (Counted ? "true" : "false") + ");");
         W.Close();
     }
 }
@@ -115,15 +208,20 @@ internal static class EnumerableOwnerTemplate
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
-        string scalar = fact.Scalar!;
+        PayloadRenderModel? payload = fact.Element;
+        // A packable element is spelled by its global name and expanded in place by the element's record body.
+        string scalar = payload != null ? payload.GlobalName : fact.Scalar!;
         string readable = ReadableTypeName.Of(scalar);
         string sequence = fact.DeclaredType;
         // The closed owner identity derives from the declared sequence, so the nested static calls agree with the model.
         string type = ReadableTypeName.Of(GeneratedNames.PayloadKey(sequence));
         string roots = "LuminRoots_" + type;
-        string elementOwner = "global::LuminPack.Binary_" + extension + "_" + readable;
+        string elementOwner = payload != null ? "global::LuminPack." + payload.Owner : "global::LuminPack.Binary_" + extension + "_" + readable;
         string owner = "Binary_" + extension + "_" + type;
-        var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal);
+        // A string element needs the profile, so its binary roots are generic in it.
+        bool text = scalar == "string" || payload != null;
+        string minimum = text ? "1" : memory + ".SizeOf<" + scalar + ">()";
+        var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal, payload);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -138,22 +236,24 @@ internal static class EnumerableOwnerTemplate
                     w.Line("internal static void Serialize_" + type + "(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    scoped in " + sequence + " input)");
-                    w.Line("        => " + roots + ".RootWrite(ref writer, input);");
+                    w.Line("        => " + roots + ".RootWrite" + (text ? "<" + utf16 + ">" : "") + "(ref writer, input);");
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
                     w.Line("internal static void Serialize_" + type + "<TLuminProfile>(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    scoped in " + sequence + " input)");
-                    w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite(ref writer, input);");
+                    w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite" + (text ? "<TLuminProfile>" : "") + "(ref writer, input);");
                     w.Blank();
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
                     w.Line(w.MethodImpl("NoInlining"));
-                    w.Line("internal static void RootWrite(");
+                    w.Line("internal static void RootWrite" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + writer + " writer,");
-                    w.Line("    " + sequence + " input)");
+                    w.Line("    " + sequence + " input)" + (text ? "" : ""));
+                    if (text)
+                        w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line(writer + " operationState = default;");
                     w.Line("writer.CopyTo(ref operationState);");
@@ -179,13 +279,13 @@ internal static class EnumerableOwnerTemplate
                     w.Line("internal static void Write(");
                     w.Line("    this ref " + writer + " state,");
                     w.Line("    in " + sequence + " value)");
-                    w.Line("        => " + serializer + "." + roots + ".RootWrite(ref state, value);");
+                    w.Line("        => " + serializer + "." + roots + ".RootWrite" + (text ? "<" + utf16 + ">" : "") + "(ref state, value);");
                     w.Blank();
                     w.Line(inline);
                     w.Line("internal static void Write<TOptions>(");
                     w.Line("    this ref " + writer + " state,");
                     w.Line("    in " + sequence + " value)");
-                    w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootWrite(ref state, value);");
+                    w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootWrite" + (text ? "<TOptions>" : "") + "(ref state, value);");
                     w.Blank();
                     break;
             }
@@ -201,26 +301,33 @@ internal static class EnumerableOwnerTemplate
                     w.Line("internal static void Deserialize_" + type + "(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
-                    w.Line("        => " + roots + ".RootRead(ref reader, ref value);");
+                    w.Line("        => " + roots + ".RootRead" + (text ? "<" + utf16 + ">" : "") + "(ref reader, ref value);");
                     w.Blank();
                     w.Line(preserve);
                     w.Line(inline);
                     w.Line("internal static void Deserialize_" + type + "<TLuminProfile>(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
-                    w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootRead(ref reader, ref value);");
+                    w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootRead" + (text ? "<TLuminProfile>" : "") + "(ref reader, ref value);");
                     w.Blank();
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
                     w.Line(inline);
-                    w.Line("internal static void RootRead(");
+                    w.Line("internal static void RootRead" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
+                    if (text)
+                        w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
-                    w.Line(reader + " operationState = default;");
-                    w.Line("reader.CopyTo(ref operationState);");
-                    w.Line("int length = operationState.ReadLength(" + memory + ".SizeOf<" + scalar + ">());");
+                    if (payload != null)
+                        w.Line("ref var operationState = ref reader;");
+                    else
+                    {
+                        w.Line(reader + " operationState = default;");
+                        w.Line("reader.CopyTo(ref operationState);");
+                    }
+                    w.Line("int length = operationState.ReadLength(" + minimum + ");");
                     w.Line("if (length < 0)");
                     w.Open();
                     w.Line("value = null;");
@@ -231,7 +338,8 @@ internal static class EnumerableOwnerTemplate
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));
-                    w.Line("operationState.CopyTo(ref reader);");
+                    if (payload == null)
+                        w.Line("operationState.CopyTo(ref reader);");
                     w.Close();
                     w.Blank();
                     break;
@@ -240,13 +348,13 @@ internal static class EnumerableOwnerTemplate
                     w.Line("internal static void Read(");
                     w.Line("    this ref " + reader + " state,");
                     w.Line("    ref " + sequence + " value)");
-                    w.Line("        => " + serializer + "." + roots + ".RootRead(ref state, ref value);");
+                    w.Line("        => " + serializer + "." + roots + ".RootRead" + (text ? "<" + utf16 + ">" : "") + "(ref state, ref value);");
                     w.Blank();
                     w.Line(inline);
                     w.Line("internal static void Read<TOptions>(");
                     w.Line("    this ref " + reader + " state,");
                     w.Line("    ref " + sequence + " value)");
-                    w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootRead(ref state, ref value);");
+                    w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootRead" + (text ? "<TOptions>" : "") + "(ref state, ref value);");
                     w.Blank();
                     break;
             }

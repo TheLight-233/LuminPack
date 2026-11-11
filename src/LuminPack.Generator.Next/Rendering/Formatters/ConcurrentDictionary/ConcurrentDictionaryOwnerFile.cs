@@ -1,3 +1,4 @@
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>ConcurrentDictionary&lt;TKey, TValue&gt;</c> of raw scalar or string entries.</summary>

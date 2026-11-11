@@ -258,23 +258,32 @@ resolves it, `SharedFormatterSet` collects `DictionaryOwnerFact` entries (a raw 
 and `SharedFormatterPublisher` publishes `DictionaryOwnerFile`. The owner writes packed raw pairs or key and value
 entries through the dense 64-bit entry view with an enumerating fallback, reads a reused destination through the
 raw refill or a staged read and a fresh one directly into its entry storage before rebuilding buckets, and keeps
-the JSON array-of-pairs form. `SortedDictionary`, `ConcurrentDictionary`, `ImmutableDictionary`,
-`ImmutableSortedDictionary`, `ReadOnlyDictionary` and `FrozenDictionary` of raw scalar or string entries share
-`PairedDictionaryOwnerTemplate` in the same folder and are called through the forwarded-collection member form:
-the tree families copy their pairs once and build through the tree storage helpers, the concurrent one counts its
-enumeration and creates through the collection-access helper, the read-only wrapper reads through the concrete
-`Dictionary` owner, and the frozen one walks its key and value arrays. `SortedList` (storage write, staged
-sorted fill), the `IDictionary`, `IReadOnlyDictionary` and `IImmutableDictionary` interfaces and the list of raw
-key and value pairs use the same template. The sequence interfaces (`IEnumerable`, `ICollection`,
-`IReadOnlyCollection`, `IList`, `IReadOnlyList`, `ISet`, `IReadOnlySet`, `IImmutableList`, `IImmutableSet`,
-`IImmutableQueue`, `IImmutableStack`) of raw scalars share the enumerable template with an exact-runtime-type
-write. The closed generic framework types `KeyValuePair`, `Nullable`, `Lazy`, `Tuple` and `ValueTuple` (with a
-string item) of raw scalars and strings publish a standalone owner through `GenericIdentity` and
-`GenericOwnerFile`. Not ported: sparse nullable dictionary values, the string-key, matching-pair and ordered-append
-reuse read paths, union and packable value slots, the frozen raw pair write and rented builder (optional runtime
-capabilities), reuse of known list and array targets by the sequence interfaces, `FrozenSet`, `PriorityQueue`,
-the memory and segment types, the lookup and grouping interfaces, nested lists, and the string and packable
-element variants of the sequence families.
+the JSON array-of-pairs form. `SortedDictionary`, `SortedList`, `ConcurrentDictionary`, `ImmutableDictionary`,
+`ImmutableSortedDictionary`, `ReadOnlyDictionary`, `FrozenDictionary`, `PriorityQueue`, the dictionary interfaces
+and the list of raw key and value pairs share `PairedDictionaryOwnerTemplate` in the same folder and are called
+through the forwarded-collection member form.
+
+The remaining sequence families share `EnumerableOwnerTemplate` (`Rendering/Formatters/Enumerable`): `LinkedList`,
+`HashSet`, `Queue`, the object-model wrappers, `FrozenSet`, the sequence and immutable interfaces and, for the
+concrete immutable types, `ConcurrentBag`, `ConcurrentStack` and `SortedSet`, support raw scalar and string
+elements; the families that route through the counted write also support packable elements, which expand their
+record body on the caller's reader (`List` has its own payload owner). The closed generic framework types
+`KeyValuePair`, `Nullable`, `Lazy`, `Tuple`, `ValueTuple` (with a string item), `Memory`, `ReadOnlyMemory`,
+`ArraySegment` and `ReadOnlySequence` publish a standalone owner through `GenericIdentity` and `GenericOwnerFile`,
+and the Unity native-owner objects forward to the Unity runtime module.
+
+Not ported: sparse nullable dictionary values, the string-key, matching-pair and ordered-append reuse read paths,
+union and packable dictionary value slots, the frozen raw pair write and rented builder, the small-hash-set grouped
+write and other optional runtime capabilities, reuse of known list and array targets by the sequence interfaces,
+packable elements of `Stack`, `Queue`, `ConcurrentStack`, `SortedSet`, arrays and nested lists, the lookup and
+grouping interfaces and memory reuse of existing storage. A value tuple keeps the original pipeline, which stores its raw
+struct memory (including string references), so an item-wise owner would change the wire.
+
+These batches build with zero errors. An in-process parity run generated one record per type shape with the Next and the
+legacy generators, compiled both, and compared the binary bytes, the JSON text and the cross round trip (each side reads the
+other's bytes and writes them back): 74 shapes with populated and with null members, covering the families above, were
+byte-identical in binary and JSON. A concurrent bag of strings compares equal on write, but its read order is unspecified, so
+its round trip is not stable. Reuse of an existing destination, sparse values and the platform fallbacks were not exercised.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,

@@ -255,6 +255,9 @@ internal enum CollectionKind
 
     /// <summary>A sequence or set interface.</summary>
     Interface,
+
+    /// <summary>A <c>FrozenSet&lt;T&gt;</c>.</summary>
+    Frozen,
 }
 
 /// <summary>The stored entry shape of a paired, nested or sorted sequence member.</summary>
@@ -384,6 +387,9 @@ internal enum DictionaryKind
 
     /// <summary>A mutable dictionary interface.</summary>
     Interface,
+
+    /// <summary>A <c>PriorityQueue&lt;TElement, TPriority&gt;</c>.</summary>
+    Priority,
 }
 
 /// <summary>A keyed member.</summary>

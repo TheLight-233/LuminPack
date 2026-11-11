@@ -15,6 +15,12 @@ internal static class WrapperTraversal
     /// enumeration. Any other backing collection is counted while it is enumerated.</remarks>
     internal static void Write(List<string> body, string element, string local)
     {
+        // A string element has no contiguous raw storage, so the wrapper is counted while it is enumerated.
+        if (element == "string")
+        {
+            InterfaceTraversal.Counted(body, element, local);
+            return;
+        }
         body.Add("int wrapperDepth = 0;");
         body.Add("var wrapperList = global::LuminPack.Code.LuminPackCollectionAccess.GetUnderlyingIList(" + local + ", ref wrapperDepth);");
         body.Add("if (wrapperList != null)");
@@ -54,6 +60,11 @@ internal static class WrapperTraversal
     /// <param name="local">The nonnull builder expression.</param>
     internal static void WriteBuilder(List<string> body, string element, string type, string local)
     {
+        if (element == "string")
+        {
+            InterfaceTraversal.Counted(body, element, local);
+            return;
+        }
         body.Add("var builderView = global::LuminPack.Code.LuminPackMarshal.As<" + type + ", global::LuminPack.Code.ReadOnlyCollectionBuilderView<" +
             element + ">>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in " + local + "));");
         body.Add("global::System.ReadOnlySpan<" + element + "> builderItems = global::System.MemoryExtensions.AsSpan(builderView.items, 0, " + local + ".Count);");
@@ -64,15 +75,7 @@ internal static class WrapperTraversal
     /// <summary>Reads the payload block of <c>length</c> raw elements into a span.</summary>
     /// <param name="c">The owner context.</param>
     /// <param name="span">The destination span expression.</param>
-    internal static void ReadSpan(EnumerableOwnerContext c, string span)
-    {
-        c.W.Line("operationState.Read(");
-        c.W.Indented(() =>
-        {
-            c.W.Line("ref " + c.Memory + ".As<" + c.Scalar + ", byte>(ref " + c.Marshal + ".GetReference(" + span + ")),");
-            c.W.Line("unchecked(length * " + c.Memory + ".SizeOf<" + c.Scalar + ">()));");
-        });
-    }
+    internal static void ReadSpan(EnumerableOwnerContext c, string span) => c.ReadBlock(span);
 
     /// <summary>Renders a wrapper owner whose binary write is the shared wrapper write.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -87,6 +90,11 @@ internal static class WrapperTraversal
     /// <param name="c">The owner context.</param>
     internal static void WriteRoot(EnumerableOwnerContext c)
     {
+        if (c.Payload != null)
+        {
+            c.CountedWrite("value");
+            return;
+        }
         var lines = new List<string>();
         Write(lines, c.Scalar, "value");
         foreach (string line in lines)
@@ -97,6 +105,11 @@ internal static class WrapperTraversal
     /// <param name="c">The owner context.</param>
     internal static void WriteBuilderRoot(EnumerableOwnerContext c)
     {
+        if (c.Payload != null)
+        {
+            c.CountedWrite("value");
+            return;
+        }
         var lines = new List<string>();
         WriteBuilder(lines, c.Scalar, c.Sequence, "value");
         foreach (string line in lines)

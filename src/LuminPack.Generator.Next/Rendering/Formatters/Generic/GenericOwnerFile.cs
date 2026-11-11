@@ -41,6 +41,11 @@ internal static class GenericOwnerFile
                     (w, c) => ValueRead(w, c, args[0], "value = new " + declared + "(item);", "value = null;", null),
                     (w, c) => ValueJsonWrite(w, c, args[0], "value is null", "value.Value", extension, true),
                     (w, c) => LazyJsonRead(w, c, args[0], declared, extension));
+            case GenericIdentity.Memory:
+            case GenericIdentity.ReadOnlyMemory:
+            case GenericIdentity.ArraySegment:
+            case GenericIdentity.ReadOnlySequence:
+                return MemoryOwnerFile.Render(definition, args[0], declared, shortName, set, operations);
             default:
                 return SpecialOwnerFile.Render(set, operations, shortName, declared, definition == GenericIdentity.Tuple,
                     (w, c) => TupleWrite(w, c, args, definition == GenericIdentity.Tuple),

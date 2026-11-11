@@ -55,6 +55,17 @@ internal static class QueueOwnerFile
         w.Line("if (storedSize != length || storedHead < 0 || storedTail < 0)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidRange(storedSize, length);"));
         w.Blank();
+        if (c.Text)
+        {
+            // A string element is read and enqueued one at a time.
+            w.Line("for (int index = 0; index < length; index++)");
+            w.Open();
+            w.Line("string item = default;");
+            w.Line("operationState.Read<TLuminProfile>(ref item);");
+            w.Line("value.Enqueue(item);");
+            w.Close();
+            return;
+        }
         w.Line("#if NET8_0_OR_GREATER");
         w.Line("var span = global::LuminPack.Code.LuminPackMarshal.GetQueueSpan(value, length);");
         w.Line("int normalizedTail = global::LuminPack.Code.LuminPackMarshal.GetQueueSpan(value).Length == length ? 0 : length;");

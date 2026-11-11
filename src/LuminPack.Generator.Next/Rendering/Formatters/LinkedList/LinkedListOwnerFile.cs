@@ -21,15 +21,23 @@ internal static class LinkedListOwnerFile
     private static void Write(EnumerableOwnerContext c)
     {
         var w = c.W;
+        if (c.Payload != null)
+        {
+            c.CountedWrite("value");
+            return;
+        }
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("int count = 0;");
         w.Line("for (var node = value.First; node is not null; node = node.Next)");
         w.Open();
-        w.Line("operationState.CheckBuffer();");
+        if (!c.Text)
+            w.Line("operationState.CheckBuffer();");
         w.Line("count++;");
         w.Line("var v = node.Value;");
         // A Boolean element writes through a read-only alias, as the legacy element write does.
-        if (c.Scalar == "bool")
+        if (c.Text)
+            w.Line("operationState.Write<TLuminProfile>(v);");
+        else if (c.Scalar == "bool")
         {
             w.Line("ref readonly bool value2 = ref v;");
             w.Line("operationState.Write(in value2);");

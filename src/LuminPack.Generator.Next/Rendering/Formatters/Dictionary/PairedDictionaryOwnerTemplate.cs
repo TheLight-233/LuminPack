@@ -27,8 +27,21 @@ internal sealed class PairedDictionaryContext
     /// <summary>The assembly extension container the owners belong to.</summary>
     internal string Extension { get; }
 
-    internal PairedDictionaryContext(CodeWriter writer, string dictionary, string key, string value, string memory, string extension)
+    /// <summary>The expression that enumerates the entries of <c>value</c>.</summary>
+    internal string Source { get; }
+
+    /// <summary>The entry member that holds the key.</summary>
+    internal string KeyMember { get; }
+
+    /// <summary>The entry member that holds the value.</summary>
+    internal string ValueMember { get; }
+
+    internal PairedDictionaryContext(CodeWriter writer, string dictionary, string key, string value, string memory, string extension,
+        string source = "value", string keyMember = "Key", string valueMember = "Value")
     {
+        Source = source;
+        KeyMember = keyMember;
+        ValueMember = valueMember;
         Extension = extension;
         W = writer;
         Dictionary = dictionary;
@@ -92,12 +105,12 @@ internal sealed class PairedDictionaryContext
     {
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
-        W.Line("foreach (var item in value)");
+        W.Line("foreach (var item in " + Source + ")");
         W.Open();
         W.Line("count++;");
-        W.Line(Key + " key = item.Key;");
+        W.Line(Key + " key = item." + KeyMember + ";");
         WriteMember(Key, "key");
-        W.Line(Value + " itemValue = item.Value;");
+        W.Line(Value + " itemValue = item." + ValueMember + ";");
         WriteMember(Value, "itemValue");
         W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
@@ -155,9 +168,22 @@ internal sealed class PairedDictionarySpec
     /// <summary>Whether the binary read reads the count header itself.</summary>
     internal bool ReadsHeader { get; }
 
+    /// <summary>The expression that enumerates the entries of <c>value</c>.</summary>
+    internal string Source { get; }
+
+    /// <summary>The entry member that holds the key.</summary>
+    internal string KeyMember { get; }
+
+    /// <summary>The entry member that holds the value.</summary>
+    internal string ValueMember { get; }
+
     internal PairedDictionarySpec(Action<PairedDictionaryContext> writeBody, Action<PairedDictionaryContext> readBody, string jsonAdd,
-        Action<PairedDictionaryContext>? jsonBefore = null, Action<PairedDictionaryContext>? jsonAfter = null, bool readsHeader = false)
+        Action<PairedDictionaryContext>? jsonBefore = null, Action<PairedDictionaryContext>? jsonAfter = null, bool readsHeader = false,
+        string source = "value", string keyMember = "Key", string valueMember = "Value")
     {
+        Source = source;
+        KeyMember = keyMember;
+        ValueMember = valueMember;
         WriteBody = writeBody;
         ReadBody = readBody;
         JsonAdd = jsonAdd;
@@ -204,7 +230,7 @@ internal static class PairedDictionaryOwnerTemplate
         string minimum = (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
             (value != "string" ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
-        var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension);
+        var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -374,7 +400,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
                     w.Line("bool isFirst = true;");
-                    w.Line("foreach (var item in value)");
+                    w.Line("foreach (var item in " + spec.Source + ")");
                     w.Open();
                     w.Line("if (!isFirst)");
                     w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
@@ -382,11 +408,11 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("    isFirst = false;");
                     w.Line("writer.SetFirstElement(true);");
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("var key = item.Key;");
+                    w.Line("var key = item." + spec.KeyMember + ";");
                     w.Line("writer.SetFirstElement(true);");
                     w.Line(keyOwner + ".Write<TLuminProfile>(ref writer, key);");
                     w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("var itemValue = item.Value;");
+                    w.Line("var itemValue = item." + spec.ValueMember + ";");
                     w.Line("writer.SetFirstElement(true);");
                     w.Line(valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");

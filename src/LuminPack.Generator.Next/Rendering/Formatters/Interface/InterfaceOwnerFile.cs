@@ -60,6 +60,11 @@ internal static class InterfaceOwnerFile
 
     private static void WriteLines(EnumerableOwnerContext c, bool setInterface)
     {
+        if (c.Payload != null)
+        {
+            c.CountedWrite("value");
+            return;
+        }
         var lines = new List<string>();
         if (setInterface)
             InterfaceTraversal.WriteSet(lines, c.Scalar, "value", c.Memory);
@@ -112,19 +117,11 @@ internal static class InterfaceOwnerFile
         w.Line("for (int index = 0; index < length; index++)");
         w.Open();
         w.Line("ref var entry = ref " + c.Memory + ".Add(ref entryRef, (nint)(uint)index);");
-        w.Line("operationState.Read(ref " + c.Memory + ".As<" + c.Scalar + ", byte>(ref entry.Value), " + c.Memory + ".SizeOf<" + c.Scalar + ">());");
+        c.ReadElement("entry.Value");
         w.Close();
         w.Line("global::LuminPack.Code.LuminPackMarshal.RebuildHashSetBuckets(setView, length);");
         w.Line("value = hashSet;");
     }
 
-    private static void Block(EnumerableOwnerContext c)
-    {
-        c.W.Line("operationState.Read(");
-        c.W.Indented(() =>
-        {
-            c.W.Line("ref " + c.Memory + ".As<" + c.Scalar + ", byte>(ref " + c.Marshal + ".GetReference(span)),");
-            c.W.Line("unchecked(length * " + c.Memory + ".SizeOf<" + c.Scalar + ">()));");
-        });
-    }
+    private static void Block(EnumerableOwnerContext c) => c.ReadBlock("span");
 }

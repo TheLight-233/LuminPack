@@ -28,6 +28,16 @@ internal static class InterfaceMemberWriter
     internal static void WriteCounted(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends) => Emit(body, member, owner, w, names, ref ends, 2);
 
+    /// <summary>Expands a frozen set member's block write body in place.</summary>
+    /// <param name="body">The body lines.</param>
+    /// <param name="member">The frozen set member.</param>
+    /// <param name="owner">The expression holding the record being written.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="names">The occurrence counters of the inline locals of this method.</param>
+    /// <param name="ends">The exit-label counter shared by the whole method.</param>
+    internal static void WriteFrozen(List<string> body, RenderMember member, string owner, CodeWriter w,
+        Dictionary<string, int> names, ref int ends) => Emit(body, member, owner, w, names, ref ends, 3);
+
     /// <summary>Expands a set interface member's write body in place.</summary>
     /// <param name="body">The body lines.</param>
     /// <param name="member">The interface member.</param>
@@ -59,6 +69,8 @@ internal static class InterfaceMemberWriter
             InterfaceTraversal.WriteSet(body, member.Scalar, local, w.A("Unsafe"));
         else if (mode == 2)
             InterfaceTraversal.Counted(body, member.Scalar, local);
+        else if (mode == 3)
+            InterfaceTraversal.WriteFrozen(body, member.Scalar, local);
         else
             InterfaceTraversal.Write(body, member.Scalar, local, w.A("Unsafe"));
         body.Add("operationState.CopyTo(ref writer);");

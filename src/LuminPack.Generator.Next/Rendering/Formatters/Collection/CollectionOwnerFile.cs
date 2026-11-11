@@ -36,7 +36,7 @@ internal static class CollectionOwnerFile
         w.Line("for (int index = 0; index < length; index++)");
         w.Open();
         w.Line(t + " item = default;");
-        w.Line("operationState.Read(ref " + c.Memory + ".As<" + t + ", byte>(ref item), " + c.Memory + ".SizeOf<" + t + ">());");
+        c.ReadElement("item");
         w.Line("value.Add(item);");
         w.Close();
         w.Line("goto operationComplete_RootRead;");

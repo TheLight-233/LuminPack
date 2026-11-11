@@ -6,17 +6,23 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Emits the shared storage write used by queue roots and inline members.</summary>
 internal static class QueueTraversal
 {
-    /// <summary>Writes a nonnull queue of raw scalars through the caller's isolated operation state.</summary>
+    /// <summary>Writes a nonnull queue through the caller's isolated operation state.</summary>
     /// <param name="body">The generated statements.</param>
-    /// <param name="element">The scalar element type.</param>
+    /// <param name="element">The scalar element type, or <c>string</c>.</param>
     /// <param name="local">The nonnull queue expression.</param>
     /// <param name="memory">The spelling of the unsafe memory helper.</param>
     /// <param name="marshal">The spelling of the memory marshal helper.</param>
     /// <remarks>The wire is the element count, the head, tail and size storage words (zero, zero, count), then the live elements
     /// in dequeue order, which the circular storage splits into at most two copied segments. Runtimes without storage access copy
-    /// the queue into one pooled array instead.</remarks>
+    /// the queue into one pooled array instead. A string element has no raw storage, so the strings are written one at a time in
+    /// dequeue order.</remarks>
     internal static void Write(List<string> body, string element, string local, string memory, string marshal)
     {
+        if (element == "string")
+        {
+            WriteText(body, local);
+            return;
+        }
         body.Add("int queueSize = " + local + ".Count;");
         body.Add("int countPosition = operationState.BeginCollection();");
         body.Add("if (queueSize != 0)");
@@ -66,6 +72,26 @@ internal static class QueueTraversal
         body.Add("}");
         body.Add("#endif");
         body.Add("operationState.Advance(queuePayload);");
+        body.Add("}");
+        body.Add("");
+        body.Add("operationState.EndCollection(countPosition, queueSize);");
+        body.Add("operationState.CheckBuffer();");
+    }
+
+    // A string element has no raw storage: after the storage words the strings are written in dequeue order.
+    private static void WriteText(List<string> body, string local)
+    {
+        body.Add("int queueSize = " + local + ".Count;");
+        body.Add("int countPosition = operationState.BeginCollection();");
+        body.Add("if (queueSize != 0)");
+        body.Add("{");
+        body.Add("operationState.EnsureAdditionalCapacity(sizeof(int) * 3);");
+        body.Add("int queueZero = 0;");
+        body.Add("operationState.Write(in queueZero);");
+        body.Add("operationState.Write(in queueZero);");
+        body.Add("operationState.Write(in queueSize);");
+        body.Add("foreach (var queueItem in " + local + ")");
+        body.Add("operationState.Write<TLuminProfile>(queueItem);");
         body.Add("}");
         body.Add("");
         body.Add("operationState.EndCollection(countPosition, queueSize);");

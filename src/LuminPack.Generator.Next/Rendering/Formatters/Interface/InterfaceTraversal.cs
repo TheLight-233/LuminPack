@@ -15,6 +15,12 @@ internal static class InterfaceTraversal
     /// storage without interface dispatch; every other implementation is counted while it is enumerated.</remarks>
     internal static void Write(List<string> body, string element, string local, string memory)
     {
+        // A string element has no contiguous raw storage, so every implementation is counted while it is enumerated.
+        if (element == "string")
+        {
+            Counted(body, element, local);
+            return;
+        }
         string list = "global::System.Collections.Generic.List<" + element + ">";
         body.Add("if (" + local + ".GetType() == typeof(" + list + "))");
         body.Add("{");
@@ -41,6 +47,11 @@ internal static class InterfaceTraversal
     /// <param name="memory">The spelling of the unsafe memory helper.</param>
     internal static void WriteSet(List<string> body, string element, string local, string memory)
     {
+        if (element == "string")
+        {
+            Counted(body, element, local);
+            return;
+        }
         string set = "global::System.Collections.Generic.HashSet<" + element + ">";
         body.Add("if (" + local + ".GetType() == typeof(" + set + "))");
         body.Add("{");
@@ -52,17 +63,36 @@ internal static class InterfaceTraversal
         body.Add("}");
     }
 
+    /// <summary>Writes a nonnull frozen set's item array as one block through the caller's isolated operation state.</summary>
+    /// <param name="body">The generated statements.</param>
+    /// <param name="element">The scalar element type.</param>
+    /// <param name="local">The nonnull frozen set expression.</param>
+    internal static void WriteFrozen(List<string> body, string element, string local)
+    {
+        if (element == "string")
+        {
+            Counted(body, element, local);
+            return;
+        }
+        body.Add("global::System.ReadOnlySpan<" + element + "> frozenItems = " + local + ".Items.AsSpan();");
+        body.Add("operationState.Write<" + element + ">(frozenItems, frozenItems.Length);");
+        body.Add("operationState.CheckBuffer();");
+    }
+
     internal static void Counted(List<string> body, string element, string local)
     {
         body.Add("int interfacePosition = operationState.BeginCollection();");
         body.Add("int interfaceCount = 0;");
         body.Add("foreach (var interfaceItem in " + local + ")");
         body.Add("{");
-        body.Add("operationState.CheckBuffer();");
+        if (element != "string")
+            body.Add("operationState.CheckBuffer();");
         body.Add("interfaceCount++;");
         body.Add("var interfaceValue = interfaceItem;");
         // A Boolean element writes through a read-only alias, as the legacy element write does.
-        if (element == "bool")
+        if (element == "string")
+            body.Add("operationState.Write<TLuminProfile>(interfaceValue);");
+        else if (element == "bool")
         {
             body.Add("ref readonly bool interfaceFlag = ref interfaceValue;");
             body.Add("operationState.Write(in interfaceFlag);");

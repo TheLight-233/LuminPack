@@ -570,11 +570,18 @@ internal static class TypeModelFactory
             if (kind == CollectionKind.Stack && item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true, raw: true);
             // A sorted set stores its ordered tree as raw unmanaged storage, so a string element stays unclassified.
+            // A sorted set of strings counts its in-order enumeration through the shared string owner.
+            if (kind == CollectionKind.SortedSet && item.SpecialType == SpecialType.System_String)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
             if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
             // A linked list, hash set or queue of raw scalars transfers its elements through the shared formatter owner.
-            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper or CollectionKind.Interface && Scalar(item) is { } enumerableItem)
+            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper or CollectionKind.Interface or CollectionKind.Frozen && Scalar(item) is { } enumerableItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: enumerableItem.Keyword);
+            // The same families transfer string elements one at a time through the shared string owner.
+            if (kind is CollectionKind.Linked or CollectionKind.HashSet or CollectionKind.Queue or CollectionKind.Wrapper or
+                CollectionKind.Interface or CollectionKind.Frozen && item.SpecialType == SpecialType.System_String)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
             // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && Scalar(item) is { } sequenceItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: sequenceItem.Keyword);
@@ -582,7 +589,8 @@ internal static class TypeModelFactory
             if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Blocking && item.SpecialType == SpecialType.System_String)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true);
             // A concurrent or immutable sequence of packable classes expands each element's record body through the sequence owner.
-            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable && LocalPackableClass(item) is { } sequenceElement)
+            if (kind is CollectionKind.Concurrent or CollectionKind.Immutable or CollectionKind.Linked or CollectionKind.HashSet or
+                CollectionKind.Wrapper or CollectionKind.Interface or CollectionKind.Frozen && LocalPackableClass(item) is { } sequenceElement)
             {
                 TypeModel? nested = ElementModel(sequenceElement, depth, issues, path, name);
                 if (nested == null)
@@ -3546,6 +3554,8 @@ internal static class TypeModelFactory
                     return Model.DictionaryKind.SortedDictionary;
                 case "SortedList":
                     return Model.DictionaryKind.SortedList;
+                case "PriorityQueue":
+                    return Model.DictionaryKind.Priority;
                 case "IDictionary":
                 case "IReadOnlyDictionary":
                     return Model.DictionaryKind.Interface;

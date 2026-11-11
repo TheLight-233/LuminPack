@@ -32,7 +32,16 @@ internal static class HashSetMemberWriter
         body.Add("goto " + exit + ";");
         body.Add("}");
         body.Add("");
-        body.Add("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref writer, " + local + ");");
+        if (member.Scalar == "string")
+        {
+            // The raw kernel needs unmanaged elements; strings are counted while the set is enumerated.
+            body.Add(w.A("LuminPackWriter") + " operationState = default;");
+            body.Add("writer.CopyTo(ref operationState);");
+            InterfaceTraversal.Counted(body, member.Scalar, local);
+            body.Add("operationState.CopyTo(ref writer);");
+        }
+        else
+            body.Add("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref writer, " + local + ");");
         body.Add(exit + ":");
         body.Add("\t;");
         body.Add("}");
