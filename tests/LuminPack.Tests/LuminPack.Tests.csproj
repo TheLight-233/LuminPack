@@ -21,9 +21,19 @@
     <LangVersion>preview</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-  <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks'">
+  <!-- LuminPackGenerator selects Legacy (default) or the Next prototype generator, for example
+       -p:LuminPackGenerator=Next -p:LuminPackTestArea=Safety. Next builds skip the legacy generator project. -->
+  <PropertyGroup>
+    <LuminPackGenerator Condition="'$(LuminPackGenerator)' == ''">Legacy</LuminPackGenerator>
+    <DisableTransitiveProjectReferences Condition="'$(LuminPackGenerator)' == 'Next'">true</DisableTransitiveProjectReferences>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks' And '$(LuminPackGenerator)' != 'Next'">
     <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks' And '$(LuminPackGenerator)' == 'Next'">
+    <ProjectReference Include="..\..\src\LuminPack.Generator.Next\LuminPack.Generator.Next.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" AdditionalProperties="LuminPackLegacyGeneratorReference=false" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Hooks'">
     <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" SetTargetFramework="TargetFramework=netstandard2.1" />
