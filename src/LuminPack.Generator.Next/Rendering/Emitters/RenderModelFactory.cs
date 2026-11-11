@@ -363,7 +363,7 @@ internal static class RenderModelFactory
                 // owner, which writes the same null marker, member count and members.
                 return new RenderMember(payload.Name, RenderMemberKind.Special, ReadableTypeName.Of(payload.Type.GlobalName),
                     payload.Type.GlobalName, 0, "global::LuminPack." + GeneratedNames.Owner(extension, payload.Type.GlobalName),
-                    ScalarKind.Other, mirrored, property: property, referencePayload: true);
+                    ScalarKind.Other, mirrored, property: property, referencePayload: true, nullObjectGuard: true);
             case CollectionMember collection:
                 return Collection(collection, extension, options);
             case DictionaryMember dictionary:

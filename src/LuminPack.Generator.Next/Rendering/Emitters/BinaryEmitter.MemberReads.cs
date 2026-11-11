@@ -40,19 +40,14 @@ internal static partial class BinaryEmitter
             AddCollectionCheck(body, member, target);
             return;
         }
+        // As the original object read, a null marker clears the member and the member's own read still runs, raising its
+        // deserializing callbacks before it consumes the marker.
         if (member.Kind == RenderMemberKind.Object || member.NullObjectGuard)
         {
             body.Add("if (" + state + ".PeekIsNullObject())");
-            body.Add("{");
-            body.Add(state + ".Advance(1);");
-            body.Add(target + " = default!;");
-            body.Add("}");
-            body.Add("else");
-            body.Add("{");
+            body.Add("\t" + target + " = default!;");
         }
         body.Add(member.Formatter + ".Read<" + profile + ">(ref " + state + ", ref " + target + "!);");
         AddCollectionCheck(body, member, target);
-        if (member.Kind == RenderMemberKind.Object || member.NullObjectGuard)
-            body.Add("}");
     }
 }
