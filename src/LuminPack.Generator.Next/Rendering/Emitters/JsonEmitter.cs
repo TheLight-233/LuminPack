@@ -20,6 +20,13 @@ internal static class JsonEmitter
     /// <param name="model">The covered type.</param>
     /// <param name="w">The file writer.</param>
     /// <param name="operations">The operations the project calls; see <see cref="BinaryEmitter.Emit"/>.</param>
+    /// <summary>Whether a member's read temporary takes a nullable annotation: a value-type framework member or type parameter keeps
+    /// its own type, because the annotation would make it a <c>Nullable&lt;T&gt;</c>.</summary>
+    /// <param name="member">The member.</param>
+    /// <returns>Whether the temporary is declared with <c>?</c>.</returns>
+    private static bool NullableTemp(RenderMember member) => !member.IsFixed &&
+        !(member.Kind is RenderMemberKind.Parameter or RenderMemberKind.Special && !member.ReferencePayload);
+
     internal static void Emit(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
     {
         bool writes = (operations & GeneratedOperations.JsonWrite) != 0;
@@ -507,7 +514,7 @@ internal static class JsonEmitter
             {
                 body.Add("// Temp vars");
                 foreach (var member in mirroredMembers)
-                    body.Add(member.TypeName + (member.IsFixed ? string.Empty : "?") + " " + Camel(member.Name) + "Temp = default;");
+                    body.Add(member.TypeName + (NullableTemp(member) ? "?" : string.Empty) + " " + Camel(member.Name) + "Temp = default;");
             }
             if (packed)
                 body.Add("uint seenFields = 0;");
@@ -519,8 +526,7 @@ internal static class JsonEmitter
         {
             body.Add("// Temp vars");
             foreach (var member in members)
-                body.Add(member.TypeName + (member.IsFixed || member.Kind == RenderMemberKind.Parameter && !member.ReferencePayload ? string.Empty : "?") +
-                    " " + Camel(member.Name) + "Temp = default;");
+                body.Add(member.TypeName + (NullableTemp(member) ? "?" : string.Empty) + " " + Camel(member.Name) + "Temp = default;");
             if (model.Mirror != null && members.Any(member => member.Mirrored))
                 body.Add("ref var reuseLocal = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " +
                     (model.IsStruct ? "value" : "value!") + ");");

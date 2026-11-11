@@ -87,9 +87,11 @@ internal static class ReadableTypeName
     private static void Type(string text, ref int index, StringBuilder name)
     {
         var part = new StringBuilder();
+        bool closed = false;
         if (index < text.Length && text[index] == '(')
         {
             index++;
+            closed = true;
             part.Append("ValueTupleOf");
             Arguments(text, ref index, ')', part);
         }
@@ -108,6 +110,7 @@ internal static class ReadableTypeName
             if (index < text.Length && text[index] == '<')
             {
                 index++;
+                closed = true;
                 part.Append("Of");
                 Arguments(text, ref index, '>', part);
                 if (index < text.Length && text[index] == '.')
@@ -132,7 +135,9 @@ internal static class ReadableTypeName
                     if (text[index] == ',')
                         rank++;
                 index++;
-                part.Append("Array");
+                // An array of a closed generic type is separated from its last argument, so List<int>[] and List<int[]> differ.
+                part.Append(closed ? "_Array" : "Array");
+                closed = false;
                 if (rank > 1)
                     part.Append(rank);
             }
