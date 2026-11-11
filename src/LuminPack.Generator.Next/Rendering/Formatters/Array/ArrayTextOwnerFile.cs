@@ -10,7 +10,7 @@ internal static class ArrayTextOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(c => c.CountedWrite("value"), Read, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged.ToArray();"), jsonCount: false, compressEntries: true);
+        c => c.W.Line("value = staged.ToArray();"), jsonCount: false, compressEntries: true, arrayReuse: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -31,6 +31,12 @@ internal static class ArrayTextOwnerFile
         w.Blank();
         w.Line("if (value is null || value.Length != length)");
         w.Indented(() => w.Line("value = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + c.Scalar + ">(length);"));
+        // A packable element is read into the existing element in place, as the original array read did.
+        if (c.Payload != null)
+        {
+            c.ReadBlockInPlace("span", array: "value");
+            return;
+        }
         w.Line("global::System.Span<" + c.Scalar + "> span = value.AsSpan();");
         c.ReadBlock("span");
     }

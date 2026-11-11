@@ -163,19 +163,29 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name="span">The destination span expression, whose elements are the destination's existing elements.</param>
     /// <remarks>A null marker clears the slot; otherwise the record body is expanded into the existing element, which is constructed
     /// only when absent.</remarks>
-    internal void ReadBlockInPlace(string span)
+    /// <param name="array">An array expression read through its unchecked first-element reference, as the original array read
+    /// did, instead of the span.</param>
+    internal void ReadBlockInPlace(string span, string? array = null)
     {
         if (Payload == null)
         {
             ReadBlock(span);
             return;
         }
-        W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
+        string slot = span + "[blockIndex]";
+        if (array != null)
+        {
+            W.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(" + array + "!);");
+            W.Line("for (nint blockIndex = 0; blockIndex < length; blockIndex++)");
+            slot = "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, blockIndex)";
+        }
+        else
+            W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
         W.Open();
         W.Line("if (operationState.PeekIsNullObject())");
-        W.Indented(() => W.Line(span + "[blockIndex] = default!;"));
+        W.Indented(() => W.Line(slot + " = default!;"));
         W.Open();
-        W.Line("ref " + Scalar + " payloadItem = ref " + span + "[blockIndex]!;");
+        W.Line("ref " + Scalar + " payloadItem = ref " + slot + "!;");
         var body = new List<string>();
         BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
             ref _readEnds);
@@ -310,6 +320,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether the JSON read keeps a list of the exact type and reads its existing elements in place.</summary>
     internal bool ListReuse { get; }
 
+    /// <summary>Whether the JSON read refills an exact-length array of packable elements in place.</summary>
+    internal bool ArrayReuse { get; }
+
     /// <summary>Whether the sequence exposes a count that short-circuits an empty JSON array.</summary>
     internal bool JsonCount { get; }
 
@@ -327,8 +340,9 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="jsonAddBody">The json add body used by this operation.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
-        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false)
+        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false)
     {
+        ArrayReuse = arrayReuse;
         ListReuse = listReuse;
         JsonAddBody = jsonAddBody;
         CompressEntries = compressEntries;
@@ -674,6 +688,63 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
+                    if (spec.ArrayReuse && context.Payload != null)
+                    {
+                        // The original array read refills an existing array of the same exact length in place and otherwise
+                        // stages the elements in a pooled array.
+                        string pool = "global::System.Buffers.ArrayPool<" + scalar + ">.Shared";
+                        w.Line("if (value is not null && value.GetType() == typeof(" + sequence + ") &&");
+                        w.Line("    reader.CountArrayElements<TLuminProfile>() == value.Length)");
+                        w.Open();
+                        w.Line("for (int i = 0; i < value.Length; i++)");
+                        w.Open();
+                        w.Line("reader.Read<TLuminProfile>();");
+                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref value[i]);");
+                        w.Close();
+                        w.Blank();
+                        w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
+                        w.Line("return;");
+                        w.Close();
+                        w.Blank();
+                        w.Line(scalar + "[]? buffer = " + pool + ".Rent(4);");
+                        w.Line("int count = 0;");
+                        w.Line("int capacity = buffer.Length;");
+                        w.Line("try");
+                        w.Open();
+                        w.Line("while (true)");
+                        w.Open();
+                        w.Line("if (!reader.Read<TLuminProfile>())");
+                        w.Line("    break;");
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
+                        w.Line("    break;");
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
+                        w.Line("    continue;");
+                        w.Line("if (count >= capacity)");
+                        w.Open();
+                        w.Line("int newCapacity = capacity * 2;");
+                        w.Line("var newBuffer = " + pool + ".Rent(newCapacity);");
+                        w.Line("buffer.AsSpan(0, count).CopyTo(newBuffer);");
+                        w.Line(pool + ".Return(buffer, clearArray: true);");
+                        w.Line("buffer = newBuffer;");
+                        w.Line("capacity = newBuffer.Length;");
+                        w.Close();
+                        w.Blank();
+                        w.Line(scalar + " item = default!;");
+                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                        w.Line("buffer[count++] = item;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("value = buffer.AsSpan(0, count).ToArray();");
+                        w.Close();
+                        w.Line("finally");
+                        w.Open();
+                        w.Line("if (buffer != null)");
+                        w.Line("    " + pool + ".Return(buffer, clearArray: true);");
+                        w.Close();
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     if (spec.ListReuse)
                     {
                         // The original list read streams its elements once: existing elements are read in place and the tail is trimmed.

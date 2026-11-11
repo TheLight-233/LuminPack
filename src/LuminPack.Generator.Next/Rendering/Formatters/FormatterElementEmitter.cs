@@ -47,20 +47,15 @@ internal static class FormatterElementEmitter
             return;
         }
 
+        // As in the original element read, a null marker clears the slot and the element's own read still runs: it raises the
+        // deserializing callbacks before it consumes the marker.
         if (model.OrdinaryObject)
         {
             w.Line("if (" + state + ".PeekIsNullObject())");
-            w.Open();
-            w.Line(state + ".Advance(1);");
-            w.Line(expression + " = default!;");
-            w.Close();
-            w.Line("else");
-            w.Open();
+            w.Indented(() => w.Line(expression + " = default!;"));
         }
 
         ForwardedElementRead.Emit(w, model.Type, state, expression, Owner(set, model) + ".Read<" + profile + ">(ref " + state + ", ref " + expression + ");");
-        if (model.OrdinaryObject)
-            w.Close();
     }
 
     /// <summary>Returns a minimum standalone record width without assuming that generic unmanaged arguments use raw storage.</summary>
