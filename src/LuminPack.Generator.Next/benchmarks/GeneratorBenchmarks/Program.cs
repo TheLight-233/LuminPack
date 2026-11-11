@@ -29,7 +29,7 @@ internal static class Program
         {
             Console.Error.WriteLine(error);
             Console.Error.WriteLine("usage: GeneratorBenchmarks [--corpus <dir>] [--types <n>] [--runs <n>] [--core <dll>] " +
-                "[--old-dll <dll>] [--old-mode on|off|verify] [--skip-next] [--skip-old]");
+                "[--refs <dir>] [--old-dll <dll>] [--old-mode on|off|verify] [--skip-next] [--skip-old]");
             return 1;
         }
         string repository = FindRepositoryRoot();
@@ -38,7 +38,7 @@ internal static class Program
             "netstandard2.0", "LuminPack.Generator.dll");
         IReadOnlyList<CorpusFile> corpus = options.Corpus == null ? SyntheticCorpus(options.Types) : ReadCorpus(options.Corpus);
         CSharpParseOptions parse = CreateParseOptions();
-        var references = LoadReferences(coreDll);
+        var references = LoadReferences(coreDll, options.References);
         var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
             optimizationLevel: OptimizationLevel.Release, nullableContextOptions: NullableContextOptions.Enable, deterministic: true);
 
@@ -50,7 +50,9 @@ internal static class Program
         Console.WriteLine($"  next: {typeof(NextGenerator).Assembly.GetName().Version}");
         Console.WriteLine($"  old:  {(File.Exists(oldDll) ? oldDll + " (" + options.OldMode + ")" : "not found")}");
         Console.WriteLine();
-        Console.WriteLine($"{"scenario",-26} {"generator",-8} {"median s",10} {"spread s",10} {"alloc MB",10} {"files",6}");
+        if (options.References != null)
+            Console.WriteLine($"  refs: {options.References}");
+        Console.WriteLine($"{"scenario",-26} {"generator",-8} {"median s",10} {"spread s",10} {"alloc MB",10} {"files",6} {"source MB",10}");
 
         Func<ISourceGenerator[]> next = static () => new ISourceGenerator[] { new NextGenerator().AsSourceGenerator() };
         Func<ISourceGenerator[]>? legacy = null;
@@ -113,8 +115,11 @@ internal static class Program
                 corpus[0].Path);
             var commentCompilation = compilation.ReplaceSyntaxTree(trees[0], commentTree);
             Measurement comment = Measure(() => driver = driver.RunGeneratorsAndUpdateCompilation(commentCompilation, out _, out _));
-            var memberTree = CSharpSyntaxTree.ParseText(AddMember(corpus[0].Text, parse), parse, corpus[0].Path);
-            var memberCompilation = commentCompilation.ReplaceSyntaxTree(commentTree, memberTree);
+            // The comment edit touches the first file; the member edit adds a field to the first packable declaration.
+            int payload = PayloadFile(corpus);
+            var memberTree = CSharpSyntaxTree.ParseText(AddMember(payload == 0 ? commentTree.ToString() : corpus[payload].Text, parse), parse,
+                corpus[payload].Path);
+            var memberCompilation = commentCompilation.ReplaceSyntaxTree(payload == 0 ? commentTree : trees[payload], memberTree);
             Measurement member = Measure(() => driver = driver.RunGeneratorsAndUpdateCompilation(memberCompilation, out _, out _));
             files = CountFiles(driver);
             samples.Add(scenario == "comment edit" ? comment : member);
@@ -197,7 +202,7 @@ internal static class Program
         double[] seconds = samples.Select(sample => sample.Seconds).ToArray();
         double[] allocations = samples.Select(sample => sample.AllocatedMegabytes).ToArray();
         Console.WriteLine($"{scenario,-26} {name,-8} {Median(seconds),10:F3} {(seconds.Max() - seconds.Min()),10:F3} " +
-            $"{Median(allocations),10:F1} {files,6}");
+            $"{Median(allocations),10:F1} {files,6} {(files == 0 ? 0 : _lastSourceCharacters / 1_000_000d),10:F2}");
     }
 
     private static double Median(double[] values)
@@ -241,7 +246,13 @@ internal static class Program
     }
 
     private static int CountFiles(GeneratorDriver driver)
-        => driver.GetRunResult().Results.Sum(result => result.GeneratedSources.Length);
+    {
+        var results = driver.GetRunResult().Results;
+        _lastSourceCharacters = results.Sum(result => result.GeneratedSources.Sum(source => (long)source.SourceText.Length));
+        return results.Sum(result => result.GeneratedSources.Length);
+    }
+
+    private static long _lastSourceCharacters;
 
     private static INamedTypeSymbol[] Payloads(Compilation compilation)
         => compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type).OfType<INamedTypeSymbol>()
@@ -259,11 +270,24 @@ internal static class Program
     {
         SyntaxNode root = CSharpSyntaxTree.ParseText(text, parse).GetRoot();
         TypeDeclarationSyntax? declaration = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
-            .FirstOrDefault(member => member is ClassDeclarationSyntax or StructDeclarationSyntax);
+            .Where(member => member is ClassDeclarationSyntax or StructDeclarationSyntax)
+            .OrderBy(member => IsPackable(member) ? 0 : 1).FirstOrDefault();
         if (declaration == null)
             return text;
         MemberDeclarationSyntax field = SyntaxFactory.ParseMemberDeclaration("public int Extra;")!;
         return root.ReplaceNode(declaration, declaration.AddMembers(field)).ToFullString();
+    }
+
+    private static bool IsPackable(TypeDeclarationSyntax declaration)
+        => declaration.AttributeLists.SelectMany(list => list.Attributes).Any(attribute => attribute.Name.ToString() is "LuminPackable" or
+            "LuminPackableAttribute" or "LuminPack.Attribute.LuminPackable");
+
+    private static int PayloadFile(IReadOnlyList<CorpusFile> corpus)
+    {
+        for (int index = 0; index < corpus.Count; index++)
+            if (corpus[index].Text.Contains("[LuminPackable", StringComparison.Ordinal))
+                return index;
+        return 0;
     }
 
     private static CSharpParseOptions CreateParseOptions()
@@ -277,12 +301,18 @@ internal static class Program
             new KeyValuePair<string, string>("InterceptorsPreviewNamespaces", "LuminPack"),
         });
 
-    private static MetadataReference[] LoadReferences(string coreDll)
+    private static MetadataReference[] LoadReferences(string coreDll, string? extra)
     {
         var references = new List<MetadataReference>();
         string? trusted = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
-        foreach (string path in trusted?.Split(Path.PathSeparator) ?? Array.Empty<string>())
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        IEnumerable<string> extraFiles = extra == null ? Array.Empty<string>() : Directory.GetFiles(extra, "*.dll")
+            .Where(file => !Path.GetFileName(file).StartsWith("LuminPack", StringComparison.OrdinalIgnoreCase) &&
+                !Path.GetFileName(file).StartsWith("Microsoft.CodeAnalysis", StringComparison.OrdinalIgnoreCase));
+        foreach (string path in (trusted?.Split(Path.PathSeparator) ?? Array.Empty<string>()).Concat(extraFiles))
         {
+            if (!names.Add(Path.GetFileName(path)))
+                continue;
             try
             {
                 using var stream = File.OpenRead(path);
@@ -394,6 +424,9 @@ internal static class Program
                 case "--old-mode" when index + 1 < args.Length:
                     options.OldMode = args[++index];
                     break;
+                case "--refs" when index + 1 < args.Length:
+                    options.References = Path.GetFullPath(args[++index]);
+                    break;
                 case "--skip-next":
                     options.SkipNext = true;
                     break;
@@ -419,6 +452,7 @@ internal static class Program
         internal int Runs = 3;
         internal string? CoreDll;
         internal string? OldDll;
+        internal string? References;
         internal string OldMode = "on";
         internal bool SkipNext;
         internal bool SkipOld;
