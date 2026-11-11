@@ -335,7 +335,7 @@ internal static class PairedDictionaryOwnerTemplate
         string owner = "Binary_" + extension + "_" + type;
         string keyOwner = "global::LuminPack." + GeneratedNames.Owner(extension, key);
         string valueOwner = fact.Element != null ? "global::LuminPack." + fact.Element.Owner : "global::LuminPack." + GeneratedNames.Owner(extension, value);
-        bool nativeEntries = fact.Family.NativeEntries && fact.Contract?.Arguments.All(argument => argument.RawCollection) == true;
+        bool nativeEntries = fact.Family.NativeEntries && fact.Contract?.Arguments.All(argument => argument.RawStorage) == true;
         string minimum = nativeEntries ? memory + ".SizeOf<" + key + ">() + " + memory + ".SizeOf<" + value + ">()" : fact.Contract != null ? FormatterElementEmitter.Minimum(fact.Contract.Arguments[0]) + " + " +
             FormatterElementEmitter.Minimum(fact.Contract.Arguments[1]) : (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
             (value != "string" && fact.Element == null && !fact.ForwardedValue ? memory + ".SizeOf<" + value + ">()" : "1");

@@ -159,6 +159,32 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
     }
 
+    /// <summary>Emits the read of <c>length</c> packable elements into the existing elements of a span.</summary>
+    /// <param name="span">The destination span expression, whose elements are the destination's existing elements.</param>
+    /// <remarks>A null marker clears the slot; otherwise the record body is expanded into the existing element, which is constructed
+    /// only when absent.</remarks>
+    internal void ReadBlockInPlace(string span)
+    {
+        if (Payload == null)
+        {
+            ReadBlock(span);
+            return;
+        }
+        W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
+        W.Open();
+        W.Line("if (operationState.PeekIsNullObject())");
+        W.Indented(() => W.Line(span + "[blockIndex] = default!;"));
+        W.Open();
+        W.Line("ref " + Scalar + " payloadItem = ref " + span + "[blockIndex]!;");
+        var body = new List<string>();
+        BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
+            ref _readEnds);
+        foreach (string line in body)
+            W.Line(line);
+        W.Close();
+        W.Close();
+    }
+
     /// <summary>Emits the read of <c>length</c> elements into a span.</summary>
     /// <param name="span">The destination span expression.</param>
     internal void ReadBlock(string span, bool foreign = false)
@@ -281,6 +307,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Emits the statements that publish the staged JSON elements after the element loop.</summary>
     internal Action<EnumerableOwnerContext>? JsonAfter { get; }
 
+    /// <summary>Whether the JSON read keeps a list of the exact type and reads its existing elements in place.</summary>
+    internal bool ListReuse { get; }
+
     /// <summary>Whether the sequence exposes a count that short-circuits an empty JSON array.</summary>
     internal bool JsonCount { get; }
 
@@ -298,8 +327,9 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="jsonAddBody">The json add body used by this operation.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
-        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null)
+        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false)
     {
+        ListReuse = listReuse;
         JsonAddBody = jsonAddBody;
         CompressEntries = compressEntries;
         JsonCount = jsonCount;
@@ -644,6 +674,36 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
+                    if (spec.ListReuse)
+                    {
+                        // The original list read streams its elements once: existing elements are read in place and the tail is trimmed.
+                        w.Line("if (value is null || value.GetType() != typeof(" + sequence + "))");
+                        w.Open();
+                        w.Line("value = new " + sequence + "(reader.GetArrayCapacityHint<TLuminProfile>(10));");
+                        w.Close();
+                        w.Blank();
+                        w.Line("int count = 0;");
+                        w.Line("while (reader.Read<TLuminProfile>())");
+                        w.Open();
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
+                        w.Line("    break;");
+                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
+                        w.Line("    continue;");
+                        w.Line(scalar + " item = count < value.Count ? value[count] : default!;");
+                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                        w.Line("if (count < value.Count)");
+                        w.Line("    value[count] = item;");
+                        w.Line("else");
+                        w.Line("    value.Add(item);");
+                        w.Line("count++;");
+                        w.Close();
+                        w.Blank();
+                        w.Line("if (count < value.Count)");
+                        w.Line("    value.RemoveRange(count, value.Count - count);");
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     w.Blank();
                     if (spec.JsonBefore != null)
                         spec.JsonBefore(context);

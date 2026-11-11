@@ -236,8 +236,11 @@ internal static partial class TypeModelFactory
             WirePolicy policy, int depth, List<string> issues, Path path, string generatorType, string[] constraints)
         {
             MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
-            PortableLayout? layout = symbol.IsUnmanagedType && generatorType == "Object" ? TryPortableLayout(symbol) : null;
-            bool nativeContract = symbol.IsUnmanagedType && generatorType == "Object" &&
+            // A closed generic struct whose definition is not unmanaged keeps its definition's object contract, which can close over
+            // references, as the original state contract rule does; only a definition that is unmanaged itself stores natively.
+            bool unmanaged = symbol.IsUnmanagedType && !(symbol.IsGenericType && !symbol.OriginalDefinition.IsUnmanagedType);
+            PortableLayout? layout = unmanaged && generatorType == "Object" ? TryPortableLayout(symbol) : null;
+            bool nativeContract = unmanaged && generatorType == "Object" &&
                 !ContainsCustomContract(symbol, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             StructStorage storage = !nativeContract ? StructStorage.ManagedRecord :
                 layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
@@ -261,7 +264,7 @@ internal static partial class TypeModelFactory
             return new StructModel(identity, accessibility, members, policy, constraints, storage, layout,
                 RecordWidthSupported(symbol), versioned: generatorType == "VersionTolerant",
                 rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
-                callbacks: managed && Callbacks(symbol), storagePlan: symbol.IsUnmanagedType && generatorType == "Object" ? FormatterStorage(symbol) : null,
+                callbacks: managed && Callbacks(symbol), storagePlan: unmanaged && generatorType == "Object" ? FormatterStorage(symbol) : null,
                 mirror: mirror, mirrorFields: mirrorFields, mirrorOffsets: mirrorOffsets, mirrorLayout: mirrorLayout,
                 construction: construction, serializationCallbacks: callbacks, version: version, rentCall: rentCall, rentByRef: rentByRef);
         }
@@ -955,7 +958,13 @@ internal static partial class TypeModelFactory
             // A pair's per-value formatter frames its two members separately, so it is never raw storage.
             if (named.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
                 return false;
-            if (GenerationMode(named) is "NonGenerator" or "Custom")
+            // As in the original formatter rule, only the ordinary object mode stores raw: version-tolerant, circle-reference,
+            // custom and formatter-less declarations frame their values themselves.
+            if (GenerationMode(named) != "Object")
+                return false;
+            // A closed generic packable struct whose definition is not unmanaged keeps its definition's object contract, which
+            // can close over references; its closed value is not raw storage.
+            if (named.IsGenericType && !named.OriginalDefinition.IsUnmanagedType && IsPackable(named.OriginalDefinition))
                 return false;
             if (HasAttribute(named, UnionAttribute) || HasAttribute(named, "System.Runtime.CompilerServices.UnionAttribute"))
                 return false;

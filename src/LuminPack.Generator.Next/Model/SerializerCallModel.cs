@@ -87,8 +87,68 @@ internal enum SerializerApi
 /// <summary>One closed serializer call site: the bound overload, its closed payload and profile, and the interception location.</summary>
 /// <remarks>The model is compiler-free and value-equal, so an edit that leaves a call's binding unchanged keeps its cached
 /// interceptor. The location text changes with the file's content and is part of equality.</remarks>
+/// <summary>The allocating-entry form the original concrete facade selected for a closed payload.</summary>
+internal enum EntryKind
+{
+    /// <summary>Pooled output and thread-static reader state.</summary>
+    Pooled,
+
+    /// <summary>A known reference-free scalar copied as its complete storage.</summary>
+    RawScalar,
+
+    /// <summary>A record of fixed-width primitive members, measured and written into an exact array.</summary>
+    FixedRecord,
+
+    /// <summary>A record measured into an exact array, with pooled output when the measure was not exact.</summary>
+    DirectRecord,
+
+    /// <summary>An enum written at its native width.</summary>
+    FixedEnum,
+
+    /// <summary>A nullable known scalar: a marker byte and the value.</summary>
+    NullableDirect,
+
+    /// <summary>A sequence of known scalars, sized by its length.</summary>
+    RawSequence,
+
+    /// <summary>A count-prefixed two's-complement big integer.</summary>
+    BigInteger,
+
+    /// <summary>An interface sequence of known scalars, read without reference-tracking state.</summary>
+    StatelessRead,
+}
+
+/// <summary>The entry form of a closed payload and its element spelling where the form needs one.</summary>
+internal readonly struct EntryShape : IEquatable<EntryShape>
+{
+    internal static readonly EntryShape Pooled = new(EntryKind.Pooled);
+
+    internal readonly EntryKind Kind;
+
+    internal readonly string? Element;
+
+    internal EntryShape(EntryKind kind, string? element = null)
+    {
+        Kind = kind;
+        Element = element;
+    }
+
+    /// <summary>Whether the binary reads construct a plain reader without leasing reference-tracking state.</summary>
+    internal bool StatelessRead => Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.FixedEnum or EntryKind.NullableDirect or
+        EntryKind.BigInteger or EntryKind.StatelessRead;
+
+    public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element;
+
+    public override bool Equals(object? obj) => obj is EntryShape other && Equals(other);
+
+    public override int GetHashCode() => (int)Kind;
+}
+
 internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
 {
+    /// <summary>The allocating-entry form of the payload.</summary>
+    internal readonly EntryShape Shape;
+
     /// <summary>The bound public overload.</summary>
     internal readonly SerializerApi Api;
 
@@ -118,8 +178,9 @@ internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
     internal readonly string? TypeArguments;
 
     internal SerializerCallModel(SerializerApi api, string payload, string? profile, string location, bool valueType, MemberModel? root,
-        bool openProfile = false, string? definition = null, string? typeArguments = null)
+        bool openProfile = false, string? definition = null, string? typeArguments = null, EntryShape shape = default)
     {
+        Shape = shape;
         Definition = definition;
         TypeArguments = typeArguments;
         OpenProfile = openProfile;
@@ -137,7 +198,7 @@ internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
     /// <inheritdoc/>
     public bool Equals(SerializerCallModel? other) => ReferenceEquals(this, other) || other != null && Api == other.Api &&
         ValueType == other.ValueType && OpenProfile == other.OpenProfile && Payload == other.Payload && Profile == other.Profile &&
-        Location == other.Location && Definition == other.Definition && TypeArguments == other.TypeArguments &&
+        Location == other.Location && Definition == other.Definition && TypeArguments == other.TypeArguments && Shape.Equals(other.Shape) &&
         Equals(Root, other.Root);
 
     /// <inheritdoc/>

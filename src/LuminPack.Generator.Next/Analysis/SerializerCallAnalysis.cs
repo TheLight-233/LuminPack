@@ -88,7 +88,10 @@ internal static class SerializerCallAnalysis
             definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             typeArguments = string.Join(", ", generic.TypeArguments.Select(argument => argument.ToDisplayString(PayloadFormat)));
         }
-        return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments);
+        EntryShape shape = TypeModelFactory.EntryShapeOf(payload, context.SemanticModel.Compilation,
+            Pipeline.GeneratorOptionsFactory.From(context.SemanticModel.Compilation));
+        return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments,
+            shape);
     }
 
     private static readonly SymbolDisplayFormat PayloadFormat = SymbolDisplayFormat.FullyQualifiedFormat

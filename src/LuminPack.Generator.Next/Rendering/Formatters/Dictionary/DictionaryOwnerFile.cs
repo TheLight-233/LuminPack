@@ -24,8 +24,10 @@ internal static class DictionaryOwnerFile
         if (GenericIdentity.IsRaw(key.Type) && key.Type != "bool" && value.Definition == GenericIdentity.Nullable &&
             GenericIdentity.IsRaw(value.Arguments[0].Type))
             return Render(set, new DictionaryOwnerFact(fact.Family, model.Type, key.Type, value.Arguments[0].Type + "?"), operations);
-        bool direct = ((key.Raw || key.Type == "string") && (value.Raw || value.Type == "string") ||
-            key.RawCollection && value.RawCollection) && key.Type != "bool" && value.Type != "bool";
+        // A packable payload is a native entry only when its own formatter is a plain storage copy.
+        bool Native(Model.FormatterModel side) => side.Raw && (side.Payload == null || side.RawStorage);
+        bool direct = ((Native(key) || key.Type == "string") && (Native(value) || value.Type == "string") ||
+            key.RawStorage && value.RawStorage) && key.Type != "bool" && value.Type != "bool";
         return direct ? Render(set, new DictionaryOwnerFact(fact.Family, model.Type, key.Type, value.Type), operations) :
             PayloadDictionaryOwnerFile.Render(set, fact, operations);
     }

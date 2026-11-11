@@ -19,6 +19,12 @@ internal sealed class FormatterModel : IEquatable<FormatterModel>
     internal readonly bool Raw;
     /// <summary>Whether raw collection storage preserves the element's established contiguous contract.</summary>
     internal readonly bool RawCollection;
+    /// <summary>Whether the value's own formatter is exactly a copy of its native storage, so a keyed entry may store it raw.</summary>
+    /// <remarks>The original raw-storage rule for dictionary keys and values: a contiguous collection copies any reference-free
+    /// element, but a pair, a version-tolerant or managed-record struct and a Union frame their values themselves.</remarks>
+    internal bool RawStorage => RawCollection && Definition != Rendering.Formatters.GenericIdentity.KeyValuePair && Payload is not UnionModel &&
+        Payload is not StructModel { Versioned: true } && Payload is not StructModel { Storage: StructStorage.ManagedRecord };
+
     /// <summary>The optional packed or tagged contiguous storage plan.</summary>
     internal readonly FormatterStorageModel? Layout;
     /// <summary>Whether shared publication must emit a payload outside the attributed declaration stream.</summary>

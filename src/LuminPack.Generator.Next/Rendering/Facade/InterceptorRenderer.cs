@@ -47,10 +47,14 @@ internal sealed class RootEntry : IEquatable<RootEntry>
     /// <summary>The closed type arguments the generic roots take before the profile, each followed by ", ".</summary>
     internal readonly string RootArguments;
 
+    /// <summary>Whether the payload's own roots publish its exact record measure.</summary>
+    internal readonly bool Measured;
+
     /// <summary>Describes a published root.</summary>
     internal RootEntry(string readable, string declaredProfile, bool binary, bool json, string? owner = null, int? limit = null,
-        int encoding = 1, string? jsonReadProfile = null, string? rootName = null, string rootArguments = "", bool genericUnion = false)
+        int encoding = 1, string? jsonReadProfile = null, string? rootName = null, string rootArguments = "", bool genericUnion = false, bool measured = false)
     {
+        Measured = measured;
         GenericUnion = genericUnion;
         RootName = rootName ?? readable;
         RootArguments = rootArguments;
@@ -68,12 +72,12 @@ internal sealed class RootEntry : IEquatable<RootEntry>
     /// <param name="readable">The entry name.</param>
     /// <returns>The renamed entry.</returns>
     internal RootEntry WithReadable(string readable) => new(readable, DeclaredProfile, Binary, Json, Owner, Limit, Encoding, JsonReadProfile,
-        RootName, RootArguments, GenericUnion);
+        RootName, RootArguments, GenericUnion, Measured);
 
     /// <inheritdoc/>
     public bool Equals(RootEntry? other) => other != null && Readable == other.Readable && DeclaredProfile == other.DeclaredProfile &&
         Binary == other.Binary && Json == other.Json && Owner == other.Owner && Limit == other.Limit && Encoding == other.Encoding &&
-        JsonReadProfile == other.JsonReadProfile && RootName == other.RootName && RootArguments == other.RootArguments;
+        JsonReadProfile == other.JsonReadProfile && RootName == other.RootName && RootArguments == other.RootArguments && Measured == other.Measured;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as RootEntry);
@@ -130,7 +134,7 @@ internal static class InterceptorRenderer
             w.Append("        internal static partial class LuminEntry_").Append(root.Readable).Append('\n');
             w.Append("        {\n");
             if (payload.Any(item => !item.Call.Json))
-                BinaryEntries(w, type, root);
+                BinaryEntries(w, type, root, payload.First().Call.Shape, root.Owner == null ? root.Measured : roots.Measured.Contains(root.RootName));
             if (payload.Any(item => item.Call.Json))
                 JsonEntries(w, type, root);
             w.Append("        }\n\n");
@@ -343,7 +347,7 @@ namespace LuminPack
         w.Append("            => ").Append(call).Append(";\n");
     }
 
-    private static void BinaryEntries(StringBuilder w, string type, RootEntry root)
+    private static void BinaryEntries(StringBuilder w, string type, RootEntry root, EntryShape shape, bool measured)
     {
         string write = root.Owner != null ? root.Owner + ".Write<TLuminProfile>(ref writer, in value);" :
             "LuminPackSerializer.Serialize_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref writer, in value);";
@@ -517,7 +521,111 @@ namespace LuminPack
                 return Deserialize<TLuminProfile>(data.Span);
             }
 ";
-        w.Append(Limits(text.Replace("\r\n", "\n"), type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));
+        text = Specialize(text.Replace("\r\n", "\n"), root, shape, measured, write);
+        w.Append(Limits(text, type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));
+    }
+
+    /// <summary>Replaces the allocating serialize entry and the span read entry with the original specialized forms.</summary>
+    /// <param name="text">The binary entry template.</param>
+    /// <param name="root">The published root.</param>
+    /// <param name="shape">The payload's entry form.</param>
+    /// <param name="measured">Whether the root publishes its exact record measure.</param>
+    /// <param name="write">The root write statement on <c>writer</c>.</param>
+    /// <returns>The template with the selected forms.</returns>
+    /// <remarks>Raw scalars copy their storage into an exact array and read it with one checked copy. Records of fixed or
+    /// measurable width write directly into an exact array, with pooled output only when a measured width was not exact, and
+    /// read through a plain reader that leases no reference-tracking state. Every other payload keeps pooled output.</remarks>
+    private static string Specialize(string text, RootEntry root, EntryShape shape, bool measured, string write)
+    {
+        string? serialize = null, deserialize = null;
+        const string Inline = "            [MethodImpl(MethodImplOptions.AggressiveInlining)]\n";
+        const string Signature = "            public static byte[] Serialize<TLuminProfile>(in %TYPE% value)\n" +
+            "                where TLuminProfile : struct, ILuminPackOptions\n";
+        bool needsMeasure = shape.Kind is EntryKind.FixedRecord or EntryKind.DirectRecord;
+        string measure = "LuminPackSerializer.MeasureRecord_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref directEvaluator, ref directValue);";
+        switch (shape.Kind)
+        {
+            case EntryKind.RawScalar:
+                serialize = Inline + Signature + "            {\n" +
+                    "                var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(Unsafe.SizeOf<%TYPE%>());\n" +
+                    "                LuminPackWriter.Write(ref MemoryMarshal.GetArrayDataReference(buffer), in value);\n" +
+                    "                return buffer;\n            }\n";
+                deserialize = Inline + "            public static int Deserialize<TLuminProfile>(ReadOnlySpan<byte> buffer, ref %TYPE% value)\n" +
+                    "                where TLuminProfile : struct, ILuminPackOptions\n            {\n" +
+                    "                LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);\n" +
+                    "                if (buffer.Length < Unsafe.SizeOf<%TYPE%>())\n" +
+                    "                    LuminPackExceptionHelper.ThrowSpanOutOfRange(Unsafe.SizeOf<%TYPE%>());\n" +
+                    "                return LuminPackReader.ReadComplete(ref MemoryMarshal.GetReference(buffer), ref value);\n            }\n";
+                break;
+            case EntryKind.BigInteger:
+                serialize = Inline + Signature + "            {\n" +
+                    "                int byteCount = value.GetByteCount();\n" +
+                    "                var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(checked(sizeof(int) + byteCount));\n" +
+                    "                LuminPackWriter.Write(ref MemoryMarshal.GetArrayDataReference(buffer), byteCount);\n" +
+                    "                value.TryWriteBytes(buffer.AsSpan(sizeof(int)), out _);\n" +
+                    "                return buffer;\n            }\n";
+                break;
+            case EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.FixedRecord or EntryKind.RawSequence or EntryKind.DirectRecord
+                when !needsMeasure || measured:
+            {
+                bool exact = shape.Kind is EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.FixedRecord;
+                string length = shape.Kind switch
+                {
+                    EntryKind.FixedEnum => "                int directLength = Unsafe.SizeOf<%TYPE%>();\n",
+                    EntryKind.NullableDirect => "                int directLength = value.HasValue ? 1 + Unsafe.SizeOf<" + shape.Element + ">() : 1;\n",
+                    EntryKind.RawSequence => "                int directLength = checked(sizeof(int) + checked((int)value.Length) * Unsafe.SizeOf<" + shape.Element + ">());\n",
+                    _ => "                var directEvaluator = new global::LuminPack.Core.LuminPackEvaluator();\n" +
+                        "                var directValue = value;\n                " + measure + "\n" +
+                        "                int directLength = directEvaluator.Value;\n",
+                };
+                var body = new StringBuilder();
+                body.Append(Inline).Append(Signature).Append("            {\n").Append(length);
+                // A fixed record is a few primitives wide; a plain array lets the JIT drop the large-array branch and null check.
+                body.Append(exact ? "                var directBuffer = new byte[directLength];\n"
+                    : "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n");
+                body.Append("                var directSpan = directBuffer.AsSpan();\n");
+                body.Append("                var writer = new LuminPackWriter(ref directSpan);\n");
+                body.Append("                ").Append(write).Append('\n');
+                if (exact)
+                    body.Append("                return directBuffer;\n            }\n");
+                else
+                {
+                    body.Append("                if (writer.Position == directLength) return directBuffer;\n");
+                    body.Append("                var writerBuffer = LuminBufferWriterPool.Rent();\n                try\n                {\n");
+                    body.Append("                    var fallbackWriter = new LuminPackWriter(writerBuffer);\n");
+                    body.Append("                    ").Append(write.Replace("ref writer,", "ref fallbackWriter,")).Append('\n');
+                    body.Append("                    var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(fallbackWriter.CurrentIndex);\n");
+                    body.Append("                    fallbackWriter.GetSpan().CopyTo(buffer.AsSpan());\n                    return buffer;\n");
+                    body.Append("                }\n                finally\n                {\n                    LuminBufferWriterPool.Return(writerBuffer);\n");
+                    body.Append("                }\n            }\n");
+                }
+                serialize = body.ToString();
+                break;
+            }
+        }
+        if (deserialize == null && shape.StatelessRead && (!needsMeasure || measured))
+            deserialize = "            public static int Deserialize<TLuminProfile>(ReadOnlySpan<byte> buffer, ref %TYPE% value)\n" +
+                "                where TLuminProfile : struct, ILuminPackOptions\n            {\n" +
+                "                LuminPackInputPolicy.CheckInput(buffer.Length, %LIMIT%);\n" +
+                (shape.Kind == EntryKind.FixedEnum ? "                if (buffer.Length < Unsafe.SizeOf<%TYPE%>())\n" +
+                    "                    LuminPackExceptionHelper.ThrowSpanOutOfRange(Unsafe.SizeOf<%TYPE%>());\n" : string.Empty) +
+                "                var reader = new LuminPackReader(ref buffer);\n                %READ%\n                return reader.Position;\n            }\n";
+        if (serialize != null)
+            text = ReplaceMethod(text, "            public static byte[] Serialize<TLuminProfile>(in %TYPE% value)\n", serialize);
+        if (deserialize != null)
+            text = ReplaceMethod(text, "            public static int Deserialize<TLuminProfile>(ReadOnlySpan<byte> buffer, ref %TYPE% value)\n", deserialize);
+        return text;
+    }
+
+    /// <summary>Replaces one template method, from its signature line to its closing brace.</summary>
+    private static string ReplaceMethod(string text, string signature, string replacement)
+    {
+        int start = text.IndexOf(signature, StringComparison.Ordinal);
+        if (start < 0)
+            return text;
+        const string Close = "\n            }\n";
+        int end = text.IndexOf(Close, start, StringComparison.Ordinal);
+        return text.Substring(0, start) + replacement + text.Substring(end + Close.Length);
     }
 
     private static void JsonEntries(StringBuilder w, string type, RootEntry root)
@@ -707,8 +815,10 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
     /// <param name="entries">The payload roots keyed by payload spelling.</param>
     /// <param name="shared">The readable names of the roots that shared owners publish.</param>
     /// <param name="extension">The assembly extension container of the shared owners.</param>
-    internal RootCatalog(IEnumerable<KeyValuePair<string, RootEntry>> entries, IEnumerable<string> shared, string? extension)
+    internal RootCatalog(IEnumerable<KeyValuePair<string, RootEntry>> entries, IEnumerable<string> shared, string? extension,
+        IEnumerable<string>? measured = null)
     {
+        Measured = new HashSet<string>(measured ?? Array.Empty<string>(), StringComparer.Ordinal);
         _extension = extension;
         _shared = shared.Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToArray();
         Shared = new HashSet<string>(_shared, StringComparer.Ordinal);
@@ -726,6 +836,9 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
 
     /// <summary>The readable names of the roots that shared owners publish.</summary>
     internal HashSet<string> Shared { get; }
+
+    /// <summary>The readable names of the shared roots that publish their exact record measure.</summary>
+    internal HashSet<string> Measured { get; }
 
     /// <summary>Finds the root a call binds to: the payload's own roots, or the shared owner of a non-packable closed root.</summary>
     /// <param name="call">The closed call.</param>
@@ -762,7 +875,7 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
         if (ReferenceEquals(this, other))
             return true;
         if (other == null || other._entries.Length != _entries.Length || _extension != other._extension ||
-            !_shared.SequenceEqual(other._shared, StringComparer.Ordinal))
+            !_shared.SequenceEqual(other._shared, StringComparer.Ordinal) || !Measured.SetEquals(other.Measured))
             return false;
         for (int index = 0; index < _entries.Length; index++)
             if (_entries[index].Key != other._entries[index].Key || !_entries[index].Value.Equals(other._entries[index].Value))

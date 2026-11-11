@@ -3,11 +3,12 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>List&lt;T&gt;</c> whose element is a packable class.</summary>
 /// <remarks>The write counts the enumeration of the list as it expands each element's record body through an isolated state. The
-/// read creates a presized list or clears the reused one and expands each element's record body into the list storage on the
-/// caller's reader. The JSON roots read each element through the element's own formatter owner.</remarks>
+/// read creates a presized list or keeps the existing one, sizes it to the payload and expands each element's record body into
+/// the existing element in place on the caller's reader, as the original list read did: a null marker clears the slot and a
+/// missing element is constructed. The JSON roots read each element through the element's own formatter owner.</remarks>
 internal static class ListPayloadOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(c => c.CountedWrite("value"), Read, "value.Add(item);");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(c => c.CountedWrite("value"), Read, "value.Add(item);", listReuse: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -20,15 +21,8 @@ internal static class ListPayloadOwnerFile
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
-        w.Line("if (value is null)");
-        w.Indented(() => w.Line("value = new " + c.Sequence + "(length);"));
-        w.Line("else");
-        w.Indented(() => w.Line("value.Clear();"));
-        w.Blank();
-        w.Line("if (length == 0)");
-        w.Indented(() => w.Line("goto operationComplete_RootRead;"));
-        w.Blank();
+        w.Line("value ??= new " + c.Sequence + "(length);");
         w.Line("global::System.Span<" + c.Scalar + "> span = global::LuminPack.Code.LuminPackMarshal.GetListSpan(value, length);");
-        c.ReadBlock("span");
+        c.ReadBlockInPlace("span");
     }
 }

@@ -353,9 +353,16 @@ public sealed class NextGenerator : IIncrementalGenerator
                             limit: policy.Input == InputPolicy.Untrusted ? policy.Limits.Input : null,
                             encoding: policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1,
                             jsonReadProfile: jsonInput.Equals(policy.Strings) ? null : ProfileNames.Type(jsonInput),
-                            genericUnion: model is UnionModel && model.Identity.IsGeneric)));
+                            genericUnion: model is UnionModel && model.Identity.IsGeneric,
+                            measured: !model.Identity.IsGeneric && PublishesMeasure(model, payload.Options))));
                 }
-            return new RootCatalog(entries, input.Right.PublishedRoots(), input.Right.Extension);
+            // Entries measure a direct record through its root's measure, which only some shared owners publish.
+            var measured = new List<string>();
+            if (!input.Right.IsEmpty)
+                foreach (var source in SharedFormatterPublisher.Render(input.Right, GeneratedOperations.All))
+                    foreach (System.Text.RegularExpressions.Match match in MeasureDeclaration.Matches(source.Value))
+                        measured.Add(match.Groups[1].Value);
+            return new RootCatalog(entries, input.Right.PublishedRoots(), input.Right.Extension, measured);
         });
         context.RegisterSourceOutput(calls.Combine(roots).Combine(enabled), static (production, input) =>
         {
@@ -374,6 +381,28 @@ public sealed class NextGenerator : IIncrementalGenerator
             }
         });
     }
+
+    /// <summary>Whether a payload's own binary roots declare its exact record measure.</summary>
+    /// <remarks>The measure is selected per declaration shape; the rendered roots are the authority. A struct with a storage
+    /// plan is written by the shared unmanaged owner, whose measure the shared scan finds instead.</remarks>
+    private static bool PublishesMeasure(TypeModel model, GeneratorOptions options)
+    {
+        if (model is UnionModel || model is StructModel { StoragePlan: not null } || RenderModelFactory.Create(model, options)?.MeasureRecord != true)
+            return false;
+        try
+        {
+            var renderContext = new RenderContext(options, AliasTable.For(options.AvailableAliases));
+            string source = BinaryRenderer.Instance.Render(model, renderContext);
+            return source.Contains(" MeasureRecord_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Identity.GlobalName)) + "(");
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex MeasureDeclaration =
+        new(@"static void MeasureRecord_(\w+?)(?:<TLuminProfile>)?\(", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private static void Emit(SourceProductionContext production, TypeModel model, RenderContext context, string source, string suffix)
     {

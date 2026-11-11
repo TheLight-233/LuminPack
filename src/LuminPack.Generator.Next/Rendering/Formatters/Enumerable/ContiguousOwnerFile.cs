@@ -19,6 +19,7 @@ internal enum ContiguousShape
 internal static class ContiguousOwnerFile
 {
     private const string Marshal = "global::LuminPack.Code.LuminPackMarshal";
+    private const string WriterType = "global::LuminPack.Core.LuminPackWriter";
     private const string Unsafe = "global::System.Runtime.CompilerServices.Unsafe";
     private const string MemoryMarshal = "global::System.Runtime.InteropServices.MemoryMarshal";
     /// <summary>Renders one closed contiguous family without constraining its element category.</summary>
@@ -38,7 +39,12 @@ internal static class ContiguousOwnerFile
         if (freshUnion is { UnionRoot: false })
             freshUnion = null;
         bool scalarElements = shape == ContiguousShape.ReadOnlySequence;
-        bool raw = element.RawCollection && !scalarElements;
+        // A sequence of reference-free elements writes its count first and copies each segment's storage, as the original did.
+        bool rawSequence = scalarElements && element.RawCollection && element.Layout == null;
+        // A nullable raw scalar is stored natively too: the original contiguous writers copied the complete Nullable storage
+        // through the tagged block writer, which records the layout where models differ.
+        bool raw = (element.RawCollection || element.Definition == GenericIdentity.Nullable && element.Arguments.Length == 1 &&
+            element.Arguments[0].RawCollection && element.Layout == null) && !scalarElements;
         FormatterStorageModel? layout = scalarElements ? null : element.Layout;
         string empty = reference ? "null" : "default";
         string absent = shape switch
@@ -75,6 +81,11 @@ internal static class ContiguousOwnerFile
         void BinaryWrite(CodeWriter w, SpecialOwnerContext c)
         {
             NullWrite(w, false);
+            if (rawSequence)
+            {
+                RawSequenceWrite(w);
+                return;
+            }
             if (shape == ContiguousShape.ReadOnlySequence)
             {
                 w.Line("int countPosition = writer.BeginCollection();");
@@ -121,8 +132,108 @@ internal static class ContiguousOwnerFile
             w.Line("writer.CheckBuffer();");
         }
 
+        void RawSequenceWrite(CodeWriter w)
+        {
+            string t = element.Type;
+            w.Line(WriterType + " operationState = default;");
+            w.Line(WriterType + " operationStateFallback = default;");
+            w.Line("writer.CopyTo(ref operationState);");
+            w.Line("int count = checked((int)value.Length);");
+            w.Line("operationState.EnsureAdditionalCapacity(4);");
+            w.Line("operationState.Write(count);");
+            w.Line("if (value.IsSingleSegment)");
+            w.Open();
+            w.Line("global::System.ReadOnlySpan<" + t + "> span = value.FirstSpan;");
+            w.Line("if (!span.IsEmpty)");
+            w.Open();
+            w.Line("if (" + MemoryMarshal + ".AsBytes(span).Overlaps(operationState.Buffer))");
+            w.Open();
+            w.Line("operationState.CopyTo(ref operationStateFallback);");
+            w.Line("WriteOverlappingSequenceSegment(ref operationStateFallback, span);");
+            w.Line("operationStateFallback.CopyTo(ref operationState);");
+            w.Close();
+            w.Line("else");
+            w.Open();
+            w.Line("int bytes = checked(span.Length * " + Unsafe + ".SizeOf<" + t + ">());");
+            w.Line("operationState.EnsureAdditionalCapacity(bytes);");
+            w.Line("operationState.Write(ref " + Unsafe + ".As<" + t + ", byte>(ref " + MemoryMarshal + ".GetReference(span)), bytes);");
+            w.Close();
+            w.Close();
+            w.Close();
+            w.Line("else");
+            w.Open();
+            w.Line("operationState.CopyTo(ref operationStateFallback);");
+            w.Line("WriteRawSequenceSegments(ref operationStateFallback, value);");
+            w.Line("operationStateFallback.CopyTo(ref operationState);");
+            w.Close();
+            w.Line("operationState.CheckBuffer();");
+            w.Line("operationState.CopyTo(ref writer);");
+            w.Blank();
+            // An overlapping source is written element by element, so a reallocation never reads released storage.
+            w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+            w.Line("static void WriteOverlappingSequenceSegment(ref " + WriterType + " target, global::System.ReadOnlySpan<" + t + "> items)");
+            w.Open();
+            w.Line(WriterType + " state = default;");
+            w.Line("target.CopyTo(ref state);");
+            w.Line("long capacity = items.Length * ((long)" + Unsafe + ".SizeOf<" + t + ">());");
+            w.Line("if (state.TryEnsureCapacity(capacity))");
+            w.Open();
+            w.Line("foreach (var item in items)");
+            w.Open();
+            w.Line("var copy = item;");
+            w.Line("state.Write(in copy);");
+            w.Close();
+            w.Close();
+            w.Line("else");
+            w.Open();
+            w.Line("foreach (var item in items)");
+            w.Open();
+            w.Line("state.CheckBuffer();");
+            w.Line("var copy = item;");
+            w.Line("state.Write(in copy);");
+            w.Close();
+            w.Close();
+            w.Line("state.CopyTo(ref target);");
+            w.Close();
+            w.Blank();
+            w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+            w.Line("static void WriteRawSequenceSegments(ref " + WriterType + " target, " + model.Type + " sequence)");
+            w.Open();
+            w.Line("foreach (var memory in sequence)");
+            w.Open();
+            w.Line("global::System.ReadOnlySpan<" + t + "> segment = memory.Span;");
+            w.Line("if (segment.IsEmpty)");
+            w.Line("    continue;");
+            w.Line("if (" + MemoryMarshal + ".AsBytes(segment).Overlaps(target.Buffer))");
+            w.Open();
+            w.Line("WriteOverlappingSequenceSegment(ref target, segment);");
+            w.Line("continue;");
+            w.Close();
+            w.Line("int segmentBytes = checked(segment.Length * " + Unsafe + ".SizeOf<" + t + ">());");
+            w.Line("target.EnsureAdditionalCapacity(segmentBytes);");
+            w.Line("target.Write(ref " + Unsafe + ".As<" + t + ", byte>(ref " + MemoryMarshal + ".GetReference(segment)), segmentBytes);");
+            w.Close();
+            w.Close();
+        }
+
         void BinaryRead(CodeWriter w, SpecialOwnerContext c)
         {
+            if (rawSequence)
+            {
+                string t = element.Type;
+                w.Line("int length = reader.ReadLength(" + Unsafe + ".SizeOf<" + t + ">());");
+                w.Line("if (length < 0)");
+                w.Open();
+                w.Line("value = default;");
+                w.Line("return;");
+                w.Close();
+                w.Line("var array = " + Marshal + ".AllocateUninitializedArray<" + t + ">(length);");
+                w.Line("if (length != 0)");
+                w.Line("    reader.Read(ref " + Unsafe + ".As<" + t + ", byte>(ref " + MemoryMarshal + ".GetArrayDataReference(array)), unchecked(length * " +
+                    Unsafe + ".SizeOf<" + t + ">()));");
+                w.Line("value = new " + model.Type + "(array);");
+                return;
+            }
             string minimum = raw ? Unsafe + ".SizeOf<" + element.Type + ">()" : layout != null ? "0" : FormatterElementEmitter.Minimum(element);
             if (shape == ContiguousShape.List && freshUnion != null)
             {

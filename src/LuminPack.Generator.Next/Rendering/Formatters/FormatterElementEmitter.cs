@@ -20,7 +20,8 @@ internal static class FormatterElementEmitter
     internal static void Write(CodeWriter w, SharedFormatterSet set, FormatterModel model, string expression, string state = "writer", string profile = "TLuminProfile")
     {
         w.Line(state + ".CheckBuffer();");
-        if (model.Raw)
+        // A packable payload is copied raw only when its own formatter is a plain storage copy, matching the owner read.
+        if (model.Raw && (model.Payload == null || model.RawStorage))
         {
             w.Line(state + ".EnsureAdditionalCapacity(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">());");
             w.Line(state + ".Write(in " + expression + ");");

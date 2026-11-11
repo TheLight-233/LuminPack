@@ -45,8 +45,10 @@ internal sealed class DictionaryFormatter
         if (General != null)
             return General(set, fact, operations);
         FormatterModel key = fact.Contract!.Arguments[0], value = fact.Contract.Arguments[1];
-        bool direct = ((key.Raw || key.Type == "string") && (value.Raw || value.Type == "string") ||
-            NativeEntries && key.RawCollection && value.RawCollection) && key.Type != "bool" && value.Type != "bool";
+        // A packable payload is a native entry only when its own formatter is a plain storage copy.
+        static bool Native(FormatterModel side) => side.Raw && (side.Payload == null || side.RawStorage);
+        bool direct = ((Native(key) || key.Type == "string") && (Native(value) || value.Type == "string") ||
+            NativeEntries && key.RawStorage && value.RawStorage) && key.Type != "bool" && value.Type != "bool";
         return direct ? Entries(set, new DictionaryOwnerFact(this, fact.DeclaredType, key.Type, value.Type), operations) :
             (Payload ?? Entries)(set, fact, operations);
     }
