@@ -70,16 +70,6 @@ internal sealed class FrozenGeneratedSource : IEquatable<FrozenGeneratedSource>
     internal readonly string Text;
     internal readonly GeneratorOutput Owner;
     internal readonly string Payload;
-    /// <summary>Renders a direct file for another alias mask; <see cref="Text"/> is its rendering with every alias available.</summary>
-    internal readonly Func<int, string> Render;
-
-    /// <summary>Creates a directly rendered source-output value.</summary>
-    /// <param name="name">The generated hint name.</param>
-    /// <param name="text">The final text with every alias available, which identifies the rendering.</param>
-    /// <param name="render">Renders the final text for an alias mask.</param>
-    /// <param name="payload">The canonical payload identity.</param>
-    internal FrozenGeneratedSource(string name, string text, Func<int, string> render, string payload)
-        : this(name, text, GeneratorOutput.Binary, payload) => Render = render;
 
     /// <summary>Creates an individual source-output value.</summary>
     /// <param name="name">The existing generated hint name.</param>

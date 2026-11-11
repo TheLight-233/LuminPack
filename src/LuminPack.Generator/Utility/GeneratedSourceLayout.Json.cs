@@ -28,9 +28,6 @@ internal static partial class GeneratedSourceLayout
     }
 
     /// <summary>Names a helper class after its type without the <c>global</c> spelling and separators.</summary>
-    internal static string JsonHelperName(string name) => HelperName(name);
-
-    /// <summary>Names a helper class after its type without the <c>global</c> spelling and separators.</summary>
     private static string HelperName(string name)
     {
         string type = name.Substring("Json_".Length);

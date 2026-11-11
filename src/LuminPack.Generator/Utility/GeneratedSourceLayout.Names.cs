@@ -52,27 +52,6 @@ internal static partial class GeneratedSourceLayout
         // from a referenced base type would take precedence, and the consuming compilation cannot report such members.
     };
 
-    /// <summary>The number of helper aliases; bit <c>i</c> of an alias mask selects alias <c>i</c>.</summary>
-    internal static int AliasCount => Aliases.Length;
-
-    /// <summary>The mask of a consumer that declares none of the alias names.</summary>
-    internal static int AllAliases => (1 << Aliases.Length) - 1;
-
-    /// <summary>Gets an alias name.</summary>
-    internal static string AliasName(int index) => Aliases[index].Alias;
-
-    /// <summary>Gets an alias's fully qualified target.</summary>
-    internal static string AliasTarget(int index) => Aliases[index].Target;
-
-    /// <summary>Finds an alias by its name.</summary>
-    internal static int AliasIndex(string alias)
-    {
-        for (int index = 0; index < Aliases.Length; index++)
-            if (Aliases[index].Alias == alias)
-                return index;
-        throw new ArgumentException(alias);
-    }
-
     /// <summary>The alias indexes keyed by the last identifier of their target, including attribute names without the suffix.</summary>
     private static readonly Dictionary<string, int> AliasByName = CreateAliasIndex();
 

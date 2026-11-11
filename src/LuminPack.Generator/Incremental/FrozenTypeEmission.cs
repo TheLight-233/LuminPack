@@ -17,8 +17,6 @@ internal sealed class FrozenTypeEmission : IEquatable<FrozenTypeEmission>
     internal readonly string Union;
     internal readonly FrozenLayoutGroup Layouts;
     internal readonly ImmutableArray<FrozenDiagnostic> Diagnostics;
-    /// <summary>The model a covered type's files are rendered from, or null for the original pipeline.</summary>
-    internal readonly Direct.DirectTypeModel Direct;
 
     /// <summary>Captures the completed outputs for one annotated type.</summary>
     /// <param name="hintName">The existing generated hint-name prefix.</param>
@@ -27,11 +25,9 @@ internal sealed class FrozenTypeEmission : IEquatable<FrozenTypeEmission>
     /// <param name="layouts">Ordered, independently deduplicated layout fragments.</param>
     /// <param name="diagnostics">Diagnostics represented as stable values.</param>
     /// <param name="payload">The canonical type identity for operation selection.</param>
-    /// <param name="direct">The model of a covered type, rendered at publication.</param>
     internal FrozenTypeEmission(string hintName, string extension, string union, FrozenLayoutGroup layouts, IEnumerable<Diagnostic> diagnostics,
-        string payload = null, Direct.DirectTypeModel direct = null)
+        string payload = null)
     {
-        Direct = direct;
         HintName = hintName;
         Payload = payload;
         Extension = extension;
@@ -44,8 +40,7 @@ internal sealed class FrozenTypeEmission : IEquatable<FrozenTypeEmission>
     /// <param name="other">The previous emission plan.</param>
     /// <returns>Whether all observable outputs are equal.</returns>
     public bool Equals(FrozenTypeEmission other) => ReferenceEquals(this, other) || other != null &&
-        HintName == other.HintName && Payload == other.Payload && Extension == other.Extension && Union == other.Union && Layouts.Equals(other.Layouts) && Diagnostics.SequenceEqual(other.Diagnostics) &&
-        Equals(Direct, other.Direct);
+        HintName == other.HintName && Payload == other.Payload && Extension == other.Extension && Union == other.Union && Layouts.Equals(other.Layouts) && Diagnostics.SequenceEqual(other.Diagnostics);
 
     /// <summary>Compares an arbitrary object with this emission plan.</summary>
     /// <param name="obj">The object to compare.</param>

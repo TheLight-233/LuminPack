@@ -32,14 +32,6 @@ internal static partial class GeneratedSourceLayout
         if (!Enabled || string.IsNullOrEmpty(source))
             return source;
         source = Present(source, root, aliases);
-        return LayOutLines(source);
-    }
-
-    /// <summary>Spaces and wraps the lines of a file whose names and aliases are already final.</summary>
-    /// <param name="source">The complete presented source.</param>
-    /// <returns>The published source.</returns>
-    internal static string LayOutLines(string source)
-    {
         // A line of a multi-line literal is not a syntax fragment, so such a file keeps its code lines.
         bool wrapCode = !source.Contains("@\"") && !source.Contains("\"\"\"");
         if (wrapCode)
