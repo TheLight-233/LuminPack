@@ -42,13 +42,13 @@ internal static class UnionEmitter
         w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Serialize_" + model.Readable + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " +
-            container + ".RootWrite<" + standard + ">(ref writer, input);");
+        w.Line("internal static void Serialize_" + model.Readable + model.TypeArguments() + "(scoped ref " + writer + " writer, scoped in " + type + "? input) => " +
+            container + ".RootWrite" + model.TypeArguments(standard) + "(ref writer, input);");
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Serialize_" + model.Readable + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
-        w.Indented(() => w.Line(constraint + " => " + container + ".RootWrite<" + Profile + ">(ref writer, input);"));
+        w.Line("internal static void Serialize_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + writer + " writer, scoped in " + type + "? input)");
+        w.Indented(() => w.Line(constraint + " => " + container + ".RootWrite" + model.TypeArguments(Profile) + "(ref writer, input);"));
         w.Suppressed = false;
 
         w.Blank();
@@ -57,7 +57,7 @@ internal static class UnionEmitter
         w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void RootWrite<" + Profile + ">(scoped ref " + writer + " writer, " + type + "? input)");
+        w.Line("internal static void RootWrite" + model.TypeArguments(Profile) + "(scoped ref " + writer + " writer, " + type + "? input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         w.Line("var value = input;");
@@ -75,7 +75,7 @@ internal static class UnionEmitter
         w.Line(w.Preserve);
         if (ReadKeepsInline(model, w))
             w.Line(inline);
-        w.Line("internal static void RootRead" + (model.UnionReadGeneric ? "<" + Profile + ">" : string.Empty) + "(scoped ref " + reader +
+        w.Line("internal static void RootRead" + (model.UnionReadGeneric ? model.TypeArguments(Profile) : model.TypeArguments()) + "(scoped ref " + reader +
             " reader, scoped ref " + type + "? value)");
         if (model.UnionReadGeneric)
             w.Indented(() => w.Line(constraint));
@@ -115,13 +115,13 @@ internal static class UnionEmitter
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize_" + model.Readable + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
-            container + ".RootRead" + (model.UnionReadGeneric ? "<" + standard + ">" : string.Empty) + "(ref reader, ref value);");
+        w.Line("internal static void Deserialize_" + model.Readable + model.TypeArguments() + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
+            container + ".RootRead" + (model.UnionReadGeneric ? model.TypeArguments(standard) : model.TypeArguments()) + "(ref reader, ref value);");
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void Deserialize_" + model.Readable + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
-        w.Indented(() => w.Line(constraint + " => " + container + ".RootRead" + (model.UnionReadGeneric ? "<" + Profile + ">" : string.Empty) +
+        w.Line("internal static void Deserialize_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Indented(() => w.Line(constraint + " => " + container + ".RootRead" + (model.UnionReadGeneric ? model.TypeArguments(Profile) : model.TypeArguments()) +
             "(ref reader, ref value);"));
         w.Close();
         w.Blank();
@@ -131,28 +131,28 @@ internal static class UnionEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(inline);
-        w.Line("internal static void Write(this ref " + writer + " state, in " + type + "? value) => " + serializer + "." + container +
-            ".RootWrite<" + standard + ">(ref state, value);");
+        w.Line("internal static void Write" + model.TypeArguments() + "(this ref " + writer + " state, in " + type + "? value) => " + serializer + "." + container +
+            ".RootWrite" + model.TypeArguments(standard) + "(ref state, value);");
         w.Line(inline);
-        w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + serializer + "." + container + ".RootWrite<TOptions>(ref state, value);"));
+        w.Line("internal static void Write" + model.TypeArguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)");
+        w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + serializer + "." + container + ".RootWrite" + model.TypeArguments("TOptions") + "(ref state, value);"));
         w.Suppressed = !reads;
         w.Line(inline);
-        w.Line("internal static void Read(this ref " + reader + " state, ref " + type + "? value)");
+        w.Line("internal static void Read" + model.TypeArguments() + "(this ref " + reader + " state, ref " + type + "? value)");
         w.Open();
         w.Line(reader + " isolated = default;");
         w.Line("state.CopyTo(ref isolated);");
-        w.Line(serializer + "." + container + ".RootRead" + (model.UnionReadGeneric ? "<" + standard + ">" : string.Empty) + "(ref isolated, ref value);");
+        w.Line(serializer + "." + container + ".RootRead" + (model.UnionReadGeneric ? model.TypeArguments(standard) : model.TypeArguments()) + "(ref isolated, ref value);");
         w.Line("isolated.CopyTo(ref state);");
         w.Close();
         w.Blank();
         w.Line(inline);
-        w.Line("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)");
+        w.Line("internal static void Read" + model.TypeArguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)");
         w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions")));
         w.Open();
         w.Line(reader + " isolated = default;");
         w.Line("state.CopyTo(ref isolated);");
-        w.Line(serializer + "." + container + ".RootRead" + (model.UnionReadGeneric ? "<TOptions>" : string.Empty) + "(ref isolated, ref value);");
+        w.Line(serializer + "." + container + ".RootRead" + (model.UnionReadGeneric ? model.TypeArguments("TOptions") : model.TypeArguments()) + "(ref isolated, ref value);");
         w.Line("isolated.CopyTo(ref state);");
         w.Close();
         w.Suppressed = false;
@@ -180,12 +180,15 @@ internal static class UnionEmitter
         }
         CloseChain(model.UnionChain.Length, model.UnionNamespace, w);
 
-        foreach (var item in model.UnionCases)
+        foreach (var group in CaseGroups(model))
         {
             w.Blank();
-            OpenType(item.Namespace, item.Chain, w);
-            CaseSlots(model, item, w, false);
-            CloseChain(item.Chain.Length, item.Namespace, w);
+            OpenType(group[0].Namespace, group[0].Chain, w);
+            if (group[0].Definition != null)
+                GenericCaseSlots(model, group, w, false);
+            else
+                CaseSlots(model, group[0], w, false);
+            CloseChain(group[0].Chain.Length, group[0].Namespace, w);
         }
     }
 
@@ -213,7 +216,7 @@ internal static class UnionEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(w.Preserve);
-        w.Line("internal static void RootWriteJson<" + Profile + ">(scoped ref " + writer + " writer, " + type + "? input)");
+        w.Line("internal static void RootWriteJson" + model.TypeArguments(Profile) + "(scoped ref " + writer + " writer, " + type + "? input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         w.Line("var value = input;");
@@ -228,7 +231,7 @@ internal static class UnionEmitter
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
-        w.Line("internal static void RootReadJson<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Line("internal static void RootReadJson" + model.TypeArguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(constraint));
         w.Open();
         JsonReadBody(model, w, reader, type);
@@ -238,24 +241,24 @@ internal static class UnionEmitter
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void SerializeJson_" + model.Readable + "(scoped ref " + writer + " writer, scoped in " + type +
-            "? input) => " + container + ".RootWriteJson<" + standard + ">(ref writer, input);");
+        w.Line("internal static void SerializeJson_" + model.Readable + model.TypeArguments() + "(scoped ref " + writer + " writer, scoped in " + type +
+            "? input) => " + container + ".RootWriteJson" + model.TypeArguments(standard) + "(ref writer, input);");
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void SerializeJson_" + model.Readable + "<" + Profile + ">(scoped ref " + writer + " writer, scoped in " + type + "? input)");
-        w.Indented(() => w.Line(constraint + " => " + container + ".RootWriteJson<" + Profile + ">(ref writer, input);"));
+        w.Line("internal static void SerializeJson_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + writer + " writer, scoped in " + type + "? input)");
+        w.Indented(() => w.Line(constraint + " => " + container + ".RootWriteJson" + model.TypeArguments(Profile) + "(ref writer, input);"));
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeJson_" + model.Readable + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
-            container + ".RootReadJson<" + standard + ">(ref reader, ref value);");
+        w.Line("internal static void DeserializeJson_" + model.Readable + model.TypeArguments() + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
+            container + ".RootReadJson" + model.TypeArguments(standard) + "(ref reader, ref value);");
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void DeserializeJson_" + model.Readable + "<" + Profile + ">(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
-        w.Indented(() => w.Line(constraint + " => " + container + ".RootReadJson<" + Profile + ">(ref reader, ref value);"));
+        w.Line("internal static void DeserializeJson_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
+        w.Indented(() => w.Line(constraint + " => " + container + ".RootReadJson" + model.TypeArguments(Profile) + "(ref reader, ref value);"));
         w.Close();
         w.Blank();
 
@@ -263,28 +266,28 @@ internal static class UnionEmitter
         w.Open();
         w.Suppressed = !writes;
         w.Line(inline);
-        w.Line("internal static void Write(this ref " + writer + " state, in " + type + "? value) => " + serializer + "." + container +
-            ".RootWriteJson<" + standard + ">(ref state, value);");
+        w.Line("internal static void Write" + model.TypeArguments() + "(this ref " + writer + " state, in " + type + "? value) => " + serializer + "." + container +
+            ".RootWriteJson" + model.TypeArguments(standard) + "(ref state, value);");
         w.Line(inline);
-        w.Line("internal static void Write<TOptions>(this ref " + writer + " state, in " + type + "? value)");
-        w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + serializer + "." + container + ".RootWriteJson<TOptions>(ref state, value);"));
+        w.Line("internal static void Write" + model.TypeArguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)");
+        w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions") + " => " + serializer + "." + container + ".RootWriteJson" + model.TypeArguments("TOptions") + "(ref state, value);"));
         w.Suppressed = !reads;
         w.Line(inline);
-        w.Line("internal static void Read(this ref " + reader + " state, ref " + type + "? value)");
+        w.Line("internal static void Read" + model.TypeArguments() + "(this ref " + reader + " state, ref " + type + "? value)");
         w.Open();
         w.Line("if (state.CurrentTokenType == " + reader + ".JsonTokenType.None && !state.Read<" + standard + ">())");
         w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowFormatException(\"JSON input does not contain a value.\");"));
-        w.Line(serializer + "." + container + ".RootReadJson<" + standard + ">(ref state, ref value);");
+        w.Line(serializer + "." + container + ".RootReadJson" + model.TypeArguments(standard) + "(ref state, ref value);");
         w.Line("state.CompleteValue();");
         w.Close();
         w.Blank();
         w.Line(inline);
-        w.Line("internal static void Read<TOptions>(this ref " + reader + " state, ref " + type + "? value)");
+        w.Line("internal static void Read" + model.TypeArguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)");
         w.Indented(() => w.Line("where TOptions : struct, " + w.A("ILuminPackOptions")));
         w.Open();
         w.Line("if (state.CurrentTokenType == " + reader + ".JsonTokenType.None && !state.Read<TOptions>())");
         w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowFormatException(\"JSON input does not contain a value.\");"));
-        w.Line(serializer + "." + container + ".RootReadJson<TOptions>(ref state, ref value);");
+        w.Line(serializer + "." + container + ".RootReadJson" + model.TypeArguments("TOptions") + "(ref state, ref value);");
         w.Line("state.CompleteValue();");
         w.Close();
         w.Suppressed = false;
@@ -301,12 +304,15 @@ internal static class UnionEmitter
             RegisteredWriter(model, w, writer, true);
             CloseChain(model.UnionChain.Length, model.UnionNamespace, w);
         }
-        foreach (var item in model.UnionCases)
+        foreach (var group in CaseGroups(model))
         {
             w.Blank();
-            OpenType(item.Namespace, item.Chain, w);
-            CaseSlots(model, item, w, true);
-            CloseChain(item.Chain.Length, item.Namespace, w);
+            OpenType(group[0].Namespace, group[0].Chain, w);
+            if (group[0].Definition != null)
+                GenericCaseSlots(model, group, w, true);
+            else
+                CaseSlots(model, group[0], w, true);
+            CloseChain(group[0].Chain.Length, group[0].Namespace, w);
         }
     }
 
@@ -339,8 +345,9 @@ internal static class UnionEmitter
                 w.Line(StructCase(item)
                     ? CaseOwner(model, item) + ".Read<" + Profile + ">(ref " + reader + ", ref member" + Number(member) + ");"
                     : w.A("LuminPackSerializer") + ".DeserializeUnion" + (model.UniqueEntries ? "_" + item.Readable : string.Empty) +
-                    (item.ReadGeneric ? "<" + Profile + ">" : string.Empty) + "(ref " + reader + ", ref member" + Number(member) + ");");
-                w.Line(target + " = member" + Number(member) + ";");
+                    (item.ReadGeneric ? "<" + Prefix(item) + Profile + ">" : item.Arguments.Length != 0 ? "<" + item.Arguments + ">" : string.Empty) +
+                    "(ref " + reader + ", ref member" + Number(member) + ");");
+                w.Line(target + " = " + Assign(model, item, "member" + Number(member)) + ";");
                 w.Line(exit);
                 w.Close();
                 w.Blank();
@@ -506,8 +513,8 @@ internal static class UnionEmitter
             w.Line(item.Type + " " + member + " = " + (StructCase(item)
                 ? "(value is " + item.Type + " existing" + member + " ? existing" + member + " : default);"
                 : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(value)!;"));
-            w.Line("global::LuminPack.Binary_" + model.Extension + "_" + item.Readable + ".Read<" + Profile + ">(ref reader, ref " + member + ");");
-            w.Line("value = " + member + ";");
+            w.Line("global::LuminPack.Binary_" + model.Extension + "_" + item.Readable + ".Read<" + Prefix(item) + Profile + ">(ref reader, ref " + member + ");");
+            w.Line("value = " + Assign(model, item, member) + ";");
             w.Line("break;");
             w.Close();
             w.Blank();
@@ -857,6 +864,136 @@ internal static class UnionEmitter
                 w.Close();
             }
     }
+
+    /// <summary>Groups the cases by the declaration that holds their slots: one group per generic definition.</summary>
+    private static List<UnionRenderCase[]> CaseGroups(PayloadRenderModel model)
+    {
+        var groups = new List<UnionRenderCase[]>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in model.UnionCases)
+        {
+            if (item.Definition == null)
+                groups.Add(new[] { item });
+            else if (seen.Add(item.Definition))
+                groups.Add(model.UnionCases.Where(other => other.Definition == item.Definition).ToArray());
+        }
+        return groups;
+    }
+
+    /// <summary>Spells a generic case's type arguments ahead of the operation profile.</summary>
+    private static string Prefix(UnionRenderCase item) => item.Arguments.Length == 0 ? string.Empty : item.Arguments + ", ";
+
+    /// <summary>Converts a read case to the root, through object when either side is generic.</summary>
+    private static string Assign(PayloadRenderModel model, UnionRenderCase item, string member) =>
+        item.Definition != null || model.TypeParameters.Length != 0 ? "(" + model.GlobalName + ")(object)" + member : member;
+
+    /// <summary>Emits the slots of the cases one generic definition supplies.</summary>
+    /// <remarks>An open case writes through its definition's generic entries directly. Closed cases select their tag through a
+    /// dispatch slot resolved once per closed definition, then reinterpret the instance as the closed case, as the original
+    /// pipeline does.</remarks>
+    private static void GenericCaseSlots(PayloadRenderModel model, UnionRenderCase[] group, CodeWriter w, bool json)
+    {
+        string definition = group[0].Definition;
+        string open = OpenSpelling(definition);
+        bool direct = group.Length == 1 && group[0].Type == open;
+        string prefix = model.UnionInterface ? "void " + model.GlobalName + "." :
+            group.All(item => item.Sealed) ? "public sealed override void " : "public override void ";
+        string operation = json ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_";
+        string slotField = "LuminPackUnionDispatchSlot_" + model.UnionSuffix;
+        if (!direct && !json)
+        {
+            w.Line("private static readonly int " + slotField + " = Resolve" + slotField + "();");
+            w.Blank();
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("private static int Resolve" + slotField + "()");
+            w.Open();
+            w.Line("// Union cases");
+            w.Line("switch (typeof(" + open + "))");
+            w.Open();
+            for (int index = 0; index < group.Length; index++)
+                w.Line("case var runtimeType when runtimeType == typeof(" + group[index].Type + "): return " +
+                    index.ToString(CultureInfo.InvariantCulture) + ";");
+            w.Line("default:");
+            w.Indented(() => w.Line("return -1;"));
+            w.Close();
+            w.Close();
+            w.Blank();
+        }
+        foreach (var slot in Slots(model, json))
+        {
+            string profile = w.A(slot.Profile);
+            w.Line(w.MethodImpl("AggressiveInlining"));
+            w.Line(Hidden(w));
+            w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + "(ref " + w.A(json ? "LuminPackJsonWriter" : "LuminPackWriter") + " writer)");
+            w.Open();
+            if (direct)
+                GenericCaseWrite(model, group[0], w, json, profile, "this");
+            else
+            {
+                w.Line("// Union cases");
+                w.Line("switch (" + slotField + ")");
+                w.Open();
+                for (int index = 0; index < group.Length; index++)
+                {
+                    w.Line("case " + index.ToString(CultureInfo.InvariantCulture) + ":");
+                    w.Open();
+                    w.Line("var genericValue = this;");
+                    w.Line("ref var concreteValue = ref " + w.A("LuminPackMarshal") + ".As<" + open + ", " + group[index].Type + ">(ref genericValue);");
+                    GenericCaseWrite(model, group[index], w, json, profile, "concreteValue");
+                    w.Line("return;");
+                    w.Close();
+                    w.Blank();
+                }
+                w.Line("default:");
+                w.Open();
+                w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(GetType(), typeof(" + model.GlobalName + "));");
+                w.Line("return;");
+                w.Close();
+                w.Close();
+            }
+            w.Close();
+            w.Blank();
+        }
+        if (!json && model.UnionCursor)
+        {
+            w.Line(w.MethodImpl("AggressiveInlining"));
+            w.Line(Hidden(w));
+            w.Line((model.UnionInterface ? "int " + model.GlobalName + "." : group.All(item => item.Sealed) ? "public sealed override int " : "public override int ") +
+                "LuminPackUnionSerializeCursor_" + model.UnionSuffix + "(ref LuminPackWriter writer, int initialIndex)");
+            w.Open();
+            w.Line("writer.CurrentIndex = initialIndex;");
+            w.Line("LuminPackUnionSerialize_" + model.UnionSuffix + "(ref writer);");
+            w.Line("return writer.Position;");
+            w.Close();
+        }
+    }
+
+    /// <summary>Writes one generic case's header and payload through its definition's generic entries.</summary>
+    private static void GenericCaseWrite(PayloadRenderModel model, UnionRenderCase item, CodeWriter w, bool json, string profile, string value)
+    {
+        string id = item.Id.ToString(CultureInfo.InvariantCulture);
+        if (!json)
+        {
+            w.Line("writer." + (model.UnionWide ? "WriteWideUnionHeader" : "WriteUnionHeader") + "(" + id + ");");
+            w.Line(w.A("LuminPackSerializer") + ".SerializeUnion<" + Prefix(item) + profile + ">(ref writer, " + value + ");");
+            return;
+        }
+        w.Line("writer.WriteObjectStart<" + profile + ">();");
+        w.Line("if (default(" + profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
+        w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU8);"));
+        w.Line("else");
+        w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".TypeU16);"));
+        w.Line("writer.Write<" + profile + ">(" + id + ");");
+        w.Line("if (default(" + profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
+        w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU8);"));
+        w.Line("else");
+        w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU16);"));
+        w.Line("global::LuminPack.Binary_" + model.Extension + "_" + item.Readable + ".Write<" + Prefix(item) + profile + ">(ref writer, " + value + ");");
+        w.Line("writer.WriteObjectEnd<" + profile + ">();");
+    }
+
+    /// <summary>Spells a generic definition with its own parameter names, as the case's partial declaration sees itself.</summary>
+    private static string OpenSpelling(string definition) => definition;
 
     /// <summary>Whether a case is a struct implementing an interface root.</summary>
     private static bool StructCase(UnionRenderCase item) => item.Chain.Length != 0 &&

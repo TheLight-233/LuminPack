@@ -28,11 +28,17 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
     internal readonly string[] Chain;
     /// <summary>The case's namespace, or null in the global namespace.</summary>
     internal readonly string Namespace;
+    /// <summary>The type arguments a generic case passes to its definition's entries, or an empty string.</summary>
+    internal readonly string Arguments;
+    /// <summary>The open definition of a generic case, or null.</summary>
+    internal readonly string Definition;
 
     /// <summary>Captures one case.</summary>
     internal UnionRenderCase(int id, string type, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor, PayloadRenderModel model,
-        string readable, string[] chain, string @namespace)
+        string readable, string[] chain, string @namespace, string arguments = "", string definition = null)
     {
+        Arguments = arguments;
+        Definition = definition;
         Namespace = @namespace;
         Chain = chain;
         Readable = readable;
@@ -48,7 +54,8 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
     /// <inheritdoc/>
     public bool Equals(UnionRenderCase other) => other != null && Id == other.Id && Type == other.Type && OwnEntry == other.OwnEntry &&
         ReadGeneric == other.ReadGeneric && Sealed == other.Sealed && FixedCursor == other.FixedCursor && Namespace == other.Namespace &&
-        Readable == other.Readable && Same(Chain, other.Chain) && Equals(Model, other.Model);
+        Readable == other.Readable && Arguments == other.Arguments && Definition == other.Definition && Same(Chain, other.Chain) &&
+        Equals(Model, other.Model);
 
     private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && System.Linq.Enumerable.SequenceEqual(left, right);
 

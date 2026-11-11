@@ -689,10 +689,18 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     /// <summary>The case's namespace, or null in the global namespace.</summary>
     internal readonly string? Namespace;
 
+    /// <summary>The type arguments a generic case passes to its definition's entries, or an empty string.</summary>
+    internal readonly string Arguments;
+
+    /// <summary>The open definition of a generic case, whose partial declaration holds its slots, or null.</summary>
+    internal readonly string? Definition;
+
     /// <summary>Captures a Union case.</summary>
     internal UnionCaseModel(int tag, TypeIdentity type, UnionCaseRead read, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor,
-        TypeModel? model, string readable, string[] chain, string? @namespace)
+        TypeModel? model, string readable, string[] chain, string? @namespace, string arguments = "", string? definition = null)
     {
+        Arguments = arguments;
+        Definition = definition;
         Namespace = @namespace;
         Chain = chain;
         Readable = readable;
@@ -709,7 +717,8 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     /// <inheritdoc/>
     public bool Equals(UnionCaseModel? other) => ReferenceEquals(this, other) || other != null && Tag == other.Tag && Type.Equals(other.Type) &&
         Read == other.Read && OwnEntry == other.OwnEntry && ReadGeneric == other.ReadGeneric && Sealed == other.Sealed &&
-        FixedCursor == other.FixedCursor && Readable == other.Readable && Namespace == other.Namespace &&
+        FixedCursor == other.FixedCursor && Readable == other.Readable && Namespace == other.Namespace && Arguments == other.Arguments &&
+        Definition == other.Definition &&
         (ReferenceEquals(Chain, other.Chain) || Enumerable.SequenceEqual(Chain, other.Chain)) && Equals(Model, other.Model);
 
     /// <inheritdoc/>

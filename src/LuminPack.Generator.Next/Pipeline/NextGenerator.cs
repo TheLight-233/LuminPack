@@ -333,7 +333,7 @@ public sealed class NextGenerator : IIncrementalGenerator
                 // Only a payload whose roots are actually rendered can bind its calls.
                 // Generic definitions are listed by their definition spelling; closed calls bind them with their type arguments.
                 if (payload.Result.IsComplete && payload.Result.Model is { } model &&
-                    (model.Identity.IsGeneric ? model is RecordModel or StructModel { StoragePlan: null } && RenderModelFactory.Create(model, payload.Options) != null
+                    (model.Identity.IsGeneric ? model is RecordModel or StructModel { StoragePlan: null } or UnionModel && RenderModelFactory.Create(model, payload.Options) != null
                         : model is UnionModel or StructModel { StoragePlan: not null } || RenderModelFactory.Create(model, payload.Options) != null))
                 {
                     string type = model.Identity.GlobalName;

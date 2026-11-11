@@ -133,8 +133,6 @@ internal static class RenderModelFactory
             return PayloadEmitter.Reject<PayloadRenderModel>("union declared profile");
         if (profile.Encoding != StringEncoding.Utf16 || profile.Recording != StringRecording.Length)
             return PayloadEmitter.Reject<PayloadRenderModel>("union compiled profile slots");
-        if (model.Identity.IsGeneric)
-            return PayloadEmitter.Reject<PayloadRenderModel>("union generic");
         if (model.Cases.Length == 0)
             return PayloadEmitter.Reject<PayloadRenderModel>("union cases");
         var cases = new UnionRenderCase[model.Cases.Length];
@@ -148,7 +146,7 @@ internal static class RenderModelFactory
                 !caseModel.Members.All(member => member.IsFixed)))
                 return PayloadEmitter.Reject<PayloadRenderModel>("union case read: " + item.Type.DisplayName);
             cases[index] = new UnionRenderCase(item.Tag, item.Type.GlobalName, item.OwnEntry, item.ReadGeneric, item.Sealed,
-                item.FixedCursor, caseModel!, item.Readable, item.Chain, item.Namespace!);
+                item.FixedCursor, caseModel!, item.Readable, item.Chain, item.Namespace!, item.Arguments, item.Definition);
         }
         string globalName = model.Identity.GlobalName;
         return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)),

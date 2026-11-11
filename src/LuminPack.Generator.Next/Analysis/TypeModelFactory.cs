@@ -1106,6 +1106,34 @@ internal static partial class TypeModelFactory
                 // A struct case implements an interface root; its slots are explicit interface implementations and its read
                 // boxes the value its own Union entry reads.
                 bool structCase = caseType.TypeKind == TypeKind.Struct && !caseType.IsGenericType && root.TypeKind == TypeKind.Interface;
+                // A generic case is either closed over concrete arguments or open over exactly the root's own parameters; it reads
+                // and writes through its definition's generic entries, as the original pipeline does.
+                string? genericArguments = GenericCaseArguments(root, caseType);
+                if (genericArguments != null)
+                {
+                    ModelResult definitionModel = Analyze(caseType.OriginalDefinition, 0, path);
+                    if (definitionModel.Model is not RecordModel || !definitionModel.IsComplete)
+                    {
+                        issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " generic case '" + caseType.ToDisplayString() +
+                            "' is not modeled: " + (definitionModel.Reason ?? "not a record"));
+                        continue;
+                    }
+                    readGeneric = true;
+                    fixedCases.Remove(caseType);
+                    string definition = caseType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    try
+                    {
+                        cases.Add(new UnionCaseModel(tag, Identity(caseType), UnionCaseRead.OwnEntry, ownEntry: true, readGeneric: true,
+                            sealedCase: root.TypeKind == TypeKind.Class && !HasDerivedCase(symbols, caseType.OriginalDefinition), fixedCursor: false,
+                            definitionModel.Model, ReadableTypeName.Of(GeneratedNames.PayloadKey(definition)), Chain(caseType.OriginalDefinition),
+                            NamespaceOf(caseType), genericArguments, definition));
+                    }
+                    catch (NotSupportedException error)
+                    {
+                        issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + ": " + error.Message);
+                    }
+                    continue;
+                }
                 if (!structCase && (caseType.TypeKind != TypeKind.Class || caseType.IsAbstract || caseType.IsGenericType || caseType.IsUnboundGenericType))
                 {
                     issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " names the case '" +
@@ -1156,6 +1184,29 @@ internal static partial class TypeModelFactory
                 }
             }
             return cases.ToArray();
+        }
+
+        /// <summary>Spells the type arguments a generic case passes to its definition's entries.</summary>
+        /// <param name="root">The Union root definition.</param>
+        /// <param name="caseType">The declared or discovered case.</param>
+        /// <returns>The closed arguments, the root's own parameter names for an open case, or null for any other case.</returns>
+        private static string? GenericCaseArguments(INamedTypeSymbol root, INamedTypeSymbol caseType)
+        {
+            if (!caseType.IsGenericType || caseType.TypeKind != TypeKind.Class || caseType.IsAbstract || caseType.IsUnboundGenericType ||
+                caseType.ContainingType is { IsGenericType: true })
+                return null;
+            if (!caseType.IsDefinition)
+                return caseType.TypeArguments.Any(ContainsTypeParameter) ? null :
+                    string.Join(", ", caseType.TypeArguments.Select(argument => argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+            // An open case must implement the root over exactly its own parameters, which carry the root's parameter names.
+            if (!root.IsGenericType || UnionRootMatch(caseType, root.OriginalDefinition) is not { } match ||
+                match.TypeArguments.Length != caseType.TypeParameters.Length)
+                return null;
+            for (int index = 0; index < caseType.TypeParameters.Length; index++)
+                if (!SymbolEqualityComparer.Default.Equals(match.TypeArguments[index], caseType.TypeParameters[index]) ||
+                    caseType.TypeParameters[index].Name != root.TypeParameters[index].Name)
+                    return null;
+            return string.Join(", ", root.TypeParameters.Select(parameter => parameter.Name));
         }
 
         /// <summary>Whether another declared case derives from or implements the case definition.</summary>
@@ -1286,6 +1337,9 @@ internal static partial class TypeModelFactory
                 _ => string.Empty,
             };
             string name = SyntaxFacts.GetKeywordKind(type.Name) == SyntaxKind.None ? type.Name : "@" + type.Name;
+            // A generic declaration repeats its own type parameters.
+            if (type.IsGenericType)
+                name += "<" + string.Join(", ", type.OriginalDefinition.TypeParameters.Select(parameter => parameter.Name)) + ">";
             return accessibility + "partial " + (type.TypeKind == TypeKind.Interface ? "interface " : type.TypeKind == TypeKind.Struct ? "struct " : "class ") + name;
         }
 
