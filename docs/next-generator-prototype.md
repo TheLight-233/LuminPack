@@ -92,8 +92,8 @@ The generator benchmarks accept a real corpus and its references:
   copied trusted payload keep their trusted marker reads; versioned, mirrored, reference-tracked and struct payloads, rejected
   structs and Union roots are not covered; compressed counts are not checked; stream and async entries are not intercepted and
   keep the assembly cap; exception mapping is not ported.
-- The standalone `List<string>` root advances the caller's reader before a failure; the legacy root publishes its cursor only on
-  success (one Safety test).
+- The standalone `List<string>` root now reads through an isolated reader copy and publishes its cursor only on success, as the
+  original root does; this is not compiled or verified yet, and the compressed string-list read still uses the caller's reader.
 - Record bodies call the owners of collection members, such as a list or dictionary of Union values, where the original pipeline
   expands those writes in place. Writing such records is slower than the original pipeline (P1 fast paths).
 - A JSON read of the benchmark graph allocates about 2 KB more than the original pipeline; the source is not identified yet.
