@@ -75,6 +75,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPack.Fuzzing", "tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPack.ILPostProcessor", "src\LuminPack.ILPostProcessor\LuminPack.ILPostProcessor.csproj", "{FCBA0EF1-923A-4136-9608-95F2F0BC2FB8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPack.Generator.Next", "src\LuminPack.Generator.Next\LuminPack.Generator.Next.csproj", "{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -355,6 +357,18 @@ Global
 		{FCBA0EF1-923A-4136-9608-95F2F0BC2FB8}.Release|x64.Build.0 = Release|Any CPU
 		{FCBA0EF1-923A-4136-9608-95F2F0BC2FB8}.Release|x86.ActiveCfg = Release|Any CPU
 		{FCBA0EF1-923A-4136-9608-95F2F0BC2FB8}.Release|x86.Build.0 = Release|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Debug|x64.Build.0 = Debug|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Debug|x86.Build.0 = Debug|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Release|x64.ActiveCfg = Release|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Release|x64.Build.0 = Release|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Release|x86.ActiveCfg = Release|Any CPU
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -393,5 +407,6 @@ Global
 		{1352F6CA-7B34-4787-8798-55FE1EDAB531} = {C48843B1-7C6E-50DE-8217-3A12331D4612}
 		{6E75BD6A-E855-41F9-9FEC-65039B2125B6} = {C48843B1-7C6E-50DE-8217-3A12331D4612}
 		{FCBA0EF1-923A-4136-9608-95F2F0BC2FB8} = {C4996ACB-5661-532C-85B5-FBB869EDDF44}
+		{621904FE-6AA9-4D00-BA33-DA2EF7AC6D5F} = {C4996ACB-5661-532C-85B5-FBB869EDDF44}
 	EndGlobalSection
 EndGlobal
