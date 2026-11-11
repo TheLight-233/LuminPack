@@ -95,6 +95,10 @@ public sealed class NextGenerator : IIncrementalGenerator
                 // A bounded untrusted root's binary file is rendered with the shared owners, whose read bodies it copies.
                 if (!BoundedRoot(model))
                     Emit(production, model, renderContext, BinaryRenderer.Instance.Render(model, renderContext), string.Empty);
+                // A struct with a storage plan writes binary through the unmanaged owner, which does not declare the layout
+                // mirror its JSON operations reach private storage through.
+                if (model is StructModel { StoragePlan: not null } && RenderModelFactory.Create(model, payload.Options) is { } direct)
+                    Emit(production, model, renderContext, BinaryEmitter.MirrorSource(direct, payload.Options.AvailableAliases), ".Mirror");
                 Emit(production, model, renderContext, JsonRenderer.Instance.Render(model, renderContext), ".Json");
             }
             catch (Exception error) when (error is not OperationCanceledException)

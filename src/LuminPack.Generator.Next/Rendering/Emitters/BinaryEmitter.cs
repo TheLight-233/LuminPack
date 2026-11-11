@@ -1840,6 +1840,40 @@ internal static partial class BinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="fields">The mirror field declarations in storage order.</param>
     /// <param name="offsets">The explicit-layout offset per field, or -1, or null.</param>
+    /// <summary>Renders only the root-private layout mirror of a payload whose binary operations another owner renders.</summary>
+    /// <param name="model">The payload.</param>
+    /// <param name="aliases">The alias mask the consumer leaves available.</param>
+    /// <returns>The mirror file, or an empty string when the payload declares no mirror.</returns>
+    /// <remarks>A struct with a storage plan writes its binary operations through the unmanaged owner, which does not declare the
+    /// mirror its JSON operations reach private storage through.</remarks>
+    internal static string MirrorSource(PayloadRenderModel model, int aliases)
+    {
+        if (model.Mirrors.Length == 0 && model.Mirror == null)
+            return string.Empty;
+        var w = new CodeWriter(aliases) { Scoped = model.Net8 };
+        w.Line("namespace LuminPack");
+        w.Open();
+        w.Line("public static partial class LuminPackSerializer");
+        w.Open();
+        if (model.Mirrors.Length != 0)
+            StorageMirrorEmitter.Emit(w, model.Mirrors);
+        else
+        {
+            if (model.LayoutAttribute != null)
+                w.Line(model.LayoutAttribute);
+            w.Line(w.Preserve);
+            w.Line("private class " + model.Mirror);
+            if (model.TypeConstraintText.Length != 0)
+                w.Indented(() => w.Line(model.TypeConstraintText));
+            w.Open();
+            MirrorFields(w, model.MirrorFields, model.MirrorOffsets);
+            w.Close();
+        }
+        w.Close();
+        w.Close();
+        return PublicationLayout.LayOutLines(w.Complete(false));
+    }
+
     internal static void MirrorFields(CodeWriter w, string[] fields, int[] offsets)
     {
         for (int index = 0; index < fields.Length; index++)
