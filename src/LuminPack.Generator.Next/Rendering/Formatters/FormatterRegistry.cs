@@ -214,7 +214,7 @@ internal static class FormatterRegistry
 
     private static readonly Dictionary<string, DictionaryFormatter> Dictionaries = new Dictionary<string, DictionaryFormatter>(StringComparer.Ordinal)
     {
-        ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render),
+        ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render, payload: PayloadDictionaryOwnerFile.Render),
         ["System.Collections.Generic.SortedDictionary"] = new DictionaryFormatter(SortedDictionaryOwnerFile.Render),
         ["System.Collections.Generic.SortedList"] = new DictionaryFormatter(SortedListOwnerFile.Render),
         ["System.Collections.Generic.PriorityQueue"] = new DictionaryFormatter(PriorityQueueOwnerFile.Render),

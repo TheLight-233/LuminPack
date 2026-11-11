@@ -262,7 +262,7 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                         ref cultureInfoReuse, visited);
                     break;
                 case DictionaryMember dictionary:
-                    CollectDictionary(dictionary, scalars, owners, dictionaries);
+                    CollectDictionary(dictionary, options, scalars, owners, dictionaries, facts, ref cultureInfoReuse, visited);
                     break;
                 case PayloadMember { Nested: { } nested }:
                     Walk(nested, options, facts, scalars, owners, dictionaries,
@@ -291,9 +291,31 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <param name="scalars">The raw scalar owners collected so far.</param>
     /// <param name="owners">The standalone owners collected so far.</param>
     /// <param name="dictionaries">The dictionary owners collected so far.</param>
-    private static void CollectDictionary(DictionaryMember member, List<string> scalars, List<string> owners,
-        List<DictionaryOwnerFact> dictionaries)
+    private static void CollectDictionary(DictionaryMember member, GeneratorOptions options, List<string> scalars, List<string> owners,
+        List<DictionaryOwnerFact> dictionaries, List<SequenceOwnerFact> facts, ref bool cultureInfoReuse, HashSet<string> visited)
     {
+        // A packable class value publishes a payload owner and the owners its record body needs.
+        if (member.Nested != null)
+        {
+            if (FormatterRegistry.FindDictionary(member.DeclaredType) is { } payloadFamily &&
+                RenderModelFactory.SequenceElement(member.Nested, options) is { } element)
+            {
+                if (member.KeyText)
+                    owners.Add(FormatterRegistry.String);
+                else if (member.KeyType != null)
+                    AddScalar(scalars, member.KeyType);
+                dictionaries.Add(new DictionaryOwnerFact(payloadFamily, member.DeclaredType, member.KeyText ? "string" : member.KeyType!,
+                    element.GlobalName, element));
+                // A forwarding family reads through the concrete dictionary owner of the same entries.
+                string concrete = "global::System.Collections.Generic.Dictionary<" + (member.KeyText ? "string" : member.KeyType!) + ", " +
+                    element.GlobalName + ">";
+                if (payloadFamily.ForwardsToDictionary && FormatterRegistry.FindDictionary(concrete) is { } concreteFamily)
+                    dictionaries.Add(new DictionaryOwnerFact(concreteFamily, concrete, member.KeyText ? "string" : member.KeyType!,
+                        element.GlobalName, element));
+                Walk(member.Nested, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, visited);
+            }
+            return;
+        }
         if (member.KeyText || member.ValueText)
             owners.Add(FormatterRegistry.String);
         if (FormatterRegistry.FindDictionary(member.DeclaredType) is not { } family)

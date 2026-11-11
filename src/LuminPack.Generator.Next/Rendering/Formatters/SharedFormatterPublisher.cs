@@ -24,7 +24,7 @@ internal static class SharedFormatterPublisher
 
         foreach (DictionaryOwnerFact fact in set.DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>())
             production.AddSource("LuminPack.SharedFormatters/Dictionary_" +
-                ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)) + ".g.cs", fact.Family.Entries(set, fact, operations));
+                ReadableTypeName.Of(GeneratedNames.PayloadKey(fact.DeclaredType)) + ".g.cs", (fact.Element != null ? fact.Family.Payload ?? fact.Family.Entries : fact.Family.Entries)(set, fact, operations));
 
         bool candidateCache = false;
         foreach (SequenceOwnerFact fact in set.SequenceOwners)

@@ -352,7 +352,7 @@ internal static class RenderModelFactory
             case CollectionMember collection:
                 return Collection(collection, extension, options);
             case DictionaryMember dictionary:
-                return Dictionary(dictionary, extension);
+                return Dictionary(dictionary, extension, options);
             default:
                 return null;
         }
@@ -428,10 +428,15 @@ internal static class RenderModelFactory
     /// <param name="member">The keyed member.</param>
     /// <param name="extension">The assembly's extension container.</param>
     /// <returns>The render member, or null when the family is outside the direct emitters.</returns>
-    private static RenderMember? Dictionary(DictionaryMember member, string extension)
+    private static RenderMember? Dictionary(DictionaryMember member, string extension, GeneratorOptions options)
     {
         bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
         string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, member.DeclaredType);
+        // A packable class value reads and writes through its dictionary owner when the element body is expandable.
+        if (member.Nested != null)
+            return FormatterRegistry.FindDictionary(member.DeclaredType) != null && SequenceElement(member.Nested, options) != null ?
+                new RenderMember(member.Name, RenderMemberKind.ForwardedCollection, member.DeclaredType, member.DeclaredType, 0, formatter,
+                    ScalarKind.Other, mirrored, property: property) : null;
         switch (member.Kind)
         {
             case DictionaryKind.SortedList when member.KeyType != null && member.ValueType != null:

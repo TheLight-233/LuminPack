@@ -18,11 +18,15 @@ internal sealed class DictionaryFormatter
 
     /// <summary>Registers a dictionary definition.</summary>
     /// <param name="entries">The owner renderer for raw scalar and string entries.</param>
-    internal DictionaryFormatter(RenderDictionaryOwner entries, bool forwardsToDictionary = false)
+    internal DictionaryFormatter(RenderDictionaryOwner entries, bool forwardsToDictionary = false, RenderDictionaryOwner? payload = null)
     {
         Entries = entries;
+        Payload = payload;
         ForwardsToDictionary = forwardsToDictionary;
     }
+
+    /// <summary>The renderer for a packable class value, when it differs from the raw and string renderer.</summary>
+    internal RenderDictionaryOwner? Payload { get; }
 
     /// <summary>Whether the owner reads through the concrete <c>Dictionary&lt;TKey, TValue&gt;</c> owner of the same entries.</summary>
     internal bool ForwardsToDictionary { get; }
@@ -41,16 +45,20 @@ internal readonly struct DictionaryOwnerFact : IEquatable<DictionaryOwnerFact>
     /// <summary>The key keyword, or <c>string</c>.</summary>
     internal readonly string Key;
 
-    /// <summary>The value keyword, or <c>string</c>.</summary>
+    /// <summary>The value keyword, <c>string</c>, or the global name of a packable class value.</summary>
     internal readonly string Value;
+
+    /// <summary>The packable value's render model, which the owner expands in place, or null.</summary>
+    internal readonly PayloadRenderModel? Element;
 
     /// <summary>Captures a dictionary of raw scalar or string entries.</summary>
     /// <param name="family">The declared dictionary family.</param>
     /// <param name="declaredType">The declared dictionary spelling.</param>
     /// <param name="key">The key keyword or <c>string</c>.</param>
     /// <param name="value">The value keyword or <c>string</c>.</param>
-    internal DictionaryOwnerFact(DictionaryFormatter family, string declaredType, string key, string value)
+    internal DictionaryOwnerFact(DictionaryFormatter family, string declaredType, string key, string value, PayloadRenderModel? element = null)
     {
+        Element = element;
         Family = family;
         DeclaredType = declaredType;
         Key = key;
@@ -59,13 +67,13 @@ internal readonly struct DictionaryOwnerFact : IEquatable<DictionaryOwnerFact>
 
     /// <inheritdoc/>
     public bool Equals(DictionaryOwnerFact other) => Family == other.Family && DeclaredType == other.DeclaredType &&
-        Key == other.Key && Value == other.Value;
+        Key == other.Key && Value == other.Value && Equals(Element, other.Element);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is DictionaryOwnerFact other && Equals(other);
 
     /// <inheritdoc/>
     public override int GetHashCode() => (DeclaredType == null ? 0 : DeclaredType.GetHashCode()) ^
-        (Key == null ? 0 : Key.GetHashCode() * 31) ^ (Value == null ? 0 : Value.GetHashCode() * 17) ^
+        (Key == null ? 0 : Key.GetHashCode() * 31) ^ (Value == null ? 0 : Value.GetHashCode() * 17) ^ (Element == null ? 0 : Element.GetHashCode()) ^
         (Family == null ? 0 : Family.GetHashCode());
 }

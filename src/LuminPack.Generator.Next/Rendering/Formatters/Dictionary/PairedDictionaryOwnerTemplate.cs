@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -36,9 +37,17 @@ internal sealed class PairedDictionaryContext
     /// <summary>The entry member that holds the value.</summary>
     internal string ValueMember { get; }
 
+    /// <summary>The packable value's render model, or null when the value is a raw scalar or a string.</summary>
+    internal PayloadRenderModel? Payload { get; }
+
+    private readonly Dictionary<string, int> _writeNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
+    private readonly Dictionary<string, int> _readNames = new Dictionary<string, int>(StringComparer.Ordinal);
+    private int _ends, _cursors, _spans, _readCursors, _readStrings, _readEnds;
+
     internal PairedDictionaryContext(CodeWriter writer, string dictionary, string key, string value, string memory, string extension,
-        string source = "value", string keyMember = "Key", string valueMember = "Value")
+        string source = "value", string keyMember = "Key", string valueMember = "Value", PayloadRenderModel? payload = null)
     {
+        Payload = payload;
         Source = source;
         KeyMember = keyMember;
         ValueMember = valueMember;
@@ -56,7 +65,19 @@ internal sealed class PairedDictionaryContext
     /// <param name="expression">The member value expression.</param>
     internal void WriteMember(string type, string expression)
     {
-        if (type != "string")
+        if (Payload != null && type == Payload.GlobalName)
+        {
+            // The value's record body is expanded in place; the expression is an addressable local.
+            var body = new List<string>();
+            string elementExit = "end" + _ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            _ends++;
+            body.Add("operationState.CheckBuffer();");
+            BinaryEmitter.AddSequenceElementWrite(body, Payload, expression, elementExit, "operationState", 0, W, _writeNames, ref _ends,
+                ref _cursors, ref _spans);
+            foreach (string line in body)
+                W.Line(line);
+        }
+        else if (type != "string")
         {
             W.Line("operationState.CheckBuffer();");
             W.Line("operationState.Write(in " + expression + ");");
@@ -70,7 +91,20 @@ internal sealed class PairedDictionaryContext
     /// <param name="destination">The assignable destination.</param>
     internal void ReadMember(string type, string destination)
     {
-        if (type == "string")
+        if (Payload != null && type == Payload.GlobalName)
+        {
+            // The value's record body is expanded in place on the caller's reader, which operationState aliases.
+            W.Open();
+            W.Line(type + " payloadItem = default !;");
+            var body = new List<string>();
+            BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
+                ref _readEnds);
+            foreach (string line in body)
+                W.Line(line);
+            W.Line(destination + " = payloadItem;");
+            W.Close();
+        }
+        else if (type == "string")
             W.Line("operationState.Read<TLuminProfile>(ref " + destination + ");");
         else
             W.Line("operationState.Read(ref " + Memory + ".As<" + type + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + type + ">());");
@@ -226,11 +260,12 @@ internal static class PairedDictionaryOwnerTemplate
         string roots = "LuminRoots_" + type;
         string owner = "Binary_" + extension + "_" + type;
         string keyOwner = "global::LuminPack." + GeneratedNames.Owner(extension, key);
-        string valueOwner = "global::LuminPack." + GeneratedNames.Owner(extension, value);
+        string valueOwner = fact.Element != null ? "global::LuminPack." + fact.Element.Owner : "global::LuminPack." + GeneratedNames.Owner(extension, value);
         string minimum = (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
-            (value != "string" ? memory + ".SizeOf<" + value + ">()" : "1");
+            (value != "string" && fact.Element == null ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
-        var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember);
+        var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,
+            fact.Element);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -327,8 +362,13 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("    scoped ref " + dictionary + " value)");
                     w.Line(generic + options);
                     w.Open();
-                    w.Line(reader + " operationState = default;");
-                    w.Line("reader.CopyTo(ref operationState);");
+                    if (fact.Element != null)
+                        w.Line("ref var operationState = ref reader;");
+                    else
+                    {
+                        w.Line(reader + " operationState = default;");
+                        w.Line("reader.CopyTo(ref operationState);");
+                    }
                     if (!spec.ReadsHeader)
                     {
                         w.Line("int length = operationState.ReadLength(" + minimum + ");");
@@ -343,7 +383,8 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));
-                    w.Line("operationState.CopyTo(ref reader);");
+                    if (fact.Element == null)
+                        w.Line("operationState.CopyTo(ref reader);");
                     w.Close();
                     w.Blank();
                     break;

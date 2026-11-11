@@ -513,7 +513,7 @@ internal static class TypeModelFactory
                         issues.Add("member '" + name + "' is a keyed collection of CultureInfo, which has no shared formatter owner");
                         return null;
                     }
-                    return DictionaryMember(name, storage, policy, named, dictionaryKind);
+                    return DictionaryMember(name, storage, policy, named, dictionaryKind, depth, issues, path);
                 }
                 if (SequenceKind(named) is { } collectionKind)
                     return SequenceMemberModel(name, storage, policy, named, collectionKind, depth, issues, path);
@@ -704,10 +704,21 @@ internal static class TypeModelFactory
         /// <param name="type">The declared keyed type.</param>
         /// <param name="kind">The declared family.</param>
         /// <returns>The keyed member.</returns>
-        private MemberModel DictionaryMember(string name, MemberStorage storage, WirePolicy policy, INamedTypeSymbol type, DictionaryKind kind)
+        private MemberModel DictionaryMember(string name, MemberStorage storage, WirePolicy policy, INamedTypeSymbol type, DictionaryKind kind,
+            int depth, List<string> issues, Path path)
         {
             string declared = DeclaredType(type);
             TypeRef key = Reference(type.TypeArguments[0]), value = Reference(type.TypeArguments[1]);
+            // A packable class value is expanded in place by the dictionary owner, whatever the raw or string key.
+            if (kind != Model.DictionaryKind.SortedList && LocalPackableClass(type.TypeArguments[1]) is { } packable)
+            {
+                bool packedKeyText = type.TypeArguments[0].SpecialType == SpecialType.System_String;
+                var packedKey = packedKeyText ? null : Scalar(type.TypeArguments[0], allowBoolean: false);
+                if ((packedKeyText || packedKey != null) && ElementModel(packable, depth, issues, path, name) is { } nested)
+                    return new DictionaryMember(name, storage, policy, declared, kind, key, value, keyText: packedKeyText,
+                        keyType: packedKey?.Keyword, valueType: packable.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        nested: nested);
+            }
             // A sorted list of a raw key and a raw or string value writes both stored arrays as paired entries.
             if (kind == Model.DictionaryKind.SortedList)
             {

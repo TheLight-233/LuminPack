@@ -279,14 +279,15 @@ enumerable template and the ordered payload traversal. A value tuple with a stri
 reference tuple; the original pipeline blits its raw struct memory including the string reference, which is not a usable
 wire, so that case intentionally differs from the original bytes.
 
-Not ported: packable dictionary values, a list of arrays, nested lists, the lookup and grouping interfaces, the string-key,
+Packable class values of the keyed families (all but `SortedList` and `PriorityQueue`) expand their record body in place through the
+same paired template. Not ported: a list or array of arrays of packable classes, nested lists, the lookup and grouping interfaces, the string-key,
 matching-pair and ordered-append reuse read paths, the frozen raw pair write and rented builder, the small-hash-set grouped
 write and other optional runtime capabilities, reuse of known list and array targets by the sequence interfaces, and memory
 reuse of existing storage. A value tuple of raw scalars only keeps the original pipeline.
 
 These batches build with zero errors. An in-process parity run generated one record per type shape with the Next and the
 legacy generators, compiled both, and compared the binary bytes, the JSON text and the cross round trip (each side reads the
-other's bytes and writes them back): 118 shapes, populated and with null members, covering these families and the earlier
+other's bytes and writes them back): 126 shapes, populated and with null members, covering these families and the earlier
 ones (lists, arrays, concurrent queue, immutable array, the framework types), were byte-identical in binary and JSON. A
 concurrent bag of strings compares equal on write, but its read order is unspecified, so its round trip is not stable.
 Reuse of an existing destination and the platform fallbacks were not exercised.

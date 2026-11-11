@@ -425,12 +425,16 @@ internal sealed class DictionaryMember : MemberModel
     /// <summary>The raw value spelling, or null when the value is a string or unsupported.</summary>
     internal readonly string? ValueType;
 
+    /// <summary>The normalized model of a packable class value, which the dictionary owner expands in place, or null.</summary>
+    internal readonly TypeModel? Nested;
+
     /// <summary>Captures a dictionary member.</summary>
     internal DictionaryMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, DictionaryKind kind, TypeRef key,
         TypeRef value, bool pair = false, bool keyText = false, bool valueText = false, bool sparse = false, string? keyType = null,
-        string? valueType = null)
+        string? valueType = null, TypeModel? nested = null)
         : base(name, storage, policy)
     {
+        Nested = nested;
         ValueType = valueType;
         KeyType = keyType;
         Sparse = sparse;
@@ -449,7 +453,7 @@ internal sealed class DictionaryMember : MemberModel
         var member = (DictionaryMember)other;
         return DeclaredType == member.DeclaredType && Kind == member.Kind && Key.Equals(member.Key) && Value.Equals(member.Value) &&
             Pair == member.Pair && KeyText == member.KeyText && ValueText == member.ValueText && Sparse == member.Sparse &&
-            KeyType == member.KeyType && ValueType == member.ValueType;
+            KeyType == member.KeyType && ValueType == member.ValueType && Equals(Nested, member.Nested);
     }
 }
 
