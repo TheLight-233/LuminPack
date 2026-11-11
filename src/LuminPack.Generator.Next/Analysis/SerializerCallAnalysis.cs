@@ -80,7 +80,15 @@ internal static class SerializerCallAnalysis
         string spelling = payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(PayloadFormat);
         MemberModel? root = TypeModelFactory.TryCreateRoot(payload, context.SemanticModel.Compilation,
             Pipeline.GeneratorOptionsFactory.From(context.SemanticModel.Compilation));
-        return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile);
+        // A closed generic payload binds the generic roots of its definition, as the original concrete facade does.
+        string? definition = null, typeArguments = null;
+        if (payload is INamedTypeSymbol { IsGenericType: true } generic && generic.ContainingType is not { IsGenericType: true } &&
+            generic.OriginalDefinition.SpecialType == SpecialType.None)
+        {
+            definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            typeArguments = string.Join(", ", generic.TypeArguments.Select(argument => argument.ToDisplayString(PayloadFormat)));
+        }
+        return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments);
     }
 
     private static readonly SymbolDisplayFormat PayloadFormat = SymbolDisplayFormat.FullyQualifiedFormat

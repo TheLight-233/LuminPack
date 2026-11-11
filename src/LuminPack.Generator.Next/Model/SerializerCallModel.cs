@@ -108,9 +108,17 @@ internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
     internal readonly MemberModel? Root;
 
     /// <summary>Captures a call site.</summary>
+    /// <summary>The generic definition of a closed generic payload, spelled as its model identity, or null.</summary>
+    internal readonly string? Definition;
+
+    /// <summary>The closed type arguments of a generic payload, comma-separated, or null.</summary>
+    internal readonly string? TypeArguments;
+
     internal SerializerCallModel(SerializerApi api, string payload, string? profile, string location, bool valueType, MemberModel? root,
-        bool openProfile = false)
+        bool openProfile = false, string? definition = null, string? typeArguments = null)
     {
+        Definition = definition;
+        TypeArguments = typeArguments;
         OpenProfile = openProfile;
         Root = root;
         Api = api;
@@ -126,7 +134,7 @@ internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
     /// <inheritdoc/>
     public bool Equals(SerializerCallModel? other) => ReferenceEquals(this, other) || other != null && Api == other.Api &&
         ValueType == other.ValueType && OpenProfile == other.OpenProfile && Payload == other.Payload && Profile == other.Profile &&
-        Location == other.Location &&
+        Location == other.Location && Definition == other.Definition && TypeArguments == other.TypeArguments &&
         Equals(Root, other.Root);
 
     /// <inheritdoc/>

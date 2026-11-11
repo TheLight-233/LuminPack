@@ -38,10 +38,18 @@ internal sealed class RootEntry : IEquatable<RootEntry>
     /// <summary>The strict profile that replaces the declared profile in JSON reads of an explicitly untrusted payload, or null.</summary>
     internal readonly string? JsonReadProfile;
 
+    /// <summary>The root method stem, which differs from the entry name for a closed generic payload.</summary>
+    internal readonly string RootName;
+
+    /// <summary>The closed type arguments the generic roots take before the profile, each followed by ", ".</summary>
+    internal readonly string RootArguments;
+
     /// <summary>Describes a published root.</summary>
     internal RootEntry(string readable, string declaredProfile, bool binary, bool json, string? owner = null, int? limit = null,
-        int encoding = 1, string? jsonReadProfile = null)
+        int encoding = 1, string? jsonReadProfile = null, string? rootName = null, string rootArguments = "")
     {
+        RootName = rootName ?? readable;
+        RootArguments = rootArguments;
         Limit = limit;
         Encoding = encoding;
         JsonReadProfile = jsonReadProfile;
@@ -55,7 +63,7 @@ internal sealed class RootEntry : IEquatable<RootEntry>
     /// <inheritdoc/>
     public bool Equals(RootEntry? other) => other != null && Readable == other.Readable && DeclaredProfile == other.DeclaredProfile &&
         Binary == other.Binary && Json == other.Json && Owner == other.Owner && Limit == other.Limit && Encoding == other.Encoding &&
-        JsonReadProfile == other.JsonReadProfile;
+        JsonReadProfile == other.JsonReadProfile && RootName == other.RootName && RootArguments == other.RootArguments;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as RootEntry);
@@ -311,9 +319,9 @@ namespace LuminPack
     private static void BinaryEntries(StringBuilder w, string type, RootEntry root)
     {
         string write = root.Owner != null ? root.Owner + ".Write<TLuminProfile>(ref writer, in value);" :
-            "LuminPackSerializer.Serialize_" + root.Readable + "<TLuminProfile>(ref writer, in value);";
+            "LuminPackSerializer.Serialize_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref writer, in value);";
         string read = root.Owner != null ? root.Owner + ".Read<TLuminProfile>(ref reader, ref value);" :
-            "LuminPackSerializer.Deserialize_" + root.Readable + "<TLuminProfile>(ref reader, ref value);";
+            "LuminPackSerializer.Deserialize_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref reader, ref value);";
         string text = @"
             public static byte[] Serialize<TLuminProfile>(in %TYPE% value)
                 where TLuminProfile : struct, ILuminPackOptions
@@ -452,9 +460,9 @@ namespace LuminPack
     private static void JsonEntries(StringBuilder w, string type, RootEntry root)
     {
         string write = root.Owner != null ? root.Owner + ".Write<TLuminProfile>(ref writer, in value);" :
-            "LuminPackSerializer.SerializeJson_" + root.Readable + "<TLuminProfile>(ref writer, in value);";
+            "LuminPackSerializer.SerializeJson_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref writer, in value);";
         string read = root.Owner != null ? root.Owner + ".Read<TLuminProfile>(ref reader, ref value);" :
-            "LuminPackSerializer.DeserializeJson_" + root.Readable + "<TLuminProfile>(ref reader, ref value);";
+            "LuminPackSerializer.DeserializeJson_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref reader, ref value);";
         string text = @"
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public static string SerializeJson<TLuminProfile>(%TYPE% value)
@@ -656,6 +664,11 @@ internal sealed class RootCatalog : IEquatable<RootCatalog>
     {
         if (Map.TryGetValue(call.Payload, out RootEntry? root))
             return root;
+        // A closed generic payload calls its definition's generic roots from an entry named for the closed type.
+        if (call.Definition != null && Map.TryGetValue(call.Definition, out RootEntry? definition) && definition.Owner == null)
+            return new RootEntry(Emitters.ReadableTypeName.Of(Emitters.GeneratedNames.PayloadKey(call.Payload)), definition.DeclaredProfile,
+                definition.Binary, definition.Json, limit: definition.Limit, encoding: definition.Encoding,
+                jsonReadProfile: definition.JsonReadProfile, rootName: definition.RootName, rootArguments: call.TypeArguments + ", ");
         if (call.Root == null)
             return null;
         // Shared roots are published by payload key: two payloads whose readable names coincide must not bind each other's owner.
