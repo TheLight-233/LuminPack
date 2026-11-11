@@ -2856,8 +2856,8 @@ internal static partial class TypeModelFactory
             {
                 ISymbol declared = storage[index];
                 ITypeSymbol memberType = declared is IFieldSymbol field ? field.Type : ((IPropertySymbol)declared).Type;
-                if (!SyntaxFacts.IsValidIdentifier(declared.Name) || declared.Name != Identifier(declared.Name) ||
-                    HasAttribute(declared, "LuminPack.Attribute.LuminPackCompressAttribute"))
+                // A keyword-named member is escaped where the source writer emits it.
+                if (!SyntaxFacts.IsValidIdentifier(declared.Name))
                 {
                     issues.Add("version tolerant: member options '" + declared.Name + "'");
                     return null;
@@ -2907,7 +2907,7 @@ internal static partial class TypeModelFactory
                 string serialized = oldNames[index].Length == 0 ? members[index].Name : oldNames[index][0];
                 string? typeIdentity = VersionTypeIdentity(memberType);
                 dynamic |= typeIdentity == null;
-                string representation = VersionRepresentation(fieldTypes[index], members[index].Policy);
+                string representation = VersionRepresentation(fieldTypes[index], members[index].Policy, members[index].Compressed);
                 AppendVersionLength(metadata, serialized);
                 AppendVersionLength(metadata, representation + (VersionIsDirectPrimitive(fieldTypes[index], memberType) ? string.Empty : typeIdentity));
                 widths[index] = VersionWidth(fieldTypes[index], memberType);
@@ -3101,11 +3101,13 @@ internal static partial class TypeModelFactory
         /// <summary>Builds the compact declaration-time wire classification byte.</summary>
         /// <param name="fieldType">The legacy schema classification.</param>
         /// <param name="policy">The member's resolved wire policy.</param>
+        /// <param name="compressed">Whether the member uses its compressed representation.</param>
         /// <returns>The one-character representation string.</returns>
-        private static string VersionRepresentation(int fieldType, WirePolicy policy)
+        private static string VersionRepresentation(int fieldType, WirePolicy policy, bool compressed)
         {
             int encoding = policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1;
-            return new string((char)(fieldType | (encoding << 6) | ((int)policy.Strings.Recording << 7)), 1);
+            // A compressed member records its compressed representation, as the original schema does.
+            return new string((char)(fieldType | (compressed ? 32 : 0) | (encoding << 6) | ((int)policy.Strings.Recording << 7)), 1);
         }
 
         /// <summary>The revision-2 payload width of a member: a constant, 255 for a length-prefixed payload, or zero when unknown.</summary>
