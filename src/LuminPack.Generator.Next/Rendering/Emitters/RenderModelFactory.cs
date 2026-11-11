@@ -400,9 +400,15 @@ internal static class RenderModelFactory
                 return new RenderMember(member.Name, RenderMemberKind.Array, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Array, mirrored, raw: member.Raw, formatterCall: member.FormatterCall, property: property);
             case CollectionKind.Stack:
+                // A stack owner transfers a keyword or string element; any other shape keeps the original pipeline.
+                if (member.Scalar != "string" && FieldType(member.Scalar) == ScalarKind.Other)
+                    return null;
                 return new RenderMember(member.Name, RenderMemberKind.Stack, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, raw: true, property: property);
             case CollectionKind.SortedSet:
+                // The ordered tree kernel stores raw unmanaged scalars only.
+                if (FieldType(member.Scalar) == ScalarKind.Other)
+                    return null;
                 return new RenderMember(member.Name, RenderMemberKind.SortedSet, member.Scalar, member.DeclaredType, 0, formatter,
                     ScalarKind.Other, mirrored, raw: true, property: property);
             case CollectionKind.List:

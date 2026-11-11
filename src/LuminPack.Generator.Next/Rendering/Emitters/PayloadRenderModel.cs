@@ -89,6 +89,10 @@ internal enum SequenceFamily : byte
     ConcurrentStack,
     /// <summary>A <c>System.Collections.Concurrent.ConcurrentBag&lt;T&gt;</c>.</summary>
     ConcurrentBag,
+    /// <summary>A <c>System.Collections.Generic.Stack&lt;T&gt;</c>.</summary>
+    Stack,
+    /// <summary>A <c>System.Collections.Generic.SortedSet&lt;T&gt;</c>.</summary>
+    SortedSet,
 }
 
 /// <summary>The entry shape of a sorted or paired collection member.</summary>

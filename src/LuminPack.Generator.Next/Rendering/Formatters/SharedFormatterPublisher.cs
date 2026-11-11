@@ -115,6 +115,14 @@ internal static class SharedFormatterPublisher
                     case SequenceFamily.ImmutableSortedSet:
                         production.AddSource(hint, ImmutableSortedSetOwnerFile.Render(set, fact, operations));
                         break;
+                    case SequenceFamily.Stack:
+                        production.AddSource(hint, fact.Scalar == "string"
+                            ? StackStringOwnerFile.Render(set, fact, operations)
+                            : StackOwnerFile.Render(set, fact, operations));
+                        break;
+                    case SequenceFamily.SortedSet:
+                        production.AddSource(hint, SortedSetOwnerFile.Render(set, fact, operations));
+                        break;
                 }
             }
         }

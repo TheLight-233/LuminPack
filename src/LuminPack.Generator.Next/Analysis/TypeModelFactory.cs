@@ -559,6 +559,10 @@ internal static class TypeModelFactory
             TypeRef element = Reference(item);
             if (kind == CollectionKind.Stack && Scalar(item) is { } stackItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: stackItem.Keyword, raw: true);
+            // A stack of strings transfers its elements through the shared string owner.
+            if (kind == CollectionKind.Stack && item.SpecialType == SpecialType.System_String)
+                return new CollectionMember(name, storage, policy, declared, kind, element, scalar: "string", elementText: true, raw: true);
+            // A sorted set stores its ordered tree as raw unmanaged storage, so a string element stays unclassified.
             if (kind == CollectionKind.SortedSet && Scalar(item) is { } setItem)
                 return new CollectionMember(name, storage, policy, declared, kind, element, scalar: setItem.Keyword, raw: true);
             // A concurrent or immutable sequence of raw scalars transfers its storage through the shared formatter owner.

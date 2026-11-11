@@ -283,7 +283,10 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                 CollectionKind.Blocking => SequenceFamily.BlockingCollection,
                 // Only the families with a published forwarded owner participate; the remaining ones stay unmapped.
                 CollectionKind.Concurrent or CollectionKind.Immutable => RenderModelFactory.SupportedFamily(member),
-                _ => SequenceFamily.List,
+                // The list owner forwards an element that carries its own generated owner; the stack and the sorted set have
+                // no forwarding template, so those elements stay unmapped.
+                CollectionKind.List or CollectionKind.NestedList => SequenceFamily.List,
+                _ => null,
             };
             if (family is { } forwarded)
                 facts.Add(SequenceOwnerFact.ForForwarding(forwarded, member.DeclaredType, element.DeclaredType));
@@ -313,6 +316,8 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         }
         else if (member.Kind is CollectionKind.Concurrent or CollectionKind.Immutable)
             Sequence(member, options, facts, scalars, ref owners);
+        else if (member.Kind is CollectionKind.Stack or CollectionKind.SortedSet)
+            StackOrSortedSet(member, facts, scalars, ref owners);
         if (member.Nested is { } nested)
             Walk(nested, options, facts, scalars, ref owners, ref cultureInfoReuse, visited);
     }
@@ -348,5 +353,32 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
             facts.Add(SequenceOwnerFact.ForScalar(family, member.DeclaredType, member.Scalar));
             AddScalar(scalars, member.Scalar);
         }
+    }
+
+    /// <summary>Records the owner one stack or sorted set member requires.</summary>
+    /// <param name="member">The sequence member.</param>
+    /// <param name="facts">The sequence owner facts collected so far.</param>
+    /// <param name="scalars">The raw scalar owners collected so far.</param>
+    /// <param name="owners">The fixed owner flags collected so far.</param>
+    private static void StackOrSortedSet(CollectionMember member, List<SequenceOwnerFact> facts, List<string> scalars,
+        ref SharedFormatterKind owners)
+    {
+        // Both families publish a raw scalar owner; the stack additionally transfers string elements through the shared owner.
+        if (member.Nested != null || member.Shape != null || member.Scalar == null)
+            return;
+        if (member.Kind == CollectionKind.Stack)
+        {
+            facts.Add(SequenceOwnerFact.ForScalar(SequenceFamily.Stack, member.DeclaredType, member.Scalar));
+            if (member.Scalar == "string")
+                owners |= SharedFormatterKind.String;
+            else
+                AddScalar(scalars, member.Scalar);
+            return;
+        }
+        // A sorted set stores its ordered tree as raw unmanaged storage, so a string element stays unmapped.
+        if (member.Scalar == "string")
+            return;
+        facts.Add(SequenceOwnerFact.ForScalar(SequenceFamily.SortedSet, member.DeclaredType, member.Scalar));
+        AddScalar(scalars, member.Scalar);
     }
 }

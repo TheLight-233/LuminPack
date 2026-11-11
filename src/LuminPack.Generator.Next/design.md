@@ -228,10 +228,14 @@ loop.
 render paths for every raw scalar element: the queue traverses its two stacks and stages a reversed
 backwards stack through a reversal lease with a capacity pre-check, the stack writes one reversed
 snapshot and restores order after a JSON read, and the bag tries the validated raw freeze and
-otherwise writes one leased snapshot. These three element shapes were ported in a batch without a
-build or parity run, so their verification is still pending. `ImmutableSortedDictionary` and the
-dictionary families remain unmapped instead of borrowing the wrong storage protocol, as do string
-and packable stack, bag or queue elements outside the concurrent queue.
+otherwise writes one leased snapshot. `Stack<T>` and `SortedSet<T>` are now covered as well: the stack
+owner copies the stack once and stores the internal bottom-to-top block, rebuilds it by pushing the
+pooled block back, and stages the top-first JSON order for a string element through the shared string
+owner; the sorted-set owner stores the ordered tree through `LuminTreeStorage.WriteRaw` and rebuilds
+it through `CreateSortedSet` or Clear and Add. These five element shapes were ported in a batch without
+a build or parity run, so their verification is still pending. `ImmutableSortedDictionary` and the
+dictionary families remain unmapped instead of borrowing the wrong storage protocol, as do packable
+stack or bag elements, sorted-set strings and the remaining generic sequence families.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,

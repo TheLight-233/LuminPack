@@ -4,6 +4,7 @@ using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering;
 using LuminPack.SourceGenerator.Next.Rendering.Binary;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using LuminPack.SourceGenerator.Next.Rendering.Json;
 using LuminPack.SourceGenerator.Next.Rendering.Union;
