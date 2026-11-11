@@ -1,0 +1,99 @@
+using System.Linq;
+using Microsoft.CodeAnalysis;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
+
+namespace LuminPack.SourceGenerator.Next.Analysis;
+/// <summary>Checks optional formatter runtime APIs against the consumer metadata.</summary>
+internal static class FormatterRuntimeTraits
+{
+    /// <summary>Recognizes established raw framework scalar storage.</summary>
+    /// <param name = "type">The declared type or its source-ready spelling.</param>
+    /// <returns>Whether the requested contract or capability is available.</returns>
+    private static bool IsKnownScalar(ITypeSymbol type) => type != null && type.IsUnmanagedType && (type.SpecialType != SpecialType.None || FrameworkScalarBody.Contains(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+    /// <summary>Checks the compiled string-key comparer guard against the referenced reader.</summary>
+    /// <param name = "compilation">The consuming compilation and its runtime references.</param>
+    /// <returns>Whether the requested contract or capability is available.</returns>
+    internal static bool HasEnumeratedStringKeyCheck(Compilation compilation) => compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader")?.GetMembers("CanReuseEnumeratedStringKey").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.ToDisplayString() == "System.Collections.Generic.IEqualityComparer<string>") == true;
+    /// <summary>Checks the closed small native storage family and the referenced runtime's grouped-store capability.</summary>
+    /// <param name = "element">The exact collection element type.</param>
+    /// <param name = "compilation">The consumer compilation supplying the actual runtime API.</param>
+    /// <returns>Whether generation may select the one-/two-byte dense hash-set writer.</returns>
+    internal static bool CanGroupSmallHashSetWrites(ITypeSymbol element, Compilation compilation)
+    {
+        if (!IsKnownScalar(element))
+            return false;
+        bool small = element.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Char || element.MetadataName == "Half" && element.ContainingNamespace.ToDisplayString() == "System";
+        return small && compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal")?.GetMembers("WriteSmallHashSetRaw").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref && method.ReturnsVoid) == true;
+    }
+
+    /// <summary>Checks the runtime's optional fresh sorted-set builder.</summary>
+    /// <param name = "element">The closed element formatter contract.</param>
+    /// <param name = "compilation">The consumer compilation supplying the referenced runtime.</param>
+    /// <returns>Whether a fresh set may avoid the public constructor's sort for ordered input.</returns>
+    /// <remarks>Any element type qualifies: the builder uses the same default comparer as the constructor, checking the
+    /// order with one comparison per element and falling back to the constructor otherwise.</remarks>
+    internal static bool CanBuildSortedSet(ITypeSymbol element, Compilation compilation)
+    {
+        return element is not null && compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage")?.GetMembers("CreateSortedSet").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[1].RefKind == RefKind.None && method.Parameters[0].Type is IArrayTypeSymbol { Rank: 1 } array && SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 && method.ReturnType is INamedTypeSymbol { MetadataName: "SortedSet`1", TypeArguments.Length: 1 } result && result.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" && SymbolEqualityComparer.Default.Equals(result.TypeArguments[0], method.TypeParameters[0])) == true;
+    }
+
+    /// <summary>Checks both optional mutable sorted-set helpers.</summary>
+    /// <param name = "element">The independently formatted element contract.</param>
+    /// <param name = "compilation">The consumer compilation supplying the actual runtime API.</param>
+    /// <returns>Whether generation may use the existing shared element pool and ordered reconstruction.</returns>
+    /// <remarks>The runtime admits only destinations using the default comparer, so user comparers keep Clear/Add.</remarks>
+    internal static bool CanRebuildSortedSet(ITypeSymbol element, Compilation compilation)
+    {
+        if (element is null)
+            return false;
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        bool Common(IMethodSymbol method) => method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) && method.Parameters[0].Type is INamedTypeSymbol { MetadataName: "SortedSet`1", TypeArguments.Length: 1 } set && set.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" && SymbolEqualityComparer.Default.Equals(set.TypeArguments[0], method.TypeParameters[0]);
+        return owner?.GetMembers("CanRebuildSortedSet").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 1 && Common(method)) == true && owner.GetMembers("TryRebuildSortedSet").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 3 && Common(method) && method.Parameters[1].Type is IArrayTypeSymbol { Rank: 1 } array && SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32);
+    }
+
+    /// <summary>Checks string-key eligibility and the complete optional ordered-list append signatures.</summary>
+    /// <param name = "key">The selected key formatter contract.</param>
+    /// <param name = "compilation">The consumer compilation supplying the actual runtime API.</param>
+    /// <returns>Whether generated reads may bypass a certified append's binary search.</returns>
+    internal static bool CanAppendSortedListOrdered(ITypeSymbol key, Compilation compilation)
+    {
+        if (key?.SpecialType != SpecialType.System_String)
+            return false;
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        bool Common(IMethodSymbol method) => method.IsStatic && method.Arity == 2 && method.DeclaredAccessibility == Accessibility.Public && method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) && method.Parameters[0].Type is INamedTypeSymbol { MetadataName: "SortedList`2", TypeArguments.Length: 2 } list && list.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" && SymbolEqualityComparer.Default.Equals(list.TypeArguments[0], method.TypeParameters[0]) && SymbolEqualityComparer.Default.Equals(list.TypeArguments[1], method.TypeParameters[1]);
+        return owner?.GetMembers("CanAppendSortedListOrdered").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 1 && Common(method)) == true && owner.GetMembers("TryAppendSortedListOrdered").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 4 && Common(method) && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, method.TypeParameters[0]) && SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, method.TypeParameters[1]) && method.Parameters[3].Type.SpecialType == SpecialType.System_Boolean);
+    }
+
+    /// <summary>Checks a referenced public sequence factory instead of inferring its API from target symbols.</summary>
+    /// <param name = "compilation">The consuming compilation and its actual immutable collection references.</param>
+    /// <param name = "name">The concrete immutable sequence family name.</param>
+    /// <returns>Whether the factory can construct the sequence from the complete buffered span.</returns>
+    internal static bool CanCreateImmutableSequenceFromSpan(Compilation compilation, string name)
+    {
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        var sequence = compilation.GetTypeByMetadataName("System.Collections.Immutable." + name + "`1");
+        return span is not null && sequence is not null && compilation.GetTypeByMetadataName("System.Collections.Immutable." + name)?.GetMembers("Create").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 && method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint && !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint && !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint && method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span.Construct(method.TypeParameters[0])) && SymbolEqualityComparer.Default.Equals(method.ReturnType, sequence.Construct(method.TypeParameters[0]))) == true;
+    }
+
+    /// <summary>Checks the exact optional portable bit-storage writer signature.</summary>
+    /// <param name = "compilation">The consumer's referenced runtime metadata.</param>
+    /// <returns>Whether the direct writer can be emitted.</returns>
+    internal static bool CanWriteBitArrayPayload(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var bits = compilation.GetTypeByMetadataName("System.Collections.BitArray");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return access is not null && bits is not null && writer is not null && access.GetMembers("TryWriteBitArrayPayload").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 0 && method.DeclaredAccessibility == Accessibility.Public && !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) && method.Parameters[1].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, bits));
+    }
+
+    /// <summary>Checks the complete optional fresh bit-array construction signature.</summary>
+    /// <param name = "compilation">The consumer's actual runtime and framework metadata.</param>
+    /// <returns>Whether portable readers can fill final bit storage.</returns>
+    internal static bool CanCreateBitArrayPayload(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var bits = compilation.GetTypeByMetadataName("System.Collections.BitArray");
+        var span = compilation.GetTypeByMetadataName("System.Span`1");
+        return access is not null && bits is not null && span is not null && access.GetMembers("TryCreateBitArrayPayload").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 0 && method.DeclaredAccessibility == Accessibility.Public && !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 3 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 && method.Parameters[1].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, bits) && method.Parameters[2].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, span.Construct(compilation.GetSpecialType(SpecialType.System_Byte))));
+    }
+}

@@ -27,7 +27,8 @@ internal static class BitArrayOwnerFile
         w.Line("writer.Write<int>(view.m_array.AsSpan(0, words), length);");
         w.Line("#endif");
         w.Line("#else");
-        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteBitArrayPayload(ref writer, value)) return;");
+        if (context.Supports("CanWriteBitArrayPayload"))
+            w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteBitArrayPayload(ref writer, value)) return;");
         w.Line("var storage = words == 0 ? null : global::System.Buffers.ArrayPool<int>.Shared.Rent(words);");
         w.Line("try { if (words != 0) value.CopyTo(storage, 0); writer.Write<int>(storage.AsSpan(0, words), length); }");
         w.Line("finally { if (storage is not null) global::System.Buffers.ArrayPool<int>.Shared.Return(storage); }");
@@ -52,13 +53,16 @@ internal static class BitArrayOwnerFile
         w.Line("reader.Read<int>(view.m_array.AsSpan(0, words));");
         w.Line("#endif");
         w.Line("#else");
-        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryCreateBitArrayPayload(length, out var fresh, out var payload))");
-        w.Open();
-        w.Line("reader.Read<byte>(payload);");
-        w.Line("fresh!.Length = length;");
-        w.Line("value = fresh;");
-        w.Line("return;");
-        w.Close();
+        if (context.Supports("CanCreateBitArrayPayload"))
+        {
+            w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryCreateBitArrayPayload(length, out var fresh, out var payload))");
+            w.Open();
+            w.Line("reader.Read<byte>(payload);");
+            w.Line("fresh!.Length = length;");
+            w.Line("value = fresh;");
+            w.Line("return;");
+            w.Close();
+        }
         w.Line("var storage = words == 0 ? global::System.Array.Empty<int>() : new int[words];");
         w.Line("reader.Read<int>(storage.AsSpan());");
         w.Line("value = new global::System.Collections.BitArray(storage) { Length = length };");
@@ -94,6 +98,7 @@ internal static class BitArrayOwnerFile
         w.Line("value = new global::System.Collections.BitArray(count);");
         w.Line("for (int i = 0; i < count; i++)");
         w.Open();
+        w.Line("reader.Read<" + context.Profile + ">();");
         w.Line("value[i] = reader.Read<bool, " + context.Profile + ">();");
         w.Close();
         w.Line("reader.ConsumeArrayEnd<" + context.Profile + ">();");

@@ -18,23 +18,57 @@ internal static class SortedSetTextOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
 
-    private static void Write(EnumerableOwnerContext c) => c.CountedWrite("value");
+    private static void Write(EnumerableOwnerContext c)
+    {
+        if (!c.Counted)
+            c.W.Line("global::LuminPack.Utility.LuminTreeStorage.WriteRaw(ref operationState, value);");
+        else if (c.Forwarded)
+            c.TreeSnapshotWrite("value");
+        else
+            c.CountedWrite("value");
+    }
 
-    private static void Read(EnumerableOwnerContext c)
+    internal static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
+        const string tree = "global::LuminPack.Utility.LuminTreeStorage";
         w.Line("if (value is null)");
-        w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
-        w.Line("else");
-        w.Indented(() => w.Line("value.Clear();"));
-        w.Blank();
-        w.Line("if (length == 0)");
-        w.Indented(() => w.Line("goto operationComplete_RootRead;"));
-        w.Blank();
-        c.PooledRead(() =>
+        w.Open();
+        c.PooledRead(() => w.Line(c.Supports("BuildSortedSet") ?
+            "value = " + tree + ".CreateSortedSet(pooled, length);" :
+            "value = new " + c.Sequence + "(new global::System.ArraySegment<" + c.Scalar + ">(pooled, 0, length));"));
+        w.Line("goto operationComplete_RootRead;");
+        w.Close();
+        if (c.Supports("RebuildSortedSet"))
         {
-            w.Line("for (int index = 0; index < length; index++)");
-            w.Indented(() => w.Line("value.Add(pooled[index]);"));
-        });
+            w.Line("if (" + tree + ".CanRebuildSortedSet(value))");
+            w.Open();
+            w.Line("value.Clear();");
+            c.PooledRead(() =>
+            {
+                w.Line("if (!" + tree + ".TryRebuildSortedSet(value, pooled, length))");
+                AddPrefix("length");
+            }, c.ContiguousLayout ? null : () => AddPrefix("completed"));
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+        }
+        w.Line("value.Clear();");
+        if (c.ContiguousLayout)
+        {
+            c.PooledRead(() => AddPrefix("length"));
+            return;
+        }
+        w.Line("for (int index = 0; index < length; index++)");
+        w.Open();
+        w.Line(c.Scalar + " item = default!;");
+        c.ReadElement("item");
+        w.Line("value.Add(item);");
+        w.Close();
+
+        void AddPrefix(string count)
+        {
+            w.Line("for (int prefix = 0; prefix < " + count + "; prefix++)");
+            w.Indented(() => w.Line("value.Add(pooled[prefix]);"));
+        }
     }
 }

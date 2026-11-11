@@ -8,8 +8,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class FrozenDictionaryOwnerFile
 {
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "staged.Add(key!, itemValue);",
-        c => c.W.Line("var staged = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">();"),
-        c => c.W.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(staged);"));
+        BeforeJson, AfterJson);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -22,6 +21,11 @@ internal static class FrozenDictionaryOwnerFile
     private static void Write(PairedDictionaryContext c)
     {
         var w = c.W;
+        if (c.RawPairs && c.Supports("FrozenRawPairs"))
+        {
+            w.Line("global::LuminPack.Utility.LuminFrozenConstruction.WritePairs<" + c.Key + ", " + c.Value + ">(ref operationState, value.Keys.AsSpan(), value.Values.AsSpan());");
+            return;
+        }
         w.Line("int count = value.Count;");
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("var keys = value.Keys.AsSpan();");
@@ -50,7 +54,10 @@ internal static class FrozenDictionaryOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
-        w.Line("var dict = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">(length);");
+        bool rented = c.Supports("RentFrozenDictionary");
+        w.Line(rented ? "var dict = global::LuminPack.Utility.LuminFrozenConstruction.RentDictionary<" + c.Key + ", " + c.Value + ">(length);" :
+            "var dict = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">(length);");
+        if (rented) { w.Line("try"); w.Open(); }
         w.Line("for (int index = 0; index < length; index++)");
         w.Open();
         w.Line(c.Key + " k = default !;");
@@ -60,5 +67,34 @@ internal static class FrozenDictionaryOwnerFile
         w.Line("dict.Add(k!, v);");
         w.Close();
         w.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");
+        if (rented)
+        {
+            w.Close();
+            w.Line("finally");
+            w.Open();
+            w.Line("global::LuminPack.Utility.LuminFrozenConstruction.ReturnDictionary(dict);");
+            w.Close();
+        }
+    }
+
+    /// <summary>Rents the JSON builder when the matching ownership API is available.</summary>
+    private static void BeforeJson(PairedDictionaryContext c)
+    {
+        c.W.Line(c.Supports("RentFrozenDictionary") ?
+            "var staged = global::LuminPack.Utility.LuminFrozenConstruction.RentDictionary<" + c.Key + ", " + c.Value + ">(0);" :
+            "var staged = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">();");
+        if (c.Supports("RentFrozenDictionary")) { c.W.Line("try"); c.W.Open(); }
+    }
+
+    /// <summary>Freezes the staged entries and returns the builder on every exit.</summary>
+    private static void AfterJson(PairedDictionaryContext c)
+    {
+        c.W.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(staged);");
+        if (!c.Supports("RentFrozenDictionary")) return;
+        c.W.Close();
+        c.W.Line("finally");
+        c.W.Open();
+        c.W.Line("global::LuminPack.Utility.LuminFrozenConstruction.ReturnDictionary(staged);");
+        c.W.Close();
     }
 }

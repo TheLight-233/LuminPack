@@ -26,7 +26,7 @@ internal static class HashSetOwnerFile
             c.CountedWrite("value");
             return;
         }
-        c.W.Line("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref operationState, value);");
+        c.W.Line("global::LuminPack.Code.LuminPackMarshal." + (c.Supports("SmallHashSetWrite") ? "WriteSmallHashSetRaw" : "WriteHashSetRaw") + "(ref operationState, value);");
     }
 
     private static void Read(EnumerableOwnerContext c)

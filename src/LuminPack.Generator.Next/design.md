@@ -275,9 +275,9 @@ and the Unity native-owner objects forward to the Unity runtime module.
 Sparse nullable dictionary values use the dictionary owner: a nullable of a payload of at most four bytes is stored as its
 raw struct and a wider one through the nullable owner, as the original pipeline does. Arrays of strings and of packable
 classes, `Stack`, `Queue` and `ConcurrentStack` of packable classes, and `Stack` of strings publish owners through the
-enumerable template and the ordered payload traversal. A value tuple with a string item is written item by item like a
-reference tuple; the original pipeline blits its raw struct memory including the string reference, which is not a usable
-wire, so that case intentionally differs from the original bytes.
+enumerable template and the ordered payload traversal. Managed value tuples transfer their items through their own formatter
+contracts. Unmanaged tuples retain the original layout analysis, including nested Rest storage and the Packed, Native and
+Tagged representations.
 
 Packable class values of the keyed families (all but `SortedList` and `PriorityQueue`) expand their record body in place through the
 same paired template. A list or array of arrays of strings or packable classes forwards to the child array owner, which carries
@@ -286,30 +286,31 @@ elements go through the enumerable owner.
 
 ## Analysis outcomes
 
-The analysis now classifies a raw element in one place (`RawElement`): a scalar keyword, an enum (identified with its
-underlying keyword so its JSON owner casts through it), a framework built-in (`Guid`, `DateTime`, `DateTimeOffset`,
-`TimeSpan`, whose JSON owner parses their string form) or a plain unmanaged packable struct. Lists, arrays, the stack, queue,
-set, immutable, concurrent, wrapper, interface and frozen families take such elements, and every keyed family takes them as
-keys and values. A member that no owner covers is left unmodeled, so its record keeps the original pipeline instead of calling
-an owner nothing publishes: an array of nullable values or of any other unsupported element, a list of nullable values or
-of `object`, a list or dictionary whose element or value is a dictionary, a dictionary whose value is a collection, a
-`SortedList` with a string key, and a member whose type is itself a packable class or struct (the record emitters do not
-expand a nested payload member outside the circle-reference framing). Multi-dimensional arrays still call their legacy owner.
+The specialized analysis retains its raw element proofs. The general route analyzes a closed type into a value-equal
+FormatterModel with recursively modeled arguments. Standalone raw values, contiguous raw storage and packed/tagged layout
+facts remain distinct. Every registered sequence and dictionary family supplies a default element-owner traversal, so an
+additional supported element combination reuses its container algorithm. Generic arguments retain balanced nesting and tuple
+Rest storage. The full framework scalar catalog, rectangular arrays, closed payloads and implicit source structs can publish
+their required owners.
+
+Payload-body availability is checked before a collection publishes a child call. External and generic-Union contracts use
+the explicit typed-registration boundary until static entry binding supplies their concrete integration. The serializer facade,
+standalone-call discovery, compiled input policies and the remaining payload protocols continue at the generator boundary.
+The formatter contract and extension procedure are documented in English and Chinese in
+[Next formatter contracts](../../docs/next-formatters.md).
 
 Fixes found by the wider parity matrix: the shared scalar owner for the built-ins was missing from the JSON roots, the
 immutable array measure added the element width instead of the count width, and the array forwarding owner passed an in
 argument to a by-value root.
 
-Not ported: the string-key, matching-pair and ordered-append reuse read paths, the frozen raw pair write and rented builder,
-the small-hash-set grouped write and other optional runtime capabilities, reuse of known list and array targets by the
-sequence interfaces, and memory reuse of existing storage. A value tuple of raw scalars only keeps the original pipeline.
+The general contracts carry the runtime capability checks used by the original formatters. Target reuse includes dictionary
+scalar and certified leaf/Union slots with a staged continuation, matching sorted-list pairs and ordered append, known list/array
+interface targets and mutable memory slices. Optional snapshot, frozen and immutable builder ownership retains its fallback and
+finally cleanup. Packed and tagged contiguous blocks retain their complete payload validation before allocation or mutation.
 
-These batches build with zero errors. An in-process parity run generated one record per type shape with the Next and the
-legacy generators, compiled both, and compared the binary bytes, the JSON text and the cross round trip (each side reads the
-other's bytes and writes them back): 172 mapped shapes, populated and with null members, were byte-identical in binary and
-JSON, and 12 further shapes stay on the original pipeline. A concurrent bag of strings compares equal on write, but its read
-order is unspecified, so its round trip is not stable. Reuse of an existing destination and the platform fallbacks were not
-exercised.
+The existing specialized-owner parity matrix covered 172 mapped shapes and identified twelve additional shapes. The general
+formatter route supersedes that source coverage limit. Generated-consumer compilation, cross reads, destination reuse and
+conditional runtime assets still need the final compatibility run. A concurrent bag retains its unspecified read enumeration order.
 
 A four-declaration diagnostics corpus (a static class, a ref struct, a class without a public
 constructor and a class with 250 serialized members) reports `LuminPack001`, `LuminPack019`,
@@ -320,9 +321,8 @@ and rent rules, compiled options and bounded sizes) is not ported yet; unmapped 
 
 All 220 corpus payloads now render, fixed Union cases publish their own `SerializeUnionAt` cursor
 entries, and the collected payload set publishes the corpus's four shared formatter owners. The corpus
-therefore compiles with the Next generator alone. Other collection element types, scalar and built-in
-owners beyond Int, dictionary families and the serializer facade remain unpublished; shared
-publication is tracked in M-01, M-02 and M-09.
+therefore compiles with the Next generator alone. Shared publication also includes recursive default formatter requirements;
+serializer facades, entry binding and the remaining payload protocols are tracked in M-09 and the related tasks.
 
 ## 4. Architecture comparison with Nino
 
@@ -383,7 +383,7 @@ pipeline; P2 improves the product.
 | ID | Task | Area | Depends on | Acceptance | Priority |
 | --- | --- | --- | --- | --- | --- |
 | M-01 | Collection formatter and dispatch generator: the corpus `int[]`/`List<int>` owners, the `String` owner, the per-keyword scalar owners, the `ConcurrentQueue<T>`/`ImmutableArray<T>` owners for every raw scalar, `string` and string-bearing packable classes and the `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableQueue<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>`/`ConcurrentStack<T>`/`ConcurrentBag<T>` owners for every raw scalar landed; the other concurrent/immutable families are declared-family guarded and stay unmapped, and other element shapes, `Stack<T>`, `SortedSet<T>` and nested lists remain | Rendering/Emitters | — | Sequence records compile and run without the old formatter generator | P0 |
-| M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values; no shared dictionary owner is published yet | Rendering/Emitters | M-01 | Dictionary records generate and compile | P0 |
+| M-02 | Dictionary formatters: `Dictionary`, `SortedDictionary`, `SortedList`, concurrent and immutable dictionaries, sparse nullable values and recursive entry-owner contracts are published; the final compatibility matrix remains | Rendering/Emitters | M-01 | Dictionary records preserve their entry contracts through specialized or default owners | P0 |
 | M-03 | Portable struct model: view fields, leaves, offsets, wire size; map `PortableLayout` to `PortableView` | Model + Rendering | — | Packed and tagged structs generate and compile | P0 |
 | M-04 | Union model facts: case read strategy, slots, tier, suffix, wide tags, chain, namespace, profiles | Model + Rendering | — | Union roots and cases generate and compile | P0 |
 | M-05 | Circle-reference model facts: mirror, slots, guards, reference ids | Model + Rendering | M-06 | Circle payloads generate and compile | P0 |
@@ -402,7 +402,7 @@ pipeline; P2 improves the product.
 | M-18 | Benchmark harness: same-run Nino/MemoryPack comparison, allocations, payload size, cold/warm generation | Benchmarks | M-01, M-04 | Results are reproducible with dispersion and allocation data | P2 |
 | M-19 | Untrusted-input fuzzing and one-exception contract | Analysis + Runtime | M-09 | Crafted inputs cannot crash, over-allocate or instantiate undeclared types | P2 |
 | M-20 | JSON name and layout parity with the old pipeline | Rendering | M-10 | JSON payload files are byte-identical on the corpus | P2 |
-| M-21 | Special framework types: CultureInfo, <c>Uri</c>, <c>Version</c>, <c>BigInteger</c>, <c>BitArray</c>, <c>StringBuilder</c>, <c>Type</c> and <c>TimeZoneInfo</c> as shared owners, the `ConcurrentQueue<T>`/`ImmutableArray<T>` families for every raw scalar, `string` and string-bearing packable classes, and `ImmutableStack<T>`/`ImmutableList<T>`/`ImmutableQueue<T>`/`ImmutableHashSet<T>`/`ImmutableSortedSet<T>`/`ConcurrentStack<T>`/`ConcurrentBag<T>` for every raw scalar landed; the remaining element shapes, the other concurrent and immutable collections and the other original-pipeline special types remain | Analysis + Rendering | M-01, M-09 | Every supported special type generates the legacy code | P0 |
+| M-21 | Framework formatter definitions and the scalar catalog have default recursive argument contracts, with retained storage layouts and optional runtime capabilities; final generated-consumer and platform parity remains | Analysis + Rendering | M-01, M-09 | Supported formatter graphs preserve the legacy representation and ownership contracts | P0 |
 
 ## 6. Decisions and constraints
 

@@ -6,7 +6,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Normalizes and parses the closed generic framework types that have a standalone formatter.</summary>
 /// <remarks>The identity is the namespace-qualified definition with its comma-separated arguments and no spacing, such as
-/// <c>System.Nullable&lt;int&gt;</c>. Each argument is a raw scalar keyword or <c>string</c>.</remarks>
+/// <c>System.Nullable&lt;int&gt;</c>. Nested arguments retain their own closed formatter identities.</remarks>
 internal static class GenericIdentity
 {
     private static readonly HashSet<string> Keywords = new HashSet<string>(StringComparer.Ordinal)
@@ -76,21 +76,17 @@ internal static class GenericIdentity
             if (open <= 0 || text[text.Length - 1] != '>')
                 return null;
             definition = text.Substring(0, open);
-            arguments = text.Substring(open + 1, text.Length - open - 2).Split(',');
+            arguments = SplitArguments(text.Substring(open + 1, text.Length - open - 2));
         }
 
-        if (arguments.Any(argument => argument != "string" && !Keywords.Contains(argument)))
-            return null;
         bool supported = definition switch
         {
             Nullable => arguments.Length == 1 && arguments[0] != "string",
             Lazy or Memory or ReadOnlyMemory or ArraySegment or ReadOnlySequence => arguments.Length == 1,
             Grouping or Lookup => arguments.Length == 2,
             KeyValuePair => arguments.Length == 2,
-            Tuple => arguments.Length is >= 1 and <= 7,
-            // A value tuple of raw scalars only keeps the raw struct storage of the original pipeline; one with a string item is
-            // managed, so its items are written one at a time like a reference tuple's.
-            ValueTuple => arguments.Length is >= 2 and <= 7 && arguments.Any(argument => argument == "string"),
+            Tuple => arguments.Length is >= 1 and <= 8,
+            ValueTuple => arguments.Length is >= 1 and <= 8,
             _ => false,
         };
         return supported ? definition + "<" + string.Join(",", arguments) + ">" : null;
@@ -121,7 +117,27 @@ internal static class GenericIdentity
             return false;
         }
         definition = identity.Substring(0, open);
-        arguments = identity.Substring(open + 1, identity.Length - open - 2).Split(',');
+        arguments = SplitArguments(identity.Substring(open + 1, identity.Length - open - 2));
         return true;
+    }
+
+    /// <summary>Splits only at the current generic level, retaining nested generic and array commas.</summary>
+    private static string[] SplitArguments(string text)
+    {
+        var arguments = new List<string>();
+        int start = 0, depth = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char item = text[i];
+            if (item is '<' or '[' or '(') depth++;
+            if (item is '>' or ']' or ')') depth--;
+            if (item == ',' && depth == 0)
+            {
+                arguments.Add(text.Substring(start, i - start));
+                start = i + 1;
+            }
+        }
+        arguments.Add(text.Substring(start));
+        return arguments.ToArray();
     }
 }

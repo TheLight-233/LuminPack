@@ -346,6 +346,18 @@ internal sealed class StructModel : TypeModel
     /// <summary>The positional transfer layout of a portable unmanaged struct, or null.</summary>
     internal readonly PortableLayout? Layout;
 
+    /// <summary>The JSON and managed-record storage mirror.</summary>
+    internal readonly string? Mirror;
+    /// <summary>The complete mirror field declarations.</summary>
+    internal readonly string[]? MirrorFields;
+    /// <summary>The explicit field offsets of the mirror.</summary>
+    internal readonly int[]? MirrorOffsets;
+    /// <summary>The CLR layout attribute of the mirror.</summary>
+    internal readonly string? MirrorLayout;
+
+    /// <summary>The complete recursive packed or tagged storage contract.</summary>
+    internal readonly FormatterStorageModel? StoragePlan;
+
     /// <summary>Whether the declaration is a supported fixed record, which gives the struct its <c>MeasureRecord</c> entry.</summary>
     internal readonly bool RecordWidth;
 
@@ -362,10 +374,32 @@ internal sealed class StructModel : TypeModel
     internal readonly bool Callbacks;
 
     /// <summary>Captures a struct.</summary>
+    /// <param name="identity">The identity used by this operation.</param>
+    /// <param name="accessibility">The accessibility used by this operation.</param>
+    /// <param name="members">The members used by this operation.</param>
+    /// <param name="policy">The policy used by this operation.</param>
+    /// <param name="constraints">The constraints used by this operation.</param>
+    /// <param name="storage">The storage used by this operation.</param>
+    /// <param name="layout">The layout used by this operation.</param>
+    /// <param name="recordWidth">The record width used by this operation.</param>
+    /// <param name="versioned">The versioned used by this operation.</param>
+    /// <param name="rent">The rent used by this operation.</param>
+    /// <param name="constructors">The constructors used by this operation.</param>
+    /// <param name="callbacks">The callbacks used by this operation.</param>
+    /// <param name="storagePlan">The storage plan used by this operation.</param>
+    /// <param name="mirror">The mirror used by this operation.</param>
+    /// <param name="mirrorFields">The mirror fields used by this operation.</param>
+    /// <param name="mirrorOffsets">The mirror offsets used by this operation.</param>
+    /// <param name="mirrorLayout">The mirror layout used by this operation.</param>
     internal StructModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
-        StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks)
+        StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks, FormatterStorageModel? storagePlan = null, string? mirror = null, string[]? mirrorFields = null, int[]? mirrorOffsets = null, string? mirrorLayout = null)
         : base(identity, accessibility, PayloadKind.Struct, members, policy, constraints)
     {
+        Mirror = mirror;
+        MirrorFields = mirrorFields;
+        MirrorOffsets = mirrorOffsets;
+        MirrorLayout = mirrorLayout;
+        StoragePlan = storagePlan;
         Callbacks = callbacks;
         Constructors = constructors;
         Rent = rent;
@@ -379,7 +413,9 @@ internal sealed class StructModel : TypeModel
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
         other is StructModel model && base.Equals(other) && Storage == model.Storage && RecordWidth == model.RecordWidth &&
         Versioned == model.Versioned && Rent == model.Rent && Constructors == model.Constructors &&
-        Callbacks == model.Callbacks && Equals(Layout, model.Layout);
+        Callbacks == model.Callbacks && Equals(Layout, model.Layout) && Equals(StoragePlan, model.StoragePlan) && Mirror == model.Mirror && MirrorLayout == model.MirrorLayout &&
+        (MirrorFields ?? Array.Empty<string>()).SequenceEqual(model.MirrorFields ?? Array.Empty<string>()) &&
+        (MirrorOffsets ?? Array.Empty<int>()).SequenceEqual(model.MirrorOffsets ?? Array.Empty<int>());
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as StructModel);

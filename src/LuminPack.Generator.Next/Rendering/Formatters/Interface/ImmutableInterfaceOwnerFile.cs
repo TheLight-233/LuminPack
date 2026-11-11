@@ -14,8 +14,7 @@ internal static class ImmutableInterfaceOwnerFile
     private const string Namespace = "global::System.Collections.Immutable.";
 
     private static readonly EnumerableOwnerSpec ListSpec = new EnumerableOwnerSpec(Write, c => Read(c, Builder),
-        "staged.Add(item);", c => c.W.Line("var staged = " + Namespace + Concrete(c) + ".CreateBuilder<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged.ToImmutable();"));
+        "staged.Add(item);", BeforeBuilder, AfterBuilder);
 
     private static readonly EnumerableOwnerSpec QueueSpec = new EnumerableOwnerSpec(Write, c => Read(c, Queue),
         "staged = staged.Enqueue(item);", c => c.W.Line("var staged = " + Namespace + "ImmutableQueue<" + c.Scalar + ">.Empty;"),
@@ -82,20 +81,28 @@ internal static class ImmutableInterfaceOwnerFile
     {
         var w = c.W;
         w.Blank();
-        w.Line("var builder = " + Namespace + Concrete(c) + ".CreateBuilder<" + c.Scalar + ">();");
+        if (Concrete(c) == "ImmutableList")
+        {
+            w.Line(c.Supports("ImmutableSpan") ?
+                "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + c.Scalar + ">(pooled, 0, length));" :
+                "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + c.Scalar + ">(pooled, 0, length));");
+            return;
+        }
+        string family = Concrete(c).Substring(9);
+        ImmutableBuilderLifetime.Begin(w, family, c.Scalar, c.Supports("ImmutableBuilder"), "builder");
         w.Line("for (int index = 0; index < length; index++)");
         w.Indented(() => w.Line("builder.Add(pooled[index]);"));
         w.Line("value = builder.ToImmutable();");
+        ImmutableBuilderLifetime.End(w, family, c.Supports("ImmutableBuilder"), "builder");
     }
 
     private static void Queue(EnumerableOwnerContext c)
     {
         var w = c.W;
         w.Blank();
-        w.Line("var queue = " + Namespace + "ImmutableQueue<" + c.Scalar + ">.Empty;");
-        w.Line("for (int index = 0; index < length; index++)");
-        w.Indented(() => w.Line("queue = queue.Enqueue(pooled[index]);"));
-        w.Line("value = queue;");
+        w.Line(c.Supports("ImmutableSpan") ?
+            "value = global::System.Collections.Immutable.ImmutableQueue.Create(new global::System.ReadOnlySpan<" + c.Scalar + ">(pooled, 0, length));" :
+            "value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(new global::System.ArraySegment<" + c.Scalar + ">(pooled, 0, length));");
     }
 
     private static void Stack(EnumerableOwnerContext c)
@@ -106,6 +113,17 @@ internal static class ImmutableInterfaceOwnerFile
         w.Line("for (int index = length - 1; index >= 0; index--)");
         w.Indented(() => w.Line("stack = stack.Push(pooled[index]);"));
         w.Line("value = stack;");
+    }
+
+    /// <summary>Starts the selected immutable builder's JSON lifetime.</summary>
+    private static void BeforeBuilder(EnumerableOwnerContext c) =>
+        ImmutableBuilderLifetime.Begin(c.W, Concrete(c).Substring(9), c.Scalar, c.Supports("ImmutableBuilder"), "staged");
+
+    /// <summary>Publishes the immutable JSON value and returns an optional rental.</summary>
+    private static void AfterBuilder(EnumerableOwnerContext c)
+    {
+        c.W.Line("value = staged.ToImmutable();");
+        ImmutableBuilderLifetime.End(c.W, Concrete(c).Substring(9), c.Supports("ImmutableBuilder"), "staged");
     }
 
     private static void AfterStack(EnumerableOwnerContext c)

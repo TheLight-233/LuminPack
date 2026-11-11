@@ -28,7 +28,7 @@ internal sealed class JsonRenderer : IRenderer
 
     private static string Emit(TypeModel model, RenderContext context)
     {
-        PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
+        PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options, json: true);
         return direct == null ? string.Empty : PayloadEmitter.Render(direct, json: true, context.Options.AvailableAliases,
             context.Operations);
     }

@@ -21,7 +21,7 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// payload protocol, enumerates the serialized storage, normalizes every member into a model value and records the declaration-time
 /// wire policy. Shapes outside the modeled surface return an incomplete or unsupported result with a specific reason; analysis never
 /// throws at the consumer.</remarks>
-internal static class TypeModelFactory
+internal static partial class TypeModelFactory
 {
     private const string PackableAttribute = "LuminPack.Attribute.LuminPackableAttribute";
     private const string IgnoreAttribute = "LuminPack.Attribute.LuminPackIgnoreAttribute";
@@ -109,7 +109,7 @@ internal static class TypeModelFactory
     }
 
     /// <summary>Holds the per-compilation analysis state: the consumer compilation, its project facts and the completed models.</summary>
-    private sealed class Session
+    private sealed partial class Session
     {
         private readonly Compilation _compilation;
         private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
@@ -196,6 +196,41 @@ internal static class TypeModelFactory
             }
         }
 
+        /// <summary>Models the native, packed, tagged or managed storage and JSON mirror of a struct.</summary>
+        /// <param name="symbol">The declared struct.</param>
+        /// <param name="identity">The normalized type identity.</param>
+        /// <param name="accessibility">The generated declaration access.</param>
+        /// <param name="policy">The declaration-owned wire policy.</param>
+        /// <param name="depth">The current payload expansion depth.</param>
+        /// <param name="issues">Receives unsupported payload-body facts.</param>
+        /// <param name="path">The active payload expansion path.</param>
+        /// <param name="generatorType">The declared serialization protocol.</param>
+        /// <param name="constraints">The generic declaration constraints.</param>
+        /// <returns>The struct storage and member model.</returns>
+        private StructModel CreateStructModel(INamedTypeSymbol symbol, TypeIdentity identity, TypeAccessibility accessibility,
+            WirePolicy policy, int depth, List<string> issues, Path path, string generatorType, string[] constraints)
+        {
+            MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
+            PortableLayout? layout = symbol.IsUnmanagedType && generatorType == "Object" ? TryPortableLayout(symbol) : null;
+            bool nativeContract = symbol.IsUnmanagedType && !ContainsCustomContract(symbol, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+            StructStorage storage = !nativeContract ? StructStorage.ManagedRecord :
+                layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
+            // A managed record body is framed by the declaration's constructors, callbacks and rent; a value type that
+            // is version-tolerant writes a schema prefix the struct roots do not reproduce.
+            bool managed = storage == StructStorage.ManagedRecord;
+            string? mirror = null, mirrorLayout = null;
+            string[]? mirrorFields = null;
+            int[]? mirrorOffsets = null;
+            if (members.Any(member => member.Mirrored))
+                TryMirror(symbol, identity, false, false, policy, members, issues,
+                    out mirror, out mirrorFields, out mirrorOffsets, out mirrorLayout);
+            return new StructModel(identity, accessibility, members, policy, constraints, storage, layout,
+                RecordWidthSupported(symbol), versioned: generatorType == "VersionTolerant",
+                rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
+                callbacks: managed && Callbacks(symbol), storagePlan: symbol.IsUnmanagedType && generatorType == "Object" ? FormatterStorage(symbol) : null,
+                mirror: mirror, mirrorFields: mirrorFields, mirrorOffsets: mirrorOffsets, mirrorLayout: mirrorLayout);
+        }
+
         /// <summary>Classifies one payload and builds the model shared by every payload kind.</summary>
         /// <param name="symbol">The declared payload type.</param>
         /// <param name="depth">The nested payload depth.</param>
@@ -242,7 +277,7 @@ internal static class TypeModelFactory
 
             TypeAccessibility accessibility = symbol.DeclaredAccessibility == Microsoft.CodeAnalysis.Accessibility.Public
                 ? TypeAccessibility.Public : TypeAccessibility.Internal;
-            string[] constraints = symbol.TypeParameters.Select(parameter => parameter.Name).ToArray();
+            string[] constraints = symbol.IsDefinition ? symbol.TypeParameters.Select(parameter => parameter.Name).ToArray() : Array.Empty<string>();
             PayloadKind kind = Kind(symbol, generatorType);
             WirePolicy policy = TypePolicy(symbol, kind);
 
@@ -250,17 +285,7 @@ internal static class TypeModelFactory
             {
                 case PayloadKind.Struct:
                 {
-                    MemberModel[] members = Members(symbol, policy, depth, issues, out _, path);
-                    PortableLayout? layout = symbol.IsUnmanagedType && generatorType == "Object" ? TryPortableLayout(symbol) : null;
-                    StructStorage storage = !symbol.IsUnmanagedType ? StructStorage.ManagedRecord :
-                        layout == null ? StructStorage.RawUnmanaged : StructStorage.PortableUnmanaged;
-                    // A managed record body is framed by the declaration's constructors, callbacks and rent; a value type that
-                    // is version-tolerant writes a schema prefix the struct roots do not reproduce.
-                    bool managed = storage == StructStorage.ManagedRecord;
-                    return new StructModel(identity, accessibility, members, policy, constraints, storage, layout,
-                        RecordWidthSupported(symbol), versioned: generatorType == "VersionTolerant",
-                        rent: managed && Rent(symbol), constructors: managed && Constructors(symbol),
-                        callbacks: managed && Callbacks(symbol));
+                    return CreateStructModel(symbol, identity, accessibility, policy, depth, issues, path, generatorType, constraints);
                 }
                 case PayloadKind.Union:
                 {
@@ -445,7 +470,7 @@ internal static class TypeModelFactory
         /// <param name="issues">Receives the reason an unsupported member is omitted.</param>
         /// <param name="path">The payloads on the current expansion path.</param>
         /// <returns>The member model, or null when the type is outside the modeled surface.</returns>
-        private MemberModel? Classify(ISymbol member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth,
+        private MemberModel? ClassifySpecialized(ISymbol member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth,
             List<string> issues, Path path)
         {
             ITypeSymbol type = member is IFieldSymbol field ? field.Type : ((IPropertySymbol)member).Type;
@@ -3405,8 +3430,11 @@ internal static class TypeModelFactory
         }
         string? @namespace = symbol.ContainingNamespace == null || symbol.ContainingNamespace.IsGlobalNamespace
             ? null : symbol.ContainingNamespace.ToDisplayString();
-        return new TypeIdentity(@namespace, containing.ToArray(), symbol.Name,
-            symbol.TypeParameters.Select(parameter => parameter.Name).ToArray());
+        string name = symbol.Name;
+        if (symbol.IsGenericType && !symbol.IsDefinition)
+            name += "<" + string.Join(", ", symbol.TypeArguments.Select(Session.FormatterSpelling)) + ">";
+        return new TypeIdentity(@namespace, containing.ToArray(), name,
+            symbol.IsDefinition ? symbol.TypeParameters.Select(parameter => parameter.Name).ToArray() : Array.Empty<string>());
     }
 
     /// <summary>Classifies the payload protocol from the declaration and its generator type.</summary>

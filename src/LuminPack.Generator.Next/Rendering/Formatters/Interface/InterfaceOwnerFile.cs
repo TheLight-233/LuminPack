@@ -60,7 +60,7 @@ internal static class InterfaceOwnerFile
 
     private static void WriteLines(EnumerableOwnerContext c, bool setInterface)
     {
-        if (c.Payload != null)
+        if (c.Payload != null || c.Forwarded)
         {
             c.CountedWrite("value");
             return;
@@ -77,6 +77,7 @@ internal static class InterfaceOwnerFile
     private static void ReadArray(EnumerableOwnerContext c)
     {
         var w = c.W;
+        c.ReadInterfaceTargets();
         w.Line("if (length == 0)");
         w.Open();
         w.Line("value = global::System.Array.Empty<" + c.Scalar + ">();");
@@ -92,6 +93,7 @@ internal static class InterfaceOwnerFile
     private static void ReadList(EnumerableOwnerContext c)
     {
         var w = c.W;
+        c.ReadInterfaceTargets();
         w.Line("var list = new global::System.Collections.Generic.List<" + c.Scalar + ">(length);");
         w.Line("if (length != 0)");
         w.Open();

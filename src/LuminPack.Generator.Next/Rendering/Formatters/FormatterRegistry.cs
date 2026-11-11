@@ -53,6 +53,12 @@ internal sealed class SequenceFormatter
     /// <summary>The renderer for an element with its own concrete formatter, when supported.</summary>
     internal RenderSequenceOwner? Forwarded { get; }
 
+    /// <summary>Whether the family's element block uses the contiguous storage contract.</summary>
+    internal bool ContiguousElements { get; }
+
+    /// <summary>The default renderer for an element with an independent static formatter.</summary>
+    internal RenderSequenceOwner General { get; }
+
     /// <summary>The optional inline record write.</summary>
     internal WriteFormatterMember? WriteMember { get; }
 
@@ -79,10 +85,15 @@ internal sealed class SequenceFormatter
     /// <param name="alwaysLoops">Whether scalar writes already need a loop.</param>
     /// <param name="payloadLoops">Whether expandable payload writes need a loop.</param>
     /// <param name="usesCandidateCache">Whether binary reads need the shared candidate cache.</param>
+    /// <param name="general">The general used by this operation.</param>
+    /// <param name="contiguousElements">The contiguous elements used by this operation.</param>
     internal SequenceFormatter(CollectionKind kind, RenderSequenceOwner scalar, RenderSequenceOwner? text = null,
         RenderSequenceOwner? payload = null, RenderSequenceOwner? forwarded = null, WriteFormatterMember? writeMember = null,
-        bool profileElements = false, bool alwaysLoops = false, bool payloadLoops = false, bool usesCandidateCache = false)
+        bool profileElements = false, bool alwaysLoops = false, bool payloadLoops = false, bool usesCandidateCache = false,
+        RenderSequenceOwner? general = null, bool contiguousElements = false)
     {
+        ContiguousElements = contiguousElements;
+        General = general ?? forwarded ?? payload ?? text ?? scalar;
         Kind = kind;
         Scalar = scalar;
         Text = text;
@@ -122,7 +133,7 @@ internal static class FormatterRegistry
             ["UnityEngine.RectOffset"] = (set, operations) => UnityObjectOwnerFile.Render(set, operations, "RectOffset", "global::UnityEngine.RectOffset"),
         };
 
-    private static readonly SequenceFormatter Array = new SequenceFormatter(CollectionKind.Array, ArrayScalarOwnerFile.Render,
+    internal static readonly SequenceFormatter Array = new SequenceFormatter(CollectionKind.Array, ArrayScalarOwnerFile.Render,
         text: ArrayTextOwnerFile.Render, payload: ArrayTextOwnerFile.Render, forwarded: ArrayForwardingOwnerFile.Render);
 
     private static readonly SequenceFormatter RectangularArray = new SequenceFormatter(CollectionKind.Array,
@@ -131,7 +142,8 @@ internal static class FormatterRegistry
     private static readonly Dictionary<string, SequenceFormatter> Sequences = new Dictionary<string, SequenceFormatter>(StringComparer.Ordinal)
     {
         ["System.Collections.Generic.List"] = new SequenceFormatter(CollectionKind.List, ListScalarOwnerFile.Render,
-            text: ListStringOwnerFile.Render, payload: ListPayloadOwnerFile.Render, forwarded: ListForwardingOwnerFile.Render),
+            text: ListStringOwnerFile.Render, payload: ListPayloadOwnerFile.Render, forwarded: ListForwardingOwnerFile.Render,
+            general: ListForwardingOwnerFile.RenderDefault),
         ["System.Collections.Generic.Stack"] = new SequenceFormatter(CollectionKind.Stack, StackOwnerFile.Render,
             text: StackStringOwnerFile.Render, payload: StackPayloadOwnerFile.Render,
             writeMember: Orderable(Adapt(StackMemberWriter.Write), OrderedPayloadMemberWriter.WriteStack, OrderedPayloadMemberWriter.WriteStackText),
@@ -145,15 +157,15 @@ internal static class FormatterRegistry
             payload: QueueOwnerFile.Render, writeMember: Orderable(Adapt(QueueMemberWriter.Write), OrderedPayloadMemberWriter.WriteQueue),
             profileElements: true, payloadLoops: true),
         ["System.Collections.ObjectModel.Collection"] = new SequenceFormatter(CollectionKind.Wrapper, CollectionOwnerFile.Render, text: CollectionOwnerFile.Render, payload: CollectionOwnerFile.Render,
-            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true),
+            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Collections.ObjectModel.ObservableCollection"] = new SequenceFormatter(CollectionKind.Wrapper, ObservableCollectionOwnerFile.Render, text: ObservableCollectionOwnerFile.Render, payload: ObservableCollectionOwnerFile.Render,
-            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true),
+            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Collections.ObjectModel.ReadOnlyCollection"] = new SequenceFormatter(CollectionKind.Wrapper, ReadOnlyCollectionOwnerFile.Render, text: ReadOnlyCollectionOwnerFile.Render, payload: ReadOnlyCollectionOwnerFile.Render,
-            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true),
+            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Collections.ObjectModel.ReadOnlyObservableCollection"] = new SequenceFormatter(CollectionKind.Wrapper, ReadOnlyObservableCollectionOwnerFile.Render, text: ReadOnlyObservableCollectionOwnerFile.Render, payload: ReadOnlyObservableCollectionOwnerFile.Render,
-            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true),
+            writeMember: PayloadAware(Adapt(WrapperMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Runtime.CompilerServices.ReadOnlyCollectionBuilder"] = new SequenceFormatter(CollectionKind.Wrapper, ReadOnlyCollectionBuilderOwnerFile.Render, text: ReadOnlyCollectionBuilderOwnerFile.Render, payload: ReadOnlyCollectionBuilderOwnerFile.Render,
-            writeMember: PayloadAware(Adapt(WrapperMemberWriter.WriteBuilder)), profileElements: true, payloadLoops: true),
+            writeMember: PayloadAware(Adapt(WrapperMemberWriter.WriteBuilder)), profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Collections.Frozen.FrozenSet"] = new SequenceFormatter(CollectionKind.Frozen, FrozenSetOwnerFile.Render, text: FrozenSetOwnerFile.Render, payload: FrozenSetOwnerFile.Render,
             writeMember: PayloadAware(Adapt(InterfaceMemberWriter.WriteFrozen)), profileElements: true, payloadLoops: true),
         ["System.Collections.Generic.IEnumerable"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderEnumerable, text: InterfaceOwnerFile.RenderEnumerable, payload: InterfaceOwnerFile.RenderEnumerable,
@@ -164,7 +176,7 @@ internal static class FormatterRegistry
             writeMember: PayloadAware(Adapt(InterfaceMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true),
         ["System.Collections.Generic.IList"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderList, text: InterfaceOwnerFile.RenderList, payload: InterfaceOwnerFile.RenderList,
             writeMember: PayloadAware(Adapt(InterfaceMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true),
-        ["System.Collections.Generic.IReadOnlyList"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderList, text: InterfaceOwnerFile.RenderList, payload: InterfaceOwnerFile.RenderList,
+        ["System.Collections.Generic.IReadOnlyList"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderCollection, text: InterfaceOwnerFile.RenderCollection, payload: InterfaceOwnerFile.RenderCollection,
             writeMember: PayloadAware(Adapt(InterfaceMemberWriter.Write)), alwaysLoops: true, profileElements: true, payloadLoops: true),
         ["System.Collections.Generic.ISet"] = new SequenceFormatter(CollectionKind.Interface, InterfaceOwnerFile.RenderSet, text: InterfaceOwnerFile.RenderSet, payload: InterfaceOwnerFile.RenderSet,
             writeMember: PayloadAware(Adapt(InterfaceMemberWriter.WriteSet)), alwaysLoops: true, profileElements: true, payloadLoops: true),
@@ -181,7 +193,7 @@ internal static class FormatterRegistry
         ["System.Collections.Generic.SortedSet"] = new SequenceFormatter(CollectionKind.SortedSet, SortedSetOwnerFile.Render,
             text: SortedSetTextOwnerFile.Render, payload: SortedSetTextOwnerFile.Render,
             writeMember: PayloadAware(TextAware(Adapt(SortedSetMemberWriter.Write))), alwaysLoops: true,
-            profileElements: true, payloadLoops: true),
+            profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Collections.Concurrent.BlockingCollection"] = new SequenceFormatter(CollectionKind.Blocking, BlockingCollectionOwnerFile.Render,
             text: BlockingCollectionOwnerFile.Render, forwarded: BlockingCollectionOwnerFile.Render),
         ["System.Collections.Concurrent.ConcurrentQueue"] = new SequenceFormatter(CollectionKind.Concurrent, ConcurrentQueueOwnerFile.Render,
@@ -192,13 +204,14 @@ internal static class FormatterRegistry
             text: ConcurrentStackTextOwnerFile.Render, payload: ConcurrentStackTextOwnerFile.Render,
             writeMember: Orderable(ConcurrentStackTextMemberWriter.Write(Adapt(ConcurrentStackMemberWriter.Write)),
                 OrderedPayloadMemberWriter.WriteConcurrentStack),
-            alwaysLoops: true, profileElements: true, payloadLoops: true),
+            alwaysLoops: true, profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Collections.Concurrent.ConcurrentBag"] = new SequenceFormatter(CollectionKind.Concurrent, ConcurrentBagOwnerFile.Render,
             text: ConcurrentBagTextOwnerFile.Render, payload: ConcurrentBagTextOwnerFile.Render, writeMember: PayloadAware(TextAware(Adapt(ConcurrentBagMemberWriter.Write))),
-            alwaysLoops: true, profileElements: true, payloadLoops: true),
+            alwaysLoops: true, profileElements: true, payloadLoops: true, contiguousElements: true),
         ["System.Collections.Immutable.ImmutableArray"] = new SequenceFormatter(CollectionKind.Immutable, ImmutableArrayOwnerFile.Render,
             text: ImmutableArrayStringOwnerFile.Render, payload: ImmutableArrayPayloadOwnerFile.Render,
-            writeMember: ImmutableArrayMemberWriter.Write, profileElements: true, payloadLoops: true),
+            writeMember: ImmutableArrayMemberWriter.Write, profileElements: true, payloadLoops: true,
+            general: (set, fact, operations) => ContiguousOwnerFile.Render(set, set.FindFormatter(fact.DeclaredType)!, operations, ContiguousShape.ImmutableArray)),
         ["System.Collections.Immutable.ImmutableStack"] = new SequenceFormatter(CollectionKind.Immutable, ImmutableStackOwnerFile.Render,
             text: ImmutableInterfaceOwnerFile.RenderStack, payload: ImmutableInterfaceOwnerFile.RenderStack, writeMember: CountedSequenceMemberWriter.Write, alwaysLoops: true, profileElements: true, payloadLoops: true),
         ["System.Collections.Immutable.ImmutableQueue"] = new SequenceFormatter(CollectionKind.Immutable, ImmutableQueueOwnerFile.Render,
@@ -217,11 +230,11 @@ internal static class FormatterRegistry
 
     private static readonly Dictionary<string, DictionaryFormatter> Dictionaries = new Dictionary<string, DictionaryFormatter>(StringComparer.Ordinal)
     {
-        ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render, payload: PayloadDictionaryOwnerFile.Render),
-        ["System.Collections.Generic.SortedDictionary"] = new DictionaryFormatter(SortedDictionaryOwnerFile.Render),
-        ["System.Collections.Generic.SortedList"] = new DictionaryFormatter(SortedListOwnerFile.Render),
+        ["System.Collections.Generic.Dictionary"] = new DictionaryFormatter(DictionaryOwnerFile.Render, payload: PayloadDictionaryOwnerFile.Render, jsonReuseStore: "value[key] = itemValue;", nativeEntries: true, general: DictionaryOwnerFile.RenderDefault),
+        ["System.Collections.Generic.SortedDictionary"] = new DictionaryFormatter(SortedDictionaryOwnerFile.Render, jsonReuseStore: "value.Add(key!, itemValue);"),
+        ["System.Collections.Generic.SortedList"] = new DictionaryFormatter(SortedListOwnerFile.Render, jsonReuseStore: "value.Add(key!, itemValue);"),
         ["System.Collections.Generic.PriorityQueue"] = new DictionaryFormatter(PriorityQueueOwnerFile.Render),
-        ["System.Collections.Concurrent.ConcurrentDictionary"] = new DictionaryFormatter(ConcurrentDictionaryOwnerFile.Render),
+        ["System.Collections.Concurrent.ConcurrentDictionary"] = new DictionaryFormatter(ConcurrentDictionaryOwnerFile.Render, jsonReuseStore: "value.TryAdd(key!, itemValue);"),
         ["System.Collections.Immutable.ImmutableDictionary"] = new DictionaryFormatter(ImmutableDictionaryOwnerFile.Render),
         ["System.Collections.Immutable.ImmutableSortedDictionary"] = new DictionaryFormatter(ImmutableSortedDictionaryOwnerFile.Render),
         ["System.Collections.ObjectModel.ReadOnlyDictionary"] = new DictionaryFormatter(ReadOnlyDictionaryOwnerFile.Render, forwardsToDictionary: true),

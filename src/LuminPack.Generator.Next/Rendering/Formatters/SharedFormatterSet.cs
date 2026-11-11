@@ -94,7 +94,7 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
 /// <remarks>The set aggregates the owner identities of complete payload models. The requests are sorted, so the
 /// same payloads always produce the same files regardless of the order the provider collected them in. Sequence owners and
 /// scalar owners are kept sorted and deduplicated, so the decision stays value-equal and order-independent.</remarks>
-internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
+internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatterSet>
 {
     /// <summary>The assembly extension container the owners belong to, or null before the first complete model.</summary>
     internal readonly string? Extension;
@@ -117,9 +117,24 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <summary>The dictionary owners, sorted by declared dictionary spelling.</summary>
     internal readonly DictionaryOwnerFact[] DictionaryOwners;
 
+    /// <summary>The compilation facts that affect shared owner declarations.</summary>
+    internal readonly GeneratorOptions Options;
+
+    /// <summary>Processes the current formatter contract.</summary>
+    /// <param name="extension">The extension used by this operation.</param>
+    /// <param name="owners">The owners used by this operation.</param>
+    /// <param name="availableAliases">The available aliases used by this operation.</param>
+    /// <param name="cultureInfoReuse">The culture info reuse used by this operation.</param>
+    /// <param name="sequenceOwners">The sequence owners used by this operation.</param>
+    /// <param name="scalars">The scalars used by this operation.</param>
+    /// <param name="dictionaryOwners">The dictionary owners used by this operation.</param>
+    /// <param name="generalOwners">The general owners used by this operation.</param>
+    /// <param name="options">The options used by this operation.</param>
     private SharedFormatterSet(string extension, string[] owners, int availableAliases, bool cultureInfoReuse,
-        SequenceOwnerFact[] sequenceOwners, string[] scalars, DictionaryOwnerFact[] dictionaryOwners)
+        SequenceOwnerFact[] sequenceOwners, string[] scalars, DictionaryOwnerFact[] dictionaryOwners, FormatterModel[] generalOwners, GeneratorOptions options)
     {
+        Options = options;
+        GeneralOwners = generalOwners;
         DictionaryOwners = dictionaryOwners;
         Scalars = scalars;
         SequenceOwners = sequenceOwners;
@@ -135,7 +150,8 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
     /// <summary>Whether the set publishes no owner file.</summary>
     internal bool IsEmpty => string.IsNullOrEmpty(Extension) ||
         (Owners == null || Owners.Length == 0) && (SequenceOwners == null || SequenceOwners.Length == 0) &&
-        (Scalars == null || Scalars.Length == 0) && (DictionaryOwners == null || DictionaryOwners.Length == 0);
+        (Scalars == null || Scalars.Length == 0) && (DictionaryOwners == null || DictionaryOwners.Length == 0) &&
+        (GeneralOwners == null || GeneralOwners.Length == 0);
 
     /// <summary>Adds the owners one complete payload model requires.</summary>
     /// <param name="model">The complete payload model.</param>
@@ -151,6 +167,14 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         var owners = new List<string>(Owners ?? Array.Empty<string>());
         var dictionaries = new List<DictionaryOwnerFact>(DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>());
         Required(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse);
+        var general = new Dictionary<string, FormatterModel>(StringComparer.Ordinal);
+        foreach (FormatterModel formatter in GeneralOwners ?? Array.Empty<FormatterModel>())
+            general[formatter.Type] = formatter;
+        CollectGeneral(model, general, new HashSet<string>(StringComparer.Ordinal));
+        cultureInfoReuse |= general.Values.Any(formatter => formatter.Supports("CanReuseCultureInfo"));
+        foreach (FormatterModel formatter in general.Values)
+            if (formatter.Payload != null)
+                Required(formatter.Payload, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse);
         SequenceOwnerFact[] sequenceOwners = facts.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal)
@@ -158,14 +182,16 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
         return new SharedFormatterSet(extension, owners.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray(), aliases, cultureInfoReuse, sequenceOwners,
             scalars.Distinct(StringComparer.Ordinal).OrderBy(scalar => scalar, StringComparer.Ordinal).ToArray(),
             dictionaries.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal).Select(group => group.First())
-                .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal).ToArray());
+                .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal).ToArray(),
+            general.Values.OrderBy(formatter => formatter.Type, StringComparer.Ordinal).ToArray(), options);
     }
 
     /// <inheritdoc/>
     public bool Equals(SharedFormatterSet other) => Extension == other.Extension && SameStrings(Owners, other.Owners) &&
-        AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse &&
+        AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse && Equals(Options, other.Options) &&
         SameFacts(SequenceOwners, other.SequenceOwners) && SameStrings(Scalars, other.Scalars) &&
-        SameDictionaries(DictionaryOwners, other.DictionaryOwners);
+        SameDictionaries(DictionaryOwners, other.DictionaryOwners) &&
+        (GeneralOwners ?? Array.Empty<FormatterModel>()).SequenceEqual(other.GeneralOwners ?? Array.Empty<FormatterModel>());
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is SharedFormatterSet other && Equals(other);
@@ -265,7 +291,7 @@ internal readonly struct SharedFormatterSet : IEquatable<SharedFormatterSet>
                 case ScalarMember { Builtin: true } builtin:
                     AddScalar(scalars, builtin.Scalar);
                     break;
-                case SpecialMember special:
+                case SpecialMember special when special.Formatter == null:
                     owners.Add(GeneratedNames.PayloadKey(special.Declared));
                     // A closed generic owner calls the element owners of its arguments.
                     if (GenericIdentity.TryParse(GeneratedNames.PayloadKey(special.Declared), out string definition, out string[] arguments))

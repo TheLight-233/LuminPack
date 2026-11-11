@@ -168,13 +168,9 @@ internal static class ImmutableListOwnerFile
                         });
                     });
                     w.Blank();
-                    w.Line("value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + scalar + ">(");
-                    w.Indented(() =>
-                    {
-                        w.Line("pooled,");
-                        w.Line("0,");
-                        w.Line("length));");
-                    });
+                    w.Line(set.FindFormatter(sequence)?.Supports("ImmutableSpan") == true ?
+                        "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length));" :
+                        "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + scalar + ">(pooled, 0, length));");
                     w.Close();
                     w.Line("finally");
                     w.Open();
@@ -374,13 +370,9 @@ internal static class ImmutableListOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + scalar + ">(");
-                    w.Indented(() =>
-                    {
-                        w.Line("buffer,");
-                        w.Line("0,");
-                        w.Line("count));");
-                    });
+                    w.Line(set.FindFormatter(sequence)?.Supports("ImmutableSpan") == true ?
+                        "value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + scalar + ">(buffer, 0, count));" :
+                        "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + scalar + ">(buffer, 0, count));");
                     w.Close();
                     w.Line("finally");
                     w.Open();

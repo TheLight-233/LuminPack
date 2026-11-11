@@ -1,11 +1,26 @@
 using System;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders a list whose elements use their own generated static formatter.</summary>
 internal static class ListForwardingOwnerFile
 {
+    /// <summary>Selects the retained list specializations or the default static element traversal.</summary>
+    internal static string RenderDefault(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
+    {
+        FormatterModel model = set.FindFormatter(fact.DeclaredType)!;
+        FormatterModel element = model.Arguments[0];
+        if (element.RawCollection)
+            return ListScalarOwnerFile.Render(set, SequenceOwnerFact.ForScalar(fact.Family, model.Type, element.Type), operations);
+        if (element.Type == "string")
+            return ListStringOwnerFile.Render(set, fact, operations);
+        if (element.Definition == FormatterDefinitions.Array)
+            return Render(set, fact, operations);
+        return ContiguousOwnerFile.Render(set, model, operations, ContiguousShape.List);
+    }
+
     /// <summary>Renders the binary and JSON operations for one closed list.</summary>
     /// <param name="set">The shared formatter publication requirements.</param>
     /// <param name="fact">The list type and the type of its forwarded element.</param>

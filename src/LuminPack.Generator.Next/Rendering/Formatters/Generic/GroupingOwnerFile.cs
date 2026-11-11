@@ -1,4 +1,5 @@
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
@@ -43,7 +44,7 @@ internal static class GroupingOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line(key + " key = value.Key;");
-                    GenericOwnerFile.WriteItem(w, c, key, "key");
+                    FormatterElementEmitter.Write(w, set, set.FindFormatter(key) ?? new FormatterModel(key, FormatterDefinitions.Scalar, raw: GenericIdentity.IsRaw(key)), "key");
                     w.Line(Sequence(element) + " elements = value;");
                     w.Line(sequence + ".Write<" + c.Profile + ">(ref writer, in elements);");
                 },
@@ -57,7 +58,7 @@ internal static class GroupingOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line(GenericOwnerFile.Declare(key, "key"));
-                    GenericOwnerFile.ReadItem(w, c, key, "key");
+                    FormatterElementEmitter.Read(w, set, set.FindFormatter(key) ?? new FormatterModel(key, FormatterDefinitions.Scalar, raw: GenericIdentity.IsRaw(key)), "key");
                     w.Line(Sequence(element) + " elements = default !;");
                     w.Line(sequence + ".Read<" + c.Profile + ">(ref reader, ref elements);");
                     w.Line("if (elements is null)");

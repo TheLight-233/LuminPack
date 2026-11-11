@@ -160,36 +160,11 @@ internal static class SortedSetOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
-                    w.Line("try");
-                    w.Open();
-                    w.Line("global::System.Span<" + scalar + "> items = pooled.AsSpan(0, length);");
-                    w.Line("if (length != 0)");
-                    w.Indented(() =>
-                    {
-                        w.Line("reader.Read(");
-                        w.Indented(() =>
-                        {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
-                            w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                        });
-                    });
-                    w.Blank();
-                    w.Line("if (value is null)");
-                    w.Open();
-                    w.Line("value = " + tree + ".CreateSortedSet(pooled, length);");
-                    w.Close();
-                    w.Line("else");
-                    w.Open();
-                    w.Line("value.Clear();");
-                    w.Line("for (int index = 0; index < length; index++)");
-                    w.Line("    value.Add(pooled[index]);");
-                    w.Close();
-                    w.Close();
-                    w.Line("finally");
-                    w.Open();
-                    w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(pooled, clearArray: false);");
-                    w.Close();
+                    w.Line("ref var operationState = ref reader;");
+                    var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal, set: set);
+                    SortedSetTextOwnerFile.Read(context);
+                    w.Line("operationComplete_RootRead:");
+                    w.Line(";");
                     w.Close();
                     w.Blank();
                     break;

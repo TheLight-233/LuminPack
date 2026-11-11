@@ -1,11 +1,16 @@
 using System;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>The aliases a framework formatter body may reference.</summary>
 internal readonly struct SpecialOwnerContext
 {
+    private readonly FormatterModel? _contract;
+    /// <summary>Checks a runtime capability captured during analysis.</summary>
+    internal bool Supports(string capability) => _contract?.Supports(capability) == true;
+
     /// <summary>The profile type parameter in scope.</summary>
     internal readonly string Profile;
 
@@ -16,8 +21,9 @@ internal readonly struct SpecialOwnerContext
     internal readonly string JsonReader;
 
     /// <summary>Captures the current aliases.</summary>
-    internal SpecialOwnerContext(string profile, string jsonWriter, string jsonReader)
+    internal SpecialOwnerContext(string profile, string jsonWriter, string jsonReader, FormatterModel? contract = null)
     {
+        _contract = contract;
         JsonReader = jsonReader;
         JsonWriter = jsonWriter;
         Profile = profile;
@@ -40,11 +46,13 @@ internal static class SpecialOwnerFile
     /// <param name="jsonWrite">Emits the JSON write root body.</param>
     /// <param name="jsonRead">Emits the JSON read root body.</param>
     /// <returns>The complete source.</returns>
+    /// <param name="support">The optional shared support declarations.</param>
+    /// <param name="compressedEntries">The compressed entries used by this operation.</param>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations, string shortName, string typeName,
         bool referenceType, Action<CodeWriter, SpecialOwnerContext> binaryWrite, Action<CodeWriter, SpecialOwnerContext> binaryRead,
-        Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead)
+        Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null, bool compressedEntries = false)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
         string serializer = w.A("LuminPackSerializer");
         const string writer = "LuminPackWriter";
         const string reader = "LuminPackReader";
@@ -60,7 +68,7 @@ internal static class SpecialOwnerFile
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots,
             "internal static partial class Binary_" + extension + "_" + shortName, null, EmitBinaryWrite, EmitBinaryRead,
-            EmitJsonWrite, EmitJsonRead);
+            EmitJsonWrite, EmitJsonRead, support == null ? null : () => support(w));
 
         string Input() => referenceType ? typeName + " input" : "in " + typeName + " input";
 
@@ -69,6 +77,12 @@ internal static class SpecialOwnerFile
             switch (section)
             {
                 case FormatterSection.Entries:
+                    if (compressedEntries)
+                    {
+                        w.Line("internal static void SerializeWithCompress<TLuminProfile>(scoped ref " + writer + " writer, scoped in " + typeName + " input)");
+                        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite<TLuminProfile>(ref writer, input);");
+                        w.Blank();
+                    }
                     w.Line(preserve);
                     w.Line(inline);
                     w.Line("internal static void Serialize_" + shortName + "(");
@@ -91,7 +105,7 @@ internal static class SpecialOwnerFile
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line("var value = input;");
-                    binaryWrite(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader));
+                    binaryWrite(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader, set.FindFormatter(typeName)));
                     w.Close();
                     w.Blank();
                     break;
@@ -115,6 +129,12 @@ internal static class SpecialOwnerFile
             switch (section)
             {
                 case FormatterSection.Entries:
+                    if (compressedEntries)
+                    {
+                        w.Line("internal static void DeserializeWithCompress<TLuminProfile>(scoped ref " + reader + " reader, scoped ref " + typeName + " value)");
+                        w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootRead<TLuminProfile>(ref reader, ref value);");
+                        w.Blank();
+                    }
                     w.Line(preserve);
                     w.Line(inline);
                     w.Line("internal static void Deserialize_" + shortName + "(");
@@ -138,7 +158,7 @@ internal static class SpecialOwnerFile
                     w.Line("    scoped ref " + typeName + " value)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
-                    binaryRead(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader));
+                    binaryRead(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader, set.FindFormatter(typeName)));
                     w.Close();
                     w.Blank();
                     break;
@@ -186,7 +206,7 @@ internal static class SpecialOwnerFile
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
                     w.Line("var value = input;");
-                    jsonWrite(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader));
+                    jsonWrite(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader, set.FindFormatter(typeName)));
                     w.Close();
                     w.Blank();
                     break;
@@ -233,7 +253,7 @@ internal static class SpecialOwnerFile
                     w.Line("    scoped ref " + typeName + " value)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
-                    jsonRead(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader));
+                    jsonRead(w, new SpecialOwnerContext("TLuminProfile", jsonWriter, jsonReader, set.FindFormatter(typeName)));
                     w.Close();
                     w.Blank();
                     break;

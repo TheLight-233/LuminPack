@@ -7,7 +7,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// stages the pairs in pooled arrays and fills the list directly when the keys are strictly ascending, sorts them first when
 /// they are not, and falls back to the bulk construction that rejects duplicates; every other read clears or creates the list and
 /// adds each pair.</remarks>
-internal static class SortedListOwnerFile
+internal static partial class SortedListOwnerFile
 {
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Add(key!, itemValue);");
 
@@ -77,6 +77,8 @@ internal static class SortedListOwnerFile
     {
         var w = c.W;
         string list = c.Dictionary;
+        if (c.ReferenceValue && c.Supports("MatchSortedListKey"))
+            MatchingPairs(c);
         w.Line("if (value is null && length > 1)");
         w.Open();
         w.Line("var keys = global::System.Buffers.ArrayPool<" + c.Key + ">.Shared.Rent(length);");
@@ -125,13 +127,20 @@ internal static class SortedListOwnerFile
         w.Indented(() => w.Line("value = new " + list + "(length);"));
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
+        bool append = c.Supports("AppendSortedList");
+        if (append)
+        {
+            w.Line("var appendDestination = value;");
+            w.Line("var appendCulture = global::System.Globalization.CultureInfo.CurrentCulture;");
+            w.Line("bool canAppendOrdered = global::LuminPack.Code.LuminPackCollectionAccess.CanAppendSortedListOrdered(value);");
+        }
         w.Line("for (int index = 0; index < length; index++)");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
         c.ReadMember(c.Key, "k");
         c.ReadMember(c.Value, "v");
-        w.Line("value.Add(k!, v);");
+        w.Line(append ? "if (!canAppendOrdered || !global::System.Object.ReferenceEquals(value, appendDestination) || !global::System.Object.ReferenceEquals(global::System.Globalization.CultureInfo.CurrentCulture, appendCulture) || !global::LuminPack.Code.LuminPackCollectionAccess.TryAppendSortedListOrdered(value, k!, v, true)) value.Add(k!, v);" : "value.Add(k!, v);");
         w.Close();
     }
 }

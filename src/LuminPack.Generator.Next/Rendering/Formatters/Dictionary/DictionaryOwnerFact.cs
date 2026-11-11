@@ -1,5 +1,6 @@
 using System;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
@@ -18,11 +19,36 @@ internal sealed class DictionaryFormatter
 
     /// <summary>Registers a dictionary definition.</summary>
     /// <param name="entries">The owner renderer for raw scalar and string entries.</param>
-    internal DictionaryFormatter(RenderDictionaryOwner entries, bool forwardsToDictionary = false, RenderDictionaryOwner? payload = null)
+    internal DictionaryFormatter(RenderDictionaryOwner entries, bool forwardsToDictionary = false, RenderDictionaryOwner? payload = null,
+        string? jsonReuseStore = null, bool nativeEntries = false, RenderDictionaryOwner? general = null)
     {
+        General = general;
+        NativeEntries = nativeEntries || forwardsToDictionary;
+        JsonReuseStore = jsonReuseStore;
         Entries = entries;
         Payload = payload;
         ForwardsToDictionary = forwardsToDictionary;
+    }
+
+    /// <summary>Whether a fully raw pair follows the concrete Dictionary contiguous entry contract.</summary>
+    internal bool NativeEntries { get; }
+
+    /// <summary>The insertion statement after an existing mutable JSON target has been staged.</summary>
+    internal string? JsonReuseStore { get; }
+
+    /// <summary>The optional family-specific general contract renderer.</summary>
+    internal RenderDictionaryOwner? General { get; }
+
+    /// <summary>Selects retained entry specializations or the default element-owner traversal.</summary>
+    internal string RenderDefault(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations)
+    {
+        if (General != null)
+            return General(set, fact, operations);
+        FormatterModel key = fact.Contract!.Arguments[0], value = fact.Contract.Arguments[1];
+        bool direct = ((key.Raw || key.Type == "string") && (value.Raw || value.Type == "string") ||
+            NativeEntries && key.RawCollection && value.RawCollection) && key.Type != "bool" && value.Type != "bool";
+        return direct ? Entries(set, new DictionaryOwnerFact(this, fact.DeclaredType, key.Type, value.Type), operations) :
+            (Payload ?? Entries)(set, fact, operations);
     }
 
     /// <summary>The renderer for a packable class value, when it differs from the raw and string renderer.</summary>
@@ -36,6 +62,9 @@ internal sealed class DictionaryFormatter
 /// <remarks>The key and value are each a raw scalar keyword or <c>string</c>. These facts contain no compiler objects.</remarks>
 internal readonly struct DictionaryOwnerFact : IEquatable<DictionaryOwnerFact>
 {
+    /// <summary>The default argument contracts of a closed dictionary.</summary>
+    internal readonly FormatterModel? Contract;
+
     /// <summary>The declared dictionary family, which selects the owner template.</summary>
     internal readonly DictionaryFormatter Family;
 
@@ -59,9 +88,13 @@ internal readonly struct DictionaryOwnerFact : IEquatable<DictionaryOwnerFact>
     /// <param name="declaredType">The declared dictionary spelling.</param>
     /// <param name="key">The key keyword or <c>string</c>.</param>
     /// <param name="value">The value keyword or <c>string</c>.</param>
+    /// <param name="element">The element used by this operation.</param>
+    /// <param name="forwardedValue">The forwarded value used by this operation.</param>
+    /// <param name="contract">The normalized closed formatter contract.</param>
     internal DictionaryOwnerFact(DictionaryFormatter family, string declaredType, string key, string value, PayloadRenderModel? element = null,
-        bool forwardedValue = false)
+        bool forwardedValue = false, FormatterModel? contract = null)
     {
+        Contract = contract;
         ForwardedValue = forwardedValue;
         Element = element;
         Family = family;
@@ -72,7 +105,7 @@ internal readonly struct DictionaryOwnerFact : IEquatable<DictionaryOwnerFact>
 
     /// <inheritdoc/>
     public bool Equals(DictionaryOwnerFact other) => Family == other.Family && DeclaredType == other.DeclaredType &&
-        Key == other.Key && Value == other.Value && Equals(Element, other.Element) && ForwardedValue == other.ForwardedValue;
+        Key == other.Key && Value == other.Value && Equals(Element, other.Element) && ForwardedValue == other.ForwardedValue && Equals(Contract, other.Contract);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is DictionaryOwnerFact other && Equals(other);

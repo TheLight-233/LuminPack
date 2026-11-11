@@ -91,7 +91,7 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Close();
                     w.Line("int countPosition = operationState.BeginCollection();");
                     w.Line("int count = 0;");
-                    w.Line("foreach (var item in value)");
+                    w.Line("foreach (var item in " + (set.FindFormatter(queue)?.Supports("ConcurrentTraversal") == true ? "global::LuminPack.Code.LuminPackCollectionAccess.EnumerateConcurrentQueue(value)" : "value") + ")");
                     w.Open();
                     w.Line("count++;");
                     w.Line("var v = item;");
@@ -165,7 +165,7 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Open();
                     w.Line(reader + " operationState = default;");
                     w.Line("reader.CopyTo(ref operationState);");
-                    w.Line("int length = operationState.ReadLength(1);");
+                    w.Line("int length = operationState.ReadLength(" + (set.FindFormatter(itemType) is { } itemModel ? FormatterElementEmitter.Minimum(itemModel) : "1") + ");");
                     w.Line("if (length < 0)");
                     w.Open();
                     w.Line("value = null;");
@@ -282,7 +282,7 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("bool isFirst = true;");
-                    w.Line("foreach (var item in value)");
+                    w.Line("foreach (var item in " + (set.FindFormatter(queue)?.Supports("ConcurrentTraversal") == true ? "global::LuminPack.Code.LuminPackCollectionAccess.EnumerateConcurrentQueue(value)" : "value") + ")");
                     w.Open();
                     w.Line("if (!isFirst)");
                     w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");

@@ -1,5 +1,6 @@
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Binary;
 
@@ -24,7 +25,9 @@ internal sealed class BinaryRenderer : IRenderer
 
     private static string Record(RecordModel model, RenderContext context) => Emit(model, context);
 
-    private static string Struct(StructModel model, RenderContext context) => Emit(model, context);
+    private static string Struct(StructModel model, RenderContext context) => model.StoragePlan != null ?
+        UnmanagedOwnerFile.Render(SharedFormatterSet.Empty.Include(model, context.Options), model, context.Operations &
+            (GeneratedOperations.BinaryWrite | GeneratedOperations.BinaryRead)) : Emit(model, context);
 
     private static string Circle(CircleReferenceModel model, RenderContext context) => Emit(model, context);
 

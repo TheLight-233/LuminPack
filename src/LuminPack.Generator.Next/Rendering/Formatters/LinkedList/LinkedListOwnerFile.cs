@@ -35,7 +35,9 @@ internal static class LinkedListOwnerFile
         w.Line("count++;");
         w.Line("var v = node.Value;");
         // A Boolean element writes through a read-only alias, as the legacy element write does.
-        if (c.Text)
+        if (c.Forwarded)
+            c.WriteElement("v");
+        else if (c.Text)
             w.Line("operationState.Write<TLuminProfile>(v);");
         else if (c.Scalar == "bool")
         {

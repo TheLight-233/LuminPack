@@ -8,8 +8,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class ImmutableSortedDictionaryOwnerFile
 {
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.TreeWrite(), Read, "staged[key] = itemValue;",
-        c => c.W.Line("var staged = global::System.Collections.Immutable.ImmutableSortedDictionary.CreateBuilder<" + c.Key + ", " + c.Value + ">();"),
-        c => c.W.Line("value = staged.ToImmutable();"));
+        c => ImmutableBuilderLifetime.Begin(c.W, "SortedDictionary", c.Key + ", " + c.Value, c.Supports("ImmutableBuilder"), "staged"),
+        AfterJson);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -18,6 +18,13 @@ internal static class ImmutableSortedDictionaryOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
+
+    /// <summary>Publishes JSON entries and returns an optional immutable builder lease.</summary>
+    private static void AfterJson(PairedDictionaryContext c)
+    {
+        c.W.Line("value = staged.ToImmutable();");
+        ImmutableBuilderLifetime.End(c.W, "SortedDictionary", c.Supports("ImmutableBuilder"), "staged");
+    }
 
     private static void Read(PairedDictionaryContext c)
     {

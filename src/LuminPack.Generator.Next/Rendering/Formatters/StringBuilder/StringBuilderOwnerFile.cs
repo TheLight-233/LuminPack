@@ -12,15 +12,36 @@ internal static class StringBuilderOwnerFile
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations) =>
-        SpecialOwnerFile.Render(set, operations, "StringBuilder", "global::System.Text.StringBuilder", true, BinaryWrite,
-            BinaryRead, JsonWrite, JsonRead);
+        SpecialOwnerFile.Render(set, operations, "StringBuilder", "global::System.Text.StringBuilder", true, (w, c) => BinaryWrite(w, c, set),
+            BinaryRead, (w, c) => JsonWrite(w, c, set), (w, c) => JsonRead(w, c, set));
 
-    private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
+    private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
-        w.Line("if (value is null) { writer.WriteNullCollectionHeader(); return; }");
+        w.Line("if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
         w.Line("int length = value.Length;");
-        w.Line("string text = value.ToString();");
-        w.Line("writer.Write<char>(text.AsSpan(), length);");
+        w.Line("int byteCount = checked(length * sizeof(char));");
+        w.Line("writer.EnsureAdditionalCapacity(checked(sizeof(int) + byteCount));");
+        w.Line("writer.WriteCollectionHeader(length);");
+        if (set.FindFormatter("global::System.Text.StringBuilder")?.Supports("CanCopyStringBuilder") == true)
+        {
+            w.Line("var destination = global::System.Runtime.InteropServices.MemoryMarshal.Cast<byte, char>(writer.Buffer.Slice(writer.Position, byteCount));");
+            w.Line("value.CopyTo(0, destination, length);");
+            w.Line("writer.Advance(byteCount);");
+        }
+        else
+        {
+            w.Line("#if NET8_0_OR_GREATER");
+            w.Line("foreach (var chunk in value.GetChunks())");
+            w.Open();
+            w.Line("var bytes = global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(chunk.Span);");
+            w.Line("writer.Write(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(bytes), bytes.Length);");
+            w.Close();
+            w.Line("#else");
+            w.Line("var bytes = global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(value.ToString().AsSpan());");
+            w.Line("writer.Write(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(bytes), bytes.Length);");
+            w.Line("#endif");
+        }
+        w.Line("writer.CheckBuffer();");
     }
 
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
@@ -42,16 +63,19 @@ internal static class StringBuilderOwnerFile
         w.Line("value.EnsureCapacity(length);");
         w.Close();
         w.Blank();
-        w.Line("if (length != 0)");
-        w.Open();
-        w.Line("var chars = new char[length];");
-        w.Line("reader.Read<char>(chars);");
-        w.Line("value.Append(chars, 0, length);");
-        w.Close();
+        w.Line("int bytes = checked(length * sizeof(char));");
+        w.Line("var chars = global::System.Runtime.InteropServices.MemoryMarshal.Cast<byte, char>(reader.Buffer.Slice(reader.Position, bytes));");
+        w.Line("value.Append(chars);");
+        w.Line("reader.Advance(bytes);");
     }
 
-    private static void JsonWrite(CodeWriter w, SpecialOwnerContext context)
+    private static void JsonWrite(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
+        if (set.FindFormatter("global::System.Text.StringBuilder")?.Supports("CanWriteJsonStringBuilder") == true)
+        {
+            w.Line("writer.WriteStringBuilder<" + context.Profile + ">(value);");
+            return;
+        }
         w.Line("if (value == null)");
         w.Open();
         w.Line("writer.WriteNull<" + context.Profile + ">();");
@@ -61,8 +85,13 @@ internal static class StringBuilderOwnerFile
         w.Line("writer.Write<" + context.Profile + ">(value.ToString());");
     }
 
-    private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
+    private static void JsonRead(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
+        if (set.FindFormatter("global::System.Text.StringBuilder")?.Supports("CanReadJsonStringBuilder") == true)
+        {
+            w.Line("reader.ReadStringBuilder<" + context.Profile + ">(ref value);");
+            return;
+        }
         w.Line("if (reader.IsNull())");
         w.Open();
         w.Line("value = null;");

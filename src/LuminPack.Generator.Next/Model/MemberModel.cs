@@ -154,11 +154,22 @@ internal sealed class SpecialMember : MemberModel
     /// <summary>Whether the member is an auto-property whose storage is reached through the layout mirror.</summary>
     internal readonly bool Property;
 
+    /// <summary>The general formatter contract when the member uses recursive static forwarding.</summary>
+    internal readonly FormatterModel? Formatter;
+
     /// <summary>Captures a framework member.</summary>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="storage">The storage used by this operation.</param>
+    /// <param name="policy">The policy used by this operation.</param>
+    /// <param name="declared">The declared used by this operation.</param>
+    /// <param name="nullable">The nullable used by this operation.</param>
+    /// <param name="property">The property used by this operation.</param>
+    /// <param name="formatter">The formatter used by this operation.</param>
     internal SpecialMember(string name, MemberStorage storage, WirePolicy policy, string declared, bool nullable,
-        bool property)
+        bool property, FormatterModel? formatter = null)
         : base(name, storage, policy)
     {
+        Formatter = formatter;
         Property = property;
         Nullable = nullable;
         Declared = declared;
@@ -168,7 +179,7 @@ internal sealed class SpecialMember : MemberModel
     protected override bool EqualsCore(MemberModel other)
     {
         var member = (SpecialMember)other;
-        return Declared == member.Declared && Nullable == member.Nullable && Property == member.Property;
+        return Declared == member.Declared && Nullable == member.Nullable && Property == member.Property && Equals(Formatter, member.Formatter);
     }
 }
 

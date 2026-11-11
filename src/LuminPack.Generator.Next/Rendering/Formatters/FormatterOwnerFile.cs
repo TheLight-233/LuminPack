@@ -33,9 +33,10 @@ internal static class FormatterOwnerFile
     /// <param name="jsonWrite">Emits the JSON write operation.</param>
     /// <param name="jsonRead">Emits the JSON read operation.</param>
     /// <returns>The complete formatter source.</returns>
+    /// <param name="support">The optional shared support declarations.</param>
     internal static string Render(CodeWriter writer, GeneratedOperations operations, string roots, string owner,
         string? extensions, Action<FormatterSection> binaryWrite, Action<FormatterSection> binaryRead,
-        Action<FormatterSection> jsonWrite, Action<FormatterSection> jsonRead)
+        Action<FormatterSection> jsonWrite, Action<FormatterSection> jsonRead, Action? support = null)
     {
         if (operations == GeneratedOperations.None)
             return string.Empty;
@@ -48,6 +49,7 @@ internal static class FormatterOwnerFile
         writer.Line(roots);
         writer.Open();
         Emit(FormatterSection.Roots);
+        support?.Invoke();
         writer.Close();
         writer.Close();
         writer.Blank();

@@ -54,6 +54,11 @@ internal static class VersionOwnerFile
 
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context)
     {
+        if (context.Supports("CanWriteJsonVersion"))
+        {
+            w.Line("writer.WriteVersion<" + context.Profile + ">(value);");
+            return;
+        }
         w.Line("if (value == null)");
         w.Open();
         w.Line("writer.WriteNull<" + context.Profile + ">();");
@@ -65,6 +70,11 @@ internal static class VersionOwnerFile
 
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
+        if (context.Supports("CanReadJsonVersion"))
+        {
+            w.Line("value = reader.ReadVersion<" + context.Profile + ">();");
+            return;
+        }
         w.Line("if (reader.IsNull())");
         w.Open();
         w.Line("value = null;");

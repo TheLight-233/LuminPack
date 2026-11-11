@@ -9,7 +9,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// order and publishes them through the collection-access helper.</remarks>
 internal static class ConcurrentStackTextOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "staged.Add(item);", Before, After);
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "staged.Add(item);", Before, After, jsonAddBody: JsonAdd);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -42,7 +42,7 @@ internal static class ConcurrentStackTextOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
-        if (c.Payload != null)
+        if (c.Payload != null || c.Forwarded)
         {
             c.StackPayloadWrite("value", true);
             return;
@@ -74,9 +74,30 @@ internal static class ConcurrentStackTextOwnerFile
         w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
-        w.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();");
+        if (c.Supports("StageConcurrentStack"))
+            w.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();");
     }
 
-    private static void After(EnumerableOwnerContext c) =>
-        c.W.Line("global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, staged.ToArray(), staged.Count, true);");
+    private static void After(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        if (c.Supports("StageConcurrentStack"))
+        {
+            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, staged.ToArray(), staged.Count, true);");
+            return;
+        }
+        w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(value, out var count);");
+        w.Line("try");
+        w.Open();
+        w.Line("value.Clear();");
+        w.Line("if (count != 0) value.PushRange(snapshot, 0, count);");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared.Return(snapshot, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Scalar + ">());");
+        w.Close();
+    }
+
+    /// <summary>Publishes callback-bearing elements immediately and stages only certified framework values.</summary>
+    private static void JsonAdd(EnumerableOwnerContext c) => c.W.Line(c.Supports("StageConcurrentStack") ? "staged.Add(item);" : "value.Push(item);");
 }

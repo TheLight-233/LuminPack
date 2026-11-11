@@ -59,6 +59,11 @@ internal static class TimeZoneInfoOwnerFile
 
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
+        if (context.Supports("CanReadJsonTimeZoneInfo"))
+        {
+            w.Line("value = reader.ReadTimeZoneInfo<" + context.Profile + ">();");
+            return;
+        }
         w.Line("if (reader.IsNull())");
         w.Open();
         w.Line("value = null;");

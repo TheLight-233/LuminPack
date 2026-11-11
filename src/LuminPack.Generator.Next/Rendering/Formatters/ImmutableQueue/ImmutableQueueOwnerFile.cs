@@ -169,7 +169,9 @@ internal static class ImmutableQueueOwnerFile
                             w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                         });
                     });
-                    w.Line("value = " + factory + ".Create(new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length));");
+                    w.Line(set.FindFormatter(queue)?.Supports("ImmutableSpan") == true ?
+                        "value = " + factory + ".Create(new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length));" :
+                        "value = " + factory + ".CreateRange(new global::System.ArraySegment<" + scalar + ">(pooled, 0, length));");
                     w.Close();
                     w.Line("finally");
                     w.Open();
@@ -376,7 +378,9 @@ internal static class ImmutableQueueOwnerFile
                     w.Line("value = " + queue + ".Empty;");
                     w.Line("return;");
                     w.Close();
-                    w.Line("value = " + factory + ".Create(new global::System.ReadOnlySpan<" + scalar + ">(buffer, 0, count));");
+                    w.Line(set.FindFormatter(queue)?.Supports("ImmutableSpan") == true ?
+                        "value = " + factory + ".Create(new global::System.ReadOnlySpan<" + scalar + ">(buffer, 0, count));" :
+                        "value = " + factory + ".CreateRange(new global::System.ArraySegment<" + scalar + ">(buffer, 0, count));");
                     w.Close();
                     w.Line("finally");
                     w.Open();

@@ -19,7 +19,7 @@ internal static class RenderModelFactory
     /// <param name="model">The normalized payload.</param>
     /// <param name="options">The project facts.</param>
     /// <returns>The render model, or null when this adapter does not cover the payload yet.</returns>
-    internal static PayloadRenderModel? Create(TypeModel model, GeneratorOptions options)
+    internal static PayloadRenderModel? Create(TypeModel model, GeneratorOptions options, bool json = false)
     {
         if (model is UnionModel union)
             return Union(union, options);
@@ -28,14 +28,15 @@ internal static class RenderModelFactory
         // A version-tolerant struct writes a schema prefix the struct roots do not reproduce yet.
         if (model is StructModel { Versioned: true })
             return null;
-        bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null };
+        bool raw = model is StructModel { Storage: StructStorage.RawUnmanaged, Layout: null } ||
+            json && model is StructModel { StoragePlan: not null };
         // A struct with reference members keeps the record protocol: public fields of fixed scalars, strings and built-in
         // values only. Mirrored storage, construction, callbacks, rent, a version schema and a bound change that framing and
         // are not modeled yet.
         bool managed = model is StructModel { Storage: StructStorage.ManagedRecord } managedStruct &&
             !managedStruct.Versioned && !managedStruct.Rent && !managedStruct.Constructors && !managedStruct.Callbacks &&
             !managedStruct.Identity.IsGeneric && managedStruct.Policy.Bound == null &&
-            managedStruct.Members.All(member => !member.Mirrored && member is ScalarMember or TextMember);
+            (managedStruct.Mirror != null || managedStruct.Members.All(member => !member.Mirrored));
         PortableLayout? portable = model is StructModel { Storage: StructStorage.PortableUnmanaged } portableStruct
             ? portableStruct.Layout : null;
         if (portable is not { Complete: true })
@@ -53,7 +54,8 @@ internal static class RenderModelFactory
         // The version-tolerant body writes its own member schema and does not reproduce the shared culture owner call.
         if (record is { Versioned: true } && model.Members.Any(member => member is CultureInfoMember))
             return PayloadEmitter.Reject<PayloadRenderModel>("versioned culture info member");
-        string? mirror = record?.Mirror;
+        StructModel? structure = model as StructModel;
+        string? mirror = record?.Mirror ?? structure?.Mirror;
         if (record != null && mirror == null && record.Members.Any(member => member.Mirrored))
             return null;
         if (portable != null && !portable.Fields.All(field => field.Leaves.Length != 0))
@@ -73,7 +75,7 @@ internal static class RenderModelFactory
         }
         // A raw struct copies its complete storage; a portable struct transfers only fixed fields. A managed struct writes a
         // record body, so its strings and built-in values keep their variable-length records.
-        if (!managed && isStruct && !members.All(member => member.IsFixed))
+        if (!managed && !json && isStruct && !raw && !members.All(member => member.IsFixed))
             return null;
         string globalName = model.Identity.GlobalName;
         // The selected constructor, pool rent and serialization callbacks scale the record's construction and framing; the
@@ -99,7 +101,7 @@ internal static class RenderModelFactory
         return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)), extension,
             GeneratedNames.JsonHelperName("Json_" + GeneratedNames.Sanitize(globalName)),
             freshResult: isStruct || model is RecordModel { FreshResult: true },
-            uniqueEntries: options.Interceptors, members, proven, mirror: mirror!, mirrorFields: record?.MirrorFields ?? null!,
+            uniqueEntries: options.Interceptors, members, proven, mirror: mirror!, mirrorFields: record?.MirrorFields ?? structure?.MirrorFields ?? null!,
             derived: model is RecordModel { Derived: true },
             isStruct, view: view!, viewElided, fixedUnionCase: record?.FixedUnionCase ?? false,
             measureRecord: members.All(item => item.IsFixed) && model switch
@@ -112,9 +114,9 @@ internal static class RenderModelFactory
             memberWrite: memberWrite, net8: options.Net8,
             utf8Literals: options.Net8 && options.CSharpVersion > 1000, version: Schema(record?.Version),
             referencePayload: model.Members.Any(item => item is not ScalarMember),
-            layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout,
+            layoutAttribute: portable?.LayoutAttribute ?? record?.MirrorLayout ?? structure?.MirrorLayout,
             bounded: model.Policy.Bound, typeParameters: model.Identity.TypeParameters, typeConstraints: model.Constraints,
-            trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView, mirrorOffsets: record?.MirrorOffsets,
+            trusted: model.Policy.Input == InputPolicy.Trusted, portableView: portableView, mirrorOffsets: record?.MirrorOffsets ?? structure?.MirrorOffsets,
             managedStruct: managed, rent: rent!,
             writeBefore: callbacks?.WriteBefore!, writeAfter: callbacks?.WriteAfter!,
             readBefore: callbacks?.ReadBefore!, readAfter: callbacks?.ReadAfter!,
@@ -320,7 +322,7 @@ internal static class RenderModelFactory
         return new PortableView(layout.ViewName, fields);
     }
 
-    private static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options)
+    internal static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options)
     {
         // Auto-property and included non-public storage keeps the same wire shapes as a public field; the mirror facts on the
         // payload decide how the emitters reach it.

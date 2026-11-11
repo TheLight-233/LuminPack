@@ -1,11 +1,13 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>The names and helpers one paired dictionary owner exposes to its family bodies.</summary>
-internal sealed class PairedDictionaryContext
+internal sealed partial class PairedDictionaryContext
 {
     /// <summary>The source writer of the owner file.</summary>
     internal CodeWriter W { get; }
@@ -43,15 +45,45 @@ internal sealed class PairedDictionaryContext
     private readonly Dictionary<string, int> _writeNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
     private readonly Dictionary<string, int> _readNames = new Dictionary<string, int>(StringComparer.Ordinal);
     private readonly bool _forwardedValue;
+    private readonly FormatterModel? _contract;
+    private readonly bool _nativeEntries;
+    private readonly SharedFormatterSet _set;
+    /// <summary>Checks the exact runtime API facts of this keyed family.</summary>
+    internal bool Supports(string capability) => _set.FindFormatter(Dictionary)?.Supports(capability) == true;
+    /// <summary>Whether both entry operations are raw unmanaged scalar stores.</summary>
+    /// <summary>Whether matching keys may seed a string or ordinary object value.</summary>
+    internal bool ReferenceValue => Value == "string" || Payload != null || _contract?.Arguments[1].OrdinaryObject == true;
+
+    internal bool RawPairs => _contract == null && Payload == null && !_forwardedValue && Key != "string" && Value != "string";
     private int _ends, _cursors, _spans, _readCursors, _readStrings, _readEnds;
 
+    /// <summary>Processes the current formatter contract.</summary>
+    /// <param name="writer">The source writer or operation writer.</param>
+    /// <param name="dictionary">The dictionary used by this operation.</param>
+    /// <param name="key">The key used by this operation.</param>
+    /// <param name="value">The value used by this operation.</param>
+    /// <param name="memory">The memory used by this operation.</param>
+    /// <param name="extension">The extension used by this operation.</param>
+    /// <param name="source">The source used by this operation.</param>
+    /// <param name="keyMember">The key member used by this operation.</param>
+    /// <param name="valueMember">The value member used by this operation.</param>
+    /// <param name="payload">The payload used by this operation.</param>
+    /// <param name="forwardedValue">The forwarded value used by this operation.</param>
+    /// <param name="contract">The normalized closed formatter contract.</param>
+    /// <param name="set">The shared formatter publication facts.</param>
+    /// <param name="nativeEntries">The native entries used by this operation.</param>
     internal PairedDictionaryContext(CodeWriter writer, string dictionary, string key, string value, string memory, string extension,
         string source = "value", string keyMember = "Key", string valueMember = "Value", PayloadRenderModel? payload = null,
-        bool forwardedValue = false)
+        bool forwardedValue = false, FormatterModel? contract = null, SharedFormatterSet set = default, bool nativeEntries = false)
     {
+        _nativeEntries = nativeEntries;
+        _contract = contract;
+        _set = set;
         Payload = payload;
         _forwardedValue = forwardedValue;
-        Source = source;
+        FormatterModel? sourceModel = set.FindFormatter(dictionary);
+        Source = source == "value" && sourceModel?.Supports("ConcurrentTraversal") == true ?
+            "global::LuminPack.Code.LuminPackCollectionAccess.Enumerate" + sourceModel.Definition.Substring(sourceModel.Definition.LastIndexOf('.') + 1) + "(" + source + ")" : source;
         KeyMember = keyMember;
         ValueMember = valueMember;
         Extension = extension;
@@ -68,6 +100,18 @@ internal sealed class PairedDictionaryContext
     /// <param name="expression">The member value expression.</param>
     internal void WriteMember(string type, string expression)
     {
+        if (_nativeEntries)
+        {
+            W.Line("operationState.CheckBuffer();");
+            W.Line("operationState.EnsureAdditionalCapacity(" + Memory + ".SizeOf<" + type + ">());");
+            W.Line("operationState.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref operationState.Cursor, in " + expression + "));");
+            return;
+        }
+        if (_contract != null)
+        {
+            FormatterElementEmitter.Write(W, _set, _contract.Arguments[type == Key ? 0 : 1], expression, "operationState");
+            return;
+        }
         if (Payload != null && type == Payload.GlobalName)
         {
             // The value's record body is expanded in place; the expression is an addressable local.
@@ -88,7 +132,8 @@ internal sealed class PairedDictionaryContext
         else if (type != "string")
         {
             W.Line("operationState.CheckBuffer();");
-            W.Line("operationState.Write(in " + expression + ");");
+            W.Line("operationState.EnsureAdditionalCapacity(" + Memory + ".SizeOf<" + type + ">());");
+            W.Line("operationState.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref operationState.Cursor, in " + expression + "));");
         }
         else
             W.Line("operationState.Write<TLuminProfile>(" + expression + ");");
@@ -99,11 +144,24 @@ internal sealed class PairedDictionaryContext
     /// <param name="destination">The assignable destination.</param>
     internal void ReadMember(string type, string destination)
     {
+        if (_nativeEntries)
+        {
+            if (type == "bool")
+                W.Line(destination + " = global::LuminPack.Security.LuminPackInputPolicy.ReadBoolean(ref operationState);");
+            else
+                W.Line("operationState.Read(ref " + Memory + ".As<" + type + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + type + ">());");
+            return;
+        }
+        if (_contract != null)
+        {
+            FormatterElementEmitter.Read(W, _set, _contract.Arguments[type == Key ? 0 : 1], destination, "operationState");
+            return;
+        }
         if (Payload != null && type == Payload.GlobalName)
         {
             // The value's record body is expanded in place on the caller's reader, which operationState aliases.
             W.Open();
-            W.Line(type + " payloadItem = default !;");
+            W.Line(type + " payloadItem = " + destination + ";");
             var body = new List<string>();
             BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
                 ref _readEnds);
@@ -272,11 +330,13 @@ internal static class PairedDictionaryOwnerTemplate
         string owner = "Binary_" + extension + "_" + type;
         string keyOwner = "global::LuminPack." + GeneratedNames.Owner(extension, key);
         string valueOwner = fact.Element != null ? "global::LuminPack." + fact.Element.Owner : "global::LuminPack." + GeneratedNames.Owner(extension, value);
-        string minimum = (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
+        bool nativeEntries = fact.Family.NativeEntries && fact.Contract?.Arguments.All(argument => argument.RawCollection) == true;
+        string minimum = nativeEntries ? memory + ".SizeOf<" + key + ">() + " + memory + ".SizeOf<" + value + ">()" : fact.Contract != null ? FormatterElementEmitter.Minimum(fact.Contract.Arguments[0]) + " + " +
+            FormatterElementEmitter.Minimum(fact.Contract.Arguments[1]) : (key != "string" ? memory + ".SizeOf<" + key + ">()" : "1") + " + " +
             (value != "string" && fact.Element == null && !fact.ForwardedValue ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
         var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,
-            fact.Element, fact.ForwardedValue);
+            fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -373,7 +433,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("    scoped ref " + dictionary + " value)");
                     w.Line(generic + options);
                     w.Open();
-                    if (fact.Element != null || fact.ForwardedValue)
+                    if (fact.Element != null || fact.ForwardedValue || fact.Contract != null)
                         w.Line("ref var operationState = ref reader;");
                     else
                     {
@@ -394,7 +454,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));
-                    if (fact.Element == null && !fact.ForwardedValue)
+                    if (fact.Element == null && !fact.ForwardedValue && fact.Contract == null)
                         w.Line("operationState.CopyTo(ref reader);");
                     w.Close();
                     w.Blank();
@@ -452,7 +512,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
                     w.Line("bool isFirst = true;");
-                    w.Line("foreach (var item in " + spec.Source + ")");
+                    w.Line("foreach (var item in " + context.Source + ")");
                     w.Open();
                     w.Line("if (!isFirst)");
                     w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
@@ -524,6 +584,8 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("return;");
                     w.Close();
                     w.Blank();
+                    if (fact.Family.JsonReuseStore != null)
+                        DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, fact.Family.JsonReuseStore, jsonReader);
                     if (spec.JsonBefore != null)
                         spec.JsonBefore(context);
                     else

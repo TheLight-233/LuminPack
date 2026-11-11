@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
@@ -20,22 +21,31 @@ internal static class RectangularArrayOwnerFile
     /// <param name="operations">The selected operations.</param>
     /// <returns>The generated owner source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
+        => Render(set, fact.DeclaredType, fact.Scalar!, fact.ArrayRank, fact.ReuseArraySlots, operations);
+
+    /// <summary>Renders a rectangular array using its general element and contiguous storage contracts.</summary>
+    internal static string Render(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations) =>
+        Render(set, model.Type, model.Arguments[0].Type, model.Rank, model.ReuseArraySlots, operations, model.Arguments[0]);
+
+    /// <summary>Renders the shared shape envelope with the analyzed element operations.</summary>
+    private static string Render(SharedFormatterSet set, string type, string item, int rank, bool reuseArraySlots,
+        GeneratedOperations operations, FormatterModel? element = null)
     {
-        string type = fact.DeclaredType;
-        string item = fact.Scalar!;
         bool text = item == "string";
-        bool raw = !text && GenericIdentity.NullableScalar(item) == null;
-        int rank = fact.ArrayRank;
+        bool raw = element != null ? element.RawCollection && element.Definition != GenericIdentity.Nullable :
+            !text && GenericIdentity.NullableScalar(item) == null;
+        FormatterStorageModel? layout = element?.Layout;
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(type));
         string owner = "global::LuminPack." + GeneratedNames.Owner(set.Extension!, item);
         string[] axes = Enumerable.Range(0, rank).Select(index => index.ToString(CultureInfo.InvariantCulture)).ToArray();
         string[] dimensions = axes.Select(axis => "dimension" + axis).ToArray();
-        string array = "new " + item + "[" + string.Join(", ", dimensions) + "]";
+        string array = "new " + ContiguousOwnerFile.WithRank(item, "[" + string.Join(", ", dimensions) + "]");
         string width = Unsafe + ".SizeOf<" + item + ">()";
 
         return SpecialOwnerFile.Render(set, operations, suffix, type, referenceType: true,
             (w, _) => BinaryWrite(w), (w, _) => BinaryRead(w), (w, _) => JsonWrite(w),
-            (w, context) => JsonRead(w, context.JsonReader));
+            (w, context) => JsonRead(w, context.JsonReader),
+            w => { if (layout != null) FormatterStorageEmitter.Support(w, layout); });
 
         void BinaryWrite(CodeWriter w)
         {
@@ -57,6 +67,12 @@ internal static class RectangularArrayOwnerFile
             {
                 First(w, item);
                 w.Line("writer.WriteStrings<" + Profile + ">(" + Marshal + ".CreateReadOnlySpan(ref first, value.Length));");
+            }
+            else if (layout != null)
+            {
+                w.Line("writer.EnsureAdditionalCapacity(" + FormatterStorageEmitter.Width(layout, "value.Length") + ");");
+                First(w, item);
+                FormatterStorageEmitter.Payload(w, layout, "first", "value.Length", true);
             }
             else if (raw)
             {
@@ -91,16 +107,18 @@ internal static class RectangularArrayOwnerFile
                 w.Line("int " + dimensions[axis] + " = global::LuminPack.Core.LuminPackReader.Read<int>(ref " +
                     Unsafe + ".Add(ref dimensions, " + offset + "));");
             }
-            w.Line("if (!reader.TryReadCollectionHead(out var length)) " + Error + ".ThrowInvalidCollection();");
+            w.Line("if (!reader.TryReadCollectionHead(out var length" + (layout != null ? ", 0" : "") + ")) " + Error + ".ThrowInvalidCollection();");
             w.Line("long expectedLength = " + string.Join(" || ", dimensions.Select(dimension => dimension + " == 0")) + " ? 0 : 1;");
             foreach (string dimension in dimensions)
                 AccumulateDimension(w, dimension);
             w.Line("if (expectedLength != length) " + Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
+            if (layout != null)
+                FormatterStorageEmitter.Validate(w, layout, "length");
             if (raw)
             {
                 w.Line("int payloadBytes = checked(length * " + width + ");");
                 w.Line("reader.EnsureCollectionPayload(reader.Position, payloadBytes);");
-                if (fact.ReuseArraySlots)
+                if (reuseArraySlots)
                 {
                     w.Line("if (value is null || " + string.Join(" || ", axes.Select(axis =>
                         "value.GetLength(" + axis + ") != dimension" + axis + " || value.GetLowerBound(" + axis + ") != 0")) + ")");
@@ -112,7 +130,7 @@ internal static class RectangularArrayOwnerFile
                 return;
             }
 
-            if (fact.ReuseArraySlots)
+            if (text && rank == 2 && reuseArraySlots)
             {
                 w.Line("if (reader.TryGetStringMatrixSlots<" + Profile + ">(value, dimension0, dimension1, out var slots))");
                 w.Open();
@@ -122,6 +140,11 @@ internal static class RectangularArrayOwnerFile
             }
             w.Line("value = " + array + ";");
             First(w, item);
+            if (layout != null)
+            {
+                FormatterStorageEmitter.Payload(w, layout, "first", "length", false);
+                return;
+            }
             w.Line("for (nint i = 0; i < length; i++)");
             w.Open();
             w.Line(owner + ".Read<" + Profile + ">(ref reader, ref " + Unsafe + ".Add(ref first, i));");

@@ -79,10 +79,20 @@ internal static class ConcurrentBagOwnerFile
                     w.Line("goto operationComplete_RootWrite;");
                     w.Close();
                     w.Blank();
-                    w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteConcurrentBagRaw(ref operationState, value))");
-                    w.Line("    goto operationComplete_RootWrite;");
+                    if (set.FindFormatter(bag)?.Supports("BagRawWrite") == true)
+                    {
+                        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteConcurrentBagRaw(ref operationState, value))");
+                        w.Line("    goto operationComplete_RootWrite;");
+                    }
                     w.Blank();
-                    w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentConcurrentBagSnapshot(value, out int count, out bool pooled);");
+                    if (set.FindFormatter(bag)?.Supports("BagSnapshot") == true)
+                        w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentConcurrentBagSnapshot(value, out int count, out bool pooled);");
+                    else
+                    {
+                        w.Line("var snapshot = value.ToArray();");
+                        w.Line("int count = snapshot.Length;");
+                        w.Line("bool pooled = false;");
+                    }
                     w.Line("try");
                     w.Open();
                     w.Line("global::System.ReadOnlySpan<" + scalar + "> items = new global::System.ReadOnlySpan<" + scalar +
@@ -243,7 +253,14 @@ internal static class ConcurrentBagOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentConcurrentBagSnapshot(value, out int count, out bool pooled);");
+                    if (set.FindFormatter(bag)?.Supports("BagSnapshot") == true)
+                        w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentConcurrentBagSnapshot(value, out int count, out bool pooled);");
+                    else
+                    {
+                        w.Line("var snapshot = value.ToArray();");
+                        w.Line("int count = snapshot.Length;");
+                        w.Line("bool pooled = false;");
+                    }
                     w.Line("try");
                     w.Open();
                     w.Line("bool isFirst = true;");

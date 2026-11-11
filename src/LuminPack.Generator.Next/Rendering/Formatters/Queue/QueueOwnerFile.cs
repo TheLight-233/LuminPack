@@ -22,7 +22,7 @@ internal static class QueueOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
-        if (c.Payload != null)
+        if (c.Payload != null || c.Forwarded)
         {
             c.QueuePayloadWrite("value");
             return;

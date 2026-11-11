@@ -90,6 +90,11 @@ internal static class WrapperTraversal
     /// <param name="c">The owner context.</param>
     internal static void WriteRoot(EnumerableOwnerContext c)
     {
+        if (c.Forwarded)
+        {
+            c.WrapperWrite("value");
+            return;
+        }
         if (c.Payload != null)
         {
             c.CountedWrite("value");
@@ -105,6 +110,11 @@ internal static class WrapperTraversal
     /// <param name="c">The owner context.</param>
     internal static void WriteBuilderRoot(EnumerableOwnerContext c)
     {
+        if (c.Forwarded)
+        {
+            c.BuilderWrite("value");
+            return;
+        }
         if (c.Payload != null)
         {
             c.CountedWrite("value");

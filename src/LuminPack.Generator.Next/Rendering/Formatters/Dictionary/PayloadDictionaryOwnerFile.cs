@@ -28,6 +28,11 @@ internal static class PayloadDictionaryOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
+        w.Line("if (value is not null)");
+        w.Open();
+        c.ReadExistingDictionary();
+        w.Line("goto operationComplete_RootRead;");
+        w.Close();
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Dictionary + "(length);"));
         w.Line("else");

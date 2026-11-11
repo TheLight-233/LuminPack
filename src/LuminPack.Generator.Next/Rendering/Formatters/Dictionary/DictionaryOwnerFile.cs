@@ -1,4 +1,5 @@
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using System.Linq;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
@@ -13,6 +14,21 @@ internal static class DictionaryOwnerFile
     // The original pipeline stores a nullable of a payload of at most four bytes as its raw struct.
     private static bool RawNullable(string member) => member.EndsWith("?", System.StringComparison.Ordinal) &&
         member.Substring(0, member.Length - 1) is "bool" or "byte" or "sbyte" or "short" or "ushort" or "char" or "int" or "uint" or "float";
+
+    /// <summary>Selects sparse nullable entries, retained raw/string kernels or recursive value-owner operations.</summary>
+    internal static string RenderDefault(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations)
+    {
+        var model = fact.Contract!;
+        var key = model.Arguments[0];
+        var value = model.Arguments[1];
+        if (GenericIdentity.IsRaw(key.Type) && key.Type != "bool" && value.Definition == GenericIdentity.Nullable &&
+            GenericIdentity.IsRaw(value.Arguments[0].Type))
+            return Render(set, new DictionaryOwnerFact(fact.Family, model.Type, key.Type, value.Arguments[0].Type + "?"), operations);
+        bool direct = ((key.Raw || key.Type == "string") && (value.Raw || value.Type == "string") ||
+            key.RawCollection && value.RawCollection) && key.Type != "bool" && value.Type != "bool";
+        return direct ? Render(set, new DictionaryOwnerFact(fact.Family, model.Type, key.Type, value.Type), operations) :
+            PayloadDictionaryOwnerFile.Render(set, fact, operations);
+    }
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -39,6 +55,9 @@ internal static class DictionaryOwnerFile
         // A nullable raw value makes the entries sparse: it is stored with the core store of the whole nullable storage.
         bool sparse = value.EndsWith("?", System.StringComparison.Ordinal);
         bool rawKey = key != "string", rawValue = value != "string", pair = rawKey && rawValue && !sparse;
+        bool CallbackFree(string item) => GenericIdentity.IsRaw(item) || FrameworkScalarBody.Contains(item) ||
+            set.FindFormatter(item)?.Underlying != null || set.Scalars.Any(scalar => scalar.StartsWith(item + "=", System.StringComparison.Ordinal));
+        bool observeRawLookup = pair && CallbackFree(key) && CallbackFree(value);
         string dictionary = fact.DeclaredType;
         string type = ReadableTypeName.Of(GeneratedNames.PayloadKey(dictionary));
         string roots = "LuminRoots_" + type;
@@ -69,7 +88,8 @@ internal static class DictionaryOwnerFile
             else if (!(member == "string"))
             {
                 w.Line(state + ".CheckBuffer();");
-                w.Line(state + ".Write(in " + expression + ");");
+                w.Line(state + ".EnsureAdditionalCapacity(" + memory + ".SizeOf<" + member + ">());");
+                w.Line(state + ".Advance(global::LuminPack.Core.LuminPackWriter.Write(ref " + state + ".Cursor, in " + expression + "));");
             }
             else
                 w.Line(state + ".Write<TLuminProfile>(" + expression + ");");
@@ -284,6 +304,8 @@ internal static class DictionaryOwnerFile
                         w.Line("goto operationComplete_RootRead;");
                         w.Close();
                     }
+                    if (set.FindFormatter(dictionary) is { } contract)
+                        DictionarySlotReuseEmitter.Emit(w, set, contract, "operationState", "value", "length", pair);
                     w.Line("ReadExisting<TLuminProfile>(ref operationState, value, length);");
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
@@ -354,11 +376,29 @@ internal static class DictionaryOwnerFile
                     w.Line("var items = global::System.Buffers.ArrayPool<" + entry + ">.Shared.Rent(count);");
                     w.Line("try");
                     w.Open();
+                    if (key == "string")
+                    {
+                        w.Line("var previous = destination.GetEnumerator();");
+                        if (set.FindFormatter(dictionary)?.Supports("EnumeratedStringKey") == true)
+                            w.Line("bool useEnumeratedValue = operationState.CanReuseEnumeratedStringKey<TLuminProfile>(destination.Comparer);");
+                    }
+                    if (observeRawLookup)
+                        w.Line("bool observeLookup = !global::System.Object.ReferenceEquals(destination.Comparer, global::System.Collections.Generic.EqualityComparer<" + key + ">.Default);");
                     w.Line("for (int index = 0; index < count; index++)");
                     w.Open();
-                    w.Line(key + " key = default !;");
-                    w.Line(value + " item = default !;");
+                    if (key == "string") w.Line("var prior = previous.MoveNext() ? previous.Current : default;");
+                    w.Line(key == "string" ? "string key = prior.Key;" : key + " key = default!;");
                     ReadMember("operationState", key, "key");
+                    if (pair)
+                    {
+                        if (observeRawLookup)
+                            w.Line("if (observeLookup) destination.TryGetValue(key, out _);");
+                        w.Line(value + " item = default!;");
+                    }
+                    else
+                        w.Line(value + " item = " + (key == "string" && set.FindFormatter(dictionary)?.Supports("EnumeratedStringKey") == true ?
+                            "useEnumeratedValue && key is not null && global::System.Object.ReferenceEquals(key, prior.Key) ? prior.Value : " : "") +
+                            "key is not null && destination.TryGetValue(key, out var existing) ? existing : default!;");
                     ReadMember("operationState", value, "item");
                     w.Line("items[index] = new " + entry + "(key, item);");
                     w.Close();
@@ -501,6 +541,7 @@ internal static class DictionaryOwnerFile
                     w.Blank();
                     w.Line("if (value is not null && value.GetType() != typeof(" + dictionary + "))");
                     w.Indented(() => w.Line("value = null;"));
+                    DictionaryJsonReuseEmitter.Emit(w, key, value, keyOwner, valueOwner, "value[key] = itemValue;", jsonReader);
                     w.Line("if (value is null)");
                     w.Indented(() => w.Line("value = new " + dictionary + "();"));
                     w.Line("else");

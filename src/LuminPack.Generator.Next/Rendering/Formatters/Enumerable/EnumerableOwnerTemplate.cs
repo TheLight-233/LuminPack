@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>The names and writer one enumerable sequence owner exposes to its family bodies.</summary>
-internal sealed class EnumerableOwnerContext
+internal sealed partial class EnumerableOwnerContext
 {
     /// <summary>The source writer of the owner file.</summary>
     internal CodeWriter W { get; }
@@ -29,7 +30,18 @@ internal sealed class EnumerableOwnerContext
     internal PayloadRenderModel? Payload { get; }
 
     /// <summary>Whether the element is written one at a time through the profile instead of as raw storage.</summary>
-    internal bool Counted => Text || Payload != null;
+    internal bool Counted => Text || Payload != null || Forwarded;
+
+    /// <summary>Whether this owner calls the element formatter.</summary>
+    internal bool Forwarded { get; }
+    /// <summary>Whether this family's default element block uses contiguous storage.</summary>
+    internal bool Contiguous { get; }
+    /// <summary>Whether the complete element block owns a packed or tagged layout.</summary>
+    internal bool ContiguousLayout => Contiguous && _element?.Layout != null;
+    private readonly SharedFormatterSet _set;
+    /// <summary>Checks the exact runtime API facts of this sequence.</summary>
+    internal bool Supports(string capability) => _set.FindFormatter(Sequence)?.Supports(capability) == true;
+    private readonly FormatterModel? _element;
 
     private readonly Dictionary<string, int> _writeNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
     private readonly Dictionary<string, int> _readNames = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -39,6 +51,19 @@ internal sealed class EnumerableOwnerContext
     /// <param name="local">The nonnull sequence expression.</param>
     internal void CountedWrite(string local)
     {
+        if (Forwarded)
+        {
+            W.Line("int countPosition = operationState.BeginCollection();");
+            W.Line("int count = 0;");
+            W.Line("foreach (var item in " + Source(local) + ")");
+            W.Open();
+            W.Line("count++;");
+            WriteElement("item");
+            W.Close();
+            W.Line("operationState.EndCollection(countPosition, count);");
+            W.Line("operationState.CheckBuffer();");
+            return;
+        }
         if (Payload == null)
         {
             var lines = new List<string>();
@@ -72,6 +97,11 @@ internal sealed class EnumerableOwnerContext
     /// <param name="concurrent">Whether the stack is a concurrent stack.</param>
     internal void StackPayloadWrite(string local, bool concurrent)
     {
+        if (Forwarded)
+        {
+            ForwardedStackWrite(local, concurrent);
+            return;
+        }
         var body = new List<string>();
         OrderedPayloadTraversal.WriteStack(body, Payload!, local, concurrent, W, _writeNames, ref _ends, ref _cursors, ref _spans);
         foreach (string line in body)
@@ -82,6 +112,11 @@ internal sealed class EnumerableOwnerContext
     /// <param name="local">The nonnull queue expression.</param>
     internal void QueuePayloadWrite(string local)
     {
+        if (Forwarded)
+        {
+            ForwardedQueueWrite(local);
+            return;
+        }
         var body = new List<string>();
         OrderedPayloadTraversal.WriteQueue(body, Payload!, local, W, _writeNames, ref _ends, ref _cursors, ref _spans);
         foreach (string line in body)
@@ -92,6 +127,19 @@ internal sealed class EnumerableOwnerContext
     /// <param name="destination">The assignable destination.</param>
     internal void ReadElement(string destination)
     {
+        if (Scalar == "bool")
+        {
+            W.Line(destination + " = global::LuminPack.Security.LuminPackInputPolicy.ReadBoolean(ref operationState);");
+            return;
+        }
+        if (Forwarded)
+        {
+            if (Contiguous && _element!.RawCollection)
+                W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
+            else
+                FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState");
+            return;
+        }
         if (Payload != null)
         {
             // The element body is expanded in place on the caller's reader, which operationState aliases.
@@ -113,18 +161,31 @@ internal sealed class EnumerableOwnerContext
 
     /// <summary>Emits the read of <c>length</c> elements into a span.</summary>
     /// <param name="span">The destination span expression.</param>
-    internal void ReadBlock(string span)
+    internal void ReadBlock(string span, bool foreign = false)
     {
-        if (Payload != null)
+        if (Forwarded && Contiguous && (_element!.RawCollection || _element.Layout != null))
+        {
+            ReadContiguous(span);
+            return;
+        }
+        if (Payload != null || Forwarded)
         {
             W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
             W.Open();
-            ReadElement(span + "[blockIndex]");
+            if (foreign)
+            {
+                W.Line(Scalar + " blockItem = default!;");
+                ReadElement("blockItem");
+                W.Line(span + "[blockIndex] = blockItem;");
+            }
+            else
+                ReadElement(span + "[blockIndex]");
             W.Close();
             return;
         }
         if (Text)
         {
+            if (foreign) W.Line(span + ".Clear();");
             W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
             W.Indented(() => W.Line("operationState.Read<TLuminProfile>(ref " + span + "[blockIndex]);"));
             return;
@@ -137,9 +198,23 @@ internal sealed class EnumerableOwnerContext
         });
     }
 
+    /// <summary>Processes the current formatter contract.</summary>
+    /// <param name="writer">The source writer or operation writer.</param>
+    /// <param name="sequence">The sequence used by this operation.</param>
+    /// <param name="scalar">The scalar used by this operation.</param>
+    /// <param name="memory">The memory used by this operation.</param>
+    /// <param name="marshal">The marshal used by this operation.</param>
+    /// <param name="payload">The payload used by this operation.</param>
+    /// <param name="set">The shared formatter publication facts.</param>
+    /// <param name="element">The element used by this operation.</param>
+    /// <param name="contiguous">The contiguous used by this operation.</param>
     internal EnumerableOwnerContext(CodeWriter writer, string sequence, string scalar, string memory, string marshal,
-        PayloadRenderModel? payload = null)
+        PayloadRenderModel? payload = null, SharedFormatterSet set = default, FormatterModel? element = null, bool contiguous = false)
     {
+        _set = set;
+        _element = element;
+        Forwarded = element != null;
+        Contiguous = contiguous;
         Payload = payload;
         W = writer;
         Sequence = sequence;
@@ -150,19 +225,38 @@ internal sealed class EnumerableOwnerContext
 
     /// <summary>Emits the pooled block read of <c>length</c> raw elements and hands the pooled array to the family.</summary>
     /// <param name="consume">The statements that consume the pooled array and <c>length</c>.</param>
-    internal void PooledRead(Action consume)
+    internal void PooledRead(Action consume, Action? onReadFailure = null)
     {
         W.Line("var pooled = global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Rent(length);");
         W.Line("try");
         W.Open();
         W.Line("global::System.Span<" + Scalar + "> items = pooled.AsSpan(0, length);");
-        ReadBlock("items");
+        if (onReadFailure == null)
+            ReadBlock("items", foreign: true);
+        else
+        {
+            W.Line("int completed = 0;");
+            W.Line("try");
+            W.Open();
+            W.Line("for (; completed < length; completed++)");
+            W.Open();
+            W.Line(Scalar + " current = default!;");
+            ReadElement("current");
+            W.Line("items[completed] = current;");
+            W.Close();
+            W.Close();
+            W.Line("catch (global::System.Exception error)");
+            W.Open();
+            onReadFailure();
+            W.Line("global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(error);");
+            W.Close();
+        }
         consume();
         W.Close();
         W.Line("finally");
         W.Open();
         // A pooled string block holds references, so it is cleared when it returns.
-        W.Line("global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Return(pooled, " + (Counted ? "true" : "false") + ");");
+        W.Line("global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Return(pooled, " + (Forwarded ? "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + Scalar + ">()" : Counted ? "true" : "false") + ");");
         W.Close();
     }
 }
@@ -178,6 +272,8 @@ internal sealed class EnumerableOwnerSpec
 
     /// <summary>The statement that appends the staged JSON element <c>item</c> to <c>value</c>.</summary>
     internal string JsonAdd { get; }
+    /// <summary>Emits a family-specific JSON insertion when capture semantics select it.</summary>
+    internal Action<EnumerableOwnerContext>? JsonAddBody { get; }
 
     /// <summary>Emits the JSON destination preparation in place of the default create-or-clear, when the sequence is staged.</summary>
     internal Action<EnumerableOwnerContext>? JsonBefore { get; }
@@ -191,10 +287,20 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether the owner also declares the compressed entry points a forwarding parent calls, which equal the plain ones.</summary>
     internal bool CompressEntries { get; }
 
+    /// <summary>Processes the current formatter contract.</summary>
+    /// <param name="writeBody">The write body used by this operation.</param>
+    /// <param name="readBody">The read body used by this operation.</param>
+    /// <param name="jsonAdd">The json add used by this operation.</param>
+    /// <param name="jsonBefore">The json before used by this operation.</param>
+    /// <param name="jsonAfter">The json after used by this operation.</param>
+    /// <param name="jsonCount">The json count used by this operation.</param>
+    /// <param name="compressEntries">The compress entries used by this operation.</param>
+    /// <param name="jsonAddBody">The json add body used by this operation.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
-        bool compressEntries = false)
+        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null)
     {
+        JsonAddBody = jsonAddBody;
         CompressEntries = compressEntries;
         JsonCount = jsonCount;
         WriteBody = writeBody;
@@ -236,21 +342,26 @@ internal static class EnumerableOwnerTemplate
         string extension = set.Extension!;
         PayloadRenderModel? payload = fact.Element;
         // A packable element is spelled by its global name and expanded in place by the element's record body.
-        string scalar = payload != null ? payload.GlobalName : fact.Scalar!;
+        string scalar = fact.ForwardedType ?? (payload != null ? payload.GlobalName : fact.Scalar!);
         string readable = ReadableTypeName.Of(scalar);
         string sequence = fact.DeclaredType;
         // The closed owner identity derives from the declared sequence, so the nested static calls agree with the model.
         string type = ReadableTypeName.Of(GeneratedNames.PayloadKey(sequence));
         string roots = "LuminRoots_" + type;
-        string elementOwner = payload != null ? "global::LuminPack." + payload.Owner : "global::LuminPack.Binary_" + extension + "_" + readable;
+        string elementOwner = payload != null ? "global::LuminPack." + payload.Owner : GenericOwnerFile.Owner(extension, scalar);
         string owner = "Binary_" + extension + "_" + type;
         // A string element needs the profile, so its binary roots are generic in it.
-        bool text = scalar == "string" || payload != null;
-        string minimum = text ? "1" : memory + ".SizeOf<" + scalar + ">()";
-        var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal, payload);
+        bool text = scalar == "string" || payload != null || fact.ForwardedType != null;
+        string minimum = fact.ForwardedType != null ? (fact.Family.ContiguousElements && set.FindFormatter(scalar)?.RawCollection == true ?
+            memory + ".SizeOf<" + scalar + ">()" : fact.Family.ContiguousElements && set.FindFormatter(scalar)?.Layout != null ? "0" :
+            FormatterElementEmitter.Minimum(set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference))) :
+            text ? "1" : memory + ".SizeOf<" + scalar + ">()";
+        FormatterModel? element = fact.ForwardedType == null ? null : set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference);
+        var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal, payload, set, element, fact.Family.ContiguousElements);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
-            null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
+            null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead,
+            () => { if (element?.Layout != null && context.Contiguous) FormatterStorageEmitter.Support(w, element.Layout); });
 
         void EmitBinaryWrite(FormatterSection section)
         {
@@ -380,7 +491,7 @@ internal static class EnumerableOwnerTemplate
                     if (text)
                         w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
-                    if (payload != null)
+                    if (payload != null || fact.ForwardedType != null)
                         w.Line("ref var operationState = ref reader;");
                     else
                     {
@@ -394,11 +505,13 @@ internal static class EnumerableOwnerTemplate
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
+                    if (context.Forwarded && context.Contiguous && element?.Layout != null)
+                        FormatterStorageEmitter.Validate(w, element.Layout, "length", "operationState");
                     spec.ReadBody(context);
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));
-                    if (payload == null)
+                    if (payload == null && fact.ForwardedType == null)
                         w.Line("operationState.CopyTo(ref reader);");
                     w.Close();
                     w.Blank();
@@ -550,7 +663,8 @@ internal static class EnumerableOwnerTemplate
                     w.Line("    continue;");
                     w.Line(scalar + " item = default !;");
                     w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                    w.Line(spec.JsonAdd);
+                    if (spec.JsonAddBody != null) spec.JsonAddBody(context);
+                    else w.Line(spec.JsonAdd);
                     w.Close();
                     spec.JsonAfter?.Invoke(context);
                     w.Close();
