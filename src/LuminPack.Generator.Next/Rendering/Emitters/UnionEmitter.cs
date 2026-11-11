@@ -332,9 +332,13 @@ internal static class UnionEmitter
             if (item.OwnEntry)
             {
                 w.Line(item.Type + " member" + Number(member) + " = " + (reuse
-                    ? w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
+                    ? StructCase(item) ? "(" + target + " is " + item.Type + " existing" + Number(member) + " ? existing" + Number(member) + " : default);"
+                        : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
                     : "default !;"));
-                w.Line(w.A("LuminPackSerializer") + ".DeserializeUnion" + (model.UniqueEntries ? "_" + item.Readable : string.Empty) +
+                // A struct case reads its boxed value through its payload owner, which every struct file publishes.
+                w.Line(StructCase(item)
+                    ? CaseOwner(model, item) + ".Read<" + Profile + ">(ref " + reader + ", ref member" + Number(member) + ");"
+                    : w.A("LuminPackSerializer") + ".DeserializeUnion" + (model.UniqueEntries ? "_" + item.Readable : string.Empty) +
                     (item.ReadGeneric ? "<" + Profile + ">" : string.Empty) + "(ref " + reader + ", ref member" + Number(member) + ");");
                 w.Line(target + " = member" + Number(member) + ";");
                 w.Line(exit);
@@ -499,7 +503,9 @@ internal static class UnionEmitter
             w.Line("case " + item.Id.ToString(CultureInfo.InvariantCulture) + ":");
             w.Open();
             string member = "member" + Number(Array.IndexOf(model.UnionCases, item));
-            w.Line(item.Type + " " + member + " = " + w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(value)!;");
+            w.Line(item.Type + " " + member + " = " + (StructCase(item)
+                ? "(value is " + item.Type + " existing" + member + " ? existing" + member + " : default);"
+                : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(value)!;"));
             w.Line("global::LuminPack.Binary_" + model.Extension + "_" + item.Readable + ".Read<" + Profile + ">(ref reader, ref " + member + ");");
             w.Line("value = " + member + ";");
             w.Line("break;");
@@ -796,7 +802,9 @@ internal static class UnionEmitter
                 w.Line("writer." + (model.UnionWide ? "WriteWideUnionHeader" : "WriteUnionHeader") + "(" +
                     item.Id.ToString(CultureInfo.InvariantCulture) + ");");
                 w.Line("var concreteValue = this;");
-                w.Line(w.A("LuminPackSerializer") + ".SerializeUnion<" + w.A(slot.Profile) + ">(ref writer, concreteValue);");
+                w.Line(StructCase(item)
+                    ? CaseOwner(model, item) + ".Write<" + w.A(slot.Profile) + ">(ref writer, in concreteValue);"
+                    : w.A("LuminPackSerializer") + ".SerializeUnion<" + w.A(slot.Profile) + ">(ref writer, concreteValue);");
                 w.Close();
             }
         if (!json && model.UnionCursor)
@@ -841,11 +849,22 @@ internal static class UnionEmitter
                 w.Line("else");
                 w.Indented(() => w.Line("writer.WritePropertyName<" + profile + ">(" + w.A("LuminPackConstUtf8") + ".ValueU16);"));
                 w.Line("var concreteValue = this;");
-                w.Raw(new string(' ', Math.Max(0, w.Indent - 1) * 4) + "writer.Write<" + profile + ">(concreteValue);");
+                if (StructCase(item))
+                    w.Line(CaseOwner(model, item) + ".Write<" + profile + ">(ref writer, in concreteValue);");
+                else
+                    w.Raw(new string(' ', Math.Max(0, w.Indent - 1) * 4) + "writer.Write<" + profile + ">(concreteValue);");
                 w.Line("writer.WriteObjectEnd<" + profile + ">();");
                 w.Close();
             }
     }
+
+    /// <summary>Whether a case is a struct implementing an interface root.</summary>
+    private static bool StructCase(UnionRenderCase item) => item.Chain.Length != 0 &&
+        item.Chain[item.Chain.Length - 1].IndexOf(" struct ", StringComparison.Ordinal) >= 0;
+
+    /// <summary>Spells a case's payload owner, which publishes its binary and JSON operations.</summary>
+    private static string CaseOwner(PayloadRenderModel model, UnionRenderCase item) =>
+        "global::LuminPack.Binary_" + model.Extension + "_" + item.Readable;
 
     /// <summary>Lists one format's profile slots.</summary>
     private static UnionRenderSlot[] Slots(PayloadRenderModel model, bool json) => json ? model.UnionJsonSlots : model.UnionBinarySlots;

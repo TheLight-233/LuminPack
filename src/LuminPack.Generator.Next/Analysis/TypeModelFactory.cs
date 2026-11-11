@@ -1103,7 +1103,10 @@ internal static partial class TypeModelFactory
             var symbols = declared.Select(item => item.Type).ToArray();
             foreach (var (tag, caseType) in declared)
             {
-                if (caseType.TypeKind != TypeKind.Class || caseType.IsAbstract || caseType.IsGenericType || caseType.IsUnboundGenericType)
+                // A struct case implements an interface root; its slots are explicit interface implementations and its read
+                // boxes the value its own Union entry reads.
+                bool structCase = caseType.TypeKind == TypeKind.Struct && !caseType.IsGenericType && root.TypeKind == TypeKind.Interface;
+                if (!structCase && (caseType.TypeKind != TypeKind.Class || caseType.IsAbstract || caseType.IsGenericType || caseType.IsUnboundGenericType))
                 {
                     issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " names the case '" +
                         caseType.ToDisplayString() + "', which is not an ordinary class record");
@@ -1118,6 +1121,12 @@ internal static partial class TypeModelFactory
                     caseModel.Members.All(member => member is ScalarMember) && !SelectedConstructor(caseType);
                 // A complete local record whose fixed body this pipeline does not expand inline reads through its own Union
                 // entry. The case bytes are the same; only the dispatch arm calls the published entry instead of the inline body.
+                if (structCase && caseModel is StructModel && analyzed.IsComplete)
+                {
+                    // A struct case reads through its payload owner, which takes the operation's profile.
+                    ownEntry = true;
+                    caseReadGeneric = true;
+                }
                 if (!ownEntry && !expandable && caseModel is RecordModel && analyzed.IsComplete &&
                     SymbolEqualityComparer.Default.Equals(caseType.ContainingAssembly, _compilation.Assembly) &&
                     !ContainsTypeParameter(caseType) && GenerationMode(caseType) != "Custom")
@@ -1277,7 +1286,7 @@ internal static partial class TypeModelFactory
                 _ => string.Empty,
             };
             string name = SyntaxFacts.GetKeywordKind(type.Name) == SyntaxKind.None ? type.Name : "@" + type.Name;
-            return accessibility + "partial " + (type.TypeKind == TypeKind.Interface ? "interface " : "class ") + name;
+            return accessibility + "partial " + (type.TypeKind == TypeKind.Interface ? "interface " : type.TypeKind == TypeKind.Struct ? "struct " : "class ") + name;
         }
 
         /// <summary>Spells a type's namespace, or null in the global namespace.</summary>
