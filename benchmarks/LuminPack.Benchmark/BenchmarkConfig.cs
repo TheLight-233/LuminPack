@@ -33,7 +33,24 @@ public class BenchmarkConfig : ManualConfig
     /// <param name="name">The JIT configuration displayed in reports.</param>
     /// <param name="tiered">Whether to enable tiered compilation and dynamic PGO.</param>
     /// <returns>A separately named three-process benchmark job.</returns>
+    /// <summary>Builds the benchmark child project with the generator the host assembly was built with.</summary>
+    /// <returns>The MSBuild arguments that select that generator.</returns>
+    private static MsBuildArgument[] GeneratorArguments()
+    {
+        var metadata = typeof(BenchmarkConfig).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .Cast<System.Reflection.AssemblyMetadataAttribute>().ToDictionary(attribute => attribute.Key, attribute => attribute.Value);
+        string generator = metadata.TryGetValue("LuminPack.Generator", out string? value) && !string.IsNullOrEmpty(value) ? value : "Next";
+        string? analyzer = metadata.TryGetValue("LuminPack.LegacyAnalyzer", out string? path) && !string.IsNullOrEmpty(path) ? path : null;
+        var arguments = new List<MsBuildArgument> { new($"/p:LuminPackGenerator={generator}") };
+        if (analyzer != null)
+            arguments.Add(new MsBuildArgument($"/p:LuminPackLegacyAnalyzer={analyzer}"));
+        if (generator == "Next" || analyzer != null)
+            arguments.Add(new MsBuildArgument("/p:LuminPackLegacyGeneratorReference=false"));
+        return arguments.ToArray();
+    }
+
     private static Job CreateJob(string name, bool tiered) => Job.Default
+        .WithArguments(GeneratorArguments())
         .WithId(name)
         .WithRuntime(CoreRuntime.Core10_0)
         .WithGcServer(true)

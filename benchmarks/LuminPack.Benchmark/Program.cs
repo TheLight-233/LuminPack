@@ -19,12 +19,16 @@ internal static class Program
     /// <returns>Zero for a successful invocation, or one for a benchmark or diagnostic failure.</returns>
     private static int Main(string[] args)
     {
+        Console.Error.WriteLine("LuminPack generator: " + (typeof(Program).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "LuminPack.Generator")?.Value ?? "unknown"));
         if (args is ["--verify-host", var architecture, var vendor])
             return VerifyHost(architecture, vendor);
         if (args is ["--polymorphism-native-probe", var operation])
             return CapturePolymorphismNativeCode(operation);
         if (args is ["--verify-fixtures"])
             return VerifyFixtures();
+        if (args is ["--verify-roundtrip"])
+            return VerifyRoundTrip();
 
         int jitModeIndex = Array.IndexOf(args, "--jit-mode");
         if (jitModeIndex >= 0)
@@ -47,6 +51,82 @@ internal static class Program
 
     /// <summary>Verifies repeated setup and fresh fixtures have identical serialized input bytes.</summary>
     /// <returns>Zero for reproducible fixtures, or one when a payload changes.</returns>
+    /// <summary>Reads every benchmark payload into fresh and existing targets through the ordinary serializer entries and
+    /// checks that writing the result reproduces the original bytes.</summary>
+    /// <remarks>No formatter is registered, so a call that is not statically bound to a generated root fails here.</remarks>
+    private static int VerifyRoundTrip()
+    {
+        int failures = 0;
+        void Check(string name, ReadOnlySpan<byte> expected, ReadOnlySpan<byte> actual)
+        {
+            bool same = expected.SequenceEqual(actual);
+            Console.WriteLine($"{name}: {(same ? "ok" : "MISMATCH")} ({actual.Length} bytes)");
+            if (!same) failures++;
+        }
+
+        using var buffer = LuminPack.Utility.LuminBufferWriterPool.Rent();
+
+        LuminPackBenchmark.SimpleClassBase simple = LuminPackBenchmark.SimpleClass.Create();
+        byte[] simpleBytes = LuminPack.LuminPackSerializer.Serialize(simple);
+        LuminPackBenchmark.SimpleClassBase simpleRead = null!;
+        int simpleConsumed = LuminPack.LuminPackSerializer.Deserialize(simpleBytes, ref simpleRead);
+        Check("Simple fresh read", simpleBytes, LuminPack.LuminPackSerializer.Serialize(simpleRead));
+        Check("Simple consumed", BitConverter.GetBytes(simpleBytes.Length), BitConverter.GetBytes(simpleConsumed));
+        LuminPack.LuminPackSerializer.Deserialize(simpleBytes, ref simpleRead);
+        Check("Simple existing target", simpleBytes, LuminPack.LuminPackSerializer.Serialize(simpleRead));
+        buffer.ResetCore();
+        LuminPack.LuminPackSerializer.Serialize(simple, buffer);
+        Check("Simple buffer writer", simpleBytes, buffer.GetSpan());
+        Check("Simple returning read", simpleBytes,
+            LuminPack.LuminPackSerializer.Serialize(LuminPack.LuminPackSerializer.Deserialize<LuminPackBenchmark.SimpleClassBase>(simpleBytes)));
+
+        LuminPackBenchmark.CharacterSaveData data = LuminPackBenchmark.CharacterSaveData.Create();
+        byte[] dataBytes = LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(data);
+        LuminPackBenchmark.CharacterSaveData dataRead = null!;
+        LuminPack.LuminPackSerializer.Deserialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(dataBytes, ref dataRead);
+        Check("CharacterSaveData fresh read", dataBytes,
+            LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(dataRead));
+        LuminPack.LuminPackSerializer.Deserialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(dataBytes, ref dataRead);
+        Check("CharacterSaveData existing target", dataBytes,
+            LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(dataRead));
+        Check("CharacterSaveData declared profile", dataBytes, LuminPack.LuminPackSerializer.Serialize(data));
+        buffer.ResetCore();
+        LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(data, buffer);
+        Check("CharacterSaveData buffer writer", dataBytes, buffer.GetSpan());
+        var bufferWriter = new System.Buffers.ArrayBufferWriter<byte>();
+        LuminPack.LuminPackSerializer.Serialize(data, bufferWriter);
+        Check("CharacterSaveData IBufferWriter", dataBytes, bufferWriter.WrittenSpan);
+
+        string json = LuminPack.LuminPackSerializer.SerializeJson<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackDefaultOptions>(data);
+        LuminPackBenchmark.CharacterSaveData jsonRead = null!;
+        LuminPack.LuminPackSerializer.DeserializeJson<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackDefaultOptions>(json, ref jsonRead);
+        Check("JSON fresh read", Encoding.UTF8.GetBytes(json), Encoding.UTF8.GetBytes(
+            LuminPack.LuminPackSerializer.SerializeJson<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackDefaultOptions>(jsonRead)));
+        LuminPack.LuminPackSerializer.DeserializeJson<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackDefaultOptions>(json, ref jsonRead);
+        Check("JSON existing target", Encoding.UTF8.GetBytes(json), Encoding.UTF8.GetBytes(
+            LuminPack.LuminPackSerializer.SerializeJson<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackDefaultOptions>(jsonRead)));
+        Check("JSON returning read", Encoding.UTF8.GetBytes(json), Encoding.UTF8.GetBytes(
+            LuminPack.LuminPackSerializer.SerializeJson<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackDefaultOptions>(
+                LuminPack.LuminPackSerializer.DeserializeJson<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackDefaultOptions>(json))));
+        Check("JSON binary of JSON read", dataBytes,
+            LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.CharacterSaveData, LuminPack.Option.LuminPackUtf16LengthOptions>(jsonRead));
+
+        LuminPackBenchmark.PolymorphismClassBase polymorphic = LuminPackBenchmark.PolymorphismClass.Create();
+        byte[] polymorphicBytes = LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphic);
+        LuminPackBenchmark.PolymorphismClassBase polymorphicRead = null!;
+        LuminPack.LuminPackSerializer.Deserialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphicBytes, ref polymorphicRead);
+        Check("Polymorphism fresh read", polymorphicBytes,
+            LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphicRead));
+        LuminPack.LuminPackSerializer.Deserialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphicBytes, ref polymorphicRead);
+        Check("Polymorphism existing target", polymorphicBytes,
+            LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphicRead));
+        buffer.ResetCore();
+        LuminPack.LuminPackSerializer.Serialize<LuminPackBenchmark.PolymorphismClassBase, LuminPack.Option.LuminPackUtf16LengthOptions>(polymorphic, buffer);
+        Check("Polymorphism buffer writer", polymorphicBytes, buffer.GetSpan());
+        Console.WriteLine(failures == 0 ? "Round trip verified." : $"{failures} round-trip check(s) failed.");
+        return failures == 0 ? 0 : 1;
+    }
+
     private static int VerifyFixtures()
     {
         Type[] types = [typeof(LuminPackBenchmark.SimpleBenchmark), typeof(LuminPackBenchmark.SerializeBenchmark),
