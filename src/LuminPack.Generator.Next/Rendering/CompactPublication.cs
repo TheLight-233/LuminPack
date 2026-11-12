@@ -116,9 +116,17 @@ internal static class CompactPublication
             }
         // Method groups retain exact ref/in signatures for existing typed delegates.
         foreach (Document document in documents)
+        {
             foreach (OperationKey reference in document.References)
                 if (catalog.TryGetValue(reference, out Operation? operation))
                     operation.Forward = null;
+            // A call that infers the type arguments of a generic forwarder cannot inline it, so the forwarder stays.
+            foreach (OperationKey call in document.Inferred)
+                if (!catalog.ContainsKey(call))
+                    for (int arity = 1; arity <= 4; arity++)
+                        if (catalog.TryGetValue(call.WithArity(arity), out Operation? generic))
+                            generic.Forward = null;
+        }
         var groups = new SortedDictionary<string, (GenerationKind Kind, List<string> Texts)>(StringComparer.Ordinal);
         foreach (Document document in documents)
         {
@@ -136,7 +144,9 @@ internal static class CompactPublication
             foreach (GeneratedText.Method method in document.Methods)
             {
                 OperationKey key = Key(method.Owner, method.Name, method.Generics.Length, method.Json);
-                bool removable = catalog.TryGetValue(key, out Operation? operation) && operation.Method == method && operation.Forward != null;
+                // A state extension is callable from consumer code, so its declaration stays even when generated callers bypass it.
+                bool removable = catalog.TryGetValue(key, out Operation? operation) && operation.Method == method && operation.Forward != null &&
+                    !Extension(method);
                 if (operation != null)
                     bindings[key] = operation;
                 if (removable || method.Name is "WritePolymorphismValue" or "ReadPolymorphismValue")
@@ -145,7 +155,7 @@ internal static class CompactPublication
                     removed.Add(method);
                     continue;
                 }
-                string renamed = MethodName(method.Owner, method.Name, method.Json);
+                string renamed = MethodName(method.Owner, method.Name, method.Json, Extension(method));
                 string signature = FormatSignature(method, renamed);
                 if (signature != method.Signature)
                 {
@@ -179,7 +189,7 @@ internal static class CompactPublication
                 string[] types = GeneratedText.Split(generic);
                 if (!catalog.ContainsKey(Key(owner, name, types.Length, json)) && !target.Contains('.'))
                     owner = "LuminPackSerializer";
-                if (!catalog.ContainsKey(Key(owner, name, types.Length, json)))
+                if (!catalog.ContainsKey(Key(owner, name, types.Length, json)) && !(types.Length == 0 && Inferred(catalog, owner, name, json)))
                     continue;
                 while (position < document.Text.Length && char.IsWhiteSpace(document.Text[position]))
                     position++;
@@ -336,12 +346,17 @@ internal static class CompactPublication
         string name = target.Substring(target.LastIndexOf('.') + 1);
         if (!catalog.TryGetValue(Key(owner, name, call.Generics.Length, json), out Operation? operation) && !target.Contains('.'))
             catalog.TryGetValue(Key(owner = "LuminPackSerializer", name, call.Generics.Length, json), out operation);
+        // A call that leaves its type arguments to inference still names a generic operation; it is renamed, never inlined.
+        int arity = call.Generics.Length;
+        for (int candidate = 1; operation == null && call.Generics.Length == 0 && candidate <= 4; candidate++)
+            if (catalog.TryGetValue(Key(owner, name, candidate, json), out operation))
+                arity = candidate;
         string generic = call.Generics.Length == 0 ? string.Empty : "<" + string.Join(", ", call.Generics) + ">";
         if (operation == null || depth > 32)
             return target + generic + "(" + string.Join(", ", call.Arguments) + ")";
-        bindings[Key(operation.Method.Owner, name, call.Generics.Length, json)] = operation;
+        bindings[Key(operation.Method.Owner, name, arity, json)] = operation;
         GeneratedText.Method method = operation.Method;
-        if (operation.Forward is { } forward)
+        if (arity == call.Generics.Length && operation.Forward is { } forward)
         {
             var values = new Dictionary<string, string>(operation.Document.Imports, StringComparer.Ordinal);
             for (int i = 0; i < Math.Min(method.Parameters.Length, call.Arguments.Length); i++)
@@ -365,17 +380,38 @@ internal static class CompactPublication
         }
         else
             target = "global::LuminPack.LuminPackSerializer";
-        return target + "." + MethodName(owner, name, method.Json) + generic + "(" + string.Join(", ", call.Arguments) + ")";
+        return target + "." + MethodName(owner, name, method.Json, Extension(method)) + generic + "(" + string.Join(", ", call.Arguments) + ")";
     }
+
+    /// <summary>Whether a call without type arguments names a generic operation whose arguments are inferred.</summary>
+    /// <param name="catalog">The operation catalog.</param>
+    /// <param name="owner">The declaring static container.</param>
+    /// <param name="name">The unqualified operation name.</param>
+    /// <param name="json">Whether the operation reads or writes JSON.</param>
+    /// <returns>Whether a generic operation of that name exists.</returns>
+    private static bool Inferred(Dictionary<OperationKey, Operation> catalog, string owner, string name, bool json)
+    {
+        for (int arity = 1; arity <= 4; arity++)
+            if (catalog.ContainsKey(Key(owner, name, arity, json)))
+                return true;
+        return false;
+    }
+
+    /// <summary>Whether a method is a state extension, which consumer code calls by its original name.</summary>
+    /// <param name="method">The source-writer method contract.</param>
+    /// <returns>Whether the first parameter is the extended state.</returns>
+    private static bool Extension(GeneratedText.Method method) =>
+        method.Parameters.Length != 0 && method.Parameters[0].StartsWith("this ", StringComparison.Ordinal);
 
     /// <summary>Spells an operation without legacy root or Union forwarding roles.</summary>
     /// <param name="json">Whether the operation reads or writes JSON.</param>
     /// <param name="name">The unqualified operation or parameter name.</param>
     /// <param name="owner">The declaring static container.</param>
+    /// <param name="extension">Whether the operation is a state extension, which keeps its name.</param>
     /// <returns>The final operation name.</returns>
-    private static string MethodName(string owner, string name, bool json) =>
+    private static string MethodName(string owner, string name, bool json, bool extension) =>
         owner.StartsWith("LuminRoots_", StringComparison.Ordinal) && name.StartsWith("Root", StringComparison.Ordinal) ? name.Substring(4).Replace("Union", "Payload").Replace("Member", "Members") :
-        owner.StartsWith("Binary_", StringComparison.Ordinal) && json && name is "Write" or "Read" ? name + "Json" :
+        owner.StartsWith("Binary_", StringComparison.Ordinal) && json && !extension && name is "Write" or "Read" ? name + "Json" :
         name.StartsWith("SerializeUnionAt_", StringComparison.Ordinal) ? "WriteAt_" + name.Substring(17) : name;
 
     /// <summary>Wraps long signatures without reparsing their already captured parameter contracts.</summary>
@@ -417,6 +453,11 @@ internal static class CompactPublication
         private readonly string _name;
         private readonly int _arity;
         private readonly bool _json;
+
+        /// <summary>The same operation at another generic arity.</summary>
+        /// <param name="arity">The generic parameter count.</param>
+        /// <returns>The operation key.</returns>
+        internal OperationKey WithArity(int arity) => new(_owner, _name, arity, _json);
 
         /// <summary>Captures the explicit static operation identity.</summary>
         /// <param name="owner">The declaring container.</param>
@@ -536,6 +577,9 @@ internal static class CompactPublication
         internal readonly Dictionary<string, List<GeneratedText.Method>> Owners = new(StringComparer.Ordinal);
         internal readonly List<OperationKey> References = new();
 
+        /// <summary>Invocations without type arguments, keyed at arity zero.</summary>
+        internal readonly List<OperationKey> Inferred = new();
+
         /// <summary>Shares bodies before indexing the resulting explicit operations.</summary>
         /// <param name="source">The original source contribution.</param>
         internal Document(GeneratedSource source)
@@ -563,12 +607,20 @@ internal static class CompactPublication
                 }
                 while (position < Text.Length && char.IsWhiteSpace(Text[position]))
                     position++;
-                if (position < Text.Length && Text[position] == '(')
+                bool invoked = position < Text.Length && Text[position] == '(';
+                // An invocation that leaves its type arguments to inference cannot inline a generic forwarder, which then stays.
+                if (invoked && arity != 0)
                     continue;
                 string target = match.Groups["target"].Value;
                 int dot = target.LastIndexOf('.');
                 string owner = Owner(target.Substring(0, dot));
                 string name = target.Substring(dot + 1);
+                if (invoked)
+                {
+                    Inferred.Add(Key(owner, name, 0, false));
+                    Inferred.Add(Key(owner, name, 0, true));
+                    continue;
+                }
                 References.Add(Key(owner, name, arity, false));
                 References.Add(Key(owner, name, arity, true));
             }

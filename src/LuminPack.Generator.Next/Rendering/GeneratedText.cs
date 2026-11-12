@@ -254,7 +254,8 @@ internal static class GeneratedText
                 declaration = text.IndexOf(" struct ", StringComparison.Ordinal);
             if (declaration < 0)
                 declaration = text.IndexOf(" interface ", StringComparison.Ordinal);
-            if (declaration >= 0 && text.IndexOf('(') < 0)
+            // A constraint clause such as "where T : struct where U : ..." names a kind, not a declaration.
+            if (declaration >= 0 && text.IndexOf('(') < 0 && !text.StartsWith("where ", StringComparison.Ordinal))
             {
                 string tail = text.Substring(text.IndexOf(' ', declaration + 1) + 1);
                 int end = 0;
@@ -429,7 +430,10 @@ internal static class GeneratedText
             Indent = indent;
             Generics = Split(generic);
             Parameters = Split(parameters);
-            Json = name.Contains("Json") || (Parameters.Length != 0 && Parameters[0].Contains("LuminPackJson"));
+            // Only the operation prefix names the format; a payload name after the separator may itself contain "Json".
+            int separator = name.IndexOf('_');
+            Json = name.IndexOf("Json", 0, separator < 0 ? name.Length : separator, StringComparison.Ordinal) >= 0 ||
+                (Parameters.Length != 0 && Parameters[0].Contains("LuminPackJson"));
             if (signature.Contains(" void ") && (expression || body.IndexOf(';') == body.LastIndexOf(';')))
                 Forward = ReadCall(body);
         }

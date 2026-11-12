@@ -349,8 +349,11 @@ internal static partial class NextPipeline
             {
                 WirePolicy policy = model.Policy;
                 string profile = policy.Declared ? ProfileNames.Type(policy.Strings) : RootEntry.DefaultProfile;
-                bool measured = model is not UnionModel && model is not StructModel { StoragePlan: not null } &&
-                    RenderModelFactory.Create(model, payload.Options)?.MeasureRecord == true;
+                // Only the record and plain struct emitters publish MeasureRecord_<payload>, and only for a closed payload with
+                // unique entry names; the entry measures through it.
+                bool measured = !model.Identity.IsGeneric && model is not UnionModel && model is not StructModel { StoragePlan: not null } &&
+                    RenderModelFactory.Create(model, payload.Options) is { MeasureRecord: true, UniqueEntries: true } rendered &&
+                    !(rendered.IsStruct && (rendered.Version != null || rendered.ManagedStruct));
                 entries.Add(new KeyValuePair<string, RootEntry>(model.Identity.GlobalName,
                     new RootEntry(ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Identity.GlobalName)), profile, true, true,
                         limit: policy.Input == InputPolicy.Untrusted ? policy.Limits.Input : null,

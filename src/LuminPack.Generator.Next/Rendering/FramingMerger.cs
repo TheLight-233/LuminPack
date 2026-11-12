@@ -67,7 +67,8 @@ internal static class FramingMerger
                 node.Suffix = position > 0 && lines[position - 1] == "};" ? ";" : string.Empty;
                 node.Braces = true;
             }
-            else if (position < lines.Count && lines[position] == "{")
+            // A complete statement never owns the scope block that follows it.
+            else if (position < lines.Count && lines[position] == "{" && !header.EndsWith(";", StringComparison.Ordinal))
             {
                 position++;
                 node.Children = Block();
@@ -135,6 +136,30 @@ internal static class FramingMerger
             {
                 if (onlyLeft.Count == 0 && onlyRight.Count == 0)
                     return;
+                // A goto cannot enter a block, so a framing-specific label stays in the shared block and the statements around
+                // it keep their own branches. The other framing passes the label without jumping to it.
+                int leftLabel = LabelIndex(onlyLeft), rightLabel = LabelIndex(onlyRight);
+                if (leftLabel >= 0 || rightLabel >= 0)
+                {
+                    bool left = leftLabel >= 0 && (rightLabel < 0 || onlyRight.Count == 0 || leftLabel <= rightLabel);
+                    List<Node> labelled = left ? onlyLeft : onlyRight, other = left ? onlyRight : onlyLeft;
+                    int label = left ? leftLabel : rightLabel;
+                    var before = labelled.GetRange(0, label);
+                    int after = label + 1 < labelled.Count && labelled[label + 1].Header == ";" ? label + 2 : label + 1;
+                    var rest = labelled.GetRange(after, labelled.Count - after);
+                    Node mark = labelled[label];
+                    var tail = new List<Node>(other);
+                    labelled.Clear();
+                    labelled.AddRange(before);
+                    other.Clear();
+                    Flush();
+                    result.Add(mark);
+                    result.Add(new Node(";"));
+                    (left ? onlyLeft : onlyRight).AddRange(rest);
+                    (left ? onlyRight : onlyLeft).AddRange(tail);
+                    Flush();
+                    return;
+                }
                 var branch = new Node("if (" + (onlyLeft.Count == 0 ? "!(" + Frame + ")" : Frame) + ")")
                 {
                     Children = new List<Node>(onlyLeft.Count == 0 ? onlyRight : onlyLeft),
@@ -152,6 +177,21 @@ internal static class FramingMerger
             if (lengths.Length <= maximumPooledLength)
                 ArrayPool<int>.Shared.Return(lengths);
         }
+    }
+
+    /// <summary>Finds the first goto label among framing-specific statements.</summary>
+    /// <param name="nodes">The statements of one framing.</param>
+    /// <returns>The label's index, or -1.</returns>
+    private static int LabelIndex(List<Node> nodes)
+    {
+        for (int index = 0; index < nodes.Count; index++)
+        {
+            string header = nodes[index].Header;
+            if (nodes[index].Children == null && header.Length > 1 && header[header.Length - 1] == ':' && header.IndexOf(' ') < 0 &&
+                header != "default:")
+                return index;
+        }
+        return -1;
     }
 
     /// <summary>Matches equal statements, equal control-flow headers and corresponding local declarations.</summary>

@@ -212,11 +212,20 @@ internal static class BinaryUnionSafetyTest
     {
         unsafe
         {
+#if LUMINPACK_NEXT_GENERATOR
+            LuminPackSerializer.Register<IFastInterfaceUnion, RegisteredInterfaceUnionMember>(100,
+                WriteRegisteredMember, ReadRegisteredMember, WriteJsonRegisteredMember, ReadJsonRegisteredMember);
+#else
             IFastInterfaceUnion.Register<RegisteredInterfaceUnionMember>(100,
                 WriteRegisteredMember, ReadRegisteredMember, WriteJsonRegisteredMember, ReadJsonRegisteredMember);
+#endif
         }
 
+#if LUMINPACK_NEXT_GENERATOR
+        Assert(global::LuminPack.Code.LuminPackUnionFormatter<IFastInterfaceUnion>.TryGetFormatter(100, out var probeEntry) && probeEntry.ReadValue != null,
+#else
         Assert(IFastInterfaceUnion.TryGetRegisteredFormatter(100, out var probeEntry) && probeEntry.ReadValue != null,
+#endif
             "probe: registered formatter not found by tag after Register.");
 
         IFastInterfaceUnion value = new RegisteredInterfaceUnionMember { Value = 321 };

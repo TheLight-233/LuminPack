@@ -20,12 +20,21 @@ public sealed class UnionRegistrationBoundaryTest
         Assert.Throws<ArgumentException>(() => Register(-1));
         Assert.Throws<ArgumentException>(() => Register(65536));
         Assert.Throws<ArgumentException>(() => Register(1));
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Register<RegistrationAuditRoot, string>(78, Write, Read, WriteJson, ReadJson));
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Register<RegistrationAuditRoot, RegistrationAuditCase>(78, null!, Read, WriteJson, ReadJson));
+        Assert.False(global::LuminPack.Code.LuminPackUnionFormatter<RegistrationAuditRoot>.TryGetFormatter(78, out _));
+        Register(77);
+        Assert.Throws<ArgumentException>(() => Register(77));
+        Assert.True(global::LuminPack.Code.LuminPackUnionFormatter<RegistrationAuditRoot>.TryGetFormatter(77, out LuminPackFormatter entry));
+#else
         Assert.Throws<ArgumentException>(() => RegistrationAuditRoot.Register<string>(78, Write, Read, WriteJson, ReadJson));
         Assert.Throws<ArgumentException>(() => RegistrationAuditRoot.Register<RegistrationAuditCase>(78, null, Read, WriteJson, ReadJson));
         Assert.False(RegistrationAuditRoot.TryGetRegisteredFormatter(78, out _));
         Register(77);
         Assert.Throws<ArgumentException>(() => Register(77));
         Assert.True(RegistrationAuditRoot.TryGetRegisteredFormatter(77, out LuminPackFormatter entry));
+#endif
         Assert.Equal(77, entry.Tag);
         Assert.NotNull(entry.WriteValue);
         Assert.NotNull(entry.ReadValue);
@@ -35,7 +44,11 @@ public sealed class UnionRegistrationBoundaryTest
 
     /// <summary>Submits one complete delegate registration for a compatible member.</summary>
     /// <param name="tag">The proposed wire tag.</param>
+#if LUMINPACK_NEXT_GENERATOR
+    private static void Register(int tag) => LuminPackSerializer.Register<RegistrationAuditRoot, RegistrationAuditCase>(tag, Write, Read, WriteJson, ReadJson);
+#else
     private static void Register(int tag) => RegistrationAuditRoot.Register<RegistrationAuditCase>(tag, Write, Read, WriteJson, ReadJson);
+#endif
 
     /// <summary>Provides the binary write signature without invoking the callback.</summary>
     /// <param name="writer">The supplied writer.</param>

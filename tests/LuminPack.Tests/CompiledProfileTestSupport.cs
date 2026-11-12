@@ -39,7 +39,14 @@ namespace LuminPackUnitTest
     /// <summary>Selects closed generic profiles for the existing test matrix; production APIs have no runtime options.</summary>
     internal static class TestProfileSerializer
     {
-        private static readonly MethodInfo[] TestStateMethods = typeof(LuminPackSerializer).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+        // The legacy generator publishes Serialize_/Deserialize_ state roots on the facade; the Next generator publishes the same
+        // closed operations as Write/Read state extensions and owner operations of its generated types.
+        private static readonly MethodInfo[] TestStateMethods = typeof(LuminPackSerializer).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Concat(typeof(TestProfileSerializer).Assembly.GetTypes()
+                .Where(type => type.IsAbstract && type.IsSealed && type.Namespace is "LuminPack" or "LuminPack.Generated")
+                .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+                .Where(method => method.Name is "Write" or "Read" or "WriteJson" or "ReadJson"))
+            .ToArray();
         private static readonly object TestRegistrationGate = new();
         /// <summary>Registers generated roots for the managed test harness's legacy profile adapter.</summary>
         /// <typeparam name = "T">The fixture payload.</typeparam>
@@ -77,7 +84,9 @@ namespace LuminPackUnitTest
             /// <returns>The closed typed delegate, or null when the operation is absent.</returns>
             private static Delegate? Find(string name, Type state)
             {
-                foreach (var method in TestStateMethods.Where(method => (method.Name == name || method.Name.StartsWith(name + "_", StringComparison.Ordinal)) && method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1))
+                string extension = name.StartsWith("Serialize", StringComparison.Ordinal) ? "Write" : "Read";
+                foreach (var method in TestStateMethods.Where(method => (method.Name == name || method.Name == extension || method.Name == extension + "Json" ||
+                    method.Name.StartsWith(name + "_", StringComparison.Ordinal)) && method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1))
                 {
                     var parameters = method.GetParameters();
                     if (parameters.Length == 2 && parameters[0].ParameterType == state.MakeByRefType() && parameters[1].ParameterType == typeof(T).MakeByRefType())

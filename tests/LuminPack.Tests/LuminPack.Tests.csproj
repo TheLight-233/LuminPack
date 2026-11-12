@@ -28,6 +28,8 @@
     <LuminPackGenerator Condition="'$(LuminPackGenerator)' == ''">Legacy</LuminPackGenerator>
     <_LuminPackSkipLegacyProject Condition="'$(LuminPackGenerator)' == 'Next' or '$(LuminPackLegacyAnalyzer)' != ''">true</_LuminPackSkipLegacyProject>
     <DisableTransitiveProjectReferences Condition="'$(_LuminPackSkipLegacyProject)' == 'true'">true</DisableTransitiveProjectReferences>
+    <!-- Tests that override generated Union slots spell the selected generator's slot names. -->
+    <DefineConstants Condition="'$(LuminPackGenerator)' == 'Next'">$(DefineConstants);LUMINPACK_NEXT_GENERATOR</DefineConstants>
   </PropertyGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks' And '$(LuminPackGenerator)' != 'Next' And '$(LuminPackLegacyAnalyzer)' == ''">
     <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
