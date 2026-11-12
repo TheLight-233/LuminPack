@@ -126,6 +126,8 @@ A checked item covers the scope stated here. Related combinations still listed b
   simple names its declarations repeat across namespaces or share with common framework types, and those names keep their
   namespace (`OtherPointFormatter`, `ListOfOtherPointFormatter`). Other names are unchanged; the benchmark corpus output is
   identical.
+- [x] **LuminPack021.** Nothing to migrate: the legacy generator has declared but not reported this warning since layout mirrors
+  made `[LuminPackInclude]` storage reachable on every target, and Next likewise reports nothing.
 
 ## Not yet migrated
 
@@ -185,8 +187,7 @@ These keep the wire format but produce different code from legacy.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | LuminPack021 | The warning for `[LuminPackInclude]` on targets without a runtime accessor is not reported. |
-| P2 | Diagnostic semantics | The other 48 descriptors exist; conditions, precedence, counts, locations, related declarations, code fixes and incomplete IDE source are not compared with legacy. |
+| P2 | Diagnostic semantics | The descriptors exist; conditions, precedence, counts, locations, related declarations, code fixes and incomplete IDE source are not compared with legacy. |
 
 ### Generator performance
 
