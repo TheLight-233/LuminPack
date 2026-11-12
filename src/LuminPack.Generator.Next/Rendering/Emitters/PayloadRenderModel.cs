@@ -443,6 +443,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly bool UnionReadGeneric;
     /// <summary>The partial declarations from the outermost containing type to the root.</summary>
     internal readonly string[] UnionChain;
+    /// <summary>Whether the Union root belongs to a referenced assembly, so nothing is declared inside it or its cases.</summary>
+    internal readonly bool UnionReferenced;
     /// <summary>The root's namespace, or null in the global namespace.</summary>
     internal readonly string UnionNamespace;
     /// <summary>The compiled binary profile slots in profile order.</summary>
@@ -545,7 +547,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         VersionSchema version, bool referencePayload, string layoutAttribute, string rent = null, string[] writeBefore = null,
         string[] writeAfter = null, string[] readBefore = null, string[] readAfter = null, string[] declaredOrder = null, int? bounded = null,
         bool unionRoot = false, bool unionInterface = false, string unionSuffix = null, UnionRenderCase[] unionCases = null,
-        bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null,
+        bool unionCursor = false, bool unionReadGeneric = false, string[] unionChain = null, string unionNamespace = null, bool unionReferenced = false,
         UnionRenderSlot[] unionBinarySlots = null, UnionRenderSlot[] unionJsonSlots = null, bool unionCanonical = false,
         string unionStandardBinary = null, string unionStandardJson = null, int unionTier = 0, string[] unionTierCases = null,
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
@@ -582,6 +584,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         UnionBinarySlots = unionBinarySlots;
         UnionNamespace = unionNamespace;
         UnionChain = unionChain;
+        UnionReferenced = unionReferenced;
         UnionReadGeneric = unionReadGeneric;
         UnionCursor = unionCursor;
         UnionCases = unionCases;
@@ -645,7 +648,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         UnionRoot == other.UnionRoot && UnionInterface == other.UnionInterface && UnionSuffix == other.UnionSuffix &&
         UnionCursor == other.UnionCursor && UnionReadGeneric == other.UnionReadGeneric && UnionNamespace == other.UnionNamespace &&
         UnionCanonical == other.UnionCanonical && UnionStandardBinary == other.UnionStandardBinary && UnionStandardJson == other.UnionStandardJson &&
-        UnionTier == other.UnionTier && UnionWide == other.UnionWide && Same(UnionChain, other.UnionChain) && Same(UnionTierCases, other.UnionTierCases) &&
+        UnionTier == other.UnionTier && UnionWide == other.UnionWide && Same(UnionChain, other.UnionChain) && UnionReferenced == other.UnionReferenced && Same(UnionTierCases, other.UnionTierCases) &&
         Same(UnionTierSealed, other.UnionTierSealed) && Same(UnionBinarySlots, other.UnionBinarySlots) && Same(UnionJsonSlots, other.UnionJsonSlots) &&
         Same(Mirrors, other.Mirrors) && Circle == other.Circle && CircleGuarded == other.CircleGuarded && Same(CircleSlots, other.CircleSlots) &&
         Same(CircleWidths, other.CircleWidths) &&

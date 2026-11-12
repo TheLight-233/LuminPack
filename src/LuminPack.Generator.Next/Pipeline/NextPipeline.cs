@@ -99,7 +99,13 @@ internal static partial class NextPipeline
                     operations |= item;
                 return operations;
             });
-        var requests = models.Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance)
+        // Referenced types the assembly marks with [assembly: LuminPackable(typeof(T))] are payloads of this compilation.
+        var external = context.CompilationProvider.Select(static (compilation, token) => ExternalPayloads(compilation, token))
+            .WithComparer(FactArrayComparer<ModeledPayload>.Instance).WithTrackingName("LuminPack.Next.ExternalPayloads");
+        var declared = models.Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance).Combine(external)
+            .Select(static (input, _) => input.Right.IsEmpty ? input.Left : input.Left.AddRange(input.Right))
+            .WithComparer(FactArrayComparer<ModeledPayload>.Instance);
+        var requests = declared
             .Combine(calls).Combine(forwarded.Combine(wrappers)).Combine(facts.Combine(usage)).Select(static (input, _) =>
         {
             ImmutableArray<ModeledPayload> payloads = input.Left.Left.Left;
@@ -128,6 +134,38 @@ internal static partial class NextPipeline
                 production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic, input.Right));
         });
         InitializePublication(context, requests);
+    }
+
+    /// <summary>Models the referenced types the consuming assembly marks as external roots.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <param name="cancellationToken">Cancels analysis.</param>
+    /// <returns>The external payloads, or an empty array when the assembly marks none.</returns>
+    /// <remarks>A marked type is analyzed through the complete-metadata view, so private and automatic-property storage of the
+    /// referenced assembly is visible to its layout mirror. An imported Union root writes through the virtual dispatch its own
+    /// assembly generated. Open generic markers, which the original specialized from observed constructions, are not modeled yet.</remarks>
+    private static ImmutableArray<ModeledPayload> ExternalPayloads(Compilation compilation, CancellationToken cancellationToken)
+    {
+        List<INamedTypeSymbol> marked = TypeModelFactory.MarkedTypes(compilation);
+        if (marked.Count == 0)
+            return ImmutableArray<ModeledPayload>.Empty;
+        GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
+        Compilation view = TypeModelFactory.Complete(compilation);
+        using var names = ReadableTypeName.Use(options.AmbiguousNames);
+        var payloads = ImmutableArray.CreateBuilder<ModeledPayload>(marked.Count);
+        foreach (INamedTypeSymbol type in marked)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (type.IsGenericType)
+                continue;
+            INamedTypeSymbol complete = TypeModelFactory.InView(type, view);
+            DiagnosticInfo[] missing = TypeModelFactory.MissingStorage(complete);
+            ModelResult result = missing.Length != 0 ? ModelResult.Unsupported("imported storage is incomplete") :
+                TypeModelFactory.TryCreate(type, compilation, options);
+            payloads.Add(new ModeledPayload(result, options, missing, null,
+                result.IsComplete ? OperationUsageAnalysis.Declaration(complete, view) : OperationReach.Empty,
+                result.IsComplete && result.Model != null ? PayloadDocumentationFactory.Create(complete, result.Model) : null));
+        }
+        return payloads.ToImmutable();
     }
 
     /// <summary>Excludes the fixed generated facade from consumer-call discovery.</summary>

@@ -29,7 +29,8 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 覆盖全部六种字符串 profile。
 `--verify-documentation` 检查三种编译器文档模式下的调用方 XML、编译器导出的文档、不变的可执行 token，以及只修改布局、添加或移除文档事实时的
 保留 driver 失效行为。`--verify-assembly-options` 检查两个选项构造函数、注册策略、全部十六种强制操作组合、旧模式值、库与友元保留、
-安全编译及默认 JSON 回退的输入策略。
+安全编译及默认 JSON 回退的输入策略。`--verify-external` 编译一个库和一个用 `[assembly: LuminPackable(typeof(T))]` 标记该库类型的使用方，
+双向比较其字节与库自身操作的结果，并在引用程序集上期望 LuminPack112。
 
 ## 调用如何绑定
 
@@ -104,6 +105,12 @@ C# 12，因此较旧的语言版本通过该后端绑定。
   不可访问成员、静态初始化）与旧版一样保留在泛型门面上；与旧版不同，对象初始化器中的成员名可以接受。保留全部操作的库项目现在也会为开放
   门面调用触发泛型展开。已通过两种后端验证泛型类、两个类型形参、嵌套转发、profile、JSON、ref 读取和值类型泛型 CircleReference；
   `GenericForwardingWrapperTest` 覆盖这些情况。
+- [x] **程序集标记的外部根。** 用 `[assembly: LuminPackable(typeof(T))]` 标记的被引用类型（以及被标记 Union 声明的 case）成为使用方
+  程序集的载荷，与旧版 `CompilationTypeAnalysis` 和 `ReferencedTypeMetadata` 一致。声明了标记的编译通过导入全部元数据的视图分析，因此
+  被引用类型的私有、internal、Include 和自动属性存储都通过布局镜像访问；其他程序集的 internal 存储走镜像而不直接访问。缺少后备字段的
+  引用程序集报告 LuminPack112。导入的 Union 根通过其自身程序集生成的已编译派发写入，在本程序集读取各 case，且不在导入类型内部声明任何
+  内容。与旧版不同，被标记类型的 internal 字段可以编译，被标记类型也可作为本地载荷的成员。`--verify-external` 通过二进制与 JSON
+  双向覆盖记录、结构体、导入 Union 和未加特性的类型。
 - [x] **LuminPack021。** 无需迁移：自布局镜像使 `[LuminPackInclude]` 存储在所有目标上可达以来，旧生成器只声明而不再报告该警告，Next
   同样不报告。
 
@@ -113,7 +120,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P1 | 跨程序集载荷 | Next 只发现当前编译中声明在类型上的 `[LuminPackable]`。程序集级 `[LuminPackable(typeof(T))]` 外部根、引用元数据导入（旧版 `ReferencedTypeMetadata`，含诊断 LuminPack112）、外部 owner、外部 Union 和跨程序集选项均缺失。 |
+| P2 | 跨程序集载荷 | 程序集标记的外部根已迁移。旧版会为观察到的构造特化的开放泛型标记（如 `typeof(Box<>)`）以及跨程序集选项继承仍缺失。与旧版相同，使用方未标记的被引用程序集 `[LuminPackable]` 类型在被序列化时仍走注册回退。 |
 | P2 | 其余后端组合 | 友元程序集的操作保留与单个语料上的 IL 重写已验证，但友元访问、IL 重写和禁用集成的静态后端组合仍需验证。在 .NET 8 及更高版本上，生成代码需要 C# 13（ref 字段、`ref readonly` 参数、ref struct 接口）。 |
 
 ### 生成源码

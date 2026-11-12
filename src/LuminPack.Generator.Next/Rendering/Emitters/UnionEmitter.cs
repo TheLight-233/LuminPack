@@ -141,6 +141,9 @@ internal static class UnionEmitter
         w.Close();
         w.Close();
 
+        // An imported root keeps the dispatch and registration its own assembly declared inside it and its cases.
+        if (model.UnionReferenced)
+            return;
         // Root dispatch and registration. The virtual slots only write, so they follow the write operation of their format.
         w.Blank();
         OpenType(model.UnionNamespace, model.UnionChain, w);
@@ -291,6 +294,8 @@ internal static class UnionEmitter
         w.Close();
         w.Close();
 
+        if (model.UnionReferenced)
+            return;
         w.Blank();
         if (!model.UnionInterface)
         {

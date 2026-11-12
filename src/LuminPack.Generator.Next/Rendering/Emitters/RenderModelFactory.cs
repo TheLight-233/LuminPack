@@ -157,7 +157,7 @@ internal static class RenderModelFactory
             referencePayload: false, layoutAttribute: null!, typeParameters: model.Identity.TypeParameters,
             typeConstraints: model.Constraints, unionRoot: true, unionInterface: model.IsInterface,
             unionSuffix: model.UnionSuffix, unionCases: cases, unionCursor: model.Cursor, unionReadGeneric: model.ReadGeneric,
-            unionChain: model.Chain, unionNamespace: model.Namespace!,
+            unionChain: model.Chain, unionNamespace: model.Namespace!, unionReferenced: model.Referenced,
             unionBinarySlots: Slots(model.BinarySlots), unionJsonSlots: Slots(model.JsonSlots),
             unionCanonical: model.Canonical, unionStandardBinary: model.StandardBinary, unionStandardJson: model.StandardJson,
             unionTier: (int)model.Tier, unionTierCases: model.TierCases, unionTierSealed: model.TierSealed, unionWide: model.WideTags,

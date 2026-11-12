@@ -27,6 +27,12 @@ internal static partial class TypeModelFactory
     /// <returns>The entry shape.</returns>
     internal static EntryShape EntryShapeOf(ITypeSymbol type, Compilation compilation, GeneratorOptions options)
     {
+        Compilation view = Complete(compilation);
+        if (!ReferenceEquals(view, compilation))
+        {
+            type = InView(type, view);
+            compilation = view;
+        }
         Session session = Sessions.GetValue(compilation, item => new Session(item, options));
         return (session.Options.Equals(options) ? session : new Session(compilation, options)).EntryShapeOf(type);
     }

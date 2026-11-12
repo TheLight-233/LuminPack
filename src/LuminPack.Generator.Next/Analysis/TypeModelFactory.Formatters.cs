@@ -152,13 +152,13 @@ internal static partial class TypeModelFactory
                     ReadableTypeName.Of(GeneratedNames.PayloadKey(named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) +
                     "|" + string.Join(", ", named.TypeArguments.Select(argument => argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))),
                     ordinaryObject: false);
-            if (!SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, _compilation.Assembly) || named.IsGenericType && HasAttribute(named, UnionAttribute))
+            if (!Owned(named) || named.IsGenericType && HasAttribute(named, UnionAttribute))
                 return new FormatterModel(spelling, FormatterDefinitions.Registered, rawCollection: rawCollection, layout: layout, ordinaryObject: ordinary);
-            if (IsPackable(named))
+            if (IsPackable(named) || Marked(named))
             {
                 ModelResult result = Analyze(named, depth + 1, path);
                 if (result.Model != null && result.IsComplete && CanPublish(result.Model))
-                    return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, raw: rawCollection, rawCollection: rawCollection, layout: layout, payload: result.Model, ordinaryObject: ordinary, publishPayload: !SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, _compilation.Assembly) || named.IsGenericType);
+                    return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, raw: rawCollection, rawCollection: rawCollection, layout: layout, payload: result.Model, ordinaryObject: ordinary, publishPayload: !Owned(named) || named.IsGenericType);
             }
 
             if (IsImplicitFormatterType(named))

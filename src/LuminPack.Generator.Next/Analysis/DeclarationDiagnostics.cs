@@ -163,7 +163,7 @@ internal static partial class TypeModelFactory
             }
             if (type is not INamedTypeSymbol named)
                 return;
-            if (IsPackable(named))
+            if (IsPackable(named) || Marked(named))
             {
                 ValidateImportedStorage(named, member, ref diagnostics);
                 return;
@@ -261,7 +261,8 @@ internal static partial class TypeModelFactory
                         continue;
                     if (property.GetMethod != null && HasAttribute(property.GetMethod, "System.Runtime.CompilerServices.CompilerGeneratedAttribute") ||
                         property.SetMethod != null && HasAttribute(property.SetMethod, "System.Runtime.CompilerServices.CompilerGeneratedAttribute"))
-                        diagnostics.Add(DiagnosticDescriptors.IncompleteReferencedPropertyStorage, member, level.ToDisplayString(), property.Name);
+                        diagnostics.Add(DiagnosticDescriptors.IncompleteReferencedPropertyStorage, member,
+                            level.WithNullableAnnotation(NullableAnnotation.None).ToDisplayString(), property.Name);
                 }
             }
         }

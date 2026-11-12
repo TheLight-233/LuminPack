@@ -34,6 +34,8 @@ elements, malformed markers and Booleans, root quotas and reuse across all six s
 unchanged executable tokens and retained-driver invalidation of layout-only and added/removed documentation facts.
 `--verify-assembly-options` checks both option constructors, registration policy, all sixteen forced-operation combinations,
 legacy mode values, library/friend retention, safe compilation and default JSON fallback input policies.
+`--verify-external` compiles a library and a consumer that marks the library's types with `[assembly: LuminPackable(typeof(T))]`,
+compares their bytes with the library's own operations in both directions, and expects LuminPack112 against a reference assembly.
 
 ## How calls bind
 
@@ -135,6 +137,14 @@ A checked item covers the scope stated here. Related combinations still listed b
   every operation, now also trigger generic expansion for open facade calls. Verified with generic classes, two type parameters,
   nested forwarding, profiles, JSON, ref reads and a value-type generic CircleReference, through both backends;
   `GenericForwardingWrapperTest` covers them.
+- [x] **Assembly-marked external roots.** A referenced type marked with `[assembly: LuminPackable(typeof(T))]`, with the declared
+  cases of a marked Union, is a payload of the consuming assembly, as legacy `CompilationTypeAnalysis` and `ReferencedTypeMetadata`
+  made it. A compilation that declares markers is analyzed through a view importing all metadata, so private, internal, included and
+  automatic-property storage of the referenced type is reached through the layout mirror; internal storage of another assembly is
+  mirrored rather than accessed. A reference assembly that omits backing storage reports LuminPack112. An imported Union root writes
+  through the compiled dispatch its own assembly generated and reads its cases here, and declares nothing inside the imported types.
+  Unlike legacy, internal fields of marked types compile, and marked types work as members of local payloads. `--verify-external`
+  covers records, structs, an imported Union and an unattributed type through binary and JSON, in both directions.
 - [x] **LuminPack021.** Nothing to migrate: the legacy generator has declared but not reported this warning since layout mirrors
   made `[LuminPackInclude]` storage reachable on every target, and Next likewise reports nothing.
 
@@ -144,7 +154,7 @@ A checked item covers the scope stated here. Related combinations still listed b
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Cross-assembly payloads | Next discovers only `[LuminPackable]` declared on types in the current compilation. Assembly-level `[LuminPackable(typeof(T))]` external roots, referenced metadata import (legacy `ReferencedTypeMetadata`, including diagnostic LuminPack112), external owners, external Unions and cross-assembly options are missing. |
+| P2 | Cross-assembly payloads | Assembly-marked external roots are migrated. Open generic markers such as `typeof(Box<>)`, which legacy specializes for observed constructions, and cross-assembly option inheritance are missing. As in legacy, a `[LuminPackable]` type of a referenced assembly that the consumer does not mark stays on the registered fallback when the consumer serializes it. |
 | P2 | Remaining backend combinations | Friend-assembly operation retention and IL rewriting on a single fixture are verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
 
 ### Generated source

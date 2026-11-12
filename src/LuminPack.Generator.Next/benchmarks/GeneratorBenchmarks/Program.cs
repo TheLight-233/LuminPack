@@ -30,7 +30,7 @@ internal static partial class Program
         {
             Console.Error.WriteLine(error);
             Console.Error.WriteLine("usage: GeneratorBenchmarks [--corpus <dir>] [--types <n>] [--runs <n>] [--core <dll>] " +
-                "[--refs <dir>] [--old-dll <dll>] [--old-mode on|off|verify] [--warmups <n>] [--reference-first] [--verify-publication] [--verify-incremental] [--verify-input-limits] [--verify-assembly-options] [--verify-documentation] [--verify-equivalence] [--skip-next] [--skip-old]");
+                "[--refs <dir>] [--old-dll <dll>] [--old-mode on|off|verify] [--warmups <n>] [--reference-first] [--verify-publication] [--verify-incremental] [--verify-input-limits] [--verify-assembly-options] [--verify-external] [--verify-documentation] [--verify-equivalence] [--skip-next] [--skip-old]");
             return 1;
         }
         string repository = FindRepositoryRoot();
@@ -44,6 +44,8 @@ internal static partial class Program
             return VerifyDocumentation(references, parse);
         if (options.VerifyAssemblyOptions)
             return VerifyAssemblyOptions(references, parse, coreDll);
+        if (options.VerifyExternal)
+            return VerifyExternal(references, parse, coreDll);
         if (options.VerifyInputLimits)
             return VerifyInputLimits(references, parse, coreDll);
         if (options.VerifyIncremental)
@@ -537,6 +539,9 @@ internal static partial class Program
                 case "--verify-documentation":
                     options.VerifyDocumentation = true;
                     break;
+                case "--verify-external":
+                    options.VerifyExternal = true;
+                    break;
                 case "--verify-equivalence":
                     options.VerifyEquivalence = true;
                     break;
@@ -573,6 +578,7 @@ internal static partial class Program
         internal bool VerifyIncremental;
         internal bool VerifyInputLimits;
         internal bool VerifyAssemblyOptions;
+        internal bool VerifyExternal;
         internal bool VerifyDocumentation;
         internal bool VerifyEquivalence;
         internal bool SkipNext;

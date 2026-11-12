@@ -55,6 +55,13 @@ internal static partial class TypeModelFactory
     /// <returns>A complete model, an incomplete model or an unsupported result.</returns>
     internal static ModelResult TryCreate(INamedTypeSymbol symbol, Compilation compilation, GeneratorOptions options)
     {
+        // A compilation that marks referenced roots is analyzed through its complete-metadata view.
+        Compilation view = Complete(compilation);
+        if (!ReferenceEquals(view, compilation))
+        {
+            symbol = InView(symbol, view);
+            compilation = view;
+        }
         Session session = Sessions.GetValue(compilation, item => new Session(item, options));
         // Project facts are created once per compilation. A caller that supplies different facts on the same compilation
         // gets an isolated run instead of a cache that was built under another caller's facts.
@@ -75,6 +82,12 @@ internal static partial class TypeModelFactory
     /// field of that type, so it reuses the specialized and default formatter contracts of members.</remarks>
     internal static MemberModel? TryCreateRoot(ITypeSymbol type, Compilation compilation, GeneratorOptions options)
     {
+        Compilation view = Complete(compilation);
+        if (!ReferenceEquals(view, compilation))
+        {
+            type = InView(type, view);
+            compilation = view;
+        }
         Session session = Sessions.GetValue(compilation, item => new Session(item, options));
         return session.Options.Equals(options) ? session.ClassifyRoot(type) : new Session(compilation, options).ClassifyRoot(type);
     }
@@ -164,7 +177,7 @@ internal static partial class TypeModelFactory
         /// <returns>The complete root member, or null.</returns>
         private MemberModel? ClassifyUncachedRoot(ITypeSymbol type)
         {
-            if (type is INamedTypeSymbol { IsGenericType: false } named && IsPackable(named))
+            if (type is INamedTypeSymbol { IsGenericType: false } named && (IsPackable(named) || Marked(named)))
                 return null;
             var issues = new List<string>();
             WirePolicy policy = Apply(WirePolicy.Default, _compilation.Assembly);
@@ -296,8 +309,9 @@ internal static partial class TypeModelFactory
         {
             var attribute = symbol.GetAttributes().FirstOrDefault(item =>
                 item.AttributeClass?.ToDisplayString() == PackableAttribute);
-            // A plain class reached as a member is expanded like a nested object record without its own declaration.
-            if (attribute == null && !IsImplicitInlineClass(symbol))
+            // A plain class reached as a member is expanded like a nested object record without its own declaration; a referenced
+            // type marked by the assembly is an Object payload of this compilation.
+            if (attribute == null && !IsImplicitInlineClass(symbol) && !Marked(symbol))
             {
                 issues.Add("not a LuminPackable declaration");
                 return null;
@@ -361,6 +375,11 @@ internal static partial class TypeModelFactory
                         issues.Add("the Union root declares no cases");
                     UnionDispatchTier tier = UnionTier(symbol, declared);
                     int encoding = (int)policy.Strings.Encoding, recording = (int)policy.Strings.Recording;
+                    // An imported root writes through the virtual dispatch its own assembly generated, as the original referenced
+                    // dispatch did; this assembly only reads, so the root must expose the compiled slots of both formats.
+                    bool referenced = !SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly);
+                    if (referenced)
+                        ReferencedDispatch(symbol, SlotSuffix(identity), declared, issues);
                     return new UnionModel(identity, accessibility, policy, constraints, cases,
                         isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: SlotSuffix(identity),
                         tier: tier, tierCases: TierCases(declared, tier), tierSealed: TierSealed(declared, tier),
@@ -368,7 +387,7 @@ internal static partial class TypeModelFactory
                         binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
                         canonical: CanonicalUnionProfiles(),
                         standardBinary: UnionProfileAlias(encoding, recording),
-                        standardJson: UnionProfileAlias(encoding, recording));
+                        standardJson: UnionProfileAlias(encoding, recording), referenced: referenced);
                 }
                 case PayloadKind.CircleReference:
                 {
@@ -461,6 +480,9 @@ internal static partial class TypeModelFactory
             {
                 if (!TryStorage(member, out MemberStorage storage))
                     continue;
+                // Internal storage of a referenced assembly is reached through the layout mirror, as private storage is.
+                if (storage == MemberStorage.Field && !_compilation.IsSymbolAccessibleWithin(member, _compilation.Assembly))
+                    storage = MemberStorage.IncludedField;
                 WirePolicy policy = MemberPolicy(member, ownerPolicy);
                 MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path);
                 if (model == null)
@@ -931,7 +953,7 @@ internal static partial class TypeModelFactory
         /// <returns>The class symbol, or null for every other declaration.</returns>
         private INamedTypeSymbol? LocalPackableClass(ITypeSymbol type)
             => type is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } named && named.SpecialType == SpecialType.None &&
-                SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, _compilation.Assembly) && IsPackable(named) ? named : null;
+                Owned(named) && (IsPackable(named) || Marked(named)) ? named : null;
 
         /// <summary>Classifies a member whose complete record has an upper bound computable from one read of its storage.</summary>
         /// <param name="type">The declared member type.</param>
@@ -1042,7 +1064,8 @@ internal static partial class TypeModelFactory
             List<string> issues, Path path)
         {
             string name = member.Name;
-            if (!IsPackable(type) && !IsImplicitInlineClass(type))
+            bool marked = Marked(type);
+            if (!IsPackable(type) && !IsImplicitInlineClass(type) && !marked)
             {
                 // A type that mentions the definition's own parameters is written and read by the generic serializer.
                 if (member.Containing != null && MentionsOwnParameter(type, member.Containing))
@@ -1057,7 +1080,8 @@ internal static partial class TypeModelFactory
             // expanded here, so it stays a member entry.
             if (type.IsGenericType)
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
-            if (!SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
+            // A referenced type keeps its own assembly's operations unless this assembly marks it as an external root.
+            if (!marked && !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly))
                 return new PayloadMember(name, storage, policy, Reference(type), PayloadShape.MemberEntry, nested: null);
 
             if (path.Active.Contains(type))
@@ -1282,8 +1306,7 @@ internal static partial class TypeModelFactory
         /// <param name="type">The concrete case.</param>
         /// <returns>Whether the case owns its Union read entry.</returns>
         private bool ReadsOwnUnionEntry(INamedTypeSymbol type)
-            => type is { IsReferenceType: true, IsAbstract: false, TypeKind: TypeKind.Class } &&
-               SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) &&
+            => type is { IsReferenceType: true, IsAbstract: false, TypeKind: TypeKind.Class } && Owned(type) &&
                !ContainsTypeParameter(type) && GenerationMode(type) != "Custom" && HasVariablePayload(type);
 
         /// <summary>Whether some instance field or property of the case or its bases is not unmanaged storage.</summary>

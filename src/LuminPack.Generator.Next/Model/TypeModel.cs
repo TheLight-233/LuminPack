@@ -827,9 +827,10 @@ internal sealed class UnionModel : TypeModel
     internal UnionModel(TypeIdentity identity, TypeAccessibility accessibility, WirePolicy policy, string[] constraints, UnionCaseModel[] cases,
         bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, string[] tierCases, bool[] tierSealed, bool cursor,
         bool readGeneric, string[] chain, string? @namespace, UnionSlotModel[] binarySlots, UnionSlotModel[] jsonSlots, bool canonical,
-        string standardBinary, string standardJson)
+        string standardBinary, string standardJson, bool referenced = false)
         : base(identity, accessibility, PayloadKind.Union, System.Array.Empty<MemberModel>(), policy, constraints)
     {
+        Referenced = referenced;
         StandardJson = standardJson;
         StandardBinary = standardBinary;
         Canonical = canonical;
@@ -855,7 +856,11 @@ internal sealed class UnionModel : TypeModel
         Canonical == union.Canonical && StandardBinary == union.StandardBinary && StandardJson == union.StandardJson &&
         Namespace == union.Namespace && Same(Cases, union.Cases) && Same(TierCases, union.TierCases) &&
         Same(TierSealed, union.TierSealed) && Same(Chain, union.Chain) && Same(BinarySlots, union.BinarySlots) &&
-        Same(JsonSlots, union.JsonSlots);
+        Same(JsonSlots, union.JsonSlots) && Referenced == union.Referenced;
+
+    /// <summary>Whether the root is declared by a referenced assembly whose generated virtual dispatch the writes call; the
+    /// consuming assembly declares nothing inside the root or its cases.</summary>
+    internal readonly bool Referenced;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as TypeModel);
