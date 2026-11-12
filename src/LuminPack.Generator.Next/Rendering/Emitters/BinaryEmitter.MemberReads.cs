@@ -47,7 +47,7 @@ internal static partial class BinaryEmitter
             body.Add("if (" + state + ".PeekIsNullObject())");
             body.Add("\t" + target + " = default!;");
         }
-        body.Add(member.Formatter + ".Read<" + profile + ">(ref " + state + ", ref " + target + "!);");
+        body.Add(member.BinaryFormatter + ".Read<" + profile + ">(ref " + state + ", ref " + target + "!);");
         AddCollectionCheck(body, member, target);
     }
 }

@@ -34,7 +34,7 @@ internal static partial class BinaryEmitter
                     current = false;
                 }
                 if (member.Kind == RenderMemberKind.ForwardedCollection)
-                    body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
+                    body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 else if (member.Kind is RenderMemberKind.Special or RenderMemberKind.CultureInfo or RenderMemberKind.Parameter)
                     AddMemberWrite(body, model, member, w, "value." + member.Name);
                 else if (member.Kind == RenderMemberKind.Sequence)

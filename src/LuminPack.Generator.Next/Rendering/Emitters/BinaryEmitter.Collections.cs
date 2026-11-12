@@ -41,7 +41,7 @@ internal static partial class BinaryEmitter
             default:
                 // A nullable value is framed by its owner (a null marker, or a memberless header and the payload), so the sparse
                 // dictionary writes through its shared owner like the other keyed collections.
-                body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(member.BinaryFormatter + ".Write<" + Profile + ">(ref writer, " + owner + "." + member.Name + ");");
                 break;
         }
     }

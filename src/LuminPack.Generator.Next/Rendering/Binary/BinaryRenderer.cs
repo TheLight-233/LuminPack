@@ -33,6 +33,8 @@ internal sealed class BinaryRenderer : IRenderer
     private static string Emit(TypeModel model, RenderContext context)
     {
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
+        if (direct != null && model is RecordModel { Recursive: false, InlineOrder: { } order })
+            direct = direct.WithInlineOrder(order);
         return direct == null ? string.Empty : PayloadEmitter.Render(direct, json: false, context.Options.AvailableAliases,
             context.Operations);
     }

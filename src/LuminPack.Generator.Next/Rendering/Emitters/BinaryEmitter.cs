@@ -311,6 +311,25 @@ internal static partial class BinaryEmitter
         }
         w.Suppressed = false;
         w.Close();
+        if (model.InlineRoots)
+        {
+            // Parent members reach the original expanded nested-record schema through this owner.
+            w.Blank();
+            w.Line("internal static partial class " + model.Owner + "_Inline");
+            w.Open();
+            w.Suppressed = !writes;
+            w.Line(inline);
+            w.Line("internal static void Write" + Arguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)");
+            w.Indented(() => w.Line(OptionsConstraint() + " => " + Serializer() + "." + container + "." +
+                Invoke("RootWriteInline", genericWrite ? "TOptions" : null) + "(ref state, value);"));
+            w.Suppressed = !reads;
+            w.Line(inline);
+            w.Line("internal static void Read" + Arguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)");
+            w.Indented(() => w.Line(OptionsConstraint() + " => " + Serializer() + "." + container + "." +
+                Invoke("RootReadInline", genericRead ? "TOptions" : null) + "(ref state, ref value);"));
+            w.Suppressed = false;
+            w.Close();
+        }
         w.Close();
         w.Blank();
 
@@ -479,6 +498,23 @@ internal static partial class BinaryEmitter
                     ? (model.ElementList ? w.MethodImpl("NoInlining") : inline)
                     : model.ReferencePayload ? w.MethodImpl("NoInlining")
                     : allFixed && DirectInlining.FixedUnionRead(model, Sizes(readUnionBody)) ? inline : null);
+            if (model.InlineRoots)
+            {
+                // The original generator expanded this record inside its parents with each level's auto-properties before its
+                // fields, so parent members keep that schema through these roots.
+                var expanded = model.InlineView();
+                w.Blank();
+                w.Suppressed = !writes;
+                var inlineWrite = Mirrored(expanded, w, WriteBody(expanded, w, union: false), writes: true, union: false);
+                if (expanded.Proven)
+                    inlineWrite = ProvenWriteBody(expanded, w, inlineWrite, union: false);
+                inlineWrite = AddCallbacks(inlineWrite, model.WriteBefore, model.WriteAfter);
+                Method(inlineWrite, "RootWriteInline", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
+                w.Blank();
+                w.Suppressed = !reads;
+                var inlineRead = AddReadCallbacks(model, Mirrored(expanded, w, ReadBody(expanded, w, union: false), writes: false, union: false));
+                Method(inlineRead, "RootReadInline", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", inline);
+            }
             w.Suppressed = false;
             w.Close();
         }
@@ -982,7 +1018,7 @@ internal static partial class BinaryEmitter
             // A formatter-call array is a plain call beside the value members, which keeps no separating blank line.
             if (member.Kind == RenderMemberKind.Array && member.FormatterCall)
             {
-                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
+                body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -995,7 +1031,7 @@ internal static partial class BinaryEmitter
             }
             if (member.Kind == RenderMemberKind.ForwardedCollection)
             {
-                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
+                body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -1009,7 +1045,7 @@ internal static partial class BinaryEmitter
             // A framework member writes through its shared formatter owner, which frames its own null record.
             if (member.Kind == RenderMemberKind.Special)
             {
-                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
+                body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
                 continue;
             }
@@ -1590,7 +1626,7 @@ internal static partial class BinaryEmitter
             // An array member writes through its generated formatter, which keeps its own framing and profile.
             if (member.Kind == RenderMemberKind.Array)
             {
-                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             // A culture-info member expands the shared owner's write body in place, as the legacy direct record does.
@@ -1602,12 +1638,12 @@ internal static partial class BinaryEmitter
             // A framework member writes through its shared formatter owner, which frames its own null record.
             if (member.Kind == RenderMemberKind.Special)
             {
-                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             if (member.Kind == RenderMemberKind.ForwardedCollection)
             {
-                body.Add(member.Formatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
+                body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, " + owner + "." + member.Name + ");");
                 continue;
             }
             if (member.Kind == RenderMemberKind.Sequence)
@@ -2322,7 +2358,7 @@ internal static partial class BinaryEmitter
             }
             else
             {
-                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref instance." + member.Name + "!);");
+                body.Add(member.BinaryFormatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref instance." + member.Name + "!);");
                 AddCollectionCheck(body, member, "instance." + member.Name);
                 // A Boolean list carries unmanaged values, so an untrusted read still checks the decoded bytes.
                 if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
@@ -2468,13 +2504,13 @@ internal static partial class BinaryEmitter
             // A fused dictionary reads through its generated formatter, which keeps its own entry framing and profile.
             if (member.Kind == RenderMemberKind.Dictionary)
             {
-                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.BinaryFormatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A culture-info member reads through its shared formatter owner, which handles its own null marker.
             if (member.Kind == RenderMemberKind.CultureInfo)
             {
-                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.BinaryFormatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A framework member reads through its shared formatter owner, which handles its own null record.
@@ -2487,13 +2523,13 @@ internal static partial class BinaryEmitter
             // own null record.
             if (member.Kind is RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence)
             {
-                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.BinaryFormatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // A sorted, paired or nested collection reads through its generated formatter, which keeps its own framing.
             if (IsCollectionBlock(member))
             {
-                body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                body.Add(member.BinaryFormatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                 continue;
             }
             // An array or list member reads through its generated formatter, which keeps its own framing and profile.
@@ -2506,7 +2542,7 @@ internal static partial class BinaryEmitter
                 }
                 else
                 {
-                    body.Add(member.Formatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
+                    body.Add(member.BinaryFormatter + ".Read<" + ReadProfile(model, w, member) + ">(ref reader, ref " + owner + "." + member.Name + "!);");
                     AddCollectionCheck(body, member, owner + "." + member.Name);
                     if (member.Kind == RenderMemberKind.List && member.Scalar == "bool" && !trusted)
                         body.Add(Policy() + ".CheckBooleans(" + owner + "." + member.Name + "!);");
