@@ -69,17 +69,25 @@ internal static partial class NextPipeline
         var calls = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => SerializerCallAnalysis.IsCandidate(node) && ConsumerTree(node.SyntaxTree),
             static (syntax, token) => SerializerCallAnalysis.Analyze(syntax, token))
-            .Where(static call => call.Call != null || call.Whole != GeneratedOperations.None)
+            .Where(static call => call.Call != null || call.Whole != GeneratedOperations.None || call.Open)
             .WithTrackingName("LuminPack.Next.SerializerCalls").Collect()
             .WithComparer(FactArrayComparer<CallFact>.Instance)
             .WithTrackingName("LuminPack.Next.CollectedCalls");
         var forwarded = calls.Combine(context.CompilationProvider).Select(static (input, token) =>
         {
             foreach (CallFact call in input.Left)
-                if (call.Call == null)
+                if (call.Call == null || call.Open)
                     return GenericPayloadExpansion.Roots(input.Right, token);
             return RootMembers.Empty;
         }).WithTrackingName("LuminPack.Next.ForwardedPayloads");
+        // Closed calls of source generic methods that reach the facade are redirected to closed wrapper copies.
+        var wrappers = calls.Combine(context.CompilationProvider).Select(static (input, token) =>
+        {
+            foreach (CallFact call in input.Left)
+                if (call.Open)
+                    return GenericWrapperAnalysis.Analyze(input.Right, token);
+            return WrapperSet.Empty;
+        }).WithTrackingName("LuminPack.Next.GenericWrappers");
         // Generated extensions, state calls, registrations and facade method groups keep their operations for every payload.
         var usage = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => OperationUsageAnalysis.IsUsageCandidate(node) && ConsumerTree(node.SyntaxTree),
@@ -92,7 +100,7 @@ internal static partial class NextPipeline
                 return operations;
             });
         var requests = models.Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance)
-            .Combine(calls).Combine(forwarded).Combine(facts.Combine(usage)).Select(static (input, _) =>
+            .Combine(calls).Combine(forwarded.Combine(wrappers)).Combine(facts.Combine(usage)).Select(static (input, _) =>
         {
             ImmutableArray<ModeledPayload> payloads = input.Left.Left.Left;
             var bound = ImmutableArray.CreateBuilder<SerializerCallModel>();
@@ -107,7 +115,10 @@ internal static partial class NextPipeline
             var diagnostics = new List<DiagnosticInfo>(project.Diagnostics);
             foreach (ModeledPayload payload in payloads)
                 diagnostics.AddRange(payload.Diagnostics);
-            return new PublicationRequest(payloads, bound.ToImmutable(), input.Left.Right,
+            // A wrapper body's facade calls bind entries like source calls, located only in the wrapper.
+            foreach (WrapperModel wrapper in input.Left.Right.Right.Wrappers)
+                bound.AddRange(wrapper.Calls);
+            return new PublicationRequest(payloads, bound.ToImmutable(), input.Left.Right.Left, input.Left.Right.Right,
                 project.Options, project.Policy, project.Symbols, diagnostics.ToArray(), project.Fixed | whole);
         });
         var diagnostics = requests.Select(static (request, _) => request.Diagnostics).WithComparer(DiagnosticInfoComparer.Instance);

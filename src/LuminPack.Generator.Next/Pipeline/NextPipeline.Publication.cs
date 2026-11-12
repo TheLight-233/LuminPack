@@ -65,6 +65,7 @@ internal static partial class NextPipeline
         private readonly ImmutableArray<ModeledPayload> _payloads;
         private readonly ImmutableArray<SerializerCallModel> _calls;
         private readonly RootMembers _forwarded;
+        private readonly WrapperSet _wrappers;
         private readonly GeneratorOptions _options;
         private readonly WirePolicy _policy;
         private readonly string[] _symbols;
@@ -83,9 +84,10 @@ internal static partial class NextPipeline
         /// <param name="symbols">The active conditional-compilation symbols.</param>
         /// <param name="whole">The operations every payload keeps regardless of calls.</param>
         internal PublicationRequest(ImmutableArray<ModeledPayload> payloads, ImmutableArray<SerializerCallModel> calls,
-            RootMembers forwarded, GeneratorOptions options, WirePolicy policy, string[] symbols, DiagnosticInfo[] diagnostics,
+            RootMembers forwarded, WrapperSet wrappers, GeneratorOptions options, WirePolicy policy, string[] symbols, DiagnosticInfo[] diagnostics,
             GeneratedOperations whole)
         {
+            _wrappers = wrappers;
             _whole = whole;
             _payloads = payloads;
             _calls = calls;
@@ -129,7 +131,8 @@ internal static partial class NextPipeline
                 // Compiler interception needs the host's location API; the IL rewriter binds the same entries after compilation.
                 if (_options.Interceptors && (SerializerCallAnalysis.Supported || _options.IlRewrite))
                 {
-                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, snapshot.SharedSources), _options.IlRewrite);
+                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, snapshot.SharedSources), _options.IlRewrite,
+                        _wrappers);
                     if (interceptors.Length != 0)
                         sources.Add(new GeneratedSource("LuminPackGen.Interceptors.g.cs", interceptors, GenerationKind.Binary));
                 }
@@ -160,7 +163,7 @@ internal static partial class NextPipeline
 
         /// <inheritdoc/>
         public bool Equals(PublicationRequest? other) => other != null && _whole == other._whole && _options.Equals(other._options) && _policy.Equals(other._policy) &&
-            Same(_payloads, other._payloads) && Same(_calls, other._calls) && _forwarded.Equals(other._forwarded) && Same(_symbols, other._symbols) && Same(Diagnostics, other.Diagnostics);
+            Same(_payloads, other._payloads) && Same(_calls, other._calls) && _forwarded.Equals(other._forwarded) && _wrappers.Equals(other._wrappers) && Same(_symbols, other._symbols) && Same(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>
         public override bool Equals(object? obj) => Equals(obj as PublicationRequest);

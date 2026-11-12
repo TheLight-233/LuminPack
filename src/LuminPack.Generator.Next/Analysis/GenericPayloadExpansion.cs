@@ -99,7 +99,7 @@ internal static class GenericPayloadExpansion
     }
 
     /// <summary>Lists the method names from which a serializer call is reachable by name, as the original bound them.</summary>
-    private static HashSet<string> RelevantNames(Compilation compilation, CancellationToken cancellationToken)
+    internal static HashSet<string> RelevantNames(Compilation compilation, CancellationToken cancellationToken)
     {
         var names = new HashSet<string>(SerializerNames, StringComparer.Ordinal);
         var callers = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
@@ -126,7 +126,7 @@ internal static class GenericPayloadExpansion
         return names;
     }
 
-    private static string? InvocationName(InvocationExpressionSyntax call) => call.Expression switch
+    internal static string? InvocationName(InvocationExpressionSyntax call) => call.Expression switch
     {
         MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
         MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
@@ -180,7 +180,7 @@ internal static class GenericPayloadExpansion
         }
     }
 
-    private static bool ContainsTypeParameter(ITypeSymbol type) => TypeParameters(type).Any();
+    internal static bool ContainsTypeParameter(ITypeSymbol type) => TypeParameters(type).Any();
 
     /// <summary>Whether generated code outside the declaring type can name the payload.</summary>
     private static bool Accessible(ITypeSymbol type)
@@ -213,7 +213,7 @@ internal static class GenericPayloadExpansion
         return map;
     }
 
-    private static ITypeSymbol Substitute(Compilation compilation, ITypeSymbol type, Dictionary<ITypeParameterSymbol, ITypeSymbol> map)
+    internal static ITypeSymbol Substitute(Compilation compilation, ITypeSymbol type, Dictionary<ITypeParameterSymbol, ITypeSymbol> map)
     {
         switch (type)
         {

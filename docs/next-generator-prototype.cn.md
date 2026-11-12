@@ -98,6 +98,12 @@ C# 12，因此较旧的语言版本通过该后端绑定。
   partial 类，而 `List<Point>` 与 `List<Other.Point>` 等集合 owner 发生冲突，其中一个不会发布。现在由编译事实列出声明在多个命名空间中、
   或与常用框架类型同名的简单名称，这些名称保留命名空间（`OtherPointFormatter`、`ListOfOtherPointFormatter`）。其他名称不变；Benchmark
   语料的输出完全一致。
+- [x] **源泛型方法的包装特化。** 到达门面的源泛型方法的封闭调用（例如基于 `Deserialize<Box<T>>` 的 `Read<double>(bytes)`）会通过拦截器
+  或 IL 重写器重定向到生成的封闭副本（`LuminWrapper_Read_Double`），与旧版 `StaticSerializerBinding.Wrappers` 一致。副本中的门面调用绑定
+  与源调用相同的具体入口，对其他转发方法的调用绑定各自的包装。搬移或封闭后可能改变语义的方法体（lambda、await、隐式接收者、开放运算符、
+  不可访问成员、静态初始化）与旧版一样保留在泛型门面上；与旧版不同，对象初始化器中的成员名可以接受。保留全部操作的库项目现在也会为开放
+  门面调用触发泛型展开。已通过两种后端验证泛型类、两个类型形参、嵌套转发、profile、JSON、ref 读取和值类型泛型 CircleReference；
+  `GenericForwardingWrapperTest` 覆盖这些情况。
 - [x] **LuminPack021。** 无需迁移：自布局镜像使 `[LuminPackInclude]` 存储在所有目标上可达以来，旧生成器只声明而不再报告该警告，Next
   同样不报告。
 
@@ -108,7 +114,6 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
 | P1 | 跨程序集载荷 | Next 只发现当前编译中声明在类型上的 `[LuminPackable]`。程序集级 `[LuminPackable(typeof(T))]` 外部根、引用元数据导入（旧版 `ReferencedTypeMetadata`，含诊断 LuminPack112）、外部 owner、外部 Union 和跨程序集选项均缺失。 |
-| P1 | 源泛型方法的包装特化 | 旧版把到达门面的用户泛型方法的每个封闭调用（例如基于 `Deserialize<Box<T>>` 的 `Read<double>(bytes)`）重定向到该方法生成的封闭副本（`StaticSerializerBinding.Wrappers`），副本中的门面调用随后静态绑定。Next 能通过泛型方法展开找到这些封闭载荷，但不发布包装，开放方法内的门面调用也不会被拦截，因此对 `Box<double>` 或泛型 CircleReference `Node<double>` 等泛型载荷会在运行时报 "No formatter is registered"。 |
 | P2 | 其余后端组合 | 友元程序集的操作保留与单个语料上的 IL 重写已验证，但友元访问、IL 重写和禁用集成的静态后端组合仍需验证。在 .NET 8 及更高版本上，生成代码需要 C# 13（ref 字段、`ref readonly` 参数、ref struct 接口）。 |
 
 ### 生成源码
@@ -121,7 +126,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P2 | 泛型 CircleReference | 直接使用或作为成员的封闭构造会得到 owner 并保持引用身份，包括环和重复的列表元素（已通过拦截器验证 `Node<string>`、`Node<int>` 与 `Node<double>`）。只能经由源泛型方法到达的构造依赖上面的包装缺口。值类型形状、复杂构造、ref 返回租借、槽位演进和失败组合均未验证。 |
+| P2 | 泛型 CircleReference | 直接使用或作为成员的封闭构造会得到 owner 并保持引用身份，包括环和重复的列表元素（已通过拦截器验证 `Node<string>`、`Node<int>` 与 `Node<double>`）。经由源泛型方法到达的构造通过包装绑定。值类型形状、复杂构造、ref 返回租借、槽位演进和失败组合均未验证。 |
 | P2 | 版本容忍组合 | 泛型与继承组合、压缩字段、旧名称、Schema 演进和完整的旧版交叉读取，只覆盖到测试所及范围。 |
 | P2 | 公开注解 | `NonGenerator`、`LuminPackableObject` 与别名冲突仍需完整对照旧版语义。跨程序集选项继承仍属于跨程序集缺口。 |
 | P2 | JSON 兼容性 | 各种封装、转义、旧名称、重复与未知属性、省略成员和失败发布，只覆盖到测试所及范围。 |

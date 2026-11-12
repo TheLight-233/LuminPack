@@ -649,7 +649,9 @@ internal static class CompactPublication
         {
             Document = document;
             Method = method;
-            Forward = document.Text.Substring(method.Start, method.SignatureStart - method.Start).Contains("InterceptsLocation") ? null : method.Forward;
+            // Interceptors are bound by their attribute or called by wrapper bodies by name, so they are never inlined away.
+            Forward = method.Name.StartsWith("LuminIntercept_", StringComparison.Ordinal) ||
+                document.Text.Substring(method.Start, method.SignatureStart - method.Start).Contains("InterceptsLocation") ? null : method.Forward;
             if (Forward != null)
             {
                 string values = Forward.Target + "(" + string.Join(",", Forward.Arguments) + ")";

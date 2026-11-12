@@ -100,8 +100,10 @@ internal static class InterceptorRenderer
     /// <param name="roots">The published roots keyed by payload spelling.</param>
     /// <param name="il">Whether the calls bind through the installed IL rewriter rather than compiler interception.</param>
     /// <returns>The source, or an empty string when no call binds to a root.</returns>
-    internal static string Render(IReadOnlyList<SerializerCallModel> calls, RootCatalog roots, bool il = false)
+    /// <param name="wrappers">The closed copies of source generic methods, whose body calls are among <paramref name="calls"/>.</param>
+    internal static string Render(IReadOnlyList<SerializerCallModel> calls, RootCatalog roots, bool il = false, WrapperSet? wrappers = null)
     {
+        wrappers ??= WrapperSet.Empty;
         var bound = new List<(SerializerCallModel Call, RootEntry Root)>();
         foreach (SerializerCallModel call in calls)
             if (roots.Find(call) is { } root && (call.Json ? root.Json : root.Binary))
@@ -123,7 +125,7 @@ internal static class InterceptorRenderer
             }
         }
         bound = bound.Select(item => (item.Call, numbered[Emitters.GeneratedNames.CanonicalKey(item.Call.Payload)])).ToList();
-        if (bound.Count == 0)
+        if (bound.Count == 0 && wrappers.Wrappers.Length == 0)
             return string.Empty;
         var w = new StringBuilder(16384);
         w.Append(Header);
@@ -151,8 +153,9 @@ internal static class InterceptorRenderer
                 JsonEntries(w, type, root, jsonWrites, jsonReads);
             w.Append("        }\n\n");
         }
-        // Interceptors, one method per (overload, payload, profile).
+        // Interceptors, one method per (overload, payload, profile). A wrapper body calls the method of its call's key.
         int index = 0;
+        var shims = new Dictionary<(SerializerApi, string, string?, bool), string>();
         foreach (var group in bound.GroupBy(item => (item.Call.Api, item.Call.Payload, item.Call.Profile, item.Call.OpenProfile))
             .OrderBy(group => group.Key.Payload, StringComparer.Ordinal).ThenBy(group => group.Key.Api)
             .ThenBy(group => group.Key.Profile ?? string.Empty, StringComparer.Ordinal).ThenBy(group => group.Key.OpenProfile))
@@ -162,13 +165,43 @@ internal static class InterceptorRenderer
             // A JSON read of an explicitly untrusted payload replaces only its declared profile with the strict one.
             string profile = group.Key.OpenProfile ? "TLuminProfile" : group.Key.Profile ??
                 (IsJsonRead(group.Key.Api) ? root.JsonReadProfile ?? root.DeclaredProfile : root.DeclaredProfile);
+            // A call of a wrapper body has no source location.
             foreach (string location in group.Select(item => item.Call.Location).Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal))
-                w.Append("        ").Append(location).Append('\n');
+                if (location.Length != 0)
+                    w.Append("        ").Append(location).Append('\n');
+            shims[group.Key] = "LuminIntercept_" + root.Readable + "_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Interceptor(w, group.Key.Api, group.Key.Payload, root.Readable, profile, index++, group.Key.OpenProfile);
             w.Append('\n');
         }
+        Wrappers(w, wrappers, shims);
         w.Append("    }\n}\n");
         return w.ToString();
+    }
+
+    /// <summary>Writes each wrapper with the source calls it replaces, its body calls bound to their entry shims.</summary>
+    /// <param name="w">The interception source.</param>
+    /// <param name="wrappers">The wrappers.</param>
+    /// <param name="shims">The interceptor method of each bound call key.</param>
+    private static void Wrappers(StringBuilder w, WrapperSet wrappers, Dictionary<(SerializerApi, string, string?, bool), string> shims)
+    {
+        foreach (WrapperModel wrapper in wrappers.Wrappers)
+        {
+            string body = wrapper.Body;
+            // Higher placeholders first, so __LuminCall_1 never rewrites the prefix of __LuminCall_10.
+            for (int index = wrapper.Calls.Length - 1; index >= 0; index--)
+            {
+                SerializerCallModel call = wrapper.Calls[index];
+                string target = shims.TryGetValue((call.Api, call.Payload, call.Profile, call.OpenProfile), out string? shim)
+                    ? shim : wrapper.Fallbacks[index];
+                body = body.Replace(WrapperModel.Placeholder(index), target);
+            }
+            foreach (string location in wrapper.Locations)
+                w.Append("        ").Append(location).Append('\n');
+            w.Append("        ").Append(wrapper.Declaration).Append('\n');
+            foreach (string line in body.Split('\n'))
+                w.Append("        ").Append(line.TrimEnd('\r')).Append('\n');
+            w.Append('\n');
+        }
     }
 
     private const string Header = @"// <auto-generated/>

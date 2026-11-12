@@ -51,7 +51,8 @@ internal static class SerializerCallAnalysis
         SerializerCallModel? call = method == null ? null : Analyze(context.SemanticModel, invocation, method, cancellationToken);
         // A facade call without a concrete root keeps its operation for every payload.
         return new CallFact(call, call != null ? GeneratedOperations.None :
-            OperationUsageAnalysis.Unbound(context.SemanticModel, invocation, method, cancellationToken));
+            OperationUsageAnalysis.Unbound(context.SemanticModel, invocation, method, cancellationToken),
+            open: call == null && method != null && IsFacade(method));
     }
 
     /// <summary>Binds an ordinary facade call in the compilation's shared discovery pass.</summary>
@@ -93,11 +94,46 @@ internal static class SerializerCallAnalysis
             Location(semanticModel, invocation, cancellationToken);
         if (location == null)
             return null;
+        return Model(semanticModel.Compilation, api.Value, payload, profile, openProfile, location);
+    }
+
+    /// <summary>Binds a closed facade construction that a generated wrapper body calls instead of a source location.</summary>
+    /// <param name="method">The closed facade method.</param>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>The call, located nowhere, or null when the overload or its type arguments have no concrete entry.</returns>
+    internal static SerializerCallModel? Closed(IMethodSymbol method, Compilation compilation)
+    {
+        if (!method.IsGenericMethod || method.ContainingType?.ToDisplayString() != SerializerName ||
+            Classify(method.OriginalDefinition) is not { } api || !IsClosed(method.TypeArguments[0]))
+            return null;
+        string? profile = null;
+        if (method.TypeArguments.Length == 2)
+        {
+            if (!IsClosed(method.TypeArguments[1]) || !Accessible(method.TypeArguments[1]))
+                return null;
+            profile = method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+        else if (method.TypeArguments.Length != 1)
+        {
+            return null;
+        }
+        return Accessible(method.TypeArguments[0]) ? Model(compilation, api, method.TypeArguments[0], profile, false, string.Empty) : null;
+    }
+
+    /// <summary>Whether a method belongs to the generated serializer facade.</summary>
+    /// <param name="method">A bound method.</param>
+    /// <returns>Whether its declaring type is <c>LuminPack.LuminPackSerializer</c>.</returns>
+    internal static bool IsFacade(IMethodSymbol method) => method.ContainingType?.ToDisplayString() == SerializerName;
+
+    /// <summary>Builds the call facts of one bound facade construction.</summary>
+    private static SerializerCallModel Model(Compilation compilation, SerializerApi api, ITypeSymbol payload, string? profile, bool openProfile,
+        string location)
+    {
         // A nullable value root keeps its Nullable spelling; the shorthand loses the distinction in owner names.
         // Nested nullable value types are spelled as Nullable<T> too: owner keys drop '?' annotations, which would merge int? and int.
         string spelling = payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(PayloadFormat);
-        MemberModel? root = TypeModelFactory.TryCreateRoot(payload, semanticModel.Compilation,
-            Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation));
+        GeneratorOptions options = Pipeline.GeneratorOptionsFactory.From(compilation);
+        MemberModel? root = TypeModelFactory.TryCreateRoot(payload, compilation, options);
         // A closed generic payload binds the generic roots of its definition, as the original concrete facade does. A type nested
         // in a generic type is generic over the containing type arguments, which precede its own.
         string? definition = null, typeArguments = null;
@@ -106,10 +142,9 @@ internal static class SerializerCallAnalysis
             definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             typeArguments = string.Join(", ", TypeModelFactory.AllTypeArguments(generic).Select(argument => argument.ToDisplayString(PayloadFormat)));
         }
-        EntryShape shape = TypeModelFactory.EntryShapeOf(payload, semanticModel.Compilation,
-            Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation));
-        return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments,
-            shape, OperationUsageAnalysis.Payload(payload, semanticModel.Compilation));
+        EntryShape shape = TypeModelFactory.EntryShapeOf(payload, compilation, options);
+        return new SerializerCallModel(api, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments,
+            shape, OperationUsageAnalysis.Payload(payload, compilation));
     }
 
     private static readonly SymbolDisplayFormat PayloadFormat = SymbolDisplayFormat.FullyQualifiedFormat
@@ -230,7 +265,7 @@ internal static class SerializerCallAnalysis
     };
 
     /// <summary>Obtains the compiler-owned interception attribute without raising the Roslyn 4.3 loading requirement.</summary>
-    private static string? Location(SemanticModel model, InvocationExpressionSyntax call, CancellationToken cancellationToken)
+    internal static string? Location(SemanticModel model, InvocationExpressionSyntax call, CancellationToken cancellationToken)
     {
         object? location = LocationMethod!.Invoke(null, new object[] { model, call, cancellationToken });
         if (location == null)

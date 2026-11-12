@@ -226,14 +226,19 @@ internal readonly struct CallFact : IEquatable<CallFact>
     /// <summary>The operations an unbound facade invocation keeps for every payload.</summary>
     internal readonly Rendering.Emitters.GeneratedOperations Whole;
 
-    internal CallFact(SerializerCallModel? call, Rendering.Emitters.GeneratedOperations whole)
+    /// <summary>Whether the invocation is a facade call that stays on the generic facade, such as one over an open payload,
+    /// which generic expansion and wrappers may close from its callers.</summary>
+    internal readonly bool Open;
+
+    internal CallFact(SerializerCallModel? call, Rendering.Emitters.GeneratedOperations whole, bool open = false)
     {
         Call = call;
         Whole = whole;
+        Open = open;
     }
 
     /// <inheritdoc/>
-    public bool Equals(CallFact other) => Whole == other.Whole && Equals(Call, other.Call);
+    public bool Equals(CallFact other) => Whole == other.Whole && Open == other.Open && Equals(Call, other.Call);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is CallFact other && Equals(other);
