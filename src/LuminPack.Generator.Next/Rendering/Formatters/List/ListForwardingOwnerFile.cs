@@ -28,7 +28,7 @@ internal static class ListForwardingOwnerFile
     /// <returns>The generated source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string collection = fact.DeclaredType;
         string item = fact.ForwardedType!;
         string owner = GeneratedNames.Owner(set.Extension!, collection);

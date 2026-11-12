@@ -12,7 +12,7 @@ internal static class BlockingCollectionOwnerFile
     /// <returns>The complete generated source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string writer = w.A("LuminPackWriter");
         string reader = w.A("LuminPackReader");
         string jsonWriter = w.A("LuminPackJsonWriter");

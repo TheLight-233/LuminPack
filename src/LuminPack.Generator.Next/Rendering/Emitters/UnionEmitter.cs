@@ -31,9 +31,7 @@ internal static class UnionEmitter
         string type = model.GlobalName, container = "LuminRoots_" + model.Readable;
         string serializer = w.A("LuminPackSerializer"), standard = w.A(model.UnionStandardBinary);
         string inline = w.MethodImpl("AggressiveInlining"), constraint = "where TLuminProfile : struct, " + w.A("ILuminPackOptions");
-        string slotPrefix = "LuminPackUnionSerialize_" + model.UnionSuffix;
-        foreach (var slot in model.UnionBinarySlots)
-            w.A(slot.Profile);
+        string slotPrefix = "Write_" + model.UnionSuffix;
 
         w.Line("namespace LuminPack");
         w.Open();
@@ -86,28 +84,10 @@ internal static class UnionEmitter
         w.Line("return;");
         w.Close();
         w.Blank();
-        w.Line("if (value is not null)");
-        w.Open();
-        w.Line("value = ReadExistingUnion(ref reader, value, tag);");
-        w.Line("return;");
-        w.Close();
-        w.Blank();
         var counters = new SwitchCounters();
-        w.Line("// Union cases");
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, false, "reader", counters, slotPrefix);
-        w.Close();
-        w.Blank();
-        w.Line(w.MethodImpl("NoInlining"));
-        w.Line("static " + type + "? ReadExistingUnion(ref " + reader + " reader2, " + type + "? value2, ushort tag2)");
-        w.Open();
-        var reuse = new SwitchCounters { Members = counters.Members, Instances = counters.Instances, Cursors = counters.Cursors };
-        w.Line("// Union cases");
-        w.Line("switch (tag2)");
-        w.Open();
-        ReadArms(model, w, true, "reader2", reuse, slotPrefix);
-        w.Close();
+        ReadArms(model, w, true, "reader", counters, slotPrefix);
         w.Close();
         w.Close();
         w.Close();
@@ -167,7 +147,6 @@ internal static class UnionEmitter
         Registration(model, w, type);
         RootSlots(model, w, writer, false);
         CompiledSlot(model, w, writer, false);
-        DispatchHelpers(model, w, writer, false);
         RegisteredWriter(model, w, writer, false);
         if (model.UnionInterface)
         {
@@ -175,7 +154,6 @@ internal static class UnionEmitter
             // in the binary file while its cases' JSON slots move to the JSON file.
             RootSlots(model, w, writer, true);
             CompiledSlot(model, w, writer, true);
-            DispatchHelpers(model, w, writer, true);
             RegisteredWriter(model, w, writer, true);
         }
         CloseChain(model.UnionChain.Length, model.UnionNamespace, w);
@@ -203,9 +181,7 @@ internal static class UnionEmitter
         string type = model.GlobalName, container = "LuminRoots_" + model.Readable;
         string serializer = w.A("LuminPackSerializer"), standard = w.A(model.UnionStandardJson);
         string inline = w.MethodImpl("AggressiveInlining"), constraint = "where TLuminProfile : struct, " + w.A("ILuminPackOptions");
-        string slotPrefix = "LuminPackUnionSerializeJson_" + model.UnionSuffix;
-        foreach (var slot in model.UnionJsonSlots)
-            w.A(slot.Profile);
+        string slotPrefix = "WriteJson_" + model.UnionSuffix;
 
         w.Line("namespace LuminPack");
         w.Open();
@@ -300,7 +276,6 @@ internal static class UnionEmitter
             OpenType(model.UnionNamespace, model.UnionChain, w);
             RootSlots(model, w, writer, true);
             CompiledSlot(model, w, writer, true);
-            DispatchHelpers(model, w, writer, true);
             RegisteredWriter(model, w, writer, true);
             CloseChain(model.UnionChain.Length, model.UnionNamespace, w);
         }
@@ -328,8 +303,8 @@ internal static class UnionEmitter
     private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters, string slotPrefix,
         string? freshTarget = null, string? freshExit = null)
     {
-        string target = reuse ? "value2" : freshTarget ?? "value";
-        string exit = freshExit ?? "return" + (reuse ? " " + target : string.Empty) + ";";
+        string target = freshTarget ?? "value";
+        string exit = freshExit ?? "return;";
         foreach (var item in model.UnionCases)
         {
             int member = counters.Members++;
@@ -373,17 +348,17 @@ internal static class UnionEmitter
         }
         w.Line("default:");
         w.Open();
-        w.Line("if (" + model.GlobalName + ".TryGetRegisteredFormatter(" + (reuse ? "tag2" : "tag") + ", out var registeredFormatter" +
-            (reuse ? "2" : string.Empty) + ") && registeredFormatter" + (reuse ? "2" : string.Empty) + ".ReadValue != null)");
+        w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(" + "tag" + ", out var registeredFormatter" +
+            string.Empty + ") && registeredFormatter" + string.Empty + ".ReadValue != null)");
         w.Open();
-        w.Line(model.GlobalName + " registeredValue" + (reuse ? "2" : string.Empty) + " = default !;");
-        w.Line("((" + "global::LuminPack.Code.LuminPackReadDelegate<" + model.GlobalName + ">)registeredFormatter" + (reuse ? "2" : string.Empty) +
-            ".ReadValue)(ref " + reader + ", ref registeredValue" + (reuse ? "2" : string.Empty) + ");");
-        w.Line(target + " = registeredValue" + (reuse ? "2" : string.Empty) + ";");
+        w.Line(model.GlobalName + " registeredValue" + string.Empty + " = default !;");
+        w.Line("((" + "global::LuminPack.Code.LuminPackReadDelegate<" + model.GlobalName + ">)registeredFormatter" + string.Empty +
+            ".ReadValue)(ref " + reader + ", ref registeredValue" + string.Empty + ");");
+        w.Line(target + " = registeredValue" + string.Empty + ";");
         w.Line(exit);
         w.Close();
         w.Blank();
-        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(" + (reuse ? "tag2" : "tag") + ", typeof(" + model.GlobalName + "));");
+        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(" + "tag" + ", typeof(" + model.GlobalName + "));");
         w.Line(exit);
         w.Close();
     }
@@ -408,7 +383,7 @@ internal static class UnionEmitter
         w.Line("// Union cases");
         w.Line("switch (tag)");
         w.Open();
-        ReadArms(model, w, false, reader, new SwitchCounters(), "LuminPackUnionSerialize_" + model.UnionSuffix, target, "goto " + label + ";");
+        ReadArms(model, w, false, reader, new SwitchCounters(), "Write_" + model.UnionSuffix, target, "goto " + label + ";");
         w.Close();
     }
 
@@ -437,8 +412,8 @@ internal static class UnionEmitter
                 int index = cursors + local;
                 return "cursor" + (index == 0 ? string.Empty : (index + 1).ToString(CultureInfo.InvariantCulture));
             });
-            if (reuse)
-                shifted = ReaderWord.Replace(shifted, "reader2");
+            if (reader != "reader")
+                shifted = ReaderWord.Replace(shifted, reader);
             result.Add(shifted);
         }
         cursorCount = cursors + localCursors;
@@ -521,7 +496,7 @@ internal static class UnionEmitter
         }
         w.Line("default:");
         w.Open();
-        w.Line("if (" + model.GlobalName + ".TryGetRegisteredFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
+        w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
         w.Open();
         w.Line(model.GlobalName + " registeredValue = default !;");
         w.Line("((global::LuminPack.Code.LuminPackJsonReadDelegate<" + model.GlobalName + ">)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue);");
@@ -563,17 +538,17 @@ internal static class UnionEmitter
         string suffix = model.UnionSuffix;
         w.Line(w.MethodImpl("AggressiveInlining"));
         w.Line(Hidden(w));
-        w.Line("public virtual int LuminPackUnionSerializeCursor_" + suffix + "(ref " + writer + " writer, int initialIndex)");
+        w.Line("public virtual int WriteCursor_" + suffix + "(ref " + writer + " writer, int initialIndex)");
         w.Open();
-        w.Line("return LuminPackUnionCursorFallback_" + suffix + "(this, ref writer, initialIndex);");
+        w.Line("return WriteCursorFallback_" + suffix + "(this, ref writer, initialIndex);");
         w.Close();
         w.Blank();
         w.Line(w.MethodImpl("NoInlining"));
         w.Line(Hidden(w));
-        w.Line("protected static int LuminPackUnionCursorFallback_" + suffix + "(" + model.GlobalName + " value, ref " + writer + " writer, int initialIndex)");
+        w.Line("protected static int WriteCursorFallback_" + suffix + "(" + model.GlobalName + " value, ref " + writer + " writer, int initialIndex)");
         w.Open();
         w.Line("writer.CurrentIndex = initialIndex;");
-        w.Line("value.LuminPackUnionSerialize_" + suffix + "(ref writer);");
+        w.Line("value.Write_" + suffix + "<" + w.A(model.UnionStandardBinary) + ">(ref writer);");
         w.Line("return writer.Position;");
         w.Close();
         w.Blank();
@@ -582,189 +557,80 @@ internal static class UnionEmitter
     /// <summary>Emits the runtime registration members of the binary root.</summary>
     private static void Registration(PayloadRenderModel model, CodeWriter w, string type)
     {
-        string suffix = model.UnionSuffix;
-        string known = string.Join(" || ", model.UnionCases.Select(item => "tag == " + item.Id.ToString(CultureInfo.InvariantCulture)).Distinct());
-        w.Line("private static readonly " + w.A("LuminPackFormatterTable") + " LuminPackUnionRegistry_" + suffix + " = new " + w.A("LuminPackFormatterTable") + "();");
-        w.Blank();
-        w.Line(w.Preserve);
-        w.Line("public static void Register<TMember>(int tag,");
-        w.Line("    global::LuminPack.Code.LuminPackUnionWriteDelegate<" + type + "> writeValue,");
-        w.Line("    global::LuminPack.Code.LuminPackReadDelegate<" + type + "> readValue,");
-        w.Line("    global::LuminPack.Code.LuminPackUnionJsonWriteDelegate<" + type + "> writeValueJson,");
-        w.Line("    global::LuminPack.Code.LuminPackJsonReadDelegate<" + type + "> readValueJson)");
-        w.Open();
-        w.Line("if ((uint)tag > ushort.MaxValue) " + w.A("LuminPackExceptionHelper") + ".ThrowArgumentException(\"A Union tag must fit in UInt16.\");");
-        w.Line("if (" + known + ") " + w.A("LuminPackExceptionHelper") + ".ThrowArgumentException(\"This Union tag belongs to a generated case.\");");
-        w.Line("if (!typeof(" + type + ").IsAssignableFrom(typeof(TMember))) " + w.A("LuminPackExceptionHelper") +
-            ".ThrowArgumentException(\"The registered member must implement or derive from the Union root.\");");
-        w.Line("if (writeValue == null || readValue == null || writeValueJson == null || readValueJson == null) " + w.A("LuminPackExceptionHelper") +
-            ".ThrowArgumentException(\"All four Union operations are required.\");");
-        w.Line("lock (LuminPackUnionRegistry_" + suffix + ")");
-        w.Open();
-        w.Line("if (TryGetRegisteredFormatter(tag, out _)) " + w.A("LuminPackExceptionHelper") + ".ThrowArgumentException(\"This Union tag is already registered.\");");
-        w.Line("if (!LuminPackUnionRegistry_" + suffix + ".TryAdd(typeof(TMember), new " + w.A("LuminPackFormatter") +
-            " { Tag = tag, WriteValue = writeValue, ReadValue = readValue, WriteValueJson = writeValueJson, ReadValueJson = readValueJson }))");
-        w.Open();
-        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowArgumentException(\"A formatter for this union member is already registered.\");");
-        w.Close();
-        w.Close();
-        w.Close();
-        w.Blank();
-        w.Line(w.Preserve);
-        w.Line("public static void Register<TMember, TOptions>(");
-        w.Line("    int tag,");
-        w.Line("    global::LuminPack.Code.LuminPackUnionWriteDelegate<" + type + "> writeValue,");
-        w.Line("    global::LuminPack.Code.LuminPackReadDelegate<" + type + "> readValue,");
-        w.Line("    global::LuminPack.Code.LuminPackUnionJsonWriteDelegate<" + type + "> writeValueJson,");
-        w.Line("    global::LuminPack.Code.LuminPackJsonReadDelegate<" + type + "> readValueJson)");
-        w.Line("    where TOptions : struct, " + w.A("ILuminPackOptions") + " => Register<TMember>(tag, writeValue, readValue, writeValueJson, readValueJson);");
-        w.Blank();
-        w.Line(w.Preserve);
-        w.Line("public static bool TryGetRegisteredFormatter(int tag, out " + w.A("LuminPackFormatter") + " entry)");
-        w.Open();
-        w.Line("lock (LuminPackUnionRegistry_" + suffix + ")");
-        w.Open();
-        w.Line("return LuminPackUnionRegistry_" + suffix + ".TryGetTag(tag, out entry);");
-        w.Close();
-        w.Close();
-        w.Blank();
-        w.Line("private static bool LuminPackTryGetRegistered_" + suffix + "(global::System.Type type, out " + w.A("LuminPackFormatter") + " entry)");
-        w.Open();
-        w.Line("lock (LuminPackUnionRegistry_" + suffix + ") return LuminPackUnionRegistry_" + suffix + ".TryGetValue((nint)" + w.A("LuminPackMarshal") +
-            ".GetMethodTable(type), out entry);");
-        w.Close();
-        w.Blank();
+        if (model.TypeParameters.Length != 0)
+        {
+            w.Line("private static readonly bool LuminPackUnionTags_" + model.UnionSuffix +
+                " = global::LuminPack.Code.LuminPackUnionFormatter<" + type + ">.ReserveTags(new int[] { " +
+                string.Join(", ", model.UnionCases.Select(item => item.Id.ToString(CultureInfo.InvariantCulture)).Distinct()) + " });");
+            w.Blank();
+        }
     }
 
     /// <summary>Emits the root's virtual write slots in profile order.</summary>
     private static void RootSlots(PayloadRenderModel model, CodeWriter w, string writer, bool json)
     {
-        string operation = json ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_";
-        string helper = json ? "LuminPackUnionWriteRegisteredJson_" : "LuminPackUnionWriteRegistered_";
+        string operation = json ? "WriteJson_" : "Write_";
+        string helper = json ? "WriteRegisteredJson_" : "WriteRegistered_";
         string state = json ? w.A("LuminPackJsonWriter") : writer;
         string modifier = model.UnionInterface ? string.Empty : "public virtual ";
         foreach (var slot in Slots(model, json))
         {
             w.Line(w.MethodImpl("AggressiveInlining"));
             w.Line(Hidden(w));
-            w.Line(modifier + "void " + operation + model.UnionSuffix + slot.Suffix + "(ref " + state + " writer)");
-            w.Indented(() => w.Line("=> " + helper + model.UnionSuffix + "(this, ref writer);"));
+            w.Line(modifier + "void " + operation + model.UnionSuffix + slot.Suffix + SlotArguments(slot) + "(ref " + state + " writer)");
+            w.Indented(() => w.Line((slot.Profile == Profile ? "where " + Profile + " : struct, " + w.A("ILuminPackOptions") + " " : string.Empty) +
+                "=> " + helper + model.UnionSuffix + "(this, ref writer);"));
+            w.Blank();
         }
-        w.Blank();
     }
 
-    /// <summary>Emits the compiled profile selector and, for a pattern tier, its exact-type dispatch helpers.</summary>
+    /// <summary>Emits the generic dispatch path, retaining exact-type dispatch for its existing tier.</summary>
     private static void CompiledSlot(PayloadRenderModel model, CodeWriter w, string writer, bool json)
     {
-        string operation = json ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_";
-        var slotList = json ? model.UnionJsonSlots : model.UnionBinarySlots;
+        string operation = json ? "WriteJson_" : "Write_";
+        string target = (json ? "WriteJson_" : "Write_") + model.UnionSuffix;
         string state = json ? w.A("LuminPackJsonWriter") : writer;
         w.Line(Hidden(w));
         w.Line(w.MethodImpl("AggressiveInlining"));
         w.Line("public static void " + operation + model.UnionSuffix + "_Compiled<" + Profile + ">(ref " + state + " writer, " + model.GlobalName + " value)");
-        w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions")));
+        w.Indented(() => w.Line("where " + Profile + " : struct, " + w.A("ILuminPackOptions")));
         w.Open();
-        if (!json && model.UnionCanonical)
-            foreach (var slot in slotList)
-            {
-                var identities = new List<string>
-                {
-                    "typeof(" + w.A(slot.Profile) + ")",
-                    "typeof(global::LuminPack.Option.LuminPackFixedOptions<" + w.A(slot.Profile) + ">)",
-                };
-                if (slot.Encoding == 1 && slot.Recording == 0)
-                    foreach (string alias in new[] { "LuminPackDefaultOptions", "LuminPackDeclaredOptions" })
-                    {
-                        identities.Add("typeof(" + w.A(alias) + ")");
-                        identities.Add("typeof(global::LuminPack.Option.LuminPackFixedOptions<" + w.A(alias) + ">)");
-                    }
-                w.Line("if (typeof(" + Profile + ") == " + string.Join(" || typeof(" + Profile + ") == ", identities) + ")");
-                w.Open();
-                w.Line(Dispatch(model, slot, writer, json));
-                w.Line("return;");
-                w.Close();
-                w.Blank();
-            }
-        foreach (var slot in slotList)
+        if (!json)
         {
-            string condition = "if (default(" + Profile + ").StringEncoding == (" + w.A("LuminPackStringEncoding") + ")" + slot.Encoding.ToString(CultureInfo.InvariantCulture);
-            if (!json)
-                condition += " && default(" + Profile + ").StringRecording == (" + w.A("LuminPackStringRecording") + ")" + slot.Recording.ToString(CultureInfo.InvariantCulture);
-            w.Line(condition + ")");
+            string standard = w.A(model.UnionStandardBinary);
+            w.Line("if (default(" + Profile + ").StringEncoding == default(" + standard + ").StringEncoding && default(" + Profile +
+                ").StringRecording == default(" + standard + ").StringRecording)");
             w.Open();
-            w.Line(Dispatch(model, slot, writer, json));
+            DispatchSlot(target + "_Default", generic: false);
             w.Line("return;");
             w.Close();
-            w.Blank();
         }
-        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowInvalidOperationException(\"The compiled profile has an invalid string encoding or recording mode.\");");
+        DispatchSlot(target, generic: true);
         w.Close();
         w.Blank();
-    }
 
-    /// <summary>Spells the compiled selector's call to one profile slot.</summary>
-    private static string Dispatch(PayloadRenderModel model, UnionRenderSlot slot, string writer, bool json)
-    {
-        string name = (json ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_") + model.UnionSuffix + slot.Suffix;
-        if (model.UnionTier == 1)
-            return name + "_Dispatch(ref writer, value);";
-        return "value." + name + "(ref writer);";
-    }
-
-    /// <summary>Emits one exact-type dispatch helper per profile slot of a pattern tier.</summary>
-    private static void DispatchHelpers(PayloadRenderModel model, CodeWriter w, string writer, bool json)
-    {
-        if (model.UnionTier != 1)
-            return;
-        int rootDepth = (model.UnionNamespace == null ? 0 : model.UnionNamespace.Split('.').Length) + model.UnionChain.Length;
-        bool normalizeAll = model.UnionCursor && (json || rootDepth >= 3);
-        string operation = json ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_";
-        foreach (var slot in Slots(model, json))
+        void DispatchSlot(string method, bool generic)
         {
-            w.Line(w.MethodImpl("AggressiveInlining"));
-            w.Line("private static void " + operation + model.UnionSuffix + slot.Suffix + "_Dispatch(ref " + writer + " writer, " + model.GlobalName + " value)");
-            w.Open();
-            w.Line("// Union cases");
-            w.Line("switch (value)");
-            w.Open();
-            for (int index = 0; index < model.UnionTierCases.Length; index++)
+            string arguments = generic ? "<" + Profile + ">" : string.Empty;
+            if (model.UnionTier == 1)
             {
-                string type = model.UnionTierCases[index];
-                string variable = "caseValue" + (index == 0 ? string.Empty : index.ToString(CultureInfo.InvariantCulture));
-                string name = type + " " + variable;
-                string call = variable + "." + operation + model.UnionSuffix + slot.Suffix + "(ref writer);";
-                string guard = model.UnionTierSealed[index] ? string.Empty : " when ((object)value).GetType() == typeof(" + type + ")";
-                var item = model.UnionCases.FirstOrDefault(value => value.Type == type);
-                bool normalize = normalizeAll || slot.Suffix.Length != 0 && item != null &&
-                    (item.Namespace == null ? 0 : item.Namespace.Split('.').Length) + item.Chain.Length >= 3;
-                if (!normalize)
+                w.Line("switch (value)");
+                w.Open();
+                for (int index = 0; index < model.UnionTierCases.Length; index++)
                 {
-                    w.Line("case " + name + guard + ": " + call + " return;");
-                    continue;
+                    string type = model.UnionTierCases[index];
+                    string variable = "caseValue" + index.ToString(CultureInfo.InvariantCulture);
+                    string guard = model.UnionTierSealed[index] ? string.Empty : " when ((object)value).GetType() == typeof(" + type + ")";
+                    w.Line("case " + type + " " + variable + guard + ":");
+                    w.Indented(() =>
+                    {
+                        w.Line(variable + "." + method + arguments + "(ref writer);");
+                        w.Line("return;");
+                    });
                 }
-                string oneLine = "case " + name + guard + ": " + call + " return;";
-                // The presentation joins a marked case row that fits its 260-column budget.
-                if (w.Indent * 4 + oneLine.Length <= 260)
-                {
-                    w.Line(oneLine);
-                    continue;
-                }
-                w.Line("case " + name + guard + ":");
-                w.Indented(() =>
-                {
-                    w.Line(call);
-                    w.Line("return;");
-                });
+                w.Close();
             }
-            w.Line("default:");
-            w.Indented(() =>
-            {
-                w.Line("value." + operation + model.UnionSuffix + slot.Suffix + "(ref writer);");
-                w.Line("return;");
-            });
-            w.Close();
-            w.Close();
-            w.Blank();
+            w.Line("value." + method + arguments + "(ref writer);");
         }
     }
 
@@ -774,10 +640,10 @@ internal static class UnionEmitter
         string delegateName = json ? "LuminPackUnionJsonWriteDelegate" : "LuminPackUnionWriteDelegate";
         string operation = json ? "WriteValueJson" : "WriteValue";
         string state = json ? w.A("LuminPackJsonWriter") : writer;
-        w.Line("private static void " + (json ? "LuminPackUnionWriteRegisteredJson_" : "LuminPackUnionWriteRegistered_") + model.UnionSuffix +
+        w.Line("private static void " + (json ? "WriteRegisteredJson_" : "WriteRegistered_") + model.UnionSuffix +
             "(" + model.GlobalName + " value, ref " + state + " writer)");
         w.Open();
-        w.Line("if (LuminPackTryGetRegistered_" + model.UnionSuffix + "(((object)value).GetType(), out var registration) && registration." + operation + " != null)");
+        w.Line("if (global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(((object)value).GetType(), out var registration) && registration." + operation + " != null)");
         w.Indented(() => w.Line("((global::LuminPack.Code." + delegateName + "<" + model.GlobalName + ">)registration." + operation + ")(ref writer, ref value);"));
         w.Line("else");
         w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(((object)value).GetType(), typeof(" + model.GlobalName + "));"));
@@ -789,29 +655,29 @@ internal static class UnionEmitter
     {
         string prefix = model.UnionInterface ? "void " + model.GlobalName + "." :
             item.Sealed ? "public sealed override void " : "public override void ";
-        string operation = json ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_";
+        string operation = json ? "WriteJson_" : "Write_";
         if (!json && item.FixedCursor)
-            foreach (var slot in model.UnionBinarySlots)
+            foreach (var slot in Slots(model, false))
             {
                 w.Line(w.MethodImpl("AggressiveInlining"));
                 w.Line(Hidden(w));
-                w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + "(ref " + w.A("LuminPackWriter") + " writer)");
-                w.Indented(() => w.Line("=> writer.CurrentIndex = " + w.A("LuminPackSerializer") + ".SerializeUnionAt(ref writer, this, writer.CurrentIndex, (byte)" +
+                w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + SlotArguments(slot) + "(ref " + w.A("LuminPackWriter") + " writer)");
+                w.Indented(() => w.Line("=> writer.CurrentIndex = " + w.A("LuminPackSerializer") + ".SerializeUnionAt_" + item.Readable + "(ref writer, this, writer.CurrentIndex, (byte)" +
                     item.Id.ToString(CultureInfo.InvariantCulture) + ");"));
             }
         else if (!json)
-            foreach (var slot in model.UnionBinarySlots)
+            foreach (var slot in Slots(model, false))
             {
                 w.Line(w.MethodImpl("AggressiveInlining"));
                 w.Line(Hidden(w));
-                w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + "(ref " + w.A("LuminPackWriter") + " writer)");
+                w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + SlotArguments(slot) + "(ref " + w.A("LuminPackWriter") + " writer)");
                 w.Open();
                 w.Line("writer." + (model.UnionWide ? "WriteWideUnionHeader" : "WriteUnionHeader") + "(" +
                     item.Id.ToString(CultureInfo.InvariantCulture) + ");");
                 w.Line("var concreteValue = this;");
                 w.Line(StructCase(item)
-                    ? CaseOwner(model, item) + ".Write<" + w.A(slot.Profile) + ">(ref writer, in concreteValue);"
-                    : w.A("LuminPackSerializer") + ".SerializeUnion<" + w.A(slot.Profile) + ">(ref writer, concreteValue);");
+                    ? CaseOwner(model, item) + ".Write<" + (slot.Profile == Profile ? Profile : w.A(slot.Profile)) + ">(ref writer, in concreteValue);"
+                    : w.A("LuminPackSerializer") + ".SerializeUnion_" + item.Readable + "<" + (slot.Profile == Profile ? Profile : w.A(slot.Profile)) + ">(ref writer, concreteValue);");
                 w.Close();
             }
         if (!json && model.UnionCursor)
@@ -820,30 +686,30 @@ internal static class UnionEmitter
             w.Line(w.MethodImpl("AggressiveInlining"));
             w.Line(Hidden(w));
             w.Line((model.UnionInterface ? "int " + model.GlobalName + "." : item.Sealed ? "public sealed override int " : "public override int ") +
-                "LuminPackUnionSerializeCursor_" + model.UnionSuffix + "(ref LuminPackWriter writer, int initialIndex)");
+                "WriteCursor_" + model.UnionSuffix + "(ref LuminPackWriter writer, int initialIndex)");
             w.Open();
             if (item.FixedCursor)
             {
                 w.Line("if (((object)this).GetType() != typeof(" + item.Type + "))");
-                w.Indented(() => w.Line("return LuminPackUnionCursorFallback_" + model.UnionSuffix + "(this, ref writer, initialIndex);"));
-                w.Line("return " + w.A("LuminPackSerializer") + ".SerializeUnionAt(ref writer, this, initialIndex, (byte)" +
+                w.Indented(() => w.Line("return WriteCursorFallback_" + model.UnionSuffix + "(this, ref writer, initialIndex);"));
+                w.Line("return " + w.A("LuminPackSerializer") + ".SerializeUnionAt_" + item.Readable + "(ref writer, this, initialIndex, (byte)" +
                     item.Id.ToString(CultureInfo.InvariantCulture) + ");");
             }
             else
             {
                 w.Line("writer.CurrentIndex = initialIndex;");
-                w.Line("LuminPackUnionSerialize_" + model.UnionSuffix + "(ref writer);");
+                w.Line("((" + model.GlobalName + ")this).Write_" + model.UnionSuffix + "<" + w.A(model.UnionStandardBinary) + ">(ref writer);");
                 w.Line("return writer.Position;");
             }
             w.Close();
         }
         if (json)
-            foreach (var slot in model.UnionJsonSlots)
+            foreach (var slot in Slots(model, true))
             {
-                string profile = w.A(slot.Profile);
+                string profile = (slot.Profile == Profile ? Profile : w.A(slot.Profile));
                 w.Line(w.MethodImpl("AggressiveInlining"));
                 w.Line(Hidden(w));
-                w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + "(ref " + w.A("LuminPackJsonWriter") + " writer)");
+                w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + SlotArguments(slot) + "(ref " + w.A("LuminPackJsonWriter") + " writer)");
                 w.Open();
                 w.Line("writer.WriteObjectStart<" + profile + ">();");
                 w.Line("if (default(" + profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8)");
@@ -859,7 +725,7 @@ internal static class UnionEmitter
                 if (StructCase(item))
                     w.Line(CaseOwner(model, item) + ".Write<" + profile + ">(ref writer, in concreteValue);");
                 else
-                    w.Raw(new string(' ', Math.Max(0, w.Indent - 1) * 4) + "writer.Write<" + profile + ">(concreteValue);");
+                    w.Line(CaseOwner(model, item) + ".Write<" + profile + ">(ref writer, concreteValue);");
                 w.Line("writer.WriteObjectEnd<" + profile + ">();");
                 w.Close();
             }
@@ -898,7 +764,7 @@ internal static class UnionEmitter
         bool direct = group.Length == 1 && group[0].Type == open;
         string prefix = model.UnionInterface ? "void " + model.GlobalName + "." :
             group.All(item => item.Sealed) ? "public sealed override void " : "public override void ";
-        string operation = json ? "LuminPackUnionSerializeJson_" : "LuminPackUnionSerialize_";
+        string operation = json ? "WriteJson_" : "Write_";
         string slotField = "LuminPackUnionDispatchSlot_" + model.UnionSuffix;
         if (!direct && !json)
         {
@@ -921,10 +787,10 @@ internal static class UnionEmitter
         }
         foreach (var slot in Slots(model, json))
         {
-            string profile = w.A(slot.Profile);
+            string profile = (slot.Profile == Profile ? Profile : w.A(slot.Profile));
             w.Line(w.MethodImpl("AggressiveInlining"));
             w.Line(Hidden(w));
-            w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + "(ref " + w.A(json ? "LuminPackJsonWriter" : "LuminPackWriter") + " writer)");
+            w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + SlotArguments(slot) + "(ref " + w.A(json ? "LuminPackJsonWriter" : "LuminPackWriter") + " writer)");
             w.Open();
             if (direct)
                 GenericCaseWrite(model, group[0], w, json, profile, "this");
@@ -959,10 +825,10 @@ internal static class UnionEmitter
             w.Line(w.MethodImpl("AggressiveInlining"));
             w.Line(Hidden(w));
             w.Line((model.UnionInterface ? "int " + model.GlobalName + "." : group.All(item => item.Sealed) ? "public sealed override int " : "public override int ") +
-                "LuminPackUnionSerializeCursor_" + model.UnionSuffix + "(ref LuminPackWriter writer, int initialIndex)");
+                "WriteCursor_" + model.UnionSuffix + "(ref LuminPackWriter writer, int initialIndex)");
             w.Open();
             w.Line("writer.CurrentIndex = initialIndex;");
-            w.Line("LuminPackUnionSerialize_" + model.UnionSuffix + "(ref writer);");
+            w.Line("((" + model.GlobalName + ")this).Write_" + model.UnionSuffix + "<" + w.A(model.UnionStandardBinary) + ">(ref writer);");
             w.Line("return writer.Position;");
             w.Close();
         }
@@ -975,7 +841,7 @@ internal static class UnionEmitter
         if (!json)
         {
             w.Line("writer." + (model.UnionWide ? "WriteWideUnionHeader" : "WriteUnionHeader") + "(" + id + ");");
-            w.Line(w.A("LuminPackSerializer") + ".SerializeUnion<" + Prefix(item) + profile + ">(ref writer, " + value + ");");
+            w.Line(w.A("LuminPackSerializer") + ".SerializeUnion_" + item.Readable + "<" + Prefix(item) + profile + ">(ref writer, " + value + ");");
             return;
         }
         w.Line("writer.WriteObjectStart<" + profile + ">();");
@@ -1004,7 +870,17 @@ internal static class UnionEmitter
         "global::LuminPack.Binary_" + model.Extension + "_" + item.Readable;
 
     /// <summary>Lists one format's profile slots.</summary>
-    private static UnionRenderSlot[] Slots(PayloadRenderModel model, bool json) => json ? model.UnionJsonSlots : model.UnionBinarySlots;
+    private static UnionRenderSlot[] Slots(PayloadRenderModel model, bool json) => json ? new[]
+    {
+        new UnionRenderSlot(string.Empty, Profile, string.Empty, 0, 0),
+    } : new[]
+    {
+        new UnionRenderSlot(string.Empty, Profile, string.Empty, 0, 0),
+        new UnionRenderSlot("_Default", model.UnionStandardBinary, string.Empty, 0, 0),
+    };
+
+    /// <summary>Spells the arbitrary-profile slot's generic parameter list.</summary>
+    private static string SlotArguments(UnionRenderSlot slot) => slot.Profile == Profile ? "<" + Profile + ">" : string.Empty;
 
     /// <summary>Opens a namespace and the root's partial type chain.</summary>
     private static void OpenType(string @namespace, string[] chain, CodeWriter w)

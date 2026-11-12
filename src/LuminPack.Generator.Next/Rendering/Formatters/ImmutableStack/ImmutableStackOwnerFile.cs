@@ -16,7 +16,7 @@ internal static class ImmutableStackOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         // The legacy immutable-stack roots spell the state types through the imported core namespace.
         const string writer = "LuminPackWriter";

@@ -19,7 +19,7 @@ internal static class ScalarOwnerFile
         int equals = identity.IndexOf('=');
         string scalar = equals < 0 ? identity : identity.Substring(0, equals);
         string? underlying = equals < 0 ? null : identity.Substring(equals + 1);
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         string writer = w.A("LuminPackWriter");
         string reader = w.A("LuminPackReader");

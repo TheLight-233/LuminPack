@@ -42,11 +42,15 @@ internal static class SerializerCallAnalysis
     /// <param name="context">The syntax and its semantic model.</param>
     /// <param name="cancellationToken">Cancels analysis.</param>
     /// <returns>The call model, or null when the call stays on the generic facade.</returns>
-    internal static SerializerCallModel? Analyze(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    internal static SerializerCallModel? Analyze(GeneratorSyntaxContext context, CancellationToken cancellationToken) =>
+        context.Node is InvocationExpressionSyntax invocation ? Analyze(context.SemanticModel, invocation, cancellationToken) : null;
+
+    /// <summary>Binds an ordinary facade call in the compilation's shared discovery pass.</summary>
+    internal static SerializerCallModel? Analyze(SemanticModel semanticModel, InvocationExpressionSyntax invocation, CancellationToken cancellationToken)
     {
-        if (LocationMethod == null || context.Node is not InvocationExpressionSyntax invocation)
+        if (LocationMethod == null)
             return null;
-        if (context.SemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method ||
+        if (semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method ||
             !method.IsGenericMethod || method.ContainingType?.ToDisplayString() != SerializerName)
             return null;
         SerializerApi? api = Classify(method.OriginalDefinition);
@@ -74,14 +78,14 @@ internal static class SerializerCallAnalysis
             return null;
         }
         cancellationToken.ThrowIfCancellationRequested();
-        string? location = Location(context.SemanticModel, invocation, cancellationToken);
+        string? location = Location(semanticModel, invocation, cancellationToken);
         if (location == null)
             return null;
         // A nullable value root keeps its Nullable spelling; the shorthand loses the distinction in owner names.
         // Nested nullable value types are spelled as Nullable<T> too: owner keys drop '?' annotations, which would merge int? and int.
         string spelling = payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(PayloadFormat);
-        MemberModel? root = TypeModelFactory.TryCreateRoot(payload, context.SemanticModel.Compilation,
-            Pipeline.GeneratorOptionsFactory.From(context.SemanticModel.Compilation));
+        MemberModel? root = TypeModelFactory.TryCreateRoot(payload, semanticModel.Compilation,
+            Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation));
         // A closed generic payload binds the generic roots of its definition, as the original concrete facade does.
         string? definition = null, typeArguments = null;
         if (payload is INamedTypeSymbol { IsGenericType: true } generic && generic.ContainingType is not { IsGenericType: true } &&
@@ -90,8 +94,8 @@ internal static class SerializerCallAnalysis
             definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             typeArguments = string.Join(", ", generic.TypeArguments.Select(argument => argument.ToDisplayString(PayloadFormat)));
         }
-        EntryShape shape = TypeModelFactory.EntryShapeOf(payload, context.SemanticModel.Compilation,
-            Pipeline.GeneratorOptionsFactory.From(context.SemanticModel.Compilation));
+        EntryShape shape = TypeModelFactory.EntryShapeOf(payload, semanticModel.Compilation,
+            Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation));
         return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments,
             shape);
     }

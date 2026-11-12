@@ -382,7 +382,7 @@ internal static class EnumerableOwnerTemplate
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations, EnumerableOwnerSpec spec)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         const string writer = "LuminPackWriter";
         const string reader = "LuminPackReader";

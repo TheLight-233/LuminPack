@@ -52,7 +52,7 @@ internal static class SpecialOwnerFile
         bool referenceType, Action<CodeWriter, SpecialOwnerContext> binaryWrite, Action<CodeWriter, SpecialOwnerContext> binaryRead,
         Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null, bool compressedEntries = false)
     {
-        var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
+        using var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
         string serializer = w.A("LuminPackSerializer");
         const string writer = "LuminPackWriter";
         const string reader = "LuminPackReader";

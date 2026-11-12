@@ -21,7 +21,7 @@ internal static class PayloadEmitter
     {
         if (model.UnionRoot)
             return string.Empty;
-        var writer = new CodeWriter(aliases) { Scoped = model.Net8, Json = json };
+        using var writer = new CodeWriter(aliases) { Scoped = model.Net8, Json = json };
         if (json)
         {
             if (model.Circle)
@@ -54,9 +54,10 @@ internal static class PayloadEmitter
 }
 
 /// <summary>Builds one direct file line by line in the publication layout.</summary>
-internal sealed class CodeWriter
+internal sealed class CodeWriter : IDisposable
 {
-    private readonly StringBuilder _body = new StringBuilder(16384);
+    private readonly PooledTextBuffer _body = new(16384);
+    private readonly GeneratedText.Capture _capture = new();
     private readonly int _available;
     private int _used;
     private int _indent;
@@ -78,15 +79,53 @@ internal sealed class CodeWriter
     /// JSON property names are string literals and keep the declared spelling.</remarks>
     internal static string EscapeKeywordMembers(string text)
     {
-        // A member-named table field is declared under the member's name as well.
-        text = StaticDeclaration.Replace(text, match => Keyword(match.Groups[2].Value)
-            ? match.Groups[1].Value + "@" + match.Groups[2].Value + match.Groups[3].Value : match.Value);
-        // An object initializer assigns the member by its name at the start of the line; `this` assignments stay as they are.
-        text = InitializerAssignment.Replace(text, match => match.Groups[2].Value != "this" && Keyword(match.Groups[2].Value)
-            ? match.Groups[1].Value + "@" + match.Groups[2].Value + match.Groups[3].Value : match.Value);
-        if (text.IndexOf('.') < 0)
+        List<int>? insertions = null;
+        for (int index = text.IndexOf('.'); index >= 0; index = text.IndexOf('.', index + 1))
+        {
+            int start = index + 1;
+            if (start >= text.Length || text[start] < 'a' || text[start] > 'z')
+                continue;
+            int end = start + 1;
+            while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_'))
+                end++;
+            if (Keyword(text, start, end - start))
+                (insertions ??= new List<int>()).Add(start);
+        }
+        int equals = text.IndexOf('=');
+        if (equals > 0)
+        {
+            int start = 0;
+            int end = equals;
+            while (start < end && char.IsWhiteSpace(text[start]))
+                start++;
+            while (end > start && char.IsWhiteSpace(text[end - 1]))
+                end--;
+            if (!(end - start == 4 && string.CompareOrdinal(text, start, "this", 0, 4) == 0) && Keyword(text, start, end - start))
+                (insertions ??= new List<int>()).Add(start);
+            else if (text.IndexOf(" static ", 0, equals, StringComparison.Ordinal) >= 0 && text.IndexOf('(', 0, equals) < 0)
+            {
+                Match match = StaticDeclaration.Match(text);
+                if (match.Success && Keyword(match.Groups[2].Value))
+                    (insertions ??= new List<int>()).Add(match.Groups[2].Index);
+            }
+        }
+        if (equals < 0 && text.IndexOf(" static ", StringComparison.Ordinal) >= 0 && text.IndexOf('{') >= 0)
+        {
+            Match match = StaticDeclaration.Match(text);
+            if (match.Success && Keyword(match.Groups[2].Value))
+                (insertions ??= new List<int>()).Add(match.Groups[2].Index);
+        }
+        if (insertions == null)
             return text;
-        return MemberAccess.Replace(text, match => Keyword(match.Groups[1].Value) ? ".@" + match.Groups[1].Value : match.Value);
+        insertions.Sort();
+        var result = new StringBuilder(text.Length + insertions.Count);
+        int copied = 0;
+        foreach (int position in insertions)
+        {
+            result.Append(text, copied, position - copied).Append('@');
+            copied = position;
+        }
+        return result.Append(text, copied, text.Length - copied).ToString();
     }
 
     private static readonly Regex StaticDeclaration = new(@"^(\s*(?:internal|private|public) static [^=(]*\s)([A-Za-z_][A-Za-z0-9_]*)(\s*(?:=|\{))");
@@ -96,6 +135,45 @@ internal sealed class CodeWriter
     /// <summary>Whether a name is a reserved C# keyword.</summary>
     private static bool Keyword(string name) => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.IsReservedKeyword(
         Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name));
+
+    private static readonly string[][] Keywords = CreateKeywords();
+
+    /// <summary>Groups reserved keywords by first character for allocation-free source-slice comparisons.</summary>
+    /// <returns>The lowercase keyword buckets.</returns>
+    private static string[][] CreateKeywords()
+    {
+        var buckets = new List<string>[26];
+        foreach (string keyword in ("abstract as base bool break byte case catch char checked class const continue decimal default delegate " +
+            "do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal " +
+            "is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed " +
+            "short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using " +
+            "virtual void volatile while").Split(' '))
+        {
+            int index = keyword[0] - 'a';
+            (buckets[index] ??= new List<string>()).Add(keyword);
+        }
+        var result = new string[26][];
+        for (int index = 0; index < result.Length; index++)
+            result[index] = buckets[index]?.ToArray() ?? Array.Empty<string>();
+        return result;
+    }
+
+    /// <summary>Tests a token without allocating a substring for each member access or assignment.</summary>
+    /// <param name="text">The generated line.</param>
+    /// <param name="start">The token start.</param>
+    /// <param name="length">The token length.</param>
+    /// <returns>Whether the slice is a reserved C# keyword.</returns>
+    private static bool Keyword(string text, int start, int length)
+    {
+        if (length != 0 && text[start] == '_')
+            return Keyword(text.Substring(start, length));
+        if (length == 0 || length > 10 || text[start] < 'a' || text[start] > 'z')
+            return false;
+        foreach (string keyword in Keywords[text[start] - 'a'])
+            if (length == keyword.Length && string.CompareOrdinal(text, start, keyword, 0, length) == 0)
+                return true;
+        return false;
+    }
 
     /// <summary>Whether the file holds JSON operations, whose compressed members keep their ordinary owner.</summary>
     internal bool Json;
@@ -181,6 +259,7 @@ internal sealed class CodeWriter
         }
         if (!Scoped && text.Contains("scoped "))
             text = ScopedModifier.Replace(text, string.Empty);
+        _capture.Line(text, _body.Length, _indent);
         _body.Append(' ', _indent * 4).Append(text).Append(Environment.NewLine);
     }
 
@@ -247,7 +326,7 @@ internal sealed class CodeWriter
     /// <returns>The file text before line wrapping.</returns>
     internal string Complete(bool json)
     {
-        var header = new StringBuilder(_body.Length + 2048);
+        using var header = new PooledTextBuffer(2048);
         string newLine = Environment.NewLine;
         header.Append("#nullable enable annotations").Append(newLine);
         header.Append("#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649, CS1591").Append(newLine);
@@ -262,8 +341,16 @@ internal sealed class CodeWriter
         int end = _body.Length;
         while (end > 0 && (_body[end - 1] == '\n' || _body[end - 1] == '\r'))
             end--;
-        return header.Append(_body.ToString(0, end)).ToString();
+        int headerLength = header.Length;
+        _body.Length = end;
+        _body.Prepend(header);
+        string source = _body.ToString();
+        _capture.Complete(source, headerLength);
+        return source;
     }
+
+    /// <summary>Returns the output lease after successful emission, failure or cancellation.</summary>
+    public void Dispose() => _body.Dispose();
 }
 
 /// <summary>Counts call sites in emitted statements the way the inlining policy counts invocation syntax.</summary>
@@ -296,8 +383,10 @@ internal static class InvocationCounter
                     int depth = 0;
                     for (end--; end >= 0; end--)
                     {
-                        if (text[end] == '>') depth++;
-                        else if (text[end] == '<' && --depth == 0) break;
+                        if (text[end] == '>')
+                            depth++;
+                        else if (text[end] == '<' && --depth == 0)
+                            break;
                     }
                     if (end <= 0)
                         continue;

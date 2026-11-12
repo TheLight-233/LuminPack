@@ -17,7 +17,7 @@ internal static class ImmutableArrayStringOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         // The legacy immutable-array roots spell the writer through the imported core namespace and the reader through its alias.
         const string writer = "LuminPackWriter";

@@ -250,11 +250,11 @@ internal static class Program
     private static void DescribePolymorphismRoots()
     {
         foreach (Type type in typeof(Program).Assembly.GetTypes().Where(type =>
-            type.IsNested && type.Name.StartsWith("LuminRoots_", StringComparison.Ordinal)))
+            type.IsNested && (type.Name.StartsWith("LuminRoots_", StringComparison.Ordinal) || type.Name.EndsWith("Formatter", StringComparison.Ordinal))))
         {
             foreach (MethodInfo method in type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic))
             {
-                if (method.Name is not ("RootRead" or "RootWrite")) continue;
+                if (method.Name is not ("RootRead" or "RootWrite" or "Read" or "Write")) continue;
                 ParameterInfo[] parameters = method.GetParameters();
                 if (parameters.Length != 2) continue;
                 Type parameter = parameters[1].ParameterType;

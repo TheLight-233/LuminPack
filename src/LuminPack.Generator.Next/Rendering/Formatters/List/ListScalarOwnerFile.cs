@@ -14,7 +14,7 @@ internal static class ListScalarOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         string writer = w.A("LuminPackWriter");
         string reader = w.A("LuminPackReader");

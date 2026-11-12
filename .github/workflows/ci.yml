@@ -248,11 +248,11 @@ jobs:
           for operation in lumin-write lumin-read nino-write nino-read; do
             case "$operation" in
               lumin-write)
-                export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *LuminPackUnionSerialize*'
-                required='LuminPackBenchmark[.]FooA:LuminPackUnionSerialize.*\(Tier1'
+                export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *LuminPackUnionSerialize* *Write*'
+                required='LuminPackBenchmark[.]FooA:(LuminPackUnionSerialize|Write_).*\(Tier1'
                 ;;
               lumin-read)
-                export DOTNET_JitDisasm='*LuminPackDeserialize* *RootRead* *TryPeekUnionHeader*'
+                export DOTNET_JitDisasm='*LuminPackDeserialize* *RootRead* *Read* *TryPeekUnionHeader*'
                 required=''
                 ;;
               nino-write)
@@ -272,12 +272,12 @@ jobs:
             fi
             cat "$metadata"
             if [[ "$operation" == lumin-read ]]; then
-              list_root=$(sed -n 's/^Generated root: .*\(LuminRoots_[0-9a-f]*\):RootRead; parameter: System.Collections.Generic.List.*/\1/p' "$metadata")
+              list_root=$(sed -nE 's/^Generated root: .*\+([[:alnum:]_]+):(RootRead|Read); parameter: System.Collections.Generic.List.*/\1:\2/p' "$metadata")
               if [[ -z "$list_root" ]]; then
                 echo 'The generated polymorphic list reader was not identified.' >&2
                 exit 1
               fi
-              required="${list_root}:RootRead.*\\(Tier1"
+              required="${list_root}.*\\(Tier1"
             fi
             if ! grep -Eq "$required" "$assembly"; then
               echo "The optimized $operation target was not captured in $assembly." >&2

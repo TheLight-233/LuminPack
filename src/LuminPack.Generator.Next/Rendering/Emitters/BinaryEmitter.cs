@@ -147,8 +147,8 @@ internal static partial class BinaryEmitter
         w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(inline);
-        string serializeUnion = "internal static void SerializeUnion" + Arguments() + "(scoped ref " + writer + " writer, " + type + "? input)";
-        string serializeUnionCall = genericWrite ? "SerializeUnion" + Arguments(Standard()) + "(ref writer, input);" :
+        string serializeUnion = "internal static void SerializeUnion_" + readable + Arguments() + "(scoped ref " + writer + " writer, " + type + "? input)";
+        string serializeUnionCall = genericWrite ? "SerializeUnion_" + readable + Arguments(Standard()) + "(ref writer, input);" :
             container + ".RootWriteUnion" + Arguments() + "(ref writer, input);";
         if (TypeConstraint().Length == 0)
             w.Line(serializeUnion + " => " + serializeUnionCall);
@@ -160,12 +160,12 @@ internal static partial class BinaryEmitter
         w.Blank();
         w.Line(w.Preserve);
         w.Line(inline);
-        w.Line("internal static void SerializeUnion" + Arguments(Profile) + "(scoped ref " + writer + " writer, " + type + "? input)");
-        w.Indented(() => w.Line(ConstraintLine(true) + " => " + (genericWrite ? container + "." + writeUnion + "(ref writer, input);" : "SerializeUnion" + Arguments() + "(ref writer, input);")));
+        w.Line("internal static void SerializeUnion_" + readable + Arguments(Profile) + "(scoped ref " + writer + " writer, " + type + "? input)");
+        w.Indented(() => w.Line(ConstraintLine(true) + " => " + (genericWrite ? container + "." + writeUnion + "(ref writer, input);" : "SerializeUnion_" + readable + Arguments() + "(ref writer, input);")));
         w.Blank();
         if (model.FixedUnionCase)
         {
-            Method(FixedUnionBody(w, WriteBody(model, w, union: true)), "SerializeUnionAt", false,
+            Method(FixedUnionBody(w, WriteBody(model, w, union: true)), "SerializeUnionAt_" + readable, false,
                 "(scoped ref " + writer + " writer, " + type + "? input, int initialIndex, byte? unionTag)", inline, "int");
             w.Blank();
         }
@@ -341,7 +341,7 @@ internal static partial class BinaryEmitter
         w.Line(w.Preserve);
         w.Line(polymorphic);
         string writePolymorphic = "public static void WritePolymorphismValue" + Arguments() + "(ref this " + writer + " writer, scoped in " + type + "? input)";
-        string writePolymorphicCall = Serializer() + ".SerializeUnion" + Arguments() + "(ref writer, input);";
+        string writePolymorphicCall = Serializer() + ".SerializeUnion_" + readable + Arguments() + "(ref writer, input);";
         if (TypeConstraint().Length == 0)
             w.Line(writePolymorphic + " => " + writePolymorphicCall);
         else
@@ -459,45 +459,36 @@ internal static partial class BinaryEmitter
             if (model.Proven)
                 write = ProvenWriteBody(model, w, write, union: false);
             write = AddCallbacks(write, model.WriteBefore, model.WriteAfter);
-            Method(write, "RootWrite", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
-                WriteHint(write, union: false));
-            w.Blank();
-            w.Suppressed = !reads;
-            var read = Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false);
-            read = AddReadCallbacks(model, read);
-            Method(read, "RootRead", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                ReadHint(read));
-            w.Blank();
-            w.Suppressed = !writes;
+            string writeParameters = "(scoped ref " + writer + " writer, " + type + "? input)";
             if (model.FixedUnionCase)
             {
-                // A fixed Union case's Union write publishes the cursor its shared returning kernel computes.
+                Method(write, "RootWrite", genericWrite, writeParameters, WriteHint(write, union: false));
+                w.Blank();
                 w.Line(w.Preserve);
                 w.Line(inline);
                 w.Line("internal static void RootWriteUnion(scoped ref " + writer + " writer, " + type +
-                    "? input) => writer.Position = SerializeUnionAt(ref writer, input, writer.Position, null);");
+                    "? input) => writer.Position = SerializeUnionAt_" + readable + "(ref writer, input, writer.Position, null);");
             }
             else
             {
-                var writeUnionBody = Mirrored(model, w, WriteBody(model, w, union: true), writes: true, union: true);
-                // A lone record checks itself, so only a reserved record takes the proven path.
+                var payloadWrite = Mirrored(model, w, WriteBody(model, w, union: true), writes: true, union: true);
                 if (model.Proven && members.Length != 1)
-                    writeUnionBody = ProvenWriteBody(model, w, writeUnionBody, union: true);
-                writeUnionBody = AddCallbacks(writeUnionBody, model.WriteBefore, model.WriteAfter);
-                Method(writeUnionBody, "RootWriteUnion", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)",
-                    WriteHint(writeUnionBody, union: true));
+                    payloadWrite = ProvenWriteBody(model, w, payloadWrite, union: true);
+                payloadWrite = AddCallbacks(payloadWrite, model.WriteBefore, model.WriteAfter);
+                Method(FramingMerger.Share(Prepare(write, "RootWrite", writeParameters), Prepare(payloadWrite, "RootWriteUnion", writeParameters)),
+                    "Write", genericWrite, writeParameters, WriteHint(write, union: false), framing: true, prepared: true);
+                RootAdapter("RootWrite", "Write", genericWrite, writeParameters, "ref writer, input", "LuminPackObjectFraming");
+                RootAdapter("RootWriteUnion", "Write", genericWrite, writeParameters, "ref writer, input", "LuminPackPayloadFraming");
             }
             w.Blank();
             w.Suppressed = !reads;
-            var readUnionBody = Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
-            readUnionBody = AddReadCallbacks(model, readUnionBody);
-            // A declared reference member keeps the Union read behind its outlined entry; a fixed record leaves the hint to the
-            // runtime when a contiguous block cannot be proven, as the original expansion does.
-            Method(readUnionBody, "RootReadUnion", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)",
-                members.Any(member => member.Kind == RenderMemberKind.Parameter)
-                    ? (model.ElementList ? w.MethodImpl("NoInlining") : inline)
-                    : model.ReferencePayload ? w.MethodImpl("NoInlining")
-                    : allFixed && DirectInlining.FixedUnionRead(model, Sizes(readUnionBody)) ? inline : null);
+            var read = AddReadCallbacks(model, Mirrored(model, w, ReadBody(model, w, union: false), writes: false, union: false));
+            var payloadRead = AddReadCallbacks(model, Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true));
+            string readParameters = "(scoped ref " + reader + " reader, scoped ref " + type + "? value)";
+            Method(FramingMerger.Share(Prepare(read, "RootRead", readParameters), Prepare(payloadRead, "RootReadUnion", readParameters)),
+                "Read", genericRead, readParameters, ReadHint(read), framing: true, prepared: true);
+            RootAdapter("RootRead", "Read", genericRead, readParameters, "ref reader, ref value", "LuminPackObjectFraming");
+            RootAdapter("RootReadUnion", "Read", genericRead, readParameters, "ref reader, ref value", "LuminPackPayloadFraming");
             if (model.InlineRoots)
             {
                 // The original generator expanded this record inside its parents with each level's auto-properties before its
@@ -535,18 +526,28 @@ internal static partial class BinaryEmitter
                 "(scoped ref " + reader + " reader, scoped ref " + value + " value)", null);
             w.Blank();
             w.Suppressed = !writes;
-            Method(Mirrored(model, w, AddCallbacks(VersionWriteBody(model, w), model.WriteBefore, model.WriteAfter), writes: true, union: false),
-                "RootWriteUnion", true, "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)", writeHint);
+            var unionWrite = Mirrored(model, w, AddCallbacks(VersionWriteBody(model, w), model.WriteBefore, model.WriteAfter), writes: true, union: false);
+            string writeParameters = "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)";
+            if (unionWrite.SequenceEqual(write))
+                VersionAlias("RootWriteUnion", "RootWrite", writeParameters, "ref writer, input");
+            else
+                Method(unionWrite, "RootWriteUnion", true, writeParameters, writeHint);
             w.Blank();
             w.Suppressed = !reads;
-            Method(AddReadCallbacks(model, VersionReadBody(model, w)), "RootReadUnion", true,
-                "(scoped ref " + reader + " reader, scoped ref " + value + " value)",
-                !model.IsStruct && members.Any(member => !member.IsFixed) ? w.MethodImpl("NoInlining") : null);
+            VersionAlias("RootReadUnion", "RootRead", "(scoped ref " + reader + " reader, scoped ref " + value + " value)", "ref reader, ref value");
             w.Suppressed = false;
             w.Close();
         }
 
-        void Method(List<string> body, string name, bool generic, string parameters, string attribute, string returns = "void")
+        void VersionAlias(string name, string target, string parameters, string values)
+        {
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void " + name + Arguments(Profile) + parameters);
+            w.Indented(() => w.Line(ConstraintLine(true) + " => " + target + Arguments(Profile) + "(" + values + ");"));
+        }
+
+        List<string> Prepare(List<string> body, string name, string parameters)
         {
             // An explicitly untrusted graph that reaches an input-selected shape fails closed in both directions.
             if (model.Rejection != null)
@@ -563,12 +564,33 @@ internal static partial class BinaryEmitter
                         body.Insert(1, "writer.CheckBuffer();");
                 }
             }
+            return body;
+        }
+
+        void RootAdapter(string name, string target, bool generic, string parameters, string values, string marker)
+        {
+            w.Blank();
+            w.Line(w.Preserve);
+            w.Line(inline);
+            w.Line("internal static void " + Root(name, generic) + parameters);
+            string constraint = ConstraintLine(generic);
+            string arguments = generic ? Arguments(Profile, "global::LuminPack.Code." + marker) : Arguments("global::LuminPack.Code." + marker);
+            w.Indented(() => w.Line((constraint.Length == 0 ? string.Empty : constraint + " ") + "=> " + target + arguments + "(" + values + ");"));
+        }
+
+        void Method(List<string> body, string name, bool generic, string parameters, string attribute, string returns = "void", bool framing = false, bool prepared = false)
+        {
+            if (!prepared)
+                body = Prepare(body, name, parameters);
             w.Line(w.Preserve);
             if (attribute != null)
                 w.Line(attribute);
-            w.Line("internal static " + returns + " " + name + (generic ? Arguments(Profile) : Arguments()) + parameters);
+            string typeArguments = framing ? generic ? Arguments(Profile, "TLuminFraming") : Arguments("TLuminFraming") : generic ? Arguments(Profile) : Arguments();
+            w.Line("internal static " + returns + " " + name + typeArguments + parameters);
             if (generic || TypeConstraint().Length != 0)
                 w.Indented(() => w.Line(ConstraintLine(generic)));
+            if (framing)
+                w.Indented(() => w.Line("where TLuminFraming : struct"));
             w.Open();
             for (int index = 0; index < body.Count; index++)
             {
@@ -1890,7 +1912,7 @@ internal static partial class BinaryEmitter
     {
         if (model.Mirrors.Length == 0 && model.Mirror == null)
             return string.Empty;
-        var w = new CodeWriter(aliases) { Scoped = model.Net8 };
+        using var w = new CodeWriter(aliases) { Scoped = model.Net8 };
         w.Line("namespace LuminPack");
         w.Open();
         w.Line("public static partial class LuminPackSerializer");

@@ -443,7 +443,11 @@ internal static class JsonEmitter
 
     /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
     /// of more than sixteen calls stays behind its formatter's call.</summary>
-    internal static int WriteCalls(PayloadRenderModel model) => InvocationCounter.Count(WriteBody(model, new CodeWriter(-1), model.JsonHelper, expand: false));
+    internal static int WriteCalls(PayloadRenderModel model)
+    {
+        using var writer = new CodeWriter(-1);
+        return InvocationCounter.Count(WriteBody(model, writer, model.JsonHelper, expand: false));
+    }
 
     /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes on .NET 8 or later, otherwise as
     /// its raw span.</summary>

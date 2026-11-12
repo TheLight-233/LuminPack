@@ -53,6 +53,21 @@ namespace LuminPack
         [ThreadStatic]
         private static LuminPackReaderOptionalState? _threadStaticReaderOptionalState;
 
+        /// <summary>Registers an additional binary and JSON Union case.</summary>
+        /// <typeparam name=""TUnion"">The Union root.</typeparam>
+        /// <typeparam name=""TMember"">The concrete case.</typeparam>
+        /// <param name=""tag"">The UInt16 wire tag, excluding generated cases.</param>
+        /// <param name=""writeValue"">The binary writer, including its Union tag.</param>
+        /// <param name=""readValue"">The binary payload reader.</param>
+        /// <param name=""writeValueJson"">The JSON writer, including its Union envelope.</param>
+        /// <param name=""readValueJson"">The JSON payload reader.</param>
+        public static void Register<TUnion, TMember>(int tag,
+            global::LuminPack.Code.LuminPackUnionWriteDelegate<TUnion> writeValue,
+            global::LuminPack.Code.LuminPackReadDelegate<TUnion> readValue,
+            global::LuminPack.Code.LuminPackUnionJsonWriteDelegate<TUnion> writeValueJson,
+            global::LuminPack.Code.LuminPackJsonReadDelegate<TUnion> readValueJson)
+            => global::LuminPack.Code.LuminPackUnionFormatter<TUnion>.Register<TMember>(tag, writeValue, readValue, writeValueJson, readValueJson);
+
         /// <summary>Registers binary delegates for generic payload entry points.</summary>
         /// <typeparam name=""T"">The runtime type to register.</typeparam>
         /// <param name=""writeValue"">Static binary writer, e.g. <c>MyType.Write</c>.</param>

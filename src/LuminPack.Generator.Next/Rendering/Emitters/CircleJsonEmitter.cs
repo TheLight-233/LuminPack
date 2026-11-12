@@ -289,7 +289,8 @@ internal static class CircleJsonEmitter
     /// <summary>Counts the calls of a record's JSON write body, which decide whether a parent copies it inline.</summary>
     private static int WriteCalls(PayloadRenderModel model)
     {
-        var body = WriteBody(model, new CodeWriter(-1), Helper(model), new CircleJsonNames(), null, null, expand: false);
+        using var writer = new CodeWriter(-1);
+        var body = WriteBody(model, writer, Helper(model), new CircleJsonNames(), null, null, expand: false);
         return InvocationCounter.Count(body);
     }
 

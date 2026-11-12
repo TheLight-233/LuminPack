@@ -33,7 +33,7 @@ internal sealed class UnionRenderer : IRenderer
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
         if (direct == null || !direct.UnionRoot)
             return string.Empty;
-        var writer = new CodeWriter(context.Options.AvailableAliases) { Scoped = direct.Net8 };
+        using var writer = new CodeWriter(context.Options.AvailableAliases) { Scoped = direct.Net8 };
         if (json)
             UnionEmitter.EmitJson(direct, writer, context.Operations);
         else

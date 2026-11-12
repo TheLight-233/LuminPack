@@ -285,6 +285,18 @@ internal static class InputReadRenderer
         }
         else
             body = container.Substring(bodyOpen + 1, Matching(container, bodyOpen, '{', '}') - bodyOpen - 1);
+        // A shared record read freezes ordinary framing before projecting this root's input limits onto its statements.
+        if (body.StartsWith("Read<", StringComparison.Ordinal))
+        {
+            var shared = GeneratedText.ReadMethods(source).FirstOrDefault(candidate => candidate.Owner == "LuminRoots_" + target &&
+                candidate.Name == "Read" && candidate.Generics.LastOrDefault() == "TLuminFraming");
+            if (shared != null)
+            {
+                int sharedOpen = source.IndexOf('{', shared.SignatureStart + shared.Signature.Length);
+                body = source.Substring(sharedOpen + 1, Matching(source, sharedOpen, '{', '}') - sharedOpen - 1)
+                    .Replace("TLuminFraming", "global::LuminPack.Code.LuminPackObjectFraming");
+            }
+        }
         string valueType = ValueType(parameters);
         var helper = new StringBuilder(1024);
         helper.Append("            [global::LuminPack.Attribute.Preserve]\n");

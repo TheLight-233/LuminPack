@@ -15,7 +15,7 @@ internal static class ImmutableHashSetOwnerFile
     /// through the partial class. It is emitted once per compilation, beside the owners that reference it.</remarks>
     internal static string RenderCache(SharedFormatterSet set)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         w.Line("namespace LuminPack");
         w.Open();
         w.Line("public static partial class LuminPackSerializer");
@@ -37,7 +37,7 @@ internal static class ImmutableHashSetOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         // The legacy immutable-hash-set roots spell the state types through the imported core namespace.
         const string writer = "LuminPackWriter";

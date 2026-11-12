@@ -26,7 +26,7 @@ internal static class ConcurrentQueueStringOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, string queue, string itemType, bool stringElement, GeneratedOperations operations)
     {
-        var w = new CodeWriter(set.AvailableAliases);
+        using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
         // The legacy concurrent-queue roots spell the state types through the imported core namespace.
         const string writer = "LuminPackWriter";
