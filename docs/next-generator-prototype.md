@@ -30,6 +30,10 @@ They compare generated source and compiler diagnostics with a fresh driver after
 assembly-option, assembly-identity, wrapper, declaration and unsafe-setting edits.
 Use the same command with `--verify-input-limits` for checked-copy contracts: trusted inline descendants, List/array/Dictionary
 elements, malformed markers and Booleans, root quotas and reuse across all six string profiles.
+`--verify-documentation` checks caller-facing XML in all three compiler documentation modes, compiled documentation output,
+unchanged executable tokens and retained-driver invalidation of layout-only and added/removed documentation facts.
+`--verify-assembly-options` checks both option constructors, registration policy, all sixteen forced-operation combinations,
+legacy mode values, library/friend retention, safe compilation and default JSON fallback input policies.
 
 ## How calls bind
 
@@ -70,6 +74,31 @@ calls use.
 - Assembly comparison (FullOpts JIT disassembly of the full test run, both generators): over 4344 matching methods Next emits 0.992
   times the legacy code bytes and slightly fewer call instructions. The systematic differences are listed under performance below.
 
+## Completed migration areas
+
+A checked item covers the scope stated here. Related combinations still listed below remain open.
+
+- [x] **Caller-facing XML documentation.** The facade and its payload-specific convenience entry containers document parameters,
+  type parameters, returns, buffer ownership, reuse and stream lifetimes. Concrete entries describe filtered member order,
+  physical storage, CLR layout, former names and reference slots, and link to their actual formatter containers. Execution roots,
+  state forwarders and support declarations retain no XML. The focused fixture checks 381 APIs across `None`, `Parse` and
+  `Diagnose`, compiler XML output and unchanged executable tokens.
+- [x] **Assembly registration policy.** Both `LuminPackGeneratorOptions` constructors select the same `Auto`/`Disabled` behavior.
+  Disabled assemblies publish no facade registration APIs and do not probe generic or Union registrations or reserve Union tags.
+  Known Union cases retain their existing dispatch.
+- [x] **Assembly operation-retention settings.** All sixteen `ForceGenerate*` combinations, ignored legacy mode values,
+  library/friend retention and registration with unsafe code disabled are covered by the focused assembly matrix.
+- [x] **Assembly fallback document boundaries.** Default generic JSON reads use the assembly's JSON input profile. Strict
+  numeric syntax and encoded input caps are verified for UTF-8 and UTF-16, including a compilation with no attributed payload.
+- [x] **Bounded ordinary-object checked copies.** Supported copies propagate their root policy through trusted inline records
+  and payload elements of List, arrays and Dictionary. The six-profile fixture covers markers, Boolean domains, quotas, nulls,
+  ordinary wire bytes and reuse; warmed reads into its complete reused target allocate no bytes. Other payload kinds remain below.
+- [x] **Normalized incremental publication.** Collected facts compare by value, repeated closed roots share compilation-owned
+  analysis, unchanged formatter requirements reuse their driver-owned catalog, and owner aggregation retains first declarations
+  without LINQ grouping. XML caches track present and absent declaration dependencies and invalidate on layout-only edits.
+- [x] **Trusted Boolean scalar reads.** Ordinary and inline trusted fields use the advancing reader operation and retain Reader
+  bounds checks; untrusted fields keep their Boolean-domain checks.
+
 ## Not yet migrated
 
 ### Static binding and publication
@@ -78,13 +107,12 @@ calls use.
 | --- | --- | --- |
 | P1 | Cross-assembly payloads | Next discovers only `[LuminPackable]` declared on types in the current compilation. Assembly-level `[LuminPackable(typeof(T))]` external roots, referenced metadata import (legacy `ReferencedTypeMetadata`, including diagnostic LuminPack112), external owners, external Unions and cross-assembly options are missing. |
 | P2 | Wrapper specialization of source generic methods | Legacy specializes calls inside user generic methods through generated wrappers (`StaticSerializerBinding.Wrappers`); Next closes those payloads through generic method expansion but does not reproduce the wrapper entries. |
-| P2 | Remaining backend combinations | Friend assemblies and disabled-backend combinations are not verified. Generated code and the facade use C# 13 features (ref fields, `ref readonly` parameters, ref struct interfaces), so C# 9–12 consumers, which the legacy generator served, do not compile. |
+| P2 | Remaining backend combinations | Friend-assembly operation retention is verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. Generated code and the facade use C# 13 features (ref fields, `ref readonly` parameters, ref struct interfaces), so C# 9–12 consumers, which the legacy generator served, do not compile. |
 
 ### Generated source
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | XML documentation | Legacy documents generated members (`GeneratedSourceDocumentation`, `LuminPackSerializerDocumentation`). For the unit-test corpus legacy emits about 54,000 documentation lines, Next about 860. |
 | P2 | Output accounting | Generated file counts, source size and retained operations are not recorded per build. |
 
 ### Type shapes and protocols
@@ -95,7 +123,7 @@ calls use.
 | P1 | Generic CircleReference | Only the closed constructions observed in the compilation get owners; the open definition that legacy publishes is missing, so other closed constructions have no generated path. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
 | P2 | Struct inline order | Legacy expands a nested member with each level's auto-properties before its fields. Next reproduces this order for classes through inline-order roots; nested structs keep declaration order. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
-| P2 | Public annotations | `NonGenerator`, `LuminPackableObject`, alias conflicts and the remaining assembly options are read but their complete semantics are not compared with legacy. |
+| P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. Cross-assembly option inheritance remains part of the cross-assembly gap. |
 | P2 | JSON compatibility | All envelopes, escaping, former names, duplicate and unknown properties, omitted members and failure publication are covered only as far as the tests reach. |
 | P2 | Formatter behavior matrix | Comparers, duplicates, concurrent observation, failed prefixes, cleanup and older-runtime fallbacks across all families are covered only as far as the tests reach. |
 
@@ -103,7 +131,7 @@ calls use.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Checked copies | Declared collection, string and depth limits are checked at the root's read sites. Checked payload copies recursively apply the root policy to inline descendants; shared payload-element sequences and dictionaries use their original family renderers with checked element models before copying. Focused tests cover nested trusted records, List/array/Dictionary elements, invalid markers and Boolean domains, root quotas and reuse across six string profiles. Only roots with a declared limit request checked copies; other owner and profile combinations remain unverified. |
+| P1 | Checked copies | Only roots with a declared limit request checked copies. Unbounded untrusted roots and the remaining owner/profile combinations still need migration and validation; the completed bounded inline scopes are listed above. |
 | P1 | Uncovered payload kinds | Versioned, mirrored, reference-tracked and struct payloads, rejected structs and Union roots are not covered by the limit paths. |
 | P2 | Stream, async and compression | Stream and async calls stage at the payload's cap and compressed members use the compressed kernels; neither is verified by focused tests, nor are the remaining protocol, nested scope, count and reuse combinations. |
 
@@ -139,7 +167,7 @@ These keep the wire format but produce different code from legacy.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Incremental work | Collected calls and payloads are compared by value before publication; unrelated invocations do not join the call list. Closed root analysis is cached inside its compilation. Each driver reuses the shared owner set when its retained payload models, non-packable roots and complete project options are unchanged, including edits that only change interception locations. Owner collection sorts and compacts temporary buffers without LINQ grouping, retaining the first declaration for duplicate identities. Per-operation dependency walks and other repeated projections and semantic queries still need reduction. |
+| P2 | Incremental work | Per-operation shared-owner dependency walks and other repeated model projections and semantic queries still need reduction. The completed normalization and cache work is listed above. |
 
 ### Acceptance
 

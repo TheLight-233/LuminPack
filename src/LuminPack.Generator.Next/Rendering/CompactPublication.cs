@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using LuminPack.SourceGenerator.Next.Pipeline;
+using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering;
 
@@ -46,10 +47,12 @@ internal static class CompactPublication
     /// <param name="sources">The generated source contributions.</param>
     /// <param name="symbols">The active conditional-compilation symbols.</param>
     /// <param name="token">Cancels publication.</param>
+    /// <param name="documentation">The current immutable declaration facts for caller-facing XML.</param>
     /// <returns>The final deterministic generated files.</returns>
     // AggressiveOptimization is available in newer hosts but unnamed by netstandard2.0.
     [MethodImpl((MethodImplOptions)512)]
-    internal static GeneratedSource[] Create(List<GeneratedSource> sources, string[] symbols, CancellationToken token, Cache cache)
+    internal static GeneratedSource[] Create(List<GeneratedSource> sources, string[] symbols, CancellationToken token, Cache cache,
+        IReadOnlyDictionary<string, PayloadDocumentation>? documentation = null)
     {
         var retained = new HashSet<string>(StringComparer.Ordinal);
         foreach (GeneratedSource source in sources)
@@ -269,7 +272,7 @@ internal static class CompactPublication
         int resultIndex = 0;
         foreach (var group in groups)
             result[resultIndex++] = new GeneratedSource(group.Key.Substring(group.Key.IndexOf(':') + 1), Join(group.Value.Texts), group.Value.Kind);
-        return result;
+        return documentation == null ? result : cache.Documentation.Apply(result, documentation);
         void Add(string hint, string output, GenerationKind kind)
         {
             string groupKey = ((int)kind).ToString() + ":" + hint;
@@ -537,6 +540,7 @@ internal static class CompactPublication
     {
         internal readonly Dictionary<string, Document> Documents;
         internal readonly Dictionary<string, CachedOutput> Outputs;
+        internal readonly SerializerDocumentation.Cache Documentation;
 
         /// <summary>Copies the preceding document and output indexes for one driver publication.</summary>
         /// <param name="prior">The preceding publication or operation contract.</param>
@@ -544,6 +548,7 @@ internal static class CompactPublication
         {
             Documents = prior == null ? new(StringComparer.Ordinal) : new(prior.Documents, StringComparer.Ordinal);
             Outputs = prior == null ? new(StringComparer.Ordinal) : new(prior.Outputs, StringComparer.Ordinal);
+            Documentation = new SerializerDocumentation.Cache(prior?.Documentation);
         }
     }
 

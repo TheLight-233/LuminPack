@@ -52,7 +52,8 @@ internal static partial class NextPipeline
                         TypeModelFactory.CustomRegistration(symbol, options, out bool customJson) is { } customType
                             ? CustomRegistrationSource.Block(customType, customJson) : null;
                     return new ModeledPayload(result, options, diagnostics, custom,
-                        result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty);
+                        result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty,
+                        result.IsComplete && result.Model != null ? PayloadDocumentationFactory.Create(symbol, result.Model) : null);
                 }
                 catch (Exception error) when (error is not OperationCanceledException)
                 {
@@ -202,9 +203,11 @@ internal static partial class NextPipeline
         /// <param name="diagnostics">The normalized declaration and assembly diagnostics.</param>
         /// <param name="customRegistration">The optional typed custom registration block.</param>
         /// <param name="reach">The payload identities the declaration reaches.</param>
+        /// <param name="documentation">Compiler-free layout and member-link facts for caller-facing XML.</param>
         internal ModeledPayload(ModelResult result, GeneratorOptions options, DiagnosticInfo[] diagnostics, string? customRegistration = null,
-            OperationReach? reach = null)
+            OperationReach? reach = null, PayloadDocumentation? documentation = null)
         {
+            Documentation = documentation;
             Reach = reach ?? OperationReach.Empty;
             CustomRegistration = customRegistration;
             Diagnostics = diagnostics;
@@ -216,6 +219,8 @@ internal static partial class NextPipeline
         {
             get;
         }
+
+        internal PayloadDocumentation? Documentation { get; }
 
         internal GeneratorOptions Options
         {
@@ -241,7 +246,8 @@ internal static partial class NextPipeline
 
         /// <inheritdoc/>
         public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options) &&
-            CustomRegistration == other.CustomRegistration && Reach.Equals(other.Reach) && SameDiagnostics(Diagnostics, other.Diagnostics);
+            CustomRegistration == other.CustomRegistration && Reach.Equals(other.Reach) && Equals(Documentation, other.Documentation) &&
+            SameDiagnostics(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>
         public override bool Equals(object? obj) => obj is ModeledPayload other && Equals(other);
