@@ -3549,6 +3549,37 @@ internal static partial class TypeModelFactory
             symbol.IsDefinition ? symbol.TypeParameters.Select(parameter => parameter.Name).ToArray() : Array.Empty<string>());
     }
 
+    /// <summary>Spells the <see cref="TypeIdentity.MetadataName"/> that <see cref="Identity"/> gives a type, without building the
+    /// identity.</summary>
+    /// <param name="symbol">A source type.</param>
+    /// <returns>The identity key, or null for a type nested in a generic definition, which has no model.</returns>
+    internal static string? ReachKey(INamedTypeSymbol symbol)
+    {
+        var text = new System.Text.StringBuilder(64);
+        if (symbol.ContainingNamespace is { IsGlobalNamespace: false } @namespace)
+            text.Append(@namespace.ToDisplayString()).Append('.');
+        int start = text.Length;
+        for (INamedTypeSymbol? current = symbol.ContainingType; current != null; current = current.ContainingType)
+        {
+            if (current.IsGenericType)
+                return null;
+            text.Insert(start, current.Name + "+");
+        }
+        text.Append(symbol.Name);
+        if (symbol.IsGenericType && !symbol.IsDefinition)
+        {
+            text.Append('<');
+            for (int index = 0; index < symbol.TypeArguments.Length; index++)
+                (index == 0 ? text : text.Append(", ")).Append(Session.FormatterSpelling(symbol.TypeArguments[index]));
+            text.Append('>');
+        }
+        else if (symbol.TypeParameters.Length != 0)
+        {
+            text.Append('`').Append(symbol.TypeParameters.Length);
+        }
+        return text.ToString();
+    }
+
     /// <summary>Classifies the payload protocol from the declaration and its generator type.</summary>
     /// <param name="symbol">The declared payload type.</param>
     /// <param name="generatorType">The declared generation mode name.</param>

@@ -177,9 +177,13 @@ internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
     /// <summary>The closed type arguments of a generic payload, comma-separated, or null.</summary>
     internal readonly string? TypeArguments;
 
+    /// <summary>The payload identities the call reaches, which keep the call's operation.</summary>
+    internal readonly OperationReach Reach;
+
     internal SerializerCallModel(SerializerApi api, string payload, string? profile, string location, bool valueType, MemberModel? root,
-        bool openProfile = false, string? definition = null, string? typeArguments = null, EntryShape shape = default)
+        bool openProfile = false, string? definition = null, string? typeArguments = null, EntryShape shape = default, OperationReach? reach = null)
     {
+        Reach = reach ?? OperationReach.Empty;
         Shape = shape;
         Definition = definition;
         TypeArguments = typeArguments;
@@ -195,15 +199,45 @@ internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
     /// <summary>Whether the call uses a JSON root.</summary>
     internal bool Json => Api >= SerializerApi.SerializeJsonString;
 
+    /// <summary>Whether the call serializes rather than deserializes.</summary>
+    internal bool Writes => Api is SerializerApi.SerializeStream or SerializerApi.SerializeArray or SerializerApi.SerializeBufferWriter or
+        SerializerApi.SerializeBuffer or SerializerApi.SerializeWriter or SerializerApi.SerializeJsonString or
+        SerializerApi.SerializeJsonBufferWriter or SerializerApi.SerializeJsonBuffer or SerializerApi.SerializeJsonWriter;
+
     /// <inheritdoc/>
     public bool Equals(SerializerCallModel? other) => ReferenceEquals(this, other) || other != null && Api == other.Api &&
         ValueType == other.ValueType && OpenProfile == other.OpenProfile && Payload == other.Payload && Profile == other.Profile &&
         Location == other.Location && Definition == other.Definition && TypeArguments == other.TypeArguments && Shape.Equals(other.Shape) &&
-        Equals(Root, other.Root);
+        Equals(Root, other.Root) && Reach.Equals(other.Reach);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as SerializerCallModel);
 
     /// <inheritdoc/>
     public override int GetHashCode() => ((int)Api * 397) ^ Payload.GetHashCode() ^ Location.GetHashCode();
+}
+
+/// <summary>One facade invocation: its closed root, or the operations every payload keeps when it has none.</summary>
+internal readonly struct CallFact : IEquatable<CallFact>
+{
+    /// <summary>The closed call, or null when the invocation stays on the generic facade or is not a facade call.</summary>
+    internal readonly SerializerCallModel? Call;
+
+    /// <summary>The operations an unbound facade invocation keeps for every payload.</summary>
+    internal readonly Rendering.Emitters.GeneratedOperations Whole;
+
+    internal CallFact(SerializerCallModel? call, Rendering.Emitters.GeneratedOperations whole)
+    {
+        Call = call;
+        Whole = whole;
+    }
+
+    /// <inheritdoc/>
+    public bool Equals(CallFact other) => Whole == other.Whole && Equals(Call, other.Call);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => obj is CallFact other && Equals(other);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => (Call?.GetHashCode() ?? 0) ^ (int)Whole;
 }

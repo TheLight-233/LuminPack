@@ -97,7 +97,7 @@ internal static partial class BinaryEmitter
         w.Suppressed = false;
         w.Close();
         w.Blank();
-        w.Suppressed = !writes;
+        w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
         string deserialize = "internal static void Deserialize" + suffix + Arguments() + "(scoped ref " + reader + " reader, scoped ref " + type + " value)";
@@ -115,9 +115,10 @@ internal static partial class BinaryEmitter
         w.Line("internal static void Deserialize" + suffix + Arguments(StructProfile) + "(scoped ref " + reader + " reader, scoped ref " + type + " value)");
         w.Indented(() => w.Line(ConstraintLine(true) + " => " + container + "." + readRoot + "(ref reader, ref value);"));
         w.Blank();
+        w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(inline);
-        string serializeUnion = "internal static void SerializeUnion" + Arguments() + "(scoped ref " + writer + " writer, scoped in " + type + " input)";
+        string serializeUnion ="internal static void SerializeUnion" + Arguments() + "(scoped ref " + writer + " writer, scoped in " + type + " input)";
         string serializeUnionCall = genericWrite ? "SerializeUnion" + Arguments(Standard()) + "(ref writer, in input);" :
             container + ".RootWriteUnion" + Arguments() + "(ref writer, in input);";
         if (TypeConstraint().Length == 0)

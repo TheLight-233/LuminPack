@@ -28,6 +28,9 @@ internal sealed class JsonRenderer : IRenderer
 
     private static string Emit(TypeModel model, RenderContext context)
     {
+        // A payload that keeps no JSON operation publishes no JSON file.
+        if ((context.Operations & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) == 0)
+            return string.Empty;
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options, json: true);
         return direct == null ? string.Empty : PayloadEmitter.Render(direct, json: true, context.Options.AvailableAliases,
             context.Operations);

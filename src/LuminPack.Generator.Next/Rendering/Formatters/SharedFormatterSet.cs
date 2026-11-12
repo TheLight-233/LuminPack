@@ -204,6 +204,49 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
             general.Values.OrderBy(formatter => formatter.Type, StringComparer.Ordinal).ToArray(), options);
     }
 
+    /// <summary>Adds the owner type keys that payloads and roots require, as <see cref="SharedFormatterPublisher"/> keys them,
+    /// without building a publication set.</summary>
+    /// <param name="models">The complete payloads.</param>
+    /// <param name="options">The project facts.</param>
+    /// <param name="roots">The non-packable call roots.</param>
+    /// <param name="keys">Receives the owner type keys.</param>
+    internal static void CollectKeys(IEnumerable<TypeModel> models, GeneratorOptions options, IEnumerable<MemberModel>? roots, HashSet<string> keys)
+    {
+        bool cultureInfoReuse = false;
+        var facts = new List<SequenceOwnerFact>();
+        var scalars = new List<string>();
+        var owners = new List<string>();
+        var dictionaries = new List<DictionaryOwnerFact>();
+        var general = new Dictionary<string, FormatterModel>(StringComparer.Ordinal);
+        var payloads = new HashSet<string>(StringComparer.Ordinal);
+        var requirements = new HashSet<string>(StringComparer.Ordinal);
+        foreach (TypeModel model in models)
+        {
+            Walk(model, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
+            CollectGeneral(model, general, payloads);
+        }
+        if (roots != null)
+            foreach (MemberModel root in roots)
+            {
+                WalkRoot(root, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
+                CollectGeneralMember(root, general, payloads);
+            }
+        foreach (FormatterModel formatter in general.Values)
+        {
+            keys.Add(GeneratedNames.PayloadKey(formatter.Type));
+            if (formatter.Payload != null)
+                Walk(formatter.Payload, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
+        }
+        foreach (string owner in owners)
+            keys.Add(GeneratedNames.PayloadKey(owner));
+        foreach (string scalar in scalars)
+            keys.Add(GeneratedNames.PayloadKey(scalar.Split('=')[0]));
+        foreach (SequenceOwnerFact fact in facts)
+            keys.Add(GeneratedNames.PayloadKey(fact.DeclaredType));
+        foreach (DictionaryOwnerFact fact in dictionaries)
+            keys.Add(GeneratedNames.PayloadKey(fact.DeclaredType));
+    }
+
     /// <inheritdoc/>
     public bool Equals(SharedFormatterSet other) => Extension == other.Extension && SameStrings(Owners, other.Owners) &&
         AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse && Equals(Options, other.Options) &&

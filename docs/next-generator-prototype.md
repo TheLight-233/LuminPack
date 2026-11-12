@@ -34,6 +34,18 @@ Interceptors forward to per-payload `LuminEntry_` owners. Packable payloads call
 closed roots call the static `Write`/`Read` operations of their shared owners. Calls without a published root stay on the generic
 facade.
 
+## How operations are retained
+
+An application, or a Unity predefined assembly, without friend assemblies keeps only the operations its code calls, as
+[generation modes](generation-modes.md) describes; every other project keeps all four. Each closed call keeps its operation on the
+payload identities its payload type reaches through member types, generic arguments, base types, interfaces and attribute types, and
+each reached declaration passes its operations on. A base type or interface also reaches the declarations derived from it, which
+Union roots dispatch to. A shared formatter owner keeps each operation of the payloads and roots that require it. A facade call
+without a concrete root, a registration, a direct writer or reader state call, a facade method group, a generated extension name
+and `LuminPackGeneratorOptions.ForceGenerate*` keep their operation for every payload. A payload that keeps no operation publishes no
+file, and one without a JSON operation publishes no JSON file. In every project, an interceptor entry keeps only the directions its
+calls use.
+
 ## Verified state
 
 - The legacy baseline is commit 8af1579, the last legacy commit that passes the full test area. With Next, the full net10.0 test
@@ -55,7 +67,6 @@ facade.
 | --- | --- | --- |
 | P1 | IL post-processing backend | `LuminPack.ILPostProcessor` rewrites calls marked with the generated `LuminPack.Generated.StaticCallAttribute` (legacy `StaticSerializerBinding.Il`). Next never emits it, so compilers without interceptors and Unity get no static binding; those calls stay on the generic facade. |
 | P1 | Cross-assembly payloads | Next discovers only `[LuminPackable]` declared on types in the current compilation. Assembly-level `[LuminPackable(typeof(T))]` external roots, referenced metadata import (legacy `ReferencedTypeMetadata`, including diagnostic LuminPack112), external owners, external Unions and cross-assembly options are missing. |
-| P1 | Call-based operation retention | Every payload publishes all four operations: the pipeline passes `GeneratedOperations.All` everywhere, although the emitters can suppress unused operations. Legacy reachability analysis and the operation filter, and `LuminPackGeneratorOptions.ForceGenerateSerialize`, `ForceGenerateDeserialize`, `ForceGenerateSerializeJson` and `ForceGenerateDeserializeJson` are not read. |
 | P2 | Wrapper specialization of source generic methods | Legacy specializes calls inside user generic methods through generated wrappers (`StaticSerializerBinding.Wrappers`); Next closes those payloads through generic method expansion but does not reproduce the wrapper entries. |
 | P2 | Remaining backend combinations | Friend assemblies, disabled-backend combinations and older language versions are not verified. |
 

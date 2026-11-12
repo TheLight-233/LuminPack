@@ -853,6 +853,7 @@ internal static class JsonEmitter
         {
             // A memberless record never matches an ordered property.
             w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions") + " => false;"));
+            w.Suppressed = false;
             return;
         }
         w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions")));

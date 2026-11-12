@@ -29,6 +29,15 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 每个载荷的 `LuminEntry_` owner。可打包载荷调用其 `Serialize_`/`Deserialize_` 根；其他封闭根调用共享 owner 的静态 `Write`/`Read`。没有发布根的
 调用保留在泛型门面上。
 
+## 操作如何保留
+
+没有友元程序集的应用程序或 Unity 预定义程序集只保留代码实际调用的操作，规则见[生成模式](generation-modes.cn.md)；其他项目保留全部四种
+操作。每个封闭调用把它的操作保留在载荷类型经由成员类型、泛型参数、基类型、接口和特性类型所到达的载荷上，每个被到达的声明再把自己的操作
+继续传递下去。基类型或接口也会到达从它派生的声明，因为 Union 根要分派到这些 case。共享 Formatter owner 保留需要它的载荷和根所具有的每种
+操作。没有具体根的门面调用、注册、直接的 writer/reader 状态调用、门面方法组、生成的扩展方法名以及
+`LuminPackGeneratorOptions.ForceGenerate*` 会为所有载荷保留对应操作。不保留任何操作的载荷不发布文件，没有 JSON 操作的载荷不发布 JSON
+文件。在任何项目中，拦截器入口只保留其调用用到的方向。
+
 ## 已验证状态
 
 - 旧生成器基准为提交 8af1579（最后一个通过完整测试区域的旧提交）。使用 Next 时，net10.0 完整测试区域 1135 项全部通过。net9.0 与 net11.0 测试
@@ -48,7 +57,6 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 | --- | --- | --- |
 | P1 | IL 后处理后端 | `LuminPack.ILPostProcessor` 改写带有生成的 `LuminPack.Generated.StaticCallAttribute` 的调用（旧版 `StaticSerializerBinding.Il`）。Next 不生成该特性，因此不支持拦截器的编译器和 Unity 没有静态绑定，这些调用停留在泛型门面上。 |
 | P1 | 跨程序集载荷 | Next 只发现当前编译中声明在类型上的 `[LuminPackable]`。程序集级 `[LuminPackable(typeof(T))]` 外部根、引用元数据导入（旧版 `ReferencedTypeMetadata`，含诊断 LuminPack112）、外部 owner、外部 Union 和跨程序集选项均缺失。 |
-| P1 | 按调用保留操作 | 每个载荷都发布全部四种操作：管线各处都传入 `GeneratedOperations.All`，尽管各 emitter 已能裁掉未用操作。旧版的可达性分析与操作过滤，以及 `LuminPackGeneratorOptions` 的 `ForceGenerateSerialize`、`ForceGenerateDeserialize`、`ForceGenerateSerializeJson`、`ForceGenerateDeserializeJson` 均未读取。 |
 | P2 | 源泛型方法的包装特化 | 旧版通过生成的包装（`StaticSerializerBinding.Wrappers`）特化用户泛型方法内的调用；Next 通过泛型方法展开封闭这些载荷，但没有重现包装入口。 |
 | P2 | 其余后端组合 | 友元程序集、禁用后端的组合以及较旧的语言版本均未验证。 |
 

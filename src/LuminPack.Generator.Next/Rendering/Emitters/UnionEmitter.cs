@@ -90,9 +90,10 @@ internal static class UnionEmitter
         ReadArms(model, w, true, "reader", counters, slotPrefix);
         w.Close();
         w.Close();
-        w.Close();
         w.Suppressed = false;
+        w.Close();
         w.Blank();
+        w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
         w.Line("internal static void Deserialize_" + model.Readable + model.TypeArguments() + "(scoped ref " + reader + " reader, scoped ref " + type + "? value) => " +
@@ -103,6 +104,7 @@ internal static class UnionEmitter
         w.Line("internal static void Deserialize_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(constraint + " => " + container + ".RootRead" + (model.UnionReadGeneric ? model.TypeArguments(Profile) : model.TypeArguments()) +
             "(ref reader, ref value);"));
+        w.Suppressed = false;
         w.Close();
         w.Blank();
 
@@ -139,22 +141,28 @@ internal static class UnionEmitter
         w.Close();
         w.Close();
 
-        // Root dispatch and registration.
+        // Root dispatch and registration. The virtual slots only write, so they follow the write operation of their format.
         w.Blank();
         OpenType(model.UnionNamespace, model.UnionChain, w);
+        w.Suppressed = !writes;
         if (model.UnionCursor)
             CursorRoot(model, w, writer);
+        w.Suppressed = false;
         Registration(model, w, type);
+        w.Suppressed = !writes;
         RootSlots(model, w, writer, false);
         CompiledSlot(model, w, writer, false);
         RegisteredWriter(model, w, writer, false);
+        w.Suppressed = false;
         if (model.UnionInterface)
         {
             // The publication partition recurses into partial classes but not into interfaces, so a root's JSON slots stay
             // in the binary file while its cases' JSON slots move to the JSON file.
+            w.Suppressed = (operations & GeneratedOperations.JsonWrite) == 0;
             RootSlots(model, w, writer, true);
             CompiledSlot(model, w, writer, true);
             RegisteredWriter(model, w, writer, true);
+            w.Suppressed = false;
         }
         CloseChain(model.UnionChain.Length, model.UnionNamespace, w);
 
@@ -163,9 +171,19 @@ internal static class UnionEmitter
             w.Blank();
             OpenType(group[0].Namespace, group[0].Chain, w);
             if (group[0].Definition != null)
+            {
+                // Both formats' generic case slots dispatch through the slot the binary file declares.
+                w.Suppressed = !writes && (operations & GeneratedOperations.JsonWrite) == 0;
+                GenericSlotField(group, w, "LuminPackUnionDispatchSlot_" + model.UnionSuffix);
+                w.Suppressed = !writes;
                 GenericCaseSlots(model, group, w, false);
+            }
             else
+            {
+                w.Suppressed = !writes;
                 CaseSlots(model, group[0], w, false);
+            }
+            w.Suppressed = false;
             CloseChain(group[0].Chain.Length, group[0].Namespace, w);
         }
     }
@@ -212,9 +230,11 @@ internal static class UnionEmitter
         w.Open();
         JsonReadBody(model, w, reader, type);
         w.Close();
+        w.Suppressed = !writes && !reads;
         w.Close();
         w.Suppressed = false;
         w.Blank();
+        w.Suppressed = !writes;
         w.Line(w.Preserve);
         w.Line(inline);
         w.Line("internal static void SerializeJson_" + model.Readable + model.TypeArguments() + "(scoped ref " + writer + " writer, scoped in " + type +
@@ -235,6 +255,7 @@ internal static class UnionEmitter
         w.Line(inline);
         w.Line("internal static void DeserializeJson_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(constraint + " => " + container + ".RootReadJson" + model.TypeArguments(Profile) + "(ref reader, ref value);"));
+        w.Suppressed = false;
         w.Close();
         w.Blank();
 
@@ -274,19 +295,23 @@ internal static class UnionEmitter
         if (!model.UnionInterface)
         {
             OpenType(model.UnionNamespace, model.UnionChain, w);
+            w.Suppressed = !writes;
             RootSlots(model, w, writer, true);
             CompiledSlot(model, w, writer, true);
             RegisteredWriter(model, w, writer, true);
+            w.Suppressed = false;
             CloseChain(model.UnionChain.Length, model.UnionNamespace, w);
         }
         foreach (var group in CaseGroups(model))
         {
             w.Blank();
             OpenType(group[0].Namespace, group[0].Chain, w);
+            w.Suppressed = !writes;
             if (group[0].Definition != null)
                 GenericCaseSlots(model, group, w, true);
             else
                 CaseSlots(model, group[0], w, true);
+            w.Suppressed = false;
             CloseChain(group[0].Chain.Length, group[0].Namespace, w);
         }
     }
@@ -757,6 +782,30 @@ internal static class UnionEmitter
     /// <remarks>An open case writes through its definition's generic entries directly. Closed cases select their tag through a
     /// dispatch slot resolved once per closed definition, then reinterpret the instance as the closed case, as the original
     /// pipeline does.</remarks>
+    /// <summary>Emits the runtime slot that selects a generic definition's closed case, which both formats' slots read.</summary>
+    private static void GenericSlotField(UnionRenderCase[] group, CodeWriter w, string slotField)
+    {
+        string open = OpenSpelling(group[0].Definition);
+        if (group.Length == 1 && group[0].Type == open)
+            return;
+        w.Line("private static readonly int " + slotField + " = Resolve" + slotField + "();");
+        w.Blank();
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("private static int Resolve" + slotField + "()");
+        w.Open();
+        w.Line("// Union cases");
+        w.Line("switch (typeof(" + open + "))");
+        w.Open();
+        for (int index = 0; index < group.Length; index++)
+            w.Line("case var runtimeType when runtimeType == typeof(" + group[index].Type + "): return " +
+                index.ToString(CultureInfo.InvariantCulture) + ";");
+        w.Line("default:");
+        w.Indented(() => w.Line("return -1;"));
+        w.Close();
+        w.Close();
+        w.Blank();
+    }
+
     private static void GenericCaseSlots(PayloadRenderModel model, UnionRenderCase[] group, CodeWriter w, bool json)
     {
         string definition = group[0].Definition;
@@ -766,25 +815,6 @@ internal static class UnionEmitter
             group.All(item => item.Sealed) ? "public sealed override void " : "public override void ";
         string operation = json ? "WriteJson_" : "Write_";
         string slotField = "LuminPackUnionDispatchSlot_" + model.UnionSuffix;
-        if (!direct && !json)
-        {
-            w.Line("private static readonly int " + slotField + " = Resolve" + slotField + "();");
-            w.Blank();
-            w.Line(w.MethodImpl("NoInlining"));
-            w.Line("private static int Resolve" + slotField + "()");
-            w.Open();
-            w.Line("// Union cases");
-            w.Line("switch (typeof(" + open + "))");
-            w.Open();
-            for (int index = 0; index < group.Length; index++)
-                w.Line("case var runtimeType when runtimeType == typeof(" + group[index].Type + "): return " +
-                    index.ToString(CultureInfo.InvariantCulture) + ";");
-            w.Line("default:");
-            w.Indented(() => w.Line("return -1;"));
-            w.Close();
-            w.Close();
-            w.Blank();
-        }
         foreach (var slot in Slots(model, json))
         {
             string profile = (slot.Profile == Profile ? Profile : w.A(slot.Profile));

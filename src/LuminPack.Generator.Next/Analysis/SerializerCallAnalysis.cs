@@ -2,6 +2,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -41,17 +42,25 @@ internal static class SerializerCallAnalysis
     /// <summary>Binds one candidate call.</summary>
     /// <param name="context">The syntax and its semantic model.</param>
     /// <param name="cancellationToken">Cancels analysis.</param>
-    /// <returns>The call model, or null when the call stays on the generic facade.</returns>
-    internal static SerializerCallModel? Analyze(GeneratorSyntaxContext context, CancellationToken cancellationToken) =>
-        context.Node is InvocationExpressionSyntax invocation ? Analyze(context.SemanticModel, invocation, cancellationToken) : null;
+    /// <returns>The closed call, or the operations every payload keeps when the call stays on the generic facade.</returns>
+    internal static CallFact Analyze(GeneratorSyntaxContext context, CancellationToken cancellationToken)
+    {
+        if (context.Node is not InvocationExpressionSyntax invocation)
+            return default;
+        var method = context.SemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
+        SerializerCallModel? call = method == null ? null : Analyze(context.SemanticModel, invocation, method, cancellationToken);
+        // A facade call without a concrete root keeps its operation for every payload.
+        return new CallFact(call, call != null ? GeneratedOperations.None :
+            OperationUsageAnalysis.Unbound(context.SemanticModel, invocation, method, cancellationToken));
+    }
 
     /// <summary>Binds an ordinary facade call in the compilation's shared discovery pass.</summary>
-    internal static SerializerCallModel? Analyze(SemanticModel semanticModel, InvocationExpressionSyntax invocation, CancellationToken cancellationToken)
+    private static SerializerCallModel? Analyze(SemanticModel semanticModel, InvocationExpressionSyntax invocation, IMethodSymbol method,
+        CancellationToken cancellationToken)
     {
         if (LocationMethod == null)
             return null;
-        if (semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method ||
-            !method.IsGenericMethod || method.ContainingType?.ToDisplayString() != SerializerName)
+        if (!method.IsGenericMethod || method.ContainingType?.ToDisplayString() != SerializerName)
             return null;
         SerializerApi? api = Classify(method.OriginalDefinition);
         if (api == null)
@@ -97,7 +106,7 @@ internal static class SerializerCallAnalysis
         EntryShape shape = TypeModelFactory.EntryShapeOf(payload, semanticModel.Compilation,
             Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation));
         return new SerializerCallModel(api.Value, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments,
-            shape);
+            shape, OperationUsageAnalysis.Payload(payload, semanticModel.Compilation));
     }
 
     private static readonly SymbolDisplayFormat PayloadFormat = SymbolDisplayFormat.FullyQualifiedFormat

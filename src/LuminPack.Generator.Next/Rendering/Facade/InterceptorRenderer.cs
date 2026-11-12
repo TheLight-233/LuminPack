@@ -133,10 +133,19 @@ internal static class InterceptorRenderer
             string type = payload.Select(item => item.Call.Payload).OrderBy(item => item, StringComparer.Ordinal).First();
             w.Append("        internal static partial class LuminEntry_").Append(root.Readable).Append('\n');
             w.Append("        {\n");
-            if (payload.Any(item => !item.Call.Json))
-                BinaryEntries(w, type, root, payload.First().Call.Shape, root.Owner == null ? root.Measured : roots.Measured.Contains(root.RootName));
-            if (payload.Any(item => item.Call.Json))
-                JsonEntries(w, type, root);
+            // An entry keeps only the directions its calls use, as the payload keeps only the called operations.
+            bool binaryWrites = false, binaryReads = false, jsonWrites = false, jsonReads = false;
+            foreach (var item in payload)
+            {
+                ref bool used = ref item.Call.Json ? ref item.Call.Writes ? ref jsonWrites : ref jsonReads
+                    : ref item.Call.Writes ? ref binaryWrites : ref binaryReads;
+                used = true;
+            }
+            if (binaryWrites || binaryReads)
+                BinaryEntries(w, type, root, payload.First().Call.Shape, root.Owner == null ? root.Measured : roots.Measured.Contains(root.RootName),
+                    binaryWrites, binaryReads);
+            if (jsonWrites || jsonReads)
+                JsonEntries(w, type, root, jsonWrites, jsonReads);
             w.Append("        }\n\n");
         }
         // Interceptors, one method per (overload, payload, profile).
@@ -347,7 +356,7 @@ namespace LuminPack
         w.Append("            => ").Append(call).Append(";\n");
     }
 
-    private static void BinaryEntries(StringBuilder w, string type, RootEntry root, EntryShape shape, bool measured)
+    private static void BinaryEntries(StringBuilder w, string type, RootEntry root, EntryShape shape, bool measured, bool writes, bool reads)
     {
         string write = root.Owner != null ? root.Owner + ".Write<TLuminProfile>(ref writer, in value);" :
             "LuminPackSerializer.Serialize_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref writer, in value);";
@@ -521,7 +530,7 @@ namespace LuminPack
                 return Deserialize<TLuminProfile>(data.Span);
             }
 ";
-        text = Specialize(text.Replace("\r\n", "\n"), root, shape, measured, write);
+        text = Directions(Specialize(text.Replace("\r\n", "\n"), root, shape, measured, write), writes, reads);
         w.Append(Limits(text, type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));
     }
 
@@ -628,7 +637,7 @@ namespace LuminPack
         return text.Substring(0, start) + replacement + text.Substring(end + Close.Length);
     }
 
-    private static void JsonEntries(StringBuilder w, string type, RootEntry root)
+    private static void JsonEntries(StringBuilder w, string type, RootEntry root, bool writes, bool reads)
     {
         string write = root.Owner != null ? root.Owner + ".Write<TLuminProfile>(ref writer, in value);" :
             "LuminPackSerializer.SerializeJson_" + root.RootName + "<" + root.RootArguments + "TLuminProfile>(ref writer, in value);";
@@ -796,7 +805,70 @@ namespace LuminPack
                 return value;
             }
 ";
-        w.Append(Limits(text.Replace("\r\n", "\n"), type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));
+        text = Directions(text.Replace("\r\n", "\n"), writes, reads);
+        w.Append(Limits(text, type, root).Replace("%TYPE%", type).Replace("%WRITE%", write).Replace("%READ%", read));
+    }
+
+    /// <summary>Keeps the entry methods of the called directions.</summary>
+    /// <param name="text">The entry template, whose members start at the member indentation after a blank line.</param>
+    /// <param name="writes">Whether a call serializes.</param>
+    /// <param name="reads">Whether a call deserializes.</param>
+    /// <returns>The template without the methods of an uncalled direction.</returns>
+    /// <remarks>A method belongs to the direction its name starts with, as the original operation filter classified facade
+    /// members; an entry method only forwards to methods of its own direction.</remarks>
+    private static string Directions(string text, bool writes, bool reads)
+    {
+        if (writes && reads)
+            return text;
+        var kept = new StringBuilder(text.Length);
+        int start = 0;
+        while (start < text.Length)
+        {
+            // A blank line inside a body is followed by deeper indentation; only a member line ends the current member.
+            int end = start;
+            do
+            {
+                end = text.IndexOf("\n\n", end, StringComparison.Ordinal);
+                end = end < 0 ? text.Length : end + 2;
+            }
+            while (end < text.Length && !MemberStart(text, end));
+            bool keep = true;
+            int signature = text.IndexOf("public static ", start, end - start, StringComparison.Ordinal);
+            int open = signature < 0 ? -1 : text.IndexOf('(', signature, end - signature);
+            if (open > 0)
+            {
+                // The method name precedes its type argument list.
+                int name = open;
+                if (text[name - 1] == '>')
+                    name = text.LastIndexOf('<', name - 1, name - signature);
+                int first = name;
+                while (first > signature && (char.IsLetterOrDigit(text[first - 1]) || text[first - 1] == '_'))
+                    first--;
+                bool deserializes = string.CompareOrdinal(text, first, "Deserialize", 0, 11) == 0;
+                bool serializes = !deserializes && string.CompareOrdinal(text, first, "Serialize", 0, 9) == 0;
+                keep = serializes ? writes : !deserializes || reads;
+            }
+            if (keep)
+                kept.Append(text, start, end - start);
+            start = end;
+        }
+        return kept.ToString();
+    }
+
+    /// <summary>Whether a line starts an entry member: an attribute or a declaration at the member indentation.</summary>
+    /// <param name="text">The entry template.</param>
+    /// <param name="line">The line start.</param>
+    /// <returns>Whether the line starts a member.</returns>
+    private static bool MemberStart(string text, int line)
+    {
+        const int Indent = 12;
+        if (line + Indent >= text.Length)
+            return false;
+        for (int index = line; index < line + Indent; index++)
+            if (text[index] != ' ')
+                return false;
+        char first = text[line + Indent];
+        return first is '[' or 'p' or 'i';
     }
 }
 

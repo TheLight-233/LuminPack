@@ -28,7 +28,8 @@ internal sealed class UnionRenderer : IRenderer
 
     private static string Render(TypeModel model, RenderContext context, bool json)
     {
-        if (model is not UnionModel)
+        if (model is not UnionModel ||
+            json && (context.Operations & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) == 0)
             return string.Empty;
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
         if (direct == null || !direct.UnionRoot)

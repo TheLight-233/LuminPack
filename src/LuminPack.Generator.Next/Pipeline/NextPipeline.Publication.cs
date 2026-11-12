@@ -53,6 +53,7 @@ internal static partial class NextPipeline
         private readonly GeneratorOptions _options;
         private readonly WirePolicy _policy;
         private readonly string[] _symbols;
+        private readonly GeneratedOperations _whole;
         private GeneratedSource[]? _sources;
         private PublicationSnapshot? _snapshot;
         internal readonly DiagnosticInfo[] Diagnostics;
@@ -65,9 +66,12 @@ internal static partial class NextPipeline
         /// <param name="payloads">The normalized declaration results.</param>
         /// <param name="policy">The assembly wire policy.</param>
         /// <param name="symbols">The active conditional-compilation symbols.</param>
+        /// <param name="whole">The operations every payload keeps regardless of calls.</param>
         internal PublicationRequest(ImmutableArray<ModeledPayload> payloads, ImmutableArray<SerializerCallModel> calls,
-            RootMembers forwarded, GeneratorOptions options, WirePolicy policy, string[] symbols, DiagnosticInfo[] diagnostics)
+            RootMembers forwarded, GeneratorOptions options, WirePolicy policy, string[] symbols, DiagnosticInfo[] diagnostics,
+            GeneratedOperations whole)
         {
+            _whole = whole;
             _payloads = payloads;
             _calls = calls;
             _forwarded = forwarded;
@@ -91,9 +95,10 @@ internal static partial class NextPipeline
                     return _sources;
                 }
                 var snapshot = new PublicationSnapshot(cache.Snapshot);
+                var plan = OperationPlan.Create(_payloads, _calls, _forwarded, _whole, _options);
                 var retained = new List<TypeModel>(_payloads.Length);
                 foreach (ModeledPayload payload in _payloads)
-                    if (payload.Result.IsComplete && payload.Result.Model is { } model)
+                    if (payload.Result.IsComplete && payload.Result.Model is { } model && plan.For(model) != GeneratedOperations.None)
                         retained.Add(model);
                 var roots = new List<MemberModel>(_calls.Length + _forwarded.Members.Length);
                 foreach (SerializerCallModel call in _calls)
@@ -102,7 +107,7 @@ internal static partial class NextPipeline
                 roots.AddRange(_forwarded.Members);
                 SharedFormatterSet formatters = retained.Count == 0 && roots.Count == 0 ? SharedFormatterSet.Empty :
                     SharedFormatterSet.Collect(retained, _options, roots: roots);
-                var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot);
+                var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot, plan);
                 if (_options.Interceptors && SerializerCallAnalysis.Supported)
                 {
                     string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, snapshot.SharedSources));
@@ -118,7 +123,7 @@ internal static partial class NextPipeline
         }
 
         /// <inheritdoc/>
-        public bool Equals(PublicationRequest? other) => other != null && _options.Equals(other._options) && _policy.Equals(other._policy) &&
+        public bool Equals(PublicationRequest? other) => other != null && _whole == other._whole && _options.Equals(other._options) && _policy.Equals(other._policy) &&
             Same(_payloads, other._payloads) && Same(_calls, other._calls) && _forwarded.Equals(other._forwarded) && Same(_symbols, other._symbols) && Same(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>
@@ -140,6 +145,7 @@ internal static partial class NextPipeline
         internal readonly Dictionary<string, CachedPayload> Payloads;
         internal readonly CompactPublication.Cache Compact;
         internal SharedFormatterSet? SharedSet;
+        internal OwnerOperations? SharedOperations;
         internal KeyValuePair<string, string>[] SharedSources;
 
         /// <summary>Copies the preceding driver snapshot for an independent publication.</summary>
@@ -149,6 +155,7 @@ internal static partial class NextPipeline
             Payloads = prior == null ? new(StringComparer.Ordinal) : new(prior.Payloads, StringComparer.Ordinal);
             Compact = new CompactPublication.Cache(prior?.Compact);
             SharedSet = prior?.SharedSet;
+            SharedOperations = prior?.SharedOperations;
             SharedSources = prior?.SharedSources ?? Array.Empty<KeyValuePair<string, string>>();
         }
     }
@@ -158,14 +165,17 @@ internal static partial class NextPipeline
     {
         internal readonly TypeModel Model;
         internal readonly GeneratorOptions Options;
+        internal readonly GeneratedOperations Operations;
         internal readonly GeneratedSource[] Sources;
 
         /// <summary>Retains the raw files of one normalized model and its settings.</summary>
         /// <param name="model">The normalized payload model.</param>
         /// <param name="options">The normalized project settings.</param>
+        /// <param name="operations">The operations the files implement.</param>
         /// <param name="sources">The generated source contributions.</param>
-        internal CachedPayload(TypeModel model, GeneratorOptions options, GeneratedSource[] sources)
+        internal CachedPayload(TypeModel model, GeneratorOptions options, GeneratedOperations operations, GeneratedSource[] sources)
         {
+            Operations = operations;
             Model = model;
             Options = options;
             Sources = sources;
@@ -178,11 +188,12 @@ internal static partial class NextPipeline
     /// <param name="policy">The assembly wire policy.</param>
     /// <param name="set">The shared formatter requirements.</param>
     /// <param name="snapshot">The independently owned publication snapshot.</param>
+    /// <param name="plan">The operations each payload and the shared owners keep.</param>
     /// <returns>The rendered source contributions or statement representation.</returns>
     // AggressiveOptimization is available in newer hosts but unnamed by netstandard2.0.
     [MethodImpl((MethodImplOptions)512)]
     private static List<GeneratedSource> Render(ImmutableArray<ModeledPayload> payloads, SharedFormatterSet set,
-        GeneratorOptions options, WirePolicy policy, PublicationSnapshot snapshot)
+        GeneratorOptions options, WirePolicy policy, PublicationSnapshot snapshot, OperationPlan plan)
     {
         var sources = new List<GeneratedSource>();
         var retained = new List<TypeModel>();
@@ -211,25 +222,34 @@ internal static partial class NextPipeline
                     pending.Push(nested);
                 }
         }
-        if (!snapshot.SharedSet.HasValue || !snapshot.SharedSet.Value.Equals(set))
+        if (!snapshot.SharedSet.HasValue || !plan.Owners.Equals(snapshot.SharedOperations) || !snapshot.SharedSet.Value.Equals(set))
         {
-            snapshot.SharedSources = SharedFormatterPublisher.Render(set, GeneratedOperations.All).ToArray();
+            snapshot.SharedSources = SharedFormatterPublisher.Render(set, plan.Owners).ToArray();
             snapshot.SharedSet = set;
+            snapshot.SharedOperations = plan.Owners;
         }
         var shared = snapshot.SharedSources;
         foreach (var source in shared)
             sources.Add(new GeneratedSource(source.Key, source.Value, GenerationKind.Formatter));
         foreach (TypeModel model in retained)
         {
+            GeneratedOperations operations = plan.For(model);
+            if (operations == GeneratedOperations.None)
+            {
+                // A payload that no called operation reaches publishes nothing; its Union tags stay reserved.
+                AddReservation(model);
+                continue;
+            }
             bool cacheable = !BoundedRoot(model);
-            if (cacheable && snapshot.Payloads.TryGetValue(model.Identity.GlobalName, out var cached) && cached.Model.Equals(model) && cached.Options.Equals(options))
+            if (cacheable && snapshot.Payloads.TryGetValue(model.Identity.GlobalName, out var cached) && cached.Operations == operations &&
+                cached.Model.Equals(model) && cached.Options.Equals(options))
             {
                 sources.AddRange(cached.Sources);
                 AddReservation(model);
                 continue;
             }
             int first = sources.Count;
-            var renderContext = new RenderContext(options, AliasTable.For(options.AvailableAliases));
+            var renderContext = new RenderContext(options, AliasTable.For(options.AvailableAliases), operations);
             string hint = "LuminPackGen." + PublicationNames.Mangle(model.Identity.GlobalName);
             string binary;
             string json;
@@ -244,7 +264,7 @@ internal static partial class NextPipeline
                 var copyable = new HashSet<string>(StringComparer.Ordinal);
                 var candidates = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
                 foreach (TypeModel candidate in retained)
-                    if (candidate is RecordModel { Rejection: null, Versioned: false } &&
+                    if (plan.For(candidate) != GeneratedOperations.None && candidate is RecordModel { Rejection: null, Versioned: false } &&
                         RenderModelFactory.Create(candidate, options) is { Circle: false, IsStruct: false, Mirror: null, Version: null } rendered &&
                         rendered.Mirrors.Length == 0)
                     {
@@ -259,9 +279,11 @@ internal static partial class NextPipeline
                             copyable.Add(match.Groups[1].Value);
                 var redirect = new InputRedirect(root.Readable, GeneratedNames.Extension(options.AssemblyName), model.Policy.Limits, copyable);
                 binary = PayloadEmitter.Render(root.WithInput(model.Policy.Limits, ((RecordModel)model).Recursive, redirect), false,
-                    options.AvailableAliases, GeneratedOperations.All);
-                Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, candidates, shared.Select(source => source.Value).ToList(),
-                    options.AvailableAliases, GeneratedOperations.All), GenerationKind.Binary);
+                    options.AvailableAliases, operations);
+                // The checked copies are reads, copied from the read bodies the root's own operations publish.
+                if ((operations & GeneratedOperations.BinaryRead) != 0)
+                    Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, candidates, shared.Select(source => source.Value).ToList(),
+                        options.AvailableAliases, operations), GenerationKind.Binary);
                 json = JsonRenderer.Instance.Render(model, renderContext);
             }
             else
@@ -277,7 +299,7 @@ internal static partial class NextPipeline
             {
                 var emitted = new GeneratedSource[sources.Count - first];
                 sources.CopyTo(first, emitted, 0, emitted.Length);
-                snapshot.Payloads[model.Identity.GlobalName] = new CachedPayload(model, options, emitted);
+                snapshot.Payloads[model.Identity.GlobalName] = new CachedPayload(model, options, operations, emitted);
             }
         }
         var obsolete = new List<string>();
