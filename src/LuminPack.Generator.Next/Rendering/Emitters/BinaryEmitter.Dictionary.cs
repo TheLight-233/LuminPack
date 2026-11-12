@@ -13,7 +13,8 @@ internal static partial class BinaryEmitter
     private static void DictionaryWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
         var members = model.Members;
-        int ends = 0, cursors = 0, spans = 0;
+        // The body's own cursor local takes the first name, so nested blocks number theirs after it.
+        int ends = 0, cursors = 1, spans = 0;
         var names = new Dictionary<string, int>(System.StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
         body.Add("ref byte cursor = ref writer.Cursor;");
         bool header = !union, current = true;
@@ -33,7 +34,7 @@ internal static partial class BinaryEmitter
                     body.Add("writer.Cursor = ref cursor;");
                     current = false;
                 }
-                if (member.Kind == RenderMemberKind.ForwardedCollection)
+                if (member.Kind == RenderMemberKind.ForwardedCollection || member.Kind == RenderMemberKind.Array && member.FormatterCall)
                     body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 else if (member.Kind is RenderMemberKind.Special or RenderMemberKind.CultureInfo or RenderMemberKind.Parameter)
                     AddMemberWrite(body, model, member, w, "value." + member.Name);
@@ -95,9 +96,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Whether a member writes in place through the writer rather than at the cursor: an inline object, a string
-    /// list or a list whose elements expand their record body.</summary>
+    /// list, a list whose elements expand their record body or an array written by its formatter owner.</summary>
     private static bool IsWriterBlock(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
-        IsElementList(member) || IsCollectionBlock(member) || member.Kind is RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence or
+        IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall || member.Kind is RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence or
             RenderMemberKind.Special or RenderMemberKind.CultureInfo or RenderMemberKind.Parameter;
 
     /// <summary>Writes one fused-entry dictionary member at the cursor: the kernel under a UTF-16 record profile and the
