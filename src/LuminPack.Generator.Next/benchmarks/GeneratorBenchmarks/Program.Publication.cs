@@ -179,6 +179,10 @@ public sealed partial class Rented
     [LuminPackPoolRent] public static Rented Rent() => new Rented { Number = 9 };
 }
 public sealed class ExternalShape : IShape { public int Number; }
+[LuminPackable, LuminPackOption(UntrustedData = false)]
+public sealed class PublishedTrustedFlag { public bool Flag; }
+[LuminPackable, LuminPackOption(UntrustedData = false)]
+public sealed class PublishedTrustedFlagHolder { public PublishedTrustedFlag Child; public bool Flag; }
 public static class PublicationFixture
 {
     private static int s_checks;
@@ -248,6 +252,13 @@ public static class PublicationFixture
         Rented rented = null;
         LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(new Rented { Number = 31 }), ref rented);
         Check(rented.Number == 31);
+        var flags = new PublishedTrustedFlagHolder { Child = new PublishedTrustedFlag { Flag = true }, Flag = true };
+        PublishedTrustedFlag flagRead = null;
+        byte[] flagBytes = LuminPackSerializer.Serialize(flags.Child);
+        Check(LuminPackSerializer.Deserialize(flagBytes, ref flagRead) == flagBytes.Length && flagRead.Flag);
+        PublishedTrustedFlagHolder holderRead = null;
+        byte[] holderBytes = LuminPackSerializer.Serialize(flags);
+        Check(LuminPackSerializer.Deserialize(holderBytes, ref holderRead) == holderBytes.Length && holderRead.Child.Flag && holderRead.Flag);
         return s_checks;
     }
     private static void Profile<TOptions>() where TOptions : struct, ILuminPackOptions

@@ -2303,8 +2303,8 @@ internal static partial class BinaryEmitter
                         body.Add("instance." + member.Name + " = " + Policy() + ".ReadMarker(ref reader, " + members.Length.ToString(CultureInfo.InvariantCulture) + ");");
                     }
                     else
-                        body.Add("instance." + member.Name + " = " + (member.IsBoolean ? (trusted ? w.A("LuminPackReader") + ".Read<bool>(ref reader);" :
-                            Policy() + ".ReadBoolean(ref reader);") : "reader.Read<" + member.Scalar + ">();"));
+                        body.Add("instance." + member.Name + " = " + (member.IsBoolean && !trusted
+                            ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
                     continue;
                 }
                 int width = 0;
@@ -2581,8 +2581,8 @@ internal static partial class BinaryEmitter
                         members.Length.ToString(CultureInfo.InvariantCulture) + ");");
                 }
                 else
-                    body.Add(owner + "." + member.Name + " = " + (member.IsBoolean ? (trusted ? w.A("LuminPackReader") + ".Read<bool>(ref reader);" :
-                        Policy() + ".ReadBoolean(ref reader);") : "reader.Read<" + member.Scalar + ">();"));
+                    body.Add(owner + "." + member.Name + " = " + (member.IsBoolean && !trusted
+                        ? Policy() + ".ReadBoolean(ref reader);" : "reader.Read<" + member.Scalar + ">();"));
                 continue;
             }
             int width = 0;
