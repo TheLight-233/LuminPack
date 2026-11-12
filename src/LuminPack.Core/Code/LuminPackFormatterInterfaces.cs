@@ -51,3 +51,37 @@ public interface ILuminPackJsonReader<T>
     /// <param name="value">The existing value and the result.</param>
     void Read<TOptions>(scoped ref LuminPackJsonReader reader, scoped ref T value) where TOptions : struct, ILuminPackOptions;
 }
+
+/// <summary>Writes a contiguous block of values in their packed or tagged storage layout; implemented by the generated owners
+/// of laid-out structs so shared contiguous collections keep the closed block transfer.</summary>
+/// <typeparam name="T">The element type.</typeparam>
+public interface ILuminPackBlockWriter<T>
+{
+    /// <summary>Returns the wire width of a block, including its layout tag when the block is tagged and nonempty.</summary>
+    /// <param name="count">The element count.</param>
+    /// <returns>The byte width.</returns>
+    int BlockWidth(int count);
+
+    /// <summary>Writes a block whose capacity the caller ensured.</summary>
+    /// <param name="writer">The binary writer state.</param>
+    /// <param name="first">The first element.</param>
+    /// <param name="count">The element count.</param>
+    void WriteBlock(scoped ref LuminPackWriter writer, scoped ref T first, int count);
+}
+
+/// <summary>Reads a contiguous block of values from their packed or tagged storage layout; implemented by the generated owners
+/// of laid-out structs.</summary>
+/// <typeparam name="T">The element type.</typeparam>
+public interface ILuminPackBlockReader<T>
+{
+    /// <summary>Validates a complete block before the caller allocates or mutates its destination.</summary>
+    /// <param name="reader">The binary reader state.</param>
+    /// <param name="count">The element count.</param>
+    void ValidateBlock(scoped ref LuminPackReader reader, int count);
+
+    /// <summary>Reads a validated block.</summary>
+    /// <param name="reader">The binary reader state.</param>
+    /// <param name="first">The first destination element.</param>
+    /// <param name="count">The element count.</param>
+    void ReadBlock(scoped ref LuminPackReader reader, scoped ref T first, int count);
+}

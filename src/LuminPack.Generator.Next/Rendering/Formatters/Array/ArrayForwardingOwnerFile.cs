@@ -30,7 +30,8 @@ internal static class ArrayForwardingOwnerFile
         string root = serializer + "." + roots;
         string elementOwner = "global::LuminPack." + GeneratedNames.Owner(extension, itemType);
         string owner = GeneratedNames.Owner(extension, collection);
-        bool compressElements = itemType.IndexOf('<') < 0 && itemType.EndsWith("[]", StringComparison.Ordinal);
+        bool compressElements = itemType.IndexOf('<') < 0 && itemType.EndsWith("[]", StringComparison.Ordinal) ||
+            GenericFormatterReuse.IsCompressedPlaceholder(itemType);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots,
             "internal static partial class " + owner, "internal static partial class " + extension,

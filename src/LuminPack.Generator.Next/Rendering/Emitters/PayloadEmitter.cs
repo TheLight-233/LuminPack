@@ -349,6 +349,9 @@ internal sealed class CodeWriter : IDisposable
         return source;
     }
 
+    /// <summary>The lines written so far, without the file header.</summary>
+    internal string Text => _body.ToString();
+
     /// <summary>Returns the output lease after successful emission, failure or cancellation.</summary>
     public void Dispose() => _body.Dispose();
 }

@@ -50,7 +50,8 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     internal readonly string[] AmbiguousNames;
 
     /// <summary>Whether the referenced runtime declares the formatter interfaces: 1 when shared generic formatters can call
-    /// owners through <c>default(T)</c>, 0 when closed owners are kept.</summary>
+    /// owners through <c>default(T)</c>, 2 when laid-out elements can transfer contiguous blocks through them too, 0 when closed
+    /// owners are kept.</summary>
     internal readonly int FormatterInterfaces;
 
     /// <summary>Captures the project facts.</summary>

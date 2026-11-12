@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using LuminPack.SourceGenerator.Next.Model;
@@ -58,6 +59,10 @@ internal static class GenericFormatterReuse
         internal readonly FormatterModel Contract;
         internal readonly Dictionary<string, string> Real = new(StringComparer.Ordinal);
         internal readonly HashSet<string> Unmanaged = new(StringComparer.Ordinal);
+        internal readonly Dictionary<string, FormatterModel> Laid = new(StringComparer.Ordinal);
+        internal readonly Dictionary<string, GeneratedOperations> Blocks = new(StringComparer.Ordinal);
+        internal readonly HashSet<string> Compressed = new(StringComparer.Ordinal);
+        internal readonly HashSet<string> PackedWidth = new(StringComparer.Ordinal);
 
         internal Context(string genericKey, FormatterModel contract)
         {
@@ -70,7 +75,37 @@ internal static class GenericFormatterReuse
     /// <param name="type">The requested formatter spelling.</param>
     /// <returns>The placeholder contract, or null.</returns>
     internal static FormatterModel? FindPlaceholder(string type) =>
-        s_current is { } current && GeneratedNames.PayloadKey(type) == current.GenericKey ? current.Contract : null;
+        s_current is not { } current ? null : GeneratedNames.PayloadKey(type) == current.GenericKey ? current.Contract :
+        current.Laid.TryGetValue(type, out FormatterModel? laid) ? laid : null;
+
+    /// <summary>Whether a placeholder stands for an array element whose collection publishes compressed roots.</summary>
+    /// <param name="type">A type spelling.</param>
+    /// <returns>Whether the compressed roots call the element's compressed operations through its compressed strategy.</returns>
+    internal static bool IsCompressedPlaceholder(string type) => s_current?.Compressed.Contains(type) == true;
+
+    /// <summary>Whether a laid-out placeholder stands for a payload or tuple whose closed minimum record width is its packed
+    /// width.</summary>
+    /// <param name="model">A formatter contract.</param>
+    /// <returns>Whether the minimum width spells the layout's wire size, as for the closed element.</returns>
+    internal static bool HasPackedMinimum(FormatterModel model) => model.Layout != null && s_current?.PackedWidth.Contains(model.Type) == true;
+
+    /// <summary>Whether a storage plan is the block marker of a laid-out placeholder of the render in progress.</summary>
+    /// <param name="model">A storage plan.</param>
+    /// <returns>Whether the element's own formatter owner holds the layout descriptors.</returns>
+    internal static bool IsBlockPlaceholder(FormatterStorageModel model) => s_current?.Laid.ContainsKey(model.Type) == true;
+
+    /// <summary>Names the strategy that transfers a laid-out placeholder's contiguous block and records the use.</summary>
+    /// <param name="model">A storage plan.</param>
+    /// <param name="write">Whether the block is written.</param>
+    /// <returns>The strategy receiver, or null when the plan is a closed layout.</returns>
+    internal static string? Block(FormatterStorageModel model, bool write)
+    {
+        if (s_current is not { } current || !current.Laid.ContainsKey(model.Type))
+            return null;
+        current.Blocks.TryGetValue(model.Type, out GeneratedOperations uses);
+        current.Blocks[model.Type] = uses | (write ? GeneratedOperations.BinaryWrite : GeneratedOperations.BinaryRead);
+        return "default(" + model.Type + "Formatter)";
+    }
 
     /// <summary>Maps a placeholder to the closed type it stands for while it renders, for facts that read the real type.</summary>
     /// <param name="type">A type spelling.</param>
@@ -88,21 +123,27 @@ internal static class GenericFormatterReuse
         internal readonly string Definition, Name, File;
         internal readonly string[] Parameters;
         internal readonly bool[] NotNull;
+        internal readonly int Rank;
 
-        internal Family(string definition, string name, string file, string[] parameters, bool[] notNull)
+        internal Family(string definition, string name, string file, string[] parameters, bool[] notNull, int rank = 0)
         {
             Definition = definition;
             Name = name;
             File = file;
             Parameters = parameters;
             NotNull = notNull;
+            Rank = rank;
         }
 
-        internal string Spell(string[] arguments) => Definition == FormatterDefinitions.Array ? arguments[0] + "[]" :
+        internal string Spell(string[] arguments) => Rank != 0 ? arguments[0] + "[" + new string(',', Rank - 1) + "]" :
             "global::" + Definition + "<" + string.Join(", ", arguments) + ">";
     }
 
-    private static readonly Family ArrayFamily = new(FormatterDefinitions.Array, "Array", "LuminPackGen.Array.g.cs", new[] { "T" }, new[] { false });
+    private static readonly Family ArrayFamily = new(FormatterDefinitions.Array, "Array", "LuminPackGen.Array.g.cs", new[] { "T" }, new[] { false }, 1);
+
+    /// <summary>The family of rectangular arrays of one rank, which share the row-major template of that rank.</summary>
+    private static Family RectangularFamily(int rank) => new(FormatterDefinitions.Array, "Array" + rank.ToString(System.Globalization.CultureInfo.InvariantCulture) + "D",
+        "LuminPackGen.Array" + rank.ToString(System.Globalization.CultureInfo.InvariantCulture) + "D.g.cs", new[] { "T" }, new[] { false }, rank);
 
     /// <summary>A closed owner planned for sharing.</summary>
     private sealed class Plan
@@ -116,6 +157,8 @@ internal static class GenericFormatterReuse
         internal Func<SharedFormatterSet, string, string[], FormatterModel, GeneratedOperations, string> RenderGeneric = null!;
         internal string Text = string.Empty;
         internal string Name = string.Empty;
+        internal Dictionary<string, GeneratedOperations> Blocks = new(StringComparer.Ordinal);
+        internal bool Compressed;
     }
 
     /// <summary>Collects the plans of one publication and renders their files.</summary>
@@ -125,6 +168,9 @@ internal static class GenericFormatterReuse
         private readonly int _mode;
         private readonly List<Plan> _plans = new();
         private readonly HashSet<string> _ordinary = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, FormatterStorageModel> _layouts = new(StringComparer.Ordinal);
+        private readonly SortedDictionary<string, (string Type, GeneratedOperations Operations)> _compressed = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, (string Type, GeneratedOperations Operations)> _pendingCompressed = new(StringComparer.Ordinal);
 
         /// <summary>Starts a publication.</summary>
         /// <param name="set">The shared formatter facts.</param>
@@ -183,16 +229,18 @@ internal static class GenericFormatterReuse
         internal bool TrySequence(string declaredType, GeneratedOperations operations, Func<GeneratedOperations, string> renderClosed,
             SequenceOwnerFact? fact = null)
         {
-            if (_mode == 0 || fact is { ArrayRank: > 1 })
+            if (_mode == 0)
                 return false;
             string key = GeneratedNames.PayloadKey(declaredType);
             Family? shape;
             SequenceFormatter? sequence = null;
-            if (key.EndsWith("[]", StringComparison.Ordinal))
-                shape = key.IndexOf(',') < 0 && key.Substring(0, key.Length - 2).IndexOf('[') < 0 ? ArrayFamily : null;
+            // An array of any element, an array of arrays included, shares the template of its outermost rank.
+            if (key.EndsWith("]", StringComparison.Ordinal) && key.IndexOf('[', key.LastIndexOf('>') + 1) is int bracket and > 0 &&
+                key.IndexOf(']', bracket) is int close && key.Substring(bracket + 1, close - bracket - 1).Trim(',').Length == 0)
+                shape = close - bracket == 1 ? ArrayFamily : RectangularFamily(close - bracket);
             else if ((shape = Open(declaredType, new[] { "T" }, new[] { false })) != null)
                 sequence = FormatterRegistry.FindSequence(shape.Definition);
-            if (shape == null || shape != ArrayFamily && sequence == null)
+            if (shape == null || shape.Rank == 0 && sequence == null)
                 return false;
             FormatterModel? model = _set.FindFormatter(declaredType);
             if (model == null && fact.HasValue)
@@ -204,30 +252,48 @@ internal static class GenericFormatterReuse
                     entries.ForwardedType != null ? Argument(entries.ForwardedType, forwarded: true) :
                     entries.Element != null ? _set.FindFormatter(entries.Element.GlobalName) : null;
                 if (element != null)
-                    model = new FormatterModel(declaredType, shape.Definition, new[] { element }, rank: shape == ArrayFamily ? 1 : 0);
+                    model = new FormatterModel(declaredType, shape.Definition, new[] { element }, rank: shape.Rank,
+                        reuseArraySlots: shape.Rank > 1 && entries.ReuseArraySlots);
             }
             if (model is not { Arguments.Length: 1 })
                 return false;
             Category category = ClassifySequence(model.Arguments[0]);
-            if (category is Category.None or Category.Text)
+            // A laid-out element keeps its closed block transfer unless the runtime declares the block interfaces.
+            if (category is Category.None or Category.Text || model.Arguments[0].Layout != null && _mode < 2)
                 return false;
+            FormatterModel item = model.Arguments[0];
+            // A closed owner of a forwarded element is published by its family's forwarding template.
+            bool forwardedFact = fact is { ForwardedType: not null };
+            // An array of arrays or of forwarded collections is published by the array forwarding template, and an array or list
+            // of single-rank arrays also publishes compressed roots that compress each element.
+            bool forwarding = shape == ArrayFamily && item.Definition is FormatterDefinitions.Array or "$forwarded";
+            // The closed templates test the forwarded spelling itself.
+            string itemSpelling = fact?.ForwardedType ?? item.Type;
+            bool compressed = (forwarding || shape.Definition == "System.Collections.Generic.List") && itemSpelling.IndexOf('<') < 0 &&
+                itemSpelling.EndsWith("[]", StringComparison.Ordinal) && category == Category.Element;
             _plans.Add(new Plan
             {
                 Family = shape,
                 Closed = model,
+                Compressed = compressed,
                 Categories = new[] { category },
                 Operations = operations,
                 RenderClosed = renderClosed,
-                BaseName = shape.Name + "Of" + Spell(category),
+                BaseName = shape.Name + "Of" + (model.Arguments[0].Layout != null ? "Layout" : Spell(category)),
                 // The closed publisher renders a raw element with the family's scalar template and any other element with its
                 // general element template.
-                RenderGeneric = (set, spelling, arguments, contract, selected) => sequence == null
+                RenderGeneric = (set, spelling, arguments, contract, selected) => shape.Rank > 1
+                    ? RectangularArrayOwnerFile.Render(set, contract, selected)
+                    : forwarding && category == Category.Element
+                    ? ArrayForwardingOwnerFile.Render(set, SequenceOwnerFact.ForForwarding(FormatterRegistry.Array, spelling, arguments[0]), selected)
+                    : sequence == null
                     ? category == Category.Unmanaged
                         ? ArrayScalarOwnerFile.Render(set, SequenceOwnerFact.ForScalar(FormatterRegistry.Array, spelling, arguments[0]), selected)
                         : ContiguousOwnerFile.Render(set, contract, selected, ContiguousShape.Array)
                     : category == Category.Unmanaged
                         ? sequence.Scalar(set, SequenceOwnerFact.ForScalar(sequence, spelling, arguments[0]), selected)
-                        : sequence.General(set, SequenceOwnerFact.ForForwarding(sequence, spelling, arguments[0]), selected),
+                        : (forwardedFact && sequence.Forwarded != null ? sequence.Forwarded : sequence.General)(set,
+                            SequenceOwnerFact.ForForwarding(sequence, spelling, arguments[0]), selected),
             });
             return true;
         }
@@ -287,7 +353,7 @@ internal static class GenericFormatterReuse
                 group.Add(plan);
             }
             var used = new Dictionary<string, int>(StringComparer.Ordinal);
-            var strategies = new SortedDictionary<string, (string Type, GeneratedOperations Operations)>(StringComparer.Ordinal);
+            var strategies = new SortedDictionary<string, (string Type, GeneratedOperations Operations, GeneratedOperations Blocks)>(StringComparer.Ordinal);
             var shared = new List<KeyValuePair<string, string>>();
             foreach (List<Plan> group in order)
             {
@@ -301,14 +367,19 @@ internal static class GenericFormatterReuse
                 used.TryGetValue(first.BaseName, out int count);
                 string name = count == 0 ? first.BaseName : first.BaseName + (count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 string text = count == 0 ? first.Text : first.Text.Replace("LuminRoots_" + first.BaseName + "<", "LuminRoots_" + name + "<");
-                var bound = new List<(Plan Plan, string Binding, SortedDictionary<string, (string Type, GeneratedOperations Operations)> Required)>();
+                var bound = new List<(Plan Plan, string Binding, SortedDictionary<string, (string Type, GeneratedOperations Operations, GeneratedOperations Blocks)> Required)>();
+                var compressedOwners = new List<Dictionary<string, (string Type, GeneratedOperations Operations)>>();
                 foreach (Plan plan in group)
                 {
                     plan.Name = name;
                     plan.Text = text;
-                    var required = new SortedDictionary<string, (string Type, GeneratedOperations Operations)>(StringComparer.Ordinal);
+                    _pendingCompressed.Clear();
+                    var required = new SortedDictionary<string, (string Type, GeneratedOperations Operations, GeneratedOperations Blocks)>(StringComparer.Ordinal);
                     if (RenderBinding(plan, Instantiation(plan, required)) is { } binding)
+                    {
                         bound.Add((plan, binding, required));
+                        compressedOwners.Add(new Dictionary<string, (string Type, GeneratedOperations Operations)>(_pendingCompressed, StringComparer.Ordinal));
+                    }
                     else
                         yield return Closed(plan);
                 }
@@ -319,6 +390,10 @@ internal static class GenericFormatterReuse
                     continue;
                 }
                 used[first.BaseName] = count + 1;
+                foreach (var owners in compressedOwners)
+                    foreach (var owner in owners)
+                        _compressed[owner.Key] = _compressed.TryGetValue(owner.Key, out var prior)
+                            ? (owner.Value.Type, prior.Operations | owner.Value.Operations) : owner.Value;
                 shared.Add(new KeyValuePair<string, string>(HintPrefix + first.Family.File + "/" + name + ".g.cs", text));
                 foreach (var item in bound)
                 {
@@ -326,14 +401,14 @@ internal static class GenericFormatterReuse
                     ClosedSources.Add(item.Binding, () => closedPlan.RenderClosed(GeneratedOperations.BinaryRead));
                     foreach (var strategy in item.Required)
                         strategies[strategy.Key] = strategies.TryGetValue(strategy.Key, out var prior)
-                            ? (strategy.Value.Type, prior.Operations | strategy.Value.Operations) : strategy.Value;
+                            ? (strategy.Value.Type, prior.Operations | strategy.Value.Operations, prior.Blocks | strategy.Value.Blocks) : strategy.Value;
                     shared.Add(new KeyValuePair<string, string>("LuminPack.SharedFormatters/Bound_" +
                         ReadableTypeName.Of(GeneratedNames.PayloadKey(closedPlan.Closed.Type)) + ".g.cs", item.Binding));
                 }
             }
             foreach (var source in shared)
                 yield return source;
-            if (strategies.Count != 0)
+            if (strategies.Count != 0 || _compressed.Count != 0)
             {
                 string binary = RenderStrategies(strategies, json: false), json = RenderStrategies(strategies, json: true);
                 if (binary.Length != 0)
@@ -377,7 +452,13 @@ internal static class GenericFormatterReuse
                         break;
                     default:
                         arguments[index] = parameter;
-                        placeholders[index] = new FormatterModel(parameter, "$strategy", ordinaryObject: argument.OrdinaryObject);
+                        // A laid-out element keeps the closed contiguous block transfer, which the shared owner makes through the
+                        // element's formatter owner; the marker carries the closed widths so a template that spells them stays exact.
+                        FormatterStorageModel? layout = argument.Layout is { } closedLayout && _mode >= 2
+                            ? new FormatterStorageModel(parameter, null, Array.Empty<FormatterStorageField>(), closedLayout.WireSize, closedLayout.Tagged,
+                                closedLayout.Volatile, Array.Empty<int>(), Array.Empty<int[]>())
+                            : null;
+                        placeholders[index] = new FormatterModel(parameter, "$strategy", ordinaryObject: argument.OrdinaryObject, layout: layout);
                         parameters.Add(parameter);
                         if (family.NotNull[index])
                             constraints.Add("where " + parameter + " : notnull");
@@ -392,6 +473,15 @@ internal static class GenericFormatterReuse
                     ? plan.Operations & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead) : plan.Operations;
                 constraints.Add("where " + strategy + " : struct, " + string.Join(", ", Interfaces(placeholder, required)));
             }
+            // Compressed roots call the element's compressed operations through a second strategy of the same interfaces.
+            GeneratedOperations compressedOperations = plan.Compressed
+                ? plan.Operations & (GeneratedOperations.BinaryWrite | GeneratedOperations.BinaryRead) : GeneratedOperations.None;
+            if (compressedOperations != GeneratedOperations.None)
+            {
+                parameters.Add(family.Parameters[0] + "CompressedFormatter");
+                constraints.Add("where " + family.Parameters[0] + "CompressedFormatter : struct, " +
+                    string.Join(", ", Interfaces(family.Parameters[0], compressedOperations)));
+            }
             string spelling = family.Spell(arguments);
             var contract = new FormatterModel(spelling, plan.Closed.Definition, placeholders, plan.Closed.Raw, plan.Closed.RawCollection,
                 rank: plan.Closed.Rank, reuseArraySlots: plan.Closed.ReuseArraySlots, capabilities: plan.Closed.Capabilities);
@@ -402,7 +492,15 @@ internal static class GenericFormatterReuse
                     context.Real[family.Parameters[index]] = plan.Closed.Arguments[index].Type;
                     if (plan.Categories[index] == Category.Unmanaged)
                         context.Unmanaged.Add(family.Parameters[index]);
+                    if (placeholders[index].Layout != null)
+                    {
+                        context.Laid[family.Parameters[index]] = placeholders[index];
+                        if (plan.Closed.Arguments[index].Definition is GenericIdentity.ValueTuple or FormatterDefinitions.PayloadReference)
+                            context.PackedWidth.Add(family.Parameters[index]);
+                    }
                 }
+            if (compressedOperations != GeneratedOperations.None)
+                context.Compressed.Add(family.Parameters[0]);
             string declaration = "internal static partial class LuminRoots_" + plan.BaseName + "<" + string.Join(", ", parameters) + "> " +
                 string.Join(" ", constraints);
             string text;
@@ -421,6 +519,15 @@ internal static class GenericFormatterReuse
             }
             if (text.Length == 0)
                 return null;
+            // A strategy whose block the owner transfers also implements the block interfaces.
+            plan.Blocks = new Dictionary<string, GeneratedOperations>(context.Blocks, StringComparer.Ordinal);
+            foreach (var (placeholder, strategy) in strategies)
+                if (context.Blocks.TryGetValue(placeholder, out GeneratedOperations blocks))
+                {
+                    GeneratedOperations required = plan.Operations;
+                    string constraint = "where " + strategy + " : struct, " + string.Join(", ", Interfaces(placeholder, required));
+                    text = text.Replace(constraint, constraint + ", " + string.Join(", ", BlockInterfaces(placeholder, blocks)));
+                }
             text = NoInliningRoots(text);
             string state = "global::LuminPack.Binary_" + _set.Extension + "_";
             // The template names its own roots after the placeholder spelling; inside the generic owner they are unqualified.
@@ -431,6 +538,13 @@ internal static class GenericFormatterReuse
                 return Reject(plan, "own name", text);
             foreach (var (placeholder, strategy) in strategies)
                 text = text.Replace(state + ReadableTypeName.Of(placeholder) + ".", "default(" + strategy + ").");
+            if (compressedOperations != GeneratedOperations.None)
+            {
+                string compressedStrategy = "default(" + family.Parameters[0] + "CompressedFormatter).";
+                foreach (string serializer in new[] { "global::LuminPack.LuminPackSerializer.", "LuminPackSerializer." })
+                    text = text.Replace(serializer + "DeserializeWithCompress<", compressedStrategy + "Read<")
+                        .Replace(serializer + "SerializeWithCompress<", compressedStrategy + "Write<");
+            }
             // An owner named after a placeholder spelling, such as the concrete dictionary a dictionary interface forwards to, has
             // no generic counterpart.
             if (PlaceholderOwner.IsMatch(text))
@@ -449,7 +563,7 @@ internal static class GenericFormatterReuse
         }
 
         /// <summary>Spells the generic instantiation of a plan and records the strategies it needs.</summary>
-        private string Instantiation(Plan plan, SortedDictionary<string, (string Type, GeneratedOperations Operations)> strategies)
+        private string Instantiation(Plan plan, SortedDictionary<string, (string Type, GeneratedOperations Operations, GeneratedOperations Blocks)> strategies)
         {
             var arguments = new List<string>();
             var formatters = new List<string>();
@@ -465,11 +579,23 @@ internal static class GenericFormatterReuse
                     continue;
                 string readable = Readable(type);
                 formatters.Add("global::LuminPack.LuminPackSerializer." + readable + "Formatter");
-                strategies[readable] = strategies.TryGetValue(readable, out var prior) ? (type, prior.Operations | required) : (type, required);
+                plan.Blocks.TryGetValue(plan.Family.Parameters[index], out GeneratedOperations blocks);
+                if (blocks != GeneratedOperations.None)
+                    _layouts[readable] = plan.Closed.Arguments[index].Layout!;
+                strategies[readable] = strategies.TryGetValue(readable, out var prior)
+                    ? (type, prior.Operations | required, prior.Blocks | blocks) : (type, required, blocks);
                 if (plan.Closed.Arguments[index].OrdinaryObject)
                     _ordinary.Add(readable);
             }
             arguments.AddRange(formatters);
+            GeneratedOperations compressed = plan.Compressed
+                ? plan.Operations & (GeneratedOperations.BinaryWrite | GeneratedOperations.BinaryRead) : GeneratedOperations.None;
+            if (compressed != GeneratedOperations.None)
+            {
+                string type = plan.Closed.Arguments[0].Type, readable = Readable(type);
+                arguments.Add("global::LuminPack.LuminPackSerializer." + readable + "CompressedFormatter");
+                _pendingCompressed[readable] = (type, compressed);
+            }
             return "global::LuminPack.LuminPackSerializer." + plan.Name + "Formatter<" + string.Join(", ", arguments) + ">";
         }
 
@@ -540,7 +666,7 @@ internal static class GenericFormatterReuse
         /// <remarks>Each member makes the element call the closed collection owner makes, which publication resolves to the
         /// element's final operation exactly as for the closed owner. JSON members are published in a JSON document so their
         /// state calls resolve to the JSON operations.</remarks>
-        private string RenderStrategies(SortedDictionary<string, (string Type, GeneratedOperations Operations)> strategies, bool json)
+        private string RenderStrategies(SortedDictionary<string, (string Type, GeneratedOperations Operations, GeneratedOperations Blocks)> strategies, bool json)
         {
             var text = new StringBuilder(4096);
             text.Append("namespace LuminPack\n{\n    public static partial class LuminPackSerializer\n    {\n");
@@ -559,8 +685,9 @@ internal static class GenericFormatterReuse
                     text.Append('\n');
                 first = false;
                 string type = strategy.Value.Type, state = "global::LuminPack.Binary_" + _set.Extension + "_" + strategy.Key;
+                GeneratedOperations blocks = json ? GeneratedOperations.None : strategy.Value.Blocks;
                 text.Append("        internal static partial class ").Append(strategy.Key).Append("Formatter : ")
-                    .Append(string.Join(", ", Interfaces(type, operations))).Append("\n        {\n");
+                    .Append(string.Join(", ", Interfaces(type, operations).Concat(BlockInterfaces(type, blocks)))).Append("\n        {\n");
                 void Member(GeneratedOperations operation, string contract, string method, string stateType, string parameters, string arguments,
                     string? prefix = null)
                 {
@@ -581,10 +708,88 @@ internal static class GenericFormatterReuse
                     "ref reader, ref value", _ordinary.Contains(strategy.Key) ? "if (reader.PeekIsNullObject()) value = default!;" : null);
                 Member(GeneratedOperations.JsonWrite, "ILuminPackJsonWriter", "Write", "global::LuminPack.Core.LuminPackJsonWriter writer", ", in " + type + " value", "ref writer, value");
                 Member(GeneratedOperations.JsonRead, "ILuminPackJsonReader", "Read", "global::LuminPack.Core.LuminPackJsonReader reader", ", " + scoped + "ref " + type + " value", "ref reader, ref value");
+                if (blocks != GeneratedOperations.None)
+                    AppendBlock(text, type, _layouts[strategy.Key], blocks, scoped);
                 text.Append("        }\n");
             }
+            if (!json)
+                foreach (var compressed in _compressed)
+                {
+                    if (!first)
+                        text.Append('\n');
+                    first = false;
+                    string type = compressed.Value.Type;
+                    text.Append("        internal static partial class ").Append(compressed.Key).Append("CompressedFormatter : ")
+                        .Append(string.Join(", ", Interfaces(type, compressed.Value.Operations))).Append("\n        {\n");
+                    if ((compressed.Value.Operations & GeneratedOperations.BinaryWrite) != 0)
+                        text.Append("            ").Append(inline).Append("\n            void global::LuminPack.Code.ILuminPackWriter<").Append(type)
+                            .Append(">.Write<TOptions>(").Append(scoped).Append("ref global::LuminPack.Core.LuminPackWriter writer, in ").Append(type)
+                            .Append(" value)\n                => global::LuminPack.LuminPackSerializer.SerializeWithCompress<TOptions>(ref writer, in value);\n");
+                    if ((compressed.Value.Operations & GeneratedOperations.BinaryRead) != 0)
+                        text.Append("            ").Append(inline).Append("\n            void global::LuminPack.Code.ILuminPackReader<").Append(type)
+                            .Append(">.Read<TOptions>(").Append(scoped).Append("ref global::LuminPack.Core.LuminPackReader reader, ").Append(scoped).Append("ref ")
+                            .Append(type).Append(" value)\n                => global::LuminPack.LuminPackSerializer.DeserializeWithCompress<TOptions>(ref reader, ref value);\n");
+                    text.Append("        }\n");
+                }
             text.Append("    }\n}\n");
             return first ? string.Empty : text.ToString();
+        }
+
+        /// <summary>Implements the block interfaces of a laid-out element with the closed contiguous transfer.</summary>
+        /// <remarks>The descriptors live in a nested container, so they cannot collide with the descriptors the element's own
+        /// standalone operations emit in the same owner.</remarks>
+        private void AppendBlock(StringBuilder text, string type, FormatterStorageModel layout, GeneratedOperations blocks, string scoped)
+        {
+            const string inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
+            using var w = new CodeWriter(-1) { Scoped = scoped.Length != 0 };
+            w.Line("private static class StorageBlock");
+            w.Open();
+            FormatterStorageEmitter.Support(w, layout);
+            if ((blocks & GeneratedOperations.BinaryWrite) != 0)
+            {
+                w.Line(inline);
+                w.Line("internal static int Width(int count) => " + FormatterStorageEmitter.Width(layout, "count") + ";");
+                w.Blank();
+                w.Line(inline);
+                w.Line("internal static void Write(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped ref " + type + " first, int count)");
+                w.Open();
+                FormatterStorageEmitter.Payload(w, layout, "first", "count", true);
+                w.Close();
+                w.Blank();
+            }
+            if ((blocks & GeneratedOperations.BinaryRead) != 0)
+            {
+                w.Line(inline);
+                w.Line("internal static void Validate(scoped ref global::LuminPack.Core.LuminPackReader reader, int count)");
+                w.Open();
+                FormatterStorageEmitter.Validate(w, layout, "count");
+                w.Close();
+                w.Blank();
+                w.Line(inline);
+                w.Line("internal static void Read(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref " + type + " first, int count)");
+                w.Open();
+                FormatterStorageEmitter.Payload(w, layout, "first", "count", false);
+                w.Close();
+            }
+            w.Close();
+            if ((blocks & GeneratedOperations.BinaryWrite) != 0)
+            {
+                w.Line(inline);
+                w.Line("int global::LuminPack.Code.ILuminPackBlockWriter<" + type + ">.BlockWidth(int count) => StorageBlock.Width(count);");
+                w.Line(inline);
+                w.Line("void global::LuminPack.Code.ILuminPackBlockWriter<" + type + ">.WriteBlock(scoped ref global::LuminPack.Core.LuminPackWriter writer, scoped ref " + type +
+                    " first, int count) => StorageBlock.Write(ref writer, ref first, count);");
+            }
+            if ((blocks & GeneratedOperations.BinaryRead) != 0)
+            {
+                w.Line(inline);
+                w.Line("void global::LuminPack.Code.ILuminPackBlockReader<" + type + ">.ValidateBlock(scoped ref global::LuminPack.Core.LuminPackReader reader, int count) => StorageBlock.Validate(ref reader, count);");
+                w.Line(inline);
+                w.Line("void global::LuminPack.Code.ILuminPackBlockReader<" + type + ">.ReadBlock(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref " + type +
+                    " first, int count) => StorageBlock.Read(ref reader, ref first, count);");
+            }
+            foreach (string line in w.Text.Replace("\r\n", "\n").TrimEnd('\n').Split('\n'))
+                (line.Length == 0 ? text : text.Append("            ").Append(line)).Append('\n');
         }
 
         /// <summary>The element owner name the state extensions and formatter owner share.</summary>
@@ -659,6 +864,15 @@ internal static class GenericFormatterReuse
             yield return "global::LuminPack.Code.ILuminPackJsonReader<" + type + ">";
     }
 
+    /// <summary>Lists the block interfaces of the transferred directions.</summary>
+    private static IEnumerable<string> BlockInterfaces(string type, GeneratedOperations blocks)
+    {
+        if ((blocks & GeneratedOperations.BinaryWrite) != 0)
+            yield return "global::LuminPack.Code.ILuminPackBlockWriter<" + type + ">";
+        if ((blocks & GeneratedOperations.BinaryRead) != 0)
+            yield return "global::LuminPack.Code.ILuminPackBlockReader<" + type + ">";
+    }
+
     private static string Spell(Category category) => category switch
     {
         Category.Unmanaged => "Unmanaged",
@@ -668,18 +882,21 @@ internal static class GenericFormatterReuse
 
     private static readonly Regex Boolean = new(@"\bbool\b", RegexOptions.Compiled);
 
-    /// <summary>Classifies a contiguous element: unmanaged storage keeps the closed raw block, an element keeps the closed
-    /// element-wise traversal; tagged or packed storage and nested arrays keep their closed owners.</summary>
+    /// <summary>Classifies a contiguous element: unmanaged storage keeps the closed raw block, a laid-out element keeps the
+    /// closed block transfer through its own formatter owner, and any other element, an array included, keeps the closed
+    /// element-wise traversal through its formatter owner.</summary>
     private static Category ClassifySequence(FormatterModel model)
     {
+        // The closed sequence routes copy any raw-collection element as one block, whatever its own formatter.
+        if (model.RawCollection && Classify(model) != Category.None)
+            return Category.Unmanaged;
         Category category = Classify(model);
         if (category == Category.None || category == Category.Text)
             return category;
-        // The closed sequence routes copy any raw-collection element as one block; other raw or laid-out elements use the
-        // tagged or packed transfer, which stays closed.
-        if (model.RawCollection)
-            return Category.Unmanaged;
-        if (model.Layout != null || model.Raw || model.Definition == FormatterDefinitions.Array)
+        if (model.Layout != null)
+            return Category.Element;
+        // A raw element that is neither a block copy nor laid out keeps its closed owner.
+        if (model.Raw)
             return Category.None;
         return Category.Element;
     }
@@ -690,15 +907,18 @@ internal static class GenericFormatterReuse
         if (model.Type == "string")
             return Category.Text;
         string key = GeneratedNames.PayloadKey(model.Type);
-        if (Boolean.IsMatch(key) || key == "object" || model.Payload is UnionModel || model.Rank > 1 ||
+        if (Boolean.IsMatch(key) || key == "object" || model.Payload is UnionModel ||
             model.Definition is FormatterDefinitions.Registered or FormatterDefinitions.GenericUnion or FormatterDefinitions.Object ||
             model.Definition == GenericIdentity.Nullable || key.IndexOf('*') >= 0 || model.Type.EndsWith("?", StringComparison.Ordinal))
             return Category.None;
-        // Tagged and packed storage plans and other raw values that are not plain storage copies keep their closed layout rules.
+        if (model.Raw && (model.Payload == null || model.RawStorage))
+            return model.Layout == null ? Category.Unmanaged : Category.None;
+        // A tagged or packed value is written and read by its own formatter owner, which keeps its layout rules; other raw
+        // values that are not plain storage copies keep their closed owners.
         if (model.Layout != null)
-            return Category.None;
+            return Category.Element;
         if (model.Raw)
-            return model.Payload == null || model.RawStorage ? Category.Unmanaged : Category.None;
+            return Category.None;
         return Category.Element;
     }
 }

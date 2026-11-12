@@ -27,12 +27,16 @@ internal static class FormatterStorageEmitter
     /// <param name = "model">The normalized formatter or storage contract.</param>
     /// <param name = "count">The count used by this operation.</param>
     /// <returns>The generated source or selected source-ready name.</returns>
-    internal static string Width(FormatterStorageModel model, string count) => model.Tagged ? "(" + count + " == 0 ? 0 : checked(1 + " + count + " * " + Tag(model) + ".Width))" : "checked(" + count + " * " + model.WireSize.ToString(CultureInfo.InvariantCulture) + ")";
+    internal static string Width(FormatterStorageModel model, string count) =>
+        GenericFormatterReuse.Block(model, write: true) is { } block ? block + ".BlockWidth(" + count + ")" : model.Tagged ? "(" + count + " == 0 ? 0 : checked(1 + " + count + " * " + Tag(model) + ".Width))" : "checked(" + count + " * " + model.WireSize.ToString(CultureInfo.InvariantCulture) + ")";
     /// <summary>Emits mirrors and offset descriptors once inside the owning roots container.</summary>
     /// <param name = "w">The generated source writer.</param>
     /// <param name = "model">The normalized formatter or storage contract.</param>
     internal static void Support(CodeWriter w, FormatterStorageModel model)
     {
+        // A shared owner's laid-out element keeps its descriptors in its own formatter owner.
+        if (GenericFormatterReuse.IsBlockPlaceholder(model))
+            return;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         Emit(model);
         void Emit(FormatterStorageModel current)
@@ -136,6 +140,12 @@ internal static class FormatterStorageEmitter
     /// <param name = "reader">The reader used by this operation.</param>
     internal static void Validate(CodeWriter w, FormatterStorageModel model, string count, string reader = "reader")
     {
+        if (GenericFormatterReuse.Block(model, write: false) is { } block)
+        {
+            w.Line(block + ".ValidateBlock(ref " + reader + ", " + count + ");");
+            return;
+        }
+
         if (!model.Tagged)
         {
             w.Line(reader + ".EnsureCollectionPayload(" + reader + ".Position, checked(" + count + " * " + model.WireSize + "));");
@@ -161,6 +171,13 @@ internal static class FormatterStorageEmitter
     {
         if (write && state == "reader")
             state = "writer";
+        // A shared owner transfers a laid-out element block through the element's formatter owner.
+        if (GenericFormatterReuse.Block(model, write) is { } block)
+        {
+            w.Line(block + (write ? ".WriteBlock(ref " : ".ReadBlock(ref ") + state + ", ref " + first + ", " + count + ");");
+            return;
+        }
+
         w.Line("ref " + model.Type + " storageFirst = ref " + first + ";");
         w.Line("ref byte storageWire = ref " + state + ".Cursor;");
         if (model.Tagged)

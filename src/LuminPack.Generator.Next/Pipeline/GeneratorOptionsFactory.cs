@@ -76,14 +76,15 @@ internal static class GeneratorOptionsFactory
 
     /// <summary>Reads whether the referenced runtime declares the formatter interfaces that shared generic formatters call.</summary>
     /// <param name="compilation">The consuming compilation.</param>
-    /// <returns>1 when the instance-member interfaces exist, otherwise 0, which keeps closed owners.</returns>
+    /// <returns>2 when the block interfaces of laid-out elements exist too, 1 when only the instance-member interfaces exist,
+    /// otherwise 0, which keeps closed owners.</returns>
     private static int FormatterInterfaces(Compilation compilation)
     {
         if (compilation.GetTypeByMetadataName("LuminPack.Code.ILuminPackWriter`1") is not { } writer)
             return 0;
         foreach (ISymbol member in writer.GetMembers("Write"))
             if (member is IMethodSymbol { IsStatic: false })
-                return 1;
+                return compilation.GetTypeByMetadataName("LuminPack.Code.ILuminPackBlockWriter`1") is null ? 1 : 2;
         return 0;
     }
 

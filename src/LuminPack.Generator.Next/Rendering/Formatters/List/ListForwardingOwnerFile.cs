@@ -41,7 +41,8 @@ internal static class ListForwardingOwnerFile
         string jsonWriter = w.A("LuminPackJsonWriter");
         string options = w.A("ILuminPackOptions");
         bool stringElement = item == "string";
-        bool compressElements = item.IndexOf('<') < 0 && item.EndsWith("[]", StringComparison.Ordinal);
+        bool compressElements = item.IndexOf('<') < 0 && item.EndsWith("[]", StringComparison.Ordinal) ||
+            GenericFormatterReuse.IsCompressedPlaceholder(item);
 
         string roots = "LuminRoots_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(collection));
         string root = serializer + "." + roots;
