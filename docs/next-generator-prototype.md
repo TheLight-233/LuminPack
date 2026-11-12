@@ -28,6 +28,8 @@ Run the focused retained-driver contracts with
 `dotnet run -c Release --project src/LuminPack.Generator.Next/benchmarks/GeneratorBenchmarks -- --verify-incremental`.
 They compare generated source and compiler diagnostics with a fresh driver after call-location, member, root, operation,
 assembly-option, assembly-identity, wrapper, declaration and unsafe-setting edits.
+Use the same command with `--verify-input-limits` for checked-copy contracts: trusted inline descendants, List/array/Dictionary
+elements, malformed markers and Booleans, root quotas and reuse across all six string profiles.
 
 ## How calls bind
 
@@ -101,7 +103,7 @@ calls use.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Checked copies | Declared collection, string and depth limits are checked at the read sites of the root body, and nested reads under a bounded root run as checked copies. Only roots with a declared limit take checked copies; inline children inside a copied trusted payload keep their trusted marker reads. |
+| P1 | Checked copies | Declared collection, string and depth limits are checked at the root's read sites. Checked payload copies recursively apply the root policy to inline descendants; shared payload-element sequences and dictionaries use their original family renderers with checked element models before copying. Focused tests cover nested trusted records, List/array/Dictionary elements, invalid markers and Boolean domains, root quotas and reuse across six string profiles. Only roots with a declared limit request checked copies; other owner and profile combinations remain unverified. |
 | P1 | Uncovered payload kinds | Versioned, mirrored, reference-tracked and struct payloads, rejected structs and Union roots are not covered by the limit paths. |
 | P2 | Stream, async and compression | Stream and async calls stage at the payload's cap and compressed members use the compressed kernels; neither is verified by focused tests, nor are the remaining protocol, nested scope, count and reuse combinations. |
 

@@ -275,11 +275,9 @@ internal static partial class NextPipeline
                         candidates[rendered.Readable] = rendered;
                         copyable.Add(rendered.Readable);
                     }
-                var scalars = new HashSet<string>(set.Scalars.Select(scalar =>
-                    ReadableTypeName.Of(GeneratedNames.PayloadKey(scalar.Split('=')[0]))), StringComparer.Ordinal);
                 foreach (var source in shared)
                     foreach (Match match in Regex.Matches(source.Value, @"class LuminRoots_(\w+)", RegexOptions.CultureInvariant))
-                        if (!scalars.Contains(match.Groups[1].Value))
+                        if (InputReadRenderer.CanCopy(source.Value, match.Groups[1].Value))
                             copyable.Add(match.Groups[1].Value);
                 var redirect = new InputRedirect(root.Readable, GeneratedNames.Extension(options.AssemblyName), model.Policy.Limits, copyable);
                 binary = PayloadEmitter.Render(root.WithInput(model.Policy.Limits, ((RecordModel)model).Recursive, redirect), false,
@@ -287,7 +285,7 @@ internal static partial class NextPipeline
                 // The checked copies are reads, copied from the read bodies the root's own operations publish.
                 if ((operations & GeneratedOperations.BinaryRead) != 0)
                     Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, candidates, shared.Select(source => source.Value).ToList(),
-                        options.AvailableAliases, operations), GenerationKind.Binary);
+                        options.AvailableAliases, operations, set), GenerationKind.Binary);
                 json = JsonRenderer.Instance.Render(model, renderContext);
             }
             else

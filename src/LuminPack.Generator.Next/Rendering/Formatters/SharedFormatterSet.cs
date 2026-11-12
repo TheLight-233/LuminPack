@@ -59,6 +59,12 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
     internal static SequenceOwnerFact ForPayload(SequenceFormatter family, string declaredType, PayloadRenderModel element)
         => new SequenceOwnerFact(family, declaredType, null, element);
 
+    /// <summary>Copies an inline element contract under the requesting root's frozen read policy.</summary>
+    /// <param name="redirect">The root's checked-copy context.</param>
+    /// <returns>The owner fact with checked inline descendants.</returns>
+    internal SequenceOwnerFact WithInput(InputRedirect redirect) => new SequenceOwnerFact(Family, DeclaredType, Scalar,
+        Element?.WithInput(redirect.Limits, Element.Recursive, redirect), ForwardedType, ArrayRank, ReuseArraySlots);
+
     /// <summary>Captures a sequence whose elements use their own generated owner.</summary>
     /// <param name="family">The declared sequence family.</param>
     /// <param name="declaredType">The declared sequence spelling.</param>

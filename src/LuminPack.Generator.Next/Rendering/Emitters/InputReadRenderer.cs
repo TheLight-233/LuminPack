@@ -90,6 +90,22 @@ internal static class InputReadRenderer
     private const string Policy = "global::LuminPack.Security.LuminPackInputPolicy";
     private static readonly string[] Readers = { "reader", "operationState", "state", "reader2" };
 
+    /// <summary>Checks for a supported binary read body in a published owner.</summary>
+    /// <param name="source">The original shared owner file.</param>
+    /// <param name="target">The readable owner identity.</param>
+    /// <returns>Whether the checked-copy extractor can read this owner's binary operation.</returns>
+    internal static bool CanCopy(string source, string target)
+    {
+        int start = FindClass(source, "LuminRoots_" + target);
+        if (start < 0)
+            return false;
+        int open = source.IndexOf('{', start);
+        int close = Matching(source, open, '{', '}');
+        return close > open &&
+            (source.IndexOf(" RootRead<TLuminProfile>(", open, close - open, StringComparison.Ordinal) >= 0 ||
+             source.IndexOf(" RootRead(", open, close - open, StringComparison.Ordinal) >= 0);
+    }
+
     /// <summary>Checks the counts and strings one statement reads against the frozen limits.</summary>
     /// <param name="line">The statement.</param>
     /// <param name="limits">The root's limits.</param>
@@ -209,12 +225,13 @@ internal static class InputReadRenderer
     /// <summary>Renders the checked copies that a bounded root's body requested, and the copies they request in turn.</summary>
     /// <param name="redirect">The root's checked-copy context, after its own body was rendered.</param>
     /// <param name="payloads">The retained payload render models by readable name, with their recursion facts.</param>
+    /// <param name="set">The shared owner facts, used to check inline elements through their original family renderer.</param>
     /// <param name="sources">The shared owner files.</param>
     /// <param name="aliases">The alias mask the consumer leaves available.</param>
     /// <param name="operations">The operations the project calls.</param>
     /// <returns>The helper file, or an empty string when nothing was redirected.</returns>
     internal static string RenderCopies(InputRedirect redirect, IReadOnlyDictionary<string, PayloadRenderModel> payloads,
-        IReadOnlyList<string> sources, int aliases, GeneratedOperations operations)
+        IReadOnlyList<string> sources, int aliases, GeneratedOperations operations, SharedFormatterSet set)
     {
         var methods = new List<string>();
         var usings = new SortedSet<string>(StringComparer.Ordinal);
@@ -225,7 +242,8 @@ internal static class InputReadRenderer
             if (payloads.TryGetValue(target, out PayloadRenderModel payload))
                 source = PayloadEmitter.Render(payload.WithInput(redirect.Limits, payload.Recursive, redirect), json: false, aliases, operations);
             else
-                source = sources.FirstOrDefault(text => FindClass(text, "LuminRoots_" + target) >= 0);
+                source = InputFormatterRenderer.Render(set, target, redirect) ??
+                    sources.FirstOrDefault(text => FindClass(text, "LuminRoots_" + target) >= 0);
             if (source == null)
                 throw new InvalidOperationException("The checked copy of '" + target + "' has no source.");
             foreach (string line in source.Split('\n'))

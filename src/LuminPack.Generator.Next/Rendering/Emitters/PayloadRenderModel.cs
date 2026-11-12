@@ -146,7 +146,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal readonly bool Builtin;
     /// <summary>The inline model of a packable class member, whose members the parent record stores without a separate record
     /// header, or null.</summary>
-    internal readonly PayloadRenderModel Nested;
+    internal PayloadRenderModel Nested { get; private set; }
     /// <summary>Whether a collection member writes through its generated formatter call instead of a reserved span, which an
     /// array of unmanaged scalars does.</summary>
     internal readonly bool FormatterCall;
@@ -231,6 +231,19 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     {
         var copy = (RenderMember)MemberwiseClone();
         copy.InlineOwner = owner;
+        return copy;
+    }
+
+    /// <summary>Copies an inline member with its root-owned checked read policy.</summary>
+    /// <param name="limits">The root's frozen input limits.</param>
+    /// <param name="redirect">The checked-copy owner for nested calls.</param>
+    /// <returns>The unchanged member when it has no inline payload, otherwise its checked copy.</returns>
+    internal RenderMember WithInput(InputLimits limits, InputRedirect redirect)
+    {
+        if (Nested == null)
+            return this;
+        var copy = (RenderMember)MemberwiseClone();
+        copy.Nested = Nested.WithInput(limits, Nested.Recursive, redirect);
         return copy;
     }
 
@@ -540,7 +553,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>The bounded root whose checked copies receive this body's nested reads, or null.</summary>
     internal InputRedirect Redirect { get; private set; }
 
-    /// <summary>Copies the model for a read under a bounded root's frozen limits.</summary>
+    /// <summary>Copies the model and its inline descendants for a read under a bounded root's frozen limits.</summary>
     /// <param name="limits">The root's limits.</param>
     /// <param name="recursive">Whether this payload reaches itself, which applies the root's depth limit.</param>
     /// <param name="redirect">The root's checked-copy context.</param>
@@ -552,6 +565,17 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         copy.Limits = limits;
         copy.Recursive = recursive;
         copy.Redirect = redirect;
+        RenderMember[] members = null;
+        for (int index = 0; index < Members.Length; index++)
+        {
+            RenderMember member = Members[index];
+            if (member.Nested == null)
+                continue;
+            members ??= (RenderMember[])Members.Clone();
+            members[index] = member.WithInput(limits, redirect);
+        }
+        if (members != null)
+            copy.Members = members;
         return copy;
     }
 
