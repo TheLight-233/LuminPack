@@ -29,6 +29,10 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 每个载荷的 `LuminEntry_` owner。可打包载荷调用其 `Serialize_`/`Deserialize_` 根；其他封闭根调用共享 owner 的静态 `Write`/`Read`。没有发布根的
 调用保留在泛型门面上。
 
+没有编译器拦截时，定义了 `LUMINPACK_IL_REWRITE`（即 `LuminPackUseIlRewriting` 构建集成）的构建得到相同的入口：每个拦截器改为带有该门面
+确切构造的仅构建期映射 `LuminPack.Generated.StaticCall`，由 `LuminPack.ILPostProcessor` 在编译后替换已编译的调用。Next 生成的代码需要
+C# 13，因此该后端暂时无法服务较旧的语言版本。
+
 ## 操作如何保留
 
 没有友元程序集的应用程序或 Unity 预定义程序集只保留代码实际调用的操作，规则见[生成模式](generation-modes.cn.md)；其他项目保留全部四种
@@ -55,10 +59,9 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P1 | IL 后处理后端 | `LuminPack.ILPostProcessor` 改写带有生成的 `LuminPack.Generated.StaticCallAttribute` 的调用（旧版 `StaticSerializerBinding.Il`）。Next 不生成该特性，因此不支持拦截器的编译器和 Unity 没有静态绑定，这些调用停留在泛型门面上。 |
 | P1 | 跨程序集载荷 | Next 只发现当前编译中声明在类型上的 `[LuminPackable]`。程序集级 `[LuminPackable(typeof(T))]` 外部根、引用元数据导入（旧版 `ReferencedTypeMetadata`，含诊断 LuminPack112）、外部 owner、外部 Union 和跨程序集选项均缺失。 |
 | P2 | 源泛型方法的包装特化 | 旧版通过生成的包装（`StaticSerializerBinding.Wrappers`）特化用户泛型方法内的调用；Next 通过泛型方法展开封闭这些载荷，但没有重现包装入口。 |
-| P2 | 其余后端组合 | 友元程序集、禁用后端的组合以及较旧的语言版本均未验证。 |
+| P2 | 其余后端组合 | 友元程序集与禁用后端的组合未验证。生成代码与门面使用 C# 13 特性（ref 字段、`ref readonly` 参数、ref struct 接口），旧版支持的 C# 9–12 使用方无法编译。 |
 
 ### 生成源码
 
@@ -71,7 +74,7 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P1 | 泛型外层类型中的载荷 | 声明在泛型类型内部的可打包类型（如 `Outer<T>.Inner`）被拒绝，原因为 "a payload nested in a generic definition is not modeled yet"。 |
+| P1 | 泛型外层类型中的载荷 | 声明在泛型类型内部的可打包类型（如 `Outer<T>.Inner`）被拒绝，原因为 "a payload nested in a generic definition is not modeled yet"。旧版生成器同样不支持（报告 LuminPack099 并生成无法编译的代码），因此这是新能力而非迁移项。 |
 | P1 | 泛型 CircleReference | 只为编译中实际出现的封闭构造生成 owner，缺少旧版发布的开放定义，其他封闭构造没有生成路径。值类型形状、复杂构造、ref 返回租借、槽位演进和失败组合均未验证。 |
 | P2 | 结构体内联顺序 | 旧版内联展开嵌套成员时，每一层先自动属性、后字段。Next 已通过内联顺序根为类重现该顺序；嵌套结构体仍按声明顺序。 |
 | P2 | 版本容忍组合 | 泛型与继承组合、压缩字段、旧名称、Schema 演进和完整的旧版交叉读取，只覆盖到测试所及范围。 |
@@ -105,7 +108,7 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
 | P1 | 兼容目标 | 旧版为 netstandard2.1 等兼容目标的指针读取器固定托管输入（`PinnedReaderProjection`）；Next 没有对应实现，且只在 .NET 10 上运行过。 |
-| P2 | Unity、IL2CPP、32 位、ARM64、AOT | 尚未用 Next 验证。Unity 还依赖 IL 后处理后端。 |
+| P2 | Unity、IL2CPP、32 位、ARM64、AOT | 尚未用 Next 验证。Unity 还需要上文所列的较旧语言版本。 |
 | P2 | 可选模块 | 各平台与集成模块尚未针对 Next 构建或测试。 |
 
 ### 诊断

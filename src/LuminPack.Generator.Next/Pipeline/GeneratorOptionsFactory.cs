@@ -54,7 +54,9 @@ internal static class GeneratorOptionsFactory
             symbols.Contains("NET10_0_OR_GREATER") || symbols.Contains("NET11_0_OR_GREATER");
         bool unity = symbols.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal)) ||
             compilation.GetTypeByMetadataName("UnityEngine.Application") != null || compilation.GetTypeByMetadataName("UnityEditor.Editor") != null;
+        // Without compiler interception, the installed IL rewriter binds the same static entries after compilation.
+        bool ilRewrite = !interceptors && symbols.Contains("LUMINPACK_IL_REWRITE");
         return new GeneratorOptions(net8, csharp == null ? 0 : (int)csharp.LanguageVersion, csharp?.Options.AllowUnsafe ?? false, unity,
-            Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors);
+            Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite);
     }
 }

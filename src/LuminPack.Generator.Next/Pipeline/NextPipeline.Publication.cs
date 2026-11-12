@@ -108,9 +108,10 @@ internal static partial class NextPipeline
                 SharedFormatterSet formatters = retained.Count == 0 && roots.Count == 0 ? SharedFormatterSet.Empty :
                     SharedFormatterSet.Collect(retained, _options, roots: roots);
                 var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot, plan);
-                if (_options.Interceptors && SerializerCallAnalysis.Supported)
+                // Compiler interception needs the host's location API; the IL rewriter binds the same entries after compilation.
+                if (_options.Interceptors && (SerializerCallAnalysis.Supported || _options.IlRewrite))
                 {
-                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, snapshot.SharedSources));
+                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, snapshot.SharedSources), _options.IlRewrite);
                     if (interceptors.Length != 0)
                         sources.Add(new GeneratedSource("LuminPackGen.Interceptors.g.cs", interceptors, GenerationKind.Binary));
                 }

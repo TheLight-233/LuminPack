@@ -58,7 +58,8 @@ internal static class SerializerCallAnalysis
     private static SerializerCallModel? Analyze(SemanticModel semanticModel, InvocationExpressionSyntax invocation, IMethodSymbol method,
         CancellationToken cancellationToken)
     {
-        if (LocationMethod == null)
+        bool il = Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation).IlRewrite;
+        if (LocationMethod == null && !il)
             return null;
         if (!method.IsGenericMethod || method.ContainingType?.ToDisplayString() != SerializerName)
             return null;
@@ -87,7 +88,9 @@ internal static class SerializerCallAnalysis
             return null;
         }
         cancellationToken.ThrowIfCancellationRequested();
-        string? location = Location(semanticModel, invocation, cancellationToken);
+        // The IL rewriter maps the call's exact facade construction instead of a source location.
+        string? location = il ? StaticCallKey.Attribute(method, openProfile ? method.TypeArguments.Length - 1 : -1) :
+            Location(semanticModel, invocation, cancellationToken);
         if (location == null)
             return null;
         // A nullable value root keeps its Nullable spelling; the shorthand loses the distinction in owner names.

@@ -98,8 +98,9 @@ internal static class InterceptorRenderer
     /// <summary>Renders the interception file.</summary>
     /// <param name="calls">The discovered closed calls.</param>
     /// <param name="roots">The published roots keyed by payload spelling.</param>
+    /// <param name="il">Whether the calls bind through the installed IL rewriter rather than compiler interception.</param>
     /// <returns>The source, or an empty string when no call binds to a root.</returns>
-    internal static string Render(IReadOnlyList<SerializerCallModel> calls, RootCatalog roots)
+    internal static string Render(IReadOnlyList<SerializerCallModel> calls, RootCatalog roots, bool il = false)
     {
         var bound = new List<(SerializerCallModel Call, RootEntry Root)>();
         foreach (SerializerCallModel call in calls)
@@ -126,6 +127,8 @@ internal static class InterceptorRenderer
             return string.Empty;
         var w = new StringBuilder(16384);
         w.Append(Header);
+        // The installed IL rewriter maps each interceptor through a build-only attribute instead of a compiler location.
+        w.Append(il ? StaticCall : InterceptsLocation).Append(FacadeOpen);
         // Concrete entries, one owner per payload, spelled as its first call in ordinal order spells it.
         foreach (var payload in bound.GroupBy(item => item.Root.Readable, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
@@ -185,7 +188,10 @@ using LuminPackInputPolicy = global::LuminPack.Security.LuminPackInputPolicy;
 using LuminPackExceptionHelper = global::LuminPack.Code.LuminPackExceptionHelper;
 using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
 
-namespace System.Runtime.CompilerServices
+";
+
+    /// <summary>The compiler interception attribute, declared file-local as the compiler requires.</summary>
+    private const string InterceptsLocation = @"namespace System.Runtime.CompilerServices
 {
     [global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]
     file sealed class InterceptsLocationAttribute : global::System.Attribute
@@ -194,7 +200,21 @@ namespace System.Runtime.CompilerServices
     }
 }
 
-namespace LuminPack
+";
+
+    /// <summary>The build-only mapping attribute the installed IL rewriter consumes and removes.</summary>
+    private const string StaticCall = @"namespace LuminPack.Generated
+{
+    [global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]
+    internal sealed class StaticCallAttribute : global::System.Attribute
+    {
+        public StaticCallAttribute(string key, int profileArgument) { }
+    }
+}
+
+";
+
+    private const string FacadeOpen = @"namespace LuminPack
 {
     public static partial class LuminPackSerializer
     {

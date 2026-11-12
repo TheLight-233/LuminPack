@@ -34,6 +34,11 @@ Interceptors forward to per-payload `LuminEntry_` owners. Packable payloads call
 closed roots call the static `Write`/`Read` operations of their shared owners. Calls without a published root stay on the generic
 facade.
 
+Without compiler interception, a build that defines `LUMINPACK_IL_REWRITE` (the `LuminPackUseIlRewriting` build integration) gets
+the same entries. Each interceptor then carries a build-only `LuminPack.Generated.StaticCall` mapping of the exact facade
+construction, and `LuminPack.ILPostProcessor` replaces the compiled calls after compilation. Next's generated code needs C# 13, so
+this backend does not yet serve older language versions.
+
 ## How operations are retained
 
 An application, or a Unity predefined assembly, without friend assemblies keeps only the operations its code calls, as
@@ -65,10 +70,9 @@ calls use.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | IL post-processing backend | `LuminPack.ILPostProcessor` rewrites calls marked with the generated `LuminPack.Generated.StaticCallAttribute` (legacy `StaticSerializerBinding.Il`). Next never emits it, so compilers without interceptors and Unity get no static binding; those calls stay on the generic facade. |
 | P1 | Cross-assembly payloads | Next discovers only `[LuminPackable]` declared on types in the current compilation. Assembly-level `[LuminPackable(typeof(T))]` external roots, referenced metadata import (legacy `ReferencedTypeMetadata`, including diagnostic LuminPack112), external owners, external Unions and cross-assembly options are missing. |
 | P2 | Wrapper specialization of source generic methods | Legacy specializes calls inside user generic methods through generated wrappers (`StaticSerializerBinding.Wrappers`); Next closes those payloads through generic method expansion but does not reproduce the wrapper entries. |
-| P2 | Remaining backend combinations | Friend assemblies, disabled-backend combinations and older language versions are not verified. |
+| P2 | Remaining backend combinations | Friend assemblies and disabled-backend combinations are not verified. Generated code and the facade use C# 13 features (ref fields, `ref readonly` parameters, ref struct interfaces), so C# 9–12 consumers, which the legacy generator served, do not compile. |
 
 ### Generated source
 
@@ -81,7 +85,7 @@ calls use.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Payloads nested in generic types | A packable type declared inside a generic type, such as `Outer<T>.Inner`, is rejected with "a payload nested in a generic definition is not modeled yet". |
+| P1 | Payloads nested in generic types | A packable type declared inside a generic type, such as `Outer<T>.Inner`, is rejected with "a payload nested in a generic definition is not modeled yet". The legacy generator does not support it either (LuminPack099 and uncompilable output), so this is a new capability rather than a migration. |
 | P1 | Generic CircleReference | Only the closed constructions observed in the compilation get owners; the open definition that legacy publishes is missing, so other closed constructions have no generated path. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
 | P2 | Struct inline order | Legacy expands a nested member with each level's auto-properties before its fields. Next reproduces this order for classes through inline-order roots; nested structs keep declaration order. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
@@ -115,7 +119,7 @@ These keep the wire format but produce different code from legacy.
 | Priority | Gap | Current state |
 | --- | --- | --- |
 | P1 | Compatibility targets | The pointer-based reader of compatibility targets such as netstandard2.1 keeps managed input pinned in legacy (`PinnedReaderProjection`); Next has no equivalent and has only been run on .NET 10. |
-| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | Not verified with Next. Unity also depends on the IL post-processing backend. |
+| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | Not verified with Next. Unity also needs the older language versions listed above. |
 | P2 | Optional modules | The platform and integration modules are not built or tested against Next. |
 
 ### Diagnostics
