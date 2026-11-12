@@ -40,10 +40,12 @@ internal static class FormatterCapabilities
                 result.Add("DictionaryScalarSlots");
             else if (Leaf(value, compilation))
                 result.Add("DictionaryLeafSlots");
-            else if (value is INamedTypeSymbol root)
+            else if (value is INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } root)
             {
+                // As the original slot plan, an abstract class Union root refills its existing exact fixed cases in place; the
+                // slot emitter selects those cases and every other value takes the staged continuation.
                 var cases = root.GetAttributes().Where(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute").ToArray();
-                if (cases.Length != 0 && cases.All(attribute => attribute.ConstructorArguments.Length >= 2 && attribute.ConstructorArguments[0].Value is int id && id >= 0 && id < 250 && attribute.ConstructorArguments[1].Value is ITypeSymbol item && Leaf(item, compilation)))
+                if (cases.Any(attribute => attribute.ConstructorArguments.Length >= 2 && attribute.ConstructorArguments[0].Value is ushort id && id < 250 && attribute.ConstructorArguments[1].Value is INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false }))
                     result.Add("DictionaryUnionSlots");
             }
         }

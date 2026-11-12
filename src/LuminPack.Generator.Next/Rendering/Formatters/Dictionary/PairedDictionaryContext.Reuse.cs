@@ -7,7 +7,7 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Stages new entries while keeping the original dictionary and matching object values alive through decoding.</summary>
     internal void ReadExistingDictionary()
     {
-        if (_set.FindFormatter(Dictionary)is { } model)
+        if ((_contract ?? _set.FindFormatter(Dictionary)) is { } model)
             DictionarySlotReuseEmitter.Emit(W, _set, model, "operationState", "value", "length", RawPairs);
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(length);");
         W.Line("try");
