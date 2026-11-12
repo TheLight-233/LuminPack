@@ -46,8 +46,16 @@ facade.
 
 Without compiler interception, a build that defines `LUMINPACK_IL_REWRITE` (the `LuminPackUseIlRewriting` build integration) gets
 the same entries. Each interceptor then carries a build-only `LuminPack.Generated.StaticCall` mapping of the exact facade
-construction, and `LuminPack.ILPostProcessor` replaces the compiled calls after compilation. Next's generated code needs C# 13, so
-this backend does not yet serve older language versions.
+construction, and `LuminPack.ILPostProcessor` replaces the compiled calls after compilation. Compiler interception needs C# 12, so
+older language versions bind through this backend.
+
+## Compatibility targets
+
+A runtime whose writer and reader states keep a native pointer cursor, such as netstandard2.1, gets the same rendered operations
+projected onto that cursor: reference-cursor stores, loads and advances become pointer arithmetic (or position arithmetic when unsafe
+code is disabled), and a reader over managed input reads a pinned or pooled copy, as the legacy `PinnedReaderProjection` did. The
+facade selects a `scoped`-free, pinned-reader variant on targets below .NET 8. These consumers compile with C# 9, as they did with
+the legacy generator. .NET 8 and later targets keep the reference-cursor code and still need C# 13.
 
 ## How operations are retained
 
@@ -98,6 +106,10 @@ A checked item covers the scope stated here. Related combinations still listed b
   without LINQ grouping. XML caches track present and absent declaration dependencies and invalidate on layout-only edits.
 - [x] **Trusted Boolean scalar reads.** Ordinary and inline trusted fields use the advancing reader operation and retain Reader
   bounds checks; untrusted fields keep their Boolean-domain checks.
+- [x] **Compatibility targets.** Pointer-cursor runtimes such as netstandard2.1 get projected cursor code, pinned or pooled reader
+  input and a compatible facade. The benchmark corpus compiles against the netstandard2.1 runtime with C# 9 and no generated errors,
+  and an IL-rewritten fixture on netstandard2.1 with C# 9 produces the same result and bytes as on .NET 10. The safe-code variant
+  without unsafe code is not run yet.
 
 ## Not yet migrated
 
@@ -107,7 +119,7 @@ A checked item covers the scope stated here. Related combinations still listed b
 | --- | --- | --- |
 | P1 | Cross-assembly payloads | Next discovers only `[LuminPackable]` declared on types in the current compilation. Assembly-level `[LuminPackable(typeof(T))]` external roots, referenced metadata import (legacy `ReferencedTypeMetadata`, including diagnostic LuminPack112), external owners, external Unions and cross-assembly options are missing. |
 | P2 | Wrapper specialization of source generic methods | Legacy specializes calls inside user generic methods through generated wrappers (`StaticSerializerBinding.Wrappers`); Next closes those payloads through generic method expansion but does not reproduce the wrapper entries. |
-| P2 | Remaining backend combinations | Friend-assembly operation retention is verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. Generated code and the facade use C# 13 features (ref fields, `ref readonly` parameters, ref struct interfaces), so C# 9–12 consumers, which the legacy generator served, do not compile. |
+| P2 | Remaining backend combinations | Friend-assembly operation retention and IL rewriting on a single fixture are verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
 
 ### Generated source
 
@@ -152,8 +164,7 @@ These keep the wire format but produce different code from legacy.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Compatibility targets | The pointer-based reader of compatibility targets such as netstandard2.1 keeps managed input pinned in legacy (`PinnedReaderProjection`); Next has no equivalent and has only been run on .NET 10. |
-| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | Not verified with Next. Unity also needs the older language versions listed above. |
+| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | Not verified with Next. The netstandard2.1 and C# 9 compile path Unity uses is covered by the compatibility-target check, but no Unity project has been built. |
 | P2 | Optional modules | The platform and integration modules are not built or tested against Next. |
 
 ### Diagnostics

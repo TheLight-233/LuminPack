@@ -34,6 +34,19 @@ internal static class GeneratorOptionsFactory
         return RegisterMode.Enabled;
     }
 
+    /// <summary>Reads the referenced runtime's actual cursor storage, as the original <c>BinaryCursorProjection</c> did.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <param name="net8">Whether the target defines .NET 8 or later, the fallback for an incomplete compilation.</param>
+    /// <returns>Whether the advancing states use a native pointer cursor.</returns>
+    private static bool PointerCursor(Compilation compilation, bool net8)
+    {
+        if (compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter") is { } writer)
+            foreach (ISymbol member in writer.GetMembers("Cursor"))
+                if (member is IFieldSymbol field)
+                    return field.Type is IPointerTypeSymbol;
+        return !net8;
+    }
+
     /// <summary>Captures target, language, registration and entry-binding facts.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <returns>The immutable project facts.</returns>
@@ -57,6 +70,7 @@ internal static class GeneratorOptionsFactory
         // Without compiler interception, the installed IL rewriter binds the same static entries after compilation.
         bool ilRewrite = !interceptors && symbols.Contains("LUMINPACK_IL_REWRITE");
         return new GeneratorOptions(net8, csharp == null ? 0 : (int)csharp.LanguageVersion, csharp?.Options.AllowUnsafe ?? false, unity,
-            Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite);
+            Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite,
+            PointerCursor(compilation, net8));
     }
 }

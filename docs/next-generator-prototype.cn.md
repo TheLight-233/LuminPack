@@ -39,8 +39,14 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 调用保留在泛型门面上。
 
 没有编译器拦截时，定义了 `LUMINPACK_IL_REWRITE`（即 `LuminPackUseIlRewriting` 构建集成）的构建得到相同的入口：每个拦截器改为带有该门面
-确切构造的仅构建期映射 `LuminPack.Generated.StaticCall`，由 `LuminPack.ILPostProcessor` 在编译后替换已编译的调用。Next 生成的代码需要
-C# 13，因此该后端暂时无法服务较旧的语言版本。
+确切构造的仅构建期映射 `LuminPack.Generated.StaticCall`，由 `LuminPack.ILPostProcessor` 在编译后替换已编译的调用。编译器拦截需要
+C# 12，因此较旧的语言版本通过该后端绑定。
+
+## 兼容目标
+
+写入器与读取器状态使用原生指针游标的运行时（例如 netstandard2.1）会得到投影到该游标上的同一套渲染操作：引用游标的存储、读取和前进改为指针运算
+（禁用 unsafe 时改为位置运算），基于托管输入的读取器读取固定或池化的副本，与旧版 `PinnedReaderProjection` 一致。低于 .NET 8 的目标上，门面选用
+不含 `scoped` 且固定读取输入的变体。这些使用方可以像旧生成器一样用 C# 9 编译。.NET 8 及更高版本的目标保留引用游标代码，仍需要 C# 13。
 
 ## 操作如何保留
 
@@ -79,6 +85,9 @@ C# 13，因此该后端暂时无法服务较旧的语言版本。
 - [x] **规范化增量发布。** 收集事实按值比较，重复封闭根共享编译内分析，Formatter 需求不变时复用 driver 所有的目录，owner 聚合保留首次声明且不使用
   LINQ 分组。XML 缓存同时记录已存在和缺失的声明依赖，并在仅布局变化时失效。
 - [x] **可信 Boolean 标量读取。** 普通和内联可信字段使用推进游标的 reader 操作，并保留 Reader 边界检查；不可信字段继续检查 Boolean 域。
+- [x] **兼容目标。** netstandard2.1 等指针游标运行时得到投影后的游标代码、固定或池化的读取输入以及兼容门面。Benchmark 语料以 C# 9 针对
+  netstandard2.1 运行时编译，没有生成代码错误；netstandard2.1 + C# 9 下经 IL 重写的语料得到与 .NET 10 相同的结果和字节。禁用 unsafe 的
+  安全代码变体尚未运行。
 
 ## 尚未迁移
 
@@ -88,7 +97,7 @@ C# 13，因此该后端暂时无法服务较旧的语言版本。
 | --- | --- | --- |
 | P1 | 跨程序集载荷 | Next 只发现当前编译中声明在类型上的 `[LuminPackable]`。程序集级 `[LuminPackable(typeof(T))]` 外部根、引用元数据导入（旧版 `ReferencedTypeMetadata`，含诊断 LuminPack112）、外部 owner、外部 Union 和跨程序集选项均缺失。 |
 | P2 | 源泛型方法的包装特化 | 旧版通过生成的包装（`StaticSerializerBinding.Wrappers`）特化用户泛型方法内的调用；Next 通过泛型方法展开封闭这些载荷，但没有重现包装入口。 |
-| P2 | 其余后端组合 | 友元程序集的操作保留已验证，但友元访问、IL 重写和禁用集成的静态后端组合仍需验证。生成代码与门面使用 C# 13 特性（ref 字段、`ref readonly` 参数、ref struct 接口），旧版支持的 C# 9–12 使用方无法编译。 |
+| P2 | 其余后端组合 | 友元程序集的操作保留与单个语料上的 IL 重写已验证，但友元访问、IL 重写和禁用集成的静态后端组合仍需验证。在 .NET 8 及更高版本上，生成代码需要 C# 13（ref 字段、`ref readonly` 参数、ref struct 接口）。 |
 
 ### 生成源码
 
@@ -133,8 +142,7 @@ C# 13，因此该后端暂时无法服务较旧的语言版本。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P1 | 兼容目标 | 旧版为 netstandard2.1 等兼容目标的指针读取器固定托管输入（`PinnedReaderProjection`）；Next 没有对应实现，且只在 .NET 10 上运行过。 |
-| P2 | Unity、IL2CPP、32 位、ARM64、AOT | 尚未用 Next 验证。Unity 还需要上文所列的较旧语言版本。 |
+| P2 | Unity、IL2CPP、32 位、ARM64、AOT | 尚未用 Next 验证。Unity 所用的 netstandard2.1 与 C# 9 编译路径已由兼容目标检查覆盖，但尚未构建 Unity 项目。 |
 | P2 | 可选模块 | 各平台与集成模块尚未针对 Next 构建或测试。 |
 
 ### 诊断
