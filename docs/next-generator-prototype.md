@@ -94,15 +94,13 @@ The generator benchmarks accept a real corpus and its references:
   Stream and async calls bind to concrete entries that stage at the payload's cap; compressed members use the compressed kernels.
   Both are not yet verified by tests.
 - The legacy baseline is commit 8af1579 (the last legacy commit that passes the full test area). With Next, the full test area
-  passes 1109 of 1135. The remaining failures each map to a legacy algorithm that is not ported yet: the in-place Union-slot read of
-  existing dictionaries, string reuse inside tuple and pair arrays, the inline child schema that orders auto-properties first, sorted
-  list reuse and validation, per-string limits in nested string matrices, the immutable queue and stack writes, the concurrent stack
-  JSON order, the time zone snapshot, wrapper specialization of source generic methods, and custom-profile interface dictionaries.
-- Assembly comparison (FullOpts JIT disassembly of the full test run, both generators): over 4284 matching methods, including 2096
-  test methods whose source is identical, Next emits 0.988 times the legacy code bytes. Two systematic differences remain. Next
-  calls the owner of a nested record where legacy expands it inline (records with mirrored members, callbacks, version tolerance or
-  pooled construction), and Next inlines several interface and collection roots into their entries where legacy kept them
-  `NoInlining`. Adjacent fixed fields that legacy copies as one block after field-address proofs are written field by field.
+  passes all 1135 tests. A nested record keeps the legacy expanded order (each level's auto-properties before its fields) inside
+  its parent through dedicated inline-order roots; struct members are not reordered yet.
+- Assembly comparison (FullOpts JIT disassembly of the full test run, both generators): over 4344 matching methods Next emits 0.992
+  times the legacy code bytes and slightly fewer call instructions. Two systematic differences remain. Next calls the owner of a
+  nested record where legacy expands it inline (records with mirrored members, callbacks, version tolerance or pooled
+  construction), and Next inlines several interface and collection roots into their entries where legacy kept them `NoInlining`.
+  Adjacent fixed fields that legacy copies as one block after field-address proofs are written field by field.
 - Closed generic payloads bind the generic roots of their definitions. Payloads whose readable names coincide get numbered entries.
 - Generic Union roots, closed and open generic cases, and Union roots with a declared string profile are ported; every payload the
   original generator emits for the unit-test corpus now has Next output. None of this is verified by tests yet.
