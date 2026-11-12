@@ -161,7 +161,7 @@ internal static class RenderModelFactory
             unionBinarySlots: Slots(model.BinarySlots), unionJsonSlots: Slots(model.JsonSlots),
             unionCanonical: model.Canonical, unionStandardBinary: model.StandardBinary, unionStandardJson: model.StandardJson,
             unionTier: (int)model.Tier, unionTierCases: model.TierCases, unionTierSealed: model.TierSealed, unionWide: model.WideTags,
-            trusted: model.Policy.Input == InputPolicy.Trusted);
+            trusted: model.Policy.Input == InputPolicy.Trusted, registration: options.RegisterMode != RegisterMode.Disabled);
     }
 
     /// <summary>Maps the model's compiled profile slots onto the emitter's slots.</summary>

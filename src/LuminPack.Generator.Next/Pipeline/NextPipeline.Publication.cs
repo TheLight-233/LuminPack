@@ -311,14 +311,17 @@ internal static partial class NextPipeline
         foreach (string name in obsolete)
             snapshot.Payloads.Remove(name);
         Add("LuminPackGen.CustomFormatterRegistry.g.cs", CustomRegistrationSource.Render(registrations, options.AssemblyName, options.Unity), GenerationKind.Formatter);
+        Add("LuminPackGen.Registration.g.cs", SerializerRegistrationSource.Render(options), GenerationKind.Formatter);
         Add("LuminPackGen.FormatterDispatch.Options.g.cs", DispatchOptionsSource.Render(ProfileNames.Type(policy.Strings),
-            policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1, policy.Input == InputPolicy.Untrusted, policy.Limits.Input), GenerationKind.Formatter);
+            policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1, policy.Input == InputPolicy.Untrusted, policy.Limits.Input,
+            options.RegisterMode != RegisterMode.Disabled, ProfileNames.Type(policy.JsonInput)), GenerationKind.Formatter);
         Add("LuminPackGen.Options.g.cs", ProfileSource.Render(retained, policy), GenerationKind.Formatter);
         return sources;
 
         void AddReservation(TypeModel model)
         {
-            if (model is UnionModel && !model.Identity.IsGeneric && RenderModelFactory.Create(model, options) is { } union)
+            if (options.RegisterMode != RegisterMode.Disabled && model is UnionModel && !model.Identity.IsGeneric &&
+                RenderModelFactory.Create(model, options) is { } union)
                 registrations.Add("global::LuminPack.Code.LuminPackUnionFormatter<" + model.Identity.GlobalName +
                     ">.ReserveTags(new int[] { " + string.Join(", ", union.UnionCases.Select(item => item.Id).Distinct()) + " });");
         }

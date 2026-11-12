@@ -6,20 +6,22 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Facade;
 /// <remarks>The option-independent dispatch is post-initialization source, so ordinary calls bind while the generator runs.
 /// The registered fallback profile, the default JSON encoding and the input cap follow the assembly declaration, as the
 /// original dispatch compiled them.</remarks>
-internal static class DispatchOptionsSource
+internal static partial class DispatchOptionsSource
 {
     /// <summary>Renders the option-dependent dispatch members.</summary>
     /// <param name="profile">The assembly's complete profile type, which also keys the registered fallback.</param>
     /// <param name="encoding">The assembly's JSON encoding: zero for UTF-8, one for UTF-16.</param>
     /// <param name="untrusted">Whether assembly reads are untrusted, which checks the JSON input boundary.</param>
     /// <param name="limit">The assembly's encoded input cap.</param>
+    /// <param name="registration">Whether this assembly permits registered fallback operations.</param>
+    /// <param name="jsonProfile">The assembly's JSON input policy, including explicit hostile-input grammar and depth.</param>
     /// <returns>The complete source file.</returns>
-    internal static string Render(string profile, int encoding, bool untrusted, int limit)
+    internal static string Render(string profile, int encoding, bool untrusted, int limit, bool registration = true, string? jsonProfile = null)
     {
         string cap = (untrusted ? limit : int.MaxValue).ToString(CultureInfo.InvariantCulture);
         string check = untrusted ? "                LuminPackInputPolicy.CheckInput(reader.Buffer.Length, " + cap + ");\n" : string.Empty;
-        return Template.Replace("%PROFILE%", profile).Replace("%ENCODING%", encoding.ToString(CultureInfo.InvariantCulture))
-            .Replace("%CHECK%", check).Replace("%LIMIT%", cap);
+        return (registration ? Template : DisabledRegistration.Source).Replace("%PROFILE%", profile).Replace("%ENCODING%", encoding.ToString(CultureInfo.InvariantCulture))
+            .Replace("%CHECK%", check).Replace("%LIMIT%", cap).Replace("%JSON_PROFILE%", jsonProfile ?? profile);
     }
 
     private const string Template = @"#pragma warning disable CS1591
@@ -106,8 +108,8 @@ namespace LuminPack
 
             internal static bool LuminPackJsonReadBoundary<T>(ref LuminPackJsonReader reader, bool complete)
             {
-%CHECK%                if (complete) { reader.EnsureEndOfDocument<%PROFILE%>(); return true; }
-                return reader.Read<%PROFILE%>();
+%CHECK%                if (complete) { reader.EnsureEndOfDocument<%JSON_PROFILE%>(); return true; }
+                return reader.Read<%JSON_PROFILE%>();
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

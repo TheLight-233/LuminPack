@@ -18,7 +18,10 @@ internal static class ProfileSource
         var components = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var visited = new HashSet<string>(StringComparer.Ordinal);
         if (assembly != null)
+        {
             Add(assembly.Strings, components);
+            Add(assembly.JsonInput, components);
+        }
         foreach (TypeModel model in models)
             Collect(model, components, visited);
         if (components.Count == 0)

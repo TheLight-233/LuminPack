@@ -313,6 +313,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly bool FreshResult;
     /// <summary>Whether interception gives the state entries payload-specific names, such as <c>Serialize_Model</c>.</summary>
     internal readonly bool UniqueEntries;
+    /// <summary>Whether the declaring assembly permits registered Union fallback operations.</summary>
+    internal readonly bool Registration;
     /// <summary>The serialized members in wire order.</summary>
     internal RenderMember[] Members { get; private set; }
 
@@ -591,8 +593,9 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
-        string rejection = null, InputLimits limits = null, bool recursive = false)
+        string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true)
     {
+        Registration = registration;
         Limits = limits;
         Recursive = recursive;
         Rejection = rejection;
@@ -670,7 +673,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <inheritdoc/>
     public bool Equals(PayloadRenderModel other) => ReferenceEquals(this, other) || other != null && GlobalName == other.GlobalName &&
         Readable == other.Readable && Extension == other.Extension && JsonHelper == other.JsonHelper && FreshResult == other.FreshResult &&
-        UniqueEntries == other.UniqueEntries && Proven == other.Proven && MemberWrite == other.MemberWrite &&
+        UniqueEntries == other.UniqueEntries && Registration == other.Registration && Proven == other.Proven && MemberWrite == other.MemberWrite &&
         CamelSnapshots == other.CamelSnapshots && IsStruct == other.IsStruct && ManagedStruct == other.ManagedStruct &&
         Equals(PortableView, other.PortableView) && View == other.View && ViewElided == other.ViewElided && Mirror == other.Mirror &&
         FixedUnionCase == other.FixedUnionCase && MeasureRecord == other.MeasureRecord &&

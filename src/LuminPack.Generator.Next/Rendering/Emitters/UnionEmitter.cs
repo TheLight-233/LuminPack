@@ -373,16 +373,19 @@ internal static class UnionEmitter
         }
         w.Line("default:");
         w.Open();
-        w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(" + "tag" + ", out var registeredFormatter" +
-            string.Empty + ") && registeredFormatter" + string.Empty + ".ReadValue != null)");
-        w.Open();
-        w.Line(model.GlobalName + " registeredValue" + string.Empty + " = default !;");
-        w.Line("((" + "global::LuminPack.Code.LuminPackReadDelegate<" + model.GlobalName + ">)registeredFormatter" + string.Empty +
-            ".ReadValue)(ref " + reader + ", ref registeredValue" + string.Empty + ");");
-        w.Line(target + " = registeredValue" + string.Empty + ";");
-        w.Line(exit);
-        w.Close();
-        w.Blank();
+        if (model.Registration)
+        {
+            w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(" + "tag" + ", out var registeredFormatter" +
+                string.Empty + ") && registeredFormatter" + string.Empty + ".ReadValue != null)");
+            w.Open();
+            w.Line(model.GlobalName + " registeredValue" + string.Empty + " = default !;");
+            w.Line("((" + "global::LuminPack.Code.LuminPackReadDelegate<" + model.GlobalName + ">)registeredFormatter" + string.Empty +
+                ".ReadValue)(ref " + reader + ", ref registeredValue" + string.Empty + ");");
+            w.Line(target + " = registeredValue" + string.Empty + ";");
+            w.Line(exit);
+            w.Close();
+            w.Blank();
+        }
         w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(" + "tag" + ", typeof(" + model.GlobalName + "));");
         w.Line(exit);
         w.Close();
@@ -521,14 +524,17 @@ internal static class UnionEmitter
         }
         w.Line("default:");
         w.Open();
-        w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
-        w.Open();
-        w.Line(model.GlobalName + " registeredValue = default !;");
-        w.Line("((global::LuminPack.Code.LuminPackJsonReadDelegate<" + model.GlobalName + ">)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue);");
-        w.Line("value = registeredValue;");
-        w.Line("break;");
-        w.Close();
-        w.Blank();
+        if (model.Registration)
+        {
+            w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
+            w.Open();
+            w.Line(model.GlobalName + " registeredValue = default !;");
+            w.Line("((global::LuminPack.Code.LuminPackJsonReadDelegate<" + model.GlobalName + ">)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue);");
+            w.Line("value = registeredValue;");
+            w.Line("break;");
+            w.Close();
+            w.Blank();
+        }
         w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(tag, typeof(" + model.GlobalName + "));");
         w.Line("break;");
         w.Close();
@@ -582,7 +588,7 @@ internal static class UnionEmitter
     /// <summary>Emits the runtime registration members of the binary root.</summary>
     private static void Registration(PayloadRenderModel model, CodeWriter w, string type)
     {
-        if (model.TypeParameters.Length != 0)
+        if (model.Registration && model.TypeParameters.Length != 0)
         {
             w.Line("private static readonly bool LuminPackUnionTags_" + model.UnionSuffix +
                 " = global::LuminPack.Code.LuminPackUnionFormatter<" + type + ">.ReserveTags(new int[] { " +
@@ -668,10 +674,15 @@ internal static class UnionEmitter
         w.Line("private static void " + (json ? "WriteRegisteredJson_" : "WriteRegistered_") + model.UnionSuffix +
             "(" + model.GlobalName + " value, ref " + state + " writer)");
         w.Open();
-        w.Line("if (global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(((object)value).GetType(), out var registration) && registration." + operation + " != null)");
-        w.Indented(() => w.Line("((global::LuminPack.Code." + delegateName + "<" + model.GlobalName + ">)registration." + operation + ")(ref writer, ref value);"));
-        w.Line("else");
-        w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(((object)value).GetType(), typeof(" + model.GlobalName + "));"));
+        if (model.Registration)
+        {
+            w.Line("if (global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(((object)value).GetType(), out var registration) && registration." + operation + " != null)");
+            w.Indented(() => w.Line("((global::LuminPack.Code." + delegateName + "<" + model.GlobalName + ">)registration." + operation + ")(ref writer, ref value);"));
+            w.Line("else");
+            w.Indented(() => w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(((object)value).GetType(), typeof(" + model.GlobalName + "));"));
+        }
+        else
+            w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(((object)value).GetType(), typeof(" + model.GlobalName + "));");
         w.Close();
     }
 
