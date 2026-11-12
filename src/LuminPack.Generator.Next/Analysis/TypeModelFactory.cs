@@ -1370,8 +1370,8 @@ internal static partial class TypeModelFactory
                 _ => string.Empty,
             };
             string name = SyntaxFacts.GetKeywordKind(type.Name) == SyntaxKind.None ? type.Name : "@" + type.Name;
-            // A generic declaration repeats its own type parameters.
-            if (type.IsGenericType)
+            // A generic declaration repeats its own type parameters; a containing type's parameters belong to its own line.
+            if (type.Arity != 0)
                 name += "<" + string.Join(", ", type.OriginalDefinition.TypeParameters.Select(parameter => parameter.Name)) + ">";
             return accessibility + "partial " + (type.TypeKind == TypeKind.Interface ? "interface " : type.TypeKind == TypeKind.Struct ? "struct " : "class ") + name;
         }
@@ -3516,51 +3516,95 @@ internal static partial class TypeModelFactory
     }
 
     /// <summary>Builds the identity of a declared type, including its containing chain and parameters.</summary>
+    /// <remarks>A definition nested in a generic type, such as <c>Outer&lt;T&gt;.Inner</c>, is generic over the containing
+    /// parameters, which precede its own. A closed construction spells every level's type arguments in its names.</remarks>
     private static TypeIdentity Identity(INamedTypeSymbol symbol)
     {
-        var containing = new List<string>();
+        int depth = 0;
+        for (var current = symbol.ContainingType; current != null; current = current.ContainingType)
+            depth++;
+        var containing = new string[depth];
+        var arities = new int[depth];
+        bool definition = symbol.IsDefinition;
+        int level = depth;
         for (var current = symbol.ContainingType; current != null; current = current.ContainingType)
         {
-            if (current.IsGenericType)
-                throw new NotSupportedException("a payload nested in a generic definition is not modeled yet");
-            containing.Insert(0, current.Name);
+            level--;
+            containing[level] = definition ? current.Name : ClosedName(current);
+            arities[level] = definition ? current.Arity : 0;
+        }
+        string[] parameters = Array.Empty<string>();
+        if (definition)
+        {
+            List<ITypeParameterSymbol> all = AllTypeParameters(symbol);
+            parameters = new string[all.Count];
+            for (int index = 0; index < parameters.Length; index++)
+                parameters[index] = all[index].Name;
         }
         string? @namespace = symbol.ContainingNamespace == null || symbol.ContainingNamespace.IsGlobalNamespace
             ? null : symbol.ContainingNamespace.ToDisplayString();
-        string name = symbol.Name;
-        if (symbol.IsGenericType && !symbol.IsDefinition)
-            name += "<" + string.Join(", ", symbol.TypeArguments.Select(Session.FormatterSpelling)) + ">";
-        return new TypeIdentity(@namespace, containing.ToArray(), name,
-            symbol.IsDefinition ? symbol.TypeParameters.Select(parameter => parameter.Name).ToArray() : Array.Empty<string>());
+        return new TypeIdentity(@namespace, containing, definition ? symbol.Name : ClosedName(symbol), parameters, arities);
+    }
+
+    /// <summary>Spells one closed level of a nested type: its name and its own type arguments.</summary>
+    /// <param name="symbol">A constructed type or one of its containing types.</param>
+    /// <returns>The level's name with its own type arguments.</returns>
+    private static string ClosedName(INamedTypeSymbol symbol)
+    {
+        if (symbol.Arity == 0)
+            return symbol.Name;
+        var text = new System.Text.StringBuilder(symbol.Name, 32).Append('<');
+        for (int index = 0; index < symbol.TypeArguments.Length; index++)
+            (index == 0 ? text : text.Append(", ")).Append(Session.FormatterSpelling(symbol.TypeArguments[index]));
+        return text.Append('>').ToString();
+    }
+
+    /// <summary>Lists every type parameter a definition is generic over, from the outermost containing type inward.</summary>
+    /// <param name="symbol">A type definition.</param>
+    /// <returns>The containing types' parameters followed by the type's own.</returns>
+    internal static List<ITypeParameterSymbol> AllTypeParameters(INamedTypeSymbol symbol)
+    {
+        var parameters = new List<ITypeParameterSymbol>();
+        for (var current = symbol; current != null; current = current.ContainingType)
+            parameters.InsertRange(0, current.TypeParameters);
+        return parameters;
+    }
+
+    /// <summary>Lists every type argument of a construction, from the outermost containing type inward.</summary>
+    /// <param name="symbol">A type construction.</param>
+    /// <returns>The containing types' arguments followed by the type's own.</returns>
+    internal static List<ITypeSymbol> AllTypeArguments(INamedTypeSymbol symbol)
+    {
+        var arguments = new List<ITypeSymbol>();
+        for (var current = symbol; current != null; current = current.ContainingType)
+            arguments.InsertRange(0, current.TypeArguments);
+        return arguments;
     }
 
     /// <summary>Spells the <see cref="TypeIdentity.MetadataName"/> that <see cref="Identity"/> gives a type, without building the
     /// identity.</summary>
     /// <param name="symbol">A source type.</param>
-    /// <returns>The identity key, or null for a type nested in a generic definition, which has no model.</returns>
+    /// <returns>The identity key, or null when the type has no model.</returns>
     internal static string? ReachKey(INamedTypeSymbol symbol)
     {
         var text = new System.Text.StringBuilder(64);
         if (symbol.ContainingNamespace is { IsGlobalNamespace: false } @namespace)
             text.Append(@namespace.ToDisplayString()).Append('.');
         int start = text.Length;
+        bool definition = symbol.IsDefinition;
         for (INamedTypeSymbol? current = symbol.ContainingType; current != null; current = current.ContainingType)
         {
-            if (current.IsGenericType)
-                return null;
-            text.Insert(start, current.Name + "+");
+            string level = !definition ? ClosedName(current) :
+                current.Arity == 0 ? current.Name : current.Name + "`" + current.Arity.ToString(CultureInfo.InvariantCulture);
+            text.Insert(start, level + "+");
         }
-        text.Append(symbol.Name);
-        if (symbol.IsGenericType && !symbol.IsDefinition)
+        if (!definition)
+            text.Append(ClosedName(symbol));
+        else
         {
-            text.Append('<');
-            for (int index = 0; index < symbol.TypeArguments.Length; index++)
-                (index == 0 ? text : text.Append(", ")).Append(Session.FormatterSpelling(symbol.TypeArguments[index]));
-            text.Append('>');
-        }
-        else if (symbol.TypeParameters.Length != 0)
-        {
-            text.Append('`').Append(symbol.TypeParameters.Length);
+            text.Append(symbol.Name);
+            if (symbol.Arity != 0)
+                text.Append('`').Append(symbol.Arity.ToString(CultureInfo.InvariantCulture));
         }
         return text.ToString();
     }

@@ -14,10 +14,10 @@ internal static partial class TypeModelFactory
         /// <returns>Symbol-free constraint clauses in declaration order.</returns>
         private static string[] TypeConstraints(INamedTypeSymbol type)
         {
-            if (!type.IsDefinition || type.TypeParameters.Length == 0)
+            if (!type.IsDefinition || !type.IsGenericType)
                 return Array.Empty<string>();
             var clauses = new List<string>();
-            foreach (ITypeParameterSymbol parameter in type.TypeParameters)
+            foreach (ITypeParameterSymbol parameter in AllTypeParameters(type))
             {
                 var constraints = new List<string>();
                 if (parameter.HasUnmanagedTypeConstraint)

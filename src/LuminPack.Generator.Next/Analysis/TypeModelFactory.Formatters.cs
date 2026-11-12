@@ -242,7 +242,9 @@ internal static partial class TypeModelFactory
             if (type is INamedTypeSymbol named && named.IsGenericType)
             {
                 string prefix = named.ContainingType != null ? FormatterSpelling(named.ContainingType) + "." : named.ContainingNamespace.IsGlobalNamespace ? "global::" : "global::" + named.ContainingNamespace.ToDisplayString() + ".";
-                return prefix + named.Name + "<" + string.Join(", ", named.TypeArguments.Select(FormatterSpelling)) + ">";
+                // A type generic only through its containing type spells the arguments on that level.
+                return named.Arity == 0 ? prefix + named.Name :
+                    prefix + named.Name + "<" + string.Join(", ", named.TypeArguments.Select(FormatterSpelling)) + ">";
             }
 
             return FormatterTypeName(type);

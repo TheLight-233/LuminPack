@@ -229,10 +229,11 @@ internal static class ReadableTypeName
                 closed = true;
                 part.Append("Of");
                 Arguments(text, ref index, '>', part);
+                // A type nested in a generic type keeps that type and its arguments as a prefix, so Outer<int>.Inner,
+                // Outer<string>.Inner and the definition's Outer<T>.Inner name different owners.
                 if (index < text.Length && text[index] == '.')
                 {
                     index++;
-                    part.Clear();
                     Type(text, ref index, part);
                 }
             }

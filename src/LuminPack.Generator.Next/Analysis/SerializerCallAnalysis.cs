@@ -98,13 +98,13 @@ internal static class SerializerCallAnalysis
         string spelling = payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(PayloadFormat);
         MemberModel? root = TypeModelFactory.TryCreateRoot(payload, semanticModel.Compilation,
             Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation));
-        // A closed generic payload binds the generic roots of its definition, as the original concrete facade does.
+        // A closed generic payload binds the generic roots of its definition, as the original concrete facade does. A type nested
+        // in a generic type is generic over the containing type arguments, which precede its own.
         string? definition = null, typeArguments = null;
-        if (payload is INamedTypeSymbol { IsGenericType: true } generic && generic.ContainingType is not { IsGenericType: true } &&
-            generic.OriginalDefinition.SpecialType == SpecialType.None)
+        if (payload is INamedTypeSymbol { IsGenericType: true } generic && generic.OriginalDefinition.SpecialType == SpecialType.None)
         {
             definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            typeArguments = string.Join(", ", generic.TypeArguments.Select(argument => argument.ToDisplayString(PayloadFormat)));
+            typeArguments = string.Join(", ", TypeModelFactory.AllTypeArguments(generic).Select(argument => argument.ToDisplayString(PayloadFormat)));
         }
         EntryShape shape = TypeModelFactory.EntryShapeOf(payload, semanticModel.Compilation,
             Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation));

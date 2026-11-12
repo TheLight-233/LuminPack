@@ -114,6 +114,12 @@ A checked item covers the scope stated here. Related combinations still listed b
   records expanded in their parents. The legacy rule that put each level's auto-properties before its fields is intentionally
   dropped, so payloads of nested classes that mix auto-properties and fields differ from legacy bytes; the four benchmark fixtures
   are unaffected.
+- [x] **Payloads nested in generic types.** A packable type declared inside a generic type, such as `Outer<T>.Inner` or
+  `Outer<T>.Mid<U>.Leaf`, is a generic definition over the containing parameters followed by its own. Closed uses bind the
+  definition's generic owner, and closed member types get owners named with their containing arguments, such as
+  `OuterOfIntInner`. A fixture with classes, a struct, two nesting levels, member and list uses, binary and JSON round-trips through
+  interception and IL rewriting. The legacy generator never supported this shape (LuminPack099). Union cases nested in generic types
+  are still rejected.
 
 ## Not yet migrated
 
@@ -135,7 +141,6 @@ A checked item covers the scope stated here. Related combinations still listed b
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Payloads nested in generic types | A packable type declared inside a generic type, such as `Outer<T>.Inner`, is rejected with "a payload nested in a generic definition is not modeled yet". The legacy generator does not support it either (LuminPack099 and uncompilable output), so this is a new capability rather than a migration. |
 | P1 | Generic CircleReference | Only the closed constructions observed in the compilation get owners; the open definition that legacy publishes is missing, so other closed constructions have no generated path. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
 | P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. Cross-assembly option inheritance remains part of the cross-assembly gap. |

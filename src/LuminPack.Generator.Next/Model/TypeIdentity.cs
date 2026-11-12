@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text;
 
 namespace LuminPack.SourceGenerator.Next.Model;
 
@@ -9,47 +10,103 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
     /// <summary>The declaring namespace, or null in the global namespace.</summary>
     internal readonly string? Namespace;
 
-    /// <summary>The containing type names from the outermost declaration inward.</summary>
+    /// <summary>The containing type names from the outermost declaration inward. A closed containing type spells its type
+    /// arguments in its name, such as <c>Outer&lt;int&gt;</c>.</summary>
     internal readonly string[] ContainingTypes;
+
+    /// <summary>The number of type parameters each containing type of a definition declares, parallel to
+    /// <see cref="ContainingTypes"/>.</summary>
+    internal readonly int[] ContainingArities;
 
     /// <summary>The type name without its arity suffix.</summary>
     internal readonly string Name;
 
-    /// <summary>The declared type parameter names, which are empty for a closed definition.</summary>
+    /// <summary>Every type parameter name the definition is generic over, the containing types' parameters first, which is
+    /// empty for a closed definition.</summary>
     internal readonly string[] TypeParameters;
 
     /// <summary>Captures a type identity.</summary>
-    internal TypeIdentity(string? @namespace, string[] containingTypes, string name, string[] typeParameters)
+    internal TypeIdentity(string? @namespace, string[] containingTypes, string name, string[] typeParameters, int[]? containingArities = null)
     {
         Namespace = @namespace;
         ContainingTypes = containingTypes;
+        ContainingArities = containingArities ?? new int[containingTypes.Length];
         Name = name;
         TypeParameters = typeParameters;
     }
 
-    /// <summary>Whether the definition declares type parameters.</summary>
+    /// <summary>Whether the definition declares type parameters, including those of a generic containing type.</summary>
     internal bool IsGeneric => TypeParameters.Length != 0;
 
-    /// <summary>The CLR metadata name, including the arity suffix and nested-type separators.</summary>
+    /// <summary>The number of type parameters the type itself declares.</summary>
+    internal int OwnArity
+    {
+        get
+        {
+            int arity = TypeParameters.Length;
+            foreach (int containing in ContainingArities)
+                arity -= containing;
+            return arity;
+        }
+    }
+
+    /// <summary>The CLR metadata name, including the arity suffixes and nested-type separators.</summary>
     internal string MetadataName
     {
         get
         {
-            string name = TypeParameters.Length == 0 ? Name : Name + "`" + TypeParameters.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            string nested = string.Join("+", ContainingTypes.Concat(new[] { name }));
-            return Namespace == null ? nested : Namespace + "." + nested;
+            var text = new StringBuilder(64);
+            if (Namespace != null)
+                text.Append(Namespace).Append('.');
+            for (int index = 0; index < ContainingTypes.Length; index++)
+            {
+                text.Append(ContainingTypes[index]);
+                if (ContainingArities[index] != 0)
+                    text.Append('`').Append(ContainingArities[index].ToString(System.Globalization.CultureInfo.InvariantCulture));
+                text.Append('+');
+            }
+            text.Append(Name);
+            int own = OwnArity;
+            if (own != 0)
+                text.Append('`').Append(own.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return text.ToString();
         }
     }
 
-    /// <summary>The C# display name, such as <c>N.Outer.Inner&lt;T&gt;</c>.</summary>
+    /// <summary>The C# display name, such as <c>N.Outer&lt;T&gt;.Inner&lt;U&gt;</c>.</summary>
     internal string DisplayName
     {
         get
         {
-            string name = TypeParameters.Length == 0 ? Name : Name + "<" + string.Join(", ", TypeParameters) + ">";
-            string nested = string.Join(".", ContainingTypes.Concat(new[] { name }));
-            return Namespace == null ? nested : Namespace + "." + nested;
+            var text = new StringBuilder(64);
+            if (Namespace != null)
+                text.Append(Namespace).Append('.');
+            int parameter = 0;
+            for (int index = 0; index < ContainingTypes.Length; index++)
+            {
+                text.Append(ContainingTypes[index]);
+                AppendParameters(text, ref parameter, ContainingArities[index]);
+                text.Append('.');
+            }
+            text.Append(Name);
+            AppendParameters(text, ref parameter, TypeParameters.Length - parameter);
+            return text.ToString();
         }
+    }
+
+    /// <summary>Appends the next <paramref name="count"/> parameter names as a type argument list.</summary>
+    private void AppendParameters(StringBuilder text, ref int parameter, int count)
+    {
+        if (count == 0)
+            return;
+        text.Append('<');
+        for (int index = 0; index < count; index++)
+        {
+            if (index != 0)
+                text.Append(", ");
+            text.Append(TypeParameters[parameter++]);
+        }
+        text.Append('>');
     }
 
     /// <summary>The fully qualified C# spelling.</summary>
@@ -57,7 +114,8 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
 
     /// <inheritdoc/>
     public bool Equals(TypeIdentity? other) => ReferenceEquals(this, other) || other != null && Namespace == other.Namespace &&
-        Name == other.Name && ContainingTypes.SequenceEqual(other.ContainingTypes) && TypeParameters.SequenceEqual(other.TypeParameters);
+        Name == other.Name && ContainingTypes.SequenceEqual(other.ContainingTypes) && ContainingArities.SequenceEqual(other.ContainingArities) &&
+        TypeParameters.SequenceEqual(other.TypeParameters);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as TypeIdentity);
