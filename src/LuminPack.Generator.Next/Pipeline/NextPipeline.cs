@@ -66,7 +66,10 @@ internal static partial class NextPipeline
         var calls = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => SerializerCallAnalysis.IsCandidate(node) && ConsumerTree(node.SyntaxTree),
             static (syntax, token) => SerializerCallAnalysis.Analyze(syntax, token))
-            .WithTrackingName("LuminPack.Next.SerializerCalls").Collect();
+            .Where(static call => call.Call != null || call.Whole != GeneratedOperations.None)
+            .WithTrackingName("LuminPack.Next.SerializerCalls").Collect()
+            .WithComparer(FactArrayComparer<CallFact>.Instance)
+            .WithTrackingName("LuminPack.Next.CollectedCalls");
         var forwarded = calls.Combine(context.CompilationProvider).Select(static (input, token) =>
         {
             foreach (CallFact call in input.Left)
@@ -85,7 +88,8 @@ internal static partial class NextPipeline
                     operations |= item;
                 return operations;
             });
-        var requests = models.Collect().Combine(calls).Combine(forwarded).Combine(facts.Combine(usage)).Select(static (input, _) =>
+        var requests = models.Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance)
+            .Combine(calls).Combine(forwarded).Combine(facts.Combine(usage)).Select(static (input, _) =>
         {
             ImmutableArray<ModeledPayload> payloads = input.Left.Left.Left;
             var bound = ImmutableArray.CreateBuilder<SerializerCallModel>();

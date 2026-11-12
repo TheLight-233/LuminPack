@@ -105,8 +105,9 @@ internal static partial class NextPipeline
                     if (call.Root != null)
                         roots.Add(call.Root);
                 roots.AddRange(_forwarded.Members);
-                SharedFormatterSet formatters = retained.Count == 0 && roots.Count == 0 ? SharedFormatterSet.Empty :
-                    SharedFormatterSet.Collect(retained, _options, roots: roots);
+                if (snapshot.SharedInputs == null || !snapshot.SharedInputs.Matches(retained, roots, _options))
+                    snapshot.SharedInputs = new SharedFormatterInputs(retained, roots, _options);
+                SharedFormatterSet formatters = snapshot.SharedInputs.Set;
                 var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot, plan);
                 // Compiler interception needs the host's location API; the IL rewriter binds the same entries after compilation.
                 if (_options.Interceptors && (SerializerCallAnalysis.Supported || _options.IlRewrite))
@@ -145,6 +146,7 @@ internal static partial class NextPipeline
     {
         internal readonly Dictionary<string, CachedPayload> Payloads;
         internal readonly CompactPublication.Cache Compact;
+        internal SharedFormatterInputs? SharedInputs;
         internal SharedFormatterSet? SharedSet;
         internal OwnerOperations? SharedOperations;
         internal KeyValuePair<string, string>[] SharedSources;
@@ -155,6 +157,7 @@ internal static partial class NextPipeline
         {
             Payloads = prior == null ? new(StringComparer.Ordinal) : new(prior.Payloads, StringComparer.Ordinal);
             Compact = new CompactPublication.Cache(prior?.Compact);
+            SharedInputs = prior?.SharedInputs;
             SharedSet = prior?.SharedSet;
             SharedOperations = prior?.SharedOperations;
             SharedSources = prior?.SharedSources ?? Array.Empty<KeyValuePair<string, string>>();

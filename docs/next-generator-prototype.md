@@ -24,6 +24,10 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 
 The generator benchmarks accept a real corpus and its references:
 `GeneratorBenchmarks --corpus benchmarks/LuminPack.Benchmark --refs <benchmark output directory> --old-dll <legacy analyzer>`.
+Run the focused retained-driver contracts with
+`dotnet run -c Release --project src/LuminPack.Generator.Next/benchmarks/GeneratorBenchmarks -- --verify-incremental`.
+They compare generated source and compiler diagnostics with a fresh driver after call-location, member, root, operation,
+assembly-option, assembly-identity, wrapper, declaration and unsafe-setting edits.
 
 ## How calls bind
 
@@ -133,7 +137,7 @@ These keep the wire format but produce different code from legacy.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Incremental work | The call list is an `ImmutableArray`, so the shared owner set is recomputed on every edit before its value-equal output is cached. Repeated model projections, semantic queries, collection copies and sorting are not reduced yet. |
+| P2 | Incremental work | Collected calls and payloads are compared by value before publication; unrelated invocations do not join the call list. Closed root analysis is cached inside its compilation. Each driver reuses the shared owner set when its retained payload models, non-packable roots and complete project options are unchanged, including edits that only change interception locations. Owner collection sorts and compacts temporary buffers without LINQ grouping, retaining the first declaration for duplicate identities. Per-operation dependency walks and other repeated projections and semantic queries still need reduction. |
 
 ### Acceptance
 

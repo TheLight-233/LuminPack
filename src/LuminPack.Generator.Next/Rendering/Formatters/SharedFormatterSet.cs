@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -195,13 +194,9 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
             if (formatter.Payload != null)
                 Walk(formatter.Payload, options, facts, scalars, owners, dictionaries, ref cultureInfoReuse, requirements);
         }
-        return new SharedFormatterSet(extension, owners.Distinct(StringComparer.Ordinal).OrderBy(owner => owner, StringComparer.Ordinal).ToArray(),
-            aliases, cultureInfoReuse, facts.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal).Select(group => group.First())
-                .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal).ToArray(),
-            scalars.Distinct(StringComparer.Ordinal).OrderBy(scalar => scalar, StringComparer.Ordinal).ToArray(),
-            dictionaries.GroupBy(fact => fact.DeclaredType, StringComparer.Ordinal).Select(group => group.First())
-                .OrderBy(fact => fact.DeclaredType, StringComparer.Ordinal).ToArray(),
-            general.Values.OrderBy(formatter => formatter.Type, StringComparer.Ordinal).ToArray(), options);
+        return new SharedFormatterSet(extension, SortedNames(owners), aliases, cultureInfoReuse,
+            SortedOwners(facts, static fact => fact.DeclaredType, SequenceOrder), SortedNames(scalars),
+            SortedOwners(dictionaries, static fact => fact.DeclaredType, DictionaryOrder), SortedGeneral(general), options);
     }
 
     /// <summary>Adds the owner type keys that payloads and roots require, as <see cref="SharedFormatterPublisher"/> keys them,
@@ -252,7 +247,7 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         AvailableAliases == other.AvailableAliases && CultureInfoReuse == other.CultureInfoReuse && Equals(Options, other.Options) &&
         SameFacts(SequenceOwners, other.SequenceOwners) && SameStrings(Scalars, other.Scalars) &&
         SameDictionaries(DictionaryOwners, other.DictionaryOwners) &&
-        (GeneralOwners ?? Array.Empty<FormatterModel>()).SequenceEqual(other.GeneralOwners ?? Array.Empty<FormatterModel>());
+        SameGeneral(GeneralOwners, other.GeneralOwners);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is SharedFormatterSet other && Equals(other);

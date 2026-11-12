@@ -21,6 +21,10 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 
 生成器基准接受真实语料及其引用：
 `GeneratorBenchmarks --corpus benchmarks/LuminPack.Benchmark --refs <基准输出目录> --old-dll <旧分析器>`。
+增量 driver 的聚焦契约检查使用
+`dotnet run -c Release --project src/LuminPack.Generator.Next/benchmarks/GeneratorBenchmarks -- --verify-incremental`。
+检查覆盖调用位置、成员、根类型、操作方向、程序集选项、程序集身份、泛型包装、声明与 unsafe 设置的编辑，逐项对比保留 driver 与全新 driver 的
+生成源码和编译器诊断。
 
 ## 调用如何绑定
 
@@ -122,7 +126,7 @@ C# 13，因此该后端暂时无法服务较旧的语言版本。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P2 | 增量工作 | 调用列表是 `ImmutableArray`，每次编辑都会重新计算共享 owner 集合，之后才由值相等的输出命中缓存。重复的模型投影、语义查询、集合复制和排序尚未削减。 |
+| P2 | 增量工作 | 收集后的调用和载荷在发布前按值比较，无关调用不进入调用列表。封闭根分析在所属编译内缓存。保留载荷模型、非载荷根和完整项目选项不变时，driver 复用共享 owner 集合，包括只改变拦截位置的编辑。owner 收集直接排序并压紧临时缓冲区，不再使用 LINQ 分组，同名项仍保留首次发现的声明。各操作的依赖遍历、其余重复模型投影和语义查询仍待削减。 |
 
 ### 验收
 

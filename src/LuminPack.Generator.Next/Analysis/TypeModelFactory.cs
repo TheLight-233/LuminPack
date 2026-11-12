@@ -124,6 +124,7 @@ internal static partial class TypeModelFactory
     {
         private readonly Compilation _compilation;
         private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
+        private readonly Dictionary<ITypeSymbol, MemberModel?> _roots = new Dictionary<ITypeSymbol, MemberModel?>(SymbolEqualityComparer.Default);
         private readonly object _gate = new object();
         private bool? _canReuseCultureInfo;
 
@@ -146,6 +147,22 @@ internal static partial class TypeModelFactory
         /// <param name="type">The closed call payload type.</param>
         /// <returns>The complete root member, or null.</returns>
         internal MemberModel? ClassifyRoot(ITypeSymbol type)
+        {
+            lock (_gate)
+            {
+                if (_roots.TryGetValue(type, out MemberModel? cached))
+                    return cached;
+            }
+            MemberModel? result = ClassifyUncachedRoot(type);
+            lock (_gate)
+                _roots[type] = result;
+            return result;
+        }
+
+        /// <summary>Builds one root's normalized formatter graph before publishing it to the compilation-owned cache.</summary>
+        /// <param name="type">The closed call payload type.</param>
+        /// <returns>The complete root member, or null.</returns>
+        private MemberModel? ClassifyUncachedRoot(ITypeSymbol type)
         {
             if (type is INamedTypeSymbol { IsGenericType: false } named && IsPackable(named))
                 return null;
