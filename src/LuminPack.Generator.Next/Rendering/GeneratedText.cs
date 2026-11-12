@@ -369,8 +369,18 @@ internal static class GeneratedText
     {
         string source = text.Trim().TrimEnd(';').Trim();
         int position = 0;
-        while (position < source.Length && (char.IsLetterOrDigit(source[position]) || source[position] is '_' or '@' or '.' or ':'))
-            position++;
+        while (true)
+        {
+            while (position < source.Length && (char.IsLetterOrDigit(source[position]) || source[position] is '_' or '@' or '.' or ':'))
+                position++;
+            // A closed generic owner, such as Owner<int>.Write, continues the target after its type arguments.
+            if (position == 0 || position >= source.Length || source[position] != '<')
+                break;
+            int closeType = Close(source, position, '<', '>');
+            if (closeType < 0 || closeType + 1 >= source.Length || source[closeType + 1] != '.')
+                break;
+            position = closeType + 2;
+        }
         if (position == 0)
             return null;
         string target = source.Substring(0, position);

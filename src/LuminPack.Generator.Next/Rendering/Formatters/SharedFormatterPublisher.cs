@@ -66,12 +66,16 @@ internal static class SharedFormatterPublisher
                 ScalarOwnerFile.Render(set, scalar, selected));
         }
 
+        var shared = new GenericFormatterReuse.Publication(set);
         foreach (DictionaryOwnerFact fact in set.DictionaryOwners ?? Array.Empty<DictionaryOwnerFact>())
         {
             string key = GeneratedNames.PayloadKey(fact.DeclaredType);
             if (general.Contains(key) || (selected = operations.For(key)) == GeneratedOperations.None)
                 continue;
             var render = fact.Element != null || fact.ForwardedValue ? fact.Family.Payload ?? fact.Family.Entries : fact.Family.Entries;
+            DictionaryOwnerFact closed = fact;
+            if (shared.TryDictionary(fact.DeclaredType, selected, chosen => render(set, closed, chosen), fact.Family, fact))
+                continue;
             yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Dictionary_" +
                 ReadableTypeName.Of(key) + ".g.cs", render(set, fact, selected));
         }
@@ -86,6 +90,10 @@ internal static class SharedFormatterPublisher
                 fact.Element != null ? fact.Family.Payload : fact.Scalar == "string" ? fact.Family.Text : fact.Family.Scalar;
             if (render == null)
                 throw new InvalidOperationException("A formatter requirement has no registered element renderer.");
+            SequenceOwnerFact sequence = fact;
+            RenderSequenceOwner chosenRender = render;
+            if (shared.TrySequence(fact.DeclaredType, selected, chosen => chosenRender(set, sequence, chosen), fact))
+                continue;
             yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Sequence_" +
                 ReadableTypeName.Of(key) + ".g.cs", render(set, fact, selected));
         }
@@ -106,9 +114,18 @@ internal static class SharedFormatterPublisher
                 }
                 continue;
             }
+            FormatterModel closedModel = model;
+            if (FormatterRegistry.FindDictionary(model.Type) is null &&
+                shared.TrySequence(model.Type, selected, chosen => DefaultFormatterOwnerFile.Render(set, closedModel, chosen)))
+                continue;
+            if (FormatterRegistry.FindDictionary(model.Type) is { } dictionary &&
+                shared.TryDictionary(model.Type, selected, chosen => DefaultFormatterOwnerFile.Render(set, closedModel, chosen), dictionary))
+                continue;
             yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Default_" + ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)) + ".g.cs",
                 DefaultFormatterOwnerFile.Render(set, model, selected));
         }
+        foreach (var source in shared.Render())
+            yield return source;
     }
 }
 

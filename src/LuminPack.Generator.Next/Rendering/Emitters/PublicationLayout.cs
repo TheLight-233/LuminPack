@@ -58,6 +58,15 @@ internal static class PublicationLayout
     /// <summary>Gets an alias's fully qualified target.</summary>
     internal static string AliasTarget(int index) => Aliases[index].Target;
 
+    /// <summary>Whether a name is a known alias.</summary>
+    internal static bool IsAlias(string alias)
+    {
+        foreach (var entry in Aliases)
+            if (entry.Alias == alias)
+                return true;
+        return false;
+    }
+
     /// <summary>Finds an alias by its name.</summary>
     internal static int AliasIndex(string alias)
     {

@@ -271,7 +271,7 @@ internal static partial class NextPipeline
         }
         var shared = snapshot.SharedSources;
         foreach (var source in shared)
-            sources.Add(new GeneratedSource(source.Key, source.Value, GenerationKind.Formatter));
+            sources.Add(new GeneratedSource(source.Key, source.Value, GenericFormatterReuse.IsJson(source.Key) ? GenerationKind.Json : GenerationKind.Formatter));
         foreach (TypeModel model in retained)
         {
             GeneratedOperations operations = plan.For(model);

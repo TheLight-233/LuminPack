@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -22,6 +23,32 @@ internal enum FormatterSection
 /// <summary>Publishes the selected formatter operations in their shared declaration containers.</summary>
 internal static class FormatterOwnerFile
 {
+    /// <summary>Replaces the roots of the next owner render: a generic declaration whose roots are published alone, or closed
+    /// forwarders that keep the owner's entries and state extensions.</summary>
+    internal sealed class Projection
+    {
+        /// <summary>The generic roots declaration, or null.</summary>
+        internal readonly string? Declaration;
+
+        /// <summary>The forwarding roots, or null.</summary>
+        internal readonly List<string>? Forwarders;
+
+        /// <summary>The words of the forwarders that may name file-local aliases.</summary>
+        internal HashSet<string> Aliases = new(StringComparer.Ordinal);
+
+        /// <summary>Captures one projection.</summary>
+        /// <param name="declaration">The generic roots declaration.</param>
+        /// <param name="forwarders">The forwarding roots.</param>
+        internal Projection(string? declaration, List<string>? forwarders)
+        {
+            Declaration = declaration;
+            Forwarders = forwarders;
+        }
+    }
+
+    /// <summary>The projection of the owner render in progress on this thread.</summary>
+    [ThreadStatic] internal static Projection? Current;
+
     /// <summary>Renders the execution roots and forwarders for the same operation selection.</summary>
     /// <param name="writer">The writer that tracks the file's aliases.</param>
     /// <param name="operations">The operations requested for this formatter.</param>
@@ -41,35 +68,75 @@ internal static class FormatterOwnerFile
         if (operations == GeneratedOperations.None)
             return string.Empty;
 
-        writer.Line("namespace LuminPack");
-        writer.Open();
-        writer.Line("public static partial class LuminPackSerializer");
-        writer.Open();
-        Emit(FormatterSection.Entries);
-        writer.Line(roots);
-        writer.Open();
-        Emit(FormatterSection.Roots);
-        support?.Invoke();
-        writer.Close();
-        writer.Close();
-        writer.Blank();
-
-        writer.Line(owner);
-        writer.Open();
-        Emit(FormatterSection.Owner);
-        writer.Close();
-
-        if (extensions != null && (operations & (GeneratedOperations.BinaryWrite | GeneratedOperations.BinaryRead)) != 0)
+        Projection? projection = Current;
+        // Nested renders, such as a child owner the template inlines, keep their ordinary shape.
+        Current = null;
+        try
         {
-            writer.Blank();
-            writer.Line(extensions);
+            bool generic = projection?.Declaration != null;
+            writer.Line("namespace LuminPack");
             writer.Open();
-            Emit(FormatterSection.Extensions);
+            writer.Line("public static partial class LuminPackSerializer");
+            writer.Open();
+            Suppressed(generic, () => Emit(FormatterSection.Entries));
+            writer.Line(projection?.Declaration ?? roots);
+            writer.Open();
+            if (projection?.Forwarders is { } forwarders)
+            {
+                Suppressed(true, () =>
+                {
+                    Emit(FormatterSection.Roots);
+                    support?.Invoke();
+                });
+                foreach (string alias in projection.Aliases)
+                    if (PublicationLayout.IsAlias(alias))
+                        writer.A(alias);
+                foreach (string line in forwarders)
+                    if (line.Length == 0)
+                        writer.Blank();
+                    else
+                        writer.Line(line);
+            }
+            else
+            {
+                Emit(FormatterSection.Roots);
+                support?.Invoke();
+            }
             writer.Close();
+            writer.Close();
+            if (!generic)
+            {
+                writer.Blank();
+                writer.Line(owner);
+                writer.Open();
+                Emit(FormatterSection.Owner);
+                writer.Close();
+
+                if (extensions != null && (operations & (GeneratedOperations.BinaryWrite | GeneratedOperations.BinaryRead)) != 0)
+                {
+                    writer.Blank();
+                    writer.Line(extensions);
+                    writer.Open();
+                    Emit(FormatterSection.Extensions);
+                    writer.Close();
+                }
+            }
+
+            writer.Close();
+            return generic ? writer.Complete(json: false) : WithEntries(writer.Complete(json: false));
+        }
+        finally
+        {
+            Current = projection;
         }
 
-        writer.Close();
-        return WithEntries(writer.Complete(json: false));
+        void Suppressed(bool suppressed, Action body)
+        {
+            bool prior = writer.Suppressed;
+            writer.Suppressed = prior || suppressed;
+            body();
+            writer.Suppressed = prior;
+        }
 
         void Emit(FormatterSection section)
         {

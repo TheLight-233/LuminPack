@@ -242,8 +242,12 @@ internal static class InputReadRenderer
             if (payloads.TryGetValue(target, out PayloadRenderModel payload))
                 source = PayloadEmitter.Render(payload.WithInput(redirect.Limits, payload.Recursive, redirect), json: false, aliases, operations);
             else
+            {
                 source = InputFormatterRenderer.Render(set, target, redirect) ??
                     sources.FirstOrDefault(text => FindClass(text, "LuminRoots_" + target) >= 0);
+                if (source != null && Formatters.GenericFormatterReuse.ClosedSource(source) is { } closed)
+                    source = closed;
+            }
             if (source == null)
                 throw new InvalidOperationException("The checked copy of '" + target + "' has no source.");
             foreach (string line in source.Split('\n'))

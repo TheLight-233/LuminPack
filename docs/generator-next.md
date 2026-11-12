@@ -22,6 +22,26 @@ Ordinary records and their Union payloads share algorithms with stateless framin
 
 Union writing propagates compiled options through one generic virtual method per format. Binary writes additionally retain one non-generic standard-profile slot so the common path avoids generic virtual dispatch overhead. Closed generic cases keep their cached dispatch slots. A Union reader uses one case switch for fresh and existing targets; each case determines whether the current instance has the exact required type.
 
+## Owner structs and shared generic formatters
+
+Generated formatter owners are field-free `readonly` structs with static operations. Core declares one interface per operation: `ILuminPackWriter<T>`, `ILuminPackReader<T>`, `ILuminPackJsonWriter<T>` and `ILuminPackJsonReader<T>`. Their members are instance members on every target, and shared code calls them as `default(TFormatter).Write<TOptions>(...)`. The call binds to the exact owner of each instantiation without boxing or dispatch, and the empty receiver disappears once the forwarder is inlined. Static abstract members are not used: NativeAOT cannot compile static virtual calls in generic code shared over reference-type elements.
+
+Closed `Dictionary<TKey, TValue>`, `List<T>` and single-rank arrays share one generic owner per element-category combination. Each argument is classified:
+
+| Category | Rule | Generic form |
+| --- | --- | --- |
+| Unmanaged | The closed owner copies its storage (raw scalars, plain unmanaged structs, `Native` layouts) | Type parameter with `unmanaged`; JSON operations add a strategy parameter |
+| String | `string` | Stays literal; the string kernel is unchanged |
+| Element | Any other non-polymorphic element with its own formatter | Type parameter and a `struct` strategy parameter implemented by the element owner |
+
+`Dictionary<int, int>` and `Dictionary<long, double>` share `DictionaryOfUnmanagedAndUnmanagedFormatter<TKey, TValue, ...>`, `Dictionary<int, string>` uses `DictionaryOfUnmanagedAndStringFormatter<TKey, ...>`, and `Dictionary<string, SimpleClass>` uses `DictionaryOfStringAndElementFormatter<TValue, TValueFormatter>`. Nested collections are elements: `Dictionary<int, List<string>>` passes the `List<string>` owner as its strategy.
+
+Union, interface, `object`, Boolean, nullable, `Tagged` and `Packed` elements, nested arrays and multidimensional arrays keep their specialized closed owners, so polymorphic dispatch and the established layout transfers are unchanged.
+
+The generic owner is rendered by the family's own template with placeholder type names, so its algorithm is the closed algorithm. Closed owners share it only when their placeholder renders and operation sets are identical; differing renders receive numbered names. A closed owner keeps its state extensions, and its roots become forwarders that publication resolves to a file alias such as `using DictionaryOfIntAndIntWriter = ...DictionaryOfUnmanagedAndUnmanagedFormatter<int, int, IntFormatter, IntFormatter>;`. Call sites keep their spelling. Strategy members, published in `LuminPackGen.FormatterStrategies.g.cs`, make exactly the element call the closed owner made. Owners whose entries or extensions need roots the shared owner lacks, such as compressed nested sequences, stay closed.
+
+Every root of a shared owner is `NoInlining`. One call into a collection keeps the caller's inline budget for the element calls inside its loop; an inlined collection root would copy the loop into each parent and leave the element calls uninlined. Strategy forwarders and payload record writes remain inlining candidates.
+
 ## Registering external Union cases
 
 Register through the serializer:

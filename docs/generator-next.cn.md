@@ -22,6 +22,26 @@
 
 Union 写入为每种格式保留一个泛型虚方法，向下传递编译期选项。二进制额外保留一个非泛型默认配置虚槽，使常用路径不承担泛型虚调用的额外分派成本。封闭泛型子类型继续使用缓存的分派槽。Union 读取使用一套 case 分支处理新建和复用目标，每个分支判断现有实例是否正好匹配所需类型。
 
+## Owner 结构体与共享泛型 Formatter
+
+生成的 Formatter owner 是只含静态操作、无字段的 `readonly` 结构体。Core 为每种操作声明一个接口：`ILuminPackWriter<T>`、`ILuminPackReader<T>`、`ILuminPackJsonWriter<T>` 和 `ILuminPackJsonReader<T>`。这些成员在所有目标框架上都是实例成员，共享代码通过 `default(TFormatter).Write<TOptions>(...)` 调用。调用在每个实例化中绑定到确切的 owner，既不装箱也不分派，转发方法内联后空接收者也随之消失。不使用 static abstract 成员：NativeAOT 无法编译在引用类型元素上共享的泛型代码中的静态虚调用。
+
+封闭的 `Dictionary<TKey, TValue>`、`List<T>` 和一维数组按元素类别组合共享一个泛型 owner。每个泛型参数分类如下：
+
+| 类别 | 规则 | 泛型形式 |
+| --- | --- | --- |
+| Unmanaged | 封闭 owner 直接复制其存储（原始标量、普通 unmanaged 结构体、`Native` 布局） | 带 `unmanaged` 约束的类型参数；JSON 操作额外带策略参数 |
+| String | `string` | 保持字面类型，字符串内核不变 |
+| Element | 其他拥有自身 Formatter 的非多态元素 | 类型参数加由元素 owner 实现的 `struct` 策略参数 |
+
+`Dictionary<int, int>` 与 `Dictionary<long, double>` 共享 `DictionaryOfUnmanagedAndUnmanagedFormatter<TKey, TValue, ...>`，`Dictionary<int, string>` 使用 `DictionaryOfUnmanagedAndStringFormatter<TKey, ...>`，`Dictionary<string, SimpleClass>` 使用 `DictionaryOfStringAndElementFormatter<TValue, TValueFormatter>`。嵌套集合属于 Element：`Dictionary<int, List<string>>` 以 `List<string>` 的 owner 作为策略。
+
+Union、接口、`object`、布尔、可空、`Tagged` 与 `Packed` 元素、嵌套数组和多维数组保留各自的专用封闭 owner，因此多态分派和既有布局传输保持不变。
+
+泛型 owner 由该家族自身的模板以占位类型名渲染，算法与封闭版本一致。只有占位渲染结果和操作集合完全相同的封闭 owner 才会共享；渲染不同时使用带编号的名称。封闭 owner 保留其状态扩展方法，其根方法变为转发，发布阶段将其解析为文件别名，例如 `using DictionaryOfIntAndIntWriter = ...DictionaryOfUnmanagedAndUnmanagedFormatter<int, int, IntFormatter, IntFormatter>;`，调用点写法不变。策略成员发布在 `LuminPackGen.FormatterStrategies.g.cs`，执行的元素调用与封闭 owner 完全相同。若封闭 owner 的入口或扩展需要共享 owner 不具备的根方法（例如压缩的嵌套序列），则保留封闭 owner。
+
+共享 owner 的所有根方法均为 `NoInlining`。以一次集合调用换取循环内元素调用的内联预算：若集合根方法被内联，循环会复制到每个调用方，循环内的元素调用反而无法内联。策略转发方法和载荷记录写入仍可内联。
+
 ## 注册外部 Union 子类型
 
 通过序列化入口注册：

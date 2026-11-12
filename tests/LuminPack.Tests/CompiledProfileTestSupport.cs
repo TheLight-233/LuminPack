@@ -43,7 +43,9 @@ namespace LuminPackUnitTest
         // closed operations as Write/Read state extensions and owner operations of its generated types.
         private static readonly MethodInfo[] TestStateMethods = typeof(LuminPackSerializer).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Concat(typeof(TestProfileSerializer).Assembly.GetTypes()
-                .Where(type => type.IsAbstract && type.IsSealed && type.Namespace is "LuminPack" or "LuminPack.Generated")
+                // Next formatter owners are field-free structs; state extensions and legacy roots are static classes.
+                .Where(type => (type.IsAbstract && type.IsSealed || type.IsValueType && !type.IsGenericTypeDefinition && type.Name.EndsWith("Formatter", StringComparison.Ordinal)) &&
+                    type.Namespace is "LuminPack" or "LuminPack.Generated")
                 .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
                 .Where(method => method.Name is "Write" or "Read" or "WriteJson" or "ReadJson"))
             .ToArray();

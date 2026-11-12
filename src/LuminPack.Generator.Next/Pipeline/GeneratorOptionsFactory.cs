@@ -71,7 +71,20 @@ internal static class GeneratorOptionsFactory
         bool ilRewrite = !interceptors && symbols.Contains("LUMINPACK_IL_REWRITE");
         return new GeneratorOptions(net8, csharp == null ? 0 : (int)csharp.LanguageVersion, csharp?.Options.AllowUnsafe ?? false, unity,
             Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite,
-            PointerCursor(compilation, net8), AmbiguousNames(compilation));
+            PointerCursor(compilation, net8), AmbiguousNames(compilation), FormatterInterfaces(compilation));
+    }
+
+    /// <summary>Reads whether the referenced runtime declares the formatter interfaces that shared generic formatters call.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>1 when the instance-member interfaces exist, otherwise 0, which keeps closed owners.</returns>
+    private static int FormatterInterfaces(Compilation compilation)
+    {
+        if (compilation.GetTypeByMetadataName("LuminPack.Code.ILuminPackWriter`1") is not { } writer)
+            return 0;
+        foreach (ISymbol member in writer.GetMembers("Write"))
+            if (member is IMethodSymbol { IsStatic: false })
+                return 1;
+        return 0;
     }
 
     /// <summary>The framework namespaces whose type names generated owners commonly spell.</summary>

@@ -38,6 +38,8 @@ internal sealed class GeneratedSource : IEquatable<GeneratedSource>
 internal static class CompactPublication
 {
     private static readonly Regex Imports = new(@"(?m)^using (?:(\w+) = )?([^\r\n;]+);\s*", RegexOptions.Compiled);
+    // Formatter owners are field-free readonly structs, so shared generic owners can take them as strategy type arguments.
+    private static readonly Regex OwnerDeclarations = new(@"(?m)^(?<indent>[ \t]*)internal static partial class (?<name>\w+Formatter)\b", RegexOptions.Compiled);
     private static readonly Regex OwnerNames = new(@"\b(?:LuminRoots_|Binary_)\w+\b", RegexOptions.Compiled);
     private static readonly Regex DirectCalls = new(@"(?<![\w.:@])(?<target>(?:global::)?(?:LuminPack\.)?(?:LuminPackSerializer\.)?(?:LuminPackSerializer|LuminRoots_\w+|Binary_\w+)\.\w+|(?:Root|Serialize|Deserialize)\w*)\s*(?=<|\()", RegexOptions.Compiled);
     private static readonly Regex MethodGroups = new(@"(?<target>(?:(?:global::)?LuminPack\.)?(?:LuminPackSerializer|LuminRoots_\w+|Binary_\w+)\.\w+)\s*", RegexOptions.Compiled);
@@ -115,7 +117,13 @@ internal static class CompactPublication
                     duplicate.Forward = null;
                 }
                 else
-                    catalog.Add(key, new Operation(document, method));
+                {
+                    var operation = new Operation(document, method);
+                    // Bound closed owners call shared generic operations by name, so they always keep their declarations.
+                    if (document.Source.Hint.StartsWith(Formatters.GenericFormatterReuse.HintPrefix, StringComparison.Ordinal))
+                        operation.Forward = null;
+                    catalog.Add(key, operation);
+                }
             }
         // Method groups retain exact ref/in signatures for existing typed delegates.
         foreach (Document document in documents)
@@ -210,7 +218,7 @@ internal static class CompactPublication
             // A state owner containing no retained method or other member has no remaining declaration contract.
             foreach (var owner in document.Owners)
             {
-                if (!owner.Key.StartsWith("Binary_", StringComparison.Ordinal))
+                if (!owner.Key.StartsWith("Binary_", StringComparison.Ordinal) && !owner.Key.StartsWith("LuminRoots_", StringComparison.Ordinal))
                     continue;
                 bool allRemoved = true;
                 foreach (GeneratedText.Method method in owner.Value)
@@ -263,7 +271,8 @@ internal static class CompactPublication
                 edits.Add((firstNamespace, firstNamespace, imports.ToString()));
             }
             edits.Sort(static (left, right) => left.Start != right.Start ? left.Start.CompareTo(right.Start) : left.End.CompareTo(right.End));
-            string output = PublicationOrder.Render(document.Text, document.Methods, removed, edits);
+            string output = OwnerDeclarations.Replace(PublicationOrder.Render(document.Text, document.Methods, removed, edits),
+                "${indent}internal readonly partial struct ${name}");
             string hint = document.Source.Hint.StartsWith("LuminPack.SharedFormatters/", StringComparison.Ordinal) ? FormatterHint(document) : document.Source.Hint;
             cache.Outputs[cacheKey] = new CachedOutput(document.Source.Text, hint, output, bindings);
             Add(hint, output, document.Source.Kind);
@@ -373,6 +382,17 @@ internal static class CompactPublication
                 generics[index] = Substitute(forward.Generics[index]);
             for (int index = 0; index < arguments.Length; index++)
                 arguments[index] = Substitute(forward.Arguments[index]);
+            // A closed owner bound to a shared generic owner is called through a file alias of the generic instantiation.
+            int typeArguments = forward.Target.IndexOf('<');
+            if (typeArguments >= 0 && names.TryGetValue(method.Owner, out string? closedOwner))
+            {
+                int member = forward.Target.LastIndexOf('.');
+                string operationName = forward.Target.Substring(member + 1);
+                string alias = closedOwner.Replace("Formatter", string.Empty) + (operationName.Contains("Read") ? "Reader" : "Writer");
+                aliases[alias] = forward.Target.Substring(0, member);
+                return alias + "." + operationName + (generics.Length == 0 ? string.Empty : "<" + string.Join(", ", generics) + ">") +
+                    "(" + string.Join(", ", arguments) + ")";
+            }
             return Resolve(new GeneratedText.Call(Substitute(forward.Target), generics, arguments),
                 method.Owner, method.Json, aliases, catalog, names, bindings, depth + 1);
         }
@@ -496,6 +516,9 @@ internal static class CompactPublication
     /// <returns>The filename shared by the formatter definition.</returns>
     private static string FormatterHint(Document document)
     {
+        string prefix = Formatters.GenericFormatterReuse.HintPrefix;
+        if (document.Source.Hint.StartsWith(prefix, StringComparison.Ordinal))
+            return document.Source.Hint.Substring(prefix.Length, document.Source.Hint.IndexOf('/', prefix.Length) - prefix.Length);
         GeneratedText.Method? method = null;
         foreach (GeneratedText.Method candidate in document.Methods)
             if (candidate.Name.StartsWith("Serialize_", StringComparison.Ordinal) && candidate.Parameters.Length > 1)

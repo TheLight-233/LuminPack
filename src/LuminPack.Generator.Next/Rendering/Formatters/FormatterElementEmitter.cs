@@ -47,6 +47,13 @@ internal static class FormatterElementEmitter
             return;
         }
 
+        // A shared owner's unmanaged argument is read as its storage, as the closed scalar owner reads it.
+        if (GenericFormatterReuse.IsUnmanagedPlaceholder(model.Type))
+        {
+            w.Line(state + ".Read(ref " + expression + ");");
+            return;
+        }
+
         // As in the original element read, a null marker clears the slot and the element's own read still runs: it raises the
         // deserializing callbacks before it consumes the marker.
         if (model.OrdinaryObject)

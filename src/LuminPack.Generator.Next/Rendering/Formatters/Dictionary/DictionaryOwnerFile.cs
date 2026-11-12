@@ -57,7 +57,8 @@ internal static class DictionaryOwnerFile
         // A nullable raw value makes the entries sparse: it is stored with the core store of the whole nullable storage.
         bool sparse = value.EndsWith("?", System.StringComparison.Ordinal);
         bool rawKey = key != "string", rawValue = value != "string", pair = rawKey && rawValue && !sparse;
-        bool CallbackFree(string item) => GenericIdentity.IsRaw(item) || FrameworkScalarBody.Contains(item) ||
+        bool CallbackFree(string item) => CallbackFreeType(GenericFormatterReuse.Real(item));
+        bool CallbackFreeType(string item) => GenericIdentity.IsRaw(item) || FrameworkScalarBody.Contains(item) ||
             set.FindFormatter(item)?.Underlying != null || set.Scalars.Any(scalar => scalar.StartsWith(item + "=", System.StringComparison.Ordinal));
         bool observeRawLookup = pair && CallbackFree(key) && CallbackFree(value);
         string dictionary = fact.DeclaredType;
