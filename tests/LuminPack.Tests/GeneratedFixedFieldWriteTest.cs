@@ -182,16 +182,23 @@ public class GeneratedFixedFieldWriteTest
                 item
             }
         };
-        // The existing inline nested-class schema places auto-properties first.
-        // Use the original writer API to construct that wire representation.
+        // Use the original writer API to construct the nested child's wire representation.
         Span<byte> childSpan = new byte[1024];
         var childWriter = new LuminPackWriter(ref childSpan);
         ref byte __fixed1Reference = ref childWriter.Cursor;
         int __fixed1Length = 0;
         __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, __fixed1Length), (byte)3);
+#if LUMINPACK_NEXT_GENERATOR
+        // Next keeps declaration order for members without an explicit order.
+        __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, __fixed1Length), child.Id);
+        __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, __fixed1Length), child.Large);
+        __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, __fixed1Length), child.Value);
+#else
+        // The legacy inline nested-class schema places auto-properties first.
         __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, __fixed1Length), child.Value);
         __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, __fixed1Length), child.Id);
         __fixed1Length += global::LuminPack.Core.LuminPackWriter.Write(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __fixed1Reference, __fixed1Length), child.Large);
+#endif
         childWriter.Advance(__fixed1Length);
         byte[] childPayload = childWriter.GetSpan().ToArray();
         using var expected = new MemoryStream();

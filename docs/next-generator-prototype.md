@@ -110,6 +110,10 @@ A checked item covers the scope stated here. Related combinations still listed b
   input and a compatible facade. The benchmark corpus compiles against the netstandard2.1 runtime with C# 9 and no generated errors,
   and an IL-rewritten fixture on netstandard2.1 with C# 9 produces the same result and bytes as on .NET 10. The safe-code variant
   without unsafe code is not run yet.
+- [x] **Declaration member order.** Members without an explicit order follow declaration order everywhere, including nested
+  records expanded in their parents. The legacy rule that put each level's auto-properties before its fields is intentionally
+  dropped, so payloads of nested classes that mix auto-properties and fields differ from legacy bytes; the four benchmark fixtures
+  are unaffected.
 
 ## Not yet migrated
 
@@ -133,7 +137,6 @@ A checked item covers the scope stated here. Related combinations still listed b
 | --- | --- | --- |
 | P1 | Payloads nested in generic types | A packable type declared inside a generic type, such as `Outer<T>.Inner`, is rejected with "a payload nested in a generic definition is not modeled yet". The legacy generator does not support it either (LuminPack099 and uncompilable output), so this is a new capability rather than a migration. |
 | P1 | Generic CircleReference | Only the closed constructions observed in the compilation get owners; the open definition that legacy publishes is missing, so other closed constructions have no generated path. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
-| P2 | Struct inline order | Legacy expands a nested member with each level's auto-properties before its fields. Next reproduces this order for classes through inline-order roots; nested structs keep declaration order. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
 | P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. Cross-assembly option inheritance remains part of the cross-assembly gap. |
 | P2 | JSON compatibility | All envelopes, escaping, former names, duplicate and unknown properties, omitted members and failure publication are covered only as far as the tests reach. |

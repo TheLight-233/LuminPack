@@ -311,25 +311,6 @@ internal static partial class BinaryEmitter
         }
         w.Suppressed = false;
         w.Close();
-        if (model.InlineRoots)
-        {
-            // Parent members reach the original expanded nested-record schema through this owner.
-            w.Blank();
-            w.Line("internal static partial class " + model.Owner + "_Inline");
-            w.Open();
-            w.Suppressed = !writes;
-            w.Line(inline);
-            w.Line("internal static void Write" + Arguments("TOptions") + "(this ref " + writer + " state, in " + type + "? value)");
-            w.Indented(() => w.Line(OptionsConstraint() + " => " + Serializer() + "." + container + "." +
-                Invoke("RootWriteInline", genericWrite ? "TOptions" : null) + "(ref state, value);"));
-            w.Suppressed = !reads;
-            w.Line(inline);
-            w.Line("internal static void Read" + Arguments("TOptions") + "(this ref " + reader + " state, ref " + type + "? value)");
-            w.Indented(() => w.Line(OptionsConstraint() + " => " + Serializer() + "." + container + "." +
-                Invoke("RootReadInline", genericRead ? "TOptions" : null) + "(ref state, ref value);"));
-            w.Suppressed = false;
-            w.Close();
-        }
         w.Close();
         w.Blank();
 
@@ -489,23 +470,6 @@ internal static partial class BinaryEmitter
                 "Read", genericRead, readParameters, ReadHint(read), framing: true, prepared: true);
             RootAdapter("RootRead", "Read", genericRead, readParameters, "ref reader, ref value", "LuminPackObjectFraming");
             RootAdapter("RootReadUnion", "Read", genericRead, readParameters, "ref reader, ref value", "LuminPackPayloadFraming");
-            if (model.InlineRoots)
-            {
-                // The original generator expanded this record inside its parents with each level's auto-properties before its
-                // fields, so parent members keep that schema through these roots.
-                var expanded = model.InlineView();
-                w.Blank();
-                w.Suppressed = !writes;
-                var inlineWrite = Mirrored(expanded, w, WriteBody(expanded, w, union: false), writes: true, union: false);
-                if (expanded.Proven)
-                    inlineWrite = ProvenWriteBody(expanded, w, inlineWrite, union: false);
-                inlineWrite = AddCallbacks(inlineWrite, model.WriteBefore, model.WriteAfter);
-                Method(inlineWrite, "RootWriteInline", genericWrite, "(scoped ref " + writer + " writer, " + type + "? input)", inline);
-                w.Blank();
-                w.Suppressed = !reads;
-                var inlineRead = AddReadCallbacks(model, Mirrored(expanded, w, ReadBody(expanded, w, union: false), writes: false, union: false));
-                Method(inlineRead, "RootReadInline", genericRead, "(scoped ref " + reader + " reader, scoped ref " + type + "? value)", inline);
-            }
             w.Suppressed = false;
             w.Close();
         }

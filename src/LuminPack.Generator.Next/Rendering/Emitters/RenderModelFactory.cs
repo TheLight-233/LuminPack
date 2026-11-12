@@ -357,22 +357,16 @@ internal static class RenderModelFactory
                     seedExisting: special.Formatter?.Payload is StructModel { Storage: StructStorage.ManagedRecord });
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
-                // The original generator expanded a nested record with each level's auto-properties before its fields.
-                if (nested.InlineOrder != null && !nested.Recursive && element.Members.Length == nested.InlineOrder.Length)
-                    element = element.WithInlineOrder(nested.InlineOrder).InlineView();
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,
                     0, "global::LuminPack." + element.Owner, ScalarKind.Other, mirrored, nested: element, property: property);
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel nestedRecord } payload when Create(nestedRecord, options) is { } called:
             {
                 // A nested record that cannot expand in place, such as one reached through mirrored storage, calls its own payload
-                // owner, which writes the same null marker, member count and members. A record whose original expanded order
-                // differs calls its inline-order owner instead.
+                // owner, which writes the same null marker, member count and members.
                 string formatter = "global::LuminPack." + GeneratedNames.Owner(extension, payload.Type.GlobalName);
-                var result = new RenderMember(payload.Name, RenderMemberKind.Special, ReadableTypeName.Of(payload.Type.GlobalName),
+                return new RenderMember(payload.Name, RenderMemberKind.Special, ReadableTypeName.Of(payload.Type.GlobalName),
                     payload.Type.GlobalName, 0, formatter,
                     ScalarKind.Other, mirrored, property: property, referencePayload: true, nullObjectGuard: true);
-                return !nestedRecord.Recursive && called.WithInlineOrder(nestedRecord.InlineOrder).InlineRoots
-                    ? result.WithInlineOwner(formatter + "_Inline") : result;
             }
             case CollectionMember collection:
                 return Collection(collection, extension, options);

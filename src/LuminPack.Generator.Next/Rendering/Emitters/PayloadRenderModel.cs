@@ -218,21 +218,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <returns>A member the emitters treat as a framework member: never merged into fixed runs or inline collection bodies.</returns>
     /// <remarks>Its binary calls become the owner's <c>WriteValueWithCompress</c> and <c>ReadValueWithCompress</c> extensions, as
     /// the original record writes them; its JSON calls keep the ordinary owner.</remarks>
-    /// <summary>The binary owner of a nested record reached through its inline-order roots, or null.</summary>
-    internal string InlineOwner { get; private set; }
-
     /// <summary>The owner a binary member write or read calls.</summary>
-    internal string BinaryFormatter => InlineOwner ?? Formatter;
-
-    /// <summary>Copies the member so its binary operations call the nested record's inline-order owner.</summary>
-    /// <param name="owner">The inline-order owner.</param>
-    /// <returns>The copy.</returns>
-    internal RenderMember WithInlineOwner(string owner)
-    {
-        var copy = (RenderMember)MemberwiseClone();
-        copy.InlineOwner = owner;
-        return copy;
-    }
+    internal string BinaryFormatter => Formatter;
 
     /// <summary>Copies an inline member with its root-owned checked read policy.</summary>
     /// <param name="limits">The root's frozen input limits.</param>
@@ -279,7 +266,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
 
     /// <inheritdoc/>
     public bool Equals(RenderMember other) => other != null && Name == other.Name && Kind == other.Kind && Scalar == other.Scalar &&
-        TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter && InlineOwner == other.InlineOwner &&
+        TypeName == other.TypeName && Size == other.Size && Formatter == other.Formatter &&
         FieldType == other.FieldType && Mirrored == other.Mirrored &&
         Underlying == other.Underlying && Raw == other.Raw && Builtin == other.Builtin && FormatterCall == other.FormatterCall &&
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
@@ -318,35 +305,6 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <summary>The serialized members in wire order.</summary>
     internal RenderMember[] Members { get; private set; }
 
-    /// <summary>The member positions of the original expanded nested-record schema, or null when it matches
-    /// <see cref="Members"/>.</summary>
-    internal int[] InlineOrder { get; private set; }
-
-    /// <summary>Whether the payload publishes inline-order roots that its parents' binary members call.</summary>
-    internal bool InlineRoots => InlineOrder != null && Version == null && !IsStruct && !ElementList && !HasDictionary &&
-        ConstructorArguments == null && !UnionRoot && !Circle;
-
-    /// <summary>Copies the model with the original expanded nested-record order.</summary>
-    /// <param name="order">The member positions, or null.</param>
-    /// <returns>The copy.</returns>
-    internal PayloadRenderModel WithInlineOrder(int[] order)
-    {
-        if (order == null || order.Length != Members.Length)
-            return this;
-        var copy = (PayloadRenderModel)MemberwiseClone();
-        copy.InlineOrder = order;
-        return copy;
-    }
-
-    /// <summary>Copies the model with its members in the original expanded nested-record order.</summary>
-    /// <returns>The reordered copy.</returns>
-    internal PayloadRenderModel InlineView()
-    {
-        var copy = (PayloadRenderModel)MemberwiseClone();
-        copy.Members = InlineOrder.Select(index => Members[index]).ToArray();
-        copy.InlineOrder = null;
-        return copy;
-    }
     /// <summary>Whether the variable members are all strings, so the type has a named member write and its reserved record
     /// writes take the proven object path.</summary>
     internal readonly bool Proven;

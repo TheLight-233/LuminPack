@@ -432,8 +432,7 @@ internal static partial class TypeModelFactory
                         constructor, callbacks, rent, (mirror != null || versioned) ? CaptureMirrors(symbol, identity, issues) : Array.Empty<StorageMirrorModel>(),
                         // A declared depth limit counts nesting only on recursive records, including a trusted record read under
                         // a bounded root; without one, recursion keeps only its stack guard.
-                        recursive: IsRecursive(symbol), implicitPayload: attribute == null,
-                        inlineOrder: versioned ? null : LegacyInlineOrder(symbol, members));
+                        recursive: IsRecursive(symbol), implicitPayload: attribute == null);
                 }
             }
         }
@@ -3403,37 +3402,6 @@ internal static partial class TypeModelFactory
         /// <summary>Lists the payload's base chain from the outermost base to the declaration.</summary>
         /// <param name="symbol">The declared payload.</param>
         /// <returns>The levels whose storage joins the record.</returns>
-        /// <summary>Orders the members the way the original generator expanded a nested record in its parent: each declaring
-        /// level, base first, lists its auto-properties before its fields.</summary>
-        /// <param name="symbol">The record.</param>
-        /// <param name="members">The record's members in its own wire order.</param>
-        /// <returns>The member positions in the expanded order, or null when it is the record's own order or a member declares
-        /// an explicit order.</returns>
-        private static int[]? LegacyInlineOrder(INamedTypeSymbol symbol, MemberModel[] members)
-        {
-            if (symbol.IsRecord || symbol.IsAbstract || members.Length < 2)
-                return null;
-            var levels = Levels(symbol);
-            var keys = new (int Level, int Kind)[members.Length];
-            for (int index = 0; index < members.Length; index++)
-            {
-                ISymbol? declared = null;
-                int found = -1;
-                for (int level = 0; level < levels.Count && declared == null; level++)
-                {
-                    declared = OrderedStorageMembers(levels[level])
-                        .FirstOrDefault(item => item.Name == members[index].Name && TryStorage(item, out _));
-                    found = level;
-                }
-                if (declared == null || Order(declared) != null)
-                    return null;
-                keys[index] = (found, declared is IPropertySymbol ? 0 : 1);
-            }
-            int[] order = Enumerable.Range(0, members.Length).OrderBy(index => keys[index].Level).ThenBy(index => keys[index].Kind)
-                .ThenBy(index => index).ToArray();
-            return order.Where((position, index) => position != index).Any() ? order : null;
-        }
-
         private static List<INamedTypeSymbol> Levels(INamedTypeSymbol symbol)
         {
             var levels = new List<INamedTypeSymbol>();
