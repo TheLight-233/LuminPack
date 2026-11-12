@@ -18,7 +18,22 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Writes a default element through the element's static owner.</summary>
     /// <param name = "expression">The addressable value expression.</param>
-    internal void WriteElement(string expression) => FormatterElementEmitter.Write(W, _set, _element!, expression, "operationState");
+    internal void WriteElement(string expression)
+    {
+        // A nullable reference-free scalar element is native storage, as the original element loops copied it.
+        if (NativeNullableElement)
+        {
+            W.Line("operationState.CheckBuffer();");
+            W.Line("operationState.Write(ref global::System.Runtime.CompilerServices.Unsafe.As<" + _element!.Type + ", byte>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in " +
+                expression + ")), global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + _element.Type + ">());");
+            return;
+        }
+        FormatterElementEmitter.Write(W, _set, _element!, expression, "operationState");
+    }
+
+    /// <summary>Whether the forwarded element is a nullable reference-free scalar without a storage layout.</summary>
+    internal bool NativeNullableElement => _element is { Definition: GenericIdentity.Nullable, Layout: null } element &&
+        element.Arguments.Length == 1 && element.Arguments[0].RawCollection;
     /// <summary>Retains exact mutable List and array targets selected by the legacy interface reader.</summary>
     internal void ReadInterfaceTargets()
     {

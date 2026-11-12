@@ -60,9 +60,11 @@ internal static class SerializerCallAnalysis
         if (method.TypeArguments.Length == 2)
         {
             // An open profile keeps the operation's profile parameter; the payload must still be closed.
-            if (method.TypeArguments[1] is ITypeParameterSymbol)
+            // An open profile, or one generated code cannot name, keeps the operation's profile parameter: the generic interceptor
+            // forwards it, as the original did. The payload must still be closed.
+            if (method.TypeArguments[1] is ITypeParameterSymbol || IsClosed(method.TypeArguments[1]) && !Accessible(method.TypeArguments[1]))
                 openProfile = true;
-            else if (!IsClosed(method.TypeArguments[1]) || !Accessible(method.TypeArguments[1]))
+            else if (!IsClosed(method.TypeArguments[1]))
                 return null;
             else
                 profile = method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

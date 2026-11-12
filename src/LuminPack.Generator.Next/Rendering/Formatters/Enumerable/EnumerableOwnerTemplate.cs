@@ -137,7 +137,12 @@ internal sealed partial class EnumerableOwnerContext
             if (Contiguous && _element!.RawCollection)
                 W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
             else
-                FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState");
+            {
+                if (NativeNullableElement)
+                    W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
+                else
+                    FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState");
+            }
             return;
         }
         if (Payload != null)

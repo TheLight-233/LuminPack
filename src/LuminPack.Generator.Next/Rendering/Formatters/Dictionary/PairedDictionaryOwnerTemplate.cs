@@ -109,7 +109,19 @@ internal sealed partial class PairedDictionaryContext
         {
             W.Line("operationState.CheckBuffer();");
             W.Line("operationState.EnsureAdditionalCapacity(" + Memory + ".SizeOf<" + type + ">());");
-            W.Line("operationState.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref operationState.Cursor, in " + expression + "));");
+            // A nullable entry is native storage: the by-value overload copies the complete struct, as the original raw pairs did,
+            // where the in overload frames it.
+            bool nullable = type.EndsWith("?", StringComparison.Ordinal) || type.StartsWith("global::System.Nullable<", StringComparison.Ordinal);
+            W.Line("operationState.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref operationState.Cursor, " + (nullable ? string.Empty : "in ") +
+                expression + "));");
+            return;
+        }
+        if (_contract != null && NativeNullable(_contract.Arguments[type == Key ? 0 : 1]))
+        {
+            // A nullable reference-free scalar entry is native storage, as the original raw pairs wrote it.
+            W.Line("operationState.CheckBuffer();");
+            W.Line("operationState.EnsureAdditionalCapacity(" + Memory + ".SizeOf<" + type + ">());");
+            W.Line("operationState.Advance(global::LuminPack.Core.LuminPackWriter.Write(ref operationState.Cursor, " + expression + "));");
             return;
         }
         if (_contract != null)
@@ -147,6 +159,15 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Reads one entry member from the isolated operation state into an assignable location.</summary>
     /// <param name="type">The member keyword or <c>string</c>.</param>
     /// <param name="destination">The assignable destination.</param>
+    /// <summary>Whether an entry contract is a nullable reference-free scalar without a storage layout.</summary>
+    /// <remarks>Only the families the original wrote as raw pairs (Dictionary and its interfaces) store it natively; a sorted
+    /// list frames each entry.</remarks>
+    private bool NativeNullable(FormatterModel contract) => contract.Definition == GenericIdentity.Nullable &&
+        contract.Arguments.Length == 1 && contract.Arguments[0].RawCollection && contract.Layout == null &&
+        (Dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
+         Dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
+         Dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal));
+
     internal void ReadMember(string type, string destination)
     {
         if (_nativeEntries)
@@ -155,6 +176,11 @@ internal sealed partial class PairedDictionaryContext
                 W.Line(destination + " = global::LuminPack.Security.LuminPackInputPolicy.ReadBoolean(ref operationState);");
             else
                 W.Line("operationState.Read(ref " + Memory + ".As<" + type + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + type + ">());");
+            return;
+        }
+        if (_contract != null && NativeNullable(_contract.Arguments[type == Key ? 0 : 1]))
+        {
+            W.Line("operationState.Read(ref " + Memory + ".As<" + type + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + type + ">());");
             return;
         }
         if (_contract != null)

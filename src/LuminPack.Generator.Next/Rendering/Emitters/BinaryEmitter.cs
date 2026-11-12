@@ -907,7 +907,11 @@ internal static partial class BinaryEmitter
         var result = new List<string>(body.Count + model.ReadBefore.Length + model.ReadAfter.Length);
         result.AddRange(model.ReadBefore);
         result.AddRange(body);
-        result.AddRange(model.ReadAfter);
+        // A version-tolerant read commits through the receiver it captured before the commit, which an aliased member may
+        // replace in the destination; the original raised the after-read callbacks on that receiver.
+        bool captured = model.Version != null && body.Any(line => line.StartsWith("var completedInstance = value;", StringComparison.Ordinal));
+        foreach (string line in model.ReadAfter)
+            result.Add(captured && line.StartsWith("value?.", StringComparison.Ordinal) ? "completedInstance?." + line.Substring("value?.".Length) : line);
         return result;
     }
 
