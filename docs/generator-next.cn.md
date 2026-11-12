@@ -16,7 +16,7 @@
 
 文件名沿用旧生成器的 `LuminPackGen.<命名空间>.<类型名>.g.cs` 规则，以声明的泛型参数个数替代具体类型参数。基础标量合并至 `LuminPackGen.System.g.cs`，数组合并至 `LuminPackGen.Array.g.cs`，同一框架泛型定义的不同构造合并到一个文件。
 
-核心算法位于必要适配方法之前。文件内使用别名标识静态读写容器，JSON 操作使用 `Json` 后缀。调用方重定向后移除纯转发方法，包括 `WritePolymorphismValue` 和 `DeserializeUnion`。编译器拦截和类型化委托适配保留必要签名。生成的实现名称不是应用程序入口。
+核心算法位于必要适配方法之前。保留的序列化便捷 API 位于各类型文件末尾；空的生成扩展类及其空命名空间片段不会输出。文件内使用别名标识静态读写容器，JSON 操作使用 `Json` 后缀。调用方重定向后移除纯转发方法，包括 `WritePolymorphismValue` 和 `DeserializeUnion`。编译器拦截和类型化委托适配保留必要签名。生成的实现名称不是应用程序入口。
 
 普通对象与其 Union 载荷通过无状态 framing 类型参数共享算法。`LuminPackObjectFraming` 与 `LuminPackPayloadFraming` 位于 Core。不同封闭实例保留各自的 null／对象头处理、容量预留、读取检查和发布边界。异常时必须保留调用方游标的路径仍使用独立的 Reader／Writer 状态复制包装。
 

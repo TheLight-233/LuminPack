@@ -5,6 +5,7 @@ using LuminPack.SourceGenerator.Next.Pipeline;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator.Next.Benchmarks;
 
@@ -38,6 +39,25 @@ internal static partial class Program
         Check(!Regex.IsMatch(all, @"\b(?:RootWrite|RootRead|DeserializeUnion|WritePolymorphismValue)\w*\s*[<(]"), "Direct operation publication");
         Check(!all.Contains("struct LuminPackObjectFraming"), "Core-owned framing markers");
         Check(!all.Contains("public static void Register<TMember>"), "Central Union registration");
+        VerifyPublicationLayout(formatter.GeneratedSources);
+        var plainParse = parse.WithFeatures(Array.Empty<KeyValuePair<string, string>>());
+        var layoutTree = CSharpSyntaxTree.ParseText("using LuminPack.Attribute; [LuminPackable] public partial class FirstRecord { public int Value; public string Name; } " +
+            "[LuminPackable] public partial class SecondRecord { public int Value; public string Name; }", plainParse, "ApiLayout.cs");
+        var layoutCompilation = CSharpCompilation.Create("NextApiLayout", new[] { layoutTree }, references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        GeneratorDriver layoutDriver = CSharpGeneratorDriver.Create(Generators(), parseOptions: plainParse)
+            .RunGeneratorsAndUpdateCompilation(layoutCompilation, out var layoutOutput, out var layoutDiagnostics);
+        foreach (Diagnostic diagnostic in layoutDiagnostics.Concat(layoutOutput.GetDiagnostics()))
+            if (diagnostic.Severity == DiagnosticSeverity.Error)
+                return LuminPackExceptionHelper.ThrowInvalidOperation(diagnostic.ToString());
+        Check(VerifyPublicationLayout(layoutDriver.GetRunResult().Results[0].GeneratedSources) != 0, "Retained API layout coverage");
+        var editedLayout = layoutCompilation.ReplaceSyntaxTree(layoutTree, CSharpSyntaxTree.ParseText(
+            layoutTree.ToString().Replace("public int Value;", "public int Value; public long Added;"), plainParse, "ApiLayout.cs"));
+        layoutDriver = layoutDriver.RunGeneratorsAndUpdateCompilation(editedLayout, out _, out _);
+        GeneratorDriver freshLayout = CSharpGeneratorDriver.Create(Generators(), parseOptions: plainParse)
+            .RunGeneratorsAndUpdateCompilation(editedLayout, out _, out _);
+        Check(Snapshot(layoutDriver).SequenceEqual(Snapshot(freshLayout)), "Retained API layout incremental equality");
+        VerifyPublicationLayout(layoutDriver.GetRunResult().Results[0].GeneratedSources);
         using var stream = new MemoryStream();
         var emitted = output.Emit(stream);
         if (!emitted.Success)
@@ -72,6 +92,50 @@ internal static partial class Program
         {
             if (!condition)
                 LuminPackExceptionHelper.ThrowInvalidOperation(name);
+        }
+    }
+
+    /// <summary>Checks final source order and generated-container cleanup on compiler-owned syntax trees.</summary>
+    /// <param name="files">The final generated contributions.</param>
+    /// <returns>The number of retained convenience APIs checked.</returns>
+    private static int VerifyPublicationLayout(IEnumerable<GeneratedSourceResult> files)
+    {
+        int orderedApis = 0;
+        foreach (var file in files)
+        {
+            if (file.HintName == "Formatters/LuminPackGen.Generated.g.cs" ||
+                file.HintName.EndsWith("/LuminPackGen.LuminPackSerializer.g.cs", StringComparison.Ordinal))
+                continue;
+            var syntax = file.SyntaxTree.GetRoot();
+            int lastAlgorithm = 0;
+            int firstApi = int.MaxValue;
+            foreach (TypeDeclarationSyntax declaration in syntax.DescendantNodes().OfType<TypeDeclarationSyntax>())
+                if (declaration.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal))
+                    Check(declaration.Members.Count != 0, "No empty extension carrier: " + file.HintName);
+            foreach (NamespaceDeclarationSyntax declaration in syntax.DescendantNodes().OfType<NamespaceDeclarationSyntax>())
+                Check(declaration.Members.Count != 0, "No empty payload namespace: " + file.HintName);
+            foreach (MethodDeclarationSyntax method in syntax.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                string name = method.Identifier.ValueText;
+                bool api = method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } &&
+                    (name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" ||
+                        name.StartsWith("Serialize_", StringComparison.Ordinal) || name.StartsWith("Deserialize_", StringComparison.Ordinal) ||
+                        name.StartsWith("SerializeJson_", StringComparison.Ordinal) || name.StartsWith("DeserializeJson_", StringComparison.Ordinal));
+                if (api)
+                {
+                    firstApi = Math.Min(firstApi, method.SpanStart);
+                    orderedApis++;
+                }
+                else
+                    lastAlgorithm = Math.Max(lastAlgorithm, method.Span.End);
+            }
+            Check(firstApi == int.MaxValue || lastAlgorithm < firstApi, "Algorithms precede convenience APIs: " + file.HintName);
+        }
+        return orderedApis;
+        static void Check(bool condition, string message)
+        {
+            if (!condition)
+                LuminPackExceptionHelper.ThrowInvalidOperation(message);
         }
     }
 

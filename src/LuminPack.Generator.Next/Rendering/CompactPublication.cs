@@ -249,19 +249,8 @@ internal static class CompactPublication
                 imports.Append('\n');
                 edits.Add((firstNamespace, firstNamespace, imports.ToString()));
             }
-            using var builder = new SourcePresentation.Builder(document.Text.Length);
-            int copied = 0;
             edits.Sort(static (left, right) => left.Start != right.Start ? left.Start.CompareTo(right.Start) : left.End.CompareTo(right.End));
-            foreach (var edit in edits)
-            {
-                if (edit.Start < copied)
-                    continue;
-                builder.Append(document.Text, copied, edit.Start - copied);
-                builder.Append(edit.Text, 0, edit.Text.Length);
-                copied = edit.End;
-            }
-            builder.Append(document.Text, copied, document.Text.Length - copied);
-            string output = builder.Complete();
+            string output = PublicationOrder.Render(document.Text, document.Methods, removed, edits);
             string hint = document.Source.Hint.StartsWith("LuminPack.SharedFormatters/", StringComparison.Ordinal) ? FormatterHint(document) : document.Source.Hint;
             cache.Outputs[cacheKey] = new CachedOutput(document.Source.Text, hint, output, bindings);
             Add(hint, output, document.Source.Kind);

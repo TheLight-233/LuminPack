@@ -30,6 +30,10 @@ internal static class SourcePresentation
         /// <param name="capacity">The expected character count.</param>
         internal Builder(int capacity) => _text = new PooledTextBuffer(capacity);
 
+        /// <summary>Appends a complete source fragment.</summary>
+        /// <param name="text">The source fragment.</param>
+        internal void Append(string text) => Append(text, 0, text.Length);
+
         /// <summary>Appends a source slice without creating an intermediate substring.</summary>
         /// <param name="length">The selected character count.</param>
         /// <param name="start">The inclusive character offset.</param>
