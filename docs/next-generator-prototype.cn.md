@@ -108,7 +108,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
 | P1 | 跨程序集载荷 | Next 只发现当前编译中声明在类型上的 `[LuminPackable]`。程序集级 `[LuminPackable(typeof(T))]` 外部根、引用元数据导入（旧版 `ReferencedTypeMetadata`，含诊断 LuminPack112）、外部 owner、外部 Union 和跨程序集选项均缺失。 |
-| P2 | 源泛型方法的包装特化 | 旧版通过生成的包装（`StaticSerializerBinding.Wrappers`）特化用户泛型方法内的调用；Next 通过泛型方法展开封闭这些载荷，但没有重现包装入口。 |
+| P1 | 源泛型方法的包装特化 | 旧版把到达门面的用户泛型方法的每个封闭调用（例如基于 `Deserialize<Box<T>>` 的 `Read<double>(bytes)`）重定向到该方法生成的封闭副本（`StaticSerializerBinding.Wrappers`），副本中的门面调用随后静态绑定。Next 能通过泛型方法展开找到这些封闭载荷，但不发布包装，开放方法内的门面调用也不会被拦截，因此对 `Box<double>` 或泛型 CircleReference `Node<double>` 等泛型载荷会在运行时报 "No formatter is registered"。 |
 | P2 | 其余后端组合 | 友元程序集的操作保留与单个语料上的 IL 重写已验证，但友元访问、IL 重写和禁用集成的静态后端组合仍需验证。在 .NET 8 及更高版本上，生成代码需要 C# 13（ref 字段、`ref readonly` 参数、ref struct 接口）。 |
 
 ### 生成源码
@@ -121,7 +121,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P1 | 泛型 CircleReference | 只为编译中实际出现的封闭构造生成 owner，缺少旧版发布的开放定义，其他封闭构造没有生成路径。值类型形状、复杂构造、ref 返回租借、槽位演进和失败组合均未验证。 |
+| P2 | 泛型 CircleReference | 直接使用或作为成员的封闭构造会得到 owner 并保持引用身份，包括环和重复的列表元素（已通过拦截器验证 `Node<string>`、`Node<int>` 与 `Node<double>`）。只能经由源泛型方法到达的构造依赖上面的包装缺口。值类型形状、复杂构造、ref 返回租借、槽位演进和失败组合均未验证。 |
 | P2 | 版本容忍组合 | 泛型与继承组合、压缩字段、旧名称、Schema 演进和完整的旧版交叉读取，只覆盖到测试所及范围。 |
 | P2 | 公开注解 | `NonGenerator`、`LuminPackableObject` 与别名冲突仍需完整对照旧版语义。跨程序集选项继承仍属于跨程序集缺口。 |
 | P2 | JSON 兼容性 | 各种封装、转义、旧名称、重复与未知属性、省略成员和失败发布，只覆盖到测试所及范围。 |

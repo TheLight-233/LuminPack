@@ -136,7 +136,7 @@ A checked item covers the scope stated here. Related combinations still listed b
 | Priority | Gap | Current state |
 | --- | --- | --- |
 | P1 | Cross-assembly payloads | Next discovers only `[LuminPackable]` declared on types in the current compilation. Assembly-level `[LuminPackable(typeof(T))]` external roots, referenced metadata import (legacy `ReferencedTypeMetadata`, including diagnostic LuminPack112), external owners, external Unions and cross-assembly options are missing. |
-| P2 | Wrapper specialization of source generic methods | Legacy specializes calls inside user generic methods through generated wrappers (`StaticSerializerBinding.Wrappers`); Next closes those payloads through generic method expansion but does not reproduce the wrapper entries. |
+| P1 | Wrapper specialization of source generic methods | Legacy redirects each closed call of a user generic method that reaches the facade, such as `Read<double>(bytes)` over `Deserialize<Box<T>>`, to a generated closed copy of that method (`StaticSerializerBinding.Wrappers`), whose facade calls then bind statically. Next finds those closed payloads through generic method expansion but publishes no wrapper, and the facade call inside the open method is not intercepted, so it fails at run time with "No formatter is registered" for generic payloads such as `Box<double>` or a generic CircleReference `Node<double>`. |
 | P2 | Remaining backend combinations | Friend-assembly operation retention and IL rewriting on a single fixture are verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
 
 ### Generated source
@@ -149,7 +149,7 @@ A checked item covers the scope stated here. Related combinations still listed b
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Generic CircleReference | Only the closed constructions observed in the compilation get owners; the open definition that legacy publishes is missing, so other closed constructions have no generated path. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
+| P2 | Generic CircleReference | Closed constructions used directly or as members get owners and keep reference identity, including cycles and repeated list elements (verified with `Node<string>`, `Node<int>` and `Node<double>` through interception). Constructions reached only through a source generic method depend on the wrapper gap above. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
 | P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. Cross-assembly option inheritance remains part of the cross-assembly gap. |
 | P2 | JSON compatibility | All envelopes, escaping, former names, duplicate and unknown properties, omitted members and failure publication are covered only as far as the tests reach. |
