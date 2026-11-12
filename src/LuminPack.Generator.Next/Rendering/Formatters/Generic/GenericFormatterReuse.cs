@@ -102,12 +102,6 @@ internal static class GenericFormatterReuse
             "global::" + Definition + "<" + string.Join(", ", arguments) + ">";
     }
 
-    private static readonly Family DictionaryFamily = new("System.Collections.Generic.Dictionary", "Dictionary",
-        "LuminPackGen.System.Collections.Generic.Dictionary`2.g.cs", new[] { "TKey", "TValue" }, new[] { true, false });
-
-    private static readonly Family ListFamily = new("System.Collections.Generic.List", "List",
-        "LuminPackGen.System.Collections.Generic.List`1.g.cs", new[] { "T" }, new[] { false });
-
     private static readonly Family ArrayFamily = new(FormatterDefinitions.Array, "Array", "LuminPackGen.Array.g.cs", new[] { "T" }, new[] { false });
 
     /// <summary>A closed owner planned for sharing.</summary>
@@ -130,6 +124,7 @@ internal static class GenericFormatterReuse
         private readonly SharedFormatterSet _set;
         private readonly int _mode;
         private readonly List<Plan> _plans = new();
+        private readonly HashSet<string> _ordinary = new(StringComparer.Ordinal);
 
         /// <summary>Starts a publication.</summary>
         /// <param name="set">The shared formatter facts.</param>
@@ -148,36 +143,38 @@ internal static class GenericFormatterReuse
         internal bool TryDictionary(string declaredType, GeneratedOperations operations, Func<GeneratedOperations, string> renderClosed,
             DictionaryFormatter family, DictionaryOwnerFact? fact = null)
         {
-            if (_mode == 0 || !GeneratedNames.PayloadKey(declaredType).StartsWith(DictionaryFamily.Definition + "<", StringComparison.Ordinal))
+            if (_mode == 0 || Open(declaredType, new[] { "TKey", "TValue" }, new[] { true, false }) is not { } shape)
                 return false;
             FormatterModel? model = _set.FindFormatter(declaredType);
             // A fact of raw, string or forwarded collection entries carries spellings instead of a general contract.
             if (model == null && fact.HasValue && fact.Value.Element == null && Argument(fact.Value.Key) is { } keyModel &&
                 Argument(fact.Value.Value, fact.Value.ForwardedValue) is { } valueModel)
-                model = new FormatterModel(declaredType, DictionaryFamily.Definition, new[] { keyModel, valueModel });
+                model = new FormatterModel(declaredType, shape.Definition, new[] { keyModel, valueModel });
             if (model is not { Arguments.Length: 2 })
                 return false;
             var categories = new[] { Classify(model.Arguments[0]), Classify(model.Arguments[1]) };
             if (categories[0] == Category.None || categories[1] == Category.None ||
                 categories[0] == Category.Text && categories[1] == Category.Text)
                 return false;
+            // The closed publisher renders raw and string entries with the family's entry template and any other entry
+            // through its general element template.
             bool entries = categories[0] != Category.Element && categories[1] != Category.Element;
             _plans.Add(new Plan
             {
-                Family = DictionaryFamily,
+                Family = shape,
                 Closed = model,
                 Categories = categories,
                 Operations = operations,
                 RenderClosed = renderClosed,
-                BaseName = DictionaryFamily.Name + "Of" + Spell(categories[0]) + "And" + Spell(categories[1]),
+                BaseName = shape.Name + "Of" + Spell(categories[0]) + "And" + Spell(categories[1]),
                 RenderGeneric = (set, spelling, arguments, contract, selected) => entries
-                    ? DictionaryOwnerFile.Render(set, new DictionaryOwnerFact(family, spelling, arguments[0], arguments[1]), selected)
+                    ? family.Entries(set, new DictionaryOwnerFact(family, spelling, arguments[0], arguments[1]), selected)
                     : (family.Payload ?? family.Entries)(set, new DictionaryOwnerFact(family, spelling, arguments[0], arguments[1], contract: contract), selected),
             });
             return true;
         }
 
-        /// <summary>Plans a closed single-rank array or <c>List&lt;T&gt;</c> owner.</summary>
+        /// <summary>Plans a closed single-rank array or registered one-argument sequence owner.</summary>
         /// <param name="declaredType">The closed collection spelling.</param>
         /// <param name="operations">The owner's operations.</param>
         /// <param name="renderClosed">Renders the closed owner with the given operations.</param>
@@ -186,54 +183,71 @@ internal static class GenericFormatterReuse
         internal bool TrySequence(string declaredType, GeneratedOperations operations, Func<GeneratedOperations, string> renderClosed,
             SequenceOwnerFact? fact = null)
         {
-            if (_mode == 0)
+            if (_mode == 0 || fact is { ArrayRank: > 1 })
                 return false;
             string key = GeneratedNames.PayloadKey(declaredType);
-            Family family;
-            if (key.StartsWith(ListFamily.Definition + "<", StringComparison.Ordinal))
-                family = ListFamily;
-            else if (key.EndsWith("[]", StringComparison.Ordinal) && key.IndexOf(',') < 0 && key.IndexOf("[][]", StringComparison.Ordinal) < 0 &&
-                key.Substring(0, key.Length - 2).IndexOf('[') < 0)
-                family = ArrayFamily;
-            else
-                return false;
-            if (fact is { ArrayRank: > 1 })
+            Family? shape;
+            SequenceFormatter? sequence = null;
+            if (key.EndsWith("[]", StringComparison.Ordinal))
+                shape = key.IndexOf(',') < 0 && key.Substring(0, key.Length - 2).IndexOf('[') < 0 ? ArrayFamily : null;
+            else if ((shape = Open(declaredType, new[] { "T" }, new[] { false })) != null)
+                sequence = FormatterRegistry.FindSequence(shape.Definition);
+            if (shape == null || shape != ArrayFamily && sequence == null)
                 return false;
             FormatterModel? model = _set.FindFormatter(declaredType);
             if (model == null && fact.HasValue)
             {
                 SequenceOwnerFact entries = fact.Value;
-                // A scalar fact always renders the raw block template, whatever the element's own formatter.
+                // A scalar fact always renders the raw template, whatever the element's own formatter.
                 FormatterModel? element = entries.Scalar != null ? entries.Scalar == "string" ? Argument(entries.Scalar) :
                     new FormatterModel(entries.Scalar, FormatterDefinitions.Scalar, raw: true, rawCollection: true) :
                     entries.ForwardedType != null ? Argument(entries.ForwardedType, forwarded: true) :
                     entries.Element != null ? _set.FindFormatter(entries.Element.GlobalName) : null;
                 if (element != null)
-                    model = new FormatterModel(declaredType, family == ArrayFamily ? FormatterDefinitions.Array : ListFamily.Definition,
-                        new[] { element }, rank: family == ArrayFamily ? 1 : 0);
+                    model = new FormatterModel(declaredType, shape.Definition, new[] { element }, rank: shape == ArrayFamily ? 1 : 0);
             }
             if (model is not { Arguments.Length: 1 })
                 return false;
-            FormatterModel argument = model.Arguments[0];
-            Category category = ClassifySequence(argument);
+            Category category = ClassifySequence(model.Arguments[0]);
             if (category is Category.None or Category.Text)
                 return false;
-            SequenceFormatter list = FormatterRegistry.FindSequence(ListFamily.Definition)!;
             _plans.Add(new Plan
             {
-                Family = family,
+                Family = shape,
                 Closed = model,
                 Categories = new[] { category },
                 Operations = operations,
                 RenderClosed = renderClosed,
-                BaseName = family.Name + "Of" + Spell(category),
-                RenderGeneric = (set, spelling, arguments, contract, selected) => category == Category.Unmanaged
-                    ? family == ArrayFamily
+                BaseName = shape.Name + "Of" + Spell(category),
+                // The closed publisher renders a raw element with the family's scalar template and any other element with its
+                // general element template.
+                RenderGeneric = (set, spelling, arguments, contract, selected) => sequence == null
+                    ? category == Category.Unmanaged
                         ? ArrayScalarOwnerFile.Render(set, SequenceOwnerFact.ForScalar(FormatterRegistry.Array, spelling, arguments[0]), selected)
-                        : ListScalarOwnerFile.Render(set, SequenceOwnerFact.ForScalar(list, spelling, arguments[0]), selected)
-                    : ContiguousOwnerFile.Render(set, contract, selected, family == ArrayFamily ? ContiguousShape.Array : ContiguousShape.List),
+                        : ContiguousOwnerFile.Render(set, contract, selected, ContiguousShape.Array)
+                    : category == Category.Unmanaged
+                        ? sequence.Scalar(set, SequenceOwnerFact.ForScalar(sequence, spelling, arguments[0]), selected)
+                        : sequence.General(set, SequenceOwnerFact.ForForwarding(sequence, spelling, arguments[0]), selected),
             });
             return true;
+        }
+
+        /// <summary>Describes the open family of a closed generic collection with the given type parameters.</summary>
+        /// <param name="declaredType">The closed collection spelling.</param>
+        /// <param name="parameters">The placeholder type parameters.</param>
+        /// <param name="notNull">Whether each parameter needs the <c>notnull</c> constraint.</param>
+        /// <returns>The family, or null for a nested or differently sized generic.</returns>
+        private static Family? Open(string declaredType, string[] parameters, bool[] notNull)
+        {
+            string key = GeneratedNames.PayloadKey(declaredType);
+            int open = key.IndexOf('<');
+            if (open <= 0 || key[key.Length - 1] != '>' || GeneratedText.Split(key.Substring(open + 1, key.Length - open - 2)).Length != parameters.Length)
+                return null;
+            string definition = key.Substring(0, open);
+            if (definition.IndexOf('>') >= 0)
+                return null;
+            return new Family(definition, definition.Substring(definition.LastIndexOf('.') + 1),
+                "LuminPackGen." + PublicationNames.Mangle(key) + ".g.cs", parameters, notNull);
         }
 
         /// <summary>Models an entry spelling of a fact without a general contract.</summary>
@@ -417,6 +431,10 @@ internal static class GenericFormatterReuse
                 return Reject(plan, "own name", text);
             foreach (var (placeholder, strategy) in strategies)
                 text = text.Replace(state + ReadableTypeName.Of(placeholder) + ".", "default(" + strategy + ").");
+            // An owner named after a placeholder spelling, such as the concrete dictionary a dictionary interface forwards to, has
+            // no generic counterpart.
+            if (PlaceholderOwner.IsMatch(text))
+                return Reject(plan, "placeholder owner", text);
             // A placeholder that still reaches a closed owner, or a closed element spelling, cannot be shared.
             foreach (string parameter in family.Parameters)
                 if (text.Contains(state + ReadableTypeName.Of(parameter) + "."))
@@ -448,6 +466,8 @@ internal static class GenericFormatterReuse
                 string readable = Readable(type);
                 formatters.Add("global::LuminPack.LuminPackSerializer." + readable + "Formatter");
                 strategies[readable] = strategies.TryGetValue(readable, out var prior) ? (type, prior.Operations | required) : (type, required);
+                if (plan.Closed.Arguments[index].OrdinaryObject)
+                    _ordinary.Add(readable);
             }
             arguments.AddRange(formatters);
             return "global::LuminPack.LuminPackSerializer." + plan.Name + "Formatter<" + string.Join(", ", arguments) + ">";
@@ -541,17 +561,24 @@ internal static class GenericFormatterReuse
                 string type = strategy.Value.Type, state = "global::LuminPack.Binary_" + _set.Extension + "_" + strategy.Key;
                 text.Append("        internal static partial class ").Append(strategy.Key).Append("Formatter : ")
                     .Append(string.Join(", ", Interfaces(type, operations))).Append("\n        {\n");
-                void Member(GeneratedOperations operation, string contract, string method, string stateType, string parameters, string arguments)
+                void Member(GeneratedOperations operation, string contract, string method, string stateType, string parameters, string arguments,
+                    string? prefix = null)
                 {
                     if ((operations & operation) == 0)
                         return;
                     text.Append("            ").Append(inline).Append('\n');
                     text.Append("            ").Append(modifier).Append("global::LuminPack.Code.").Append(contract).Append('<').Append(type).Append(">.")
-                        .Append(method).Append("<TOptions>(").Append(scoped).Append("ref ").Append(stateType).Append(parameters)
-                        .Append(")\n                => ").Append(state).Append('.').Append(method).Append("<TOptions>(").Append(arguments).Append(");\n");
+                        .Append(method).Append("<TOptions>(").Append(scoped).Append("ref ").Append(stateType).Append(parameters).Append(')');
+                    if (prefix == null)
+                        text.Append("\n                => ").Append(state).Append('.').Append(method).Append("<TOptions>(").Append(arguments).Append(");\n");
+                    else
+                        text.Append("\n            {\n                ").Append(prefix).Append("\n                ").Append(state).Append('.').Append(method)
+                            .Append("<TOptions>(").Append(arguments).Append(");\n            }\n");
                 }
                 Member(GeneratedOperations.BinaryWrite, "ILuminPackWriter", "Write", "global::LuminPack.Core.LuminPackWriter writer", ", in " + type + " value", "ref writer, in value");
-                Member(GeneratedOperations.BinaryRead, "ILuminPackReader", "Read", "global::LuminPack.Core.LuminPackReader reader", ", " + scoped + "ref " + type + " value", "ref reader, ref value");
+                // As the closed element reads do, a null marker clears an ordinary object before its own read consumes the marker.
+                Member(GeneratedOperations.BinaryRead, "ILuminPackReader", "Read", "global::LuminPack.Core.LuminPackReader reader", ", " + scoped + "ref " + type + " value",
+                    "ref reader, ref value", _ordinary.Contains(strategy.Key) ? "if (reader.PeekIsNullObject()) value = default!;" : null);
                 Member(GeneratedOperations.JsonWrite, "ILuminPackJsonWriter", "Write", "global::LuminPack.Core.LuminPackJsonWriter writer", ", in " + type + " value", "ref writer, value");
                 Member(GeneratedOperations.JsonRead, "ILuminPackJsonReader", "Read", "global::LuminPack.Core.LuminPackJsonReader reader", ", " + scoped + "ref " + type + " value", "ref reader, ref value");
                 text.Append("        }\n");
@@ -614,6 +641,8 @@ internal static class GenericFormatterReuse
         }
         return result.ToString();
     }
+
+    private static readonly Regex PlaceholderOwner = new(@"\b(?:Binary|LuminRoots)_\w*?(?:Of|And)(?:TKey|TValue|T)(?:And|Array|\b)", RegexOptions.Compiled);
 
     private static readonly Regex Words = new(@"(?<![\w@.:])[A-Za-z_@][\w@]*", RegexOptions.Compiled);
 
