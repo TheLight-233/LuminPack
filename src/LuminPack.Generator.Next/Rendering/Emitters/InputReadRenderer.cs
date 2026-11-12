@@ -278,7 +278,8 @@ internal static class InputReadRenderer
         int bodyOpen = container.IndexOf('{', parametersClose);
         int arrow = container.IndexOf("=>", parametersClose, StringComparison.Ordinal);
         string body;
-        if (arrow >= 0 && arrow < bodyOpen)
+        // An expression-bodied read can be the last member of its class, with no block brace after it.
+        if (arrow >= 0 && (bodyOpen < 0 || arrow < bodyOpen))
         {
             int semicolon = container.IndexOf(';', arrow);
             body = container.Substring(arrow + 2, semicolon - arrow - 1).Trim();
