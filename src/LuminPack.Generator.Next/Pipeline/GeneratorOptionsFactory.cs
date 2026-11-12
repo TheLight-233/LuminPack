@@ -71,6 +71,61 @@ internal static class GeneratorOptionsFactory
         bool ilRewrite = !interceptors && symbols.Contains("LUMINPACK_IL_REWRITE");
         return new GeneratorOptions(net8, csharp == null ? 0 : (int)csharp.LanguageVersion, csharp?.Options.AllowUnsafe ?? false, unity,
             Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite,
-            PointerCursor(compilation, net8));
+            PointerCursor(compilation, net8), AmbiguousNames(compilation));
+    }
+
+    /// <summary>The framework namespaces whose type names generated owners commonly spell.</summary>
+    private static readonly string[] FrameworkNamespaces =
+    {
+        "System", "System.Collections", "System.Collections.Generic", "System.Collections.Concurrent", "System.Collections.Immutable",
+        "System.Collections.ObjectModel", "System.Collections.Frozen", "System.Collections.Specialized", "System.Globalization",
+        "System.Numerics", "System.Text", "LuminPack",
+    };
+
+    /// <summary>Finds the simple type names that the compilation's own declarations share across namespaces or with a common
+    /// framework type, so generated names spelled from them would collide without their namespace.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>The ambiguous names in ordinal order.</returns>
+    private static string[] AmbiguousNames(Compilation compilation)
+    {
+        var paths = new Dictionary<string, string>(StringComparer.Ordinal);
+        var ambiguous = new SortedSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<INamespaceOrTypeSymbol>();
+        pending.Push(compilation.Assembly.GlobalNamespace);
+        while (pending.Count != 0)
+        {
+            INamespaceOrTypeSymbol container = pending.Pop();
+            foreach (ISymbol member in container.GetMembers())
+            {
+                if (member is INamespaceSymbol nested)
+                {
+                    pending.Push(nested);
+                    continue;
+                }
+                if (member is not INamedTypeSymbol type || type.IsImplicitlyDeclared)
+                    continue;
+                pending.Push(type);
+                string path = container.ToDisplayString();
+                if (paths.TryGetValue(type.Name, out string? seen))
+                {
+                    if (!string.Equals(seen, path, StringComparison.Ordinal))
+                        ambiguous.Add(type.Name);
+                }
+                else
+                {
+                    paths.Add(type.Name, path);
+                    foreach (string framework in FrameworkNamespaces)
+                        if (!string.Equals(framework, path, StringComparison.Ordinal) &&
+                            compilation.GetTypeByMetadataName(framework + "." + type.MetadataName) != null)
+                        {
+                            ambiguous.Add(type.Name);
+                            break;
+                        }
+                }
+            }
+        }
+        var names = new string[ambiguous.Count];
+        ambiguous.CopyTo(names);
+        return names;
     }
 }

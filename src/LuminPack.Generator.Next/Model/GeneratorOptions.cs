@@ -45,10 +45,15 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced runtime's advancing states expose a <c>byte*</c> cursor (netstandard2.1).</summary>
     internal readonly bool PointerCursor;
 
+    /// <summary>The simple type names the compilation declares in more than one namespace, or beside a common framework type,
+    /// in ordinal order; generated names keep the namespace of these types.</summary>
+    internal readonly string[] AmbiguousNames;
+
     /// <summary>Captures the project facts.</summary>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
-        string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false)
+        string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null)
     {
+        AmbiguousNames = ambiguousNames ?? Array.Empty<string>();
         PointerCursor = pointerCursor;
         IlRewrite = ilRewrite;
         Interceptors = interceptors;
@@ -65,7 +70,8 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     public bool Equals(GeneratorOptions? other) => ReferenceEquals(this, other) || other != null && Net8 == other.Net8 &&
         CSharpVersion == other.CSharpVersion && Unsafe == other.Unsafe && Unity == other.Unity &&
         RegisterMode == other.RegisterMode && AvailableAliases == other.AvailableAliases && AssemblyName == other.AssemblyName &&
-        Interceptors == other.Interceptors && IlRewrite == other.IlRewrite && PointerCursor == other.PointerCursor;
+        Interceptors == other.Interceptors && IlRewrite == other.IlRewrite && PointerCursor == other.PointerCursor &&
+        System.Linq.Enumerable.SequenceEqual(AmbiguousNames, other.AmbiguousNames);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as GeneratorOptions);

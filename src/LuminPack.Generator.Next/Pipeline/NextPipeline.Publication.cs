@@ -102,6 +102,8 @@ internal static partial class NextPipeline
         /// <returns>The rendered source contributions or statement representation.</returns>
         internal GeneratedSource[] Render(PublicationCache cache, CancellationToken token)
         {
+            // Every owner and alias name spelled below keeps the namespace of a simple name the compilation declares twice.
+            using var names = ReadableTypeName.Use(_options.AmbiguousNames);
             lock (this)
             {
                 if (_sources != null)

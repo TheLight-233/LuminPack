@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -186,8 +187,36 @@ internal static class GeneratedNames
 }
 
 /// <summary>Spells a payload type as a short identifier for generated members and containers.</summary>
+/// <remarks>A type name is spelled without its namespace unless the compilation declares that simple name in more than one
+/// namespace (or beside a common framework type); such names keep their namespace, as in <c>OtherPoint</c>, so their owners and
+/// aliases stay distinct. The ambiguous names are a compilation fact that the analysis and publication stages install with
+/// <see cref="Use"/>.</remarks>
 internal static class ReadableTypeName
 {
+    [ThreadStatic]
+    private static HashSet<string>? _ambiguous;
+
+    /// <summary>Installs the compilation's ambiguous simple type names for the current thread until the scope is disposed.</summary>
+    /// <param name="names">The ambiguous names, or an empty array.</param>
+    /// <returns>The scope that restores the previous names.</returns>
+    internal static Scope Use(string[] names)
+    {
+        HashSet<string>? previous = _ambiguous;
+        _ambiguous = names.Length == 0 ? null : new HashSet<string>(names, StringComparer.Ordinal);
+        return new Scope(previous);
+    }
+
+    /// <summary>Restores the ambiguous names that were installed before a <see cref="Use"/> call.</summary>
+    internal readonly struct Scope : IDisposable
+    {
+        private readonly HashSet<string>? _previous;
+
+        internal Scope(HashSet<string>? previous) => _previous = previous;
+
+        /// <inheritdoc/>
+        public void Dispose() => _ambiguous = _previous;
+    }
+
     /// <summary>Spells a type.</summary>
     /// <param name="spelling">A C# type spelling, optionally qualified with <c>global::</c>.</param>
     /// <returns>The identifier.</returns>
@@ -214,15 +243,31 @@ internal static class ReadableTypeName
         else
         {
             var segment = new StringBuilder();
+            var qualifier = new StringBuilder();
             while (index < text.Length && (char.IsLetterOrDigit(text[index]) || text[index] is '_' or '.' or ':'))
             {
-                if (text[index] is '.' or ':')
+                if (text[index] == '.')
+                {
+                    qualifier.Append(segment);
                     segment.Clear();
+                }
+                else if (text[index] == ':')
+                {
+                    qualifier.Clear();
+                    segment.Clear();
+                }
                 else
+                {
                     segment.Append(text[index]);
+                }
                 index++;
             }
-            part.Append(Keyword(segment.ToString()));
+            string simple = segment.ToString();
+            // A simple name the compilation declares in several namespaces keeps its namespace and containing types.
+            if (_ambiguous != null && qualifier.Length != 0 && _ambiguous.Contains(simple))
+                part.Append(qualifier).Append(simple);
+            else
+                part.Append(Keyword(simple));
             if (index < text.Length && text[index] == '<')
             {
                 index++;

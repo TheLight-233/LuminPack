@@ -120,6 +120,12 @@ A checked item covers the scope stated here. Related combinations still listed b
   `OuterOfIntInner`. A fixture with classes, a struct, two nesting levels, member and list uses, binary and JSON round-trips through
   interception and IL rewriting. The legacy generator never supported this shape (LuminPack099). Union cases nested in generic types
   are still rejected.
+- [x] **Distinct names for repeated simple type names.** Owner, entry and alias names drop namespaces, so two types with one
+  simple name in different namespaces shared an owner: their payload operations merged into one partial class, and collection
+  owners such as `List<Point>` and `List<Other.Point>` collided, leaving one of them unpublished. A compilation fact now lists the
+  simple names its declarations repeat across namespaces or share with common framework types, and those names keep their
+  namespace (`OtherPointFormatter`, `ListOfOtherPointFormatter`). Other names are unchanged; the benchmark corpus output is
+  identical.
 
 ## Not yet migrated
 

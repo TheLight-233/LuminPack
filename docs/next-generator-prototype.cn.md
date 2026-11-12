@@ -94,6 +94,10 @@ C# 12，因此较旧的语言版本通过该后端绑定。
   类型形参依次为外层形参与自身形参。封闭使用绑定到定义的泛型 owner，封闭成员类型的 owner 名称包含外层实参（如 `OuterOfIntInner`）。
   覆盖类、结构体、两层嵌套、成员与列表使用的语料，在拦截器与 IL 重写下二进制和 JSON 往返均正确。旧版生成器从未支持该形状（LuminPack099）。
   嵌套在泛型类型中的 Union case 仍被拒绝。
+- [x] **重复简单类型名的区分。** owner、入口和别名名称不含命名空间，因此不同命名空间中同名的两个类型会共享 owner：载荷操作合并进同一个
+  partial 类，而 `List<Point>` 与 `List<Other.Point>` 等集合 owner 发生冲突，其中一个不会发布。现在由编译事实列出声明在多个命名空间中、
+  或与常用框架类型同名的简单名称，这些名称保留命名空间（`OtherPointFormatter`、`ListOfOtherPointFormatter`）。其他名称不变；Benchmark
+  语料的输出完全一致。
 
 ## 尚未迁移
 

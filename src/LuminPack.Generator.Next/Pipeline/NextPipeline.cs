@@ -39,6 +39,8 @@ internal static partial class NextPipeline
                 GeneratorOptions options = GeneratorOptionsFactory.From(attributeContext.SemanticModel.Compilation);
                 var symbol = (INamedTypeSymbol)attributeContext.TargetSymbol;
                 Compilation compilation = attributeContext.SemanticModel.Compilation;
+                // Union case and formatter names captured by the model spell ambiguous simple names with their namespace.
+                using var names = ReadableTypeName.Use(options.AmbiguousNames);
                 try
                 {
                     DiagnosticInfo[] diagnostics = TypeModelFactory.Diagnose(symbol, compilation, options);
