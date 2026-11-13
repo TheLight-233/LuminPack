@@ -138,6 +138,10 @@ internal static partial class Program
         public partial interface ILimitedStructUnion { }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public partial struct TrustedStructCase : ILimitedStructUnion { public string Text { get; set; } }
+        [LuminPackable, LuminPackOption(MaxStringLength = 4)]
+        public abstract partial class LimitedOpenUnion<T> where T : struct { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrustedOpenCase<T> : LimitedOpenUnion<T> where T : struct { public string Text; }
         public static class InputLimitFixture
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
@@ -252,8 +256,16 @@ internal static partial class Program
                 byte[] utf8Struct = LuminPackSerializer.Serialize<ILimitedStructUnion, LuminPackUtf8VarIntOptions>(boxed);
                 RejectRead(() => LuminPackSerializer.Deserialize<LimitedGenericUnion<string>, LuminPackUtf8VarIntOptions>(utf8Generic));
                 RejectRead(() => LuminPackSerializer.Deserialize<ILimitedStructUnion, LuminPackUtf8VarIntOptions>(utf8Struct));
-                return 39;
+                byte[] openValid = LuminPackSerializer.Serialize(NewOpenCase<int>("ok"));
+                if (LuminPackSerializer.Deserialize<LimitedOpenUnion<int>>(openValid) == null)
+                    throw new Exception("An open generic case changed its valid framing.");
+                byte[] openOversized = LuminPackSerializer.Serialize(NewOpenCase<int>("oversized"));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedOpenUnion<int>>(openOversized));
+                return 41;
             }
+
+            private static LimitedOpenUnion<T> NewOpenCase<T>(string text) where T : struct =>
+                new TrustedOpenCase<T> { Text = text };
 
             private static void RejectContract(Action action)
             {

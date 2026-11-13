@@ -955,8 +955,11 @@ internal static partial class BinaryEmitter
             Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
         body = InputChecks(model, w, AddReadCallbacks(model, body), read: true);
         w.Line(w.Preserve);
-        w.Line("internal static void Read_" + model.Readable + "<TLuminProfile>(scoped ref " + w.A("LuminPackReader") +
+        w.Line("internal static void Read_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + w.A("LuminPackReader") +
             " reader, scoped ref " + model.GlobalName + (model.IsStruct ? " value)" : "? value)"));
+        if (model.TypeParameters.Length != 0)
+            foreach (string constraint in model.TypeConstraints)
+                w.Indented(() => w.Line(constraint));
         w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions")));
         w.Open();
         if (model.Recursive)
