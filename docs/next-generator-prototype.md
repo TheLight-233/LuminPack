@@ -158,7 +158,7 @@ by family, excluding itself, and selected operation directions for complete payl
 | Priority | Gap | Current state |
 | --- | --- | --- |
 | P2 | Cross-assembly payloads | Imported Union cases discovered only in the declaring assembly's source, open generic cases, and the wider option and backend matrix still need coverage. Legacy libraries expose a different Union slot signature from the compiled Next slots checked by the current importer. Unmarked referenced payloads use registered fallback. |
-| P2 | Remaining backend combinations | The modern application matrix executes state calls compiled in a separate friend assembly for all three binding modes. The Roslyn 4.3 harness executes C# 9 and 10 consumers with the netstandard2.1 runtime, covering IL rewriting with portable PDBs and registered fallback. Next uses flat source hints on older hosts that reject directory separators. Installed-package integration and the wider target matrix remain. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
+| P2 | Remaining backend combinations | The modern application matrix executes state calls compiled in a separate friend assembly for all three binding modes. The Roslyn 4.3 harness executes C# 9 and 10 consumers with the netstandard2.1 runtime, covering IL rewriting with portable PDBs and registered fallback. Next uses flat source hints on older hosts that reject directory separators. A local NuGet candidate passes all three binding modes on .NET 11. The wider target matrix remains. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
 
 ### Type shapes and protocols
 
@@ -215,7 +215,7 @@ These keep the wire format but produce different code from legacy.
 The AOT smoke project selects Next with `-p:LuminPackGenerator=Next` and keeps its build outputs in a separate directory.
 Its 18 retained legacy binary fixtures pass both decoding and byte-for-byte write comparison. Fresh Legacy and Next builds also
 verify each other's fixture output. Broader wire and diagnostic corpora, the remaining platform and language matrix, and fuzzing still need
-validation. Package installation continues to exercise the packaged legacy generator.
+validation. The local Next package installation fixture runs compiler interception, IL rewriting and registered fallback from a candidate NuGet feed.
 
 ```text
 dotnet run --project tests/LuminPack.Tests.Aot -c Release -p:LuminPackGenerator=Next -- --wire verify tests/LuminPack.Tests.Aot/Fixtures

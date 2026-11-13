@@ -28,6 +28,8 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all" />
     <ProjectReference Include="../LuminPack.CodeFixes/LuminPack.CodeFixes.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="../LuminPack.ILPostProcessor/LuminPack.ILPostProcessor.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="../LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
+                      Condition="'$(LuminPackPackNext)' == 'true'" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
     <None Update="buildTransitive/LuminPack.Generator.props" Pack="true" PackagePath="buildTransitive/LuminPack.Generator.props" />
     <None Update="buildTransitive/LuminPack.Generator.targets" Pack="true" PackagePath="buildTransitive/LuminPack.Generator.targets" />
@@ -39,7 +41,12 @@
     <MSBuild Projects="../LuminPack.CodeFixes/LuminPack.CodeFixes.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
       <Output TaskParameter="TargetOutputs" ItemName="_LuminPackCodeFixAssembly" />
     </MSBuild>
+    <MSBuild Projects="../LuminPack.Generator.Next/LuminPack.Generator.Next.csproj" Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" Condition="'$(LuminPackPackNext)' == 'true'">
+      <Output TaskParameter="TargetOutputs" ItemName="_LuminPackNextAssembly" />
+    </MSBuild>
     <ItemGroup>
+      <None Include="@(_LuminPackNextAssembly)" Pack="true" PackagePath="tools/next/" Visible="false" />
       <None Include="@(_LuminPackIlAssembly)" Pack="true" PackagePath="tools/" Visible="false" />
       <None Include="@(_LuminPackIlAssembly->'%(RootDir)%(Directory)Mono.Cecil.dll')" Pack="true" PackagePath="tools/" Visible="false" />
       <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />

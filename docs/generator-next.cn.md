@@ -4,6 +4,8 @@
 
 `src/LuminPack.Generator.Next` 是基于模型的新生成器。Benchmark 和运行时测试项目通过 `-p:LuminPackGenerator=Next` 选择它，也保留了旧生成器选项以便对照。发布包中的生成器仍是独立项目。
 
+测试 NuGet 安装时，为 `src/LuminPack.Generator` 打包加上 `-p:LuminPackPackNext=true`，并以相同候选版本打包 Core。从本地源安装生成的 `LuminPack` 包，在消费项目中设置 `<LuminPackGenerator>Next</LuminPackGenerator>` 即可选择包内的 Next 分析器。省略该属性时，候选包默认使用旧生成器。可用 `.github/scripts/verify-next-package.ps1` 对候选源验证编译器拦截、IL 重写和注册回退。
+
 ## 输出结构
 
 一个增量生成器输出三个目录：

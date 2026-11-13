@@ -19,6 +19,8 @@ When a project explicitly selects the Next generator, its single incremental pip
 
 For repository builds using Next, `-p:LuminPackReportGeneratorOutput=true -p:EmitCompilerGeneratedFiles=true` writes a comment-only output report with the final source size and selected operation counts. See [Next output accounting](../../docs/next-generator-prototype.md#output-accounting).
 
+A local NuGet candidate built with `LuminPackPackNext=true` includes the Next analyzer. Set `LuminPackGenerator=Next` in the consumer project to select it. See [Next generator](../../docs/generator-next.md) for the installation check.
+
 ## Quick start
 
 ```csharp

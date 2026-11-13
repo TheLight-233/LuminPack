@@ -4,6 +4,8 @@
 
 `src/LuminPack.Generator.Next` is the model-based generator. The benchmark and runtime test projects select it with `-p:LuminPackGenerator=Next`; their legacy selection remains available for comparisons. The packaged generator is a separate project.
 
+To test NuGet installation, pack `src/LuminPack.Generator` with `-p:LuminPackPackNext=true` and pack Core with the same candidate version. Install the resulting `LuminPack` package from a local feed and set `<LuminPackGenerator>Next</LuminPackGenerator>` in the consumer project. This selects the bundled Next analyzer. The candidate defaults to Legacy when the property is omitted. Run `.github/scripts/verify-next-package.ps1` against the candidate feed to exercise compiler interception, IL rewriting and registered fallback.
+
 ## Output layout
 
 One incremental generator publishes three directories:
