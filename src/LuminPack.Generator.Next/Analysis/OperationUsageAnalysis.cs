@@ -90,8 +90,15 @@ internal static class OperationUsageAnalysis
             return GeneratedOperations.None;
         if (symbol != null)
             return IsFacade(symbol) ? Of(symbol.Name) : GeneratedOperations.None;
-        // A call that cannot bind yet may still reach the facade once other generators run.
-        return IsFacadeExpression(model, invocation.Expression, cancellationToken) ? GeneratedOperations.All : GeneratedOperations.None;
+        // Another generator can supply missing argument types, but cannot change the operation named by this call.
+        if (!IsFacadeExpression(model, invocation.Expression, cancellationToken))
+            return GeneratedOperations.None;
+        return invocation.Expression switch
+        {
+            MemberAccessExpressionSyntax access => Of(access.Name.Identifier.ValueText),
+            SimpleNameSyntax name => Of(name.Identifier.ValueText),
+            _ => GeneratedOperations.All,
+        };
     }
 
     /// <summary>Checks the syntax shape of a usage that selects operations outside closed facade calls.</summary>
@@ -145,11 +152,8 @@ internal static class OperationUsageAnalysis
             return IsFacade(method) ? Of(method.Name) : GeneratedOperations.None;
         if (!IsFacadeExpression(model, expression, cancellationToken))
             return GeneratedOperations.None;
-        // nameof names an operation; any other unresolved facade expression keeps everything.
-        for (SyntaxNode? current = expression.Parent; current != null; current = current.Parent)
-            if (current is InvocationExpressionSyntax call)
-                return call.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" } ? Of(text) : GeneratedOperations.All;
-        return GeneratedOperations.All;
+        // An unresolved method group can bind after generation, but every overload has the same direction.
+        return Of(text);
     }
 
     /// <summary>Collects the identities a packable declaration reaches through its members, bases, interfaces and attribute types.</summary>

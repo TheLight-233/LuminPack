@@ -61,6 +61,26 @@ internal static partial class Program
             CheckSettings(settings + "[assembly: System.Runtime.CompilerServices.InternalsVisibleTo(" +
                 Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral("Friend", true) + ")]", 15, registration, application: true, unsafeCode);
         }
+        {
+            const string source = """
+                using LuminPack;
+                using LuminPack.Attribute;
+                [LuminPackable] public sealed class PendingPayload { public int Number; }
+                public static class Entry
+                {
+                    public static void Main() => LuminPackSerializer.Serialize(new SuppliedByAnotherGenerator());
+                }
+                """;
+            var tree = CSharpSyntaxTree.ParseText(source, parse, "PendingArgument.cs");
+            var input = CSharpCompilation.Create("PendingArgument", new[] { tree }, references,
+                new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true));
+            CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
+                .RunGeneratorsAndUpdateCompilation(input, out var output, out _);
+            var root = output.GetTypeByMetadataName("LuminPack.LuminPackSerializer+PendingPayloadFormatter");
+            RequireIncremental(root?.GetMembers("Write").Length > 0 && root.GetMembers("Read").IsEmpty &&
+                root.GetMembers("WriteJson").IsEmpty && root.GetMembers("ReadJson").IsEmpty,
+                "An unresolved serializer call should keep only the direction selected by its name.");
+        }
         AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(coreDll));
         foreach (bool registration in new[] { true, false })
         {
