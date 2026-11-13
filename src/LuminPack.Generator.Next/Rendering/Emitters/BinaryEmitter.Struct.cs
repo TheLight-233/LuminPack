@@ -48,7 +48,11 @@ internal static partial class BinaryEmitter
         string readRoot = Root("RootRead", genericRead);
         string writeUnion = Root("RootWriteUnion", genericWrite);
         string readUnion = Root("RootReadUnion", genericRead);
-        List<string> ReadBody(bool union) => InputChecks(model, w,
+        List<string> WriteRecord(bool union) => model.Rejection != null ? new List<string> { RejectUnsupported(model.Rejection) } :
+            AddCallbacks(MirroredStruct(model, w, model.Version != null ? VersionWriteBody(model, w) :
+                WriteBody(model, w, union, structValue: true)), model.WriteBefore, model.WriteAfter);
+        List<string> ReadBody(bool union) => model.Rejection != null ? new List<string> { RejectUnsupported(model.Rejection) } :
+            InputChecks(model, w,
             AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union)), read: true);
         string inline = w.MethodImpl("AggressiveInlining");
         string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
@@ -80,7 +84,7 @@ internal static partial class BinaryEmitter
         w.Line("internal static partial class " + container);
         w.Open();
         w.Suppressed = !writes;
-        var write = AddCallbacks(MirroredStruct(model, w, (model.Version != null ? VersionWriteBody(model, w) : WriteBody(model, w, union: false, structValue: true))), model.WriteBefore, model.WriteAfter);
+        var write = WriteRecord(union: false);
         Method(w, write, "RootWrite", genericWrite, RootArguments(genericWrite), ConstraintLine(genericWrite),
             "(scoped ref " + writer + " writer, scoped in " + type + " input)", WriteHint(model, write, union: false, inline));
         w.Blank();
@@ -89,7 +93,7 @@ internal static partial class BinaryEmitter
             "(scoped ref " + reader + " reader, scoped ref " + type + " value)", ReadHint(model, inline));
         w.Blank();
         w.Suppressed = !writes;
-        var unionBody = AddCallbacks(MirroredStruct(model, w, (model.Version != null ? VersionWriteBody(model, w) : WriteBody(model, w, union: true, structValue: true))), model.WriteBefore, model.WriteAfter);
+        var unionBody = WriteRecord(union: true);
         Method(w, unionBody, "RootWriteUnion", genericWrite, RootArguments(genericWrite), ConstraintLine(genericWrite),
             "(scoped ref " + writer + " writer, scoped in " + type + " input)", WriteHint(model, unionBody, union: true, inline));
         w.Blank();

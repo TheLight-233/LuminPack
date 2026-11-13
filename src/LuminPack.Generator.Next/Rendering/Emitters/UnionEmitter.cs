@@ -58,6 +58,7 @@ internal static class UnionEmitter
         w.Line("internal static void RootWrite" + model.TypeArguments(Profile) + "(scoped ref " + writer + " writer, " + type + "? input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
+        Reject(model, w);
         w.Line("var value = input;");
         w.Line("if (value is null)");
         w.Open();
@@ -78,6 +79,7 @@ internal static class UnionEmitter
         if (model.UnionReadGeneric)
             w.Indented(() => w.Line(constraint));
         w.Open();
+        Reject(model, w);
         w.Line("if (!reader." + (model.UnionWide ? "TryPeekWideUnionHeader" : "TryPeekUnionHeader") + "(out var tag))");
         w.Open();
         w.Line("value = default;");
@@ -216,6 +218,7 @@ internal static class UnionEmitter
         w.Line("internal static void RootWriteJson" + model.TypeArguments(Profile) + "(scoped ref " + writer + " writer, " + type + "? input)");
         w.Indented(() => w.Line(constraint));
         w.Open();
+        Reject(model, w);
         w.Line("var value = input;");
         w.Line("if (value is null)");
         w.Open();
@@ -231,6 +234,7 @@ internal static class UnionEmitter
         w.Line("internal static void RootReadJson" + model.TypeArguments(Profile) + "(scoped ref " + reader + " reader, scoped ref " + type + "? value)");
         w.Indented(() => w.Line(constraint));
         w.Open();
+        Reject(model, w);
         JsonReadBody(model, w, reader, type);
         w.Close();
         w.Suppressed = !writes && !reads;
@@ -361,7 +365,7 @@ internal static class UnionEmitter
             w.Line(item.Type + " member" + Number(member) + " = " + (reuse
                 ? w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
                 : "default !;"));
-            var body = BinaryEmitter.UnionReadBody(item.Model, w);
+            var body = FixedCaseRead(model, item, w);
             bool hasInstance = body.Count != 0 && body[0].StartsWith("var instance = ", StringComparison.Ordinal);
             int instance = counters.Instances;
             if (hasInstance)
@@ -407,6 +411,7 @@ internal static class UnionEmitter
     /// element instead of calling the root's read entry.</remarks>
     internal static void FreshElementRead(PayloadRenderModel model, CodeWriter w, string target, string label, string reader = "reader")
     {
+        Reject(model, w);
         w.Line("if (!" + reader + "." + (model.UnionWide ? "TryPeekWideUnionHeader" : "TryPeekUnionHeader") + "(out var tag))");
         w.Open();
         w.Line(target + " = default;");
@@ -418,6 +423,15 @@ internal static class UnionEmitter
         w.Open();
         ReadArms(model, w, false, reader, new SwitchCounters(), "Write_" + model.UnionSuffix, target, "goto " + label + ";");
         w.Close();
+    }
+
+    /// <summary>Rejects an input-selected case graph before reading or writing its framing.</summary>
+    /// <param name="model">The Union contract.</param>
+    /// <param name="w">The source writer.</param>
+    private static void Reject(PayloadRenderModel model, CodeWriter w)
+    {
+        if (model.Rejection != null)
+            w.Line(BinaryEmitter.RejectUnsupported(model.Rejection));
     }
 
     private static List<string> Rename(List<string> body, int member, int instance, int cursors, ref int cursorCount, string reader, bool reuse)
@@ -462,8 +476,21 @@ internal static class UnionEmitter
         // The two switches share the peek and the existing-instance call, and each repeats the three registered-member calls.
         int calls = 8;
         foreach (var item in model.UnionCases)
-            calls += item.OwnEntry ? 2 : 2 * InvocationCounter.Count(BinaryEmitter.UnionReadBody(item.Model, w)) + 1;
+            calls += item.OwnEntry ? 2 : 2 * InvocationCounter.Count(FixedCaseRead(model, item, w)) + 1;
         return calls <= 16;
+    }
+
+    /// <summary>Builds the fixed case read in the Union root's explicitly declared input scope.</summary>
+    /// <param name="root">The Union root.</param>
+    /// <param name="item">The expanded fixed case.</param>
+    /// <param name="w">The source writer.</param>
+    /// <returns>The case's checked statements.</returns>
+    private static List<string> FixedCaseRead(PayloadRenderModel root, UnionRenderCase item, CodeWriter w)
+    {
+        PayloadRenderModel model = item.Model;
+        if (model.Trusted && root.Limits is { Explicit: true } limits)
+            model = model.WithInput(limits, recursive: false, redirect: null);
+        return BinaryEmitter.UnionReadBody(model, w);
     }
 
     /// <summary>Emits the JSON read body of the root.</summary>
@@ -631,6 +658,7 @@ internal static class UnionEmitter
         w.Line("public static void " + operation + model.UnionSuffix + "_Compiled<" + Profile + ">(ref " + state + " writer, " + model.GlobalName + " value)");
         w.Indented(() => w.Line("where " + Profile + " : struct, " + w.A("ILuminPackOptions")));
         w.Open();
+        Reject(model, w);
         if (!json)
         {
             string standard = w.A(model.UnionStandardBinary);

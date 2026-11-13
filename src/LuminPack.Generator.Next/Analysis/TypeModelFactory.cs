@@ -354,11 +354,17 @@ internal static partial class TypeModelFactory
             WirePolicy policy = TypePolicy(symbol, kind);
             // An explicit hostile-input declaration rejects input-selected shapes in both directions; the implicit default keeps
             // them working with checked reads.
-            if (policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit && symbol.TypeKind == TypeKind.Class &&
+            if (policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit &&
                 kind != PayloadKind.Union && Rejection(symbol) is { } rejection)
+            {
+                if (kind == PayloadKind.Struct)
+                    return new StructModel(identity, accessibility, Array.Empty<MemberModel>(), policy, constraints,
+                        StructStorage.ManagedRecord, layout: null, recordWidth: false, versioned: false,
+                        rent: false, constructors: false, callbacks: false, rejection: rejection);
                 return new RecordModel(identity, accessibility, Array.Empty<MemberModel>(), policy, constraints, versioned: false,
                     fixedUnionCase: false, derived: false, proven: false, recordWidth: false, freshResult: false, mirror: null,
                     mirrorFields: null, mirrorOffsets: null, mirrorLayout: null, version: null, rejection: rejection);
+            }
 
             switch (kind)
             {
@@ -382,6 +388,7 @@ internal static partial class TypeModelFactory
                     bool referenced = !SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly);
                     if (referenced)
                         ReferencedDispatch(symbol, SlotSuffix(identity), declared, issues);
+                    string? unionRejection = policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit ? Rejection(symbol) : null;
                     return new UnionModel(identity, accessibility, policy, constraints, cases,
                         isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: SlotSuffix(identity),
                         tier: tier, tierCases: TierCases(declared, tier), tierSealed: TierSealed(declared, tier),
@@ -389,7 +396,7 @@ internal static partial class TypeModelFactory
                         binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
                         canonical: CanonicalUnionProfiles(),
                         standardBinary: UnionProfileAlias(encoding, recording),
-                        standardJson: UnionProfileAlias(encoding, recording), referenced: referenced);
+                        standardJson: UnionProfileAlias(encoding, recording), referenced: referenced, rejection: unionRejection);
                 }
                 case PayloadKind.CircleReference:
                 {

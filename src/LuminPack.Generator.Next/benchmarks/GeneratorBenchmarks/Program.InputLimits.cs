@@ -111,6 +111,16 @@ internal static partial class Program
         public partial class EarlierVersionCompressed { [LuminPackCompress] public int[] Values; public int Removed; }
         [LuminPackable, LuminPackOption(MaxInputBytes = 5)]
         public partial class LimitedStream { public int Value; }
+        [LuminPackable, LuminPackOption(UntrustedData = true)]
+        public partial struct RejectedStruct { public object Value; }
+        [LuminPackable, LuminPackUnion(0, typeof(RejectedCase)), LuminPackOption(UntrustedData = true)]
+        public abstract partial class RejectedUnion { }
+        [LuminPackable]
+        public sealed partial class RejectedCase : RejectedUnion { public object Value; }
+        [LuminPackable, LuminPackUnion(0, typeof(TrustedFlagCase)), LuminPackOption(UntrustedData = true)]
+        public abstract partial class CheckedFlagUnion { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrustedFlagCase : CheckedFlagUnion { public bool Flag; }
         public static class InputLimitFixture
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
@@ -173,7 +183,30 @@ internal static partial class Program
                 RejectRead(() => LuminPackSerializer.DeserializeAsync<LimitedStream>(oversized).GetAwaiter().GetResult());
                 if (oversized.Position != 6)
                     throw new Exception("The stream reader consumed more than the limit and one lookahead byte.");
-                return 18;
+                var rejected = new RejectedStruct { Value = 42 };
+                RejectedUnion rejectedCase = new RejectedCase { Value = 42 };
+                RejectContract(() => LuminPackSerializer.Serialize(rejected));
+                RejectContract(() => LuminPackSerializer.Deserialize<RejectedStruct>(new byte[] { 1 }));
+                RejectContract(() => LuminPackSerializer.SerializeJson(rejected));
+                RejectContract(() => LuminPackSerializer.DeserializeJson<RejectedStruct>("{}"));
+                RejectContract(() => LuminPackSerializer.Serialize(rejectedCase));
+                RejectContract(() => LuminPackSerializer.Deserialize<RejectedUnion>(new byte[] { 0 }));
+                RejectContract(() => LuminPackSerializer.SerializeJson(rejectedCase));
+                RejectContract(() => LuminPackSerializer.DeserializeJson<RejectedUnion>("{}"));
+                CheckedFlagUnion flag = new TrustedFlagCase { Flag = true };
+                byte[] flagBytes = LuminPackSerializer.Serialize(flag);
+                if (!((TrustedFlagCase)LuminPackSerializer.Deserialize<CheckedFlagUnion>(flagBytes)).Flag)
+                    throw new Exception("A checked fixed Union case changed its valid value.");
+                flagBytes[flagBytes.Length - 1] = 2;
+                RejectRead(() => LuminPackSerializer.Deserialize<CheckedFlagUnion>(flagBytes));
+                return 28;
+            }
+
+            private static void RejectContract(Action action)
+            {
+                try { action(); }
+                catch (NotSupportedException error) when (error.Message.Contains("untrusted-input option")) { return; }
+                throw new Exception("An explicitly untrusted contract accepted an input-selected type.");
             }
 
             private static void RejectRead(Action read)

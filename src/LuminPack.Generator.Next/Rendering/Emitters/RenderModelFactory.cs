@@ -110,7 +110,7 @@ internal static class RenderModelFactory
             readBefore: callbacks?.ReadBefore!, readAfter: callbacks?.ReadAfter!,
             declaredOrder: constructor?.DeclaredOrder!, rentByRef: structure?.RentByRef ?? false,
             declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
-            constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection,
+            constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection ?? structure?.Rejection,
             limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null, recursive: record?.Recursive ?? false);
     }
 
@@ -161,7 +161,8 @@ internal static class RenderModelFactory
             unionBinarySlots: Slots(model.BinarySlots), unionJsonSlots: Slots(model.JsonSlots),
             unionCanonical: model.Canonical, unionStandardBinary: model.StandardBinary, unionStandardJson: model.StandardJson,
             unionTier: (int)model.Tier, unionTierCases: model.TierCases, unionTierSealed: model.TierSealed, unionWide: model.WideTags,
-            trusted: model.Policy.Input == InputPolicy.Trusted, registration: options.RegisterMode != RegisterMode.Disabled);
+            trusted: model.Policy.Input == InputPolicy.Trusted, registration: options.RegisterMode != RegisterMode.Disabled,
+            rejection: model.Rejection, limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null);
     }
 
     /// <summary>Maps the model's compiled profile slots onto the emitter's slots.</summary>

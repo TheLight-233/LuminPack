@@ -367,6 +367,9 @@ internal enum StructStorage
 /// <summary>A value type with its storage protocol.</summary>
 internal sealed class StructModel : TypeModel
 {
+    /// <summary>The input-selected shape that makes this contract fail closed.</summary>
+    internal readonly string? Rejection;
+
     /// <summary>The storage protocol.</summary>
     internal readonly StructStorage Storage;
 
@@ -435,9 +438,10 @@ internal sealed class StructModel : TypeModel
     /// <param name="mirrorLayout">The mirror layout used by this operation.</param>
     internal StructModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks, FormatterStorageModel? storagePlan = null, string? mirror = null, string[]? mirrorFields = null, int[]? mirrorOffsets = null, string? mirrorLayout = null, ConstructorModel? construction = null, CallbackModel? serializationCallbacks = null,
-        VersionSchemaModel? version = null, string? rentCall = null, bool rentByRef = false)
+        VersionSchemaModel? version = null, string? rentCall = null, bool rentByRef = false, string? rejection = null)
         : base(identity, accessibility, PayloadKind.Struct, members, policy, constraints)
     {
+        Rejection = rejection;
         Mirror = mirror;
         MirrorFields = mirrorFields;
         MirrorOffsets = mirrorOffsets;
@@ -460,7 +464,7 @@ internal sealed class StructModel : TypeModel
     /// <inheritdoc/>
     public override bool Equals(TypeModel? other) => ReferenceEquals(this, other) ||
         other is StructModel model && base.Equals(other) && Storage == model.Storage && RecordWidth == model.RecordWidth &&
-        Versioned == model.Versioned && Rent == model.Rent && Constructors == model.Constructors &&
+        Versioned == model.Versioned && Rent == model.Rent && Constructors == model.Constructors && Rejection == model.Rejection &&
         Callbacks == model.Callbacks && Equals(Construction, model.Construction) && Equals(SerializationCallbacks, model.SerializationCallbacks) &&
         Equals(Version, model.Version) && RentCall == model.RentCall && RentByRef == model.RentByRef && Equals(Layout, model.Layout) && Equals(StoragePlan, model.StoragePlan) && Mirror == model.Mirror && MirrorLayout == model.MirrorLayout &&
         (MirrorFields ?? Array.Empty<string>()).SequenceEqual(model.MirrorFields ?? Array.Empty<string>()) &&
@@ -775,6 +779,9 @@ internal sealed class UnionSlotModel : IEquatable<UnionSlotModel>
 /// <summary>A polymorphic root.</summary>
 internal sealed class UnionModel : TypeModel
 {
+    /// <summary>The input-selected case shape that makes this contract fail closed.</summary>
+    internal readonly string? Rejection;
+
     /// <summary>The declared cases in declaration order.</summary>
     internal readonly UnionCaseModel[] Cases;
 
@@ -827,9 +834,10 @@ internal sealed class UnionModel : TypeModel
     internal UnionModel(TypeIdentity identity, TypeAccessibility accessibility, WirePolicy policy, string[] constraints, UnionCaseModel[] cases,
         bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, string[] tierCases, bool[] tierSealed, bool cursor,
         bool readGeneric, string[] chain, string? @namespace, UnionSlotModel[] binarySlots, UnionSlotModel[] jsonSlots, bool canonical,
-        string standardBinary, string standardJson, bool referenced = false)
+        string standardBinary, string standardJson, bool referenced = false, string? rejection = null)
         : base(identity, accessibility, PayloadKind.Union, System.Array.Empty<MemberModel>(), policy, constraints)
     {
+        Rejection = rejection;
         Referenced = referenced;
         StandardJson = standardJson;
         StandardBinary = standardBinary;
@@ -856,7 +864,7 @@ internal sealed class UnionModel : TypeModel
         Canonical == union.Canonical && StandardBinary == union.StandardBinary && StandardJson == union.StandardJson &&
         Namespace == union.Namespace && Same(Cases, union.Cases) && Same(TierCases, union.TierCases) &&
         Same(TierSealed, union.TierSealed) && Same(Chain, union.Chain) && Same(BinarySlots, union.BinarySlots) &&
-        Same(JsonSlots, union.JsonSlots) && Referenced == union.Referenced;
+        Same(JsonSlots, union.JsonSlots) && Referenced == union.Referenced && Rejection == union.Rejection;
 
     /// <summary>Whether the root is declared by a referenced assembly whose generated virtual dispatch the writes call; the
     /// consuming assembly declares nothing inside the root or its cases.</summary>

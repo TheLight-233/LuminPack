@@ -54,7 +54,8 @@ internal static partial class TypeModelFactory
                 if (VisitRejection(argument, seen) is { } rejection)
                     return rejection;
             // Framework values, raw unmanaged storage and registered formatters use the library's or the application's own code.
-            if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct or TypeKind.Interface) || !IsPackable(named))
+            if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct or TypeKind.Interface) ||
+                !IsPackable(named) && !Marked(named) && !IsImplicitInlineClass(named))
                 return null;
             // Generic members are analyzed on the definition; their arguments were checked above.
             INamedTypeSymbol definition = named.IsGenericType ? named.OriginalDefinition : named;
