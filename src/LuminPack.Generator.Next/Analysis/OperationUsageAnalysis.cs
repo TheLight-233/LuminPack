@@ -125,11 +125,15 @@ internal static class OperationUsageAnalysis
             return GeneratedOperations.None;
         var name = (SimpleNameSyntax)context.Node;
         string text = name.Identifier.ValueText;
-        // Generated extension methods are callable directly, so naming one keeps every operation.
-        if (IsExtensionName(text))
-            return GeneratedOperations.All;
         SemanticModel model = BindingSemanticModel.For(compilation, name.SyntaxTree);
         bool invoked = Invoked(name, out ExpressionSyntax expression);
+        if (IsExtensionName(text))
+        {
+            // A bound field or property reference is independent of generated extension methods.
+            if (!invoked && model.GetSymbolInfo(expression, cancellationToken).Symbol is IFieldSymbol or IPropertySymbol)
+                return GeneratedOperations.None;
+            return GeneratedOperations.All;
+        }
         if (invoked && text is "Write" or "Read")
         {
             if (expression is MemberAccessExpressionSyntax access && expression.Parent is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 1 })

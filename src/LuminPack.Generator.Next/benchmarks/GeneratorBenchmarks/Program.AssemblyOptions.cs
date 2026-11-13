@@ -28,6 +28,30 @@ internal static partial class Program
             CheckSettings("[assembly: LuminPack.Attribute.LuminPackGeneratorOptions(LuminPack.Attribute.LuminPackGenerationMode." +
                 mode + ", LuminPack.Attribute.LuminPackRegisterMode." + (registration ? "Auto" : "Disabled") + ")]",
                 0, registration, application: true, unsafeCode: true);
+        {
+            const string source = """
+                using LuminPack;
+                using LuminPack.Attribute;
+                [LuminPackable] public sealed class UsedPayload { public int Number; }
+                [LuminPackable] public sealed class UnusedPayload { public int Number; }
+                public sealed class OrdinaryMembers { public int ReadValue = 3; public int WriteValueJson => 4; }
+                public static class Entry
+                {
+                    public static void Main()
+                    {
+                        var ordinary = new OrdinaryMembers();
+                        LuminPackSerializer.Serialize(new UsedPayload { Number = ordinary.ReadValue + ordinary.WriteValueJson });
+                    }
+                }
+                """;
+            var result = GenerateAssembly(source, OutputKind.ConsoleApplication, allowUnsafe: true);
+            var used = result.Output.GetTypeByMetadataName("LuminPack.LuminPackSerializer+UsedPayloadFormatter");
+            RequireIncremental(used?.GetMembers("Write").Length > 0 && used.GetMembers("Read").IsEmpty &&
+                used.GetMembers("WriteJson").IsEmpty && used.GetMembers("ReadJson").IsEmpty,
+                "An ordinary field or property with a generated extension name must not retain unrelated directions.");
+            RequireIncremental(result.Output.GetTypeByMetadataName("LuminPack.LuminPackSerializer+UnusedPayloadFormatter") == null,
+                "An ordinary field or property with a generated extension name must not retain unused payloads.");
+        }
         foreach (bool unsafeCode in new[] { true, false })
         foreach (bool registration in new[] { true, false })
         {
