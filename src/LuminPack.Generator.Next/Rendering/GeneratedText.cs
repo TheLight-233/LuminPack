@@ -227,9 +227,10 @@ internal static class GeneratedText
                 continue;
             }
             string signature = text.Substring(match.Index, body - match.Index).TrimEnd();
-            string content = expression ? text.Substring(body + 2, end - body - 2).Trim() : text.Substring(body + 1, end - body - 1);
+            int contentStart = expression ? body + 2 : body + 1;
             methods!.Add(new Method(start, end + 1, match.Index, scopes.Peek().Name, name, generic,
-                text.Substring(parameters + 1, parametersEnd - parameters - 1), signature, content, expression, match.Groups["indent"].Value));
+                text.Substring(parameters + 1, parametersEnd - parameters - 1), signature, match.Groups["indent"].Value,
+                ForwardedCall(signature, text, contentStart, end - contentStart, expression)));
         }
     }
 
@@ -379,16 +380,10 @@ internal static class GeneratedText
                 int parametersEnd = Close(signature, parameters, '(', ')');
                 if (parametersEnd < 0)
                     continue;
-                int bodyLength = entry.BodyEnd - entry.BodyStart;
-                int firstSemicolon = source.IndexOf(';', header + entry.BodyStart, bodyLength);
-                bool singleStatement = firstSemicolon < 0 || source.IndexOf(';', firstSemicolon + 1, header + entry.BodyEnd - firstSemicolon - 1) < 0;
-                string body = entry.Expression || singleStatement || name is "RootWrite" or "RootRead" or "RootWriteUnion" or "RootReadUnion"
-                    ? source.Substring(header + entry.BodyStart, bodyLength) : string.Empty;
-                if (entry.Expression)
-                    body = body.Trim();
                 methods.Add(new Method(header + entry.Start, header + entry.End, header + entry.SignatureStart, entry.Owner,
                     name, generic, signature.Substring(parameters + 1, parametersEnd - parameters - 1),
-                    signature, body, entry.Expression, signature.Substring(0, LeadingWhitespace(signature))));
+                    signature, signature.Substring(0, LeadingWhitespace(signature)),
+                    ForwardedCall(signature, source, header + entry.BodyStart, entry.BodyEnd - entry.BodyStart, entry.Expression)));
             }
             Captured.Add(source, methods);
         }
@@ -444,19 +439,38 @@ internal static class GeneratedText
         return new Call(target, Split(generic), Split(source.Substring(position + 1, end - position - 1)));
     }
 
+    /// <summary>Reads a forwarding call only when the method can be a void adapter.</summary>
+    /// <param name="signature">The generated method signature.</param>
+    /// <param name="source">The generated file.</param>
+    /// <param name="start">The beginning of the body or expression.</param>
+    /// <param name="length">The length of the body or expression.</param>
+    /// <param name="expression">Whether the method uses an expression body.</param>
+    /// <returns>The forwarding call if the complete body is one invocation.</returns>
+    private static Call? ForwardedCall(string signature, string source, int start, int length, bool expression)
+    {
+        if (!signature.Contains(" void "))
+            return null;
+        if (!expression)
+        {
+            int first = source.IndexOf(';', start, length);
+            if (first >= 0 && source.IndexOf(';', first + 1, start + length - first - 1) >= 0)
+                return null;
+        }
+        return ReadCall(Trimmed(source, start, length));
+    }
+
     /// <summary>A source-writer method boundary and its explicit operation contract.</summary>
     internal sealed class Method
     {
         internal readonly int Start, End, SignatureStart;
-        internal readonly string Owner, Name, Signature, Body, Indent;
+        internal readonly string Owner, Name, Signature, Indent;
         internal readonly string[] Generics, Parameters;
-        internal readonly bool Expression, Json;
-        internal Call? Forward;
+        internal readonly bool Json;
+        internal readonly Call? Forward;
 
         /// <summary>Captures a generated method without syntax trees or symbols.</summary>
-        /// <param name="body">The operation body or forwarding expression.</param>
+        /// <param name="forward">The optional forwarding call.</param>
         /// <param name="end">The exclusive character offset.</param>
-        /// <param name="expression">Whether the body is an expression.</param>
         /// <param name="generic">The generic parameter text.</param>
         /// <param name="indent">The declaration indentation.</param>
         /// <param name="name">The unqualified method name.</param>
@@ -466,7 +480,7 @@ internal static class GeneratedText
         /// <param name="signatureStart">The start of the method signature.</param>
         /// <param name="start">The inclusive character offset.</param>
         internal Method(int start, int end, int signatureStart, string owner, string name, string generic, string parameters,
-            string signature, string body, bool expression, string indent)
+            string signature, string indent, Call? forward)
         {
             Start = start;
             End = end;
@@ -474,8 +488,7 @@ internal static class GeneratedText
             Owner = owner;
             Name = name;
             Signature = signature;
-            Body = body;
-            Expression = expression;
+            Forward = forward;
             Indent = indent;
             Generics = Split(generic);
             Parameters = Split(parameters);
@@ -483,8 +496,6 @@ internal static class GeneratedText
             int separator = name.IndexOf('_');
             Json = name.IndexOf("Json", 0, separator < 0 ? name.Length : separator, StringComparison.Ordinal) >= 0 ||
                 (Parameters.Length != 0 && Parameters[0].Contains("LuminPackJson"));
-            if (signature.Contains(" void ") && (expression || body.IndexOf(';') == body.LastIndexOf(';')))
-                Forward = ReadCall(body);
         }
     }
 
