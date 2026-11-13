@@ -130,6 +130,7 @@ internal static class InputReadRenderer
         @"(?<![\w.])(reader|operationState|state|reader2)\.ReadStrings<([^>]+)>\(([^()]*)\)", RegexOptions.CultureInvariant);
     private static readonly Regex StringOwners = new(
         @"global::LuminPack\.Binary_\w+_String\.Read<([^>]+)>\(ref (reader|operationState|state|reader2), (ref [^;]+)\);", RegexOptions.CultureInvariant);
+    private const string ForwardedBooleanRead = Policy + ".ReadBooleans(ref reader, ref ";
 
     /// <summary>Checks for a supported binary read body in a published owner.</summary>
     /// <param name="source">The original shared owner file.</param>
@@ -143,8 +144,9 @@ internal static class InputReadRenderer
         int open = source.IndexOf('{', start);
         int close = Matching(source, open, '{', '}');
         return close > open &&
-            (source.IndexOf(" RootRead<TLuminProfile>(", open, close - open, StringComparison.Ordinal) >= 0 ||
-             source.IndexOf(" RootRead(", open, close - open, StringComparison.Ordinal) >= 0);
+            (source.IndexOf(" void RootRead<TLuminProfile>(", open, close - open, StringComparison.Ordinal) >= 0 ||
+             source.IndexOf(" void RootRead<TOptions>(", open, close - open, StringComparison.Ordinal) >= 0 ||
+             source.IndexOf(" void RootRead(", open, close - open, StringComparison.Ordinal) >= 0);
     }
 
     /// <summary>Checks the counts and strings one statement reads against the frozen limits.</summary>
@@ -389,13 +391,20 @@ internal static class InputReadRenderer
         // A record of fixed members publishes a root read without a profile parameter.
         string profile = compressed ? "TOptions" : "TLuminProfile";
         string signature = compressed ? "RootReadCompressed<TOptions>(" : "RootRead<TLuminProfile>(";
-        int method = container.IndexOf(signature, StringComparison.Ordinal);
+        int method = FindMethod(signature);
         if (method < 0 && !compressed)
         {
-            signature = "RootRead(";
-            method = container.IndexOf(" " + signature, StringComparison.Ordinal) + 1;
+            signature = "RootRead<TOptions>(";
+            method = FindMethod(signature);
+            if (method >= 0)
+                profile = "TOptions";
+            else
+            {
+                signature = "RootRead(";
+                method = FindMethod(signature);
+            }
         }
-        if (method <= 0)
+        if (method < 0)
             throw new InvalidOperationException("The checked copy of '" + target + "' has no root read.");
         int parametersOpen = method + signature.Length - 1;
         int parametersClose = Matching(container, parametersOpen, '(', ')');
@@ -407,7 +416,7 @@ internal static class InputReadRenderer
         if (arrow >= 0 && (bodyOpen < 0 || arrow < bodyOpen))
         {
             int semicolon = container.IndexOf(';', arrow);
-            body = container.Substring(arrow + 2, semicolon - arrow - 1).Trim();
+            body = container.Substring(arrow + 2, semicolon - arrow - 1).Trim() + ";";
         }
         else
             body = container.Substring(bodyOpen + 1, Matching(container, bodyOpen, '{', '}') - bodyOpen - 1);
@@ -467,7 +476,7 @@ internal static class InputReadRenderer
             if (compressed)
                 throw new InvalidOperationException("The compressed read of '" + target + "' requires a closed root body.");
             helper.Append("                global::LuminPack.").Append(redirect.OwnerPrefix).Append(target)
-                .Append(".Read<TLuminProfile>(ref reader, ref value);\n");
+                .Append(".Read<").Append(profile).Append(">(ref reader, ref value);\n");
         }
         else
             foreach (string raw in body.Split('\n'))
@@ -477,6 +486,16 @@ internal static class InputReadRenderer
                     line = redirect.ApplyCompressedChild(line, target, Policy);
                 line = Project(redirect.Apply(line), redirect.Limits, Policy);
                 helper.Append(line).Append('\n');
+                // Forwarded Boolean arrays retain the fused validating copy used by the ordinary owner.
+                if (redirect.Limits.Collection != int.MaxValue &&
+                    line.IndexOf(ForwardedBooleanRead, StringComparison.Ordinal) is int booleanSite && booleanSite >= 0 &&
+                    line.EndsWith(");", StringComparison.Ordinal))
+                {
+                    int valueStart = booleanSite + ForwardedBooleanRead.Length;
+                    helper.Append(line, 0, booleanSite).Append(Policy).Append(".CheckLength(")
+                        .Append(line, valueStart, line.Length - valueStart - 2).Append(", ")
+                        .Append(Literal(redirect.Limits.Collection)).Append(");\n");
+                }
             }
         helper.Append("            }\n");
         if (!forward)
@@ -487,6 +506,12 @@ internal static class InputReadRenderer
                     helper.Append(Project(redirect.Apply(Rename(raw.TrimEnd('\r'), renames)), redirect.Limits, Policy)).Append('\n');
             }
         return helper.ToString();
+
+        int FindMethod(string name)
+        {
+            int start = container.IndexOf(" void " + name, StringComparison.Ordinal);
+            return start < 0 ? -1 : start + " void ".Length;
+        }
     }
 
     /// <summary>Reads the value parameter's type from a root read's parameter list.</summary>

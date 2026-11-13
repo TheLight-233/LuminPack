@@ -106,6 +106,14 @@ internal static partial class Program
         public sealed class LimitedArrayRoot { public TrustedContainer[] Children; }
         [LuminPackable, LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4)]
         public sealed class LimitedDictionaryRoot { public System.Collections.Generic.Dictionary<int, TrustedContainer> Children; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4)]
+        public sealed class LimitedForwardedCollections
+        {
+            [LuminPackableObject] public int[][] Jagged;
+            [LuminPackableObject] public List<int[]> Arrays;
+            [LuminPackableObject] public bool[][] Flags;
+            [LuminPackableObject] public List<string> Text;
+        }
         [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxStringLength = 4)]
         public partial class LimitedVersion { public string Text { get; set; } }
         [LuminPackable(GeneratorType.VersionTolerant)]
@@ -493,7 +501,45 @@ internal static partial class Program
                     throw new Exception("An open generic case changed its valid framing.");
                 byte[] openOversized = LuminPackSerializer.Serialize(NewOpenCase<int>("oversized"));
                 RejectRead(() => LuminPackSerializer.Deserialize<LimitedOpenUnion<int>>(openOversized));
-                return 49 + CheckNestedContracts();
+                return 49 + CheckNestedContracts() + CheckForwardedCollections<LuminPackUtf16LengthOptions>() +
+                    CheckForwardedCollections<LuminPackUtf8VarIntOptions>();
+            }
+
+            private static int CheckForwardedCollections<TProfile>() where TProfile : struct, ILuminPackOptions
+            {
+                var source = new LimitedForwardedCollections
+                {
+                    Jagged = new[] { new[] { 1 } },
+                    Arrays = new List<int[]> { new[] { 2 } },
+                    Flags = new[] { new[] { true } },
+                    Text = new List<string> { "ok" },
+                };
+                byte[] bytes = Write();
+                var copy = LuminPackSerializer.Deserialize<LimitedForwardedCollections, TProfile>(bytes);
+                var jagged = copy.Jagged;
+                var text = copy.Text;
+                if (LuminPackSerializer.Deserialize<LimitedForwardedCollections, TProfile>(bytes, ref copy) != bytes.Length ||
+                    !ReferenceEquals(jagged, copy.Jagged) || !ReferenceEquals(text, copy.Text) ||
+                    copy.Jagged[0][0] != 1 || copy.Arrays[0][0] != 2 || !copy.Flags[0][0] || copy.Text[0] != "ok")
+                    throw new Exception("Checked forwarded collections changed a valid read or its reuse.");
+                source.Jagged[0] = new int[5];
+                Reject();
+                source.Jagged[0] = null;
+                source.Arrays[0] = new int[5];
+                Reject();
+                source.Arrays[0] = null;
+                source.Flags[0] = new bool[5];
+                Reject();
+                source.Flags[0] = null;
+                source.Text[0] = "oversized";
+                Reject();
+                source.Text.Clear();
+                source.Text.AddRange(new string[5]);
+                Reject();
+                return 6;
+
+                byte[] Write() => LuminPackSerializer.Serialize<LimitedForwardedCollections, TProfile>(source);
+                void Reject() => RejectRead(() => LuminPackSerializer.Deserialize<LimitedForwardedCollections, TProfile>(Write()));
             }
 
             private static int CheckNestedContracts()
