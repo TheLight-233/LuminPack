@@ -149,7 +149,8 @@ A checked item covers the scope stated here. Related combinations still listed b
 
 In repository builds, pass `-p:LuminPackReportGeneratorOutput=true -p:EmitCompilerGeneratedFiles=true`. Next writes
 `Formatters/LuminPackGen.OutputReport.g.cs` under the compiler's generated-files directory. It counts final files and source size
-by family, excluding itself, and selected operation directions for complete payloads and unambiguous shared roots.
+by family, excluding itself, and selected operation directions for complete payloads and unambiguous shared roots. The report
+also identifies the directions retained globally by project settings, direct API use and facade fallback.
 
 ## Not yet migrated
 
@@ -187,7 +188,7 @@ These keep the wire format but produce different code from legacy.
 | P1 | Nested record expansion | Legacy expands nested records inline, including records with mirrored members, callbacks, version tolerance or pooled construction; Next calls their owners. |
 | P1 | Collection members in record bodies | Record bodies call the owners of collection members, such as a list or dictionary of Union values, where legacy expands those writes in place. |
 | P1 | Adjacent fixed-field blocks | Ordinary fixed record runs and eligible CircleReference runs use the 64-bit field-address proof and scalar fallback. CircleReference applies the proof to reserved and sequential writes and same-table reads. Version-tolerant writers with constant slot widths retain separate reservations across variable fields, and volatile fields take the scalar snapshot path. Version-tolerant same-schema reads stage scalar values behind one checked advance per run. Remaining layout, construction and protocol combinations still need comparison. |
-| P1 | Unmanaged root sharing | Legacy shares closed-generic and array roots through substitution and binding proofs; Next publishes individual roots. |
+| P2 | Unmanaged root sharing coverage | Next already shares eligible generated array and generic formatter bodies through unmanaged placeholders and binds closed owners to them. Check which remaining closed bodies lack a matching shared plan and compare their output with legacy before extending the shared families. |
 | P2 | Root inlining policy | Allocating static entries write UTF-16 length-prefixed time zone snapshots and exact scalar `IList<T>`, `ISet<T>` and `IReadOnlySet<T>` implementations directly into the result array. Other profiles or implementations retain the pooled path. Binary `List<string>` writes and reads and `SortedSet<string>` reads keep the legacy `NoInlining` boundary. Scalar enumerable, collection and list interfaces use the JIT's default read policy and keep their outlined writes. Other collection and element combinations still need comparison. |
 | P2 | JSON read allocations | A JSON read of the benchmark graph allocates about 2 KB more than legacy; the source is not identified. |
 

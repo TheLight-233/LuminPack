@@ -84,6 +84,7 @@ internal static partial class NextPipeline
         private readonly GeneratorOptions _options;
         private readonly WirePolicy _policy;
         private readonly GeneratedOperations _whole;
+        private readonly GeneratedOperations _fixed, _usage, _fallback;
         private GeneratedSource[]? _sources;
         private GeneratedSource[]? _reportedSources;
         private PublicationSnapshot? _snapshot;
@@ -95,12 +96,17 @@ internal static partial class NextPipeline
         /// <param name="options">The normalized project settings.</param>
         /// <param name="payloads">The normalized declaration results.</param>
         /// <param name="policy">The assembly wire policy.</param>
-        /// <param name="whole">The operations every payload keeps regardless of calls.</param>
+        /// <param name="fixedOperations">Operations retained by project kind or assembly options.</param>
+        /// <param name="usage">Operations retained by direct state access, registration or method groups.</param>
+        /// <param name="fallback">Operations retained by facade calls without a closed binding.</param>
         internal PublicationRequest(ImmutableArray<ModeledPayload> payloads, ImmutableArray<SerializerCallModel> calls,
             GeneratorOptions options, WirePolicy policy, DiagnosticInfo[] diagnostics,
-            GeneratedOperations whole)
+            GeneratedOperations fixedOperations, GeneratedOperations usage, GeneratedOperations fallback)
         {
-            _whole = whole;
+            _fixed = fixedOperations;
+            _usage = usage;
+            _fallback = fallback;
+            _whole = fixedOperations | usage | fallback;
             _payloads = payloads;
             _calls = calls;
             _options = options;
@@ -192,12 +198,13 @@ internal static partial class NextPipeline
             counts.AddSource(GenerationKind.Formatter, GeneratedNamespace);
             var reported = new GeneratedSource[sources.Length + 1];
             sources.CopyTo(reported, 0);
-            reported[sources.Length] = new GeneratedSource("LuminPackGen.OutputReport.g.cs", counts.Render(), GenerationKind.Formatter);
+            reported[sources.Length] = new GeneratedSource("LuminPackGen.OutputReport.g.cs", counts.Render(_fixed, _usage, _fallback), GenerationKind.Formatter);
             return _reportedSources = reported;
         }
 
         /// <inheritdoc/>
-        public bool Equals(PublicationRequest? other) => other != null && _whole == other._whole && _options.Equals(other._options) && _policy.Equals(other._policy) &&
+        public bool Equals(PublicationRequest? other) => other != null && _fixed == other._fixed && _usage == other._usage && _fallback == other._fallback &&
+            _options.Equals(other._options) && _policy.Equals(other._policy) &&
             Same(_payloads, other._payloads) && Same(_calls, other._calls) && Same(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>

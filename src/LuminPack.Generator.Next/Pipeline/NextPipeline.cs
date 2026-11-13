@@ -84,18 +84,23 @@ internal static partial class NextPipeline
         var declared = models.Collect().WithComparer(FactArrayComparer<ModeledPayload>.Instance).Combine(external)
             .Select(static (input, _) => input.Right.IsEmpty ? input.Left : input.Left.AddRange(input.Right))
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance);
+        var report = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
+            options.GlobalOptions.TryGetValue("build_property.LuminPackReportGeneratorOutput", out string? value) &&
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
         var requests = declared
-            .Combine(calls).Combine(facts.Combine(usage)).Select(static (input, _) =>
+            .Combine(calls).Combine(facts.Combine(usage)).Combine(report).Select(static (request, _) =>
         {
+            var input = request.Left;
             ImmutableArray<ModeledPayload> payloads = input.Left.Left;
             var bound = ImmutableArray.CreateBuilder<SerializerCallModel>();
             ProjectFacts project = input.Right.Left;
             var diagnostics = new List<DiagnosticInfo>(project.Diagnostics);
             HashSet<DiagnosticInfo>? callDiagnostics = null;
-            GeneratedOperations whole = input.Right.Right;
+            GeneratedOperations usage = input.Right.Right;
+            GeneratedOperations fallback = GeneratedOperations.None;
             foreach (CallFact call in input.Left.Right)
             {
-                whole |= call.Whole;
+                fallback |= call.Whole;
                 if (call.Call != null)
                 {
                     bound.Add(call.Call);
@@ -106,8 +111,14 @@ internal static partial class NextPipeline
             }
             foreach (ModeledPayload payload in payloads)
                 diagnostics.AddRange(payload.Diagnostics);
+            GeneratedOperations fixedOperations = project.Fixed;
+            if (!request.Right)
+            {
+                fixedOperations |= usage | fallback;
+                usage = fallback = GeneratedOperations.None;
+            }
             return new PublicationRequest(payloads, bound.ToImmutable(),
-                project.Options, project.Policy, diagnostics.ToArray(), project.Fixed | whole);
+                project.Options, project.Policy, diagnostics.ToArray(), fixedOperations, usage, fallback);
         });
         var diagnostics = requests.Select(static (request, _) => request.Diagnostics).WithComparer(DiagnosticInfoComparer.Instance);
         context.RegisterSourceOutput(diagnostics.Combine(context.CompilationProvider), static (production, input) =>
@@ -115,9 +126,6 @@ internal static partial class NextPipeline
             foreach (DiagnosticInfo diagnostic in input.Left)
                 production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic, input.Right));
         });
-        var report = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
-            options.GlobalOptions.TryGetValue("build_property.LuminPackReportGeneratorOutput", out string? value) &&
-            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
         InitializePublication(context, requests, report);
     }
 

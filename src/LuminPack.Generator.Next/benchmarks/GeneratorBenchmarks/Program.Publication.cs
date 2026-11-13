@@ -145,6 +145,8 @@ internal static partial class Program
         }
         RequireIncremental(Regex.IsMatch(report!, @"// Payloads ([1-9]\d*) \1 \1 \1\n") &&
             Regex.IsMatch(report!, @"// SharedRoots ([1-9]\d*) \1 \1 \1\n"), "A library retains all four directions.");
+        RequireIncremental(report!.Contains("// ProjectOrForced 1 1 1 1\n// DirectUsage 0 0 0 0\n// FacadeFallback 0 0 0 0\n", StringComparison.Ordinal),
+            "A library's project-level retention should account for all four directions.");
         var disabled = enabled.WithUpdatedAnalyzerConfigOptions(new ReportOptions(false)).RunGenerators(compilation);
         RequireIncremental(Sources(disabled).Count == ordinary.Count && !Sources(disabled).ContainsKey(hint),
             "Turning off output accounting must remove the report.");
