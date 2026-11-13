@@ -21,7 +21,11 @@ internal static partial class Program
         foreach (bool friend in new[] { false, true })
         {
             bool compiler = backend == "compiler", il = backend == "il";
-            CSharpParseOptions syntax = compiler ? parse : parse.WithFeatures(Array.Empty<KeyValuePair<string, string>>());
+            CSharpParseOptions syntax = compiler ? parse : parse.WithFeatures(new[]
+            {
+                new KeyValuePair<string, string>("InterceptorsNamespaces", "Unrelated"),
+                new KeyValuePair<string, string>("InterceptorsPreviewNamespaces", string.Empty),
+            });
             if (il)
                 syntax = syntax.WithPreprocessorSymbols(syntax.PreprocessorSymbolNames.Append("LUMINPACK_IL_REWRITE"));
             string source = StaticBackendFixture.Replace("FRIEND", friend

@@ -23,6 +23,9 @@ internal static class SerializerCallAnalysis
     private static readonly PropertyInfo? LocationVersion = LocationMethod?.ReturnType.GetProperty("Version");
     private static readonly PropertyInfo? LocationData = LocationMethod?.ReturnType.GetProperty("Data");
 
+    /// <summary>Whether the compiler exposes the versioned interception location contract.</summary>
+    internal static bool SupportsCompilerInterception => LocationVersion != null && LocationData != null;
+
     private static readonly ConditionalWeakTable<Compilation, BindingFacts> Bindings = new();
     private const int ParallelCandidateThreshold = 128;
     private const int MaximumBindingWorkers = 6;

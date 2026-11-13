@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using LuminPack.SourceGenerator.Next.Analysis;
 using LuminPack.SourceGenerator.Next.Model;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -60,7 +61,8 @@ internal static class GeneratorOptionsFactory
             {
                 foreach (string symbol in parse.PreprocessorSymbolNames)
                     symbols.Add(symbol);
-                if (parse.Features.ContainsKey("InterceptorsNamespaces") || parse.Features.ContainsKey("InterceptorsPreviewNamespaces"))
+                if (SerializerCallAnalysis.SupportsCompilerInterception && (int)parse.LanguageVersion >= 1100 &&
+                    (HasNamespace(parse, "InterceptorsNamespaces") || HasNamespace(parse, "InterceptorsPreviewNamespaces")))
                     interceptors = true;
             }
         bool net8 = symbols.Contains("NET8_0_OR_GREATER") || symbols.Contains("NET9_0_OR_GREATER") ||
@@ -73,6 +75,30 @@ internal static class GeneratorOptionsFactory
             Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite,
             PointerCursor(compilation, net8), AmbiguousNames(compilation), FormatterInterfaces(compilation),
             compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackKnownFormatters") != null);
+    }
+
+    /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>
+    private static bool HasNamespace(CSharpParseOptions parse, string feature)
+    {
+        if (!parse.Features.TryGetValue(feature, out string? namespaces))
+            return false;
+        const string name = "LuminPack";
+        int start = 0;
+        while (start < namespaces.Length)
+        {
+            int end = namespaces.IndexOf(';', start);
+            if (end < 0)
+                end = namespaces.Length;
+            int next = end + 1;
+            while (start < end && char.IsWhiteSpace(namespaces[start]))
+                start++;
+            while (end > start && char.IsWhiteSpace(namespaces[end - 1]))
+                end--;
+            if (end - start == name.Length && string.CompareOrdinal(namespaces, start, name, 0, name.Length) == 0)
+                return true;
+            start = next;
+        }
+        return false;
     }
 
     /// <summary>Reads whether the referenced runtime declares the formatter interfaces that shared generic formatters call.</summary>
