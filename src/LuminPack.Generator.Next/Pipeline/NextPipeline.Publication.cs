@@ -296,7 +296,8 @@ internal static partial class NextPipeline
         Dictionary<string, (TypeModel Payload, GeneratedOperations Operations)>? checkedOwners = null;
         foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
         {
-            if (!owner.PublishPayload || owner.Payload is not { } payload || !CanCopyPayload(payload) || !NeedsInputScope(payload))
+            if (!owner.PublishPayload || owner.Payload is not { } payload || payload.Identity.IsGeneric ||
+                !HasProjectableRead(payload) || !NeedsInputScope(payload))
                 continue;
             GeneratedOperations operations = plan.Owners.For(GeneratedNames.PayloadKey(owner.Type));
             if ((operations & GeneratedOperations.BinaryRead) == 0)
@@ -415,7 +416,7 @@ internal static partial class NextPipeline
                 inputCandidates = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
                 foreach (TypeModel candidate in retained)
                     if ((plan.For(candidate) & GeneratedOperations.BinaryRead) != 0 && CanCopyPayload(candidate) &&
-                        RenderModelFactory.Create(candidate, options) is { Rejection: null } rendered)
+                        RenderModelFactory.Create(candidate, options, checkedUnionCopy: true) is { Rejection: null } rendered)
                     {
                         inputCandidates[rendered.Readable] = rendered;
                         copyable.Add(rendered.Readable);
@@ -423,7 +424,7 @@ internal static partial class NextPipeline
                 foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
                     if (owner.PublishPayload && owner.Payload is { } candidate && CanCopyPayload(candidate) &&
                         (plan.Owners.For(GeneratedNames.PayloadKey(owner.Type)) & GeneratedOperations.BinaryRead) != 0 &&
-                        RenderModelFactory.Create(candidate, options) is { Rejection: null } rendered &&
+                        RenderModelFactory.Create(candidate, options, checkedUnionCopy: true) is { Rejection: null } rendered &&
                         !inputCandidates.ContainsKey(rendered.Readable))
                     {
                         inputCandidates.Add(rendered.Readable, rendered);
@@ -500,7 +501,8 @@ internal static partial class NextPipeline
     /// <summary>Whether a declaration owns a read that can be rendered in another input scope.</summary>
     /// <param name="model">The declaration.</param>
     /// <returns>Whether the read has a supported concrete record model.</returns>
-    private static bool CanCopyPayload(TypeModel model) => !model.Identity.IsGeneric && HasProjectableRead(model);
+    private static bool CanCopyPayload(TypeModel model) => !model.Identity.IsGeneric &&
+        (HasProjectableRead(model) || model is UnionModel { Referenced: false, Rejection: null });
 
     /// <summary>Recognizes payload algorithms that accept a nested read scope.</summary>
     /// <param name="model">The declaration or closed owner.</param>

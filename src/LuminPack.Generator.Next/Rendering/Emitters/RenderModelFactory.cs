@@ -18,11 +18,12 @@ internal static class RenderModelFactory
     /// <summary>Builds the render model of one payload.</summary>
     /// <param name="model">The normalized payload.</param>
     /// <param name="options">The project facts.</param>
+    /// <param name="checkedUnionCopy">Whether to model the Union's closed cases for an enclosing input scope.</param>
     /// <returns>The render model, or null when this adapter does not cover the payload yet.</returns>
-    internal static PayloadRenderModel? Create(TypeModel model, GeneratorOptions options, bool json = false)
+    internal static PayloadRenderModel? Create(TypeModel model, GeneratorOptions options, bool json = false, bool checkedUnionCopy = false)
     {
         if (model is UnionModel union)
-            return Union(union, options);
+            return Union(union, options, checkedUnionCopy);
         if (model is CircleReferenceModel circle)
             return Circle(circle, options);
         if (model is StructModel { Versioned: true, Version: null })
@@ -125,8 +126,9 @@ internal static class RenderModelFactory
     /// reproduce.</summary>
     /// <param name="model">The normalized Union root.</param>
     /// <param name="options">The project facts.</param>
+    /// <param name="checkedUnionCopy">Whether to resolve closed cases for a checked member read.</param>
     /// <returns>The render model, or null when the root is outside the direct Union emitters.</returns>
-    private static PayloadRenderModel? Union(UnionModel model, GeneratorOptions options)
+    private static PayloadRenderModel? Union(UnionModel model, GeneratorOptions options, bool checkedUnionCopy)
     {
         StringProfile profile = model.Policy.Strings;
         if (profile.Format != 'G' || profile.Precision != byte.MaxValue || profile.Depth != 1024 || profile.Strict)
@@ -141,7 +143,7 @@ internal static class RenderModelFactory
         {
             UnionCaseModel item = model.Cases[index];
             TypeModel? closed = item.Closed?.Payload;
-            TypeModel? payload = checkedCases || checkInput && closed?.Policy.Input == InputPolicy.Trusted
+            TypeModel? payload = checkedUnionCopy || checkedCases || checkInput && closed?.Policy.Input == InputPolicy.Trusted
                 ? closed ?? item.Model : item.Model;
             PayloadRenderModel? caseModel = payload == null ? null : Create(payload, options);
             // A case arm either calls the case's own read entry or expands a complete fixed record body.

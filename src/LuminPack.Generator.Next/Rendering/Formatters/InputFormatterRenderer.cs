@@ -17,7 +17,19 @@ internal static class InputFormatterRenderer
         // General contracts take precedence over family specializations in the original publisher. Preserve that choice.
         foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
             if (owner.Definition != FormatterDefinitions.PayloadReference && Matches(owner.Type, target))
+            {
+                if (set.Options.Net8 && owner.Definition == "System.Collections.Generic.List" &&
+                    CheckedUnion(owner.Arguments[0]) is { } listItem)
+                    return ContiguousOwnerFile.Render(set, owner, GeneratedOperations.BinaryRead, ContiguousShape.List, listItem);
+                if (owner.Definition == "System.Collections.Generic.Dictionary" && CheckedUnion(owner.Arguments[1]) is { } value &&
+                    FormatterRegistry.FindDictionary(owner.Type) is { } family)
+                {
+                    var fact = new DictionaryOwnerFact(family, owner.Type, owner.Arguments[0].Type,
+                        owner.Arguments[1].Type, contract: owner);
+                    return PayloadDictionaryOwnerFile.Render(set, fact, GeneratedOperations.BinaryRead, value);
+                }
                 return null;
+            }
         foreach (SequenceOwnerFact fact in set.SequenceOwners ?? Array.Empty<SequenceOwnerFact>())
             if (fact.Element != null && fact.Family.Payload != null && Matches(fact.DeclaredType, target))
                 return fact.Family.Payload(set, fact.WithInput(redirect), GeneratedOperations.BinaryRead);
@@ -30,6 +42,11 @@ internal static class InputFormatterRenderer
                 return (fact.Family.Payload ?? fact.Family.Entries)(set, checkedFact, GeneratedOperations.BinaryRead);
             }
         return null;
+
+        PayloadRenderModel? CheckedUnion(FormatterModel argument) =>
+            argument.Payload is UnionModel { Referenced: false, Rejection: null } union && !union.Identity.IsGeneric &&
+            RenderModelFactory.Create(union, set.Options, checkedUnionCopy: true) is { } model
+                ? model.WithInput(redirect.Limits, recursive: false, redirect) : null;
     }
 
     /// <summary>Matches a catalog type using the publisher's exact readable owner identity.</summary>

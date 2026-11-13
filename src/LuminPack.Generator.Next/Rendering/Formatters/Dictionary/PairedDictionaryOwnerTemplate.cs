@@ -52,9 +52,10 @@ internal sealed partial class PairedDictionaryContext
     internal bool Supports(string capability) => _set.FindFormatter(Dictionary)?.Supports(capability) == true;
     /// <summary>Whether both entry operations are raw unmanaged scalar stores.</summary>
     /// <summary>The Union root render model of the value, from the payload element or the closed contract, or null.</summary>
-    internal PayloadRenderModel? UnionValue => Payload is { UnionRoot: true } payload ? payload :
+    internal PayloadRenderModel? UnionValue => _checkedUnion ?? (Payload is { UnionRoot: true } payload ? payload :
         _contract is { Arguments.Length: 2 } && _contract.Arguments[1].Payload is UnionModel union && _set.Options != null &&
-        RenderModelFactory.Create(union, _set.Options) is { UnionRoot: true } rendered ? rendered : null;
+        RenderModelFactory.Create(union, _set.Options) is { UnionRoot: true } rendered ? rendered : null);
+    private readonly PayloadRenderModel? _checkedUnion;
 
     /// <summary>Whether matching keys may seed a string or ordinary object value.</summary>
     internal bool ReferenceValue => Value == "string" || Payload != null || _contract?.Arguments[1].OrdinaryObject == true;
@@ -77,10 +78,13 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="contract">The normalized closed formatter contract.</param>
     /// <param name="set">The shared formatter publication facts.</param>
     /// <param name="nativeEntries">The native entries used by this operation.</param>
+    /// <param name="checkedUnion">The fresh Union value operation under the enclosing input policy.</param>
     internal PairedDictionaryContext(CodeWriter writer, string dictionary, string key, string value, string memory, string extension,
         string source = "value", string keyMember = "Key", string valueMember = "Value", PayloadRenderModel? payload = null,
-        bool forwardedValue = false, FormatterModel? contract = null, SharedFormatterSet set = default, bool nativeEntries = false)
+        bool forwardedValue = false, FormatterModel? contract = null, SharedFormatterSet set = default, bool nativeEntries = false,
+        PayloadRenderModel? checkedUnion = null)
     {
+        _checkedUnion = checkedUnion;
         _nativeEntries = nativeEntries;
         _contract = contract;
         _set = set;
@@ -401,8 +405,10 @@ internal static class PairedDictionaryOwnerTemplate
     /// <param name="fact">The closed dictionary owner.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <param name="spec">The family algorithms.</param>
+    /// <param name="checkedUnion">The fresh Union value operation under the enclosing input policy.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations, PairedDictionarySpec spec)
+    internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations, PairedDictionarySpec spec,
+        PayloadRenderModel? checkedUnion = null)
     {
         using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
@@ -430,7 +436,7 @@ internal static class PairedDictionaryOwnerTemplate
             (value != "string" && fact.Element == null && !fact.ForwardedValue ? memory + ".SizeOf<" + value + ">()" : "1");
         const string generic = "    where TLuminProfile : struct, ";
         var context = new PairedDictionaryContext(w, dictionary, key, value, memory, extension, spec.Source, spec.KeyMember, spec.ValueMember,
-            fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries);
+            fact.Element, fact.ForwardedValue, fact.Contract, set, nativeEntries, checkedUnion);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);

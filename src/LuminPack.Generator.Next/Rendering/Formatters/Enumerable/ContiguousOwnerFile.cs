@@ -28,14 +28,16 @@ internal static class ContiguousOwnerFile
     /// <param name = "operations">The binary and JSON operations to publish.</param>
     /// <param name = "shape">The shape used by this operation.</param>
     /// <returns>The generated source or selected source-ready name.</returns>
-    internal static string Render(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations, ContiguousShape shape)
+    /// <param name="checkedUnion">The fresh Union element read under the enclosing root's limits, if supplied.</param>
+    internal static string Render(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations, ContiguousShape shape,
+        PayloadRenderModel? checkedUnion = null)
     {
         FormatterModel element = model.Arguments[0];
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
         bool reference = shape is ContiguousShape.Array or ContiguousShape.List;
         // A Union element of a list keeps the original fresh loop, which needs the root's case arms.
-        PayloadRenderModel? freshUnion = element.Payload is UnionModel union && set.Options != null && set.Options.Net8
-            ? RenderModelFactory.Create(union, set.Options) : null;
+        PayloadRenderModel? freshUnion = checkedUnion ?? (element.Payload is UnionModel union && set.Options != null && set.Options.Net8
+            ? RenderModelFactory.Create(union, set.Options) : null);
         if (freshUnion is { UnionRoot: false })
             freshUnion = null;
         bool scalarElements = shape == ContiguousShape.ReadOnlySequence;

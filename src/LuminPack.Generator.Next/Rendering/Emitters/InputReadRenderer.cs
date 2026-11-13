@@ -21,7 +21,8 @@ internal sealed class InputRedirect
     private readonly HashSet<string> _copyable;
     private readonly HashSet<string> _unchanged;
     private readonly IReadOnlyDictionary<string, string> _compressedChildren;
-    private readonly HashSet<(string Name, bool Compressed)> _requested = new();
+    private readonly HashSet<(string Name, InputReadKind Kind)> _requested = new();
+    private Dictionary<string, PayloadRenderModel> _unionCases;
 
     /// <summary>Captures the root and the targets whose read bodies can be copied.</summary>
     /// <param name="root">The root's readable name, whose own entry already applies these limits.</param>
@@ -55,7 +56,7 @@ internal sealed class InputRedirect
     internal readonly string Helpers;
 
     /// <summary>The readable names whose copies were requested, in request order.</summary>
-    internal readonly List<(string Name, bool Compressed)> Targets = new();
+    internal readonly List<(string Name, InputReadKind Kind)> Targets = new();
 
     /// <summary>Redirects one statement's nested owner read to the root's checked copy.</summary>
     /// <param name="line">The statement.</param>
@@ -90,7 +91,7 @@ internal sealed class InputRedirect
                 search = nameEnd;
                 continue;
             }
-            string replacement = Request(target, compressed) + "<";
+            string replacement = Request(target, compressed ? InputReadKind.Compressed : InputReadKind.Ordinary) + "<";
             line = line.Substring(0, start) + replacement + line.Substring(readStart + read.Length);
             search = start + replacement.Length;
         }
@@ -98,12 +99,27 @@ internal sealed class InputRedirect
     }
 
     /// <summary>Registers a checked read and returns its generated method name.</summary>
-    private string Request(string target, bool compressed)
+    internal string Request(string target, InputReadKind kind)
     {
-        if (_requested.Add((target, compressed)))
-            Targets.Add((target, compressed));
-        return Helpers + (compressed ? ".ReadCompressed_" : ".Read_") + target;
+        if (_requested.Add((target, kind)))
+            Targets.Add((target, kind));
+        return Helpers + (kind switch
+        {
+            InputReadKind.Compressed => ".ReadCompressed_",
+            InputReadKind.UnionCase => ".ReadUnionCase_",
+            _ => ".Read_",
+        }) + target;
     }
+
+    /// <summary>Requests the exact case model with its Union payload framing.</summary>
+    internal string RequestUnionCase(PayloadRenderModel payload)
+    {
+        (_unionCases ??= new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal))[payload.Readable] = payload;
+        return Request(payload.Readable, InputReadKind.UnionCase);
+    }
+
+    /// <summary>Returns the case model recorded when the Union switch requested the helper.</summary>
+    internal PayloadRenderModel UnionCase(string target) => _unionCases[target];
 
     /// <summary>Applies the collection limit at the compressed child before its read can allocate.</summary>
     internal string ApplyCompressedChild(string line, string target, string policy)
@@ -115,10 +131,18 @@ internal sealed class InputRedirect
         string child = _compressedChildren[target];
         int start = line.Length - line.TrimStart().Length;
         if (_compressedChildren.ContainsKey(child))
-            return line.Substring(0, start) + Request(child, compressed: true) + line.Substring(call + operation.Length - 1);
+            return line.Substring(0, start) + Request(child, InputReadKind.Compressed) + line.Substring(call + operation.Length - 1);
         return line.Insert(start, policy + ".CheckCompressedCount(reader.GetSpan().Slice(reader.Position), " +
             Limits.Collection.ToString(CultureInfo.InvariantCulture) + "); ");
     }
+}
+
+/// <summary>The wire entry whose read body is copied under the caller's policy.</summary>
+internal enum InputReadKind
+{
+    Ordinary,
+    Compressed,
+    UnionCase,
 }
 
 /// <summary>Projects frozen input limits onto read statements and renders a bounded root's checked copies.</summary>
@@ -288,10 +312,16 @@ internal static class InputReadRenderer
         using var payloadWriter = new CheckedPayloadFile(aliases, scoped, redirect.Helpers);
         for (int index = 0; index < redirect.Targets.Count; index++)
         {
-            var (target, compressed) = redirect.Targets[index];
-            if (!compressed && payloads.TryGetValue(target, out PayloadRenderModel payload))
+            var (target, kind) = redirect.Targets[index];
+            bool compressed = kind == InputReadKind.Compressed;
+            PayloadRenderModel payload = null;
+            if (kind == InputReadKind.UnionCase)
+                payload = redirect.UnionCase(target);
+            else if (!compressed)
+                payloads.TryGetValue(target, out payload);
+            if (payload != null)
             {
-                payloadWriter.Emit(payload.WithInput(redirect.Limits, payload.Recursive, redirect));
+                payloadWriter.Emit(payload.WithInput(redirect.Limits, payload.Recursive, redirect), kind);
                 continue;
             }
             string source = (compressed ? null : InputFormatterRenderer.Render(set, target, redirect)) ??
@@ -345,7 +375,7 @@ internal static class InputReadRenderer
 
         /// <summary>Appends the checked read of a modeled payload.</summary>
         /// <param name="model">The payload with the root's input policy.</param>
-        internal void Emit(PayloadRenderModel model)
+        internal void Emit(PayloadRenderModel model, InputReadKind kind)
         {
             if (_writer == null)
             {
@@ -357,7 +387,11 @@ internal static class InputReadRenderer
                 _writer.Line("internal static partial class " + _helpers);
                 _writer.Open();
             }
-            BinaryEmitter.EmitCheckedPayloadRead(model, _writer, unionCase: false);
+            if (model.UnionRoot)
+                UnionEmitter.EmitCheckedMemberRead(model, _writer);
+            else
+                BinaryEmitter.EmitCheckedPayloadRead(model, _writer, unionCase: kind == InputReadKind.UnionCase,
+                    methodPrefix: kind == InputReadKind.UnionCase ? "ReadUnionCase_" : "Read_");
         }
 
         /// <summary>Returns the complete file, or empty text when there are no modeled reads.</summary>

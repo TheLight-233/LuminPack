@@ -960,7 +960,8 @@ internal static partial class BinaryEmitter
     /// <param name="model">The payload with its enclosing policy and nested read redirects applied.</param>
     /// <param name="w">The source writer.</param>
     /// <param name="unionCase">Whether a class read consumes Union payload framing.</param>
-    internal static void EmitCheckedPayloadRead(PayloadRenderModel model, CodeWriter w, bool unionCase)
+    /// <param name="methodPrefix">The helper's prefix for this entry's wire framing.</param>
+    internal static void EmitCheckedPayloadRead(PayloadRenderModel model, CodeWriter w, bool unionCase, string methodPrefix = "Read_")
     {
         bool versioned = model.Version != null;
         // Interface Union struct cases call their ordinary owner and retain its record header.
@@ -969,7 +970,7 @@ internal static partial class BinaryEmitter
             Mirrored(model, w, ReadBody(model, w, unionCase), writes: false, unionCase);
         body = InputChecks(model, w, model.Circle ? body : AddReadCallbacks(model, body), read: true);
         w.Line(w.Preserve);
-        w.Line("internal static void Read_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + w.A("LuminPackReader") +
+        w.Line("internal static void " + methodPrefix + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + w.A("LuminPackReader") +
             " reader, scoped ref " + model.GlobalName + (model.IsStruct ? " value)" : "? value)"));
         if (model.TypeParameters.Length != 0)
             foreach (string constraint in model.TypeConstraints)

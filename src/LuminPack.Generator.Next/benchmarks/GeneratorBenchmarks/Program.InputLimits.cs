@@ -182,6 +182,16 @@ internal static partial class Program
         public sealed partial class TrustedTextCase : LimitedUnion { public string Text { get; set; } }
         [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
         public sealed partial class TrustedVersionCase : LimitedUnion { public string Text { get; set; } }
+        [LuminPackable, LuminPackOption(MaxStringLength = 2)]
+        public sealed class LimitedUnionMember { public LimitedUnion Value; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 2)]
+        public sealed class LimitedUnionBatch { public LimitedUnion[] Values; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 2)]
+        public sealed class LimitedUnionContainers
+        {
+            public List<LimitedUnion> List;
+            public Dictionary<int, LimitedUnion> Map;
+        }
         [LuminPackable, LuminPackUnion(0, typeof(TrackedCase)), LuminPackUnion(1, typeof(FixedTrackedCase)),
             LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4, MaxDepth = 2)]
         public abstract partial class LimitedTrackedUnion { }
@@ -518,7 +528,45 @@ internal static partial class Program
                 RejectRead(() => LuminPackSerializer.Deserialize<LimitedOpenUnion<int>>(openOversized));
                 return 49 + CheckNestedContracts() + CheckForwardedCollections<LuminPackUtf16LengthOptions>() +
                     CheckForwardedCollections<LuminPackUtf8VarIntOptions>() +
-                    CheckTrackedUnion<LuminPackUtf16LengthOptions>() + CheckTrackedUnion<LuminPackUtf8VarIntOptions>();
+                    CheckTrackedUnion<LuminPackUtf16LengthOptions>() + CheckTrackedUnion<LuminPackUtf8VarIntOptions>() +
+                    CheckUnionMembers<LuminPackUtf16LengthOptions>() + CheckUnionMembers<LuminPackUtf8VarIntOptions>();
+            }
+
+            private static int CheckUnionMembers<TProfile>() where TProfile : struct, ILuminPackOptions
+            {
+                var item = new TrustedVersionCase { Text = "ok" };
+                var source = new LimitedUnionMember { Value = item };
+                var array = new LimitedUnionBatch { Values = new LimitedUnion[] { item, null } };
+                var containers = new LimitedUnionContainers { List = new() { item }, Map = new() { [1] = item } };
+                byte[] memberBytes = LuminPackSerializer.Serialize<LimitedUnionMember, TProfile>(source);
+                var member = new LimitedUnionMember { Value = new TrustedVersionCase() };
+                var candidate = member.Value;
+                if (LuminPackSerializer.Deserialize<LimitedUnionMember, TProfile>(memberBytes, ref member) != memberBytes.Length ||
+                    !ReferenceEquals(candidate, member.Value) || ((TrustedVersionCase)member.Value).Text != "ok" ||
+                    LuminPackSerializer.Deserialize<LimitedUnionBatch, TProfile>(LuminPackSerializer.Serialize<LimitedUnionBatch, TProfile>(array))
+                        .Values[1] != null)
+                    throw new Exception("The checked Union member changed framing or case reuse.");
+                byte[] containerBytes = WriteContainers();
+                var containersCopy = LuminPackSerializer.Deserialize<LimitedUnionContainers, TProfile>(containerBytes);
+                if (((TrustedVersionCase)containersCopy.List[0]).Text != "ok" || ((TrustedVersionCase)containersCopy.Map[1]).Text != "ok" ||
+                    LuminPackSerializer.Deserialize<LimitedUnionContainers, TProfile>(containerBytes, ref containersCopy) != containerBytes.Length)
+                    throw new Exception("The checked list or dictionary of Unions changed its read.");
+                item.Text = "four";
+                byte[] ordinary = LuminPackSerializer.Serialize<LimitedUnion, TProfile>(item);
+                if (((TrustedVersionCase)LuminPackSerializer.Deserialize<LimitedUnion, TProfile>(ordinary)).Text != "four")
+                    throw new Exception("The standalone Union lost its declared input scope.");
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnionMember, TProfile>(
+                    LuminPackSerializer.Serialize<LimitedUnionMember, TProfile>(source)));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnionBatch, TProfile>(
+                    LuminPackSerializer.Serialize<LimitedUnionBatch, TProfile>(array)));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnionContainers, TProfile>(WriteContainers()));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnionContainers, TProfile>(WriteContainers(), ref containersCopy));
+                containers.List.Clear();
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnionContainers, TProfile>(WriteContainers()));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnionContainers, TProfile>(WriteContainers(), ref containersCopy));
+                return 9;
+
+                byte[] WriteContainers() => LuminPackSerializer.Serialize<LimitedUnionContainers, TProfile>(containers);
             }
 
             private static int CheckTrackedUnion<TProfile>() where TProfile : struct, ILuminPackOptions

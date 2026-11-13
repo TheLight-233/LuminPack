@@ -16,7 +16,11 @@ internal static class PayloadDictionaryOwnerFile
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
-        PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
+        Render(set, fact, operations, null);
+
+    /// <summary>Renders the same dictionary traversal with checked fresh Union elements when requested.</summary>
+    internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations,
+        PayloadRenderModel? checkedUnion) => PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec, checkedUnion);
 
     private static void Read(PairedDictionaryContext c)
     {
