@@ -34,7 +34,10 @@ public class ScalarReadReturnTest
         CheckNullable<long>(long.MaxValue);
         CheckNullable<Guid>(null);
         CheckNullable<Guid>(Guid.Parse("8f3d1c2b-4a59-4e6f-9b70-1d2c3e4f5a6b"));
-        CheckNullable<Complex>(new Complex(3, 4));
+        Complex? complex = new Complex(3, 4);
+        byte[] complexBytes = LuminPackSerializer.Serialize(complex);
+        Assert.Equal(complex, LuminPackSerializer.Deserialize<Complex?>(complexBytes));
+        CheckNullable(complex);
     }
 
     /// <summary>Checks immutable staging slices, empty/null records and managed elements.</summary>
