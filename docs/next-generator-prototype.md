@@ -169,7 +169,7 @@ A checked item covers the scope stated here. Related combinations still listed b
 | Priority | Gap | Current state |
 | --- | --- | --- |
 | P1 | Checked copies | Only roots with a declared limit request checked copies. Unbounded untrusted roots and the remaining owner/profile combinations still need migration and validation; the completed bounded inline scopes are listed above. |
-| P1 | Uncovered payload kinds | Direct read-site checks cover versioned records (same and evolved schema), mirrored string storage, reference-tracked records and managed structs. A recursive reference-tracked root counts new records against its depth cap. Explicitly untrusted struct and Union roots reject input-selected shapes in binary and JSON. Expanded fixed Union cases honor the root's explicit untrusted scope. Checked copies across payload boundaries, including Union cases that use their own entries, remain open. |
+| P1 | Uncovered payload kinds | Direct read-site checks cover versioned records, mirrored string storage, reference-tracked records and managed structs. Explicitly untrusted struct and Union roots reject input-selected shapes. Expanded fixed Union cases and separate binary reads of non-generic class cases use the root policy, including mirrored and versioned cases and fresh List elements. Cross-payload checked copies for remaining shapes, including generic and struct Union cases, remain open. |
 | P2 | Stream, async and compression | The binary async stream fixture checks the encoded cap and single-byte lookahead. The compressed array fixture checks the declared element cap. The remaining protocol, nested scope and reuse combinations still need coverage. |
 
 ### Performance mechanisms

@@ -351,7 +351,10 @@ internal static class UnionEmitter
                         : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(" + target + ")!;"
                     : "default !;"));
                 // A struct case reads its boxed value through its payload owner, which every struct file publishes.
-                w.Line(StructCase(item)
+                w.Line(NeedsCheckedCase(model, item)
+                    ? w.A("LuminPackSerializer") + ".LuminUnionInput_" + model.Readable + ".Read_" + item.Readable +
+                      "<" + (item.ReadGeneric ? Profile : w.A(model.UnionStandardBinary)) + ">(ref " + reader + ", ref member" + Number(member) + ");"
+                    : StructCase(item)
                     ? CaseOwner(model, item) + ".Read<" + Profile + ">(ref " + reader + ", ref member" + Number(member) + ");"
                     : w.A("LuminPackSerializer") + ".DeserializeUnion" + (model.UniqueEntries ? "_" + item.Readable : string.Empty) +
                     (item.ReadGeneric ? "<" + Prefix(item) + Profile + ">" : item.Arguments.Length != 0 ? "<" + item.Arguments + ">" : string.Empty) +
@@ -492,6 +495,15 @@ internal static class UnionEmitter
             model = model.WithInput(limits, recursive: false, redirect: null);
         return BinaryEmitter.UnionReadBody(model, w);
     }
+
+    /// <summary>Whether the ordinary class case needs its own copy under a different Union root policy.</summary>
+    /// <param name="root">The Union root.</param>
+    /// <param name="item">The case.</param>
+    /// <returns>Whether to call the Union-specific checked body.</returns>
+    internal static bool NeedsCheckedCase(PayloadRenderModel root, UnionRenderCase item) =>
+        root.Rejection == null && root.Limits is { Explicit: true } limits && item.OwnEntry &&
+        item.Model is { IsStruct: false, Circle: false, Rejection: null, TypeParameters.Length: 0 } model &&
+        item.Definition == null && (model.Trusted || !limits.Equals(model.Limits));
 
     /// <summary>Emits the JSON read body of the root.</summary>
     private static void JsonReadBody(PayloadRenderModel model, CodeWriter w, string reader, string type)

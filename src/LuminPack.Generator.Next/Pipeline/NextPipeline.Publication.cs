@@ -260,7 +260,9 @@ internal static partial class NextPipeline
             GeneratedOperations operations = plan.For(model);
             if (operations == GeneratedOperations.None)
                 continue;
-            bool cacheable = !BoundedRoot(model);
+            bool checkedUnion = model is UnionModel { Rejection: null } && model.Policy.Input == InputPolicy.Untrusted &&
+                model.Policy.Limits.Explicit && (operations & GeneratedOperations.BinaryRead) != 0;
+            bool cacheable = !BoundedRoot(model) && !checkedUnion;
             if (cacheable && snapshot.Payloads.TryGetValue(model.Identity.GlobalName, out var cached) && cached.Operations == operations &&
                 cached.Model.Equals(model) && cached.Options.Equals(options))
             {
@@ -274,39 +276,48 @@ internal static partial class NextPipeline
             string json;
             if (model is UnionModel)
             {
-                binary = UnionRenderer.Instance.RenderBinary(model, renderContext);
-                json = UnionRenderer.Instance.RenderJson(model, renderContext);
+                var union = RenderModelFactory.Create(model, options);
+                binary = union == null ? string.Empty : UnionRenderer.Render(union, renderContext, json: false);
+                json = union == null ? string.Empty : UnionRenderer.Render(union, renderContext, json: true);
+                if (checkedUnion && union != null)
+                {
+                    InputRedirect? redirect = null;
+                    using var writer = new CodeWriter(options.AvailableAliases) { Scoped = union.Net8 };
+                    HashSet<string>? emitted = null;
+                    foreach (UnionRenderCase item in union.UnionCases)
+                    {
+                        if (!UnionEmitter.NeedsCheckedCase(union, item) || !(emitted ??= new HashSet<string>(StringComparer.Ordinal)).Add(item.Readable))
+                            continue;
+                        if (redirect == null)
+                        {
+                            redirect = CreateRedirect(union.Readable, model.Policy.Limits);
+                            writer.Line("namespace LuminPack");
+                            writer.Open();
+                            writer.Line("public static partial class LuminPackSerializer");
+                            writer.Open();
+                            writer.Line("internal static class LuminUnionInput_" + union.Readable);
+                            writer.Open();
+                        }
+                        var payload = item.Model;
+                        BinaryEmitter.EmitCheckedUnionCase(payload.WithInput(redirect.Limits, payload.Recursive, redirect), writer);
+                    }
+                    if (redirect != null)
+                    {
+                        writer.Close();
+                        writer.Close();
+                        writer.Close();
+                        Add(hint + ".UnionInput.g.cs", writer.Complete(false), GenerationKind.Binary);
+                        AddCopies(hint, redirect, operations);
+                    }
+                }
             }
             else if (BoundedRoot(model) && RenderModelFactory.Create(model, options) is { } root)
             {
-                if (copyable == null)
-                {
-                    copyable = new HashSet<string>(StringComparer.Ordinal);
-                    inputCandidates = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
-                    foreach (TypeModel candidate in retained)
-                        if (plan.For(candidate) != GeneratedOperations.None && candidate is RecordModel { Rejection: null, Versioned: false } &&
-                            RenderModelFactory.Create(candidate, options) is { Circle: false, IsStruct: false, Mirror: null, Version: null } rendered &&
-                            rendered.Mirrors.Length == 0)
-                        {
-                            inputCandidates[rendered.Readable] = rendered;
-                            copyable.Add(rendered.Readable);
-                        }
-                    sharedInputSources = new List<string>(shared.Length);
-                    foreach (var source in shared)
-                    {
-                        sharedInputSources.Add(source.Value);
-                        foreach (Match match in Regex.Matches(source.Value, @"class LuminRoots_(\w+)", RegexOptions.CultureInvariant))
-                            if (InputReadRenderer.CanCopy(source.Value, match.Groups[1].Value))
-                                copyable.Add(match.Groups[1].Value);
-                    }
-                }
-                var redirect = new InputRedirect(root.Readable, GeneratedNames.Extension(options.AssemblyName), model.Policy.Limits, copyable);
+                var redirect = CreateRedirect(root.Readable, model.Policy.Limits);
                 binary = PayloadEmitter.Render(root.WithInput(model.Policy.Limits, ((RecordModel)model).Recursive, redirect), false,
                     options.AvailableAliases, operations);
-                // The checked copies are reads, copied from the read bodies the root's own operations publish.
                 if ((operations & GeneratedOperations.BinaryRead) != 0)
-                    Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, inputCandidates!, sharedInputSources!,
-                        options.AvailableAliases, operations, set), GenerationKind.Binary);
+                    AddCopies(hint, redirect, operations);
                 json = JsonRenderer.Instance.Render(model, renderContext);
             }
             else
@@ -325,6 +336,37 @@ internal static partial class NextPipeline
                 snapshot.Payloads[model.Identity.GlobalName] = new CachedPayload(model, options, operations, emitted);
             }
         }
+
+        InputRedirect CreateRedirect(string readable, InputLimits limits)
+        {
+            if (copyable == null)
+            {
+                copyable = new HashSet<string>(StringComparer.Ordinal);
+                inputCandidates = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
+                foreach (TypeModel candidate in retained)
+                    if (plan.For(candidate) != GeneratedOperations.None && candidate is RecordModel { Rejection: null, Versioned: false } &&
+                        RenderModelFactory.Create(candidate, options) is { Circle: false, IsStruct: false, Mirror: null, Version: null } rendered &&
+                        rendered.Mirrors.Length == 0)
+                    {
+                        inputCandidates[rendered.Readable] = rendered;
+                        copyable.Add(rendered.Readable);
+                    }
+                sharedInputSources = new List<string>(shared.Length);
+                foreach (var source in shared)
+                {
+                    sharedInputSources.Add(source.Value);
+                    foreach (Match match in Regex.Matches(source.Value, @"class LuminRoots_(\w+)", RegexOptions.CultureInvariant))
+                        if (InputReadRenderer.CanCopy(source.Value, match.Groups[1].Value))
+                            copyable.Add(match.Groups[1].Value);
+                }
+            }
+            return new InputRedirect(readable, GeneratedNames.Extension(options.AssemblyName), limits, copyable);
+        }
+
+        void AddCopies(string hint, InputRedirect redirect, GeneratedOperations operations) =>
+            Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, inputCandidates!, sharedInputSources!,
+                options.AvailableAliases, operations, set), GenerationKind.Binary);
+
         var obsolete = new List<string>();
         foreach (string name in snapshot.Payloads.Keys)
             if (!seen.Contains(name))
@@ -360,16 +402,20 @@ internal static partial class NextPipeline
     {
         var entries = new List<KeyValuePair<string, RootEntry>>();
         foreach (ModeledPayload payload in payloads)
-            if (payload.Result.IsComplete && payload.Result.Model is { } model &&
-                (model.Identity.IsGeneric ? model is RecordModel or StructModel { StoragePlan: null } or UnionModel && RenderModelFactory.Create(model, payload.Options) != null
-                    : model is UnionModel or StructModel { StoragePlan: not null } || RenderModelFactory.Create(model, payload.Options) != null))
+            if (payload.Result.IsComplete && payload.Result.Model is { } model)
             {
+                bool generic = model.Identity.IsGeneric;
+                bool intrinsic = !generic && model is UnionModel or StructModel { StoragePlan: not null };
+                if (generic && model is not (RecordModel or StructModel { StoragePlan: null } or UnionModel))
+                    continue;
+                PayloadRenderModel? rendered = intrinsic ? null : RenderModelFactory.Create(model, payload.Options);
+                if (!intrinsic && rendered == null)
+                    continue;
                 WirePolicy policy = model.Policy;
                 string profile = policy.Declared ? ProfileNames.Type(policy.Strings) : RootEntry.DefaultProfile;
                 // Only the record and plain struct emitters publish MeasureRecord_<payload>, and only for a closed payload with
                 // unique entry names; the entry measures through it.
-                bool measured = !model.Identity.IsGeneric && model is not UnionModel && model is not StructModel { StoragePlan: not null } &&
-                    RenderModelFactory.Create(model, payload.Options) is { MeasureRecord: true, UniqueEntries: true } rendered &&
+                bool measured = !generic && rendered is { MeasureRecord: true, UniqueEntries: true } &&
                     !(rendered.IsStruct && (rendered.Version != null || rendered.ManagedStruct));
                 entries.Add(new KeyValuePair<string, RootEntry>(model.Identity.GlobalName,
                     new RootEntry(ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Identity.GlobalName)), profile, true, true,

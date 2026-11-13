@@ -42,6 +42,8 @@ internal static partial class Program
         {
             InputLimitFixture.Replace("MaxStringLength = 4", "MaxStringLength = 1"),
             InputLimitFixture.Replace("MaxStringLength = 4, MaxCollectionLength = 4", "UntrustedData = false"),
+            InputLimitFixture.Replace("LuminPackOption(MaxStringLength = 4)]\npublic abstract partial class LimitedUnion",
+                "LuminPackOption(UntrustedData = false)]\npublic abstract partial class LimitedUnion"),
             InputLimitFixture,
         })
         {
@@ -121,6 +123,13 @@ internal static partial class Program
         public abstract partial class CheckedFlagUnion { }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public sealed partial class TrustedFlagCase : CheckedFlagUnion { public bool Flag; }
+        [LuminPackable, LuminPackUnion(0, typeof(TrustedTextCase)), LuminPackUnion(1, typeof(TrustedVersionCase)),
+            LuminPackOption(MaxStringLength = 4)]
+        public abstract partial class LimitedUnion { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrustedTextCase : LimitedUnion { public string Text { get; set; } }
+        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrustedVersionCase : LimitedUnion { public string Text { get; set; } }
         public static class InputLimitFixture
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
@@ -199,7 +208,26 @@ internal static partial class Program
                     throw new Exception("A checked fixed Union case changed its valid value.");
                 flagBytes[flagBytes.Length - 1] = 2;
                 RejectRead(() => LuminPackSerializer.Deserialize<CheckedFlagUnion>(flagBytes));
-                return 28;
+                LimitedUnion textCase = new TrustedTextCase { Text = "ok" };
+                LimitedUnion versionCase = new TrustedVersionCase { Text = "ok" };
+                byte[] textCaseBytes = LuminPackSerializer.Serialize(textCase);
+                byte[] versionCaseBytes = LuminPackSerializer.Serialize(versionCase);
+                LimitedUnion existing = new TrustedTextCase();
+                var original = existing;
+                if (LuminPackSerializer.Deserialize(textCaseBytes, ref existing) != textCaseBytes.Length ||
+                    !ReferenceEquals(original, existing) || ((TrustedTextCase)existing).Text != "ok" ||
+                    ((TrustedVersionCase)LuminPackSerializer.Deserialize<LimitedUnion>(versionCaseBytes)).Text != "ok")
+                    throw new Exception("The checked Union case changed framing or reuse.");
+                ((TrustedTextCase)textCase).Text = "oversized";
+                ((TrustedVersionCase)versionCase).Text = "oversized";
+                byte[] oversizedTextCase = LuminPackSerializer.Serialize(textCase);
+                byte[] oversizedVersionCase = LuminPackSerializer.Serialize(versionCase);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnion>(oversizedTextCase));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedUnion>(oversizedVersionCase));
+                var cases = new System.Collections.Generic.List<LimitedUnion> { textCase };
+                byte[] oversizedCases = LuminPackSerializer.Serialize(cases);
+                RejectRead(() => LuminPackSerializer.Deserialize<System.Collections.Generic.List<LimitedUnion>>(oversizedCases));
+                return 33;
             }
 
             private static void RejectContract(Action action)

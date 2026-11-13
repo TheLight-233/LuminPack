@@ -32,7 +32,17 @@ internal sealed class UnionRenderer : IRenderer
             json && (context.Operations & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) == 0)
             return string.Empty;
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);
-        if (direct == null || !direct.UnionRoot)
+        return direct == null ? string.Empty : Render(direct, context, json);
+    }
+
+    /// <summary>Publishes a Union from the projection shared by its ordinary and checked reads.</summary>
+    /// <param name="direct">The projected Union.</param>
+    /// <param name="context">The render facts.</param>
+    /// <param name="json">Whether to render the JSON roots.</param>
+    /// <returns>The generated file.</returns>
+    internal static string Render(PayloadRenderModel direct, RenderContext context, bool json)
+    {
+        if (!direct.UnionRoot || json && (context.Operations & (GeneratedOperations.JsonWrite | GeneratedOperations.JsonRead)) == 0)
             return string.Empty;
         using var writer = new CodeWriter(context.Options.AvailableAliases) { Scoped = direct.Net8 };
         if (json)

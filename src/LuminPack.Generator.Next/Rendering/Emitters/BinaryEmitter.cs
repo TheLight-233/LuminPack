@@ -944,6 +944,26 @@ internal static partial class BinaryEmitter
     internal static List<string> UnionReadBody(PayloadRenderModel model, CodeWriter w)
         => AddReadCallbacks(model, ReadBody(model, w, union: true));
 
+    /// <summary>Emits the existing case payload read with the enclosing Union's checked input policy.</summary>
+    /// <param name="model">The case with its enclosing policy and nested read redirects applied.</param>
+    /// <param name="w">The source writer.</param>
+    internal static void EmitCheckedUnionCase(PayloadRenderModel model, CodeWriter w)
+    {
+        bool versioned = model.Version != null;
+        var body = versioned ? VersionReadBody(model, w) :
+            Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
+        body = InputChecks(model, w, AddReadCallbacks(model, body), read: true);
+        w.Line(w.Preserve);
+        w.Line("internal static void Read_" + model.Readable + "<TLuminProfile>(scoped ref " + w.A("LuminPackReader") +
+            " reader, scoped ref " + model.GlobalName + "? value)");
+        w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions")));
+        w.Open();
+        if (model.Recursive)
+            w.Line(w.A("LuminPackExceptionHelper") + ".EnsureSufficientStack();");
+        JsonEmitter.Lines(w, body);
+        w.Close();
+    }
+
     /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in
     /// place, and every following run of reserving members written through its own reservation.</summary>
     private static List<string> MixedWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
