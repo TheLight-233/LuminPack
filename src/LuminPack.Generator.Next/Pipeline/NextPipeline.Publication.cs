@@ -292,8 +292,33 @@ internal static partial class NextPipeline
         List<string>? sharedInputSources = null;
         HashSet<string>? unchangedUnboundedReads = null;
         var trustedReads = TrustedReadReach.Create(retained);
+        Dictionary<string, (TypeModel Payload, GeneratedOperations Operations)>? checkedOwners = null;
+        foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
+        {
+            if (!owner.PublishPayload || owner.Payload is not { } payload || !CanCopyPayload(payload) || !NeedsInputScope(payload))
+                continue;
+            GeneratedOperations operations = plan.Owners.For(GeneratedNames.PayloadKey(owner.Type));
+            if ((operations & GeneratedOperations.BinaryRead) == 0)
+                continue;
+            checkedOwners ??= new Dictionary<string, (TypeModel, GeneratedOperations)>(StringComparer.Ordinal);
+            string hint = SharedFormatterPublisher.PayloadBinaryHint(ReadableTypeName.Of(GeneratedNames.PayloadKey(owner.Type)));
+            if (!checkedOwners.ContainsKey(hint))
+                checkedOwners.Add(hint, (payload, operations));
+        }
         foreach (var source in shared)
-            sources.Add(new GeneratedSource(source.Key, source.Value, GenericFormatterReuse.IsJson(source.Key) ? GenerationKind.Json : GenerationKind.Formatter));
+        {
+            string text = source.Value;
+            if (checkedOwners != null && checkedOwners.TryGetValue(source.Key, out var checkedOwner) &&
+                RenderModelFactory.Create(checkedOwner.Payload, options) is { } owner)
+            {
+                TypeModel payload = checkedOwner.Payload;
+                var redirect = CreateRedirect(owner.Readable, payload.Policy.Limits);
+                text = PayloadEmitter.Render(owner.WithInput(payload.Policy.Limits, owner.Recursive, redirect), false,
+                    options.AvailableAliases, checkedOwner.Operations);
+                AddCopies("LuminPackGen." + PublicationNames.Mangle(payload.Identity.GlobalName), redirect);
+            }
+            sources.Add(new GeneratedSource(source.Key, text, GenericFormatterReuse.IsJson(source.Key) ? GenerationKind.Json : GenerationKind.Formatter));
+        }
         foreach (TypeModel model in retained)
         {
             GeneratedOperations operations = plan.For(model);
@@ -302,8 +327,7 @@ internal static partial class NextPipeline
             bool checkedUnion = model is UnionModel { Rejection: null } unionModel && model.Policy.Input == InputPolicy.Untrusted &&
                 (operations & GeneratedOperations.BinaryRead) != 0 &&
                 (model.Policy.Limits.Explicit || TrustedReadReach.HasTrustedCase(unionModel));
-            bool checkedRoot = (operations & GeneratedOperations.BinaryRead) != 0 && CanCopyPayload(model) &&
-                model.Policy.Input == InputPolicy.Untrusted && (model.Policy.Limits.Bounded || trustedReads?.Reaches(model) == true);
+            bool checkedRoot = (operations & GeneratedOperations.BinaryRead) != 0 && HasProjectableRead(model) && NeedsInputScope(model);
             bool cacheable = !checkedRoot && !checkedUnion;
             if (cacheable && snapshot.Payloads.TryGetValue(model.Identity.GlobalName, out var cached) && cached.Operations == operations &&
                 cached.Model.Equals(model) && cached.Options.Equals(options))
@@ -379,6 +403,9 @@ internal static partial class NextPipeline
             }
         }
 
+        bool NeedsInputScope(TypeModel model) => model.Policy.Input == InputPolicy.Untrusted &&
+            (model.Policy.Limits.Bounded || trustedReads?.Reaches(model) == true);
+
         InputRedirect CreateRedirect(string readable, InputLimits limits)
         {
             if (copyable == null)
@@ -452,7 +479,12 @@ internal static partial class NextPipeline
     /// <summary>Whether a declaration owns a read that can be rendered in another input scope.</summary>
     /// <param name="model">The declaration.</param>
     /// <returns>Whether the read has a supported concrete record model.</returns>
-    private static bool CanCopyPayload(TypeModel model) => !model.Identity.IsGeneric &&
+    private static bool CanCopyPayload(TypeModel model) => !model.Identity.IsGeneric && HasProjectableRead(model);
+
+    /// <summary>Recognizes payload algorithms that accept a nested read scope.</summary>
+    /// <param name="model">The declaration or closed owner.</param>
+    /// <returns>Whether the payload renderer supports applying a read scope.</returns>
+    private static bool HasProjectableRead(TypeModel model) =>
         model is RecordModel { Rejection: null } or StructModel { Storage: StructStorage.ManagedRecord, Rejection: null } or CircleReferenceModel;
 
     /// <summary>Builds the closed operation catalog consumed by interception.</summary>

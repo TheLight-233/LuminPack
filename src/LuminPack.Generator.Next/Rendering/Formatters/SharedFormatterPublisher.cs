@@ -11,6 +11,11 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Publishes each requested formatter owner once through its registered renderer.</summary>
 internal static class SharedFormatterPublisher
 {
+    /// <summary>Names the binary source of a closed payload owner.</summary>
+    /// <param name="name">The readable owner name.</param>
+    /// <returns>The shared binary source hint.</returns>
+    internal static string PayloadBinaryHint(string name) => "LuminPack.SharedFormatters/Payload_" + name + ".g.cs";
+
     /// <summary>Publishes every shared owner file of the set.</summary>
     /// <param name="production">The source output.</param>
     /// <param name="set">The collected owner requirements.</param>
@@ -109,7 +114,7 @@ internal static class SharedFormatterPublisher
                     string name = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
                     string binary = BinaryRenderer.Instance.Render(model.Payload, renderContext);
                     string json = JsonRenderer.Instance.Render(model.Payload, renderContext);
-                    if (binary.Length != 0) yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Payload_" + name + ".g.cs", binary);
+                    if (binary.Length != 0) yield return new KeyValuePair<string, string>(PayloadBinaryHint(name), binary);
                     if (json.Length != 0) yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Payload_" + name + ".Json.g.cs", json);
                 }
                 continue;

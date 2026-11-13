@@ -220,6 +220,12 @@ internal static partial class Program
         public sealed class TrustedGenericValue<T> { public T Value; }
         [LuminPackable(GeneratorType.VersionTolerant)]
         public sealed class UnboundedGenericParent { public TrustedGenericValue<bool> Child; }
+        [LuminPackable]
+        public sealed class GenericInputRoot<T> { public T Value; public TrustedVersionedFlag Child; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 4)]
+        public sealed class BoundedGenericInputRoot<T> { public T Value; public TrustedMirror Child; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 4)]
+        public partial struct BoundedGenericStruct<T> { public T Value; public TrustedMirror Child; }
         [LuminPackable, LuminPackOption(MaxStringLength = 4)]
         public partial struct LimitedStructParent { public TrustedVersion Child; }
         public static class InputLimitFixture
@@ -265,8 +271,32 @@ internal static partial class Program
                     throw new Exception("A closed generic member lost its valid Boolean.");
                 parent[^1] = 2;
                 RejectRead(() => LuminPackSerializer.Deserialize<UnboundedGenericParent>(parent));
-                return 16;
+                var root = new GenericInputRoot<int> { Value = 17, Child = child };
+                byte[] rootBytes = LuminPackSerializer.Serialize(root);
+                if (LuminPackSerializer.Deserialize<GenericInputRoot<int>>(rootBytes).Value != 17 ||
+                    !LuminPackSerializer.Deserialize<GenericInputRoot<int>>(rootBytes).Child.Flag)
+                    throw new Exception("The closed generic root lost a field.");
+                rootBytes[^1] = 2;
+                RejectRead(() => LuminPackSerializer.Deserialize<GenericInputRoot<int>>(rootBytes));
+                RejectRead(() => ReadRegistered<GenericInputRoot<int>>(rootBytes));
+                var bounded = new BoundedGenericInputRoot<int> { Value = 23, Child = new TrustedMirror { Text = "ok" } };
+                byte[] valid = LuminPackSerializer.Serialize<BoundedGenericInputRoot<int>, LuminPackUtf8VarIntOptions>(bounded);
+                if (LuminPackSerializer.Deserialize<BoundedGenericInputRoot<int>, LuminPackUtf8VarIntOptions>(valid).Child.Text != "ok")
+                    throw new Exception("The profiled generic root lost a valid string.");
+                bounded.Child.Text = "oversized";
+                byte[] oversized = LuminPackSerializer.Serialize<BoundedGenericInputRoot<int>, LuminPackUtf8VarIntOptions>(bounded);
+                RejectRead(() => LuminPackSerializer.Deserialize<BoundedGenericInputRoot<int>, LuminPackUtf8VarIntOptions>(oversized));
+                var boundedStruct = new BoundedGenericStruct<int> { Value = 29, Child = new TrustedMirror { Text = "ok" } };
+                byte[] structBytes = LuminPackSerializer.Serialize(boundedStruct);
+                if (LuminPackSerializer.Deserialize<BoundedGenericStruct<int>>(structBytes).Child.Text != "ok")
+                    throw new Exception("The closed generic struct lost a valid string.");
+                boundedStruct.Child.Text = "oversized";
+                structBytes = LuminPackSerializer.Serialize(boundedStruct);
+                RejectRead(() => LuminPackSerializer.Deserialize<BoundedGenericStruct<int>>(structBytes));
+                return 23;
             }
+
+            private static T ReadRegistered<T>(byte[] input) => LuminPackSerializer.Deserialize<T>(input);
 
             private static int CheckCircleGroups()
             {
