@@ -42,9 +42,8 @@ compares their bytes with the library's own operations in both directions, and e
 The generic binary and JSON facade, including `Register` and the registration-only `FormatterDispatch`, is post-initialization
 source, so call sites bind against it while the generator runs. A syntax provider records each closed call as a value-equal fact:
 overload, payload, closed or declared profile (or an open profile type parameter) and the compiler-owned interception location.
-Interceptors forward to per-payload `LuminEntry_` owners. Packable payloads call their `Serialize_`/`Deserialize_` roots; other
-closed roots call the static `Write`/`Read` operations of their shared owners. Calls without a published root stay on the generic
-facade.
+Interceptors implement the document boundary and call the published static root directly. Calls with an open payload and calls
+without a published root stay on the generic facade and use registered dispatch.
 
 Without compiler interception, a build that defines `LUMINPACK_IL_REWRITE` (the `LuminPackUseIlRewriting` build integration) gets
 the same entries. Each interceptor then carries a build-only `LuminPack.Generated.StaticCall` mapping of the exact facade
@@ -88,11 +87,8 @@ calls use.
 
 A checked item covers the scope stated here. Related combinations still listed below remain open.
 
-- [x] **Caller-facing XML documentation.** The facade and its payload-specific convenience entry containers document parameters,
-  type parameters, returns, buffer ownership, reuse and stream lifetimes. Concrete entries describe filtered member order,
-  physical storage, CLR layout, former names and reference slots, and link to their actual formatter containers. Execution roots,
-  state forwarders and support declarations retain no XML. The focused fixture checks 381 APIs across `None`, `Parse` and
-  `Diagnose`, compiler XML output and unchanged executable tokens.
+- [x] **Facade XML documentation.** The public facade documents parameters, type parameters, returns, buffer ownership,
+  reuse and stream lifetimes. Per-payload convenience overloads and their XML are out of scope.
 - [x] **Assembly registration policy.** Both `LuminPackGeneratorOptions` constructors select the same `Auto`/`Disabled` behavior.
   Disabled assemblies publish no facade registration APIs and do not probe generic or Union registrations or reserve Union tags.
   Known Union cases retain their existing dispatch.
@@ -105,7 +101,7 @@ A checked item covers the scope stated here. Related combinations still listed b
   ordinary wire bytes and reuse; warmed reads into its complete reused target allocate no bytes. Other payload kinds remain below.
 - [x] **Normalized incremental publication.** Collected facts compare by value, repeated closed roots share compilation-owned
   analysis, unchanged formatter requirements reuse their driver-owned catalog, and owner aggregation retains first declarations
-  without LINQ grouping. XML caches track present and absent declaration dependencies and invalidate on layout-only edits.
+  without LINQ grouping.
 - [x] **Trusted Boolean scalar reads.** Ordinary and inline trusted fields use the advancing reader operation and retain Reader
   bounds checks; untrusted fields keep their Boolean-domain checks.
 - [x] **Compatibility targets.** Pointer-cursor runtimes such as netstandard2.1 get projected cursor code, pinned or pooled reader
@@ -128,15 +124,7 @@ A checked item covers the scope stated here. Related combinations still listed b
   simple names its declarations repeat across namespaces or share with common framework types, and those names keep their
   namespace (`OtherPointFormatter`, `ListOfOtherPointFormatter`). Other names are unchanged; the benchmark corpus output is
   identical.
-- [x] **Wrapper specialization of source generic methods.** A closed call of a source generic method that reaches the facade,
-  such as `Read<double>(bytes)` over `Deserialize<Box<T>>`, is redirected to a generated closed copy (`LuminWrapper_Read_Double`),
-  through interception or the IL rewriter, as legacy `StaticSerializerBinding.Wrappers` did. Its facade calls bind the same concrete
-  entries as source calls, and calls of other forwarding methods bind their own wrappers. Bodies that could change meaning when
-  relocated or closed (lambdas, awaits, implicit receivers, open operators, inaccessible members, static initialization) stay on
-  the generic facade, as in legacy; unlike legacy, object-initializer member names are accepted. Library projects, which keep
-  every operation, now also trigger generic expansion for open facade calls. Verified with generic classes, two type parameters,
-  nested forwarding, profiles, JSON, ref reads and a value-type generic CircleReference, through both backends;
-  `GenericForwardingWrapperTest` covers them.
+- **Source generic methods.** Open facade calls in generic source methods use the registered fallback.
 - [x] **Assembly-marked external roots.** A referenced type marked with `[assembly: LuminPackable(typeof(T))]`, with the declared
   cases of a marked Union, is a payload of the consuming assembly, as legacy `CompilationTypeAnalysis` and `ReferencedTypeMetadata`
   made it. A compilation that declares markers is analyzed through a view importing all metadata, so private, internal, included and
@@ -170,7 +158,7 @@ A checked item covers the scope stated here. Related combinations still listed b
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Generic CircleReference | Closed constructions used directly or as members get owners and keep reference identity, including cycles and repeated list elements (verified with `Node<string>`, `Node<int>` and `Node<double>` through interception). Constructions reached through source generic methods bind through wrappers. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
+| P2 | Generic CircleReference | Closed constructions used directly or as members get owners and keep reference identity, including cycles and repeated list elements (verified with `Node<string>`, `Node<int>` and `Node<double>` through interception). Open calls use registered fallback. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
 | P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. Cross-assembly option inheritance remains part of the cross-assembly gap. |
 | P2 | JSON compatibility | All envelopes, escaping, former names, duplicate and unknown properties, omitted members and failure publication are covered only as far as the tests reach. |

@@ -35,9 +35,8 @@ dotnet run -c Release --project benchmarks/LuminPack.Benchmark -- --filter "*"
 ## 调用如何绑定
 
 泛型二进制与 JSON 门面（包括 `Register` 和仅用于注册的 `FormatterDispatch`）作为 post-initialization 源码发布，调用点在生成器运行期间即可绑定。
-语法提供器把每个封闭调用记录为值相等的事实：重载、载荷、封闭或声明的 profile（或开放的 profile 类型参数）以及编译器给出的拦截位置。拦截器转发到
-每个载荷的 `LuminEntry_` owner。可打包载荷调用其 `Serialize_`/`Deserialize_` 根；其他封闭根调用共享 owner 的静态 `Write`/`Read`。没有发布根的
-调用保留在泛型门面上。
+语法提供器把每个封闭调用记录为值相等的事实：重载、载荷、封闭或声明的 profile（或开放的 profile 类型参数）以及编译器给出的拦截位置。拦截器处理
+文档边界并直接调用已发布的静态根。载荷开放或缺少已发布根的调用保留在泛型门面上，使用注册派发。
 
 没有编译器拦截时，定义了 `LUMINPACK_IL_REWRITE`（即 `LuminPackUseIlRewriting` 构建集成）的构建得到相同的入口：每个拦截器改为带有该门面
 确切构造的仅构建期映射 `LuminPack.Generated.StaticCall`，由 `LuminPack.ILPostProcessor` 在编译后替换已编译的调用。编译器拦截需要
@@ -73,9 +72,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 勾选仅表示本项明确列出的范围已完成；下方仍列出的相关组合继续保留为待办。
 
-- [x] **调用方 XML 文档。** 门面及其载荷专属便捷入口容器包含形参、类型形参、返回值、缓冲区归属、复用和流生命周期说明。具体入口描述经过筛选的
-  成员顺序、物理存储、CLR 布局、旧名称与引用槽，并链接实际 Formatter 容器。执行根、状态转发器和辅助声明不生成 XML。聚焦语料在 `None`、
-  `Parse`、`Diagnose` 三种模式下检查 381 个 API、编译器 XML 输出及可执行 token 不变。
+- [x] **门面 XML 文档。** 公开门面包含形参、类型形参、返回值、缓冲区归属、复用和流生命周期说明。载荷专属便捷重载及其 XML 已从迁移范围中移除。
 - [x] **程序集注册策略。** `LuminPackGeneratorOptions` 的两个构造函数采用相同的 `Auto`/`Disabled` 语义。禁用注册时不发布门面注册 API，
   不查询泛型或 Union 注册，也不向注册表预留 Union 标签；已知 Union case 沿用原有派发。
 - [x] **程序集操作保留设置。** 聚焦矩阵覆盖全部十六种 `ForceGenerate*` 组合、被忽略的旧模式值、库与友元保留，以及禁用 unsafe 时的注册能力。
@@ -84,7 +81,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 - [x] **有上限普通对象的受检副本。** 已支持的副本将根策略递归传入可信内联记录及 List、数组、Dictionary 的载荷元素。六种 profile 的语料覆盖
   标记、Boolean 域、配额、空值、普通线格式与复用；完整目标预热后的复用读取不分配内存。其余载荷种类仍列在下方。
 - [x] **规范化增量发布。** 收集事实按值比较，重复封闭根共享编译内分析，Formatter 需求不变时复用 driver 所有的目录，owner 聚合保留首次声明且不使用
-  LINQ 分组。XML 缓存同时记录已存在和缺失的声明依赖，并在仅布局变化时失效。
+  LINQ 分组。
 - [x] **可信 Boolean 标量读取。** 普通和内联可信字段使用推进游标的 reader 操作，并保留 Reader 边界检查；不可信字段继续检查 Boolean 域。
 - [x] **兼容目标。** netstandard2.1 等指针游标运行时得到投影后的游标代码、固定或池化的读取输入以及兼容门面。Benchmark 语料以 C# 9 针对
   netstandard2.1 运行时编译，没有生成代码错误；netstandard2.1 + C# 9 下经 IL 重写的语料得到与 .NET 10 相同的结果和字节。禁用 unsafe 的
@@ -99,12 +96,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
   partial 类，而 `List<Point>` 与 `List<Other.Point>` 等集合 owner 发生冲突，其中一个不会发布。现在由编译事实列出声明在多个命名空间中、
   或与常用框架类型同名的简单名称，这些名称保留命名空间（`OtherPointFormatter`、`ListOfOtherPointFormatter`）。其他名称不变；Benchmark
   语料的输出完全一致。
-- [x] **源泛型方法的包装特化。** 到达门面的源泛型方法的封闭调用（例如基于 `Deserialize<Box<T>>` 的 `Read<double>(bytes)`）会通过拦截器
-  或 IL 重写器重定向到生成的封闭副本（`LuminWrapper_Read_Double`），与旧版 `StaticSerializerBinding.Wrappers` 一致。副本中的门面调用绑定
-  与源调用相同的具体入口，对其他转发方法的调用绑定各自的包装。搬移或封闭后可能改变语义的方法体（lambda、await、隐式接收者、开放运算符、
-  不可访问成员、静态初始化）与旧版一样保留在泛型门面上；与旧版不同，对象初始化器中的成员名可以接受。保留全部操作的库项目现在也会为开放
-  门面调用触发泛型展开。已通过两种后端验证泛型类、两个类型形参、嵌套转发、profile、JSON、ref 读取和值类型泛型 CircleReference；
-  `GenericForwardingWrapperTest` 覆盖这些情况。
+- **源泛型方法。** 源泛型方法中的开放门面调用走注册回退。
 - [x] **程序集标记的外部根。** 用 `[assembly: LuminPackable(typeof(T))]` 标记的被引用类型（以及被标记 Union 声明的 case）成为使用方
   程序集的载荷，与旧版 `CompilationTypeAnalysis` 和 `ReferencedTypeMetadata` 一致。声明了标记的编译通过导入全部元数据的视图分析，因此
   被引用类型的私有、internal、Include 和自动属性存储都通过布局镜像访问；其他程序集的 internal 存储走镜像而不直接访问。缺少后备字段的
@@ -135,7 +127,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P2 | 泛型 CircleReference | 直接使用或作为成员的封闭构造会得到 owner 并保持引用身份，包括环和重复的列表元素（已通过拦截器验证 `Node<string>`、`Node<int>` 与 `Node<double>`）。经由源泛型方法到达的构造通过包装绑定。值类型形状、复杂构造、ref 返回租借、槽位演进和失败组合均未验证。 |
+| P2 | 泛型 CircleReference | 直接使用或作为成员的封闭构造会得到 owner 并保持引用身份，包括环和重复的列表元素（已通过拦截器验证 `Node<string>`、`Node<int>` 与 `Node<double>`）。开放调用走注册回退。值类型形状、复杂构造、ref 返回租借、槽位演进和失败组合均未验证。 |
 | P2 | 版本容忍组合 | 泛型与继承组合、压缩字段、旧名称、Schema 演进和完整的旧版交叉读取，只覆盖到测试所及范围。 |
 | P2 | 公开注解 | `NonGenerator`、`LuminPackableObject` 与别名冲突仍需完整对照旧版语义。跨程序集选项继承仍属于跨程序集缺口。 |
 | P2 | JSON 兼容性 | 各种封装、转义、旧名称、重复与未知属性、省略成员和失败发布，只覆盖到测试所及范围。 |
