@@ -93,11 +93,95 @@ internal static partial class Program
         public sealed class LimitedArrayRoot { public TrustedContainer[] Children; }
         [LuminPackable, LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4)]
         public sealed class LimitedDictionaryRoot { public System.Collections.Generic.Dictionary<int, TrustedContainer> Children; }
+        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxStringLength = 4)]
+        public partial class LimitedVersion { public string Text { get; set; } }
+        [LuminPackable(GeneratorType.VersionTolerant)]
+        public partial class EarlierVersion { public string Text { get; set; } public int Removed; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4)]
+        public partial struct LimitedStruct { public string Text; public int[] Values; }
+        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(MaxStringLength = 4)]
+        public partial class LimitedCircle { [LuminPackOrder(0)] public string Text { get; set; } }
+        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(MaxDepth = 2)]
+        public partial class LimitedCycle { [LuminPackOrder(0)] public LimitedCycle Next; }
+        [LuminPackable, LuminPackOption(MaxCollectionLength = 4)]
+        public partial class LimitedCompressed { [LuminPackCompress] public int[] Values; }
+        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxCollectionLength = 4)]
+        public partial class LimitedVersionCompressed { [LuminPackCompress] public int[] Values; }
+        [LuminPackable(GeneratorType.VersionTolerant)]
+        public partial class EarlierVersionCompressed { [LuminPackCompress] public int[] Values; public int Removed; }
+        [LuminPackable, LuminPackOption(MaxInputBytes = 5)]
+        public partial class LimitedStream { public int Value; }
         public static class InputLimitFixture
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
                 Check<LuminPackUtf16VarIntOptions>() + Check<LuminPackUtf8VarIntOptions>() +
-                Check<LuminPackUtf16TokenOptions>() + Check<LuminPackUtf8TokenOptions>();
+                Check<LuminPackUtf16TokenOptions>() + Check<LuminPackUtf8TokenOptions>() + CheckAdditionalRoots();
+
+            private static int CheckAdditionalRoots()
+            {
+                var version = new LimitedVersion { Text = "ok" };
+                var structure = new LimitedStruct { Text = "ok", Values = new[] { 1, 2 } };
+                var circle = new LimitedCircle { Text = "ok" };
+                var compressed = new LimitedCompressed { Values = new[] { 1, 2 } };
+                var earlier = new EarlierVersion { Text = "old", Removed = 42 };
+                if (LuminPackSerializer.Deserialize<LimitedVersion>(LuminPackSerializer.Serialize(version)).Text != "ok" ||
+                    LuminPackSerializer.Deserialize<LimitedVersion>(LuminPackSerializer.Serialize(earlier)).Text != "old" ||
+                    LuminPackSerializer.Deserialize<LimitedStruct>(LuminPackSerializer.Serialize(structure)).Values[1] != 2 ||
+                    LuminPackSerializer.Deserialize<LimitedCircle>(LuminPackSerializer.Serialize(circle)).Text != "ok" ||
+                    LuminPackSerializer.Deserialize<LimitedCompressed>(LuminPackSerializer.Serialize(compressed)).Values[1] != 2)
+                    throw new Exception("A checked root changed valid wire reads.");
+
+                version.Text = structure.Text = circle.Text = "oversized";
+                compressed.Values = new int[5];
+                byte[] versionBytes = LuminPackSerializer.Serialize(version);
+                byte[] structBytes = LuminPackSerializer.Serialize(structure);
+                byte[] circleBytes = LuminPackSerializer.Serialize(circle);
+                byte[] compressedBytes = LuminPackSerializer.Serialize(compressed);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedVersion>(versionBytes));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedStruct>(structBytes));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedCircle>(circleBytes));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedCompressed>(compressedBytes));
+                earlier.Text = "oversized";
+                byte[] earlierBytes = LuminPackSerializer.Serialize(earlier);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedVersion>(earlierBytes));
+                structure.Text = "ok";
+                structure.Values = new int[5];
+                byte[] oversizedStruct = LuminPackSerializer.Serialize(structure);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedStruct>(oversizedStruct));
+                var earlierCompressed = new EarlierVersionCompressed { Values = new[] { 1, 2 }, Removed = 42 };
+                if (LuminPackSerializer.Deserialize<LimitedVersionCompressed>(LuminPackSerializer.Serialize(earlierCompressed)).Values[1] != 2)
+                    throw new Exception("The evolved schema changed a valid compressed read.");
+                earlierCompressed.Values = new int[5];
+                byte[] oversizedCompressed = LuminPackSerializer.Serialize(earlierCompressed);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedVersionCompressed>(oversizedCompressed));
+
+                var cycle = new LimitedCycle { Next = new LimitedCycle() };
+                cycle.Next.Next = cycle;
+                var cycleCopy = LuminPackSerializer.Deserialize<LimitedCycle>(LuminPackSerializer.Serialize(cycle));
+                if (!ReferenceEquals(cycleCopy, cycleCopy.Next.Next))
+                    throw new Exception("A back reference incorrectly consumed another level of depth.");
+                cycle.Next.Next = new LimitedCycle();
+                byte[] deepCycle = LuminPackSerializer.Serialize(cycle);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedCycle>(deepCycle));
+
+                byte[] bytes = LuminPackSerializer.Serialize(new LimitedStream { Value = 42 });
+                using var exact = new MemoryStream(bytes);
+                if (LuminPackSerializer.DeserializeAsync<LimitedStream>(exact).GetAwaiter().GetResult().Value != 42)
+                    throw new Exception("The stream read rejected its exact limit.");
+                Array.Resize(ref bytes, bytes.Length + 4);
+                using var oversized = new MemoryStream(bytes);
+                RejectRead(() => LuminPackSerializer.DeserializeAsync<LimitedStream>(oversized).GetAwaiter().GetResult());
+                if (oversized.Position != 6)
+                    throw new Exception("The stream reader consumed more than the limit and one lookahead byte.");
+                return 18;
+            }
+
+            private static void RejectRead(Action read)
+            {
+                try { read(); }
+                catch (InvalidDataException) { return; }
+                throw new Exception("A root bypassed its declared input limit.");
+            }
 
             private static int Check<TProfile>() where TProfile : struct, ILuminPackOptions
             {

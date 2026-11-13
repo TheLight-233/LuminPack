@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
@@ -89,6 +90,10 @@ internal static class InputReadRenderer
 {
     private const string Policy = "global::LuminPack.Security.LuminPackInputPolicy";
     private static readonly string[] Readers = { "reader", "operationState", "state", "reader2" };
+    private static readonly Regex StringBlocks = new(
+        @"(?<![\w.])(reader|operationState|state|reader2)\.ReadStrings<([^>]+)>\(([^()]*)\)", RegexOptions.CultureInvariant);
+    private static readonly Regex StringOwners = new(
+        @"global::LuminPack\.Binary_\w+_String\.Read<([^>]+)>\(ref (reader|operationState|state|reader2), (ref [^;]+)\);", RegexOptions.CultureInvariant);
 
     /// <summary>Checks for a supported binary read body in a published owner.</summary>
     /// <param name="source">The original shared owner file.</param>
@@ -122,7 +127,8 @@ internal static class InputReadRenderer
                 string compressed = reader + ".ReadValueWithCompress(";
                 int site = line.IndexOf(compressed, StringComparison.Ordinal);
                 // Record bodies still spell the compressed read as its marked owner call, which the source writer resolves later.
-                if (site < 0 && reader == "reader" && line.IndexOf(RenderMember.CompressedOwner + ".Read<", StringComparison.Ordinal) >= 0)
+                if (site < 0 && line.IndexOf(RenderMember.CompressedOwner + ".Read<", StringComparison.Ordinal) is int owner && owner >= 0 &&
+                    line.IndexOf(">(ref " + reader + ",", owner, StringComparison.Ordinal) >= 0)
                     site = line.Length - line.TrimStart().Length;
                 if (site >= 0 && (site == 0 || !(char.IsLetterOrDigit(line[site - 1]) || line[site - 1] is '_' or '.')))
                     line = line.Substring(0, site) + policy + ".CheckCompressedCount(" + reader + ".GetSpan().Slice(" + reader + ".Position), " +
@@ -132,8 +138,17 @@ internal static class InputReadRenderer
                 line = Kernel(line, reader, "PeekCollectionHeader", policy, limits.Collection, defaultMinimum: false);
             }
         if (limits.String != int.MaxValue)
+        {
+            string limit = Literal(limits.String);
+            if (line.IndexOf(".ReadStrings<", StringComparison.Ordinal) >= 0)
+                line = StringBlocks.Replace(line, match => policy + ".ReadStrings<" + match.Groups[2].Value + ">(ref " +
+                    match.Groups[1].Value + ", " + match.Groups[3].Value + ", " + limit + ")");
+            if (line.IndexOf("_String.Read<", StringComparison.Ordinal) >= 0)
+                line = StringOwners.Replace(line, match => policy + ".ReadStringRecord<" + match.Groups[1].Value + ">(ref " +
+                    match.Groups[2].Value + ", " + match.Groups[3].Value + ", " + limit + ");");
             foreach (string reader in Readers)
-                line = Strings(line, reader, policy, limits.String);
+                line = Strings(line, reader, policy, limit);
+        }
         return line;
     }
 
@@ -180,15 +195,8 @@ internal static class InputReadRenderer
     /// <returns>The checked statement.</returns>
     /// <remarks>A string record reads through <c>reader.Read&lt;TProfile&gt;(ref storage)</c> and a reused string through
     /// <c>reader.Read&lt;TProfile&gt;(current)</c>; scalar reads carry no argument and stay unchanged.</remarks>
-    private static string Strings(string line, string reader, string policy, int limit)
+    private static string Strings(string line, string reader, string policy, string limit)
     {
-        // A string block and a string owner read take the limit too, as the original matrix and element reads did.
-        line = System.Text.RegularExpressions.Regex.Replace(line,
-            @"(?<![\w.])" + System.Text.RegularExpressions.Regex.Escape(reader) + @"\.ReadStrings<([^>]+)>\(([^()]*)\)",
-            match => policy + ".ReadStrings<" + match.Groups[1].Value + ">(ref " + reader + ", " + match.Groups[2].Value + ", " + Literal(limit) + ")");
-        line = System.Text.RegularExpressions.Regex.Replace(line,
-            @"global::LuminPack\.Binary_\w+_String\.Read<([^>]+)>\(ref " + System.Text.RegularExpressions.Regex.Escape(reader) + @", (ref [^;]+)\);",
-            match => policy + ".ReadStringRecord<" + match.Groups[1].Value + ">(ref " + reader + ", " + match.Groups[2].Value + ", " + Literal(limit) + ");");
         string call = reader + ".Read<";
         int search = 0;
         while ((search = line.IndexOf(call, search, StringComparison.Ordinal)) >= 0)
@@ -214,8 +222,8 @@ internal static class InputReadRenderer
                 continue;
             }
             string replacement = argument.StartsWith("ref ", StringComparison.Ordinal)
-                ? policy + ".ReadStringRecord<" + profile + ">(ref " + reader + ", " + argument + ", " + Literal(limit) + ")"
-                : policy + ".ReadString<" + profile + ">(ref " + reader + ", " + argument + ", " + Literal(limit) + ")";
+                ? policy + ".ReadStringRecord<" + profile + ">(ref " + reader + ", " + argument + ", " + limit + ")"
+                : policy + ".ReadString<" + profile + ">(ref " + reader + ", " + argument + ", " + limit + ")";
             line = line.Substring(0, search) + replacement + line.Substring(end + 1);
             search += replacement.Length;
         }

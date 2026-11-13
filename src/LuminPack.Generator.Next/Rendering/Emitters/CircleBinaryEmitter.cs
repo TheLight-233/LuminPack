@@ -33,8 +33,8 @@ internal static partial class CircleBinaryEmitter
 
         var write = BinaryEmitter.ApplyBoundedWrite(model, WriteBody(model, w));
         var readChildren = new List<PayloadRenderModel>();
-        var read = ReadBody(model, w, union: false, readChildren);
-        var readUnion = ReadBody(model, w, union: true, readChildren);
+        var read = BinaryEmitter.InputChecks(model, w, ReadBody(model, w, union: false, readChildren), read: true);
+        var readUnion = BinaryEmitter.InputChecks(model, w, ReadBody(model, w, union: true, readChildren), read: true);
         bool genericWrite = HasProfile(write);
         bool genericRead = HasProfile(read);
 
@@ -382,7 +382,13 @@ internal static partial class CircleBinaryEmitter
     /// <param name="expanded">Collects the member operations whose bodies were expanded, in expansion order.</param>
     private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, List<PayloadRenderModel> expanded)
     {
-        var state = new ReadState { W = w, Names = new NamePool("value"), Expanded = expanded };
+        var state = new ReadState
+        {
+            W = w,
+            Names = new NamePool("value"),
+            Expanded = expanded,
+            Depth = model.CircleGuarded ? model.Limits?.Depth ?? int.MaxValue : int.MaxValue,
+        };
         var body = new List<string>();
         if (!union)
             state.Stack.Add(model.GlobalName);
@@ -396,6 +402,7 @@ internal static partial class CircleBinaryEmitter
         internal CodeWriter W;
         internal NamePool Names;
         internal List<PayloadRenderModel> Expanded;
+        internal int Depth;
         internal readonly HashSet<string> Stack = new HashSet<string>(StringComparer.Ordinal);
     }
 
@@ -411,6 +418,9 @@ internal static partial class CircleBinaryEmitter
         var names = state.Names;
         var members = model.Members;
         string type = model.GlobalName;
+        string enterDepth = state.Depth == int.MaxValue ? null :
+            w.A("LuminPackInputPolicy") + ".EnterDepth(ref reader, " + state.Depth.ToString(CultureInfo.InvariantCulture) + ");";
+        string exitDepth = enterDepth == null ? null : w.A("LuminPackInputPolicy") + ".ExitDepth(ref reader);";
         string Exit() => top ? "return;" : "\u0003GOTO\u0003";
         string Null(string tail) => access.EndsWith("!", StringComparison.Ordinal) ? access + tail : access + " " + tail;
         if (top && model.CircleGuarded)
@@ -432,6 +442,8 @@ internal static partial class CircleBinaryEmitter
         body.Add("reader.EnsureReadable(" + table.Length.ToString(CultureInfo.InvariantCulture) + ");");
         body.Add("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, " + table.Length.ToString(CultureInfo.InvariantCulture) + ");");
         body.Add("uint " + id + " = reader.ReadVarIntUInt32();");
+        if (enterDepth != null)
+            body.Add(enterDepth);
         body.Add("if (" + Null("is null") + " || !reader.OptionState.ClaimReference(" + id + ", " + access + "))");
         body.Add("{");
         body.Add(target + " = " + NewInstance(model) + ";");
@@ -486,6 +498,8 @@ internal static partial class CircleBinaryEmitter
             body.Add("");
         foreach (string callback in model.ReadAfter)
             body.Add(Rewrite(callback, instance, instance));
+        if (exitDepth != null)
+            body.Add(exitDepth);
         body.Add(Exit());
         body.Add("}");
         body.Add("");
@@ -530,6 +544,8 @@ internal static partial class CircleBinaryEmitter
         body.Add("reader.Cursor = ref " + memory + ".Add(ref reader.Cursor, unchecked((nint)(uint)((" + count + "))));");
         string second = names.Next("id");
         body.Add("uint " + second + " = reader.ReadVarIntUInt32();");
+        if (enterDepth != null)
+            body.Add(enterDepth);
         string reuse = names.Next("reuseObject");
         body.Add("bool " + reuse + " = " + Null("is not null") + " && !reader.OptionState.IsObjectReferenceRegistered(" + access + ");");
         body.Add("if (!" + reuse + ")");
@@ -607,6 +623,8 @@ internal static partial class CircleBinaryEmitter
         }
         foreach (string callback in model.ReadAfter)
             body.Add(Rewrite(callback, access, null));
+        if (exitDepth != null)
+            body.Add(exitDepth);
     }
 
     /// <summary>Reads one reference member, expanding its own record body once below the enclosing root.</summary>

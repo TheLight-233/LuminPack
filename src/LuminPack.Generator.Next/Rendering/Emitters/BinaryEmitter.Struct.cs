@@ -48,6 +48,8 @@ internal static partial class BinaryEmitter
         string readRoot = Root("RootRead", genericRead);
         string writeUnion = Root("RootWriteUnion", genericWrite);
         string readUnion = Root("RootReadUnion", genericRead);
+        List<string> ReadBody(bool union) => InputChecks(model, w,
+            AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union)), read: true);
         string inline = w.MethodImpl("AggressiveInlining");
         string suffix = model.UniqueEntries ? "_" + readable : string.Empty;
         string polymorphic = "[" + w.Attribute("MethodImpl") + "(MethodImplOptions.AggressiveInlining)]";
@@ -83,7 +85,7 @@ internal static partial class BinaryEmitter
             "(scoped ref " + writer + " writer, scoped in " + type + " input)", WriteHint(model, write, union: false, inline));
         w.Blank();
         w.Suppressed = !reads;
-        Method(w, AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union: false)), "RootRead", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
+        Method(w, ReadBody(union: false), "RootRead", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
             "(scoped ref " + reader + " reader, scoped ref " + type + " value)", ReadHint(model, inline));
         w.Blank();
         w.Suppressed = !writes;
@@ -92,10 +94,11 @@ internal static partial class BinaryEmitter
             "(scoped ref " + writer + " writer, scoped in " + type + " input)", WriteHint(model, unionBody, union: true, inline));
         w.Blank();
         w.Suppressed = !reads;
-        Method(w, AddReadCallbacks(model, model.Version != null ? VersionReadBody(model, w) : StructReadBody(model, w, union: true)), "RootReadUnion", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
+        Method(w, ReadBody(union: true), "RootReadUnion", genericRead, RootArguments(genericRead), ConstraintLine(genericRead),
             "(scoped ref " + reader + " reader, scoped ref " + type + " value)", ReadHint(model, inline));
         w.Suppressed = false;
         w.Close();
+
         w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);

@@ -212,7 +212,8 @@ internal static class RenderModelFactory
             writeAfter: model.SerializationCallbacks?.WriteAfter!, readBefore: model.SerializationCallbacks?.ReadBefore!,
             readAfter: model.SerializationCallbacks?.ReadAfter!, trusted: model.Policy.Input == InputPolicy.Trusted,
             declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
-            circleSlots: model.Slots, circleWidths: model.Widths, mirrors: model.Mirrors, bounded: model.Policy.Bound);
+            circleSlots: model.Slots, circleWidths: model.Widths, mirrors: model.Mirrors, bounded: model.Policy.Bound,
+            limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null);
     }
 
     /// <summary>Maps one circle member: a fixed scalar of at most four bytes, a string or another reference-tracked node.</summary>
