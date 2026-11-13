@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
 
@@ -118,16 +119,19 @@ internal static partial class TypeModelFactory
             var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
             var names = new HashSet<(string Name, int Arity)>();
             foreach (INamedTypeSymbol declaration in declarations)
-                if (declaration.Arity != 0)
+                if (declaration.Arity != 0 && CanContributeGenericCase(declaration))
                     names.Add((declaration.Name, declaration.Arity));
             if (names.Count == 0)
                 return _closedConstructions = result;
             foreach (SyntaxTree tree in _compilation.SyntaxTrees)
             {
                 SemanticModel? model = null;
-                foreach (var name in tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.GenericNameSyntax>())
+                foreach (SyntaxNode node in tree.GetRoot().DescendantNodes())
                 {
-                    if (!names.Contains((name.Identifier.ValueText, name.Arity)))
+                    if (node is not GenericNameSyntax name || !names.Contains((name.Identifier.ValueText, name.Arity)))
+                        continue;
+                    SyntaxNode expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access : name;
+                    if (expression.Parent is InvocationExpressionSyntax invocation && invocation.Expression == expression)
                         continue;
                     model ??= BindingSemanticModel.For(_compilation, tree);
                     if (model.GetSymbolInfo(name).Symbol is not INamedTypeSymbol { IsGenericType: true } type || ContainsTypeParameter(type) ||
@@ -147,6 +151,22 @@ internal static partial class TypeModelFactory
                     result[type.OriginalDefinition] = list = new List<INamedTypeSymbol>();
                 list.Add(type);
             }
+        }
+
+        /// <summary>Rejects generic definitions whose inheritance cannot contribute a local Union case.</summary>
+        /// <param name="declaration">A source-owned packable definition.</param>
+        /// <returns>Whether one of its base definitions can own the Union slot.</returns>
+        private bool CanContributeGenericCase(INamedTypeSymbol declaration)
+        {
+            if (declaration.IsAbstract || declaration.IsStatic)
+                return false;
+            for (INamedTypeSymbol? parent = declaration.BaseType; parent != null; parent = parent.BaseType)
+                if (SymbolEqualityComparer.Default.Equals(parent.ContainingAssembly, _compilation.Assembly) && IsPackable(parent.OriginalDefinition))
+                    return true;
+            foreach (INamedTypeSymbol contract in declaration.AllInterfaces)
+                if (SymbolEqualityComparer.Default.Equals(contract.ContainingAssembly, _compilation.Assembly) && IsPackable(contract.OriginalDefinition))
+                    return true;
+            return false;
         }
 
         /// <summary>Indexes source-owned attributed types without revisiting syntax in each Union analysis.</summary>

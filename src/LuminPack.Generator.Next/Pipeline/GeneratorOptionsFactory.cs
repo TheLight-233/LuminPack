@@ -136,6 +136,7 @@ internal static class GeneratorOptionsFactory
         while (pending.Count != 0)
         {
             INamespaceOrTypeSymbol container = pending.Pop();
+            string? path = null;
             foreach (ISymbol member in container.GetMembers())
             {
                 if (member is INamespaceSymbol nested)
@@ -146,7 +147,7 @@ internal static class GeneratorOptionsFactory
                 if (member is not INamedTypeSymbol type || type.IsImplicitlyDeclared)
                     continue;
                 pending.Push(type);
-                string path = container.ToDisplayString();
+                path ??= container.ToDisplayString();
                 if (paths.TryGetValue(type.Name, out string? seen))
                 {
                     if (!string.Equals(seen, path, StringComparison.Ordinal))

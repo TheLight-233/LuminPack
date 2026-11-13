@@ -308,10 +308,39 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
 
         string body = DocumentBody(api, bound.Shape, measured);
         string measure = "LuminPackSerializer.MeasureRecord_" + root.RootName + "<" + root.RootArguments + profile + ">";
-        body = Limits(body, type, root).Replace("%TYPE%", type).Replace("%PROFILE%", profile).Replace("%MEASURE%", measure)
-            .Replace("%WRITE%", target + "(ref writer, in value);").Replace("%FALLBACKWRITE%", target + "(ref fallbackWriter, in value);")
-            .Replace("%READ%", target + "(ref reader, ref value);");
-        w.Append(body).Append('\n');
+        AppendBody(w, Limits(body, type, root), type, profile, measure, target);
+        w.Append('\n');
+    }
+
+    /// <summary>Writes the selected document body without materializing each substitution as a new body string.</summary>
+    /// <param name="writer">The interceptor output.</param>
+    /// <param name="body">The document template after applying input limits.</param>
+    /// <param name="type">The closed payload spelling.</param>
+    /// <param name="profile">The declared or forwarded profile.</param>
+    /// <param name="measure">The exact record measurement call target.</param>
+    /// <param name="target">The existing static read or write target.</param>
+    private static void AppendBody(StringBuilder writer, string body, string type, string profile, string measure, string target)
+    {
+        int start = 0;
+        for (int marker = body.IndexOf('%'); marker >= 0; marker = body.IndexOf('%', start))
+        {
+            int end = body.IndexOf('%', marker + 1);
+            if (end < 0)
+                break;
+            writer.Append(body, start, marker - start);
+            switch (body.AsSpan(marker + 1, end - marker - 1))
+            {
+                case "TYPE": writer.Append(type); break;
+                case "PROFILE": writer.Append(profile); break;
+                case "MEASURE": writer.Append(measure); break;
+                case "WRITE": writer.Append(target).Append("(ref writer, in value);"); break;
+                case "FALLBACKWRITE": writer.Append(target).Append("(ref fallbackWriter, in value);"); break;
+                case "READ": writer.Append(target).Append("(ref reader, ref value);"); break;
+                default: writer.Append(body, marker, end - marker + 1); break;
+            }
+            start = end + 1;
+        }
+        writer.Append(body, start, body.Length - start);
     }
 
     /// <summary>Selects the established document boundary and combines it with the required return shape.</summary>
