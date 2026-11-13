@@ -88,6 +88,7 @@ internal static partial class Program
             RequireIncremental(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
             checks += (int)Assembly.Load(image.ToArray()).GetType("AutomaticRegistrationFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
         }
+        checks += VerifyStaticBackends(references, parse);
         Console.WriteLine($"Next assembly-option contracts: {checks} matrix and runtime checks passed.");
         return 0;
 

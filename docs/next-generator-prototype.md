@@ -33,7 +33,9 @@ elements, malformed markers and Booleans, root quotas and reuse across all six s
 `--verify-documentation` checks caller-facing XML in all three compiler documentation modes, compiled documentation output,
 unchanged executable tokens and retained-driver invalidation of layout-only and added/removed documentation facts.
 `--verify-assembly-options` checks both option constructors, registration policy, all sixteen forced-operation combinations,
-legacy mode values, library/friend retention, safe compilation and default JSON fallback input policies.
+legacy mode values, library/friend retention, safe compilation and default JSON fallback input policies. Six application fixtures
+exercise compiler interception, the installed IL rewriter with portable symbols, and registered fallback with both static
+integrations disabled, each with and without a friend assembly declaration.
 `--verify-external` compiles a library and a consumer that marks the library's types with `[assembly: LuminPackable(typeof(T))]`,
 compares their bytes with the library's own operations in both directions, and expects LuminPack112 against a reference assembly.
 
@@ -136,7 +138,7 @@ A checked item covers the scope stated here. Related combinations still listed b
   For ordinary external records, an open generic marker such as `typeof(Box<>)` permits closed formatter owners discovered through
   calls and members. A closed marker such as `typeof(Box<int>)` selects that construction alone. The fixture also exercises both
   marker forms in an application with operation pruning.
-  A generic Union with explicitly declared closed cases supports both marker forms. Writes call the declaring assembly's
+  A generic Union with explicitly declared closed cases supports both marker forms when the defining library also uses Next. Writes call the declaring assembly's
   compiled slots and reads use the consumer's generated case owners. The fixture checks binary and JSON, a collection member,
   and a non-generic case implementing a constructed interface. It also verifies LuminPack112 for closed generic records reached
   through open markers and the consumer's assembly options with imported type-level overrides.
@@ -155,8 +157,8 @@ by family, excluding itself, and selected operation directions for complete payl
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Cross-assembly payloads | Imported Union cases discovered only in the declaring assembly's source, open generic cases, and the wider option and backend matrix still need coverage. Unmarked referenced payloads use registered fallback. |
-| P2 | Remaining backend combinations | Friend-assembly operation retention and IL rewriting on a single fixture are verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
+| P2 | Cross-assembly payloads | Imported Union cases discovered only in the declaring assembly's source, open generic cases, and the wider option and backend matrix still need coverage. Legacy libraries expose a different Union slot signature from the compiled Next slots checked by the current importer. Unmarked referenced payloads use registered fallback. |
+| P2 | Remaining backend combinations | The modern application matrix covers all three binding modes with and without a friend declaration. Calls compiled in a separate friend assembly, the older compiler and target matrix, and installed-package integration still need Next-specific validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
 
 ### Type shapes and protocols
 
