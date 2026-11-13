@@ -491,7 +491,7 @@ internal static class UnionEmitter
         return calls <= 16;
     }
 
-    /// <summary>Builds the fixed case read in the Union root's explicitly declared input scope.</summary>
+    /// <summary>Builds the fixed case read in the Union root's input scope.</summary>
     /// <param name="root">The Union root.</param>
     /// <param name="item">The expanded fixed case.</param>
     /// <param name="w">The source writer.</param>
@@ -499,7 +499,7 @@ internal static class UnionEmitter
     private static List<string> FixedCaseRead(PayloadRenderModel root, UnionRenderCase item, CodeWriter w)
     {
         PayloadRenderModel model = item.Model;
-        if (model.Trusted && root.Limits is { Explicit: true } limits)
+        if (model.Trusted && root.Limits is { } limits)
             model = model.WithInput(limits, recursive: false, redirect: null);
         return BinaryEmitter.UnionReadBody(model, w);
     }
@@ -509,10 +509,10 @@ internal static class UnionEmitter
     /// <param name="item">The case.</param>
     /// <returns>Whether to call the Union-specific checked body.</returns>
     internal static bool NeedsCheckedCase(PayloadRenderModel root, UnionRenderCase item) =>
-        root.Rejection == null && root.Limits is { Explicit: true } limits && item.OwnEntry &&
+        root.Rejection == null && root.Limits is { } limits && item.OwnEntry &&
         item.Model is { Circle: false, Rejection: null } model &&
         (model.TypeParameters.Length == 0 || item.Arguments.Length != 0) &&
-        (!model.IsStruct || model.ManagedStruct) && (model.Trusted || !limits.Equals(model.Limits));
+        (!model.IsStruct || model.ManagedStruct) && (model.Trusted || limits.Explicit && !limits.Equals(model.Limits));
 
     /// <summary>Emits the JSON read body of the root.</summary>
     private static void JsonReadBody(PayloadRenderModel model, CodeWriter w, string reader, string type)

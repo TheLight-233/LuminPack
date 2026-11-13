@@ -52,6 +52,8 @@ internal static partial class Program
             InputLimitFixture.Replace("MaxStringLength = 4, MaxCollectionLength = 4", "UntrustedData = false"),
             InputLimitFixture.Replace("LuminPackOption(MaxStringLength = 4)]\npublic abstract partial class LimitedUnion",
                 "LuminPackOption(UntrustedData = false)]\npublic abstract partial class LimitedUnion"),
+            InputLimitFixture.Replace("LuminPackOption(UntrustedData = false)]\npublic sealed class TrustedVersionedFlag",
+                "LuminPackOption(UntrustedData = true)]\npublic sealed class TrustedVersionedFlag"),
             InputLimitFixture,
         })
         {
@@ -188,13 +190,55 @@ internal static partial class Program
         }
         [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxStringLength = 4)]
         public partial class LimitedVersionParent { public TrustedMirror Child; }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed class TrustedVersionedFlag
+        {
+            public bool Flag { get; set; }
+        }
+        [LuminPackable(GeneratorType.VersionTolerant)]
+        public sealed class UnboundedVersionParent { public TrustedVersionedFlag Child; }
+        [LuminPackable]
+        public partial struct UnboundedStructParent { public TrustedVersionedFlag Child; }
+        [LuminPackable]
+        public sealed class UnboundedCollectionParent
+        {
+            public System.Collections.Generic.List<TrustedVersionedFlag> Children { get; set; }
+        }
+        [LuminPackable, LuminPackUnion(0, typeof(TrustedUnboundedCase))]
+        public abstract partial class UnboundedUnion { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrustedUnboundedCase : UnboundedUnion
+        {
+            public string Text;
+            public bool Flag;
+        }
         [LuminPackable, LuminPackOption(MaxStringLength = 4)]
         public partial struct LimitedStructParent { public TrustedVersion Child; }
         public static class InputLimitFixture
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
                 Check<LuminPackUtf16VarIntOptions>() + Check<LuminPackUtf8VarIntOptions>() +
-                Check<LuminPackUtf16TokenOptions>() + Check<LuminPackUtf8TokenOptions>() + CheckAdditionalRoots() + CheckCircleGroups();
+                Check<LuminPackUtf16TokenOptions>() + Check<LuminPackUtf8TokenOptions>() + CheckAdditionalRoots() + CheckCircleGroups() + CheckUnbounded();
+
+            private static int CheckUnbounded()
+            {
+                var child = new TrustedVersionedFlag { Flag = true };
+                byte[] version = LuminPackSerializer.Serialize(new UnboundedVersionParent { Child = child });
+                byte[] structure = LuminPackSerializer.Serialize(new UnboundedStructParent { Child = child });
+                byte[] collection = LuminPackSerializer.Serialize(new UnboundedCollectionParent { Children = new() { child } });
+                byte[] union = LuminPackSerializer.Serialize<UnboundedUnion>(new TrustedUnboundedCase { Text = "ok", Flag = true });
+                if (!LuminPackSerializer.Deserialize<UnboundedVersionParent>(version).Child.Flag ||
+                    !LuminPackSerializer.Deserialize<UnboundedStructParent>(structure).Child.Flag ||
+                    !LuminPackSerializer.Deserialize<UnboundedCollectionParent>(collection).Children[0].Flag ||
+                    !((TrustedUnboundedCase)LuminPackSerializer.Deserialize<UnboundedUnion>(union)).Flag)
+                    throw new Exception("An unbounded checked read changed valid bytes.");
+                version[^1] = structure[^1] = collection[^1] = union[^1] = 2;
+                RejectRead(() => LuminPackSerializer.Deserialize<UnboundedVersionParent>(version));
+                RejectRead(() => LuminPackSerializer.Deserialize<UnboundedStructParent>(structure));
+                RejectRead(() => LuminPackSerializer.Deserialize<UnboundedCollectionParent>(collection));
+                RejectRead(() => LuminPackSerializer.Deserialize<UnboundedUnion>(union));
+                return 8;
+            }
 
             private static int CheckCircleGroups()
             {

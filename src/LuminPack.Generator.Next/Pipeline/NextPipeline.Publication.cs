@@ -290,6 +290,8 @@ internal static partial class NextPipeline
         Dictionary<string, PayloadRenderModel>? inputCandidates = null;
         HashSet<string>? copyable = null;
         List<string>? sharedInputSources = null;
+        HashSet<string>? unchangedUnboundedReads = null;
+        var trustedReads = TrustedReadReach.Create(retained);
         foreach (var source in shared)
             sources.Add(new GeneratedSource(source.Key, source.Value, GenericFormatterReuse.IsJson(source.Key) ? GenerationKind.Json : GenerationKind.Formatter));
         foreach (TypeModel model in retained)
@@ -297,9 +299,12 @@ internal static partial class NextPipeline
             GeneratedOperations operations = plan.For(model);
             if (operations == GeneratedOperations.None)
                 continue;
-            bool checkedUnion = model is UnionModel { Rejection: null } && model.Policy.Input == InputPolicy.Untrusted &&
-                model.Policy.Limits.Explicit && (operations & GeneratedOperations.BinaryRead) != 0;
-            bool cacheable = !BoundedRoot(model) && !checkedUnion;
+            bool checkedUnion = model is UnionModel { Rejection: null } unionModel && model.Policy.Input == InputPolicy.Untrusted &&
+                (operations & GeneratedOperations.BinaryRead) != 0 &&
+                (model.Policy.Limits.Explicit || TrustedReadReach.HasTrustedCase(unionModel));
+            bool checkedRoot = (operations & GeneratedOperations.BinaryRead) != 0 && CanCopyPayload(model) &&
+                model.Policy.Input == InputPolicy.Untrusted && (model.Policy.Limits.Bounded || trustedReads?.Reaches(model) == true);
+            bool cacheable = !checkedRoot && !checkedUnion;
             if (cacheable && snapshot.Payloads.TryGetValue(model.Identity.GlobalName, out var cached) && cached.Operations == operations &&
                 cached.Model.Equals(model) && cached.Options.Equals(options))
             {
@@ -348,7 +353,7 @@ internal static partial class NextPipeline
                     }
                 }
             }
-            else if (BoundedRoot(model) && RenderModelFactory.Create(model, options) is { } root)
+            else if (checkedRoot && RenderModelFactory.Create(model, options) is { } root)
             {
                 var redirect = CreateRedirect(root.Readable, model.Policy.Limits);
                 binary = PayloadEmitter.Render(root.WithInput(model.Policy.Limits, root.Recursive, redirect), false,
@@ -396,7 +401,15 @@ internal static partial class NextPipeline
                             copyable.Add(match.Groups[1].Value);
                 }
             }
-            return new InputRedirect(readable, GeneratedNames.Extension(options.AssemblyName), limits, copyable);
+            if (!limits.Bounded && unchangedUnboundedReads == null)
+            {
+                unchangedUnboundedReads = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var candidate in inputCandidates!)
+                    if (trustedReads?.NeedsCopy(candidate.Value.GlobalName) != true && !candidate.Value.Trusted)
+                        unchangedUnboundedReads.Add(candidate.Key);
+            }
+            return new InputRedirect(readable, GeneratedNames.Extension(options.AssemblyName), limits, copyable,
+                limits.Bounded ? null : unchangedUnboundedReads);
         }
 
         void AddCopies(string hint, InputRedirect redirect)
@@ -426,12 +439,6 @@ internal static partial class NextPipeline
                 sources.Add(new GeneratedSource(hint, text, family));
         }
     }
-
-    /// <summary>Reports whether a record freezes additional nested input limits.</summary>
-    /// <param name="model">The normalized payload model.</param>
-    /// <returns>Whether the record freezes additional nested input limits.</returns>
-    private static bool BoundedRoot(TypeModel model) => CanCopyPayload(model) &&
-        model.Policy.Input == InputPolicy.Untrusted && model.Policy.Limits.Bounded;
 
     /// <summary>Whether a declaration owns a read that can be rendered in another input scope.</summary>
     /// <param name="model">The declaration.</param>

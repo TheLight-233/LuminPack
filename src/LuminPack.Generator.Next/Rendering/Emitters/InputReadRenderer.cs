@@ -10,15 +10,16 @@ using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
-/// <summary>The checked-copy context of one bounded untrusted root.</summary>
+/// <summary>The checked-copy context of one untrusted root.</summary>
 /// <remarks>
-/// Under a root with declared collection, string or depth limits, a nested read whose own entry applies other checks is not
-/// called: it runs as a copy of that entry's read body with the root's limits frozen, as the original <c>InputRead_</c> helpers
+/// A nested read that needs the root's domain checks or declared limits runs as a copy of its read body with the root's
+/// policy frozen, as the original <c>InputRead_</c> helpers
 /// did. Copies redirect their own nested reads the same way, so a recursive child reuses its one copy.
 /// </remarks>
 internal sealed class InputRedirect
 {
     private readonly HashSet<string> _copyable;
+    private readonly HashSet<string> _unchanged;
     private readonly HashSet<string> _requested = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>Captures the root and the targets whose read bodies can be copied.</summary>
@@ -26,13 +27,15 @@ internal sealed class InputRedirect
     /// <param name="extension">The consumer's extension container name.</param>
     /// <param name="limits">The root's frozen limits.</param>
     /// <param name="copyable">The readable names of owners and payloads with a copyable read body.</param>
-    internal InputRedirect(string root, string extension, InputLimits limits, HashSet<string> copyable)
+    /// <param name="unchanged">Payloads that already check their input and need no copy for an unbounded root.</param>
+    internal InputRedirect(string root, string extension, InputLimits limits, HashSet<string> copyable, HashSet<string> unchanged = null)
     {
         Root = root;
         Limits = limits;
         OwnerPrefix = "Binary_" + extension + "_";
         Helpers = "LuminInputReads_" + root;
         _copyable = copyable;
+        _unchanged = unchanged;
     }
 
     /// <summary>The root's readable name.</summary>
@@ -69,8 +72,13 @@ internal sealed class InputRedirect
             if (start >= qualified.Length && string.CompareOrdinal(line, start - qualified.Length, qualified, 0, qualified.Length) == 0)
                 start -= qualified.Length;
             bool boundary = start == 0 || !(char.IsLetterOrDigit(line[start - 1]) || line[start - 1] is '_' or '.' or ':');
+            if (!call || !boundary)
+            {
+                search = nameEnd;
+                continue;
+            }
             string target = line.Substring(nameStart, nameEnd - nameStart);
-            if (!call || !boundary || target == Root || !_copyable.Contains(target))
+            if (target == Root || !_copyable.Contains(target) || _unchanged?.Contains(target) == true)
             {
                 search = nameEnd;
                 continue;

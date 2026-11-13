@@ -174,8 +174,8 @@ by family, excluding itself, and selected operation directions for complete payl
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P1 | Checked copies | Bounded concrete record and managed struct roots can redirect nested modeled reads to root-owned copies. These copies cover ordinary, mirrored, versioned, managed struct and reference-tracked records. Unbounded untrusted roots and the remaining owner/profile combinations still need migration and validation. |
-| P1 | Uncovered payload kinds | Direct read-site checks cover versioned records, mirrored string storage, reference-tracked records and managed structs. Explicitly untrusted struct and Union roots reject input-selected shapes. Expanded fixed Union cases and separate binary reads of class, generic class and managed struct cases use the root policy. Open generic cases check statically known fields and retain their generic member dispatch. Remaining cross-payload owner and profile combinations still need checked copies. |
+| P1 | Checked copies | Concrete roots with declared bounds or a modeled dependency on trusted reads can redirect nested reads to root-owned copies. The unbounded fixtures cover a version-tolerant record, a managed struct and a list member with a trusted child. Closed generic owners, opaque fallback and additional container combinations still need validation. |
+| P1 | Uncovered payload kinds | Direct read-site checks cover versioned records, mirrored string storage, reference-tracked records and managed structs. Explicitly untrusted struct and Union roots reject input-selected shapes. An unbounded Union applies its domain checks to trusted fixed cases and supported own-entry cases. Open generic cases check statically known fields and retain their generic member dispatch. Remaining cross-payload owner and profile combinations still need checked copies. |
 | P2 | Stream, async and compression | The binary async stream fixture checks the encoded cap and single-byte lookahead. The compressed array fixture checks the declared element cap. The remaining protocol, nested scope and reuse combinations still need coverage. |
 
 ### Performance mechanisms
