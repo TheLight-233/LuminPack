@@ -344,6 +344,15 @@ internal static partial class Program
         [assembly: LuminPackable(typeof(Address))]
         [assembly: LuminPackable(typeof(ScopedBox))]
         [assembly: LuminPackable(typeof(IToken<>))]
+        [assembly: LuminPackable(typeof(Shape))]
+
+        [LuminPackable, LuminPackOption(MaxStringLength = 2)]
+        public sealed class LimitedImportedUnions
+        {
+            public Shape? Shape;
+            public IToken<string>? Token;
+            public System.Collections.Generic.List<Shape>? Shapes;
+        }
 
         [LuminPackable]
         [LuminPackOption(StringRecording = LuminPackStringRecording.Token)]
@@ -372,7 +381,35 @@ internal static partial class Program
                 if (!union.SequenceEqual(Library.WriteTokenUtf8VarInt(token)) || union.SequenceEqual(Library.WriteToken(token)) ||
                     ((Token<string>)LuminPackSerializer.Deserialize<IToken<string>>(union)).Value != "\u4E2D")
                     throw new InvalidOperationException("An imported Union must pass the consumer profile through the defining assembly's slots.");
-                return 3;
+                var limited = new LimitedImportedUnions { Shape = Library.Square("ok"), Token = token,
+                    Shapes = new() { Library.Square("ok") } };
+                var copy = LuminPackSerializer.Deserialize<LimitedImportedUnions>(LuminPackSerializer.Serialize(limited));
+                if (Library.Label((Square)copy.Shape!) != "ok" || Library.Label((Square)copy.Shapes![0]) != "ok" ||
+                    copy.Token is not Token<string> copiedToken || copiedToken.Value != "中" || Library.Number(copiedToken) != 43)
+                    throw new InvalidOperationException("A checked imported Union changed the case or its fields.");
+                var existingShape = copy.Shape;
+                var existingList = copy.Shapes;
+                byte[] accepted = LuminPackSerializer.Serialize(limited);
+                if (LuminPackSerializer.Deserialize(accepted, ref copy) != accepted.Length ||
+                    !ReferenceEquals(existingShape, copy.Shape) || !ReferenceEquals(existingList, copy.Shapes))
+                    throw new InvalidOperationException("A checked imported Union lost existing storage reuse.");
+                limited.Shape = Library.Square("four");
+                Reject(limited);
+                limited.Shape = null;
+                limited.Token = Library.Token("four", 43);
+                Reject(limited);
+                limited.Token = null;
+                limited.Shapes![0] = Library.Square("four");
+                Reject(limited);
+                return 8;
+
+                static void Reject(LimitedImportedUnions value)
+                {
+                    byte[] bytes = LuminPackSerializer.Serialize(value);
+                    try { LuminPackSerializer.Deserialize<LimitedImportedUnions>(bytes); }
+                    catch (System.IO.InvalidDataException error) when (error.Message.Contains("string length", StringComparison.Ordinal)) { return; }
+                    throw new InvalidOperationException("An imported Union case bypassed the enclosing string limit.");
+                }
             }
         }
         """;

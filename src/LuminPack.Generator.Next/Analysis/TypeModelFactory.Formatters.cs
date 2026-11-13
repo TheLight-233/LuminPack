@@ -162,7 +162,7 @@ internal static partial class TypeModelFactory
                 (IsLocal(named) || !ExplicitMarker(named) && ExplicitMarker(named.OriginalDefinition) &&
                     Analyze(named.OriginalDefinition, depth + 1, path) is { IsComplete: true, Model: UnionModel }))
                 return new FormatterModel(spelling, FormatterDefinitions.GenericUnion,
-                    payload: IsLocal(named) && Analyze(named, depth + 1, path) is { IsComplete: true, Model: UnionModel closed } ? closed : null,
+                    payload: Analyze(named, depth + 1, path) is { IsComplete: true, Model: UnionModel closed } ? closed : null,
                     underlying:
                     ReadableTypeName.Of(GeneratedNames.PayloadKey(named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) +
                     "|" + string.Join(", ", named.TypeArguments.Select(argument => argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))),

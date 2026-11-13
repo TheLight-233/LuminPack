@@ -45,7 +45,7 @@ internal static class InputFormatterRenderer
 
         PayloadRenderModel? CheckedUnion(FormatterModel argument) =>
             argument.Definition != FormatterDefinitions.GenericUnion &&
-            argument.Payload is UnionModel { Referenced: false, Rejection: null } union && !union.Identity.IsGeneric &&
+            argument.Payload is UnionModel { Rejection: null } union && !union.Identity.IsGeneric &&
             RenderModelFactory.Create(union, set.Options, checkedUnionCopy: true) is { } model
                 ? model.WithInput(redirect.Limits, recursive: false, redirect) : null;
     }

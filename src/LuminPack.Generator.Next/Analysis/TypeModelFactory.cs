@@ -1135,7 +1135,7 @@ internal static partial class TypeModelFactory
         {
             var cases = new List<(int Tag, INamedTypeSymbol Type)>();
             var tags = new HashSet<int>();
-            bool closed = symbol.IsGenericType && !symbol.IsDefinition && !ContainsTypeParameter(symbol) && IsLocal(symbol);
+            bool closed = symbol.IsGenericType && !symbol.IsDefinition && !ContainsTypeParameter(symbol);
             ITypeSymbol[]? arguments = null;
             wideCase = false;
             // A closed checked read shares the definition's tags and framing. Only its case bodies are specialized.

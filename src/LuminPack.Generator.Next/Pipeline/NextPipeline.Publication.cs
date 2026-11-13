@@ -503,7 +503,7 @@ internal static partial class NextPipeline
     /// <param name="model">The declaration.</param>
     /// <returns>Whether the read has a supported concrete record model.</returns>
     private static bool CanCopyPayload(TypeModel model) => !model.Identity.IsGeneric &&
-        (HasProjectableRead(model) || model is UnionModel { Referenced: false, Rejection: null });
+        (HasProjectableRead(model) || model is UnionModel { Rejection: null });
 
     /// <summary>Recognizes payload algorithms that accept a nested read scope.</summary>
     /// <param name="model">The declaration or closed owner.</param>
