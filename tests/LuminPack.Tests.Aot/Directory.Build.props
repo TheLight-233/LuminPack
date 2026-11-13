@@ -3,6 +3,8 @@
     <!-- Package mode restores the packed LuminPack.Core instead of the projects, into separate outputs. -->
     <BaseIntermediateOutputPath Condition="'$(LuminPackPackageVersion)' != ''">obj/Package/</BaseIntermediateOutputPath>
     <BaseOutputPath Condition="'$(LuminPackPackageVersion)' != ''">bin/Package/</BaseOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(LuminPackPackageVersion)' == '' And '$(LuminPackGenerator)' == 'Next'">obj/Next/</BaseIntermediateOutputPath>
+    <BaseOutputPath Condition="'$(LuminPackPackageVersion)' == '' And '$(LuminPackGenerator)' == 'Next'">bin/Next/</BaseOutputPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
   </PropertyGroup>
 </Project>

@@ -195,7 +195,7 @@ These keep the wire format but produce different code from legacy.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | Not verified with Next. The netstandard2.1 and C# 9 compile path Unity uses is covered by the compatibility-target check, but no Unity project has been built. |
+| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | The Windows .NET 10 smoke app and retained wire fixtures pass with Next in x64 JIT, trimmed and NativeAOT builds and a self-contained x86 JIT process. The build analyzer still warns about dynamic `System.Type` resolution. Unity's netstandard2.1 and C# 9 compile path is covered by the compatibility-target check. Unity execution and the wider runtime and architecture matrix remain pending. |
 | P2 | Optional modules | The platform and integration modules are not built or tested against Next. |
 
 ### Diagnostics
@@ -212,9 +212,14 @@ These keep the wire format but produce different code from legacy.
 
 ### Acceptance
 
-Legacy wire fixtures beyond the benchmark fixtures, diagnostic corpora, platform and language matrices, incremental equivalence and
-fuzzing have not been run for Next. Packaging, build and IDE integration and the affected usage skills still describe the legacy
-generator.
+The AOT smoke project selects Next with `-p:LuminPackGenerator=Next` and keeps its build outputs in a separate directory.
+Its 18 retained legacy binary fixtures pass both decoding and byte-for-byte write comparison. Fresh Legacy and Next builds also
+verify each other's fixture output. Broader wire and diagnostic corpora, the remaining platform and language matrix, and fuzzing still need
+validation. Package installation continues to exercise the packaged legacy generator.
+
+```text
+dotnet run --project tests/LuminPack.Tests.Aot -c Release -p:LuminPackGenerator=Next -- --wire verify tests/LuminPack.Tests.Aot/Fixtures
+```
 
 ## Execution constraints
 

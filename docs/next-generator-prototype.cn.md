@@ -160,7 +160,7 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P2 | Unity、IL2CPP、32 位、ARM64、AOT | 尚未用 Next 验证。Unity 所用的 netstandard2.1 与 C# 9 编译路径已由兼容目标检查覆盖，但尚未构建 Unity 项目。 |
+| P2 | Unity、IL2CPP、32 位、ARM64、AOT | Next 在 Windows .NET 10 的 x64 JIT、裁剪、NativeAOT 构建及独立的 x86 JIT 进程中通过了冒烟测试与保留的线格式样本。构建分析器仍报告动态 `System.Type` 解析警告。兼容目标检查覆盖 Unity 所用的 netstandard2.1 与 C# 9 编译路径。Unity 实际运行和其余运行时及架构组合仍待验证。 |
 | P2 | 可选模块 | 各平台与集成模块尚未针对 Next 构建或测试。 |
 
 ### 诊断
@@ -177,8 +177,12 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 ### 验收
 
-尚未对 Next 运行 Benchmark 固定数据之外的旧版线格式固定数据、诊断语料、平台与语言矩阵、增量等价性检查和模糊测试。打包、构建与 IDE 集成以及受影响的
-使用技能仍以旧生成器为准。
+AOT 冒烟项目通过 `-p:LuminPackGenerator=Next` 选择 Next，构建产物放在独立目录。保留的 18 个旧版二进制样本均通过读取和逐字节写入比对，
+新构建的旧版和 Next 测试程序也通过了对方写出样本的验证。更广泛的线格式与诊断语料、其余平台和语言组合，以及模糊测试仍待验证。安装包测试继续使用包内的旧版生成器。
+
+```text
+dotnet run --project tests/LuminPack.Tests.Aot -c Release -p:LuminPackGenerator=Next -- --wire verify tests/LuminPack.Tests.Aot/Fixtures
+```
 
 ## 执行约束
 
