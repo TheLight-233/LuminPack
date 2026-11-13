@@ -950,12 +950,13 @@ internal static partial class BinaryEmitter
     internal static void EmitCheckedUnionCase(PayloadRenderModel model, CodeWriter w)
     {
         bool versioned = model.Version != null;
-        var body = versioned ? VersionReadBody(model, w) :
+        // Interface Union struct cases call their ordinary owner and retain its record header.
+        var body = versioned ? VersionReadBody(model, w) : model.IsStruct ? StructReadBody(model, w, union: false) :
             Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
         body = InputChecks(model, w, AddReadCallbacks(model, body), read: true);
         w.Line(w.Preserve);
         w.Line("internal static void Read_" + model.Readable + "<TLuminProfile>(scoped ref " + w.A("LuminPackReader") +
-            " reader, scoped ref " + model.GlobalName + "? value)");
+            " reader, scoped ref " + model.GlobalName + (model.IsStruct ? " value)" : "? value)"));
         w.Indented(() => w.Line("where TLuminProfile : struct, " + w.A("ILuminPackOptions")));
         w.Open();
         if (model.Recursive)

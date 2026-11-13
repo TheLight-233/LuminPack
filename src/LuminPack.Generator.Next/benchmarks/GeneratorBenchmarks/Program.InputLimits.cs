@@ -130,6 +130,14 @@ internal static partial class Program
         public sealed partial class TrustedTextCase : LimitedUnion { public string Text { get; set; } }
         [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
         public sealed partial class TrustedVersionCase : LimitedUnion { public string Text { get; set; } }
+        [LuminPackable, LuminPackUnion(0, typeof(TrustedGenericCase<string>)), LuminPackOption(MaxStringLength = 4)]
+        public abstract partial class LimitedGenericUnion<T> { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrustedGenericCase<T> : LimitedGenericUnion<T> { public T Text { get; set; } }
+        [LuminPackable, LuminPackUnion(0, typeof(TrustedStructCase)), LuminPackOption(MaxStringLength = 4)]
+        public partial interface ILimitedStructUnion { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public partial struct TrustedStructCase : ILimitedStructUnion { public string Text { get; set; } }
         public static class InputLimitFixture
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
@@ -227,7 +235,24 @@ internal static partial class Program
                 var cases = new System.Collections.Generic.List<LimitedUnion> { textCase };
                 byte[] oversizedCases = LuminPackSerializer.Serialize(cases);
                 RejectRead(() => LuminPackSerializer.Deserialize<System.Collections.Generic.List<LimitedUnion>>(oversizedCases));
-                return 33;
+                LimitedGenericUnion<string> generic = new TrustedGenericCase<string> { Text = "ok" };
+                ILimitedStructUnion boxed = new TrustedStructCase { Text = "ok" };
+                byte[] genericBytes = LuminPackSerializer.Serialize(generic);
+                byte[] structCaseBytes = LuminPackSerializer.Serialize(boxed);
+                if (((TrustedGenericCase<string>)LuminPackSerializer.Deserialize<LimitedGenericUnion<string>>(genericBytes)).Text != "ok" ||
+                    ((TrustedStructCase)LuminPackSerializer.Deserialize<ILimitedStructUnion>(structCaseBytes)).Text != "ok")
+                    throw new Exception("A checked generic or struct Union case changed valid framing.");
+                ((TrustedGenericCase<string>)generic).Text = "oversized";
+                boxed = new TrustedStructCase { Text = "oversized" };
+                genericBytes = LuminPackSerializer.Serialize(generic);
+                structCaseBytes = LuminPackSerializer.Serialize(boxed);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedGenericUnion<string>>(genericBytes));
+                RejectRead(() => LuminPackSerializer.Deserialize<ILimitedStructUnion>(structCaseBytes));
+                byte[] utf8Generic = LuminPackSerializer.Serialize<LimitedGenericUnion<string>, LuminPackUtf8VarIntOptions>(generic);
+                byte[] utf8Struct = LuminPackSerializer.Serialize<ILimitedStructUnion, LuminPackUtf8VarIntOptions>(boxed);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedGenericUnion<string>, LuminPackUtf8VarIntOptions>(utf8Generic));
+                RejectRead(() => LuminPackSerializer.Deserialize<ILimitedStructUnion, LuminPackUtf8VarIntOptions>(utf8Struct));
+                return 39;
             }
 
             private static void RejectContract(Action action)

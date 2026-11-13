@@ -496,14 +496,14 @@ internal static class UnionEmitter
         return BinaryEmitter.UnionReadBody(model, w);
     }
 
-    /// <summary>Whether the ordinary class case needs its own copy under a different Union root policy.</summary>
+    /// <summary>Whether the case needs its own copy under a different Union root policy.</summary>
     /// <param name="root">The Union root.</param>
     /// <param name="item">The case.</param>
     /// <returns>Whether to call the Union-specific checked body.</returns>
     internal static bool NeedsCheckedCase(PayloadRenderModel root, UnionRenderCase item) =>
         root.Rejection == null && root.Limits is { Explicit: true } limits && item.OwnEntry &&
-        item.Model is { IsStruct: false, Circle: false, Rejection: null, TypeParameters.Length: 0 } model &&
-        item.Definition == null && (model.Trusted || !limits.Equals(model.Limits));
+        item.Model is { Circle: false, Rejection: null, TypeParameters.Length: 0 } model &&
+        (!model.IsStruct || model.ManagedStruct) && (model.Trusted || !limits.Equals(model.Limits));
 
     /// <summary>Emits the JSON read body of the root.</summary>
     private static void JsonReadBody(PayloadRenderModel model, CodeWriter w, string reader, string type)

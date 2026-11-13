@@ -134,11 +134,13 @@ internal static class RenderModelFactory
         // A declared string profile selects the root's standard slot; every canonical slot is published either way.
         if (model.Cases.Length == 0)
             return PayloadEmitter.Reject<PayloadRenderModel>("union cases");
+        bool checkedCases = model.Rejection == null && model.Policy.Limits.Explicit && model.Policy.Input == InputPolicy.Untrusted;
         var cases = new UnionRenderCase[model.Cases.Length];
         for (int index = 0; index < cases.Length; index++)
         {
             UnionCaseModel item = model.Cases[index];
-            PayloadRenderModel? caseModel = item.Model == null ? null : Create(item.Model, options);
+            TypeModel? payload = checkedCases ? item.Closed?.Payload ?? item.Model : item.Model;
+            PayloadRenderModel? caseModel = payload == null ? null : Create(payload, options);
             // A case arm either calls the case's own read entry or expands a complete fixed record body.
             if (!item.OwnEntry && (caseModel == null || caseModel.UnionRoot || caseModel.IsStruct || caseModel.Mirror != null ||
                 caseModel.Version != null || caseModel.ConstructorArguments != null || caseModel.Members.Length == 0 ||
