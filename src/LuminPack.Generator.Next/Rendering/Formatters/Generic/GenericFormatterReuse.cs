@@ -622,6 +622,7 @@ internal static class GenericFormatterReuse
             var aliases = new HashSet<string>(StringComparer.Ordinal);
             var forwarded = new HashSet<string>(StringComparer.Ordinal);
             string root = "LuminRoots_" + plan.Name;
+            string? array = plan.Family.Rank == 0 ? null : plan.Family.Spell(plan.Family.Parameters);
             foreach (GeneratedText.Method method in GeneratedText.ReadMethods(plan.Text))
             {
                 if (method.Owner != root || !method.Name.StartsWith("Root", StringComparison.Ordinal) ||
@@ -630,8 +631,12 @@ internal static class GenericFormatterReuse
                 string signature = Words.Replace(method.Signature, match =>
                 {
                     aliases.Add(match.Value);
-                    return substitutions.TryGetValue(match.Value, out string? closed) ? closed : match.Value;
+                    return substitutions.TryGetValue(match.Value, out string? closed) && (array == null || match.Value != plan.Family.Parameters[0])
+                        ? closed : match.Value;
                 });
+                // C# writes array ranks from outermost to innermost, so substituting the element text into T[] can reverse mixed ranks.
+                if (array != null)
+                    signature = signature.Replace(array, plan.Closed.Type);
                 var arguments = new string[method.Parameters.Length];
                 for (int index = 0; index < arguments.Length; index++)
                 {
