@@ -212,6 +212,14 @@ internal static partial class Program
             public string Text;
             public bool Flag;
         }
+        [LuminPackable, LuminPackUnion(0, typeof(TrustedUnboundedGenericCase<bool>))]
+        public abstract partial class UnboundedGenericUnion<T> { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrustedUnboundedGenericCase<T> : UnboundedGenericUnion<T> { public T Value; }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed class TrustedGenericValue<T> { public T Value; }
+        [LuminPackable(GeneratorType.VersionTolerant)]
+        public sealed class UnboundedGenericParent { public TrustedGenericValue<bool> Child; }
         [LuminPackable, LuminPackOption(MaxStringLength = 4)]
         public partial struct LimitedStructParent { public TrustedVersion Child; }
         public static class InputLimitFixture
@@ -237,7 +245,27 @@ internal static partial class Program
                 RejectRead(() => LuminPackSerializer.Deserialize<UnboundedStructParent>(structure));
                 RejectRead(() => LuminPackSerializer.Deserialize<UnboundedCollectionParent>(collection));
                 RejectRead(() => LuminPackSerializer.Deserialize<UnboundedUnion>(union));
-                return 8;
+                UnboundedGenericUnion<bool> generic = new TrustedUnboundedGenericCase<bool> { Value = true };
+                byte[] genericBytes = LuminPackSerializer.Serialize(generic);
+                byte[] profiled = LuminPackSerializer.Serialize<UnboundedGenericUnion<bool>, LuminPackUtf8VarIntOptions>(generic);
+                if (!((TrustedUnboundedGenericCase<bool>)LuminPackSerializer.Deserialize<UnboundedGenericUnion<bool>>(genericBytes)).Value ||
+                    !((TrustedUnboundedGenericCase<bool>)LuminPackSerializer.Deserialize<UnboundedGenericUnion<bool>, LuminPackUtf8VarIntOptions>(profiled)).Value)
+                    throw new Exception("A closed generic case lost its valid Boolean.");
+                genericBytes[^1] = profiled[^1] = 2;
+                RejectRead(() => LuminPackSerializer.Deserialize<UnboundedGenericUnion<bool>>(genericBytes));
+                RejectRead(() => LuminPackSerializer.Deserialize<UnboundedGenericUnion<bool>, LuminPackUtf8VarIntOptions>(profiled));
+                var cases = new System.Collections.Generic.List<UnboundedGenericUnion<bool>> { generic };
+                byte[] list = LuminPackSerializer.Serialize(cases);
+                if (!((TrustedUnboundedGenericCase<bool>)LuminPackSerializer.Deserialize<System.Collections.Generic.List<UnboundedGenericUnion<bool>>>(list)[0]).Value)
+                    throw new Exception("A closed generic case in a list lost its valid Boolean.");
+                list[^1] = 2;
+                RejectRead(() => LuminPackSerializer.Deserialize<System.Collections.Generic.List<UnboundedGenericUnion<bool>>>(list));
+                byte[] parent = LuminPackSerializer.Serialize(new UnboundedGenericParent { Child = new() { Value = true } });
+                if (!LuminPackSerializer.Deserialize<UnboundedGenericParent>(parent).Child.Value)
+                    throw new Exception("A closed generic member lost its valid Boolean.");
+                parent[^1] = 2;
+                RejectRead(() => LuminPackSerializer.Deserialize<UnboundedGenericParent>(parent));
+                return 16;
             }
 
             private static int CheckCircleGroups()

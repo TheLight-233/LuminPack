@@ -51,7 +51,7 @@ internal static partial class NextPipeline
         /// <summary>Checks whether a named target needs an unbounded checked copy.</summary>
         /// <param name="name">The target payload's fully qualified spelling.</param>
         /// <returns>Whether its ordinary entry can bypass a domain check.</returns>
-        internal bool NeedsCopy(string name) => _payloads.TryGetValue(name, out TypeModel? payload) && Reaches(payload);
+        internal bool NeedsCopy(string name) => !_payloads.TryGetValue(name, out TypeModel? payload) || Reaches(payload);
 
         /// <summary>Visits an owned or inline payload once in the current walk.</summary>
         /// <param name="payload">The modeled payload.</param>
