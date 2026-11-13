@@ -182,6 +182,21 @@ internal static partial class Program
         public sealed partial class TrustedTextCase : LimitedUnion { public string Text { get; set; } }
         [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
         public sealed partial class TrustedVersionCase : LimitedUnion { public string Text { get; set; } }
+        [LuminPackable, LuminPackUnion(0, typeof(TrackedCase)), LuminPackUnion(1, typeof(FixedTrackedCase)),
+            LuminPackOption(MaxStringLength = 4, MaxCollectionLength = 4, MaxDepth = 2)]
+        public abstract partial class LimitedTrackedUnion { }
+        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(UntrustedData = false)]
+        public sealed partial class TrackedCase : LimitedTrackedUnion
+        {
+            [LuminPackOrder(0)] public string Text { get; set; }
+            [LuminPackOrder(1)] public TrackedCase Next;
+            [LuminPackOrder(2)] public int[] Values;
+        }
+        [LuminPackable(GeneratorType.CircleReference)]
+        public sealed partial class FixedTrackedCase : LimitedTrackedUnion
+        {
+            [LuminPackOrder(0)] public int Number;
+        }
         [LuminPackable, LuminPackUnion(0, typeof(TrustedGenericCase<string>)), LuminPackOption(MaxStringLength = 4)]
         public abstract partial class LimitedGenericUnion<T> { }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
@@ -502,7 +517,40 @@ internal static partial class Program
                 byte[] openOversized = LuminPackSerializer.Serialize(NewOpenCase<int>("oversized"));
                 RejectRead(() => LuminPackSerializer.Deserialize<LimitedOpenUnion<int>>(openOversized));
                 return 49 + CheckNestedContracts() + CheckForwardedCollections<LuminPackUtf16LengthOptions>() +
-                    CheckForwardedCollections<LuminPackUtf8VarIntOptions>();
+                    CheckForwardedCollections<LuminPackUtf8VarIntOptions>() +
+                    CheckTrackedUnion<LuminPackUtf16LengthOptions>() + CheckTrackedUnion<LuminPackUtf8VarIntOptions>();
+            }
+
+            private static int CheckTrackedUnion<TProfile>() where TProfile : struct, ILuminPackOptions
+            {
+                var source = new TrackedCase { Text = "ok", Values = new[] { 17 } };
+                source.Next = source;
+                byte[] bytes = Write();
+                LimitedTrackedUnion value = new TrackedCase();
+                var candidate = value;
+                if (LuminPackSerializer.Deserialize<LimitedTrackedUnion, TProfile>(bytes, ref value) != bytes.Length ||
+                    !ReferenceEquals(candidate, value) || value is not TrackedCase copy ||
+                    !ReferenceEquals(copy, copy.Next) || copy.Text != "ok" || copy.Values[0] != 17)
+                    throw new Exception("The checked Union read changed reference tracking or reuse.");
+                source.Text = "oversized";
+                Reject();
+                source.Text = "ok";
+                source.Values = new int[5];
+                Reject();
+                source.Values = null;
+                source.Next = new TrackedCase { Text = "next" };
+                source.Next.Next = new TrackedCase { Text = "end" };
+                Reject();
+                byte[] fixedBytes = LuminPackSerializer.Serialize<LimitedTrackedUnion, TProfile>(new FixedTrackedCase { Number = 29 });
+                var fixedCase = new FixedTrackedCase();
+                value = fixedCase;
+                if (LuminPackSerializer.Deserialize<LimitedTrackedUnion, TProfile>(fixedBytes, ref value) != fixedBytes.Length ||
+                    !ReferenceEquals(fixedCase, value) || fixedCase.Number != 29)
+                    throw new Exception("A fixed reference-tracked case lost its slot framing or reuse.");
+                return 5;
+
+                byte[] Write() => LuminPackSerializer.Serialize<LimitedTrackedUnion, TProfile>(source);
+                void Reject() => RejectRead(() => LuminPackSerializer.Deserialize<LimitedTrackedUnion, TProfile>(Write()));
             }
 
             private static int CheckForwardedCollections<TProfile>() where TProfile : struct, ILuminPackOptions

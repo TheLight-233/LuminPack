@@ -964,7 +964,7 @@ internal static partial class BinaryEmitter
     {
         bool versioned = model.Version != null;
         // Interface Union struct cases call their ordinary owner and retain its record header.
-        var body = model.Circle ? CircleBinaryEmitter.ReadBody(model, w, union: false, expanded: null) :
+        var body = model.Circle ? CircleBinaryEmitter.ReadBody(model, w, unionCase, expanded: null) :
             versioned ? VersionReadBody(model, w) : model.IsStruct ? StructReadBody(model, w, union: false) :
             Mirrored(model, w, ReadBody(model, w, unionCase), writes: false, unionCase);
         body = InputChecks(model, w, model.Circle ? body : AddReadCallbacks(model, body), read: true);

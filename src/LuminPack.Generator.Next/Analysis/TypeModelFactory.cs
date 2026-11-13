@@ -1220,7 +1220,7 @@ internal static partial class TypeModelFactory
                 ModelResult analyzed = Analyze(caseType, 0, path);
                 TypeModel? caseModel = analyzed.Model;
                 bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
-                bool expandable = caseModel != null && analyzed.IsComplete && caseModel is not (UnionModel or StructModel) &&
+                bool expandable = caseModel is RecordModel && analyzed.IsComplete &&
                     caseModel.Members.Length != 0 && !caseModel.Members.Any(member => member.Mirrored) &&
                     caseModel.Members.All(member => member is ScalarMember) && !SelectedConstructor(caseType);
                 // A complete local record whose fixed body this pipeline does not expand inline reads through its own Union
@@ -1231,7 +1231,7 @@ internal static partial class TypeModelFactory
                     ownEntry = true;
                     caseReadGeneric = true;
                 }
-                if (!ownEntry && !expandable && caseModel is RecordModel && analyzed.IsComplete &&
+                if (!ownEntry && !expandable && caseModel is RecordModel or CircleReferenceModel && analyzed.IsComplete &&
                     SymbolEqualityComparer.Default.Equals(caseType.ContainingAssembly, _compilation.Assembly) &&
                     !ContainsTypeParameter(caseType) && GenerationMode(caseType) != "Custom")
                     ownEntry = true;

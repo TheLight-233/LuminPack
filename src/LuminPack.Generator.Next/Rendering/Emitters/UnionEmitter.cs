@@ -510,7 +510,7 @@ internal static class UnionEmitter
     /// <returns>Whether to call the Union-specific checked body.</returns>
     internal static bool NeedsCheckedCase(PayloadRenderModel root, UnionRenderCase item) =>
         root.Rejection == null && root.Limits is { } limits && item.OwnEntry &&
-        item.Model is { Circle: false, Rejection: null } model &&
+        item.Model is { Rejection: null } model &&
         (model.TypeParameters.Length == 0 || item.Arguments.Length != 0) &&
         (!model.IsStruct || model.ManagedStruct) && (model.Trusted || limits.Explicit && !limits.Equals(model.Limits));
 

@@ -83,6 +83,11 @@ internal static partial class CircleBinaryEmitter
         w.Line("internal static void SerializeUnion<" + Profile + ">(scoped ref " + writer + " writer, " + type + "? input)");
         w.Indented(() => w.Line(Constraint() + " => " + (genericWrite ? container + ".RootWriteUnion<" + Profile + ">(ref writer, input);" : "SerializeUnion(ref writer, input);")));
         w.Blank();
+        w.Line(w.Preserve);
+        w.Line(inline);
+        w.Line("internal static void SerializeUnion_" + readable + "<" + Profile + ">(scoped ref " + writer + " writer, " + type + "? input)");
+        w.Indented(() => w.Line(Constraint() + " => SerializeUnion<" + Profile + ">(ref writer, input);"));
+        w.Blank();
         w.Suppressed = !reads;
         w.Line(w.Preserve);
         w.Line(inline);
