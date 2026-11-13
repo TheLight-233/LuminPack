@@ -21,13 +21,8 @@ internal static partial class BinaryEmitter
         if (schema.Dynamic)
             return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
         for (int index = 0; index < members.Length; index++)
-        {
-            RenderMember member = members[index];
-            // Only a raw list of unmanaged elements is captured as a reserved span; record and string lists stream.
-            if (schema.Widths[index] == 255 && member.Kind != RenderMemberKind.Text &&
-                !(member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string"))
+            if (members[index].Volatile)
                 return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
-        }
         var body = new List<string>
         {
             "var value = input;",
@@ -43,8 +38,45 @@ internal static partial class BinaryEmitter
             body.Add("");
         }
         body.Add("ref byte cursor = ref writer.Cursor;");
-        var terms = new List<string> { schema.Schema + ".Prefix.Length" };
-        for (int index = 0; index < members.Length; index++)
+        bool prefix = true;
+        int lengths = 0;
+        for (int index = 0; index <= members.Length;)
+        {
+            int end = index;
+            while (end < members.Length && VersionReservable(members[end], schema.Widths[end]))
+                end++;
+            if (prefix || end > index)
+            {
+                AppendVersionReservation(model, w, body, index, end, prefix, ref lengths);
+                prefix = false;
+            }
+            if (end == members.Length)
+                break;
+            body.Add("writer.Cursor = ref cursor;");
+            AppendVersionVariable(body, model, members[end], w, "value." + members[end].Name);
+            body.Add("cursor = ref writer.Cursor;");
+            index = end + 1;
+        }
+        if (body[body.Count - 1].Length != 0 && members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.List))
+            body.Add("");
+        body.Add("writer.Cursor = ref cursor;");
+        return ApplyBoundedWrite(model, body);
+    }
+
+    /// <summary>Whether the complete slot can be written inside a fixed reservation.</summary>
+    private static bool VersionReservable(RenderMember member, int width) => width != 255 ||
+        member.Kind == RenderMemberKind.Text ||
+        member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string";
+
+    /// <summary>Reserves one run of fixed or measured slots and optionally stores the schema prefix.</summary>
+    private static void AppendVersionReservation(PayloadRenderModel model, CodeWriter w, List<string> body,
+        int first, int end, bool prefix, ref int lengths)
+    {
+        var members = model.Members;
+        var terms = new List<string>();
+        if (prefix)
+            terms.Add(model.Version.Schema + ".Prefix.Length");
+        for (int index = first; index < end; index++)
         {
             if (members[index].Kind == RenderMemberKind.List)
             {
@@ -64,9 +96,9 @@ internal static partial class BinaryEmitter
             terms.Add("writer.RecordBound<" + WriteProfile(model, w, members[index]) + ">(" + VersionSnapshot(model, index) + ")");
         }
         body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
-        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, unchecked((nint)(uint)(" + schema.Schema + ".StorePrefix<" + Profile + ">(ref writer, ref cursor))));");
-        int lengths = 0;
-        for (int index = 0; index < members.Length; index++)
+        if (prefix)
+            body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, unchecked((nint)(uint)(" + model.Version.Schema + ".StorePrefix<" + Profile + ">(ref writer, ref cursor))));");
+        for (int index = first; index < end; index++)
         {
             var member = members[index];
             if (member.Kind is RenderMemberKind.Text or RenderMemberKind.List)
@@ -105,22 +137,10 @@ internal static partial class BinaryEmitter
                 }
                 continue;
             }
-            string width = Width(members, index, last);
-            body.Add("if (" + Proof(w, members, index, last, "value", readOnly: true) + ")");
-            body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " + Bytes(w, member, "value", readOnly: true) + ", " + width + ");");
-            body.Add("else");
-            body.Add("{");
-            AddFixedStores(w, members, index, last, "cursor", body);
-            body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width + ");");
-            body.Add("}");
+            AddVersionFixedStores(body, w, members, index, last, Width(members, index, last));
             body.Add("");
             index = last;
         }
-        // A record with a string or list separates the commit from its last store.
-        if (members.Any(member => member.Kind is RenderMemberKind.Text or RenderMemberKind.List) && body[body.Count - 1].Length != 0)
-            body.Add("");
-        body.Add("writer.Cursor = ref cursor;");
-        return ApplyBoundedWrite(model, body);
     }
 
     /// <summary>Whether a version-tolerant write root keeps its inline hint: its template stays within the sixteen-call budget

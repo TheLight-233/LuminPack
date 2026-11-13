@@ -62,24 +62,48 @@ internal static partial class BinaryEmitter
             RenderMember member = model.Members[index];
             int width = model.Version.Widths[index];
             string target = "value." + member.Name;
-            body.Add("{");
             if (width == 255)
             {
-                body.Add("int fieldLength = writer.ReserveVersionLength();");
-                AddMemberWrite(body, model, member, w, target);
-                body.Add("writer.CompleteVersionLength(fieldLength);");
+                AppendVersionVariable(body, model, member, w, target);
+                continue;
             }
-            else
+            body.Add("{");
+            string size = width == 0 ? w.A("Unsafe") + ".SizeOf<" + member.TypeName + ">()" : width.ToString(CultureInfo.InvariantCulture);
+            if (width == 0)
+                body.Add("if (" + size + " >= 255) writer.WriteVersionLength(" + size + ");");
+            body.Add("writer.EnsureAdditionalCapacity(" + size + ");");
+            if (member.Volatile)
             {
-                string size = width == 0 ? w.A("Unsafe") + ".SizeOf<" + member.TypeName + ">()" : width.ToString(CultureInfo.InvariantCulture);
-                if (width == 0)
-                    body.Add("if (" + size + " >= 255) writer.WriteVersionLength(" + size + ");");
-                body.Add("writer.EnsureAdditionalCapacity(" + size + ");");
-                body.Add("writer.Write(in " + target + ");");
+                body.Add("var snapshot = " + target + ";");
+                target = "snapshot";
             }
+            body.Add("writer.Write(in " + target + ");");
             body.Add("}");
         }
         return body;
+    }
+
+    /// <summary>Writes one unbounded variable slot on the published writer and patches its length.</summary>
+    private static void AppendVersionVariable(List<string> body, PayloadRenderModel model, RenderMember member, CodeWriter w, string target)
+    {
+        body.Add("{");
+        body.Add("int fieldLength = writer.ReserveVersionLength();");
+        AddMemberWrite(body, model, member, w, target);
+        body.Add("writer.CompleteVersionLength(fieldLength);");
+        body.Add("}");
+    }
+
+    /// <summary>Writes a reserved fixed run through proven field addresses or individual scalar stores.</summary>
+    private static void AddVersionFixedStores(List<string> body, CodeWriter w, RenderMember[] members, int first, int last, string width)
+    {
+        body.Add("if (" + Proof(w, members, first, last, "value", readOnly: true) + ")");
+        body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " +
+            Bytes(w, members[first], "value", readOnly: true) + ", " + width + ");");
+        body.Add("else");
+        body.Add("{");
+        AddFixedStores(w, members, first, last, "cursor", body);
+        body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + width + ");");
+        body.Add("}");
     }
 
     /// <summary>Calls an existing member operation from a state-published variable field boundary.</summary>

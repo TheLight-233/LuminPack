@@ -39,6 +39,12 @@ internal static partial class Program
                 source.Contains(".SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
                 source.Contains(".Advance(", StringComparison.Ordinal), type + " must retain its guarded fixed group and checked fallback.");
         }
+        string versionWrite = driver.GetRunResult().Results.Single().GeneratedSources.Single(file =>
+            file.HintName == "Binary/LuminPackGen.VersionedRuns.g.cs").SourceText.ToString();
+        RequireIncremental(versionWrite.Contains(".ByteOffset(", StringComparison.Ordinal) &&
+            versionWrite.Contains(".SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
+            versionWrite.Contains(".WriteReservedBlock(", StringComparison.Ordinal) &&
+            versionWrite.Contains(".CompleteVersionLength(", StringComparison.Ordinal), "Versioned runs must retain guarded stores across variable slots.");
         using var image = new MemoryStream();
         var emitted = output.Emit(image);
         if (!emitted.Success)
@@ -139,6 +145,23 @@ internal static partial class Program
         {
             [LuminPackOrder(0)] public byte First;
             [LuminPackOrder(1)] public long Second;
+        }
+        [LuminPackable(GeneratorType.VersionTolerant)]
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        public sealed class VersionedRuns
+        {
+            public int First;
+            public int Second;
+            public int[] Items;
+            public byte Flag;
+            public long Last;
+        }
+        [LuminPackable(GeneratorType.VersionTolerant)]
+        public sealed class VersionedVolatile
+        {
+            public int First;
+            public volatile int Middle;
+            public int Last;
         }
         [LuminPackable, LuminPackOption(MaxCollectionLength = 4)]
         public partial class LimitedCompressed { [LuminPackCompress] public int[] Values; }
@@ -389,7 +412,19 @@ internal static partial class Program
                 var copy = LuminPackSerializer.Deserialize<CircleGapped>(gapped);
                 if (!gapped.AsSpan().SequenceEqual(gappedExpected) || copy.First != 5 || copy.Second != 9)
                     throw new Exception("The gapped CircleReference fallback must keep packed bytes.");
-                return 12;
+                var runs = new VersionedRuns { First = 7, Second = 19, Items = new int[4096], Flag = 3, Last = 29 };
+                runs.Items[^1] = 31;
+                byte[] versioned = LuminPackSerializer.Serialize(runs);
+                var retained = new VersionedRuns { Items = new int[4096] };
+                var prior = retained;
+                if (LuminPackSerializer.Deserialize(versioned, ref retained) != versioned.Length || !ReferenceEquals(prior, retained) ||
+                    retained.First != 7 || retained.Second != 19 || retained.Items[^1] != 31 || retained.Flag != 3 || retained.Last != 29)
+                    throw new Exception("Versioned fixed runs changed values, framing or reuse.");
+                var snapshot = LuminPackSerializer.Deserialize<VersionedVolatile>(
+                    LuminPackSerializer.Serialize(new VersionedVolatile { First = 37, Middle = 41, Last = 43 }));
+                if (snapshot.First != 37 || snapshot.Middle != 41 || snapshot.Last != 43)
+                    throw new Exception("The versioned volatile member lost its scalar snapshot.");
+                return 14;
             }
 
             private static int CheckAdditionalRoots()
