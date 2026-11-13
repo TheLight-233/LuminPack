@@ -238,6 +238,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             case SerializerApi.DeserializeSequenceRef:
                 signature = "int " + name + "(global::System.Buffers.ReadOnlySequence<byte> buffer, ref " + type + " value)";
                 break;
+            case SerializerApi.DeserializeSequence:
+                signature = type + " " + name + "(in global::System.Buffers.ReadOnlySequence<byte> buffer)";
+                break;
             case SerializerApi.SerializeWriter:
                 signature = "void " + name + "(ref LuminPackWriter state, scoped in " + type + " value)";
                 break;
@@ -378,6 +381,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             SerializerApi.DeserializeSpan => ReturnValue(binaryRead, "buffer"),
             SerializerApi.DeserializeSpanRef => binaryRead,
             SerializerApi.DeserializeSequenceRef => SequenceRead,
+            SerializerApi.DeserializeSequence => ReturnValue(SequenceRead, "buffer", "global::System.Buffers.ReadOnlySequence<byte>"),
             SerializerApi.DeserializeBuffer => ReturnValue(BinaryBufferRead, "bufferWriter"),
             SerializerApi.DeserializeBufferRef => BinaryBufferRead,
             SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue => StreamRead + ReturnValue(binaryRead, "data.Span"),

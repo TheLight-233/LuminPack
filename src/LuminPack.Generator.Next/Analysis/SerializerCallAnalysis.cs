@@ -273,6 +273,9 @@ internal static class SerializerCallAnalysis
                 {
                     "ReadOnlySpan<byte>" => SerializerApi.DeserializeSpan,
                     "LuminBufferWriter" => SerializerApi.DeserializeBuffer,
+                    "ReadOnlySequence" when parameters[0].RefKind == RefKind.In &&
+                        parameters[0].Type is INamedTypeSymbol { TypeArguments.Length: 1 } sequence &&
+                        sequence.TypeArguments[0].SpecialType == SpecialType.System_Byte => SerializerApi.DeserializeSequence,
                     _ => null,
                 };
             case "Deserialize" when parameters.Length == 2 && parameters[1].RefKind == RefKind.Ref && parameters[1].Type is ITypeParameterSymbol:

@@ -59,7 +59,7 @@ internal static partial class Program
             RequireIncremental(emitted.Success, name + ": " + string.Join(Environment.NewLine, emitted.Diagnostics));
             byte[] image = pe.ToArray(), symbols = pdb.ToArray();
             var rewritten = StaticCallAssembly.Rewrite(image, symbols, paths);
-            RequireIncremental(il ? rewritten is { Calls: 4, Pdb.Length: > 0 } : rewritten == null, name + " IL rewrite and symbols.");
+            RequireIncremental(il ? rewritten is { Calls: 6, Pdb.Length: > 0 } : rewritten == null, name + " IL rewrite and symbols.");
             if (rewritten != null)
             {
                 image = rewritten.Pe;
@@ -134,6 +134,8 @@ internal static partial class Program
         """;
 
     private const string StaticBackendFixture = """
+        using System;
+        using System.Buffers;
         using LuminPack;
         using LuminPack.Attribute;
         using LuminPack.Option;
@@ -153,9 +155,28 @@ internal static partial class Program
                 var value = new BackendPayload { Number = 29, Text = "\u4E2D" };
                 byte[] bytes = LuminPackSerializer.Serialize<BackendPayload, LuminPackUtf8VarIntOptions>(value);
                 BackendPayload binary = LuminPackSerializer.Deserialize<BackendPayload, LuminPackUtf8VarIntOptions>(bytes);
+                var single = new ReadOnlySequence<byte>(bytes);
+                var first = new Segment(bytes.AsMemory(0, 1));
+                var last = first.Append(bytes.AsMemory(1));
+                var multiple = new ReadOnlySequence<byte>(first, 0, last, last.Memory.Length);
+                BackendPayload singleCopy = LuminPackSerializer.Deserialize<BackendPayload, LuminPackUtf8VarIntOptions>(in single);
+                BackendPayload multipleCopy = LuminPackSerializer.Deserialize<BackendPayload, LuminPackUtf8VarIntOptions>(in multiple);
                 string text = LuminPackSerializer.SerializeJson<BackendPayload, LuminPackUtf8LengthOptions>(value);
                 BackendPayload json = LuminPackSerializer.DeserializeJson<BackendPayload, LuminPackUtf8LengthOptions>(text);
-                return binary.Number == 29 && binary.Text == value.Text && json.Number == 29 && json.Text == value.Text;
+                return binary.Number == 29 && binary.Text == value.Text && json.Number == 29 && json.Text == value.Text &&
+                    singleCopy.Number == 29 && singleCopy.Text == value.Text && multipleCopy.Number == 29 && multipleCopy.Text == value.Text;
+            }
+
+            private sealed class Segment : ReadOnlySequenceSegment<byte>
+            {
+                internal Segment(ReadOnlyMemory<byte> memory) => Memory = memory;
+
+                internal Segment Append(ReadOnlyMemory<byte> memory)
+                {
+                    var segment = new Segment(memory) { RunningIndex = RunningIndex + Memory.Length };
+                    Next = segment;
+                    return segment;
+                }
             }
         }
         """;
