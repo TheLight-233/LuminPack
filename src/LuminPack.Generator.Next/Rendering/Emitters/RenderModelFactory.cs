@@ -147,7 +147,7 @@ internal static class RenderModelFactory
                 !caseModel.Members.All(member => member.IsFixed)))
                 return PayloadEmitter.Reject<PayloadRenderModel>("union case read: " + item.Type.DisplayName);
             cases[index] = new UnionRenderCase(item.Tag, item.Type.GlobalName, item.OwnEntry, item.ReadGeneric, item.Sealed,
-                item.FixedCursor, caseModel!, item.Readable, item.Chain, item.Namespace!, item.Arguments, item.Definition);
+                item.FixedCursor, caseModel!, item.Readable, item.Chain, item.Namespace!, item.Arguments, item.Definition, item.InterfaceContract);
         }
         string globalName = model.Identity.GlobalName;
         return new PayloadRenderModel(globalName, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)),

@@ -250,11 +250,12 @@ internal static partial class TypeModelFactory
                 return;
             foreach (INamedTypeSymbol level in Levels(type))
             {
-                if (!HasAttribute(level.ContainingAssembly, "System.Runtime.CompilerServices.ReferenceAssemblyAttribute"))
+                if (!HasAttribute(level.ContainingAssembly, ReferenceAssemblyAttribute))
                     continue;
                 foreach (IPropertySymbol property in level.GetMembers().OfType<IPropertySymbol>())
                 {
-                    if (property.IsStatic || property.IsAbstract || property.IsExtern || property.IsIndexer || IsAutoProperty(property))
+                    if (property.IsStatic || property.IsAbstract || property.IsExtern || property.IsIndexer || IsAutoProperty(property) ||
+                        HasAttribute(property, IgnoreAttribute))
                         continue;
                     if (property.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal) &&
                         !HasAttribute(property, IncludeAttribute))

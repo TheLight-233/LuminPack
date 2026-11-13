@@ -34,6 +34,13 @@ internal static partial class TypeModelFactory
                         cases.Add(new UnionCaseDeclaration(tag, member, false));
                         tags.Add(tag);
                     }
+                // A consumer cannot repeat source discovery in the declaring assembly. Its dispatch tags come from metadata.
+                if (!IsLocal(root))
+                {
+                    UnionCaseDeclaration[] referenced = cases.ToArray();
+                    _unionDeclarations[root] = referenced;
+                    return referenced;
+                }
                 if (_unionCandidates == null)
                 {
                     var declarations = new List<INamedTypeSymbol>();

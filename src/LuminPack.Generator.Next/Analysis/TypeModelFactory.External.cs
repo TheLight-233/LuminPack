@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
@@ -18,6 +19,7 @@ internal static partial class TypeModelFactory
 {
     private static readonly ConditionalWeakTable<Compilation, Compilation> CompleteViews = new();
     private static readonly ConditionalWeakTable<Compilation, IReadOnlyList<INamedTypeSymbol>> ExternalMarkers = new();
+    private const string ReferenceAssemblyAttribute = "System.Runtime.CompilerServices.ReferenceAssemblyAttribute";
 
     /// <summary>Returns the compilation analysis runs on: itself, or its complete-metadata view when it declares external roots.</summary>
     /// <param name="compilation">The consuming compilation.</param>
@@ -49,6 +51,57 @@ internal static partial class TypeModelFactory
     /// <returns>The marked definitions in declaration order.</returns>
     internal static IReadOnlyList<INamedTypeSymbol> MarkedTypes(Compilation compilation) =>
         ExternalMarkers.GetValue(compilation, static item => ReadMarkedTypes(item));
+
+    /// <summary>Recognizes a marked Union whose definition owns generic dispatch.</summary>
+    /// <param name="type">The marked type.</param>
+    /// <returns>Whether the type declares a Union contract.</returns>
+    internal static bool IsUnion(INamedTypeSymbol type) => HasAttribute(type, UnionAttribute);
+
+    /// <summary>Finds omitted storage in marked generic constructions reached by a serializer call.</summary>
+    /// <param name="type">The closed payload or formatter container.</param>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>The missing storage diagnostics, or an empty array.</returns>
+    internal static DiagnosticInfo[] MissingCallStorage(ITypeSymbol type, Compilation compilation)
+    {
+        IReadOnlyList<INamedTypeSymbol> markers = MarkedTypes(compilation);
+        List<DiagnosticInfo>? diagnostics = null;
+        Visit(type);
+        return diagnostics?.ToArray() ?? Array.Empty<DiagnosticInfo>();
+
+        void Visit(ITypeSymbol item)
+        {
+            if (item is IArrayTypeSymbol array)
+            {
+                Visit(array.ElementType);
+                return;
+            }
+            if (item is not INamedTypeSymbol { IsGenericType: true } named)
+                return;
+            if (HasAttribute(named.ContainingAssembly, ReferenceAssemblyAttribute))
+            {
+                bool open = false;
+                for (int index = 0; index < markers.Count; index++)
+                {
+                    INamedTypeSymbol marker = markers[index];
+                    if (SymbolEqualityComparer.Default.Equals(marker, named))
+                        return;
+                    open |= SymbolEqualityComparer.Default.Equals(marker, named.OriginalDefinition);
+                }
+                if (open)
+                {
+                    DiagnosticInfo[] missing = MissingStorage(InView(named, Complete(compilation)));
+                    if (missing.Length != 0)
+                        (diagnostics ??= new List<DiagnosticInfo>()).AddRange(missing);
+                    return;
+                }
+            }
+            string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.OriginalDefinition.Name;
+            if (FormatterDefinitions.HasGeneric(definition) || FormatterRegistry.FindSequence(definition) != null ||
+                FormatterRegistry.FindDictionary(Session.FormatterSpelling(named)) != null)
+                foreach (ITypeSymbol argument in named.TypeArguments)
+                    Visit(argument);
+        }
+    }
 
     /// <summary>Reads exact closed markers and the definitions selected by open markers.</summary>
     /// <param name="compilation">The consuming compilation.</param>
@@ -91,11 +144,11 @@ internal static partial class TypeModelFactory
         for (INamedTypeSymbol? current = type; current != null && current.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
             current = current.BaseType)
         {
-            if (current.DeclaringSyntaxReferences.Length != 0)
+            if (current.DeclaringSyntaxReferences.Length != 0 || !HasAttribute(current.ContainingAssembly, ReferenceAssemblyAttribute))
                 continue;
             foreach (ISymbol member in current.GetMembers())
             {
-                if (member is not IPropertySymbol property || property.IsStatic || property.IsAbstract || property.IsIndexer ||
+                if (member is not IPropertySymbol property || property.IsStatic || property.IsAbstract || property.IsExtern || property.IsIndexer ||
                     current.GetMembers("<" + property.Name + ">k__BackingField").Length != 0)
                     continue;
                 if (property.DeclaredAccessibility is not (Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal) &&
@@ -117,24 +170,17 @@ internal static partial class TypeModelFactory
         private HashSet<INamedTypeSymbol>? _marked;
 
         /// <summary>Requires the generated dispatch of an imported Union root: the public compiled binary and JSON slots its own
-        /// assembly declares, and closed cases, whose generic slot fields only that assembly owns.</summary>
+        /// assembly declares. The defining assembly retains ownership of the virtual and generic case slots.</summary>
         /// <param name="root">The imported Union root.</param>
         /// <param name="suffix">The root's slot suffix.</param>
-        /// <param name="declared">The declared cases.</param>
         /// <param name="issues">Receives the reason the root cannot be read here.</param>
-        private void ReferencedDispatch(INamedTypeSymbol root, string suffix, List<(int Tag, INamedTypeSymbol Type)> declared, List<string> issues)
+        private void ReferencedDispatch(INamedTypeSymbol root, string suffix, List<string> issues)
         {
             foreach (string slot in new[] { "Write_" + suffix + "_Compiled", "WriteJson_" + suffix + "_Compiled" })
                 if (!root.GetMembers(slot).OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 &&
                         method.Parameters.Length == 2 && _compilation.IsSymbolAccessibleWithin(method, _compilation.Assembly)))
                 {
                     issues.Add("the imported Union root '" + root.ToDisplayString() + "' does not expose its generated dispatch '" + slot + "'");
-                    return;
-                }
-            foreach (var item in declared)
-                if (item.Type.IsGenericType)
-                {
-                    issues.Add("the imported Union root '" + root.ToDisplayString() + "' declares the generic case '" + item.Type.ToDisplayString() + "'");
                     return;
                 }
         }

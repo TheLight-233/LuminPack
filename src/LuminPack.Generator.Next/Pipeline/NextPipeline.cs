@@ -89,15 +89,21 @@ internal static partial class NextPipeline
         {
             ImmutableArray<ModeledPayload> payloads = input.Left.Left;
             var bound = ImmutableArray.CreateBuilder<SerializerCallModel>();
+            ProjectFacts project = input.Right.Left;
+            var diagnostics = new List<DiagnosticInfo>(project.Diagnostics);
+            HashSet<DiagnosticInfo>? callDiagnostics = null;
             GeneratedOperations whole = input.Right.Right;
             foreach (CallFact call in input.Left.Right)
             {
                 whole |= call.Whole;
                 if (call.Call != null)
+                {
                     bound.Add(call.Call);
+                    foreach (DiagnosticInfo diagnostic in call.Call.Binding.Diagnostics)
+                        if ((callDiagnostics ??= new HashSet<DiagnosticInfo>()).Add(diagnostic))
+                            diagnostics.Add(diagnostic);
+                }
             }
-            ProjectFacts project = input.Right.Left;
-            var diagnostics = new List<DiagnosticInfo>(project.Diagnostics);
             foreach (ModeledPayload payload in payloads)
                 diagnostics.AddRange(payload.Diagnostics);
             return new PublicationRequest(payloads, bound.ToImmutable(),
@@ -134,7 +140,7 @@ internal static partial class NextPipeline
         foreach (INamedTypeSymbol type in marked)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (type.IsGenericType && type.IsDefinition)
+            if (type.IsGenericType && type.IsDefinition && !TypeModelFactory.IsUnion(type))
                 continue;
             INamedTypeSymbol complete = TypeModelFactory.InView(type, view);
             DiagnosticInfo[] missing = TypeModelFactory.MissingStorage(complete);

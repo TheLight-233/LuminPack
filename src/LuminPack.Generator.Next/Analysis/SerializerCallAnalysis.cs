@@ -54,7 +54,10 @@ internal static class SerializerCallAnalysis
     {
         GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
         bool intercept = options.Interceptors && (LocationMethod != null || options.IlRewrite);
-        if (candidates.IsEmpty || !intercept && options.RegisterMode == RegisterMode.Disabled && OperationUsageAnalysis.Fixed(compilation) == GeneratedOperations.All)
+        if (candidates.IsEmpty)
+            return ImmutableArray<CallFact>.Empty;
+        if (!intercept && options.RegisterMode == RegisterMode.Disabled && OperationUsageAnalysis.Fixed(compilation) == GeneratedOperations.All &&
+            TypeModelFactory.MarkedTypes(compilation).Count == 0)
             return ImmutableArray<CallFact>.Empty;
         var facts = Bindings.GetValue(compilation, static item => new BindingFacts(item));
         var trees = new Dictionary<SyntaxTree, List<int>>();
@@ -145,6 +148,7 @@ internal static class SerializerCallAnalysis
     {
         private readonly Compilation _compilation;
         private readonly GeneratorOptions _options;
+        private readonly bool _hasExternalMarkers;
         internal readonly ConcurrentDictionary<IMethodSymbol, SerializerApi?> Apis = new(SymbolEqualityComparer.Default);
         internal readonly ConcurrentDictionary<ITypeSymbol, Lazy<PayloadBinding?>> Payloads = new(SymbolEqualityComparer.Default);
 
@@ -154,6 +158,7 @@ internal static class SerializerCallAnalysis
         {
             _compilation = compilation;
             _options = GeneratorOptionsFactory.From(compilation);
+            _hasExternalMarkers = TypeModelFactory.MarkedTypes(compilation).Count != 0;
         }
 
         /// <summary>Defers payload modeling until the shared cache selects this entry.</summary>
@@ -178,7 +183,8 @@ internal static class SerializerCallAnalysis
                 typeArguments = string.Join(", ", TypeModelFactory.AllTypeArguments(generic).Select(argument => argument.ToDisplayString(PayloadFormat)));
             }
             return new PayloadBinding(spelling, root, definition, typeArguments, TypeModelFactory.EntryShapeOf(payload, _compilation, _options),
-                OperationUsageAnalysis.Payload(payload, _compilation));
+                OperationUsageAnalysis.Payload(payload, _compilation), _hasExternalMarkers
+                    ? TypeModelFactory.MissingCallStorage(payload, _compilation) : Array.Empty<Diagnostics.DiagnosticInfo>());
         }
     }
 

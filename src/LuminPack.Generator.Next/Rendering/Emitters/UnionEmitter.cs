@@ -743,7 +743,7 @@ internal static class UnionEmitter
     /// <summary>Emits one case's slot overrides of one format.</summary>
     private static void CaseSlots(PayloadRenderModel model, UnionRenderCase item, CodeWriter w, bool json)
     {
-        string prefix = model.UnionInterface ? "void " + model.GlobalName + "." :
+        string prefix = model.UnionInterface ? "void " + (item.InterfaceContract ?? model.GlobalName) + "." :
             item.Sealed ? "public sealed override void " : "public override void ";
         string operation = json ? "WriteJson_" : "Write_";
         if (!json && item.FixedCursor)

@@ -37,7 +37,15 @@ internal static partial class Program
         string[] missing = diagnostics.Where(item => item.Id == "LuminPack112").Select(item => item.GetMessage()).ToArray();
         RequireIncremental(missing.Any(message => message.Contains("'Hidden'", StringComparison.Ordinal)), "LuminPack112 for Plain.Hidden.");
         RequireIncremental(missing.Any(message => message.Contains("'Nick'", StringComparison.Ordinal)), "LuminPack112 for Person.Nick.");
-        checks += 2;
+        Generate("ExternalOpenReferenceConsumer", OpenReferenceConsumerSource,
+            references.Append(MetadataReference.CreateFromImage(metadata)).ToArray(), out diagnostics);
+        missing = diagnostics.Where(item => item.Id == "LuminPack112").Select(item => item.GetMessage()).ToArray();
+        RequireIncremental(missing.Length == 2 && missing.Any(message => message.Contains("AutoBox<int>", StringComparison.Ordinal)) &&
+            missing.Any(message => message.Contains("AutoBox<string>", StringComparison.Ordinal)),
+            "LuminPack112 once for each open-marker construction reached by direct calls and collection members.");
+        Compilation options = Generate("ExternalOptionsConsumer", ExternalOptionsConsumerSource,
+            references.Append(MetadataReference.CreateFromImage(image)).ToArray(), out _);
+        checks += 3 + (int)Assembly.Load(Emit(options, new EmitOptions())).GetType("ExternalOptionsConsumer")!.GetMethod("Exercise")!.Invoke(null, null)!;
         Console.WriteLine($"Next external-root contracts: {checks} checks passed.");
         return 0;
 
@@ -68,6 +76,7 @@ internal static partial class Program
     private const string ExternalLibrarySource = """
         using LuminPack;
         using LuminPack.Attribute;
+        using LuminPack.Option;
 
         [assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]
 
@@ -131,6 +140,37 @@ internal static partial class Program
                 public T Value = default!;
             }
 
+            public class AutoBox<T>
+            {
+                public T Value { get; set; } = default!;
+                [LuminPackIgnore] public T Ignored { get; set; } = default!;
+            }
+
+            [LuminPackable]
+            [LuminPackUnion(7, typeof(Token<int>))]
+            [LuminPackUnion(8, typeof(Token<string>))]
+            [LuminPackUnion(9, typeof(IntToken))]
+            public partial interface IToken<T> { }
+
+            [LuminPackable]
+            public sealed partial class IntToken : IToken<int>
+            {
+                public int Number;
+            }
+
+            [LuminPackable]
+            public sealed partial class Token<T> : IToken<T>
+            {
+                public T Value = default!;
+                internal int Number;
+            }
+
+            [LuminPackOption(StringRecording = LuminPackStringRecording.Token)]
+            public class ScopedBox
+            {
+                public string? Value;
+            }
+
             public static class Library
             {
                 public static Person Person(int secret) => new Person { Id = 1, Name = "p", Home = new Address { Zip = 2, Street = 3 }, Nick = "n", Secret = secret, Hidden = 9 };
@@ -141,6 +181,12 @@ internal static partial class Program
                 public static byte[] Write(Shape shape) => LuminPackSerializer.Serialize(shape);
                 public static Person ReadPerson(byte[] bytes) => LuminPackSerializer.Deserialize<Person>(bytes);
                 public static Shape ReadShape(byte[] bytes) => LuminPackSerializer.Deserialize<Shape>(bytes);
+                public static byte[] WriteToken(IToken<string> token) => LuminPackSerializer.Serialize(token);
+                public static byte[] WriteTokenUtf8VarInt(IToken<string> token) => LuminPackSerializer.Serialize<IToken<string>, LuminPackUtf8VarIntOptions>(token);
+                public static string WriteTokenJson(IToken<string> token) => LuminPackSerializer.SerializeJson(token);
+                public static IToken<string> ReadToken(byte[] bytes) => LuminPackSerializer.Deserialize<IToken<string>>(bytes);
+                public static Token<string> Token(string value, int number) => new Token<string> { Value = value, Number = number };
+                public static int Number(Token<string> token) => token.Number;
             }
         }
         """;
@@ -160,6 +206,9 @@ internal static partial class Program
         [assembly: LuminPackable(typeof(Shape))]
         [assembly: LuminPackable(typeof(Box<>))]
         [assembly: LuminPackable(typeof(ExactBox<int>))]
+        [assembly: LuminPackable(typeof(IToken<>))]
+        [assembly: LuminPackable(typeof(IToken<int>))]
+        [assembly: LuminPackable(typeof(AutoBox<>))]
 
         [LuminPackable]
         public partial class Order
@@ -170,6 +219,7 @@ internal static partial class Program
             public List<Person>? Others;
             public List<Shape>? Shapes;
             public List<Box<string>>? Boxes;
+            public List<IToken<string>>? Tokens;
         }
 
         public static class ExternalConsumer
@@ -207,6 +257,9 @@ internal static partial class Program
                 var box = new Box<int> { Value = 19, Number = 4 };
                 Box<int> boxCopy = LuminPackSerializer.Deserialize<Box<int>>(LuminPackSerializer.Serialize(box));
                 Check(boxCopy.Value == 19 && boxCopy.Number == 4, "open marker binds a closed binary root");
+                var auto = new AutoBox<int> { Value = 21, Ignored = 99 };
+                AutoBox<int> autoCopy = LuminPackSerializer.Deserialize<AutoBox<int>>(LuminPackSerializer.Serialize(auto));
+                Check(autoCopy.Value == 21 && autoCopy.Ignored == 0, "open marker imports automatic storage from implementation metadata");
                 var exact = new ExactBox<int> { Value = 13 };
                 Check(LuminPackSerializer.DeserializeJson<ExactBox<int>>(LuminPackSerializer.SerializeJson(exact)).Value == 13,
                     "closed marker binds exactly one construction");
@@ -228,7 +281,98 @@ internal static partial class Program
                 Order json = LuminPackSerializer.DeserializeJson<Order>(LuminPackSerializer.SerializeJson(order));
                 Check(json.Note!.Hidden == 7 && Library.Secret(json.Customer!) == 11 && ((Square)json.Shapes![0]).Side == 5, "marked members through JSON");
                 Check(orderCopy.Boxes![0].Value == "box" && json.Boxes![0].Number == 9, "open marker binds an independently closed collection element");
+
+                IToken<string> token = Library.Token("generic", 29);
+                byte[] tokenBytes = LuminPackSerializer.Serialize(token);
+                Check(tokenBytes.SequenceEqual(Library.WriteToken(token)), "imported generic Union writes through library slots");
+                Check(Library.Number((Token<string>)LuminPackSerializer.Deserialize<IToken<string>>(tokenBytes)) == 29 &&
+                    ((Token<string>)Library.ReadToken(tokenBytes)).Value == "generic", "closed generic Union case reads in both assemblies");
+                string tokenJson = LuminPackSerializer.SerializeJson(token);
+                Check(tokenJson == Library.WriteTokenJson(token) && ((Token<string>)LuminPackSerializer.DeserializeJson<IToken<string>>(tokenJson)).Value == "generic",
+                    "imported generic Union JSON slots and cases");
+                IToken<int> exactToken = new Token<int> { Value = 31 };
+                Check(((Token<int>)LuminPackSerializer.Deserialize<IToken<int>>(LuminPackSerializer.Serialize(exactToken))).Value == 31,
+                    "exact generic Union marker");
+                exactToken = new IntToken { Number = 37 };
+                byte[] exactBytes = LuminPackSerializer.Serialize(exactToken);
+                Check(exactBytes[0] == 9 && ((IntToken)LuminPackSerializer.Deserialize<IToken<int>>(exactBytes)).Number == 37,
+                    "non-generic case implements the constructed generic interface slot");
+                order.Tokens = new List<IToken<string>> { token };
+                Check(((Token<string>)LuminPackSerializer.Deserialize<Order>(LuminPackSerializer.Serialize(order)).Tokens![0]).Value == "generic" &&
+                    Library.Number((Token<string>)LuminPackSerializer.DeserializeJson<Order>(LuminPackSerializer.SerializeJson(order)).Tokens![0]) == 29,
+                    "open imported Union marker reached by a collection member");
                 return checks;
+            }
+        }
+        """;
+
+    private const string OpenReferenceConsumerSource = """
+        using System.Collections.Generic;
+        using External;
+        using LuminPack;
+        using LuminPack.Attribute;
+
+        [assembly: LuminPackable(typeof(AutoBox<>))]
+
+        [LuminPackable]
+        public partial class ReferenceHolder
+        {
+            public List<AutoBox<string>>? Boxes;
+        }
+
+        public static class ExternalOpenReferenceConsumer
+        {
+            public static void Main()
+            {
+                LuminPackSerializer.Serialize(new AutoBox<int>());
+                LuminPackSerializer.Deserialize<AutoBox<int>>(new byte[0]);
+            }
+        }
+        """;
+
+    private const string ExternalOptionsConsumerSource = """
+        using System;
+        using System.Linq;
+        using External;
+        using LuminPack;
+        using LuminPack.Attribute;
+        using LuminPack.Option;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]
+        [assembly: LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8, StringRecording = LuminPackStringRecording.VarInt)]
+        [assembly: LuminPackable(typeof(Person))]
+        [assembly: LuminPackable(typeof(Address))]
+        [assembly: LuminPackable(typeof(ScopedBox))]
+        [assembly: LuminPackable(typeof(IToken<>))]
+
+        [LuminPackable]
+        [LuminPackOption(StringRecording = LuminPackStringRecording.Token)]
+        public partial class LocalBox
+        {
+            public string? Value;
+        }
+
+        public static class ExternalOptionsConsumer
+        {
+            public static void Main() => Exercise();
+
+            public static int Exercise()
+            {
+                Person person = Library.Person(41);
+                byte[] bytes = LuminPackSerializer.Serialize(person);
+                if (bytes.SequenceEqual(Library.Write(person)) || LuminPackSerializer.Deserialize<Person>(bytes).Nick != "n")
+                    throw new InvalidOperationException("A marked root must inherit the consumer assembly profile.");
+                var box = new ScopedBox { Value = "\u4E2D" };
+                byte[] scoped = LuminPackSerializer.Serialize(box);
+                if (!scoped.SequenceEqual(LuminPackSerializer.Serialize(new LocalBox { Value = box.Value })) ||
+                    LuminPackSerializer.Deserialize<ScopedBox>(scoped).Value != box.Value)
+                    throw new InvalidOperationException("An imported type option must overlay the consumer assembly profile.");
+                IToken<string> token = Library.Token("\u4E2D", 43);
+                byte[] union = LuminPackSerializer.Serialize(token);
+                if (!union.SequenceEqual(Library.WriteTokenUtf8VarInt(token)) || union.SequenceEqual(Library.WriteToken(token)) ||
+                    ((Token<string>)LuminPackSerializer.Deserialize<IToken<string>>(union)).Value != "\u4E2D")
+                    throw new InvalidOperationException("An imported Union must pass the consumer profile through the defining assembly's slots.");
+                return 3;
             }
         }
         """;

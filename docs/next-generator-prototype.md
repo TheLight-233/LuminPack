@@ -136,6 +136,10 @@ A checked item covers the scope stated here. Related combinations still listed b
   For ordinary external records, an open generic marker such as `typeof(Box<>)` permits closed formatter owners discovered through
   calls and members. A closed marker such as `typeof(Box<int>)` selects that construction alone. The fixture also exercises both
   marker forms in an application with operation pruning.
+  A generic Union with explicitly declared closed cases supports both marker forms. Writes call the declaring assembly's
+  compiled slots and reads use the consumer's generated case owners. The fixture checks binary and JSON, a collection member,
+  and a non-generic case implementing a constructed interface. It also verifies LuminPack112 for closed generic records reached
+  through open markers and the consumer's assembly options with imported type-level overrides.
 - [x] **LuminPack021.** Nothing to migrate: the legacy generator has declared but not reported this warning since layout mirrors
   made `[LuminPackInclude]` storage reachable on every target, and Next likewise reports nothing.
 
@@ -151,7 +155,7 @@ by family, excluding itself, and selected operation directions for complete payl
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Cross-assembly payloads | External ordinary records support open and closed generic markers. Generic external Union dispatch, reference-assembly diagnostics for constructions discovered from open markers, and cross-assembly option inheritance still need coverage. Unmarked referenced payloads use registered fallback. |
+| P2 | Cross-assembly payloads | Imported Union cases discovered only in the declaring assembly's source, open generic cases, and the wider option and backend matrix still need coverage. Unmarked referenced payloads use registered fallback. |
 | P2 | Remaining backend combinations | Friend-assembly operation retention and IL rewriting on a single fixture are verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
 
 ### Type shapes and protocols
@@ -160,7 +164,7 @@ by family, excluding itself, and selected operation directions for complete payl
 | --- | --- | --- |
 | P2 | Generic CircleReference | Closed constructions used directly or as members get owners and keep reference identity, including cycles and repeated list elements (verified with `Node<string>`, `Node<int>` and `Node<double>` through interception). Open calls use registered fallback. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
-| P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. Cross-assembly option inheritance remains part of the cross-assembly gap. |
+| P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. |
 | P2 | JSON compatibility | All envelopes, escaping, former names, duplicate and unknown properties, omitted members and failure publication are covered only as far as the tests reach. |
 | P2 | Formatter behavior matrix | Comparers, duplicates, concurrent observation, failed prefixes, cleanup and older-runtime fallbacks across all families are covered only as far as the tests reach. |
 

@@ -52,6 +52,12 @@ The generic owner is rendered by the family's own template with placeholder type
 
 Every root of a shared owner is `NoInlining`. One call into a collection keeps the caller's inline budget for the element calls inside its loop; an inlined collection root would copy the loop into each parent and leave the element calls uninlined. Strategy forwarders and payload record writes remain inlining candidates.
 
+## Importing referenced payloads
+
+Use `[assembly: LuminPackable(typeof(Box<>))]` in the consuming assembly to generate owners for closed `Box<T>` constructions reached by serializer calls or members. Use `typeof(Box<int>)` to select one construction. Marked records inherit the consuming assembly's options and apply their own type and member options. Reference metadata that omits required automatic-property storage reports `LuminPack112`. Reference the implementation assembly when the generated owner needs that storage.
+
+For a marked generic Union with explicitly declared closed cases, the consumer reads the declared tags and the defining assembly's compiled Union slots write the payload. Both open and exact root markers work for these Unions.
+
 ## Registering external Union cases
 
 Register through the serializer:

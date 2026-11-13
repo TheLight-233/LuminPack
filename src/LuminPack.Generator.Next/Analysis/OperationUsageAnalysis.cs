@@ -288,13 +288,22 @@ internal static class OperationUsageAnalysis
             INamedTypeSymbol definition = named.OriginalDefinition;
             if (!InSource(definition))
             {
+                bool open = false;
                 for (int index = 0; index < _external.Count; index++)
-                    if (SymbolEqualityComparer.Default.Equals(_external[index], named) ||
-                        SymbolEqualityComparer.Default.Equals(_external[index], definition))
+                {
+                    if (SymbolEqualityComparer.Default.Equals(_external[index], named))
                     {
                         Add(TypeModelFactory.ReachKey(named));
-                        break;
+                        return;
                     }
+                    open |= SymbolEqualityComparer.Default.Equals(_external[index], definition);
+                }
+                if (open)
+                {
+                    Add(TypeModelFactory.ReachKey(named));
+                    if (TypeModelFactory.IsUnion(definition))
+                        Add(TypeModelFactory.ReachKey(definition));
+                }
                 return;
             }
             Add(TypeModelFactory.ReachKey(named));

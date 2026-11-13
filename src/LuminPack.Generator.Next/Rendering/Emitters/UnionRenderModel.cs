@@ -32,11 +32,14 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
     internal readonly string Arguments;
     /// <summary>The open definition of a generic case, or null.</summary>
     internal readonly string Definition;
+    /// <summary>The constructed interface implemented by a non-generic case of a generic Union root.</summary>
+    internal readonly string InterfaceContract;
 
     /// <summary>Captures one case.</summary>
     internal UnionRenderCase(int id, string type, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor, PayloadRenderModel model,
-        string readable, string[] chain, string @namespace, string arguments = "", string definition = null)
+        string readable, string[] chain, string @namespace, string arguments = "", string definition = null, string interfaceContract = null)
     {
+        InterfaceContract = interfaceContract;
         Arguments = arguments;
         Definition = definition;
         Namespace = @namespace;
@@ -54,7 +57,8 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
     /// <inheritdoc/>
     public bool Equals(UnionRenderCase other) => other != null && Id == other.Id && Type == other.Type && OwnEntry == other.OwnEntry &&
         ReadGeneric == other.ReadGeneric && Sealed == other.Sealed && FixedCursor == other.FixedCursor && Namespace == other.Namespace &&
-        Readable == other.Readable && Arguments == other.Arguments && Definition == other.Definition && Same(Chain, other.Chain) &&
+        Readable == other.Readable && Arguments == other.Arguments && Definition == other.Definition &&
+        InterfaceContract == other.InterfaceContract && Same(Chain, other.Chain) &&
         Equals(Model, other.Model);
 
     private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && System.Linq.Enumerable.SequenceEqual(left, right);

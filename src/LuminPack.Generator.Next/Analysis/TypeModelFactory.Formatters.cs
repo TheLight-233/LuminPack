@@ -144,15 +144,17 @@ internal static partial class TypeModelFactory
             bool ordinary = named.TypeKind == TypeKind.Class && GenerationMode(named) == "Object" && !HasAttribute(named, UnionAttribute);
             if (path.Active.Contains(named))
                 return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, ordinaryObject: ordinary);
-            // A closed local generic Union dispatches through its definition's generic Union roots, as the original closed root
-            // called the Union's own dispatch.
-            if (SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, _compilation.Assembly) && named.IsGenericType &&
-                HasAttribute(named, UnionAttribute) && !ContainsTypeParameter(named) && IsPackable(named.OriginalDefinition))
+            // A closed generic Union dispatches through its generic definition owner unless an exact external marker publishes
+            // the closed root directly. Both forms use the defining assembly's Union slots.
+            bool genericUnion = named.IsGenericType && HasAttribute(named, UnionAttribute);
+            if (genericUnion && !ContainsTypeParameter(named) && IsPackable(named.OriginalDefinition) &&
+                (IsLocal(named) || !ExplicitMarker(named) && ExplicitMarker(named.OriginalDefinition) &&
+                    Analyze(named.OriginalDefinition, depth + 1, path) is { IsComplete: true, Model: UnionModel }))
                 return new FormatterModel(spelling, FormatterDefinitions.GenericUnion, underlying:
                     ReadableTypeName.Of(GeneratedNames.PayloadKey(named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) +
                     "|" + string.Join(", ", named.TypeArguments.Select(argument => argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))),
                     ordinaryObject: false);
-            if (!Owned(named) || named.IsGenericType && HasAttribute(named, UnionAttribute))
+            if (!Owned(named) || genericUnion && !ExplicitMarker(named))
                 return new FormatterModel(spelling, FormatterDefinitions.Registered, rawCollection: rawCollection, layout: layout, ordinaryObject: ordinary);
             if (IsPackable(named) || Marked(named))
             {

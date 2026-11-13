@@ -386,11 +386,12 @@ internal static partial class TypeModelFactory
                     // An imported root writes through the virtual dispatch its own assembly generated, as the original referenced
                     // dispatch did; this assembly only reads, so the root must expose the compiled slots of both formats.
                     bool referenced = !SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly);
+                    string suffix = SlotSuffix(referenced && symbol.IsGenericType ? Identity(symbol.OriginalDefinition) : identity);
                     if (referenced)
-                        ReferencedDispatch(symbol, SlotSuffix(identity), declared, issues);
+                        ReferencedDispatch(symbol, suffix, issues);
                     string? unionRejection = policy.Input == InputPolicy.Untrusted && policy.Limits.Explicit ? Rejection(symbol) : null;
                     return new UnionModel(identity, accessibility, policy, constraints, cases,
-                        isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: SlotSuffix(identity),
+                        isInterface: symbol.TypeKind == TypeKind.Interface, wideTags: wide, unionSuffix: suffix,
                         tier: tier, tierCases: TierCases(declared, tier), tierSealed: TierSealed(declared, tier),
                         cursor: fixedCases.Count != 0, readGeneric: readGeneric, chain: Chain(symbol), @namespace: identity.Namespace,
                         binarySlots: UnionSlots(json: false, encoding, recording), jsonSlots: UnionSlots(json: true, encoding, 0),
@@ -1160,6 +1161,7 @@ internal static partial class TypeModelFactory
             readGeneric = false;
             var cases = new List<UnionCaseModel>(declared.Count);
             var symbols = declared.Select(item => item.Type).ToArray();
+            bool referenced = !IsLocal(root);
             foreach (var (tag, caseType) in declared)
             {
                 // A struct case implements an interface root; its slots are explicit interface implementations and its read
@@ -1170,20 +1172,25 @@ internal static partial class TypeModelFactory
                 string? genericArguments = GenericCaseArguments(root, caseType);
                 if (genericArguments != null)
                 {
-                    ModelResult definitionModel = Analyze(caseType.OriginalDefinition, 0, path);
-                    if (definitionModel.Model is not RecordModel || !definitionModel.IsComplete)
+                    ModelResult? definitionModel = referenced ? null : Analyze(caseType.OriginalDefinition, 0, path);
+                    if (definitionModel != null && (definitionModel.Model is not RecordModel || !definitionModel.IsComplete))
                     {
                         issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " generic case '" + caseType.ToDisplayString() +
                             "' is not modeled: " + (definitionModel.Reason ?? "not a record"));
                         continue;
                     }
-                    readGeneric = true;
-                    fixedCases.Remove(caseType);
                     string definition = caseType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     // A closed case dispatches to the closed owner's own Union entries, as the original called the closed overloads;
                     // only an open case writes and reads through its definition's generic entries.
                     FormatterModel? closed = !ContainsTypeParameter(caseType) && Formatter(caseType, depth, path) is
                         { Definition: FormatterDefinitions.PayloadReference, Payload: not null } closedOwner ? closedOwner : null;
+                    if (referenced && closed?.Payload is not RecordModel)
+                    {
+                        issues.Add("Union tag " + tag.ToString(CultureInfo.InvariantCulture) + " has no imported closed case owner");
+                        continue;
+                    }
+                    readGeneric = true;
+                    fixedCases.Remove(caseType);
                     string caseReadable = closed != null
                         ? ReadableTypeName.Of(GeneratedNames.PayloadKey(caseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))
                         : ReadableTypeName.Of(GeneratedNames.PayloadKey(definition));
@@ -1191,7 +1198,7 @@ internal static partial class TypeModelFactory
                     {
                         cases.Add(new UnionCaseModel(tag, Identity(caseType), UnionCaseRead.OwnEntry, ownEntry: true, readGeneric: true,
                             sealedCase: root.TypeKind == TypeKind.Class && !HasDerivedCase(symbols, caseType.OriginalDefinition), fixedCursor: false,
-                            definitionModel.Model, caseReadable, Chain(caseType.OriginalDefinition),
+                            definitionModel?.Model ?? closed?.Payload, caseReadable, Chain(caseType.OriginalDefinition),
                             NamespaceOf(caseType), closed != null ? string.Empty : genericArguments, definition, closed));
                     }
                     catch (NotSupportedException error)
@@ -1206,7 +1213,9 @@ internal static partial class TypeModelFactory
                         caseType.ToDisplayString() + "', which is not an ordinary class record");
                     continue;
                 }
-                bool ownEntry = ReadsOwnUnionEntry(caseType);
+                string? interfaceContract = root.TypeKind == TypeKind.Interface && root.IsGenericType && root.IsDefinition
+                    ? UnionRootMatch(caseType, root.OriginalDefinition)?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) : null;
+                bool ownEntry = interfaceContract != null || ReadsOwnUnionEntry(caseType);
                 ModelResult analyzed = Analyze(caseType, 0, path);
                 TypeModel? caseModel = analyzed.Model;
                 bool caseReadGeneric = caseModel == null || NeedsReadProfile(caseModel);
@@ -1242,7 +1251,7 @@ internal static partial class TypeModelFactory
                     cases.Add(new UnionCaseModel(tag, Identity(caseType),
                         ownEntry ? UnionCaseRead.OwnEntry : UnionCaseRead.ExpandedFixed, ownEntry, caseReadGeneric, sealedCase,
                         fixedCases.Contains(caseType), caseModel, ReadableTypeName.Of(GeneratedNames.PayloadKey(globalName)),
-                        Chain(caseType), NamespaceOf(caseType)));
+                        Chain(caseType), NamespaceOf(caseType), interfaceContract: interfaceContract));
                 }
                 catch (NotSupportedException error)
                 {

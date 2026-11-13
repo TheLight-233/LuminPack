@@ -150,6 +150,7 @@ internal sealed class PayloadBinding : IEquatable<PayloadBinding>
     internal readonly string? TypeArguments;
     internal readonly EntryShape Shape;
     internal readonly OperationReach Reach;
+    internal readonly Diagnostics.DiagnosticInfo[] Diagnostics;
 
     /// <summary>Captures the closed payload and the root declarations it needs.</summary>
     /// <param name="type">The closed payload spelling.</param>
@@ -158,7 +159,9 @@ internal sealed class PayloadBinding : IEquatable<PayloadBinding>
     /// <param name="typeArguments">The closed arguments of the payload definition.</param>
     /// <param name="shape">The allocating binary entry form.</param>
     /// <param name="reach">The declarations that keep the bound operation.</param>
-    internal PayloadBinding(string type, MemberModel? root, string? definition, string? typeArguments, EntryShape shape, OperationReach reach)
+    /// <param name="diagnostics">Missing storage in imported generic payloads reached by this call.</param>
+    internal PayloadBinding(string type, MemberModel? root, string? definition, string? typeArguments, EntryShape shape, OperationReach reach,
+        Diagnostics.DiagnosticInfo[] diagnostics)
     {
         Type = type;
         Root = root;
@@ -166,12 +169,27 @@ internal sealed class PayloadBinding : IEquatable<PayloadBinding>
         TypeArguments = typeArguments;
         Shape = shape;
         Reach = reach;
+        Diagnostics = diagnostics;
     }
 
     /// <inheritdoc/>
     public bool Equals(PayloadBinding? other) => ReferenceEquals(this, other) || other != null && Type == other.Type &&
         Definition == other.Definition && TypeArguments == other.TypeArguments && Shape.Equals(other.Shape) &&
-        Equals(Root, other.Root) && Reach.Equals(other.Reach);
+        Equals(Root, other.Root) && Reach.Equals(other.Reach) && SameDiagnostics(Diagnostics, other.Diagnostics);
+
+    /// <summary>Compares diagnostic snapshots for the same closed payload.</summary>
+    /// <param name="left">The preceding diagnostic facts.</param>
+    /// <param name="right">The current diagnostic facts.</param>
+    /// <returns>Whether both snapshots describe the same diagnostics.</returns>
+    private static bool SameDiagnostics(Diagnostics.DiagnosticInfo[] left, Diagnostics.DiagnosticInfo[] right)
+    {
+        if (left.Length != right.Length)
+            return false;
+        for (int index = 0; index < left.Length; index++)
+            if (!left[index].Equals(right[index]))
+                return false;
+        return true;
+    }
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as PayloadBinding);
