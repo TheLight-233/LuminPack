@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
@@ -144,10 +143,20 @@ internal static class GeneratedText
                 classes.Add((match.Index, end, match.Groups[1].Value));
         }
         var methods = new List<Method>();
+        var scopes = new Stack<(int End, string Name)>();
+        int classIndex = 0;
         foreach (Match match in Methods.Matches(text))
         {
-            var owner = classes.LastOrDefault(item => item.Start < match.Index && item.End > match.Index);
-            if (owner.Name == null)
+            while (classIndex < classes.Count && classes[classIndex].Start < match.Index)
+            {
+                var scope = classes[classIndex++];
+                while (scopes.Count != 0 && scopes.Peek().End <= scope.Start)
+                    scopes.Pop();
+                scopes.Push((scope.End, scope.Name));
+            }
+            while (scopes.Count != 0 && scopes.Peek().End <= match.Index)
+                scopes.Pop();
+            if (scopes.Count == 0)
                 continue;
             int position = match.Index + match.Length;
             string generic = string.Empty;
@@ -188,7 +197,7 @@ internal static class GeneratedText
             }
             string signature = text.Substring(match.Index, body - match.Index).TrimEnd();
             string content = expression ? text.Substring(body + 2, end - body - 2).Trim() : text.Substring(body + 1, end - body - 1);
-            methods.Add(new Method(start, end + 1, match.Index, owner.Name, match.Groups["name"].Value, generic,
+            methods.Add(new Method(start, end + 1, match.Index, scopes.Peek().Name, match.Groups["name"].Value, generic,
                 text.Substring(parameters + 1, parametersEnd - parameters - 1), signature, content, expression, match.Groups["indent"].Value));
         }
         return methods;

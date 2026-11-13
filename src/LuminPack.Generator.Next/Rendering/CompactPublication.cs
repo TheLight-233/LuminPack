@@ -174,6 +174,9 @@ internal static class CompactPublication
                 }
             }
             int currentMethod = 0;
+            int declarationEdit = 0;
+            int declarationCount = edits.Count;
+            int lastCallEnd = 0;
             foreach (Match match in RetainedCalls(document, removed))
             {
                 while (currentMethod < document.Methods.Count && document.Methods[currentMethod].End <= match.Index)
@@ -207,13 +210,18 @@ internal static class CompactPublication
                 if (position >= document.Text.Length || document.Text[position] != '(')
                     continue;
                 int close = GeneratedText.Close(document.Text, position, '(', ')');
-                if (close < 0 || Overlaps(edits, match.Index, close + 1))
+                if (close < 0 || match.Index < lastCallEnd || Intersects(edits, declarationCount, ref declarationEdit, match.Index, close + 1))
                     continue;
                 var call = new GeneratedText.Call(target, types, GeneratedText.Split(document.Text.Substring(position + 1, close - position - 1)));
                 edits.Add((match.Index, close + 1, Resolve(call, owner, json, aliases, catalog, names, bindings, 0)));
+                lastCallEnd = close + 1;
             }
+            SortEdits(edits);
+            int operationEdit = 0;
+            int operationCount = edits.Count;
             foreach (Match match in OwnerNames.Matches(document.Text))
-                if (names.TryGetValue(match.Value, out string? name) && !Overlaps(edits, match.Index, match.Index + match.Length))
+                if (names.TryGetValue(match.Value, out string? name) &&
+                    !Intersects(edits, operationCount, ref operationEdit, match.Index, match.Index + match.Length))
                     edits.Add((match.Index, match.Index + match.Length, name));
             // A state owner containing no retained method or other member has no remaining declaration contract.
             foreach (var owner in document.Owners)
@@ -270,7 +278,7 @@ internal static class CompactPublication
                 imports.Append('\n');
                 edits.Add((firstNamespace, firstNamespace, imports.ToString()));
             }
-            edits.Sort(static (left, right) => left.Start != right.Start ? left.Start.CompareTo(right.Start) : left.End.CompareTo(right.End));
+            SortEdits(edits);
             string output = OwnerDeclarations.Replace(PublicationOrder.Render(document.Text, document.Methods, removed, edits),
                 "${indent}internal readonly partial struct ${name}");
             string hint = document.Source.Hint.StartsWith("LuminPack.SharedFormatters/", StringComparison.Ordinal) ? FormatterHint(document) : document.Source.Hint;
@@ -308,18 +316,24 @@ internal static class CompactPublication
         return true;
     }
 
-    /// <summary>Checks source edits without allocating a predicate for every candidate call.</summary>
-    /// <param name="edits">The existing edits.</param>
+    /// <summary>Tests increasing source ranges against a fixed, sorted prefix of nonoverlapping edits.</summary>
+    /// <param name="edits">The edit list, whose sorted prefix excludes edits appended by the current pass.</param>
+    /// <param name="count">The length of the sorted prefix.</param>
+    /// <param name="index">The first edit that may intersect this range.</param>
     /// <param name="start">The proposed start.</param>
     /// <param name="end">The proposed exclusive end.</param>
     /// <returns>Whether the proposed range intersects an existing edit.</returns>
-    private static bool Overlaps(List<(int Start, int End, string Text)> edits, int start, int end)
+    private static bool Intersects(List<(int Start, int End, string Text)> edits, int count, ref int index, int start, int end)
     {
-        foreach (var edit in edits)
-            if (start < edit.End && end > edit.Start)
-                return true;
-        return false;
+        while (index < count && edits[index].End <= start)
+            index++;
+        return index < count && edits[index].Start < end;
     }
+
+    /// <summary>Sorts edits by source position, with insertions before longer edits at the same offset.</summary>
+    /// <param name="edits">The edits to order.</param>
+    private static void SortEdits(List<(int Start, int End, string Text)> edits) =>
+        edits.Sort(static (left, right) => left.Start != right.Start ? left.Start.CompareTo(right.Start) : left.End.CompareTo(right.End));
 
     /// <summary>Searches only source ranges whose declarations survive publication.</summary>
     /// <param name="document">The indexed source contribution.</param>
