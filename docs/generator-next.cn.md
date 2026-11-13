@@ -54,6 +54,8 @@ Union、接口、`object`、布尔与可空元素保留各自的专用封闭 own
 
 对于由 Next 生成且显式声明闭合 case 的库中泛型 Union，消费程序集按声明的标签读取，定义程序集的编译期 Union 槽负责写入。这类 Union 支持开放和精确根标记。
 
+引用成员标记 `[LuminPackableObject]` 后使用完整的生成或注册 Formatter。接口即使没有声明 `[LuminPackable]`，其成员也可使用手动注册的 Formatter。
+
 ## 注册外部 Union 子类型
 
 通过序列化入口注册：

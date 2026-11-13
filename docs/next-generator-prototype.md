@@ -166,7 +166,7 @@ by family, excluding itself, and selected operation directions for complete payl
 | --- | --- | --- |
 | P2 | Generic CircleReference | Closed constructions used directly or as members get owners and keep reference identity, including cycles and repeated list elements (verified with `Node<string>`, `Node<int>` and `Node<double>` through interception). Open calls use registered fallback. Value-type shapes, complex construction, ref-return rentals, slot evolution and failure combinations are not verified. |
 | P2 | Version tolerance combinations | Generic and inherited combinations, compressed fields, former names, schema evolution and complete legacy cross reads are covered only as far as the tests reach. |
-| P2 | Public annotations | `NonGenerator`, `LuminPackableObject` and alias conflicts still need complete semantic comparison with legacy. |
+| P2 | Public annotations | `LuminPackableObject` selects the member's complete formatter for generated and registered reference payloads. The annotation fixture checks manual registration for a `NonGenerator` member and an unannotated interface type. `--verify-alias-diagnostics` compares seven invalid name cases with the built legacy analyzer. Compression and the broader diagnostic location and precedence matrix remain open. |
 | P2 | JSON compatibility | All envelopes, escaping, former names, duplicate and unknown properties, omitted members and failure publication are covered only as far as the tests reach. |
 | P2 | Formatter behavior matrix | Comparers, duplicates, concurrent observation, failed prefixes, cleanup and older-runtime fallbacks across all families are covered only as far as the tests reach. |
 

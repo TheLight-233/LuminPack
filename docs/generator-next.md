@@ -58,6 +58,9 @@ Use `[assembly: LuminPackable(typeof(Box<>))]` in the consuming assembly to gene
 
 For a marked generic Union defined in a Next-generated library with explicitly declared closed cases, the consumer reads the declared tags and the defining assembly's compiled Union slots write the payload. Both open and exact root markers work for these Unions.
 
+An annotated reference member with `[LuminPackableObject]` uses its complete generated or registered formatter. An interface
+member can use a manually registered formatter even when the interface has no `[LuminPackable]` declaration.
+
 ## Registering external Union cases
 
 Register through the serializer:

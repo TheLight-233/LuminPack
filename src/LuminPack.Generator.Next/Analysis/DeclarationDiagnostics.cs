@@ -95,14 +95,17 @@ internal static partial class TypeModelFactory
                 }
                 members.Add(member);
                 ITypeSymbol memberType = StorageType(member);
+                bool ownFormatter = HasAttribute(member, PackableObjectAttribute);
                 if (memberType.IsRefLikeType)
                     diagnostics.Add(DiagnosticDescriptors.MemberIsRefStruct, member, type.Name, member.Name, memberType.ToDisplayString());
-                else
+                else if (!ownFormatter)
                     ValidateNestedType(memberType, member, ref diagnostics);
+                else if (memberType is INamedTypeSymbol explicitType && (IsPackable(explicitType) || Marked(explicitType)))
+                    ValidateImportedStorage(explicitType, member, ref diagnostics);
                 ITypeSymbol? element = memberType is IArrayTypeSymbol array ? array.ElementType :
                     memberType is INamedTypeSymbol named && SequenceKind(named) == CollectionKind.List ? named.TypeArguments[0] : null;
                 if (element != null && !element.IsUnmanagedType && HasAttribute(member, "LuminPack.Attribute.LuminPackCompressAttribute") &&
-                    !HasAttribute(member, "LuminPack.Attribute.LuminPackableObjectAttribute"))
+                    !ownFormatter)
                     diagnostics.Add(DiagnosticDescriptors.ManagedArrayDataCompress, member, type.Name, member.Name,
                         memberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
             }

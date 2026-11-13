@@ -30,7 +30,7 @@ internal static partial class Program
         {
             Console.Error.WriteLine(error);
             Console.Error.WriteLine("usage: GeneratorBenchmarks [--corpus <dir>] [--types <n>] [--runs <n>] [--core <dll>] " +
-                "[--refs <dir>] [--old-dll <dll>] [--old-mode on|off|verify] [--warmups <n>] [--reference-first] [--verify-publication] [--verify-incremental] [--verify-input-limits] [--verify-assembly-options] [--verify-external] [--verify-documentation] [--verify-equivalence] [--skip-next] [--skip-old]");
+                "[--refs <dir>] [--old-dll <dll>] [--old-mode on|off|verify] [--warmups <n>] [--reference-first] [--verify-publication] [--verify-incremental] [--verify-input-limits] [--verify-assembly-options] [--verify-alias-diagnostics] [--verify-external] [--verify-documentation] [--verify-equivalence] [--skip-next] [--skip-old]");
             return 1;
         }
         string repository = FindRepositoryRoot();
@@ -44,6 +44,12 @@ internal static partial class Program
             return VerifyDocumentation(references, parse);
         if (options.VerifyAssemblyOptions)
             return VerifyAssemblyOptions(references, parse, coreDll);
+        if (options.VerifyAliasDiagnostics)
+        {
+            int checks = VerifyAliasDiagnostics(references, parse, oldDll);
+            Console.WriteLine($"Next alias diagnostics: {checks} legacy comparisons passed.");
+            return 0;
+        }
         if (options.VerifyExternal)
             return VerifyExternal(references, parse, coreDll);
         if (options.VerifyInputLimits)
@@ -536,6 +542,9 @@ internal static partial class Program
                 case "--verify-assembly-options":
                     options.VerifyAssemblyOptions = true;
                     break;
+                case "--verify-alias-diagnostics":
+                    options.VerifyAliasDiagnostics = true;
+                    break;
                 case "--verify-documentation":
                     options.VerifyDocumentation = true;
                     break;
@@ -578,6 +587,7 @@ internal static partial class Program
         internal bool VerifyIncremental;
         internal bool VerifyInputLimits;
         internal bool VerifyAssemblyOptions;
+        internal bool VerifyAliasDiagnostics;
         internal bool VerifyExternal;
         internal bool VerifyDocumentation;
         internal bool VerifyEquivalence;

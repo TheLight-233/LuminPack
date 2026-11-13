@@ -26,6 +26,7 @@ internal static partial class TypeModelFactory
     private const string PackableAttribute = "LuminPack.Attribute.LuminPackableAttribute";
     private const string IgnoreAttribute = "LuminPack.Attribute.LuminPackIgnoreAttribute";
     private const string IncludeAttribute = "LuminPack.Attribute.LuminPackIncludeAttribute";
+    private const string PackableObjectAttribute = "LuminPack.Attribute.LuminPackableObjectAttribute";
     private const string OptionAttribute = "LuminPack.Attribute.LuminPackOptionAttribute";
     private const string BoundedAttribute = "LuminPack.Attribute.LuminPackBoundedAttribute";
     private const string UnionAttribute = "LuminPack.Attribute.LuminPackUnionAttribute";
@@ -494,7 +495,8 @@ internal static partial class TypeModelFactory
                 if (storage == MemberStorage.Field && !_compilation.IsSymbolAccessibleWithin(member, _compilation.Assembly))
                     storage = MemberStorage.IncludedField;
                 WirePolicy policy = MemberPolicy(member, ownerPolicy);
-                MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path);
+                MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path,
+                    HasAttribute(member, PackableObjectAttribute));
                 if (model == null)
                     continue;
                 // An array or list of unmanaged elements declared compressed keeps the compressed binary representation.

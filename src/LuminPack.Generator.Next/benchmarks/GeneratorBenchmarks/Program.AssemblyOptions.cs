@@ -89,6 +89,16 @@ internal static partial class Program
             checks += (int)Assembly.Load(image.ToArray()).GetType("AutomaticRegistrationFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
         }
         checks += VerifyStaticBackends(references, parse);
+        {
+            var result = GenerateAssembly(AnnotatedMembersFixture, OutputKind.DynamicallyLinkedLibrary, allowUnsafe: false);
+            using var image = new MemoryStream();
+            var emitted = result.Output.Emit(image);
+            RequireIncremental(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+            string registry = Sources(result.Driver).Single(file => file.Key.EndsWith("CustomFormatterRegistry.g.cs", StringComparison.Ordinal)).Value;
+            RequireIncremental(!registry.Contains("RegisterGenerated<global::ManualPayload>", StringComparison.Ordinal),
+                "NonGenerator must not publish an automatic registration.");
+            checks += (int)Assembly.Load(image.ToArray()).GetType("AnnotatedMembersFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
+        }
         Console.WriteLine($"Next assembly-option contracts: {checks} matrix and runtime checks passed.");
         return 0;
 
@@ -125,6 +135,50 @@ internal static partial class Program
         }
 
         static string Bool(bool value) => value ? "true" : "false";
+    }
+
+    /// <summary>Compares named-member conflicts with the legacy generator's diagnostic contract.</summary>
+    /// <param name="references">The framework and runtime references.</param>
+    /// <param name="parse">The consumer parse options.</param>
+    /// <param name="legacyDll">The legacy generator assembly.</param>
+    /// <returns>The number of compared declarations.</returns>
+    private static int VerifyAliasDiagnostics(MetadataReference[] references, CSharpParseOptions parse, string legacyDll)
+    {
+        var assembly = new AssemblyLoadContext("AliasDiagnosticReference").LoadFromAssemblyPath(Path.GetFullPath(legacyDll));
+        ISourceGenerator[] legacy = CreateLegacyGenerators(assembly);
+        ISourceGenerator[] next = { new NextGenerator().AsSourceGenerator() };
+        var cases = new (string Mode, string Fields)[]
+        {
+            ("VersionTolerant", """[LuminPackOldName("")] public int A;"""),
+            ("VersionTolerant", """[LuminPackOldName(null)] public int A;"""),
+            ("VersionTolerant", """[LuminPackOldName("A")] public int A;"""),
+            ("VersionTolerant", """[LuminPackOldName("B")] public int A; public int B;"""),
+            ("VersionTolerant", """[LuminPackOldName("old")] public int A; [LuminPackOldName("old")] public int B;"""),
+            ("VersionTolerant", """[LuminPackOldName("\uD800")] public int A;"""),
+            ("Object", """[LuminPackOldName("old")] public int A;"""),
+        };
+        foreach (var item in cases)
+        {
+            string source = "using LuminPack.Attribute; [LuminPackable(GeneratorType." + item.Mode +
+                ")] public class Invalid { " + item.Fields + " }";
+            var tree = CSharpSyntaxTree.ParseText(source, parse, "InvalidNames.cs");
+            var input = CSharpCompilation.Create("InvalidNames", new[] { tree }, references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            var expected = Diagnostics(legacy, input);
+            var actual = Diagnostics(next, input);
+            RequireIncremental(expected.Length == 1 && expected.SequenceEqual(actual),
+                item.Fields + " diagnostic mismatch: " + string.Join(", ", expected) + " / " + string.Join(", ", actual));
+        }
+        return cases.Length;
+
+        (string Message, DiagnosticSeverity Severity)[] Diagnostics(ISourceGenerator[] generators, Compilation compilation)
+        {
+            var result = CSharpGeneratorDriver.Create(generators, parseOptions: parse).RunGenerators(compilation).GetRunResult();
+            foreach (var generator in result.Results)
+                RequireIncremental(generator.Exception == null, generator.Exception?.ToString() ?? string.Empty);
+            return result.Diagnostics.Where(item => item.Id == "LuminPack062")
+                .Select(item => (item.GetMessage(), item.Severity)).Distinct().ToArray();
+        }
     }
 
     private const string AutomaticRegistrationFixture = """
@@ -175,6 +229,56 @@ internal static partial class Program
             private static T ReadJson<T>(string json) => LuminPackSerializer.DeserializeJson<T>(json);
             private static string WriteUtf8Json<T>(T value) => LuminPackSerializer.SerializeJson<T, LuminPackUtf8LengthOptions>(value);
             private static T ReadUtf8Json<T>(string json) => LuminPackSerializer.DeserializeJson<T, LuminPackUtf8LengthOptions>(json);
+        }
+        """;
+
+    private const string AnnotatedMembersFixture = """
+        using System;
+        using LuminPack;
+        using LuminPack.Attribute;
+        using LuminPack.Core;
+        using LuminPack.Option;
+
+        public interface IManualValue { int Number { get; } }
+        [LuminPackable(GeneratorType.NonGenerator)]
+        public sealed class ManualPayload : IManualValue { public int Number { get; set; } }
+        [LuminPackable] public sealed class AutomaticChild { public int Number; }
+
+        [LuminPackable]
+        public sealed class AnnotationHolder
+        {
+            [LuminPackableObject] public IManualValue Manual { get; set; }
+            [LuminPackableObject] public AutomaticChild Child;
+            public ManualPayload Value;
+        }
+
+        public static class AnnotatedMembersFixture
+        {
+            public static int Exercise()
+            {
+                LuminPackSerializer.Register<IManualValue>(
+                    static (ref LuminPackWriter w, in IManualValue v) => w.Write(v.Number + 1),
+                    static (ref LuminPackReader r, ref IManualValue v) => v = new ManualPayload { Number = r.Read<int>() - 1 },
+                    static (ref LuminPackJsonWriter w, in IManualValue v) => w.Write<LuminPackUtf16LengthOptions>(v.Number + 1),
+                    static (ref LuminPackJsonReader r, ref IManualValue v) => v = new ManualPayload { Number = r.Read<int, LuminPackUtf16LengthOptions>() - 1 });
+                LuminPackSerializer.Register<ManualPayload>(
+                    static (ref LuminPackWriter w, in ManualPayload v) => w.Write(v.Number + 2),
+                    static (ref LuminPackReader r, ref ManualPayload v) => v = new ManualPayload { Number = r.Read<int>() - 2 },
+                    static (ref LuminPackJsonWriter w, in ManualPayload v) => w.Write<LuminPackUtf16LengthOptions>(v.Number + 2),
+                    static (ref LuminPackJsonReader r, ref ManualPayload v) => v = new ManualPayload { Number = r.Read<int, LuminPackUtf16LengthOptions>() - 2 });
+                var value = new AnnotationHolder { Manual = new ManualPayload { Number = 10 },
+                    Child = new AutomaticChild { Number = 20 }, Value = new ManualPayload { Number = 30 } };
+                byte[] bytes = LuminPackSerializer.Serialize(value);
+                string json = LuminPackSerializer.SerializeJson(value);
+                if (!bytes.AsSpan().SequenceEqual(new byte[] { 3, 11, 0, 0, 0, 1, 20, 0, 0, 0, 32, 0, 0, 0 }))
+                    throw new InvalidOperationException("The member formatter changed binary framing.");
+                var binary = LuminPackSerializer.Deserialize<AnnotationHolder>(bytes);
+                var text = LuminPackSerializer.DeserializeJson<AnnotationHolder>(json);
+                if (binary.Manual.Number != 10 || binary.Child.Number != 20 || binary.Value.Number != 30 ||
+                    text.Manual.Number != 10 || text.Child.Number != 20 || text.Value.Number != 30)
+                    throw new InvalidOperationException("The annotated members failed to round trip.");
+                return 3;
+            }
         }
         """;
 

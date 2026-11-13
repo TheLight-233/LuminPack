@@ -23,7 +23,7 @@ All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Opti
 | `[LuminPackIgnore]` | Exclude a public member. |
 | `[LuminPackInclude]` | Include a private/protected field or property (works through nested levels via generated layout mirrors). |
 | `[LuminPackOldName("Name")]` | `VersionTolerant` only: keep old names readable; list several in chronological order. |
-| `[LuminPackableObject]` | Call the member type's own formatter instead of inlining it (needed for `Custom` members). |
+| `[LuminPackableObject]` | Call the member type's own complete formatter. Next also accepts a marked interface member with a manually registered formatter. |
 | `[LuminPackCompress]` | LZ-compress a supported unmanaged array/span member. Managed elements are rejected (LuminPack034). |
 | `[LuminPackDelegate(instanceName, methodName)]` | Route the member through a method on an instance member. |
 | `[LuminPackStaticDelegate(typeof(T), methodName)]` | Route the member through a static method. |

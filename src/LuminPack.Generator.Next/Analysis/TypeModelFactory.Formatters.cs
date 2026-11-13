@@ -19,8 +19,10 @@ internal static partial class TypeModelFactory
         /// <param name = "depth">The depth used by this operation.</param>
         /// <param name = "issues">The issues used by this operation.</param>
         /// <param name = "path">The path used by this operation.</param>
+        /// <param name="ownFormatter">Whether the member explicitly selects its complete formatter.</param>
         /// <returns>The normalized result of the operation.</returns>
-        private MemberModel? Classify(MemberSite member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth, List<string> issues, Path path)
+        private MemberModel? Classify(MemberSite member, MemberStorage storage, WirePolicy policy, INamedTypeSymbol owner, int depth,
+            List<string> issues, Path path, bool ownFormatter = false)
         {
             ITypeSymbol type = member.Type;
             if (type is ITypeParameterSymbol || type.TypeKind == TypeKind.Enum ||
@@ -29,6 +31,12 @@ internal static partial class TypeModelFactory
             if (type is not ITypeParameterSymbol && ContainsTypeParameter(type) && MentionsOwnParameter(type, owner))
                 return new TypeParameterMember(member.Name, storage, policy, FormatterSpelling(type), type.IsValueType, type.IsReferenceType);
             FormatterModel? formatter = type is ITypeParameterSymbol ? null : Formatter(type, depth, path);
+            if (ownFormatter)
+            {
+                formatter ??= new FormatterModel(FormatterSpelling(type), FormatterDefinitions.Registered);
+                return new SpecialMember(member.Name, storage, policy, formatter.Type, type.IsReferenceType,
+                    storage == MemberStorage.AutoProperty, formatter);
+            }
             var specializedIssues = new List<string>();
             MemberModel? specialized = ClassifySpecialized(member, storage, policy, owner, depth, specializedIssues, path);
             bool missingElementBody = specialized is CollectionMember { Nested: { } nested } && RenderModelFactory.SequenceElement(nested, Options) == null;
