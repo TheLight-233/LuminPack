@@ -18,10 +18,16 @@ internal static partial class BinaryEmitter
     {
         var members = model.Members;
         var schema = model.Version;
-        if (schema.Dynamic || members.Where((member, index) => schema.Widths[index] == 255)
-            .Any(member => member.Kind != RenderMemberKind.Text && !(member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string")))
-            // Only a raw list of unmanaged elements is captured as a reserved span; record and string lists stream.
+        if (schema.Dynamic)
             return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
+        for (int index = 0; index < members.Length; index++)
+        {
+            RenderMember member = members[index];
+            // Only a raw list of unmanaged elements is captured as a reserved span; record and string lists stream.
+            if (schema.Widths[index] == 255 && member.Kind != RenderMemberKind.Text &&
+                !(member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string"))
+                return ApplyBoundedWrite(model, VersionStreamWriteBody(model, w));
+        }
         var body = new List<string>
         {
             "var value = input;",
@@ -124,8 +130,12 @@ internal static partial class BinaryEmitter
     internal static bool VersionWriteInline(PayloadRenderModel model)
     {
         var members = model.Members;
-        bool group = Enumerable.Range(0, members.Length).Any(index => members[index].IsFixed && VersionRunEnd(model, index) > index);
-        return !group && members.Count(member => member.Kind == RenderMemberKind.Text) <= 1;
+        int strings = 0;
+        for (int index = 0; index < members.Length; index++)
+            if (members[index].IsFixed && VersionRunEnd(model, index) > index ||
+                members[index].Kind == RenderMemberKind.Text && ++strings > 1)
+                return false;
+        return true;
     }
 
     /// <summary>Spells a string member's write snapshot, camel-cased like the other bound locals of these operations.</summary>
@@ -192,7 +202,8 @@ internal static partial class BinaryEmitter
         for (int index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            bool group = member.IsFixed && VersionRunEnd(model, index) > index;
+            int last = VersionRunEnd(model, index);
+            bool group = last > index;
             if (separate && !group)
                 body.Add("");
             separate = !member.IsFixed || group;
@@ -205,7 +216,6 @@ internal static partial class BinaryEmitter
                 body.Add(Reader() + ".ValidateVersionFieldEnd(reader.Position, " + end + ");");
                 continue;
             }
-            int last = VersionRunEnd(model, index);
             if (last == index)
             {
                 string size = "Unsafe.SizeOf<" + schema.TypeNames[index] + ">()";

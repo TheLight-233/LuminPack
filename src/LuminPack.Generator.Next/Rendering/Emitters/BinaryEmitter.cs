@@ -480,7 +480,8 @@ internal static partial class BinaryEmitter
             // A mirrored record keeps its null handling in both bodies, so the mirror view is declared at the same position.
             // A struct never writes or reads a null marker and keeps its callbacks around the same schema body.
             string value = model.IsStruct ? type : type + "?";
-            var write = AddCallbacks(Mirrored(model, w, VersionWriteBody(model, w), writes: true, union: false), model.WriteBefore, model.WriteAfter);
+            var writeBody = VersionWriteBody(model, w);
+            var write = AddCallbacks(Mirrored(model, w, writeBody, writes: true, union: false), model.WriteBefore, model.WriteAfter);
             string writeHint = VersionWriteInline(model) ? inline : null;
             w.Suppressed = !writes;
             Method(write, "RootWrite", true, "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)", writeHint);
@@ -490,12 +491,17 @@ internal static partial class BinaryEmitter
                 "(scoped ref " + reader + " reader, scoped ref " + value + " value)", null);
             w.Blank();
             w.Suppressed = !writes;
-            var unionWrite = Mirrored(model, w, AddCallbacks(VersionWriteBody(model, w), model.WriteBefore, model.WriteAfter), writes: true, union: false);
             string writeParameters = "(scoped ref " + writer + " writer, " + (model.IsStruct ? "scoped in " : string.Empty) + value + " input)";
-            if (unionWrite.SequenceEqual(write))
+            if (model.Mirror == null || model.WriteBefore.Length == 0 && model.WriteAfter.Length == 0)
                 VersionAlias("RootWriteUnion", "RootWrite", writeParameters, "ref writer, input");
             else
-                Method(unionWrite, "RootWriteUnion", true, writeParameters, writeHint);
+            {
+                var unionWrite = Mirrored(model, w, AddCallbacks(writeBody, model.WriteBefore, model.WriteAfter), writes: true, union: false);
+                if (unionWrite.SequenceEqual(write))
+                    VersionAlias("RootWriteUnion", "RootWrite", writeParameters, "ref writer, input");
+                else
+                    Method(unionWrite, "RootWriteUnion", true, writeParameters, writeHint);
+            }
             w.Blank();
             w.Suppressed = !reads;
             VersionAlias("RootReadUnion", "RootRead", "(scoped ref " + reader + " reader, scoped ref " + value + " value)", "ref reader, ref value");
