@@ -115,6 +115,7 @@ internal static class SerializerCallAnalysis
     {
         // The facade is static. Bind the receiver before the invocation to avoid overload resolution on unrelated APIs.
         if (invocation.Expression is MemberAccessExpressionSyntax access &&
+            !HasFacadeSpelling(access.Expression) &&
             semanticModel.GetSymbolInfo(access.Expression, cancellationToken).Symbol is { } receiver &&
             !IsFacadeType(receiver is IAliasSymbol alias ? alias.Target : receiver))
             return default;
@@ -138,6 +139,17 @@ internal static class SerializerCallAnalysis
     /// <param name="method">A bound method.</param>
     /// <returns>Whether its declaring type is <c>LuminPack.LuminPackSerializer</c>.</returns>
     private static bool IsFacade(IMethodSymbol method) => method.Arity is 1 or 2 && IsFacadeType(method.ContainingType);
+
+    /// <summary>Recognizes receiver spellings that can go straight to overload binding.</summary>
+    /// <param name="receiver">The syntax of the receiver. The bound overload still determines its identity.</param>
+    /// <returns>Whether the receiver ends in the facade's simple name.</returns>
+    private static bool HasFacadeSpelling(ExpressionSyntax receiver) => receiver switch
+    {
+        IdentifierNameSyntax name => name.Identifier.ValueText == "LuminPackSerializer",
+        MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText == "LuminPackSerializer",
+        AliasQualifiedNameSyntax qualified => qualified.Name.Identifier.ValueText == "LuminPackSerializer",
+        _ => false,
+    };
 
     /// <summary>Identifies the serializer type independently of its spelling at the use site.</summary>
     /// <param name="symbol">The bound receiver or declaring type.</param>
