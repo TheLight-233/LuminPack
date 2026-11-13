@@ -32,6 +32,29 @@ internal static partial class Program
             const string source = """
                 using LuminPack;
                 using LuminPack.Attribute;
+                [assembly: LuminPackGeneratorOptions(ForceGenerateSerialize = true)]
+                [LuminPackable] public sealed class ParentPayload { public ChildPayload Child = new(); }
+                [LuminPackable] public sealed class ChildPayload { public int Number; }
+                [LuminPackable] public sealed class UnrelatedPayload { public int Number; }
+                public static class Entry
+                {
+                    public static void Main() => LuminPackSerializer.SerializeJson(new ParentPayload());
+                }
+                """;
+            var result = GenerateAssembly(source, OutputKind.ConsoleApplication, allowUnsafe: true);
+            foreach (string name in new[] { "ParentPayload", "ChildPayload", "UnrelatedPayload" })
+            {
+                var formatter = result.Output.GetTypeByMetadataName("LuminPack.LuminPackSerializer+" + name + "Formatter")!;
+                RequireIncremental(!formatter.GetMembers("Write").IsEmpty && formatter.GetMembers("Read").IsEmpty &&
+                    formatter.GetMembers("ReadJson").IsEmpty, "The forced binary writer must apply to every payload.");
+                RequireIncremental(formatter.GetMembers("WriteJson").IsEmpty == (name == "UnrelatedPayload"),
+                    "JSON write must reach only the closed call and its member graph.");
+            }
+        }
+        {
+            const string source = """
+                using LuminPack;
+                using LuminPack.Attribute;
                 [LuminPackable] public sealed class UsedPayload { public int Number; }
                 [LuminPackable] public sealed class UnusedPayload { public int Number; }
                 public sealed class OrdinaryMembers { public int ReadValue = 3; public int WriteValueJson => 4; }

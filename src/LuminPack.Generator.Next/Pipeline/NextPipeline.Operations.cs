@@ -55,14 +55,19 @@ internal static partial class NextPipeline
                 return new OperationPlan(whole, null, new OwnerOperations(whole));
 
             var byPayload = new Dictionary<PayloadBinding, GeneratedOperations>();
-            GeneratedOperations called = whole;
+            GeneratedOperations called = GeneratedOperations.None;
             foreach (SerializerCallModel call in calls)
             {
-                GeneratedOperations operation = OperationUsageAnalysis.Of(call);
+                GeneratedOperations operation = OperationUsageAnalysis.Of(call) & ~whole;
+                if (operation == GeneratedOperations.None)
+                    continue;
                 called |= operation;
                 byPayload.TryGetValue(call.Binding, out GeneratedOperations previous);
-                byPayload[call.Binding] = previous | operation;
+                if ((previous & operation) == 0)
+                    byPayload[call.Binding] = previous | operation;
             }
+            if (byPayload.Count == 0)
+                return new OperationPlan(whole, null, new OwnerOperations(whole));
             var edges = new Dictionary<string, OperationReach>(payloads.Length, StringComparer.Ordinal);
             var derived = new Dictionary<string, List<string>>(StringComparer.Ordinal);
             foreach (ModeledPayload payload in payloads)
@@ -81,16 +86,11 @@ internal static partial class NextPipeline
             var pending = new Queue<string>();
             foreach (var call in byPayload)
                 Follow(call.Key.Reach.Keys, call.Value);
-            // Payloads that keep operations of their own pass them on before any call reaches them.
-            if (whole != GeneratedOperations.None)
-                foreach (string key in edges.Keys)
-                    pending.Enqueue(key);
+            // Every payload and owner already retains the global mask. Only payload-specific bits need to traverse edges.
             while (pending.Count != 0)
             {
                 string key = pending.Dequeue();
-                GeneratedOperations operations = whole | (reached.TryGetValue(key, out GeneratedOperations own) ? own : GeneratedOperations.None);
-                if (operations == GeneratedOperations.None)
-                    continue;
+                GeneratedOperations operations = reached[key];
                 if (edges.TryGetValue(key, out OperationReach? reach))
                     Follow(reach.Keys, operations);
                 if (derived.TryGetValue(key, out List<string>? cases))
@@ -106,7 +106,7 @@ internal static partial class NextPipeline
             var keys = new HashSet<string>(StringComparer.Ordinal);
             foreach (GeneratedOperations operation in Single)
             {
-                if ((called & operation) == 0 || (whole & operation) != 0)
+                if ((called & operation) == 0)
                     continue;
                 models.Clear();
                 roots.Clear();
