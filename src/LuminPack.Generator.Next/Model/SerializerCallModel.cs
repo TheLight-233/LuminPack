@@ -84,9 +84,6 @@ internal enum SerializerApi
     DeserializeJsonReader,
 }
 
-/// <summary>One closed serializer call site: the bound overload, its closed payload and profile, and the interception location.</summary>
-/// <remarks>The model is compiler-free and value-equal, so an edit that leaves a call's binding unchanged keeps its cached
-/// interceptor. The location text changes with the file's content and is part of equality.</remarks>
 /// <summary>The allocating-entry form the original concrete facade selected for a closed payload.</summary>
 internal enum EntryKind
 {
@@ -144,77 +141,89 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
     public override int GetHashCode() => (int)Kind;
 }
 
-internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
+/// <summary>Normalized root facts shared by all facade calls of one payload.</summary>
+internal sealed class PayloadBinding : IEquatable<PayloadBinding>
 {
-    /// <summary>The allocating-entry form of the payload.</summary>
-    internal readonly EntryShape Shape;
-
-    /// <summary>The bound public overload.</summary>
-    internal readonly SerializerApi Api;
-
-    /// <summary>The closed payload spelling, such as <c>global::N.T</c>.</summary>
-    internal readonly string Payload;
-
-    /// <summary>The closed profile spelling, or null when the call uses the declared profile or an open profile.</summary>
-    internal readonly string? Profile;
-
-    /// <summary>Whether the call passes a type parameter as its profile, which the interceptor keeps generic.</summary>
-    internal readonly bool OpenProfile;
-
-    /// <summary>The complete interception attribute text for this call.</summary>
-    internal readonly string Location;
-
-    /// <summary>Whether the payload is a value type.</summary>
-    internal readonly bool ValueType;
-
-    /// <summary>The member shape of a non-packable root, which publishes the shared owner the call binds to.</summary>
+    internal readonly string Type;
     internal readonly MemberModel? Root;
-
-    /// <summary>Captures a call site.</summary>
-    /// <summary>The generic definition of a closed generic payload, spelled as its model identity, or null.</summary>
     internal readonly string? Definition;
-
-    /// <summary>The closed type arguments of a generic payload, comma-separated, or null.</summary>
     internal readonly string? TypeArguments;
-
-    /// <summary>The payload identities the call reaches, which keep the call's operation.</summary>
+    internal readonly EntryShape Shape;
     internal readonly OperationReach Reach;
 
-    internal SerializerCallModel(SerializerApi api, string payload, string? profile, string location, bool valueType, MemberModel? root,
-        bool openProfile = false, string? definition = null, string? typeArguments = null, EntryShape shape = default, OperationReach? reach = null)
+    /// <summary>Captures the closed payload and the root declarations it needs.</summary>
+    /// <param name="type">The closed payload spelling.</param>
+    /// <param name="root">The shared formatter requirement, if any.</param>
+    /// <param name="definition">The generic payload definition.</param>
+    /// <param name="typeArguments">The closed arguments of the payload definition.</param>
+    /// <param name="shape">The allocating binary entry form.</param>
+    /// <param name="reach">The declarations that keep the bound operation.</param>
+    internal PayloadBinding(string type, MemberModel? root, string? definition, string? typeArguments, EntryShape shape, OperationReach reach)
     {
-        Reach = reach ?? OperationReach.Empty;
-        Shape = shape;
+        Type = type;
+        Root = root;
         Definition = definition;
         TypeArguments = typeArguments;
-        OpenProfile = openProfile;
-        Root = root;
-        Api = api;
-        Payload = payload;
-        Profile = profile;
-        Location = location;
-        ValueType = valueType;
+        Shape = shape;
+        Reach = reach;
     }
+
+    /// <inheritdoc/>
+    public bool Equals(PayloadBinding? other) => ReferenceEquals(this, other) || other != null && Type == other.Type &&
+        Definition == other.Definition && TypeArguments == other.TypeArguments && Shape.Equals(other.Shape) &&
+        Equals(Root, other.Root) && Reach.Equals(other.Reach);
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => Equals(obj as PayloadBinding);
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => Type.GetHashCode();
+}
+
+/// <summary>A facade overload, its payload binding and the location or IL signature it replaces.</summary>
+internal sealed class SerializerCallModel : IEquatable<SerializerCallModel>
+{
+    internal readonly SerializerApi Api;
+    internal readonly PayloadBinding Binding;
+    internal readonly string Location;
+    internal readonly bool OpenProfile;
+
+    /// <summary>Captures one intercepted call.</summary>
+    /// <param name="api">The facade overload.</param>
+    /// <param name="binding">The shared payload facts.</param>
+    /// <param name="location">The interception attribute, if the backend can bind this call.</param>
+    /// <param name="openProfile">Whether the interceptor forwards the original profile type argument.</param>
+    internal SerializerCallModel(SerializerApi api, PayloadBinding binding, string location, bool openProfile)
+    {
+        Api = api;
+        Binding = binding;
+        Location = location;
+        OpenProfile = openProfile;
+    }
+
+    internal string Payload => Binding.Type;
+    internal MemberModel? Root => Binding.Root;
+    internal string? Definition => Binding.Definition;
+    internal string? TypeArguments => Binding.TypeArguments;
+    internal EntryShape Shape => Binding.Shape;
 
     /// <summary>Whether the call uses a JSON root.</summary>
     internal bool Json => Api >= SerializerApi.SerializeJsonString;
 
-    /// <summary>Whether the call serializes rather than deserializes.</summary>
+    /// <summary>Whether the call serializes.</summary>
     internal bool Writes => Api is SerializerApi.SerializeStream or SerializerApi.SerializeArray or SerializerApi.SerializeBufferWriter or
         SerializerApi.SerializeBuffer or SerializerApi.SerializeWriter or SerializerApi.SerializeJsonString or
         SerializerApi.SerializeJsonBufferWriter or SerializerApi.SerializeJsonBuffer or SerializerApi.SerializeJsonWriter;
 
     /// <inheritdoc/>
     public bool Equals(SerializerCallModel? other) => ReferenceEquals(this, other) || other != null && Api == other.Api &&
-        ValueType == other.ValueType && OpenProfile == other.OpenProfile && Payload == other.Payload && Profile == other.Profile &&
-        Location == other.Location && Definition == other.Definition && TypeArguments == other.TypeArguments && Shape.Equals(other.Shape) &&
-        Equals(Root, other.Root) && Reach.Equals(other.Reach);
+        OpenProfile == other.OpenProfile && Location == other.Location && Binding.Equals(other.Binding);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as SerializerCallModel);
 
     /// <inheritdoc/>
-    public override int GetHashCode() => ((int)Api * 397) ^ Payload.GetHashCode() ^ Location.GetHashCode();
+    public override int GetHashCode() => ((int)Api * 397) ^ Binding.GetHashCode() ^ Location.GetHashCode();
 }
 
 /// <summary>One facade invocation: its closed root, or the operations every payload keeps when it has none.</summary>
@@ -226,19 +235,17 @@ internal readonly struct CallFact : IEquatable<CallFact>
     /// <summary>The operations an unbound facade invocation keeps for every payload.</summary>
     internal readonly Rendering.Emitters.GeneratedOperations Whole;
 
-    /// <summary>Whether the invocation is a facade call that stays on the generic facade, such as one over an open payload,
-    /// which generic expansion and wrappers may close from its callers.</summary>
-    internal readonly bool Open;
-
-    internal CallFact(SerializerCallModel? call, Rendering.Emitters.GeneratedOperations whole, bool open = false)
+    /// <summary>Captures the precise call or the conservative operation selection.</summary>
+    /// <param name="call">The bound call, if available.</param>
+    /// <param name="whole">The operations every payload retains.</param>
+    internal CallFact(SerializerCallModel? call, Rendering.Emitters.GeneratedOperations whole)
     {
         Call = call;
         Whole = whole;
-        Open = open;
     }
 
     /// <inheritdoc/>
-    public bool Equals(CallFact other) => Whole == other.Whole && Open == other.Open && Equals(Call, other.Call);
+    public bool Equals(CallFact other) => Whole == other.Whole && Equals(Call, other.Call);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is CallFact other && Equals(other);

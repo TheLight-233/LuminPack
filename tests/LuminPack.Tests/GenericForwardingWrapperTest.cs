@@ -3,21 +3,26 @@ using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Option;
+using LuminPack.Core;
 using Xunit;
 
 namespace LuminPackUnitTest
 {
-    /// <summary>Verifies closed calls of source generic methods that forward their type parameters to the serializer facade.</summary>
-    /// <remarks>Each such call is redirected to a generated closed copy of the method whose facade calls bind concrete entries, so
-    /// the payloads need no registration. The legacy generator rejects the object initializer and value-type CircleReference
-    /// cases, so this file compiles only for the Next generator.</remarks>
+    /// <summary>Verifies registered dispatch from source methods that forward an open payload to the serializer facade.</summary>
     public class GenericForwardingWrapperTest
     {
-        /// <summary>Verifies a generic method pair round-trips a closed generic payload without registration.</summary>
+        /// <summary>Verifies a generic method pair uses explicit registration while a closed facade call binds directly.</summary>
         [Fact]
         public void ForwardedGenericPayloadRoundTrips()
         {
-            byte[] bytes = ForwardingCodec.Write(new ForwardedBox<double> { Value = 1.5, Count = 2 });
+            var value = new ForwardedBox<double> { Value = 1.5, Count = 2 };
+            var missing = Record.Exception(() => ForwardingCodec.Write(value));
+            Assert.NotNull(missing);
+            Assert.Contains("No formatter is registered", missing.Message);
+            LuminPackSerializer.Register<ForwardedBox<double>>(
+                static (ref LuminPackWriter writer, in ForwardedBox<double> item) => LuminPackSerializer.Serialize(ref writer, in item),
+                static (ref LuminPackReader reader, ref ForwardedBox<double> item) => LuminPackSerializer.Deserialize(ref reader, ref item));
+            byte[] bytes = ForwardingCodec.Write(value);
             Assert.Equal(LuminPackSerializer.Serialize(new ForwardedBox<double> { Value = 1.5, Count = 2 }), bytes);
             ForwardedBox<double> copy = ForwardingCodec.Read<ForwardedBox<double>>(bytes);
             Assert.Equal(1.5, copy.Value);
@@ -28,6 +33,12 @@ namespace LuminPackUnitTest
         [Fact]
         public void ForwardingThroughGenericTypesAndRefReads()
         {
+            LuminPackSerializer.Register<ForwardedBox<string>>(
+                static (ref LuminPackWriter writer, in ForwardedBox<string> item) => LuminPackSerializer.Serialize(ref writer, in item),
+                static (ref LuminPackReader reader, ref ForwardedBox<string> item) => LuminPackSerializer.Deserialize(ref reader, ref item));
+            LuminPackSerializer.Register<ForwardedBox<long>>(
+                static (ref LuminPackWriter writer, in ForwardedBox<long> item) => LuminPackSerializer.Serialize(ref writer, in item),
+                static (ref LuminPackReader reader, ref ForwardedBox<long> item) => LuminPackSerializer.Deserialize(ref reader, ref item));
             ForwardedBox<string> copy = ForwardingStore<string>.Load(ForwardingStore<string>.Save(new ForwardedBox<string> { Value = "s", Count = 3 }));
             Assert.Equal("s", copy.Value);
             Assert.Equal(3, copy.Count);
@@ -42,6 +53,16 @@ namespace LuminPackUnitTest
         [Fact]
         public void ForwardedProfileAndJsonRoundTrip()
         {
+            LuminPackSerializer.Register<ForwardedBox<string>, LuminPackUtf8LengthOptions>(
+                static (ref LuminPackWriter writer, in ForwardedBox<string> item) =>
+                    LuminPackSerializer.Serialize<ForwardedBox<string>, LuminPackUtf8LengthOptions>(ref writer, in item),
+                static (ref LuminPackReader reader, ref ForwardedBox<string> item) =>
+                    LuminPackSerializer.Deserialize<ForwardedBox<string>, LuminPackUtf8LengthOptions>(ref reader, ref item));
+            LuminPackSerializer.Register<ForwardedBox<int>>(
+                static (ref LuminPackWriter writer, in ForwardedBox<int> item) => LuminPackSerializer.Serialize(ref writer, in item),
+                static (ref LuminPackReader reader, ref ForwardedBox<int> item) => LuminPackSerializer.Deserialize(ref reader, ref item),
+                static (ref LuminPackJsonWriter writer, in ForwardedBox<int> item) => LuminPackSerializer.SerializeJson(ref writer, in item),
+                static (ref LuminPackJsonReader reader, ref ForwardedBox<int> item) => LuminPackSerializer.DeserializeJson(ref reader, ref item));
             var value = new ForwardedBox<string> { Value = "u", Count = 4 };
             Assert.Equal(LuminPackSerializer.Serialize<ForwardedBox<string>, LuminPackUtf8LengthOptions>(value), ForwardingCodec.WriteUtf8(value));
 
@@ -54,6 +75,9 @@ namespace LuminPackUnitTest
         [Fact]
         public void ForwardedConstructionWithTwoTypeParameters()
         {
+            LuminPackSerializer.Register<ForwardedPair<string, ForwardedBox<short>>>(
+                static (ref LuminPackWriter writer, in ForwardedPair<string, ForwardedBox<short>> item) => LuminPackSerializer.Serialize(ref writer, in item),
+                static (ref LuminPackReader reader, ref ForwardedPair<string, ForwardedBox<short>> item) => LuminPackSerializer.Deserialize(ref reader, ref item));
             byte[] bytes = ForwardingCodec.WritePair("k", new ForwardedBox<short> { Value = 7 });
             ForwardedPair<string, ForwardedBox<short>> pair = ForwardingCodec.Read<ForwardedPair<string, ForwardedBox<short>>>(bytes);
             Assert.Equal("k", pair.Key);
@@ -64,6 +88,9 @@ namespace LuminPackUnitTest
         [Fact]
         public void ForwardedReferenceTrackedPayloadKeepsIdentity()
         {
+            LuminPackSerializer.Register<ForwardedNode<decimal>>(
+                static (ref LuminPackWriter writer, in ForwardedNode<decimal> item) => LuminPackSerializer.Serialize(ref writer, in item),
+                static (ref LuminPackReader reader, ref ForwardedNode<decimal> item) => LuminPackSerializer.Deserialize(ref reader, ref item));
             var node = new ForwardedNode<decimal> { Value = 7.5m };
             node.Next = node;
             node.Children = new List<ForwardedNode<decimal>> { node };

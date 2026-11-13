@@ -136,6 +136,7 @@ internal static partial class TypeModelFactory
     private sealed partial class Session
     {
         private readonly Compilation _compilation;
+        private readonly WirePolicy _assemblyPolicy;
         private readonly Dictionary<AnalysisKey, ModelResult> _completed = new Dictionary<AnalysisKey, ModelResult>();
         private readonly Dictionary<ITypeSymbol, MemberModel?> _roots = new Dictionary<ITypeSymbol, MemberModel?>(SymbolEqualityComparer.Default);
         private readonly object _gate = new object();
@@ -145,6 +146,7 @@ internal static partial class TypeModelFactory
         {
             Options = options;
             _compilation = compilation;
+            _assemblyPolicy = Apply(WirePolicy.Default, compilation.Assembly);
         }
 
         /// <summary>The project facts this session analyzes under.</summary>
@@ -180,8 +182,7 @@ internal static partial class TypeModelFactory
             if (type is INamedTypeSymbol { IsGenericType: false } named && (IsPackable(named) || Marked(named)))
                 return null;
             var issues = new List<string>();
-            WirePolicy policy = Apply(WirePolicy.Default, _compilation.Assembly);
-            MemberModel? model = Classify(new MemberSite("Root", type, isVolatile: false, containing: null), MemberStorage.Field, policy,
+            MemberModel? model = Classify(new MemberSite("Root", type, isVolatile: false, containing: null), MemberStorage.Field, _assemblyPolicy,
                 _compilation.GetSpecialType(SpecialType.System_Object), depth: 0, issues, new Path());
             return issues.Count == 0 ? model : null;
         }
@@ -1685,7 +1686,7 @@ internal static partial class TypeModelFactory
         /// <returns>The effective policy.</returns>
         private WirePolicy TypePolicy(INamedTypeSymbol symbol, PayloadKind kind)
         {
-            WirePolicy policy = Apply(WirePolicy.Default, _compilation.Assembly);
+            WirePolicy policy = _assemblyPolicy;
             var scopes = new Stack<INamedTypeSymbol>();
             for (var type = symbol; type != null; type = type.ContainingType)
                 scopes.Push(type);

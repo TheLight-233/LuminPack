@@ -1,19 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Collections.Immutable;
 using System.Threading;
-using Microsoft.CodeAnalysis.CSharp;
 using LuminPack.SourceGenerator.Next.Analysis;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering;
-using LuminPack.SourceGenerator.Next.Rendering.Binary;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using LuminPack.SourceGenerator.Next.Rendering.Facade;
-using LuminPack.SourceGenerator.Next.Rendering.Formatters;
-using LuminPack.SourceGenerator.Next.Rendering.Json;
-using LuminPack.SourceGenerator.Next.Rendering.Union;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -44,18 +38,18 @@ internal static partial class NextPipeline
                 try
                 {
                     DiagnosticInfo[] diagnostics = TypeModelFactory.Diagnose(symbol, compilation, options);
-                    bool errors = DiagnosticDescriptors.HasErrors(diagnostics) ||
+                    bool declarationErrors = DiagnosticDescriptors.HasErrors(diagnostics);
+                    bool errors = declarationErrors ||
                         DiagnosticDescriptors.HasErrors(TypeModelFactory.DiagnoseAssembly(compilation, options));
                     cancellationToken.ThrowIfCancellationRequested();
                     ModelResult result = errors ? ModelResult.Unsupported("invalid serialization declaration") :
                         TypeModelFactory.TryCreate(symbol, compilation, options);
                     // A valid Custom declaration registers its own static operations.
-                    string? custom = DiagnosticDescriptors.HasErrors(diagnostics) ? null :
+                    string? custom = declarationErrors ? null :
                         TypeModelFactory.CustomRegistration(symbol, options, out bool customJson) is { } customType
                             ? CustomRegistrationSource.Block(customType, customJson) : null;
                     return new ModeledPayload(result, options, diagnostics, custom,
-                        result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty,
-                        result.IsComplete && result.Model != null ? PayloadDocumentationFactory.Create(symbol, result.Model) : null);
+                        result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty);
                 }
                 catch (Exception error) when (error is not OperationCanceledException)
                 {
@@ -68,26 +62,11 @@ internal static partial class NextPipeline
         var facts = context.CompilationProvider.Select(static (compilation, _) => new ProjectFacts(compilation));
         var calls = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => SerializerCallAnalysis.IsCandidate(node) && ConsumerTree(node.SyntaxTree),
-            static (syntax, token) => SerializerCallAnalysis.Analyze(syntax, token))
-            .Where(static call => call.Call != null || call.Whole != GeneratedOperations.None || call.Open)
-            .WithTrackingName("LuminPack.Next.SerializerCalls").Collect()
+            static (syntax, _) => (InvocationExpressionSyntax)syntax.Node)
+            .Collect().Combine(context.CompilationProvider)
+            .Select(static (input, token) => SerializerCallAnalysis.Analyze(input.Right, input.Left, token))
             .WithComparer(FactArrayComparer<CallFact>.Instance)
             .WithTrackingName("LuminPack.Next.CollectedCalls");
-        var forwarded = calls.Combine(context.CompilationProvider).Select(static (input, token) =>
-        {
-            foreach (CallFact call in input.Left)
-                if (call.Call == null || call.Open)
-                    return GenericPayloadExpansion.Roots(input.Right, token);
-            return RootMembers.Empty;
-        }).WithTrackingName("LuminPack.Next.ForwardedPayloads");
-        // Closed calls of source generic methods that reach the facade are redirected to closed wrapper copies.
-        var wrappers = calls.Combine(context.CompilationProvider).Select(static (input, token) =>
-        {
-            foreach (CallFact call in input.Left)
-                if (call.Open)
-                    return GenericWrapperAnalysis.Analyze(input.Right, token);
-            return WrapperSet.Empty;
-        }).WithTrackingName("LuminPack.Next.GenericWrappers");
         // Generated extensions, state calls, registrations and facade method groups keep their operations for every payload.
         var usage = context.SyntaxProvider.CreateSyntaxProvider(
             static (node, _) => OperationUsageAnalysis.IsUsageCandidate(node) && ConsumerTree(node.SyntaxTree),
@@ -106,12 +85,12 @@ internal static partial class NextPipeline
             .Select(static (input, _) => input.Right.IsEmpty ? input.Left : input.Left.AddRange(input.Right))
             .WithComparer(FactArrayComparer<ModeledPayload>.Instance);
         var requests = declared
-            .Combine(calls).Combine(forwarded.Combine(wrappers)).Combine(facts.Combine(usage)).Select(static (input, _) =>
+            .Combine(calls).Combine(facts.Combine(usage)).Select(static (input, _) =>
         {
-            ImmutableArray<ModeledPayload> payloads = input.Left.Left.Left;
+            ImmutableArray<ModeledPayload> payloads = input.Left.Left;
             var bound = ImmutableArray.CreateBuilder<SerializerCallModel>();
             GeneratedOperations whole = input.Right.Right;
-            foreach (CallFact call in input.Left.Left.Right)
+            foreach (CallFact call in input.Left.Right)
             {
                 whole |= call.Whole;
                 if (call.Call != null)
@@ -121,11 +100,8 @@ internal static partial class NextPipeline
             var diagnostics = new List<DiagnosticInfo>(project.Diagnostics);
             foreach (ModeledPayload payload in payloads)
                 diagnostics.AddRange(payload.Diagnostics);
-            // A wrapper body's facade calls bind entries like source calls, located only in the wrapper.
-            foreach (WrapperModel wrapper in input.Left.Right.Right.Wrappers)
-                bound.AddRange(wrapper.Calls);
-            return new PublicationRequest(payloads, bound.ToImmutable(), input.Left.Right.Left, input.Left.Right.Right,
-                project.Options, project.Policy, project.Symbols, diagnostics.ToArray(), project.Fixed | whole);
+            return new PublicationRequest(payloads, bound.ToImmutable(),
+                project.Options, project.Policy, diagnostics.ToArray(), project.Fixed | whole);
         });
         var diagnostics = requests.Select(static (request, _) => request.Diagnostics).WithComparer(DiagnosticInfoComparer.Instance);
         context.RegisterSourceOutput(diagnostics.Combine(context.CompilationProvider), static (production, input) =>
@@ -162,8 +138,7 @@ internal static partial class NextPipeline
             ModelResult result = missing.Length != 0 ? ModelResult.Unsupported("imported storage is incomplete") :
                 TypeModelFactory.TryCreate(type, compilation, options);
             payloads.Add(new ModeledPayload(result, options, missing, null,
-                result.IsComplete ? OperationUsageAnalysis.Declaration(complete, view) : OperationReach.Empty,
-                result.IsComplete && result.Model != null ? PayloadDocumentationFactory.Create(complete, result.Model) : null));
+                result.IsComplete ? OperationUsageAnalysis.Declaration(complete, view) : OperationReach.Empty));
         }
         return payloads.ToImmutable();
     }
@@ -180,13 +155,12 @@ internal static partial class NextPipeline
     {
         internal readonly GeneratorOptions Options;
         internal readonly WirePolicy Policy;
-        internal readonly string[] Symbols;
         internal readonly DiagnosticInfo[] Diagnostics;
 
         /// <summary>The operations every payload keeps regardless of calls.</summary>
         internal readonly GeneratedOperations Fixed;
 
-        /// <summary>Captures compiler-free settings, conditional symbols and assembly diagnostics.</summary>
+        /// <summary>Captures compiler-free settings and assembly diagnostics.</summary>
         /// <param name="compilation">The current compiler input.</param>
         internal ProjectFacts(Compilation compilation)
         {
@@ -194,20 +168,11 @@ internal static partial class NextPipeline
             Policy = TypeModelFactory.AssemblyPolicy(compilation);
             Diagnostics = TypeModelFactory.DiagnoseAssembly(compilation, Options);
             Fixed = OperationUsageAnalysis.Fixed(compilation);
-            var symbols = new List<string>();
-            foreach (SyntaxTree tree in compilation.SyntaxTrees)
-            {
-                if (tree.Options is CSharpParseOptions parse)
-                    symbols.AddRange(parse.PreprocessorSymbolNames);
-                break;
-            }
-            symbols.Sort(StringComparer.Ordinal);
-            Symbols = symbols.ToArray();
         }
 
         /// <inheritdoc/>
         public bool Equals(ProjectFacts? other) => other != null && Fixed == other.Fixed && Options.Equals(other.Options) && Policy.Equals(other.Policy) &&
-            Same(Symbols, other.Symbols) && Same(Diagnostics, other.Diagnostics);
+            Same(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>
         public override bool Equals(object? obj) => Equals(obj as ProjectFacts);
@@ -254,11 +219,9 @@ internal static partial class NextPipeline
         /// <param name="diagnostics">The normalized declaration and assembly diagnostics.</param>
         /// <param name="customRegistration">The optional typed custom registration block.</param>
         /// <param name="reach">The payload identities the declaration reaches.</param>
-        /// <param name="documentation">Compiler-free layout and member-link facts for caller-facing XML.</param>
         internal ModeledPayload(ModelResult result, GeneratorOptions options, DiagnosticInfo[] diagnostics, string? customRegistration = null,
-            OperationReach? reach = null, PayloadDocumentation? documentation = null)
+            OperationReach? reach = null)
         {
-            Documentation = documentation;
             Reach = reach ?? OperationReach.Empty;
             CustomRegistration = customRegistration;
             Diagnostics = diagnostics;
@@ -270,8 +233,6 @@ internal static partial class NextPipeline
         {
             get;
         }
-
-        internal PayloadDocumentation? Documentation { get; }
 
         internal GeneratorOptions Options
         {
@@ -297,7 +258,7 @@ internal static partial class NextPipeline
 
         /// <inheritdoc/>
         public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options) &&
-            CustomRegistration == other.CustomRegistration && Reach.Equals(other.Reach) && Equals(Documentation, other.Documentation) &&
+            CustomRegistration == other.CustomRegistration && Reach.Equals(other.Reach) &&
             SameDiagnostics(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>

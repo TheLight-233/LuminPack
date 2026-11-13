@@ -10,7 +10,7 @@ internal static class DocumentationMethods
     private static readonly Regex Classes = new(@"(?m)^[ ]*(?:(?:public|internal|private|protected|static|sealed|abstract|partial|readonly)[ ]+)*(?:class|struct|interface)[ ]+", RegexOptions.Compiled);
     private static readonly Regex Starts = new(@"(?m)^(?<indent>[ ]*)(?<access>public|internal|private|protected)[ ]+static[ ]+", RegexOptions.Compiled);
 
-    /// <summary>Reads caller methods on the serializer facade and its concrete convenience-entry containers.</summary>
+    /// <summary>Reads the public methods of the serializer facade.</summary>
     /// <param name="source">The final generated source.</param>
     /// <returns>The caller-facing signatures in source order.</returns>
     internal static List<Method> Read(string source)
@@ -31,23 +31,13 @@ internal static class DocumentationMethods
         foreach (Match match in Starts.Matches(source))
         {
             string? owner = null;
-            int ownerIndex = -1;
             for (int index = classes.Count - 1; index >= 0; index--)
                 if (classes[index].Start < match.Index && match.Index < classes[index].End)
                 {
                     owner = classes[index].Name;
-                    ownerIndex = index;
                     break;
                 }
-            bool entry = false;
-            if (owner?.StartsWith("LuminEntry_", StringComparison.Ordinal) == true)
-                for (int index = ownerIndex - 1; index >= 0; index--)
-                    if (classes[index].Start < classes[ownerIndex].Start && classes[ownerIndex].Start < classes[index].End)
-                    {
-                        entry = classes[index].Name == "LuminPackSerializer";
-                        break;
-                    }
-            if (owner != "LuminPackSerializer" && !entry)
+            if (owner != "LuminPackSerializer" || match.Groups["access"].Value != "public")
                 continue;
             int position = match.Index + match.Length;
             SkipModifier(source, ref position, "async");
@@ -92,8 +82,6 @@ internal static class DocumentationMethods
             if (parametersEnd < 0)
                 continue;
             string[] parameters = GeneratedText.Split(source.Substring(position + 1, parametersEnd - position - 1));
-            if (match.Groups["access"].Value != "public" && parameters.Length != 0 && IsState(parameters[0]))
-                continue;
             int body = parametersEnd + 1;
             while (body < source.Length && source[body] != '{' && source[body] != '=')
                 body++;

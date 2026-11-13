@@ -9,6 +9,12 @@ internal static class LuminPackExceptionHelper
     /// <param name="parameter">The invalid parameter name.</param>
     internal static void ThrowArgumentOutOfRange(string parameter) => throw new ArgumentOutOfRangeException(parameter);
 
+    /// <summary>Rejects an unsupported argument in a value-producing expression.</summary>
+    /// <typeparam name="T">The required result type.</typeparam>
+    /// <param name="parameter">The invalid parameter name.</param>
+    /// <returns>Never returns a value.</returns>
+    internal static T ThrowArgumentOutOfRange<T>(string parameter) => throw new ArgumentOutOfRangeException(parameter);
+
     /// <summary>Stops verification with the concrete failed contract.</summary>
     /// <param name="message">The failed contract and its context.</param>
     /// <returns>Never returns a value.</returns>

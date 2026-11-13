@@ -120,14 +120,15 @@ internal static class OperationUsageAnalysis
     /// <returns>The operations every payload keeps.</returns>
     internal static GeneratedOperations Usage(GeneratorSyntaxContext context, CancellationToken cancellationToken)
     {
-        SemanticModel model = context.SemanticModel;
-        if (Fixed(model.Compilation) == GeneratedOperations.All)
+        Compilation compilation = context.SemanticModel.Compilation;
+        if (Fixed(compilation) == GeneratedOperations.All)
             return GeneratedOperations.None;
         var name = (SimpleNameSyntax)context.Node;
         string text = name.Identifier.ValueText;
         // Generated extension methods are callable directly, so naming one keeps every operation.
         if (IsExtensionName(text))
             return GeneratedOperations.All;
+        SemanticModel model = BindingSemanticModel.For(compilation, name.SyntaxTree);
         bool invoked = Invoked(name, out ExpressionSyntax expression);
         if (invoked && text is "Write" or "Read")
         {

@@ -333,10 +333,22 @@ internal static class GenericFormatterReuse
             if (_plans.Count == 0)
                 yield break;
             // Groups the plans by their placeholder render and operations, in plan order.
-            var groups = new Dictionary<string, List<Plan>>(StringComparer.Ordinal);
+            var groups = new Dictionary<(GeneratedOperations Operations, string Text), List<Plan>>();
             var order = new List<List<Plan>>();
+            var counts = new Dictionary<(string Name, GeneratedOperations Operations), int>();
             foreach (Plan plan in _plans)
             {
+                var shape = (plan.BaseName, plan.Operations);
+                counts.TryGetValue(shape, out int count);
+                counts[shape] = count + 1;
+            }
+            foreach (Plan plan in _plans)
+            {
+                if (counts[(plan.BaseName, plan.Operations)] == 1)
+                {
+                    yield return Closed(plan);
+                    continue;
+                }
                 string? text = RenderPlaceholder(plan);
                 if (text == null)
                 {
@@ -344,7 +356,7 @@ internal static class GenericFormatterReuse
                     continue;
                 }
                 plan.Text = text;
-                string identity = ((int)plan.Operations).ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + text;
+                var identity = (plan.Operations, text);
                 if (!groups.TryGetValue(identity, out List<Plan>? group))
                 {
                     groups.Add(identity, group = new List<Plan>());

@@ -45,22 +45,24 @@ internal static partial class NextPipeline
         /// <summary>Closes the called operations over the reached payload identities and shared owners.</summary>
         /// <param name="payloads">The normalized declaration results.</param>
         /// <param name="calls">The bound serializer calls.</param>
-        /// <param name="forwarded">The closed roots reached through source wrappers.</param>
         /// <param name="whole">The operations every payload keeps regardless of calls.</param>
         /// <param name="options">The normalized project settings.</param>
         /// <returns>The operation plan.</returns>
         internal static OperationPlan Create(ImmutableArray<ModeledPayload> payloads, ImmutableArray<SerializerCallModel> calls,
-            RootMembers forwarded, GeneratedOperations whole, GeneratorOptions options)
+            GeneratedOperations whole, GeneratorOptions options)
         {
-            GeneratedOperations called = whole;
-            foreach (SerializerCallModel call in calls)
-                called |= OperationUsageAnalysis.Of(call);
-            // Wrapper roots are published by shared owners whose payloads are not traced here.
-            if (forwarded.Members.Length != 0)
-                whole = called;
             if (whole == GeneratedOperations.All)
                 return new OperationPlan(whole, null, new OwnerOperations(whole));
 
+            var byPayload = new Dictionary<PayloadBinding, GeneratedOperations>();
+            GeneratedOperations called = whole;
+            foreach (SerializerCallModel call in calls)
+            {
+                GeneratedOperations operation = OperationUsageAnalysis.Of(call);
+                called |= operation;
+                byPayload.TryGetValue(call.Binding, out GeneratedOperations previous);
+                byPayload[call.Binding] = previous | operation;
+            }
             var edges = new Dictionary<string, OperationReach>(payloads.Length, StringComparer.Ordinal);
             var derived = new Dictionary<string, List<string>>(StringComparer.Ordinal);
             foreach (ModeledPayload payload in payloads)
@@ -77,8 +79,8 @@ internal static partial class NextPipeline
                 }
             var reached = new Dictionary<string, GeneratedOperations>(edges.Count, StringComparer.Ordinal);
             var pending = new Queue<string>();
-            foreach (SerializerCallModel call in calls)
-                Follow(call.Reach.Keys, OperationUsageAnalysis.Of(call));
+            foreach (var call in byPayload)
+                Follow(call.Key.Reach.Keys, call.Value);
             // Payloads that keep operations of their own pass them on before any call reaches them.
             if (whole != GeneratedOperations.None)
                 foreach (string key in edges.Keys)
@@ -112,9 +114,9 @@ internal static partial class NextPipeline
                 foreach (ModeledPayload payload in payloads)
                     if (payload.Result.IsComplete && payload.Result.Model is { } model && (plan.For(model) & operation) != 0)
                         models.Add(model);
-                foreach (SerializerCallModel call in calls)
-                    if (call.Root != null && OperationUsageAnalysis.Of(call) == operation)
-                        roots.Add(call.Root);
+                foreach (var call in byPayload)
+                    if (call.Key.Root != null && (call.Value & operation) != 0)
+                        roots.Add(call.Key.Root);
                 SharedFormatterSet.CollectKeys(models, options, roots, keys);
                 foreach (string key in keys)
                 {

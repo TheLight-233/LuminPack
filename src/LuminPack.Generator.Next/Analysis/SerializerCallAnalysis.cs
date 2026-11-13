@@ -1,7 +1,14 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Pipeline;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -9,18 +16,16 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
 
-/// <summary>Discovers closed calls to the public <c>LuminPackSerializer</c> facade and their interception locations.</summary>
-/// <remarks>This is a Roslyn boundary: the semantic model binds the call against the published facade and only compiler-free
-/// facts leave. Calls whose payload or profile is open, unbound or outside the supported overloads are not returned and keep
-/// the facade's registration-only fallback.</remarks>
+/// <summary>Binds facade signatures and gathers compiler or IL interception locations.</summary>
 internal static class SerializerCallAnalysis
 {
-    private const string SerializerName = "LuminPack.LuminPackSerializer";
-
     private static readonly MethodInfo? LocationMethod = FindLocationMethod();
+    private static readonly PropertyInfo? LocationVersion = LocationMethod?.ReturnType.GetProperty("Version");
+    private static readonly PropertyInfo? LocationData = LocationMethod?.ReturnType.GetProperty("Data");
 
-    /// <summary>Whether this compiler host can publish versioned interception locations.</summary>
-    internal static bool Supported => LocationMethod != null;
+    private static readonly ConditionalWeakTable<Compilation, BindingFacts> Bindings = new();
+    private const int ParallelCandidateThreshold = 128;
+    private const int MaximumBindingWorkers = 6;
 
     /// <summary>Checks the syntax shape cheaply before binding.</summary>
     /// <param name="node">The candidate node.</param>
@@ -39,112 +44,142 @@ internal static class SerializerCallAnalysis
             "SerializeAsync" or "DeserializeAsync";
     }
 
-    /// <summary>Binds one candidate call.</summary>
-    /// <param name="context">The syntax and its semantic model.</param>
+    /// <summary>Binds independent source files concurrently and retains the original discovery order.</summary>
+    /// <param name="compilation">The compilation containing the candidates.</param>
+    /// <param name="candidates">The syntax-filtered facade candidates.</param>
     /// <param name="cancellationToken">Cancels analysis.</param>
-    /// <returns>The closed call, or the operations every payload keeps when the call stays on the generic facade.</returns>
-    internal static CallFact Analyze(GeneratorSyntaxContext context, CancellationToken cancellationToken)
-    {
-        if (context.Node is not InvocationExpressionSyntax invocation)
-            return default;
-        var method = context.SemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
-        SerializerCallModel? call = method == null ? null : Analyze(context.SemanticModel, invocation, method, cancellationToken);
-        // A facade call without a concrete root keeps its operation for every payload.
-        return new CallFact(call, call != null ? GeneratedOperations.None :
-            OperationUsageAnalysis.Unbound(context.SemanticModel, invocation, method, cancellationToken),
-            open: call == null && method != null && IsFacade(method));
-    }
-
-    /// <summary>Binds an ordinary facade call in the compilation's shared discovery pass.</summary>
-    private static SerializerCallModel? Analyze(SemanticModel semanticModel, InvocationExpressionSyntax invocation, IMethodSymbol method,
+    /// <returns>The normalized bindings and conservative operation uses.</returns>
+    internal static ImmutableArray<CallFact> Analyze(Compilation compilation, ImmutableArray<InvocationExpressionSyntax> candidates,
         CancellationToken cancellationToken)
     {
-        bool il = Pipeline.GeneratorOptionsFactory.From(semanticModel.Compilation).IlRewrite;
-        if (LocationMethod == null && !il)
-            return null;
-        if (!method.IsGenericMethod || method.ContainingType?.ToDisplayString() != SerializerName)
-            return null;
-        SerializerApi? api = Classify(method.OriginalDefinition);
-        if (api == null)
-            return null;
-        ITypeSymbol payload = method.TypeArguments[0];
-        if (!IsClosed(payload))
-            return null;
-        string? profile = null;
-        bool openProfile = false;
-        if (method.TypeArguments.Length == 2)
+        GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
+        bool intercept = options.Interceptors && (LocationMethod != null || options.IlRewrite);
+        if (candidates.IsEmpty || !intercept && OperationUsageAnalysis.Fixed(compilation) == GeneratedOperations.All)
+            return ImmutableArray<CallFact>.Empty;
+        var facts = Bindings.GetValue(compilation, static item => new BindingFacts(item));
+        var trees = new Dictionary<SyntaxTree, List<int>>();
+        for (int index = 0; index < candidates.Length; index++)
         {
-            // An open profile keeps the operation's profile parameter; the payload must still be closed.
-            // An open profile, or one generated code cannot name, keeps the operation's profile parameter: the generic interceptor
-            // forwards it, as the original did. The payload must still be closed.
-            if (method.TypeArguments[1] is ITypeParameterSymbol || IsClosed(method.TypeArguments[1]) && !Accessible(method.TypeArguments[1]))
-                openProfile = true;
-            else if (!IsClosed(method.TypeArguments[1]))
-                return null;
-            else
-                profile = method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            SyntaxTree tree = candidates[index].SyntaxTree;
+            if (!trees.TryGetValue(tree, out var indexes))
+                trees.Add(tree, indexes = new List<int>());
+            indexes.Add(index);
         }
-        else if (method.TypeArguments.Length != 1)
+        var results = new CallFact[candidates.Length];
+        if (!compilation.Options.ConcurrentBuild || trees.Count < 2 || candidates.Length < ParallelCandidateThreshold)
         {
-            return null;
+            foreach (var tree in trees)
+                BindTree(tree);
         }
-        cancellationToken.ThrowIfCancellationRequested();
-        // The IL rewriter maps the call's exact facade construction instead of a source location.
-        string? location = il ? StaticCallKey.Attribute(method, openProfile ? method.TypeArguments.Length - 1 : -1) :
-            Location(semanticModel, invocation, cancellationToken);
-        if (location == null)
-            return null;
-        return Model(semanticModel.Compilation, api.Value, payload, profile, openProfile, location);
+        else
+        {
+            Parallel.ForEach(trees, new ParallelOptions
+            {
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, MaximumBindingWorkers),
+            }, BindTree);
+        }
+        var retained = ImmutableArray.CreateBuilder<CallFact>();
+        foreach (CallFact result in results)
+            if (result.Call != null || result.Whole != GeneratedOperations.None)
+                retained.Add(result);
+        return retained.ToImmutable();
+
+        void BindTree(KeyValuePair<SyntaxTree, List<int>> tree)
+        {
+            SemanticModel model = BindingSemanticModel.For(compilation, tree.Key);
+            foreach (int index in tree.Value)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                results[index] = Bind(model, candidates[index], facts, intercept, options.IlRewrite, cancellationToken);
+            }
+        }
     }
 
-    /// <summary>Binds a closed facade construction that a generated wrapper body calls instead of a source location.</summary>
-    /// <param name="method">The closed facade method.</param>
-    /// <param name="compilation">The consuming compilation.</param>
-    /// <returns>The call, located nowhere, or null when the overload or its type arguments have no concrete entry.</returns>
-    internal static SerializerCallModel? Closed(IMethodSymbol method, Compilation compilation)
+    /// <summary>Binds the signature and location of one candidate invocation.</summary>
+    /// <param name="semanticModel">The binding model of the source file.</param>
+    /// <param name="invocation">The candidate facade call.</param>
+    /// <param name="facts">The compilation's signature and payload facts.</param>
+    /// <param name="intercept">Whether a static backend can bind the call.</param>
+    /// <param name="il">Whether the IL postprocessor owns static binding.</param>
+    /// <param name="cancellationToken">Cancels binding.</param>
+    /// <returns>The call or the operations retained for open fallback.</returns>
+    private static CallFact Bind(SemanticModel semanticModel, InvocationExpressionSyntax invocation, BindingFacts facts,
+        bool intercept, bool il, CancellationToken cancellationToken)
     {
-        if (!method.IsGenericMethod || method.ContainingType?.ToDisplayString() != SerializerName ||
-            Classify(method.OriginalDefinition) is not { } api || !IsClosed(method.TypeArguments[0]))
-            return null;
-        string? profile = null;
-        if (method.TypeArguments.Length == 2)
-        {
-            if (!IsClosed(method.TypeArguments[1]) || !Accessible(method.TypeArguments[1]))
-                return null;
-            profile = method.TypeArguments[1].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        }
-        else if (method.TypeArguments.Length != 1)
-        {
-            return null;
-        }
-        return Accessible(method.TypeArguments[0]) ? Model(compilation, api, method.TypeArguments[0], profile, false, string.Empty) : null;
+        // The facade is static. Bind the receiver before the invocation to avoid overload resolution on unrelated APIs.
+        if (invocation.Expression is MemberAccessExpressionSyntax access &&
+            semanticModel.GetSymbolInfo(access.Expression, cancellationToken).Symbol is { } receiver &&
+            !IsFacadeType(receiver is IAliasSymbol alias ? alias.Target : receiver))
+            return default;
+        var method = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
+        if (method == null || !IsFacade(method))
+            return new CallFact(null, OperationUsageAnalysis.Unbound(semanticModel, invocation, method, cancellationToken));
+
+        ITypeSymbol payload = method.TypeArguments[0];
+        SerializerApi? api = facts.Apis.GetOrAdd(method.OriginalDefinition, Classify);
+        if (api == null || facts.Payloads.GetOrAdd(payload, facts.Create).Value is not { } binding)
+            return new CallFact(null, OperationUsageAnalysis.Unbound(semanticModel, invocation, method, cancellationToken));
+
+        bool profiled = method.Arity == 2;
+        string? location = !intercept ? null : il
+            ? StaticCallKey.Attribute(method, profiled ? 1 : -1)
+            : Location(semanticModel, invocation, cancellationToken);
+        return new CallFact(new SerializerCallModel(api.Value, binding, location ?? string.Empty, profiled), GeneratedOperations.None);
     }
 
     /// <summary>Whether a method belongs to the generated serializer facade.</summary>
     /// <param name="method">A bound method.</param>
     /// <returns>Whether its declaring type is <c>LuminPack.LuminPackSerializer</c>.</returns>
-    internal static bool IsFacade(IMethodSymbol method) => method.ContainingType?.ToDisplayString() == SerializerName;
+    private static bool IsFacade(IMethodSymbol method) => method.Arity is 1 or 2 && IsFacadeType(method.ContainingType);
 
-    /// <summary>Builds the call facts of one bound facade construction.</summary>
-    private static SerializerCallModel Model(Compilation compilation, SerializerApi api, ITypeSymbol payload, string? profile, bool openProfile,
-        string location)
+    /// <summary>Identifies the serializer type independently of its spelling at the use site.</summary>
+    /// <param name="symbol">The bound receiver or declaring type.</param>
+    /// <returns>Whether it is the serializer facade.</returns>
+    private static bool IsFacadeType(ISymbol symbol) =>
+        symbol is INamedTypeSymbol { Name: "LuminPackSerializer", ContainingType: null,
+            ContainingNamespace: { Name: "LuminPack", ContainingNamespace.IsGlobalNamespace: true } };
+
+    /// <summary>Shares normalized payload and overload facts across all locations in one compilation.</summary>
+    private sealed class BindingFacts
     {
-        // A nullable value root keeps its Nullable spelling; the shorthand loses the distinction in owner names.
-        // Nested nullable value types are spelled as Nullable<T> too: owner keys drop '?' annotations, which would merge int? and int.
-        string spelling = payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(PayloadFormat);
-        GeneratorOptions options = Pipeline.GeneratorOptionsFactory.From(compilation);
-        MemberModel? root = TypeModelFactory.TryCreateRoot(payload, compilation, options);
-        // A closed generic payload binds the generic roots of its definition, as the original concrete facade does. A type nested
-        // in a generic type is generic over the containing type arguments, which precede its own.
-        string? definition = null, typeArguments = null;
-        if (payload is INamedTypeSymbol { IsGenericType: true } generic && generic.OriginalDefinition.SpecialType == SpecialType.None)
+        private readonly Compilation _compilation;
+        private readonly GeneratorOptions _options;
+        internal readonly ConcurrentDictionary<IMethodSymbol, SerializerApi?> Apis = new(SymbolEqualityComparer.Default);
+        internal readonly ConcurrentDictionary<ITypeSymbol, Lazy<PayloadBinding?>> Payloads = new(SymbolEqualityComparer.Default);
+
+        /// <summary>Captures the compilation owning the two binding caches.</summary>
+        /// <param name="compilation">The consuming compilation.</param>
+        internal BindingFacts(Compilation compilation)
         {
-            definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            typeArguments = string.Join(", ", TypeModelFactory.AllTypeArguments(generic).Select(argument => argument.ToDisplayString(PayloadFormat)));
+            _compilation = compilation;
+            _options = GeneratorOptionsFactory.From(compilation);
         }
-        EntryShape shape = TypeModelFactory.EntryShapeOf(payload, compilation, options);
-        return new SerializerCallModel(api, spelling, profile, location, payload.IsValueType, root, openProfile, definition, typeArguments,
-            shape, OperationUsageAnalysis.Payload(payload, compilation));
+
+        /// <summary>Defers payload modeling until the shared cache selects this entry.</summary>
+        /// <param name="payload">The closed payload symbol.</param>
+        /// <returns>The single publication of the normalized payload binding.</returns>
+        internal Lazy<PayloadBinding?> Create(ITypeSymbol payload) => new(() => Model(payload));
+
+        /// <summary>Normalizes one closed payload after its cache entry has been selected.</summary>
+        /// <param name="payload">The closed payload symbol.</param>
+        /// <returns>The normalized payload binding, or null for an open or inaccessible payload.</returns>
+        private PayloadBinding? Model(ITypeSymbol payload)
+        {
+            if (!IsClosed(payload) || !Accessible(payload))
+                return null;
+            using var names = ReadableTypeName.Use(_options.AmbiguousNames);
+            string spelling = payload.WithNullableAnnotation(NullableAnnotation.NotAnnotated).ToDisplayString(PayloadFormat);
+            MemberModel? root = TypeModelFactory.TryCreateRoot(payload, _compilation, _options);
+            string? definition = null, typeArguments = null;
+            if (payload is INamedTypeSymbol { IsGenericType: true } generic && generic.OriginalDefinition.SpecialType == SpecialType.None)
+            {
+                definition = generic.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                typeArguments = string.Join(", ", TypeModelFactory.AllTypeArguments(generic).Select(argument => argument.ToDisplayString(PayloadFormat)));
+            }
+            return new PayloadBinding(spelling, root, definition, typeArguments, TypeModelFactory.EntryShapeOf(payload, _compilation, _options),
+                OperationUsageAnalysis.Payload(payload, _compilation));
+        }
     }
 
     private static readonly SymbolDisplayFormat PayloadFormat = SymbolDisplayFormat.FullyQualifiedFormat
@@ -152,18 +187,29 @@ internal static class SerializerCallAnalysis
 
     /// <summary>Whether generated code outside the declaring type can name the type: a private or protected nested type keeps
     /// its call on the facade.</summary>
+    /// <param name="type">The payload type.</param>
+    /// <returns>Whether the generated interceptor can name the payload.</returns>
     private static bool Accessible(ITypeSymbol type)
     {
+        while (type is IArrayTypeSymbol array)
+            type = array.ElementType;
         for (ITypeSymbol? current = type; current != null; current = current.ContainingType)
             if (current.DeclaredAccessibility is Microsoft.CodeAnalysis.Accessibility.Private or Microsoft.CodeAnalysis.Accessibility.Protected or
-                Microsoft.CodeAnalysis.Accessibility.ProtectedAndInternal)
+                Microsoft.CodeAnalysis.Accessibility.ProtectedAndInternal ||
+                current is INamedTypeSymbol named && !named.TypeArguments.All(Accessible))
                 return false;
-        return type is not INamedTypeSymbol named || named.TypeArguments.All(Accessible);
+        return true;
     }
 
+    /// <summary>Checks whether the compiler has a concrete payload type.</summary>
+    /// <param name="type">The payload type.</param>
+    /// <returns>Whether the payload is closed.</returns>
     private static bool IsClosed(ITypeSymbol type) => type.TypeKind is not (TypeKind.Error or TypeKind.TypeParameter or TypeKind.Dynamic) &&
         !ContainsTypeParameter(type);
 
+    /// <summary>Checks the payload and its enclosing constructions for open arguments.</summary>
+    /// <param name="type">The payload or one of its component types.</param>
+    /// <returns>Whether the type contains a type parameter.</returns>
     private static bool ContainsTypeParameter(ITypeSymbol type) => type switch
     {
         ITypeParameterSymbol => true,
@@ -175,6 +221,8 @@ internal static class SerializerCallAnalysis
     };
 
     /// <summary>Classifies the original facade overload by its parameter shapes.</summary>
+    /// <param name="definition">The facade method definition.</param>
+    /// <returns>The intercepted API, or null for an unsupported overload.</returns>
     private static SerializerApi? Classify(IMethodSymbol definition)
     {
         var parameters = definition.Parameters;
@@ -253,6 +301,9 @@ internal static class SerializerCallAnalysis
         }
     }
 
+    /// <summary>Spells the part of a parameter type that distinguishes facade overloads.</summary>
+    /// <param name="type">The parameter type.</param>
+    /// <returns>The overload classification key.</returns>
     private static string Shape(ITypeSymbol type) => type switch
     {
         { SpecialType: SpecialType.System_String } => "string",
@@ -265,17 +316,22 @@ internal static class SerializerCallAnalysis
     };
 
     /// <summary>Obtains the compiler-owned interception attribute without raising the Roslyn 4.3 loading requirement.</summary>
-    internal static string? Location(SemanticModel model, InvocationExpressionSyntax call, CancellationToken cancellationToken)
+    /// <param name="model">The semantic model of the source file.</param>
+    /// <param name="call">The invocation to intercept.</param>
+    /// <param name="cancellationToken">Cancels location resolution.</param>
+    /// <returns>The complete compiler attribute, if available.</returns>
+    private static string? Location(SemanticModel model, InvocationExpressionSyntax call, CancellationToken cancellationToken)
     {
         object? location = LocationMethod!.Invoke(null, new object[] { model, call, cancellationToken });
         if (location == null)
             return null;
-        var type = location.GetType();
-        object version = type.GetProperty("Version")!.GetValue(location);
-        string data = (string)type.GetProperty("Data")!.GetValue(location);
+        object version = LocationVersion!.GetValue(location);
+        string data = (string)LocationData!.GetValue(location);
         return "[global::System.Runtime.CompilerServices.InterceptsLocation(" + version + ", " + SymbolDisplay.FormatLiteral(data, true) + ")]";
     }
 
+    /// <summary>Finds the compiler host's versioned interception location API.</summary>
+    /// <returns>The public location method, or null for an older host.</returns>
     private static MethodInfo? FindLocationMethod()
     {
         var assembly = typeof(CSharpCompilation).Assembly;

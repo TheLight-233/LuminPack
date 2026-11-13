@@ -40,7 +40,7 @@ internal static partial class TypeModelFactory
                     CollectUnionCandidates(_compilation.Assembly.GlobalNamespace, declarations);
                     // As the original discovery, a generic declaration contributes the closed constructions the source uses, and
                     // its open definition only when it is never constructed. The original sorted with the default comparer.
-                    Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> closed = ClosedConstructions();
+                    Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> closed = ClosedConstructions(declarations);
                     var candidates = new List<INamedTypeSymbol>();
                     foreach (INamedTypeSymbol declaration in declarations)
                         if (declaration.Arity != 0 && closed.TryGetValue(declaration, out List<INamedTypeSymbol>? constructions))
@@ -101,19 +101,28 @@ internal static partial class TypeModelFactory
         private Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>? _closedConstructions;
 
         /// <summary>Indexes the closed constructions of local generic packable declarations that the source names.</summary>
+        /// <param name="declarations">The local packable declarations that can contribute a Union case.</param>
         /// <returns>The constructions of each generic definition, without duplicates.</returns>
-        private Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> ClosedConstructions()
+        private Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> ClosedConstructions(List<INamedTypeSymbol> declarations)
         {
             if (_closedConstructions != null)
                 return _closedConstructions;
             var result = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
             var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            var names = new HashSet<(string Name, int Arity)>();
+            foreach (INamedTypeSymbol declaration in declarations)
+                if (declaration.Arity != 0)
+                    names.Add((declaration.Name, declaration.Arity));
+            if (names.Count == 0)
+                return _closedConstructions = result;
             foreach (SyntaxTree tree in _compilation.SyntaxTrees)
             {
                 SemanticModel? model = null;
                 foreach (var name in tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.GenericNameSyntax>())
                 {
-                    model ??= _compilation.GetSemanticModel(tree);
+                    if (!names.Contains((name.Identifier.ValueText, name.Arity)))
+                        continue;
+                    model ??= BindingSemanticModel.For(_compilation, tree);
                     if (model.GetSymbolInfo(name).Symbol is not INamedTypeSymbol { IsGenericType: true } type || ContainsTypeParameter(type) ||
                         !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, _compilation.Assembly) || !IsPackable(type.OriginalDefinition))
                         continue;

@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using LuminPack.SourceGenerator.Next.Pipeline;
-using LuminPack.SourceGenerator.Next.Model;
 
 namespace LuminPack.SourceGenerator.Next.Rendering;
 
@@ -47,14 +46,11 @@ internal static class CompactPublication
     /// <summary>Shares algorithms, eliminates pure adapters and groups closed formatter definitions.</summary>
     /// <param name="cache">The driver-owned publication cache.</param>
     /// <param name="sources">The generated source contributions.</param>
-    /// <param name="symbols">The active conditional-compilation symbols.</param>
     /// <param name="token">Cancels publication.</param>
-    /// <param name="documentation">The current immutable declaration facts for caller-facing XML.</param>
     /// <returns>The final deterministic generated files.</returns>
     // AggressiveOptimization is available in newer hosts but unnamed by netstandard2.0.
     [MethodImpl((MethodImplOptions)512)]
-    internal static GeneratedSource[] Create(List<GeneratedSource> sources, string[] symbols, CancellationToken token, Cache cache,
-        IReadOnlyDictionary<string, PayloadDocumentation>? documentation = null)
+    internal static GeneratedSource[] Create(List<GeneratedSource> sources, CancellationToken token, Cache cache)
     {
         var retained = new HashSet<string>(StringComparer.Ordinal);
         foreach (GeneratedSource source in sources)
@@ -85,11 +81,7 @@ internal static class CompactPublication
             foreach (GeneratedText.Method method in document.Methods)
                 if (method.Owner.StartsWith("LuminRoots_", StringComparison.Ordinal))
                     rootSet.Add(method.Owner.Substring(11));
-        var roots = new List<string>(rootSet);
-        roots.Sort(static (left, right) => right.Length.CompareTo(left.Length));
-        var suffixes = new string[roots.Count];
-        for (int index = 0; index < roots.Count; index++)
-            suffixes[index] = "_" + roots[index];
+        var stateNames = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (Document document in documents)
             foreach (GeneratedText.Method method in document.Methods)
             {
@@ -101,13 +93,21 @@ internal static class CompactPublication
                 }
                 else if (owner.StartsWith("Binary_", StringComparison.Ordinal))
                 {
-                    if (!names.ContainsKey(owner))
-                        for (int index = 0; index < suffixes.Length; index++)
-                            if (owner.EndsWith(suffixes[index], StringComparison.Ordinal))
+                    if (!stateNames.TryGetValue(owner, out string? state))
+                    {
+                        for (int separator = owner.IndexOf('_', 7); separator >= 0; separator = owner.IndexOf('_', separator + 1))
+                        {
+                            string suffix = owner.Substring(separator + 1);
+                            if (rootSet.Contains(suffix))
                             {
-                                names.Add(owner, roots[index] + "State");
+                                state = suffix + "State";
                                 break;
                             }
+                        }
+                        stateNames.Add(owner, state ?? string.Empty);
+                        if (state != null)
+                            names.Add(owner, state);
+                    }
                 }
                 else if (owner != "LuminPackSerializer")
                     continue;
@@ -281,7 +281,7 @@ internal static class CompactPublication
         int resultIndex = 0;
         foreach (var group in groups)
             result[resultIndex++] = new GeneratedSource(group.Key.Substring(group.Key.IndexOf(':') + 1), Join(group.Value.Texts), group.Value.Kind);
-        return documentation == null ? result : cache.Documentation.Apply(result, documentation);
+        return result;
         void Add(string hint, string output, GenerationKind kind)
         {
             string groupKey = ((int)kind).ToString() + ":" + hint;
@@ -563,7 +563,6 @@ internal static class CompactPublication
     {
         internal readonly Dictionary<string, Document> Documents;
         internal readonly Dictionary<string, CachedOutput> Outputs;
-        internal readonly SerializerDocumentation.Cache Documentation;
 
         /// <summary>Copies the preceding document and output indexes for one driver publication.</summary>
         /// <param name="prior">The preceding publication or operation contract.</param>
@@ -571,7 +570,6 @@ internal static class CompactPublication
         {
             Documents = prior == null ? new(StringComparer.Ordinal) : new(prior.Documents, StringComparer.Ordinal);
             Outputs = prior == null ? new(StringComparer.Ordinal) : new(prior.Outputs, StringComparer.Ordinal);
-            Documentation = new SerializerDocumentation.Cache(prior?.Documentation);
         }
     }
 
@@ -673,7 +671,7 @@ internal static class CompactPublication
             Document = document;
             Method = method;
             // Interceptors are bound by their attribute or called by wrapper bodies by name, so they are never inlined away.
-            Forward = method.Name.StartsWith("LuminIntercept_", StringComparison.Ordinal) ||
+            Forward = method.Name.StartsWith("LuminIntercept", StringComparison.Ordinal) ||
                 document.Text.Substring(method.Start, method.SignatureStart - method.Start).Contains("InterceptsLocation") ? null : method.Forward;
             if (Forward != null)
             {

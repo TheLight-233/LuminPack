@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using LuminPack.SourceGenerator.Next.Analysis;
 using LuminPack.SourceGenerator.Next.Pipeline;
 using LuminPack.SourceGenerator.Next.Rendering;
 using LuminPack.SourceGenerator.Next.Rendering.Facade;
@@ -11,7 +10,7 @@ namespace LuminPack.SourceGenerator.Next.Benchmarks;
 
 internal static partial class Program
 {
-    /// <summary>Checks complete caller XML, bound references, layout invalidation and unchanged executable tokens.</summary>
+    /// <summary>Checks public facade XML and verifies that implementation signatures carry no XML.</summary>
     /// <param name="references">The consumer's framework and runtime metadata.</param>
     /// <param name="parse">The target and language settings.</param>
     /// <returns>Zero after all XML and retained-driver contracts pass.</returns>
@@ -39,8 +38,9 @@ internal static partial class Program
                 CheckDiagnostics(output, emitted.Diagnostics);
                 documentation.Position = 0;
                 XDocument compiled = XDocument.Load(documentation);
-                RequireIncremental(compiled.Descendants("member").Any(static member => ((string?)member.Attribute("name"))?.Contains("LuminEntry_LayoutOnly.Serialize") == true),
-                    "The compiler did not export concrete convenience API documentation.");
+                RequireIncremental(compiled.Descendants("member").Any(static member =>
+                    ((string?)member.Attribute("name"))?.Contains("LuminPackSerializer.Serialize", StringComparison.Ordinal) == true),
+                    "The compiler did not export public facade documentation.");
             }
             Dictionary<string, string> original = Sources(driver);
             foreach (string source in original.Values)
@@ -48,14 +48,8 @@ internal static partial class Program
                 var root = CSharpSyntaxTree.ParseText(source, language.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
                 foreach (MethodDeclarationSyntax method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
                 {
-                    bool facade = method.Parent is ClassDeclarationSyntax owner &&
-                        (owner.Identifier.ValueText == "LuminPackSerializer" || owner.Identifier.ValueText.StartsWith("LuminEntry_", StringComparison.Ordinal));
-                    bool state = method.ParameterList.Parameters.Count != 0 &&
-                        method.ParameterList.Parameters[0].Type?.ToString().Contains("LuminPack") == true &&
-                        method.ParameterList.Parameters[0].Identifier.ValueText is "state" or "writer" or "reader" or "evaluator";
-                    bool api = facade && (method.Modifiers.Any(SyntaxKind.PublicKeyword) || !state &&
-                        (method.Identifier.ValueText.StartsWith("Serialize", StringComparison.Ordinal) ||
-                         method.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal)));
+                    bool api = method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText == "LuminPackSerializer" &&
+                        method.Modifiers.Any(SyntaxKind.PublicKeyword);
                     string comment = string.Concat(method.GetLeadingTrivia().Where(static trivia =>
                         trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).Select(static trivia => trivia.ToFullString()));
                     if (!api)
@@ -81,42 +75,13 @@ internal static partial class Program
                 string completed = SerializerDocumentation.Facade(source, typeSummary: false);
                 RequireIncremental(Tokens(source, language) == Tokens(completed, language), "Documentation changed executable tokens.");
             }
-            string combined = string.Concat(original.Values);
-            foreach (string expected in new[] { "Generation mode: <c>VersionTolerant", "Generation mode: <c>CircleReference",
-                "CLR memory layout", "Pack = 4", "CLR offset: 8", "Storage member", "included non-public storage",
-                "Generated implementation:", "caller-owned stream", "F:DocBase.BaseValue", "old_value" })
-                RequireIncremental(combined.Contains(expected, StringComparison.Ordinal), "Missing XML contract detail: " + expected);
-            var edited = input.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(declarations.Replace("Pack = 4", "Pack = 8"), language, "Documentation.cs"));
-            var beforeModel = TypeModelFactory.TryCreate(input.GetTypeByMetadataName("LayoutOnly")!, input, GeneratorOptionsFactory.From(input)).Model!;
-            var afterModel = TypeModelFactory.TryCreate(edited.GetTypeByMetadataName("LayoutOnly")!, edited, GeneratorOptionsFactory.From(edited)).Model!;
-            RequireIncremental(beforeModel.Equals(afterModel), "The layout-only fixture changed executable model facts.");
-            var cache = new SerializerDocumentation.Cache(null);
-            var cachedInput = new[] { new GeneratedSource("DocumentationCache.g.cs", original.Values.First(static text =>
-                text.Contains("class LuminEntry_LayoutOnly", StringComparison.Ordinal)), GenerationKind.Binary) };
-            var catalog = new Dictionary<string, Model.PayloadDocumentation>(StringComparer.Ordinal);
-            RequireIncremental(!cache.Apply(cachedInput, catalog)[0].Text.Contains("Pack = 4", StringComparison.Ordinal), "Missing contracts gained layout XML.");
-            catalog[SerializerDocumentation.Key(beforeModel.Identity.GlobalName)] = PayloadDocumentationFactory.Create(input.GetTypeByMetadataName("LayoutOnly")!, beforeModel);
-            RequireIncremental(cache.Apply(cachedInput, catalog)[0].Text.Contains("Pack = 4", StringComparison.Ordinal), "An added documentation dependency remained cached as missing.");
-            catalog.Clear();
-            RequireIncremental(!cache.Apply(cachedInput, catalog)[0].Text.Contains("Pack = 4", StringComparison.Ordinal), "A removed documentation dependency remained cached.");
-            foreach (var change in new[] { edited, input })
-            {
-                driver = driver.RunGeneratorsAndUpdateCompilation(change, out output, out diagnostics);
-                CheckDiagnostics(output, diagnostics);
-                GeneratorDriver fresh = CreateDriver().RunGenerators(change);
-                var actual = Sources(driver);
-                var expected = Sources(fresh);
-                RequireIncremental(actual.Count == expected.Count, "Layout XML invalidation changed file count.");
-                foreach (var file in expected)
-                    RequireIncremental(actual.TryGetValue(file.Key, out string? value) && value == file.Value, "Retained layout XML differs: " + file.Key);
-                string text = string.Concat(actual.Values);
-                RequireIncremental(text.Contains(ReferenceEquals(change, edited) ? "Pack = 8" : "Pack = 4", StringComparison.Ordinal), "Layout XML retained an obsolete pack setting.");
-            }
+            RequireIncremental(original.Values.All(static source => !source.Contains("class LuminEntry_", StringComparison.Ordinal)),
+                "An interceptor regenerated a concrete convenience overload container.");
         }
         foreach (string facade in new[] { SerializerFacadeSource.Binary, SerializerFacadeSource.Json })
             RequireIncremental(Tokens(facade, parse) == Tokens(SerializerDocumentation.Facade(facade, typeSummary: true), parse),
                 "Generic facade XML changed executable tokens.");
-        Console.WriteLine($"Next XML contracts: {apis} caller APIs checked across three documentation modes; token and layout invalidation checks passed.");
+        Console.WriteLine($"Next XML contracts: {apis} public APIs checked across three documentation modes with unchanged executable tokens.");
         return 0;
 
         static string Tokens(string source, CSharpParseOptions language) => string.Join("|", CSharpSyntaxTree.ParseText(source, language)

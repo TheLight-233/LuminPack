@@ -15,8 +15,9 @@ internal readonly partial struct SharedFormatterSet
     {
         if (GenericFormatterReuse.FindPlaceholder(type) is { } placeholder)
             return placeholder;
+        string key = GeneratedNames.PayloadKey(type);
         foreach (FormatterModel model in GeneralOwners ?? Array.Empty<FormatterModel>())
-            if (GeneratedNames.PayloadKey(model.Type) == GeneratedNames.PayloadKey(type))
+            if (GeneratedNames.PayloadKey(model.Type) == key)
                 return model;
         return null;
     }

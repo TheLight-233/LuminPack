@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Text.RegularExpressions;
-using LuminPack.SourceGenerator.Next.Analysis;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering;
@@ -16,7 +15,6 @@ using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using LuminPack.SourceGenerator.Next.Rendering.Json;
 using LuminPack.SourceGenerator.Next.Rendering.Union;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.SourceGenerator.Next.Pipeline;
 
@@ -64,11 +62,8 @@ internal static partial class NextPipeline
     {
         private readonly ImmutableArray<ModeledPayload> _payloads;
         private readonly ImmutableArray<SerializerCallModel> _calls;
-        private readonly RootMembers _forwarded;
-        private readonly WrapperSet _wrappers;
         private readonly GeneratorOptions _options;
         private readonly WirePolicy _policy;
-        private readonly string[] _symbols;
         private readonly GeneratedOperations _whole;
         private GeneratedSource[]? _sources;
         private PublicationSnapshot? _snapshot;
@@ -77,24 +72,19 @@ internal static partial class NextPipeline
         /// <summary>Captures compilation-independent facts shared by the three output families.</summary>
         /// <param name="calls">The bound serializer calls.</param>
         /// <param name="diagnostics">The normalized declaration and assembly diagnostics.</param>
-        /// <param name="forwarded">The closed roots reached through source wrappers.</param>
         /// <param name="options">The normalized project settings.</param>
         /// <param name="payloads">The normalized declaration results.</param>
         /// <param name="policy">The assembly wire policy.</param>
-        /// <param name="symbols">The active conditional-compilation symbols.</param>
         /// <param name="whole">The operations every payload keeps regardless of calls.</param>
         internal PublicationRequest(ImmutableArray<ModeledPayload> payloads, ImmutableArray<SerializerCallModel> calls,
-            RootMembers forwarded, WrapperSet wrappers, GeneratorOptions options, WirePolicy policy, string[] symbols, DiagnosticInfo[] diagnostics,
+            GeneratorOptions options, WirePolicy policy, DiagnosticInfo[] diagnostics,
             GeneratedOperations whole)
         {
-            _wrappers = wrappers;
             _whole = whole;
             _payloads = payloads;
             _calls = calls;
-            _forwarded = forwarded;
             _options = options;
             _policy = policy;
-            _symbols = symbols;
             Diagnostics = diagnostics;
         }
 
@@ -114,38 +104,29 @@ internal static partial class NextPipeline
                     return _sources;
                 }
                 var snapshot = new PublicationSnapshot(cache.Snapshot);
-                var plan = OperationPlan.Create(_payloads, _calls, _forwarded, _whole, _options);
+                var plan = OperationPlan.Create(_payloads, _calls, _whole, _options);
                 var retained = new List<TypeModel>(_payloads.Length);
                 foreach (ModeledPayload payload in _payloads)
                     if (payload.Result.IsComplete && payload.Result.Model is { } model && plan.For(model) != GeneratedOperations.None)
                         retained.Add(model);
-                var roots = new List<MemberModel>(_calls.Length + _forwarded.Members.Length);
+                var roots = new List<MemberModel>();
+                var seenRoots = new HashSet<MemberModel>();
                 foreach (SerializerCallModel call in _calls)
-                    if (call.Root != null)
+                    if (call.Root != null && seenRoots.Add(call.Root))
                         roots.Add(call.Root);
-                roots.AddRange(_forwarded.Members);
                 if (snapshot.SharedInputs == null || !snapshot.SharedInputs.Matches(retained, roots, _options))
                     snapshot.SharedInputs = new SharedFormatterInputs(retained, roots, _options);
                 SharedFormatterSet formatters = snapshot.SharedInputs.Set;
                 var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot, plan);
                 // Compiler interception needs the host's location API; the IL rewriter binds the same entries after compilation.
-                if (_options.Interceptors && (SerializerCallAnalysis.Supported || _options.IlRewrite))
+                if (_options.Interceptors && !_calls.IsEmpty)
                 {
-                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, snapshot.SharedSources), _options.IlRewrite,
-                        _wrappers);
+                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, snapshot.SharedSources), _options.IlRewrite);
                     if (interceptors.Length != 0)
                         sources.Add(new GeneratedSource("LuminPackGen.Interceptors.g.cs", interceptors, GenerationKind.Binary));
                 }
                 token.ThrowIfCancellationRequested();
-                var documentation = new Dictionary<string, PayloadDocumentation>(retained.Count, StringComparer.Ordinal);
-                foreach (ModeledPayload payload in _payloads)
-                    if (payload.Documentation is { } facts && plan.For(facts.Model) != GeneratedOperations.None)
-                    {
-                        documentation[SerializerDocumentation.Key(facts.Model.Identity.GlobalName)] = facts;
-                        if (facts.Model.Identity.IsGeneric)
-                            documentation[PublicationNames.Mangle(facts.Model.Identity.GlobalName)] = facts;
-                    }
-                _sources = CompactPublication.Create(sources, _symbols, token, snapshot.Compact, documentation);
+                _sources = CompactPublication.Create(sources, token, snapshot.Compact);
                 // Compatibility targets advance a pointer cursor; the projection leaves other targets' text untouched.
                 if (_options.PointerCursor)
                     for (int index = 0; index < _sources.Length; index++)
@@ -163,7 +144,7 @@ internal static partial class NextPipeline
 
         /// <inheritdoc/>
         public bool Equals(PublicationRequest? other) => other != null && _whole == other._whole && _options.Equals(other._options) && _policy.Equals(other._policy) &&
-            Same(_payloads, other._payloads) && Same(_calls, other._calls) && _forwarded.Equals(other._forwarded) && _wrappers.Equals(other._wrappers) && Same(_symbols, other._symbols) && Same(Diagnostics, other.Diagnostics);
+            Same(_payloads, other._payloads) && Same(_calls, other._calls) && Same(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>
         public override bool Equals(object? obj) => Equals(obj as PublicationRequest);
@@ -270,6 +251,9 @@ internal static partial class NextPipeline
             snapshot.SharedOperations = plan.Owners;
         }
         var shared = snapshot.SharedSources;
+        Dictionary<string, PayloadRenderModel>? inputCandidates = null;
+        HashSet<string>? copyable = null;
+        List<string>? sharedInputSources = null;
         foreach (var source in shared)
             sources.Add(new GeneratedSource(source.Key, source.Value, GenericFormatterReuse.IsJson(source.Key) ? GenerationKind.Json : GenerationKind.Formatter));
         foreach (TypeModel model in retained)
@@ -302,26 +286,33 @@ internal static partial class NextPipeline
             }
             else if (BoundedRoot(model) && RenderModelFactory.Create(model, options) is { } root)
             {
-                var copyable = new HashSet<string>(StringComparer.Ordinal);
-                var candidates = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
-                foreach (TypeModel candidate in retained)
-                    if (plan.For(candidate) != GeneratedOperations.None && candidate is RecordModel { Rejection: null, Versioned: false } &&
-                        RenderModelFactory.Create(candidate, options) is { Circle: false, IsStruct: false, Mirror: null, Version: null } rendered &&
-                        rendered.Mirrors.Length == 0)
+                if (copyable == null)
+                {
+                    copyable = new HashSet<string>(StringComparer.Ordinal);
+                    inputCandidates = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
+                    foreach (TypeModel candidate in retained)
+                        if (plan.For(candidate) != GeneratedOperations.None && candidate is RecordModel { Rejection: null, Versioned: false } &&
+                            RenderModelFactory.Create(candidate, options) is { Circle: false, IsStruct: false, Mirror: null, Version: null } rendered &&
+                            rendered.Mirrors.Length == 0)
+                        {
+                            inputCandidates[rendered.Readable] = rendered;
+                            copyable.Add(rendered.Readable);
+                        }
+                    sharedInputSources = new List<string>(shared.Length);
+                    foreach (var source in shared)
                     {
-                        candidates[rendered.Readable] = rendered;
-                        copyable.Add(rendered.Readable);
+                        sharedInputSources.Add(source.Value);
+                        foreach (Match match in Regex.Matches(source.Value, @"class LuminRoots_(\w+)", RegexOptions.CultureInvariant))
+                            if (InputReadRenderer.CanCopy(source.Value, match.Groups[1].Value))
+                                copyable.Add(match.Groups[1].Value);
                     }
-                foreach (var source in shared)
-                    foreach (Match match in Regex.Matches(source.Value, @"class LuminRoots_(\w+)", RegexOptions.CultureInvariant))
-                        if (InputReadRenderer.CanCopy(source.Value, match.Groups[1].Value))
-                            copyable.Add(match.Groups[1].Value);
+                }
                 var redirect = new InputRedirect(root.Readable, GeneratedNames.Extension(options.AssemblyName), model.Policy.Limits, copyable);
                 binary = PayloadEmitter.Render(root.WithInput(model.Policy.Limits, ((RecordModel)model).Recursive, redirect), false,
                     options.AvailableAliases, operations);
                 // The checked copies are reads, copied from the read bodies the root's own operations publish.
                 if ((operations & GeneratedOperations.BinaryRead) != 0)
-                    Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, candidates, shared.Select(source => source.Value).ToList(),
+                    Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, inputCandidates!, sharedInputSources!,
                         options.AvailableAliases, operations, set), GenerationKind.Binary);
                 json = JsonRenderer.Instance.Render(model, renderContext);
             }

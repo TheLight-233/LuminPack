@@ -21,13 +21,10 @@ internal static partial class TypeModelFactory
     /// <summary>Returns the compilation analysis runs on: itself, or its complete-metadata view when it declares external roots.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <returns>The analysis compilation.</returns>
-    internal static Compilation Complete(Compilation compilation)
-    {
-        if (compilation.Options.MetadataImportOptions == MetadataImportOptions.All || MarkedTypes(compilation).Count == 0)
-            return compilation;
-        return CompleteViews.GetValue(compilation, static item =>
-            item.WithOptions(item.Options.WithMetadataImportOptions(MetadataImportOptions.All)));
-    }
+    internal static Compilation Complete(Compilation compilation) => CompleteViews.GetValue(compilation, static item =>
+        item.Options.MetadataImportOptions == MetadataImportOptions.All || MarkedTypes(item).Count == 0
+            ? item
+            : item.WithOptions(item.Options.WithMetadataImportOptions(MetadataImportOptions.All)));
 
     /// <summary>Finds the same type in another view of the compilation.</summary>
     /// <param name="type">A type of the consuming compilation.</param>
@@ -140,8 +137,13 @@ internal static partial class TypeModelFactory
         /// <returns>Whether its definition is an external root.</returns>
         internal bool Marked(INamedTypeSymbol type)
         {
-            _marked ??= new HashSet<INamedTypeSymbol>(MarkedTypes(_compilation), SymbolEqualityComparer.Default);
-            return _marked.Count != 0 && _marked.Contains(type.OriginalDefinition);
+            HashSet<INamedTypeSymbol>? marked = System.Threading.Volatile.Read(ref _marked);
+            if (marked == null)
+            {
+                marked = new HashSet<INamedTypeSymbol>(MarkedTypes(_compilation), SymbolEqualityComparer.Default);
+                marked = System.Threading.Interlocked.CompareExchange(ref _marked, marked, null) ?? marked;
+            }
+            return marked.Contains(type.OriginalDefinition);
         }
     }
 }
