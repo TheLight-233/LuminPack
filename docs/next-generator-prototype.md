@@ -139,6 +139,12 @@ A checked item covers the scope stated here. Related combinations still listed b
 - [x] **LuminPack021.** Nothing to migrate: the legacy generator has declared but not reported this warning since layout mirrors
   made `[LuminPackInclude]` storage reachable on every target, and Next likewise reports nothing.
 
+## Output accounting
+
+In repository builds, pass `-p:LuminPackReportGeneratorOutput=true -p:EmitCompilerGeneratedFiles=true`. Next writes
+`Formatters/LuminPackGen.OutputReport.g.cs` under the compiler's generated-files directory. It counts final files and source size
+by family, excluding itself, and selected operation directions for complete payloads and unambiguous shared roots.
+
 ## Not yet migrated
 
 ### Static binding and publication
@@ -147,12 +153,6 @@ A checked item covers the scope stated here. Related combinations still listed b
 | --- | --- | --- |
 | P2 | Cross-assembly payloads | External ordinary records support open and closed generic markers. Generic external Union dispatch, reference-assembly diagnostics for constructions discovered from open markers, and cross-assembly option inheritance still need coverage. Unmarked referenced payloads use registered fallback. |
 | P2 | Remaining backend combinations | Friend-assembly operation retention and IL rewriting on a single fixture are verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
-
-### Generated source
-
-| Priority | Gap | Current state |
-| --- | --- | --- |
-| P2 | Output accounting | Generated file counts, source size and retained operations are not recorded per build. |
 
 ### Type shapes and protocols
 

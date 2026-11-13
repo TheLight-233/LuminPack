@@ -92,7 +92,10 @@ internal readonly partial struct SharedFormatterSet
         // Two payloads whose readable names coincide share one owner class name; neither binds statically.
         var readable = new Dictionary<string, int>(System.StringComparer.Ordinal);
         foreach (string key in roots)
-            readable[ReadableTypeName.Of(key)] = readable.TryGetValue(ReadableTypeName.Of(key), out int count) ? count + 1 : 1;
+        {
+            string name = ReadableTypeName.Of(key);
+            readable[name] = readable.TryGetValue(name, out int count) ? count + 1 : 1;
+        }
         roots.RemoveWhere(key => readable[ReadableTypeName.Of(key)] > 1);
         return roots;
     }

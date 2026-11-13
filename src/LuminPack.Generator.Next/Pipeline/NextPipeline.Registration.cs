@@ -21,11 +21,13 @@ internal static partial class NextPipeline
     /// <param name="payloads">The modeled declarations and Custom registrations.</param>
     /// <param name="calls">The closed serializer uses.</param>
     /// <param name="formatters">The closed shared formatter owners.</param>
+    /// <param name="shared">The shared owners with unambiguous published root names.</param>
     /// <param name="plan">The operations retained by each owner and declaration.</param>
     /// <param name="options">The consuming assembly settings.</param>
     /// <param name="policy">The consuming assembly policy.</param>
     private static void AddFormatterRegistration(List<GeneratedSource> sources, ImmutableArray<ModeledPayload> payloads,
-        ImmutableArray<SerializerCallModel> calls, SharedFormatterSet formatters, OperationPlan plan, GeneratorOptions options, WirePolicy policy)
+        ImmutableArray<SerializerCallModel> calls, SharedFormatterSet formatters, HashSet<string> shared, OperationPlan plan,
+        GeneratorOptions options, WirePolicy policy)
     {
         var custom = new List<string>();
         var generated = new SortedDictionary<string, (string Type, string BinarySuffix, string JsonSuffix, string Arguments, GeneratedOperations Operations)>(StringComparer.Ordinal);
@@ -67,7 +69,6 @@ internal static partial class NextPipeline
             if (call.Definition is { } definition && open.TryGetValue(definition, out TypeModel? model))
                 AddPayload(model, call.Payload, arguments: call.TypeArguments + ", ");
 
-        var shared = formatters.PublishedRoots();
         foreach (FormatterModel formatter in formatters.GeneralOwners ?? Array.Empty<FormatterModel>())
         {
             if (formatter.Definition == FormatterDefinitions.PayloadReference)

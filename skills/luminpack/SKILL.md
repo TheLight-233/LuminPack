@@ -17,6 +17,8 @@ Internal binary writes can share named static member kernels while keeping their
 
 When a project explicitly selects the Next generator, its single incremental pipeline writes Binary, Json and Formatters directories with the same filename conventions. Closed facade calls bind directly to static roots through interceptors. A source generic wrapper with an open payload can use built-in, Custom or emitted closed-type operations registered on first use of the Next facade. Explicit registrations take precedence and cover opaque types or operations outside the generated set. Register additional Union cases through `LuminPackSerializer.Register<TUnion, TMember>(tag, Write, Read, WriteJson, ReadJson)`. Core's hidden `LuminPackUnionFormatter<TUnion>` owns the shared table; Next roots do not publish per-root Register methods. Continue using public serializer entry points rather than generated writer aliases or framing markers. See [Next generator](../../docs/generator-next.md).
 
+For repository builds using Next, `-p:LuminPackReportGeneratorOutput=true -p:EmitCompilerGeneratedFiles=true` writes a comment-only output report with the final source size and selected operation counts. See [Next output accounting](../../docs/next-generator-prototype.md#output-accounting).
+
 ## Quick start
 
 ```csharp

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using LuminPack.SourceGenerator.Next.Pipeline;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -28,6 +29,7 @@ internal static partial class Program
         GeneratorDriver driver = CSharpGeneratorDriver.Create(Generators(), parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         var run = driver.GetRunResult();
+        VerifyOutputReport(driver, compilation);
         string[] errors = diagnostics.Concat(output.GetDiagnostics()).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Select(diagnostic => diagnostic.ToString()).ToArray();
         if (errors.Length != 0)
@@ -92,6 +94,49 @@ internal static partial class Program
         {
             if (!condition)
                 LuminPackExceptionHelper.ThrowInvalidOperation(name);
+        }
+    }
+
+    /// <summary>Checks opt-in output accounting and retained-driver option changes.</summary>
+    /// <param name="driver">The ordinary publication driver.</param>
+    /// <param name="compilation">The unchanged consumer.</param>
+    private static void VerifyOutputReport(GeneratorDriver driver, Compilation compilation)
+    {
+        const string hint = "Formatters/LuminPackGen.OutputReport.g.cs";
+        var ordinary = Sources(driver);
+        RequireIncremental(!ordinary.ContainsKey(hint), "Output accounting must be opt-in.");
+        var enabled = driver.WithUpdatedAnalyzerConfigOptions(new ReportOptions(true)).RunGenerators(compilation);
+        var reported = Sources(enabled);
+        RequireIncremental(reported.TryGetValue(hint, out string? report), "The requested output report was not emitted.");
+        RequireIncremental(reported.Count == ordinary.Count + 1, "Output accounting changed the publication.");
+        foreach (var file in ordinary)
+            RequireIncremental(reported[file.Key] == file.Value, "Output accounting changed generated source.");
+        foreach (string family in new[] { "Binary", "Json", "Formatters" })
+        {
+            var files = ordinary.Where(file => file.Key.StartsWith(family + "/", StringComparison.Ordinal)).ToArray();
+            string row = FormattableString.Invariant($"// {family} {files.Length} {files.Sum(file => file.Value.Length)} {files.Sum(file => System.Text.Encoding.UTF8.GetByteCount(file.Value))}\n");
+            RequireIncremental(report!.Contains(row, StringComparison.Ordinal), "The output report did not match final source for " + family);
+        }
+        RequireIncremental(Regex.IsMatch(report!, @"// Payloads ([1-9]\d*) \1 \1 \1\n") &&
+            Regex.IsMatch(report!, @"// SharedRoots ([1-9]\d*) \1 \1 \1\n"), "A library retains all four directions.");
+        var disabled = enabled.WithUpdatedAnalyzerConfigOptions(new ReportOptions(false)).RunGenerators(compilation);
+        RequireIncremental(Sources(disabled).Count == ordinary.Count && !Sources(disabled).ContainsKey(hint),
+            "Turning off output accounting must remove the report.");
+    }
+
+    private sealed class ReportOptions(bool enabled) : AnalyzerConfigOptionsProvider
+    {
+        public override AnalyzerConfigOptions GlobalOptions { get; } = new Values(enabled);
+        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => GlobalOptions;
+        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => GlobalOptions;
+
+        private sealed class Values(bool enabled) : AnalyzerConfigOptions
+        {
+            public override bool TryGetValue(string key, out string value)
+            {
+                value = enabled ? "true" : "false";
+                return key == "build_property.LuminPackReportGeneratorOutput";
+            }
         }
     }
 

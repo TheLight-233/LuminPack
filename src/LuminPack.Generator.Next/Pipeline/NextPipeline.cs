@@ -109,7 +109,10 @@ internal static partial class NextPipeline
             foreach (DiagnosticInfo diagnostic in input.Left)
                 production.ReportDiagnostic(DiagnosticDescriptors.Create(diagnostic, input.Right));
         });
-        InitializePublication(context, requests);
+        var report = context.AnalyzerConfigOptionsProvider.Select(static (options, _) =>
+            options.GlobalOptions.TryGetValue("build_property.LuminPackReportGeneratorOutput", out string? value) &&
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase));
+        InitializePublication(context, requests, report);
     }
 
     /// <summary>Models the referenced types the consuming assembly marks as external roots.</summary>

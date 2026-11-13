@@ -13,6 +13,10 @@ internal sealed class SharedFormatterInputs
     private readonly GeneratorOptions _options;
 
     internal readonly SharedFormatterSet Set;
+    private HashSet<string>? _publishedRoots;
+
+    /// <summary>Shares the read-only root index between registration and interception.</summary>
+    internal HashSet<string> PublishedRoots => _publishedRoots ??= Set.PublishedRoots();
 
     /// <summary>Freezes the dependency lists and collects their shared owners once.</summary>
     /// <param name="models">The retained payloads in publication order.</param>
