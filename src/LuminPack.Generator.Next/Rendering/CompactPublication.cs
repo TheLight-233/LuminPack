@@ -606,8 +606,7 @@ internal static class CompactPublication
             joined.Append(body.Text, body.Start, body.Length);
         }
         string source = joined.Append(Environment.NewLine).ToString();
-        return PublicationOrder.Render(source, GeneratedText.ReadMethods(source), new HashSet<GeneratedText.Method>(),
-            new List<(int Start, int End, string Text)>());
+        return PublicationOrder.RenderJoined(source);
     }
 
     /// <summary>Retains one grouped file for its ordered, already projected contributions.</summary>

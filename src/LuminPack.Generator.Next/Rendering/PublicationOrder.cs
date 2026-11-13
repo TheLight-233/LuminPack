@@ -16,7 +16,7 @@ internal static class PublicationOrder
         List<(int Start, int End, string Text)> edits)
     {
         var excluded = new List<(int Start, int End)>();
-        List<GeneratedText.Method>? apis = null;
+        List<(int Start, int End)>? apis = null;
         bool conditional = source.IndexOf("#if", StringComparison.Ordinal) >= 0;
         foreach (var edit in edits)
             if (edit.Text.Length == 0 && edit.End > edit.Start)
@@ -24,9 +24,32 @@ internal static class PublicationOrder
         foreach (GeneratedText.Method method in methods)
             if (!conditional && !removed.Contains(method) && method.Owner == "LuminPackSerializer" && IsApi(method.Name))
             {
-                (apis ??= new List<GeneratedText.Method>()).Add(method);
+                (apis ??= new List<(int Start, int End)>()).Add((method.Start, method.End));
                 excluded.Add((method.Start, method.End));
             }
+        return Render(source, excluded, apis, edits);
+    }
+
+    /// <summary>Orders already projected formatter contributions without rebuilding method contracts.</summary>
+    /// <param name="source">The assembled formatter file.</param>
+    /// <returns>The final formatted source.</returns>
+    internal static string RenderJoined(string source)
+    {
+        var apis = GeneratedText.ReadApiRanges(source);
+        return Render(source, apis == null ? new() : new(apis), apis, NoEdits);
+    }
+
+    private static readonly List<(int Start, int End, string Text)> NoEdits = new();
+
+    /// <summary>Reconstructs the file from sorted source ranges and moves facade entries to its end.</summary>
+    /// <param name="source">The unmodified contribution.</param>
+    /// <param name="excluded">Source ranges removed from their original positions.</param>
+    /// <param name="apis">Facade methods moved to the end.</param>
+    /// <param name="edits">The ordered publication edits.</param>
+    /// <returns>The final source.</returns>
+    private static string Render(string source, List<(int Start, int End)> excluded, List<(int Start, int End)>? apis,
+        List<(int Start, int End, string Text)> edits)
+    {
         Sort(excluded);
         RemoveEmpty(source, "internal static partial class LuminPackExtensions_", excluded);
         if (apis != null)
@@ -52,7 +75,7 @@ internal static class PublicationOrder
         {
             output.Append("\nnamespace LuminPack\n{\n    public static partial class LuminPackSerializer\n    {\n");
             editIndex = 0;
-            foreach (GeneratedText.Method method in apis)
+            foreach (var method in apis)
             {
                 Append(output, source, method.Start, method.End, edits, ref editIndex);
                 output.Append("\n\n");
@@ -65,7 +88,7 @@ internal static class PublicationOrder
     /// <summary>Distinguishes convenience entries from cursor and member-writing algorithms.</summary>
     /// <param name="name">The original generated method name.</param>
     /// <returns>Whether the method belongs below the algorithms.</returns>
-    private static bool IsApi(string name) => name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or
+    internal static bool IsApi(string name) => name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or
         "SerializeAsync" or "DeserializeAsync" || name.StartsWith("Serialize_", StringComparison.Ordinal) ||
         name.StartsWith("Deserialize_", StringComparison.Ordinal) || name.StartsWith("SerializeJson_", StringComparison.Ordinal) ||
         name.StartsWith("DeserializeJson_", StringComparison.Ordinal) || name.StartsWith("SerializeAsync_", StringComparison.Ordinal) ||

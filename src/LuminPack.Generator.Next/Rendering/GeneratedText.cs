@@ -134,6 +134,29 @@ internal static class GeneratedText
     {
         if (Captured.TryGetValue(text, out var captured))
             return captured;
+        var methods = new List<Method>();
+        ReadMethods(text, methods, null);
+        return methods;
+    }
+
+    /// <summary>Collects only the boundaries of facade methods that publication moves.</summary>
+    /// <param name="text">The assembled formatter file.</param>
+    /// <returns>Convenience entry ranges in source order, or null for a conditional file or one without entries.</returns>
+    internal static List<(int Start, int End)>? ReadApiRanges(string text)
+    {
+        if (text.IndexOf("#if", StringComparison.Ordinal) >= 0)
+            return null;
+        var ranges = new List<(int Start, int End)>();
+        ReadMethods(text, null, ranges);
+        return ranges.Count == 0 ? null : ranges;
+    }
+
+    /// <summary>Scans method boundaries for full binding or for publication ordering alone.</summary>
+    /// <param name="text">The original generated text.</param>
+    /// <param name="methods">Receives complete method contracts when requested.</param>
+    /// <param name="apiRanges">Receives only movable convenience entry ranges when requested.</param>
+    private static void ReadMethods(string text, List<Method>? methods, List<(int Start, int End)>? apiRanges)
+    {
         var classes = new List<(int Start, int End, string Name)>();
         foreach (Match match in Classes.Matches(text))
         {
@@ -142,7 +165,6 @@ internal static class GeneratedText
             if (end >= 0)
                 classes.Add((match.Index, end, match.Groups[1].Value));
         }
-        var methods = new List<Method>();
         var scopes = new Stack<(int End, string Name)>();
         int classIndex = 0;
         foreach (Match match in Methods.Matches(text))
@@ -158,6 +180,9 @@ internal static class GeneratedText
                 scopes.Pop();
             if (scopes.Count == 0)
                 continue;
+            string name = match.Groups["name"].Value;
+            if (apiRanges != null && (scopes.Peek().Name != "LuminPackSerializer" || !PublicationOrder.IsApi(name)))
+                continue;
             int position = match.Index + match.Length;
             string generic = string.Empty;
             if (text[position] == '<')
@@ -165,7 +190,8 @@ internal static class GeneratedText
                 int close = Close(text, position, '<', '>');
                 if (close < 0)
                     continue;
-                generic = text.Substring(position + 1, close - position - 1);
+                if (methods != null)
+                    generic = text.Substring(position + 1, close - position - 1);
                 position = close + 1;
             }
             int parameters = text.IndexOf('(', position);
@@ -195,12 +221,16 @@ internal static class GeneratedText
                     break;
                 start = priorStart;
             }
+            if (apiRanges != null)
+            {
+                apiRanges.Add((start, end + 1));
+                continue;
+            }
             string signature = text.Substring(match.Index, body - match.Index).TrimEnd();
             string content = expression ? text.Substring(body + 2, end - body - 2).Trim() : text.Substring(body + 1, end - body - 1);
-            methods.Add(new Method(start, end + 1, match.Index, scopes.Peek().Name, match.Groups["name"].Value, generic,
+            methods!.Add(new Method(start, end + 1, match.Index, scopes.Peek().Name, name, generic,
                 text.Substring(parameters + 1, parametersEnd - parameters - 1), signature, content, expression, match.Groups["indent"].Value));
         }
-        return methods;
     }
 
     private static readonly ConditionalWeakTable<string, List<Method>> Captured = new();
