@@ -422,7 +422,8 @@ internal static partial class NextPipeline
                         copyable.Add(rendered.Readable);
                     }
                 foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
-                    if (owner.PublishPayload && owner.Payload is { } candidate && CanCopyPayload(candidate) &&
+                    if ((owner.PublishPayload || owner.Definition == FormatterDefinitions.GenericUnion) &&
+                        owner.Payload is { } candidate && CanCopyPayload(candidate) &&
                         (plan.Owners.For(GeneratedNames.PayloadKey(owner.Type)) & GeneratedOperations.BinaryRead) != 0 &&
                         RenderModelFactory.Create(candidate, options, checkedUnionCopy: true) is { Rejection: null } rendered &&
                         !inputCandidates.ContainsKey(rendered.Readable))

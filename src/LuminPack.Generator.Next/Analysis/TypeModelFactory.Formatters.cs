@@ -65,7 +65,9 @@ internal static partial class TypeModelFactory
         /// <summary>Retains complete argument contracts when a specialized collection cannot publish all dependent owners.</summary>
         /// <param name = "model">The normalized formatter or storage contract.</param>
         /// <returns>Whether the requested contract or capability is available.</returns>
-        private static bool RequiresDefault(FormatterModel model) => model.Layout != null || model.Capabilities.Length != 0 || model.PublishPayload || FormatterDefinitions.HasGeneric(model.Definition) || model.Arguments.Any(RequiresDefault);
+        private static bool RequiresDefault(FormatterModel model) => model.Layout != null || model.Capabilities.Length != 0 ||
+            model.PublishPayload || model.Definition == FormatterDefinitions.GenericUnion || FormatterDefinitions.HasGeneric(model.Definition) ||
+            model.Arguments.Any(RequiresDefault);
         /// <summary>Analyzes one closed formatter graph independently of its containing collection.</summary>
         /// <param name = "type">The declared type or its source-ready spelling.</param>
         /// <param name = "depth">The depth used by this operation.</param>
@@ -154,11 +156,14 @@ internal static partial class TypeModelFactory
                 return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, ordinaryObject: ordinary);
             // A closed generic Union dispatches through its generic definition owner unless an exact external marker publishes
             // the closed root directly. Both forms use the defining assembly's Union slots.
-            bool genericUnion = named.IsGenericType && HasAttribute(named, UnionAttribute);
+            bool genericUnion = named.IsGenericType &&
+                (HasAttribute(named, UnionAttribute) || IsLocal(named) && (named.IsAbstract || named.TypeKind == TypeKind.Interface));
             if (genericUnion && !ContainsTypeParameter(named) && IsPackable(named.OriginalDefinition) &&
                 (IsLocal(named) || !ExplicitMarker(named) && ExplicitMarker(named.OriginalDefinition) &&
                     Analyze(named.OriginalDefinition, depth + 1, path) is { IsComplete: true, Model: UnionModel }))
-                return new FormatterModel(spelling, FormatterDefinitions.GenericUnion, underlying:
+                return new FormatterModel(spelling, FormatterDefinitions.GenericUnion,
+                    payload: IsLocal(named) && Analyze(named, depth + 1, path) is { IsComplete: true, Model: UnionModel closed } ? closed : null,
+                    underlying:
                     ReadableTypeName.Of(GeneratedNames.PayloadKey(named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) +
                     "|" + string.Join(", ", named.TypeArguments.Select(argument => argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))),
                     ordinaryObject: false);

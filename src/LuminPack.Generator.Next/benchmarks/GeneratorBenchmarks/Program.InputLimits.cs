@@ -219,6 +219,17 @@ internal static partial class Program
         public abstract partial class LimitedOpenUnion<T> where T : struct { }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public sealed partial class TrustedOpenCase<T> : LimitedOpenUnion<T> where T : struct { public string Text; }
+        [LuminPackable, LuminPackUnion(3, typeof(ScopedGenericCase<string>)), LuminPackUnion(257, typeof(ScopedGenericCase<int>))]
+        public abstract partial class ScopedGenericUnion<T> { }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public sealed partial class ScopedGenericCase<T> : ScopedGenericUnion<T> { public T Value; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 2)]
+        public sealed class LimitedClosedUnion
+        {
+            public ScopedGenericUnion<string> Value;
+            public List<ScopedGenericUnion<string>> Items;
+            public LimitedOpenUnion<int> OpenCase;
+        }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public partial class TrustedMirror { public string Text { get; set; } }
         [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
@@ -529,7 +540,31 @@ internal static partial class Program
                 return 49 + CheckNestedContracts() + CheckForwardedCollections<LuminPackUtf16LengthOptions>() +
                     CheckForwardedCollections<LuminPackUtf8VarIntOptions>() +
                     CheckTrackedUnion<LuminPackUtf16LengthOptions>() + CheckTrackedUnion<LuminPackUtf8VarIntOptions>() +
-                    CheckUnionMembers<LuminPackUtf16LengthOptions>() + CheckUnionMembers<LuminPackUtf8VarIntOptions>();
+                    CheckUnionMembers<LuminPackUtf16LengthOptions>() + CheckUnionMembers<LuminPackUtf8VarIntOptions>() +
+                    CheckClosedUnion<LuminPackUtf16LengthOptions>() + CheckClosedUnion<LuminPackUtf8VarIntOptions>();
+            }
+
+            private static int CheckClosedUnion<TProfile>() where TProfile : struct, ILuminPackOptions
+            {
+                var item = new ScopedGenericCase<string> { Value = "ok" };
+                var source = new LimitedClosedUnion { Value = item, Items = new() { item }, OpenCase = NewOpenCase<int>("ok") };
+                byte[] bytes = Write();
+                var candidate = new ScopedGenericCase<string>();
+                var copy = new LimitedClosedUnion { Value = candidate };
+                if (LuminPackSerializer.Deserialize<LimitedClosedUnion, TProfile>(bytes, ref copy) != bytes.Length ||
+                    !ReferenceEquals(candidate, copy.Value) || candidate.Value != "ok" ||
+                    ((ScopedGenericCase<string>)copy.Items[0]).Value != "ok" || ((TrustedOpenCase<int>)copy.OpenCase).Text != "ok")
+                    throw new Exception("A closed generic Union read changed tag selection or reuse.");
+                item.Value = "four";
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedClosedUnion, TProfile>(Write()));
+                source.Value = null;
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedClosedUnion, TProfile>(Write()));
+                source.Items.Clear();
+                source.OpenCase = NewOpenCase<int>("four");
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedClosedUnion, TProfile>(Write()));
+                return 4;
+
+                byte[] Write() => LuminPackSerializer.Serialize<LimitedClosedUnion, TProfile>(source);
             }
 
             private static int CheckUnionMembers<TProfile>() where TProfile : struct, ILuminPackOptions

@@ -64,7 +64,7 @@ internal static partial class TypeModelFactory
                 return null;
             if (HasAttribute(definition, UnionAttribute))
             {
-                foreach (var (_, caseType) in UnionMembers(definition, new List<string>()))
+                foreach (var (_, caseType) in UnionMembers(definition, new List<string>(), out _))
                     if (VisitRejection(caseType, seen) is { } rejection)
                         return rejection;
                 return null;

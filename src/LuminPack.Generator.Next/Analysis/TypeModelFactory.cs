@@ -375,9 +375,8 @@ internal static partial class TypeModelFactory
                 }
                 case PayloadKind.Union:
                 {
-                    var declared = UnionMembers(symbol, issues);
-                    bool wide = HasAttribute(symbol, WideTagAttribute) || OptionSwitch(symbol, "WideTag") ||
-                        declared.Any(item => item.Tag >= 250);
+                    var declared = UnionMembers(symbol, issues, out bool wideCase);
+                    bool wide = HasAttribute(symbol, WideTagAttribute) || OptionSwitch(symbol, "WideTag") || wideCase;
                     HashSet<ITypeSymbol> fixedCases = FixedUnionCases(symbol, declared, issues);
                     UnionCaseModel[] cases = UnionCases(symbol, declared, fixedCases, depth, issues, path, out bool readGeneric);
                     if (cases.Length == 0)
@@ -1130,19 +1129,33 @@ internal static partial class TypeModelFactory
         /// <summary>Reads the declared Union cases in declaration order.</summary>
         /// <param name="symbol">The Union root.</param>
         /// <param name="issues">Receives invalid case declarations.</param>
+        /// <param name="wideCase">Whether any case of the definition requires the wide tag format.</param>
         /// <returns>The declared tag and case type of each attribute.</returns>
-        private List<(int Tag, INamedTypeSymbol Type)> UnionMembers(INamedTypeSymbol symbol, List<string> issues)
+        private List<(int Tag, INamedTypeSymbol Type)> UnionMembers(INamedTypeSymbol symbol, List<string> issues, out bool wideCase)
         {
             var cases = new List<(int Tag, INamedTypeSymbol Type)>();
             var tags = new HashSet<int>();
-            foreach (UnionCaseDeclaration declaration in UnionCaseDeclarations(symbol))
+            bool closed = symbol.IsGenericType && !symbol.IsDefinition && !ContainsTypeParameter(symbol) && IsLocal(symbol);
+            ITypeSymbol[]? arguments = null;
+            wideCase = false;
+            // A closed checked read shares the definition's tags and framing. Only its case bodies are specialized.
+            foreach (UnionCaseDeclaration declaration in UnionCaseDeclarations(closed ? symbol.OriginalDefinition : symbol))
             {
+                wideCase |= declaration.Tag >= 250;
+                INamedTypeSymbol type = declaration.Type;
+                if (closed)
+                {
+                    if (type.IsDefinition && GenericCaseArguments(symbol.OriginalDefinition, type) != null)
+                        type = type.Construct(arguments ??= symbol.TypeArguments.ToArray());
+                    if (!SymbolEqualityComparer.Default.Equals(UnionRootMatch(type, symbol.OriginalDefinition), symbol))
+                        continue;
+                }
                 if (!tags.Add(declaration.Tag))
                 {
                     issues.Add("the Union root declares tag " + declaration.Tag.ToString(CultureInfo.InvariantCulture) + " more than once");
                     continue;
                 }
-                cases.Add((declaration.Tag, declaration.Type));
+                cases.Add((declaration.Tag, type));
             }
             return cases;
         }
@@ -1516,7 +1529,7 @@ internal static partial class TypeModelFactory
             if (root == null)
                 return false;
             var issues = new List<string>();
-            var declared = UnionMembers(root, issues);
+            var declared = UnionMembers(root, issues, out _);
             if (issues.Count != 0 || root is not { TypeKind: TypeKind.Class, IsAbstract: true, IsGenericType: false } ||
                 !IsLocal(root) || GenerationMode(root) != "Object" || HasAttribute(root, WideTagAttribute) ||
                 OptionSwitch(root, "WideTag") || declared.Any(item => item.Tag >= 250))

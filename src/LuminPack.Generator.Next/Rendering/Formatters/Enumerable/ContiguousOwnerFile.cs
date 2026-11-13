@@ -36,7 +36,8 @@ internal static class ContiguousOwnerFile
         string suffix = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
         bool reference = shape is ContiguousShape.Array or ContiguousShape.List;
         // A Union element of a list keeps the original fresh loop, which needs the root's case arms.
-        PayloadRenderModel? freshUnion = checkedUnion ?? (element.Payload is UnionModel union && set.Options != null && set.Options.Net8
+        PayloadRenderModel? freshUnion = checkedUnion ?? (element.Definition != FormatterDefinitions.GenericUnion &&
+            element.Payload is UnionModel union && set.Options != null && set.Options.Net8
             ? RenderModelFactory.Create(union, set.Options) : null);
         if (freshUnion is { UnionRoot: false })
             freshUnion = null;

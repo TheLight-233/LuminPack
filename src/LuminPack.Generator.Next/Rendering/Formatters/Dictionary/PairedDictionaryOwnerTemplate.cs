@@ -53,7 +53,8 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Whether both entry operations are raw unmanaged scalar stores.</summary>
     /// <summary>The Union root render model of the value, from the payload element or the closed contract, or null.</summary>
     internal PayloadRenderModel? UnionValue => _checkedUnion ?? (Payload is { UnionRoot: true } payload ? payload :
-        _contract is { Arguments.Length: 2 } && _contract.Arguments[1].Payload is UnionModel union && _set.Options != null &&
+        _contract is { Arguments.Length: 2 } && _contract.Arguments[1].Definition != FormatterDefinitions.GenericUnion &&
+        _contract.Arguments[1].Payload is UnionModel union && _set.Options != null &&
         RenderModelFactory.Create(union, _set.Options) is { UnionRoot: true } rendered ? rendered : null);
     private readonly PayloadRenderModel? _checkedUnion;
 
