@@ -94,6 +94,7 @@ internal static class InterceptorRenderer
     internal static string Render(IReadOnlyList<SerializerCallModel> calls, RootCatalog roots, bool il)
     {
         var writer = new StringBuilder();
+        var documentBodies = new Dictionary<(SerializerApi Api, EntryShape Shape, bool Measured), string>();
         int index = 0;
         foreach (var group in calls.Where(call => call.Location.Length != 0).GroupBy(call => (call.Api, call.Payload, call.OpenProfile))
             .OrderBy(group => group.Key.Payload, StringComparer.Ordinal).ThenBy(group => group.Key.Api).ThenBy(group => group.Key.OpenProfile))
@@ -107,7 +108,7 @@ internal static class InterceptorRenderer
                 writer.Append("        ").Append(location).Append('\n');
             string profile = call.OpenProfile ? "TLuminProfile" :
                 call.Json && !call.Writes ? root.JsonReadProfile ?? root.DeclaredProfile : root.DeclaredProfile;
-            Interceptor(writer, call, root, profile, index++, root.Owner == null ? root.Measured : roots.Measured.Contains(root.RootName));
+            Interceptor(writer, call, root, profile, index++, root.Owner == null ? root.Measured : roots.Measured.Contains(root.RootName), documentBodies);
         }
         return index == 0 ? string.Empty : writer.Append("    }\n}\n").ToString();
     }
@@ -189,7 +190,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <param name="profile">The concrete or forwarded profile.</param>
     /// <param name="index">The unique interceptor index.</param>
     /// <param name="measured">Whether the root has an exact record measurement.</param>
-    private static void Interceptor(StringBuilder w, SerializerCallModel bound, RootEntry root, string profile, int index, bool measured)
+    /// <param name="documentBodies">The document templates already assembled for this publication.</param>
+    private static void Interceptor(StringBuilder w, SerializerCallModel bound, RootEntry root, string profile, int index, bool measured,
+        Dictionary<(SerializerApi Api, EntryShape Shape, bool Measured), string> documentBodies)
     {
         SerializerApi api = bound.Api;
         string type = bound.Payload;
@@ -306,7 +309,14 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return;
         }
 
-        string body = DocumentBody(api, bound.Shape, measured);
+        bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
+            SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue;
+        var bodyKey = (Api: api, Shape: binaryShape ? bound.Shape : EntryShape.Pooled, Measured: binaryShape && measured);
+        if (!documentBodies.TryGetValue(bodyKey, out string? body))
+        {
+            body = DocumentBody(bodyKey.Api, bodyKey.Shape, bodyKey.Measured);
+            documentBodies.Add(bodyKey, body);
+        }
         string measure = "LuminPackSerializer.MeasureRecord_" + root.RootName + "<" + root.RootArguments + profile + ">";
         AppendBody(w, Limits(body, type, root), type, profile, measure, target);
         w.Append('\n');
