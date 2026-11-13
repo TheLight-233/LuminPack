@@ -1,7 +1,8 @@
 param(
     [string]$Project = '.tmp/unity-extensions-native',
     [string]$Artifacts = '.tmp/unity-extensions-results',
-    [switch]$PrepareHosted
+    [switch]$PrepareHosted,
+    [ValidateSet('Legacy', 'Next')][string]$LuminPackGenerator = 'Legacy'
 )
 $ErrorActionPreference = 'Stop'
 if (-not $PrepareHosted -and (-not $env:UNITY_EDITOR_PATH -or -not (Test-Path -LiteralPath $env:UNITY_EDITOR_PATH))) {
@@ -35,7 +36,7 @@ if ([version]$unityVersionMatch.Value -ge [version]'6000.2') {
 }
 dotnet build (Join-Path $repositoryPath 'src/LuminPack.Unity/LuminPack.Unity.csproj') -c Release @unityModuleOptions
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-dotnet build (Join-Path $repositoryPath 'src/LuminPack.Unity/Tests~/Consumer/LuminPack.Unity.Consumer.Tests.csproj') -c Release "-p:UnityManagedPath=$unityManagedPath"
+dotnet build (Join-Path $repositoryPath 'src/LuminPack.Unity/Tests~/Consumer/LuminPack.Unity.Consumer.Tests.csproj') -c Release "-p:UnityManagedPath=$unityManagedPath" "-p:LuminPackGenerator=$LuminPackGenerator"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 foreach ($source in @('src/LuminPack.Unity/bin/Release/netstandard2.1/LuminPack.Unity.dll', 'src/LuminPack.Unity/Tests~/Consumer/bin/Release/netstandard2.1/LuminPack.Unity.Consumer.Tests.dll')) {
     Copy-Item -LiteralPath (Join-Path $repositoryPath $source) -Destination (Join-Path $projectPath 'Assets/Plugins')

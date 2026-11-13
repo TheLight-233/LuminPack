@@ -174,6 +174,10 @@ internal static partial class TypeModelFactory
             // A concrete plain class is expanded inline as a nested object and needs no declaration.
             if (IsImplicitInlineClass(named))
                 return;
+            // A direct opaque value from a referenced assembly can use its registered formatter.
+            if (named is { TypeKind: TypeKind.Struct, IsGenericType: false, IsRecord: false, IsRefLikeType: false } &&
+                !IsLocal(named) && SymbolEqualityComparer.Default.Equals(named, StorageType(member)))
+                return;
             string name = named.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty);
             if (SequenceKind(named) != null || DictionaryKind(named) != null || GenericIdentity.Of(FormatterSpelling(named)) != null)
             {

@@ -19,6 +19,9 @@ internal static class GeneratedContract
         LuminPackSerializer.Deserialize(bytes,ref restored);
         var native = new NativeColorPayload { Color = global::System.Drawing.Color.FromName("CustomColor") };
         byte[] nativeBytes = LuminPackSerializer.Serialize(native);
+        CodecContract.Assert(nativeBytes.Length > 0 && nativeBytes[0] == 1 &&
+            nativeBytes.AsSpan(1).SequenceEqual(LuminPack.Drawing.LuminDrawing.ColorCodec.Serialize(native.Color)),
+            "The native Color field did not retain the registered formatter's binary representation.");
         NativeColorPayload? nativeResult = null;
         LuminPackSerializer.Deserialize(nativeBytes, ref nativeResult);
         CodecContract.Assert(nativeResult?.Color == native.Color, "The existing native Color fallback did not use its registered formatter.");

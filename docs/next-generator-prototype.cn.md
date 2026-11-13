@@ -160,8 +160,16 @@ C# 12，因此较旧的语言版本通过该后端绑定。
 
 | 优先级 | 缺口 | 当前状态 |
 | --- | --- | --- |
-| P2 | Unity、IL2CPP、32 位、ARM64、AOT | Next 在 Windows .NET 10 的 x64 JIT、裁剪、NativeAOT 构建及独立的 x86 JIT 进程中通过了冒烟测试与保留的线格式样本。构建分析器仍报告动态 `System.Type` 解析警告。兼容目标检查覆盖 Unity 所用的 netstandard2.1 与 C# 9 编译路径。Unity 实际运行和其余运行时及架构组合仍待验证。 |
-| P2 | 可选模块 | 各平台与集成模块尚未针对 Next 构建或测试。 |
+| P2 | Unity、IL2CPP、32 位、ARM64、AOT | Next 在 Windows .NET 10 的 x64 JIT、裁剪、NativeAOT 构建及独立的 x86 JIT 进程中通过了冒烟测试与保留的线格式样本。构建分析器仍报告动态 `System.Type` 解析警告。netstandard2.1 与 C# 9 消费端通过了 Windows 上的 Unity 6 编辑器集成检查。IL2CPP Player 及其余运行时和架构组合仍待验证。 |
+
+ASP.NET Core、Avalonia、Drawing、MAUI、MonoGame、SkiaSharp 与 WPF 的适配器测试已在 Windows .NET 10 上使用 Next 运行。
+Drawing 测试覆盖了通过现有 typed delegate 注册处理的直接 `System.Drawing.Color` 成员，以及 Custom 包装类型。
+Unity 扩展脚本运行 Next 生成的 Unity 消费端，以及 Unity 原生对象与 Burst 内核测试。
+
+```text
+dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlatform=Drawing -p:LuminPackGenerator=Next
+pwsh -File .github/scripts/invoke-unity-extensions.ps1 -Project .tmp/unity-next -Artifacts .tmp/unity-next-results -LuminPackGenerator Next
+```
 
 ### 诊断
 

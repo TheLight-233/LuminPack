@@ -195,8 +195,16 @@ These keep the wire format but produce different code from legacy.
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | The Windows .NET 10 smoke app and retained wire fixtures pass with Next in x64 JIT, trimmed and NativeAOT builds and a self-contained x86 JIT process. The build analyzer still warns about dynamic `System.Type` resolution. Unity's netstandard2.1 and C# 9 compile path is covered by the compatibility-target check. Unity execution and the wider runtime and architecture matrix remain pending. |
-| P2 | Optional modules | The platform and integration modules are not built or tested against Next. |
+| P2 | Unity, IL2CPP, 32-bit, ARM64, AOT | The Windows .NET 10 smoke app and retained wire fixtures pass with Next in x64 JIT, trimmed and NativeAOT builds and a self-contained x86 JIT process. The build analyzer still warns about dynamic `System.Type` resolution. The netstandard2.1 and C# 9 consumer passes the Unity 6 Windows Editor integration check. IL2CPP players and the wider runtime and architecture matrix remain pending. |
+
+The ASP.NET Core, Avalonia, Drawing, MAUI, MonoGame, SkiaSharp and WPF adapter contracts run with Next on Windows .NET 10.
+The Drawing contract covers direct `System.Drawing.Color` members through the existing typed registration as well as the Custom wrapper.
+The Unity extension script runs the Next-generated Unity consumer with the native Unity object and Burst kernel contracts.
+
+```text
+dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlatform=Drawing -p:LuminPackGenerator=Next
+pwsh -File .github/scripts/invoke-unity-extensions.ps1 -Project .tmp/unity-next -Artifacts .tmp/unity-next-results -LuminPackGenerator Next
+```
 
 ### Diagnostics
 
