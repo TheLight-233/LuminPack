@@ -65,9 +65,69 @@ internal static partial class Program
             RequireIncremental((bool)assembly.GetType("StaticBackendFixture")!.GetMethod("Exercise")!.Invoke(null, null)!,
                 name + " binary and JSON profile round trip.");
             checks++;
+            if (friend)
+            {
+                VerifyFriend(output, image, assembly, references, syntax);
+                checks++;
+            }
         }
         return checks;
     }
+
+    /// <summary>Compiles and executes calls to the retained state entries from a separate friend assembly.</summary>
+    /// <param name="producer">The compilation that declared the friend.</param>
+    /// <param name="image">The emitted producer with any required IL rewrite applied.</param>
+    /// <param name="assembly">The loaded producer.</param>
+    /// <param name="references">The framework and runtime references.</param>
+    /// <param name="parse">The consumer's compiler settings.</param>
+    private static void VerifyFriend(Compilation producer, byte[] image, Assembly assembly, MetadataReference[] references, CSharpParseOptions parse)
+    {
+        var source = CSharpSyntaxTree.ParseText(FriendBackendFixture, parse, "StaticBackendFriend.cs");
+        var input = CSharpCompilation.Create("StaticBackendFriend", new[] { source },
+            references.Append(MetadataReference.CreateFromImage(image)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));
+        using var pe = new MemoryStream();
+        var emitted = input.Emit(pe);
+        RequireIncremental(emitted.Success, producer.AssemblyName + ": " + string.Join(Environment.NewLine, emitted.Diagnostics));
+
+        var context = new System.Runtime.Loader.AssemblyLoadContext(producer.AssemblyName + "_Friend", isCollectible: true);
+        context.Resolving += (_, name) => name.Name == producer.AssemblyName ? assembly : null;
+        try
+        {
+            pe.Position = 0;
+            var friend = context.LoadFromStream(pe);
+            RequireIncremental((bool)friend.GetType("FriendEntry")!.GetMethod("Exercise")!.Invoke(null, null)!,
+                producer.AssemblyName + " external friend state entries.");
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
+    private const string FriendBackendFixture = """
+        #nullable enable
+        using LuminPack;
+        using LuminPack.Core;
+        using LuminPack.Option;
+        using LuminPack.Utility;
+
+        public static class FriendEntry
+        {
+            public static bool Exercise()
+            {
+                var value = new FriendPayload { Text = "friend \u4E2D" };
+                using var buffer = LuminBufferWriterPool.Rent();
+                var writer = new LuminPackWriter(buffer);
+                FriendPayloadState.Write<LuminPackUtf8VarIntOptions>(ref writer, in value);
+                var data = writer.GetSpan();
+                var reader = new LuminPackReader(ref data);
+                FriendPayload? copy = null;
+                FriendPayloadState.Read<LuminPackUtf8VarIntOptions>(ref reader, ref copy);
+                return copy?.Text == value.Text && reader.Position == data.Length;
+            }
+        }
+        """;
 
     private const string StaticBackendFixture = """
         using LuminPack;

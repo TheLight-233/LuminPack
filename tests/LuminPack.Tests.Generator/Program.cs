@@ -18,6 +18,12 @@ if (args.Contains("--verify-il-rewriting", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--verify-next-compatibility", StringComparer.Ordinal))
+{
+    NextCompatibilityRegression.Run();
+    return;
+}
+
 if (args.Contains("--verify-source-references", StringComparer.Ordinal))
 {
     IncrementalGenerationChecks.VerifyReferenceInvalidation(CompatibilityCompilationReferences.Create());
