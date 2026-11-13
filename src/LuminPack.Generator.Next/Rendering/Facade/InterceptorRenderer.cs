@@ -356,7 +356,17 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             SerializerApi.DeserializeJsonBufferRef => JsonBufferRead,
             _ => LuminPackExceptionHelper.ThrowArgumentOutOfRange<string>(nameof(api)),
         };
-        return "            {\n" + statements + "            }\n";
+        using var body = new PooledTextBuffer(statements.Length + 24);
+        body.Append("        {\n");
+        for (int start = 0; start < statements.Length;)
+        {
+            int end = statements.IndexOf('\n', start) + 1;
+            int indent = end - start > 4 && statements[start] == ' ' ? 4 : 0;
+            body.Append(statements, start + indent, end - start - indent);
+            start = end;
+        }
+        body.Append("        }\n");
+        return body.ToString();
     }
 
     /// <summary>Creates a local read function with the original input boundary and ref semantics.</summary>
