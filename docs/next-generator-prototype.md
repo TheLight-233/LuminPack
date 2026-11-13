@@ -188,7 +188,7 @@ These keep the wire format but produce different code from legacy.
 | P1 | Collection members in record bodies | Record bodies call the owners of collection members, such as a list or dictionary of Union values, where legacy expands those writes in place. |
 | P1 | Adjacent fixed-field blocks | Ordinary fixed record runs and eligible CircleReference runs use the 64-bit field-address proof and scalar fallback. CircleReference applies the proof to reserved and sequential writes and same-table reads. Remaining layout, construction and protocol combinations still need comparison. |
 | P1 | Unmanaged root sharing | Legacy shares closed-generic and array roots through substitution and binding proofs; Next publishes individual roots. |
-| P2 | Root inlining policy | Several interface and collection roots that legacy keeps `NoInlining` are inlined into Next entries, and the time zone and exact-interface entry forms are not specialized. |
+| P2 | Root inlining policy | Allocating static entries write UTF-16 length-prefixed time zone snapshots and exact scalar `IList<T>`, `ISet<T>` and `IReadOnlySet<T>` implementations directly into the result array. Other profiles or implementations retain the pooled path. Several interface and collection roots still need comparison against the original `NoInlining` policy. |
 | P2 | JSON read allocations | A JSON read of the benchmark graph allocates about 2 KB more than legacy; the source is not identified. |
 
 ### Platforms and targets

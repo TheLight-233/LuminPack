@@ -41,6 +41,9 @@ internal static partial class Program
         Check(!Regex.IsMatch(all, @"\b(?:RootWrite|RootRead|DeserializeUnion|WritePolymorphismValue)\w*\s*[<(]"), "Direct operation publication");
         Check(!all.Contains("struct LuminPackObjectFraming"), "Core-owned framing markers");
         Check(!all.Contains("public static void Register<TMember>"), "Central Union registration");
+        Check(all.Contains("Utf16SnapshotRecordLength(snapshot)", StringComparison.Ordinal) &&
+            all.Contains("WriteSmallHashSetRaw(ref writer, exact)", StringComparison.Ordinal) &&
+            all.Contains("SerializeInterfaceSlow", StringComparison.Ordinal), "Allocating entry specialization");
         VerifyPublicationLayout(formatter.GeneratedSources);
         var plainParse = parse.WithFeatures(Array.Empty<KeyValuePair<string, string>>());
         var layoutTree = CSharpSyntaxTree.ParseText("using LuminPack.Attribute; [LuminPackable] public partial class FirstRecord { public int Value; public string Name; } " +
@@ -236,6 +239,7 @@ public static class PublicationFixture
     {
         Profile<LuminPackUtf8LengthOptions>(); Profile<LuminPackUtf8TokenOptions>(); Profile<LuminPackUtf8VarIntOptions>();
         Profile<LuminPackUtf16LengthOptions>(); Profile<LuminPackUtf16TokenOptions>(); Profile<LuminPackUtf16VarIntOptions>();
+        CheckAllocatingEntries();
         var ordinary = new Ordinary { Number = 7, Name = "value", Values = new[] { 1, 2 }, Items = new List<int> { 3, 4 }, Longs = new List<long> { 5 }, @event = 42 };
         byte[] bytes = LuminPackSerializer.Serialize(ordinary);
         Ordinary read = null;
@@ -305,6 +309,34 @@ public static class PublicationFixture
         byte[] holderBytes = LuminPackSerializer.Serialize(flags);
         Check(LuminPackSerializer.Deserialize(holderBytes, ref holderRead) == holderBytes.Length && holderRead.Child.Flag && holderRead.Flag);
         return s_checks;
+    }
+
+    private static void CheckAllocatingEntries()
+    {
+        TimeZoneInfo zone = TimeZoneInfo.Utc;
+        byte[] snapshot = LuminPackSerializer.Serialize(zone);
+        byte[] profiled = LuminPackSerializer.Serialize<TimeZoneInfo, LuminPackUtf8VarIntOptions>(zone);
+        using var buffer = LuminBufferWriterPool.Rent();
+        LuminPackSerializer.Serialize(zone, buffer);
+        Check(snapshot.AsSpan().SequenceEqual(buffer.GetSpan()) && LuminPackSerializer.Deserialize<TimeZoneInfo>(snapshot).Equals(zone));
+        Check(LuminPackSerializer.Deserialize<TimeZoneInfo, LuminPackUtf8VarIntOptions>(profiled).Equals(zone));
+        Check(LuminPackSerializer.Serialize((TimeZoneInfo)null).AsSpan().SequenceEqual(new byte[] { 255 }));
+
+        IList<int> list = new List<int> { 1, 3 };
+        IList<int> alternate = new[] { 1, 3 };
+        byte[] exactList = LuminPackSerializer.Serialize(list);
+        Check(exactList.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(alternate)) &&
+            LuminPackSerializer.Deserialize<IList<int>>(exactList)[1] == 3);
+        Check(LuminPackSerializer.Deserialize<IList<int>>(LuminPackSerializer.Serialize((IList<int>)null)) == null);
+
+        ISet<byte> set = new HashSet<byte> { 1, 2, 3 };
+        set.Remove(2);
+        ISet<byte> alternateSet = new SortedSet<byte> { 1, 3 };
+        byte[] exactSet = LuminPackSerializer.Serialize(set);
+        Check(exactSet.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(alternateSet)) &&
+            LuminPackSerializer.Deserialize<ISet<byte>>(exactSet).SetEquals(alternateSet));
+        IReadOnlySet<int> readOnlySet = new HashSet<int> { 7, 9 };
+        Check(LuminPackSerializer.Deserialize<IReadOnlySet<int>>(LuminPackSerializer.Serialize(readOnlySet)).SetEquals(readOnlySet));
     }
     private static void Profile<TOptions>() where TOptions : struct, ILuminPackOptions
     {

@@ -113,6 +113,18 @@ internal enum EntryKind
 
     /// <summary>An interface sequence of known scalars, read without reference-tracking state.</summary>
     StatelessRead,
+
+    /// <summary>A UTF-16 length-prefixed time zone snapshot sized from its cached text.</summary>
+    TimeZoneSnapshot,
+
+    /// <summary>An exact built-in list implementation of a scalar interface.</summary>
+    ExactList,
+
+    /// <summary>An exact built-in hash set implementation of a scalar interface.</summary>
+    ExactHashSet,
+
+    /// <summary>An exact hash set using the small-element grouped writer.</summary>
+    ExactSmallHashSet,
 }
 
 /// <summary>The entry form of a closed payload and its element spelling where the form needs one.</summary>

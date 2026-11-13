@@ -407,6 +407,10 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return RawWrite;
         if (shape.Kind == EntryKind.BigInteger)
             return BigIntegerWrite;
+        if (shape.Kind == EntryKind.TimeZoneSnapshot)
+            return TimeZoneSnapshotWrite + PooledWrite;
+        if (shape.Kind is EntryKind.ExactList or EntryKind.ExactHashSet or EntryKind.ExactSmallHashSet)
+            return ExactInterfaceWrite(shape);
         string? size = shape.Kind switch
         {
             EntryKind.FixedEnum => "                int directLength = Unsafe.SizeOf<%TYPE%>();\n",
@@ -422,6 +426,52 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n") +
             DirectWrite + (exact ? "                return directBuffer;\n" : MeasuredFallback);
     }
+
+    /// <summary>Writes the proven exact interface implementation and keeps the existing pooled entry for other values.</summary>
+    private static string ExactInterfaceWrite(EntryShape shape)
+    {
+        bool list = shape.Kind == EntryKind.ExactList;
+        string implementation = "global::System.Collections.Generic." + (list ? "List" : "HashSet") + "<" + shape.Element + ">";
+        const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+        string write = list
+            ? "                    var items = " + marshal + ".GetListSpan(exact);\n" +
+              "                    writer.Write<" + shape.Element + ">(items, items.Length);\n"
+            : "                    " + marshal + "." + (shape.Kind == EntryKind.ExactSmallHashSet ? "WriteSmallHashSetRaw" : "WriteHashSetRaw") +
+              "(ref writer, exact);\n";
+        return """
+                        if (value is not null && value.GetType() == typeof(%IMPLEMENTATION%))
+                        {
+                            var exact = Unsafe.As<%IMPLEMENTATION%>(value);
+                            int directLength = checked(sizeof(int) + exact.Count * Unsafe.SizeOf<%ELEMENT%>());
+                            var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);
+                            var directSpan = directBuffer.AsSpan();
+                            var writer = new LuminPackWriter(ref directSpan);
+            """.Replace("%IMPLEMENTATION%", implementation).Replace("%ELEMENT%", shape.Element!) + "\n" + write +
+            """
+                            if (writer.Position == directLength)
+                                return directBuffer;
+                        }
+                        return SerializeInterfaceSlow(in value);
+
+                        [MethodImpl(MethodImplOptions.NoInlining)]
+                        static byte[] SerializeInterfaceSlow(in %TYPE% value)
+                        {
+            """ + "\n" + Indent(PooledWrite) + "                }\n";
+    }
+
+    private const string TimeZoneSnapshotWrite = """
+                        if (default(%PROFILE%).StringEncoding == LuminPackStringEncoding.UTF16 &&
+                            default(%PROFILE%).StringRecording == global::LuminPack.Option.LuminPackStringRecording.Length)
+                        {
+                            string? snapshot = value is null ? null : global::LuminPack.Code.LuminPackTimeZoneInfoCache.GetText(value);
+                            int length = global::LuminPack.Code.LuminPackTimeZoneInfoCache.Utf16SnapshotRecordLength(snapshot);
+                            var buffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(length);
+                            var span = buffer.AsSpan();
+                            var writer = new LuminPackWriter(ref span);
+                            global::LuminPack.Code.LuminPackTimeZoneInfoCache.WriteTimeZoneText<%PROFILE%>(ref writer, snapshot, capacityReserved: true);
+                            return buffer;
+                        }
+        """ + "\n";
 
     private const string PooledWrite = """
                         var writerBuffer = LuminBufferWriterPool.Rent();

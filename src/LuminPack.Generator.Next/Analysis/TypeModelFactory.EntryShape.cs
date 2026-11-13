@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LuminPack.SourceGenerator.Next.Model;
+using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.Next.Analysis;
@@ -48,6 +49,8 @@ internal static partial class TypeModelFactory
             string name = FormatterName(type);
             if (KnownValueTypes.Contains(name) && !containsReferences)
                 return new EntryShape(EntryKind.RawScalar);
+            if (name == "global::System.TimeZoneInfo")
+                return new EntryShape(EntryKind.TimeZoneSnapshot);
             bool fixedEnum = type.TypeKind == TypeKind.Enum && !containsReferences;
             bool fixedRecord = IsFixedRecord(type) || fixedEnum;
             if (fixedRecord || IsDirectRecord(type))
@@ -63,11 +66,27 @@ internal static partial class TypeModelFactory
             if (type is INamedTypeSymbol { TypeArguments.Length: 1 } sequence &&
                 sequence.OriginalDefinition.ToDisplayString() == "System.Buffers.ReadOnlySequence<T>" && IsKnownScalar(sequence.TypeArguments[0]))
                 return new EntryShape(EntryKind.RawSequence, FormatterName(sequence.TypeArguments[0]));
-            if (type is INamedTypeSymbol { TypeArguments.Length: 1 } stateless &&
-                stateless.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.IEnumerable<T>" or
-                    "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyList<T>" &&
-                IsKnownScalar(stateless.TypeArguments[0]))
-                return new EntryShape(EntryKind.StatelessRead);
+            if (type is INamedTypeSymbol { TypeArguments.Length: 1, TypeKind: TypeKind.Interface } collection)
+            {
+                string definition = collection.OriginalDefinition.ToDisplayString();
+                ITypeSymbol element = collection.TypeArguments[0];
+                if (definition is "System.Collections.Generic.IEnumerable<T>" or "System.Collections.Generic.ICollection<T>" or
+                    "System.Collections.Generic.IReadOnlyList<T>" && IsKnownScalar(element))
+                    return new EntryShape(EntryKind.StatelessRead);
+                if (definition is "System.Collections.Generic.IList<T>" or "System.Collections.Generic.ISet<T>" or
+                    "System.Collections.Generic.IReadOnlySet<T>")
+                {
+                    string spelling = FormatterName(element);
+                    // The original exact-interface path admits supported framework scalars with native storage.
+                    if ((element.SpecialType != SpecialType.None || spelling != "global::System.Runtime.InteropServices.GCHandle" &&
+                         FrameworkScalarBody.Contains(spelling)) && KnownValueTypes.Contains(spelling) && CanUseUnmanagedSerialization(element))
+                    {
+                        EntryKind kind = definition == "System.Collections.Generic.IList<T>" ? EntryKind.ExactList :
+                            FormatterRuntimeTraits.CanGroupSmallHashSetWrites(element, _compilation) ? EntryKind.ExactSmallHashSet : EntryKind.ExactHashSet;
+                        return new EntryShape(kind, spelling);
+                    }
+                }
+            }
             return EntryShape.Pooled;
         }
 
