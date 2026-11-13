@@ -118,10 +118,10 @@ internal static partial class NextPipeline
     /// <returns>The external payloads, or an empty array when the assembly marks none.</returns>
     /// <remarks>A marked type is analyzed through the complete-metadata view, so private and automatic-property storage of the
     /// referenced assembly is visible to its layout mirror. An imported Union root writes through the virtual dispatch its own
-    /// assembly generated. Open generic markers, which the original specialized from observed constructions, are not modeled yet.</remarks>
+    /// assembly generated. Open generic definitions publish through their closed call or member formatter contracts.</remarks>
     private static ImmutableArray<ModeledPayload> ExternalPayloads(Compilation compilation, CancellationToken cancellationToken)
     {
-        List<INamedTypeSymbol> marked = TypeModelFactory.MarkedTypes(compilation);
+        IReadOnlyList<INamedTypeSymbol> marked = TypeModelFactory.MarkedTypes(compilation);
         if (marked.Count == 0)
             return ImmutableArray<ModeledPayload>.Empty;
         GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
@@ -131,7 +131,7 @@ internal static partial class NextPipeline
         foreach (INamedTypeSymbol type in marked)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (type.IsGenericType)
+            if (type.IsGenericType && type.IsDefinition)
                 continue;
             INamedTypeSymbol complete = TypeModelFactory.InView(type, view);
             DiagnosticInfo[] missing = TypeModelFactory.MissingStorage(complete);

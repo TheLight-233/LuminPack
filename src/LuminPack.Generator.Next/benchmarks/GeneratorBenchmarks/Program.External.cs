@@ -45,7 +45,8 @@ internal static partial class Program
         {
             var tree = CSharpSyntaxTree.ParseText(source, parse, name + ".cs");
             var input = CSharpCompilation.Create(name, new[] { tree }, metadataReferences,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release,
+                new CSharpCompilationOptions(name == "ExternalLibrary" ? OutputKind.DynamicallyLinkedLibrary : OutputKind.ConsoleApplication,
+                    allowUnsafe: true, optimizationLevel: OptimizationLevel.Release,
                     nullableContextOptions: NullableContextOptions.Enable));
             GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
                 .RunGeneratorsAndUpdateCompilation(input, out var output, out var generated);
@@ -67,6 +68,8 @@ internal static partial class Program
     private const string ExternalLibrarySource = """
         using LuminPack;
         using LuminPack.Attribute;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]
 
         namespace External
         {
@@ -117,6 +120,17 @@ internal static partial class Program
                 public int Hidden { get; set; }
             }
 
+            public class Box<T>
+            {
+                public T Value = default!;
+                public int Number;
+            }
+
+            public class ExactBox<T>
+            {
+                public T Value = default!;
+            }
+
             public static class Library
             {
                 public static Person Person(int secret) => new Person { Id = 1, Name = "p", Home = new Address { Zip = 2, Street = 3 }, Nick = "n", Secret = secret, Hidden = 9 };
@@ -139,10 +153,13 @@ internal static partial class Program
         using LuminPack.Attribute;
         using External;
 
+        [assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]
         [assembly: LuminPackable(typeof(Plain))]
         [assembly: LuminPackable(typeof(Person))]
         [assembly: LuminPackable(typeof(Address))]
         [assembly: LuminPackable(typeof(Shape))]
+        [assembly: LuminPackable(typeof(Box<>))]
+        [assembly: LuminPackable(typeof(ExactBox<int>))]
 
         [LuminPackable]
         public partial class Order
@@ -152,10 +169,13 @@ internal static partial class Program
             public Address Ship;
             public List<Person>? Others;
             public List<Shape>? Shapes;
+            public List<Box<string>>? Boxes;
         }
 
         public static class ExternalConsumer
         {
+            public static void Main() => Exercise();
+
             public static int Exercise()
             {
                 int checks = 0;
@@ -184,12 +204,30 @@ internal static partial class Program
                 Plain plainCopy = LuminPackSerializer.Deserialize<Plain>(LuminPackSerializer.Serialize(plain));
                 Check(plainCopy.Hidden == 7 && plainCopy.Text == "t", "unattributed marked type");
 
+                var box = new Box<int> { Value = 19, Number = 4 };
+                Box<int> boxCopy = LuminPackSerializer.Deserialize<Box<int>>(LuminPackSerializer.Serialize(box));
+                Check(boxCopy.Value == 19 && boxCopy.Number == 4, "open marker binds a closed binary root");
+                var exact = new ExactBox<int> { Value = 13 };
+                Check(LuminPackSerializer.DeserializeJson<ExactBox<int>>(LuminPackSerializer.SerializeJson(exact)).Value == 13,
+                    "closed marker binds exactly one construction");
+                try
+                {
+                    LuminPackSerializer.Serialize(new ExactBox<string> { Value = "unmarked" });
+                    throw new InvalidOperationException("The closed marker must not bind another construction.");
+                }
+                catch (Exception error) when (error.GetType().Name == "LuminPackException")
+                {
+                    checks++;
+                }
+
                 var order = new Order { Customer = person, Note = plain, Ship = new Address { Zip = 8 }, Others = new List<Person> { person },
-                    Shapes = new List<Shape> { shape, new Circle { Radius = 2 } } };
+                    Shapes = new List<Shape> { shape, new Circle { Radius = 2 } },
+                    Boxes = new List<Box<string>> { new Box<string> { Value = "box", Number = 9 } } };
                 Order orderCopy = LuminPackSerializer.Deserialize<Order>(LuminPackSerializer.Serialize(order));
                 Check(orderCopy.Others![0].Hidden == 9 && orderCopy.Ship.Zip == 8 && ((Circle)orderCopy.Shapes![1]).Radius == 2, "marked members of a local payload");
                 Order json = LuminPackSerializer.DeserializeJson<Order>(LuminPackSerializer.SerializeJson(order));
                 Check(json.Note!.Hidden == 7 && Library.Secret(json.Customer!) == 11 && ((Square)json.Shapes![0]).Side == 5, "marked members through JSON");
+                Check(orderCopy.Boxes![0].Value == "box" && json.Boxes![0].Number == 9, "open marker binds an independently closed collection element");
                 return checks;
             }
         }

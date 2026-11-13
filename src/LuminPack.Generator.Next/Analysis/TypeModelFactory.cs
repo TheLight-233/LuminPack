@@ -179,7 +179,8 @@ internal static partial class TypeModelFactory
         /// <returns>The complete root member, or null.</returns>
         private MemberModel? ClassifyUncachedRoot(ITypeSymbol type)
         {
-            if (type is INamedTypeSymbol { IsGenericType: false } named && (IsPackable(named) || Marked(named)))
+            if (type is INamedTypeSymbol named && (!named.IsGenericType && (IsPackable(named) || Marked(named)) ||
+                named.IsGenericType && !IsLocal(named) && ExplicitMarker(named)))
                 return null;
             var issues = new List<string>();
             MemberModel? model = Classify(new MemberSite("Root", type, isVolatile: false, containing: null), MemberStorage.Field, _assemblyPolicy,

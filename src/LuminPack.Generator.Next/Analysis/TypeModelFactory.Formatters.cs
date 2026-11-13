@@ -156,9 +156,14 @@ internal static partial class TypeModelFactory
                 return new FormatterModel(spelling, FormatterDefinitions.Registered, rawCollection: rawCollection, layout: layout, ordinaryObject: ordinary);
             if (IsPackable(named) || Marked(named))
             {
+                // Open assembly markers authorize closed owners reached by calls or members. Their storage is only known after substitution.
+                bool local = IsLocal(named);
+                if (named.IsGenericType && !local && (ContainsTypeParameter(named) || MissingStorage(named).Length != 0))
+                    return null;
                 ModelResult result = Analyze(named, depth + 1, path);
                 if (result.Model != null && result.IsComplete && CanPublish(result.Model))
-                    return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, raw: rawCollection, rawCollection: rawCollection, layout: layout, payload: result.Model, ordinaryObject: ordinary, publishPayload: !Owned(named) || named.IsGenericType);
+                    return new FormatterModel(spelling, FormatterDefinitions.PayloadReference, raw: rawCollection, rawCollection: rawCollection,
+                        layout: layout, payload: result.Model, ordinaryObject: ordinary, publishPayload: named.IsGenericType && (local || !ExplicitMarker(named)));
             }
 
             if (IsImplicitFormatterType(named))

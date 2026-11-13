@@ -145,6 +145,9 @@ A checked item covers the scope stated here. Related combinations still listed b
   through the compiled dispatch its own assembly generated and reads its cases here, and declares nothing inside the imported types.
   Unlike legacy, internal fields of marked types compile, and marked types work as members of local payloads. `--verify-external`
   covers records, structs, an imported Union and an unattributed type through binary and JSON, in both directions.
+  For ordinary external records, an open generic marker such as `typeof(Box<>)` permits closed formatter owners discovered through
+  calls and members. A closed marker such as `typeof(Box<int>)` selects that construction alone. The fixture also exercises both
+  marker forms in an application with operation pruning.
 - [x] **LuminPack021.** Nothing to migrate: the legacy generator has declared but not reported this warning since layout mirrors
   made `[LuminPackInclude]` storage reachable on every target, and Next likewise reports nothing.
 
@@ -154,7 +157,7 @@ A checked item covers the scope stated here. Related combinations still listed b
 
 | Priority | Gap | Current state |
 | --- | --- | --- |
-| P2 | Cross-assembly payloads | Assembly-marked external roots are migrated. Open generic markers such as `typeof(Box<>)`, which legacy specializes for observed constructions, and cross-assembly option inheritance are missing. As in legacy, a `[LuminPackable]` type of a referenced assembly that the consumer does not mark stays on the registered fallback when the consumer serializes it. |
+| P2 | Cross-assembly payloads | External ordinary records support open and closed generic markers. Generic external Union dispatch, reference-assembly diagnostics for constructions discovered from open markers, and cross-assembly option inheritance still need coverage. Unmarked referenced payloads use registered fallback. |
 | P2 | Remaining backend combinations | Friend-assembly operation retention and IL rewriting on a single fixture are verified, but static backend combinations involving friend access, IL rewriting and disabled integration still need validation. On .NET 8 and later the generated code needs C# 13 (ref fields, `ref readonly` parameters, ref struct interfaces). |
 
 ### Generated source

@@ -156,7 +156,7 @@ internal static class OperationUsageAnalysis
     {
         if (Fixed(compilation) == GeneratedOperations.All)
             return OperationReach.Empty;
-        var walk = new ReachWalk();
+        var walk = new ReachWalk(TypeModelFactory.MarkedTypes(compilation));
         walk.Members(symbol);
         foreach (INamedTypeSymbol contract in symbol.AllInterfaces)
             walk.Visit(contract);
@@ -185,7 +185,7 @@ internal static class OperationUsageAnalysis
     {
         if (Fixed(compilation) == GeneratedOperations.All)
             return OperationReach.Empty;
-        var walk = new ReachWalk();
+        var walk = new ReachWalk(TypeModelFactory.MarkedTypes(compilation));
         walk.Visit(payload);
         return walk.Result();
     }
@@ -257,6 +257,11 @@ internal static class OperationUsageAnalysis
         private readonly List<string> _keys = new();
         private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
         private readonly HashSet<ITypeSymbol> _walked = new(SymbolEqualityComparer.Default);
+        private readonly IReadOnlyList<INamedTypeSymbol> _external;
+
+        /// <summary>Creates a reach walk with the consumer's assembly-marked metadata roots.</summary>
+        /// <param name="external">The exact closed markers and open definitions.</param>
+        internal ReachWalk(IReadOnlyList<INamedTypeSymbol> external) => _external = external;
 
         internal OperationReach Result(List<string>? bases = null) => _keys.Count == 0 && (bases == null || bases.Count == 0)
             ? OperationReach.Empty
@@ -282,7 +287,16 @@ internal static class OperationUsageAnalysis
                     Visit(argument);
             INamedTypeSymbol definition = named.OriginalDefinition;
             if (!InSource(definition))
+            {
+                for (int index = 0; index < _external.Count; index++)
+                    if (SymbolEqualityComparer.Default.Equals(_external[index], named) ||
+                        SymbolEqualityComparer.Default.Equals(_external[index], definition))
+                    {
+                        Add(TypeModelFactory.ReachKey(named));
+                        break;
+                    }
                 return;
+            }
             Add(TypeModelFactory.ReachKey(named));
             if (!named.IsDefinition)
                 Add(TypeModelFactory.ReachKey(definition));

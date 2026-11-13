@@ -17,6 +17,7 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 internal static partial class TypeModelFactory
 {
     private static readonly ConditionalWeakTable<Compilation, Compilation> CompleteViews = new();
+    private static readonly ConditionalWeakTable<Compilation, IReadOnlyList<INamedTypeSymbol>> ExternalMarkers = new();
 
     /// <summary>Returns the compilation analysis runs on: itself, or its complete-metadata view when it declares external roots.</summary>
     /// <param name="compilation">The consuming compilation.</param>
@@ -46,26 +47,38 @@ internal static partial class TypeModelFactory
     /// <summary>Reads the referenced definitions marked by the assembly, with the declared cases of a marked Union.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <returns>The marked definitions in declaration order.</returns>
-    internal static List<INamedTypeSymbol> MarkedTypes(Compilation compilation)
+    internal static IReadOnlyList<INamedTypeSymbol> MarkedTypes(Compilation compilation) =>
+        ExternalMarkers.GetValue(compilation, static item => ReadMarkedTypes(item));
+
+    /// <summary>Reads exact closed markers and the definitions selected by open markers.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>The external marker index in declaration order.</returns>
+    private static IReadOnlyList<INamedTypeSymbol> ReadMarkedTypes(Compilation compilation)
     {
-        var types = new List<INamedTypeSymbol>();
-        var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        List<INamedTypeSymbol>? types = null;
+        HashSet<INamedTypeSymbol>? seen = null;
         foreach (AttributeData attribute in compilation.Assembly.GetAttributes())
         {
             if (attribute.AttributeClass?.ToDisplayString() != PackableAttribute || attribute.ConstructorArguments.Length != 1 ||
                 attribute.ConstructorArguments[0].Value is not INamedTypeSymbol type || type.TypeKind == TypeKind.Error ||
                 type.ContainingAssembly == null || SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
                 continue;
-            if (seen.Add(type.OriginalDefinition))
-                types.Add(type.OriginalDefinition);
+            INamedTypeSymbol marker = type.IsUnboundGenericType ? type.OriginalDefinition : type;
+            if ((seen ??= new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default)).Add(marker))
+                (types ??= new List<INamedTypeSymbol>()).Add(marker);
         }
+        if (types == null || seen == null)
+            return Array.Empty<INamedTypeSymbol>();
         // An imported Union owns its declared case contracts just as a source-declared root does.
         for (int index = 0; index < types.Count; index++)
             foreach (AttributeData attribute in types[index].GetAttributes())
                 if (attribute.AttributeClass?.ToDisplayString() == UnionAttribute && attribute.ConstructorArguments.Length == 2 &&
-                    attribute.ConstructorArguments[1].Value is INamedTypeSymbol member && member.TypeKind != TypeKind.Error &&
-                    seen.Add(member.OriginalDefinition))
-                    types.Add(member.OriginalDefinition);
+                    attribute.ConstructorArguments[1].Value is INamedTypeSymbol member && member.TypeKind != TypeKind.Error)
+                {
+                    INamedTypeSymbol marker = member.IsUnboundGenericType ? member.OriginalDefinition : member;
+                    if (seen.Add(marker))
+                        types.Add(marker);
+                }
         return types;
     }
 
@@ -135,7 +148,13 @@ internal static partial class TypeModelFactory
         /// <summary>Whether the consuming assembly marks a referenced type as packable.</summary>
         /// <param name="type">A type of this session's compilation.</param>
         /// <returns>Whether its definition is an external root.</returns>
-        internal bool Marked(INamedTypeSymbol type)
+        internal bool Marked(INamedTypeSymbol type) =>
+            ExplicitMarker(type) || !type.IsDefinition && ExplicitMarker(type.OriginalDefinition);
+
+        /// <summary>Whether the marker index contains this exact type symbol.</summary>
+        /// <param name="type">A type of this session's compilation.</param>
+        /// <returns>Whether publication can start from this marker directly.</returns>
+        private bool ExplicitMarker(INamedTypeSymbol type)
         {
             HashSet<INamedTypeSymbol>? marked = System.Threading.Volatile.Read(ref _marked);
             if (marked == null)
@@ -143,7 +162,7 @@ internal static partial class TypeModelFactory
                 marked = new HashSet<INamedTypeSymbol>(MarkedTypes(_compilation), SymbolEqualityComparer.Default);
                 marked = System.Threading.Interlocked.CompareExchange(ref _marked, marked, null) ?? marked;
             }
-            return marked.Contains(type.OriginalDefinition);
+            return marked.Contains(type);
         }
     }
 }
