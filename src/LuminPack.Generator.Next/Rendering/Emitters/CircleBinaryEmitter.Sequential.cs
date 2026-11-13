@@ -1,7 +1,6 @@
 #nullable disable
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
@@ -33,12 +32,14 @@ internal static partial class CircleBinaryEmitter
         body.Add("writer.WriteObjectReferenceId((uint)~reference);");
         body.Add("return;");
         body.Add("}");
-        body.Add("writer.EnsureAdditionalCapacity(" + (model.CircleSlotCount + 6).ToString(CultureInfo.InvariantCulture) + ");");
-        body.Add("writer.WriteObjectHeader(" + model.CircleSlotCount.ToString(CultureInfo.InvariantCulture) + ");");
-        for (int slot = 0; slot < model.CircleSlotCount; slot++)
+        int slotCount = model.CircleSlotCount;
+        body.Add("writer.EnsureAdditionalCapacity(" + WidthText(slotCount + 6) + ");");
+        body.Add("writer.WriteObjectHeader(" + WidthText(slotCount) + ");");
+        int nextField = 0;
+        for (int slot = 0; slot < slotCount; slot++)
         {
-            int index = Array.IndexOf(model.CircleSlots, slot);
-            string width = index < 0 ? "0" : model.CircleWidths[index].ToString(CultureInfo.InvariantCulture);
+            int index = nextField < model.CircleSlots.Length && model.CircleSlots[nextField] == slot ? nextField++ : -1;
+            string width = index < 0 ? "0" : WidthText(model.CircleWidths[index]);
             if (index >= 0 && model.CircleWidths[index] == 0)
             {
                 string size = w.A("Unsafe") + ".SizeOf<" + model.Members[index].TypeName + ">()";
@@ -60,6 +61,22 @@ internal static partial class CircleBinaryEmitter
             }
             else
             {
+                int last = FixedRunEnd(model, index, model.Members.Length - 1, read: false, out int runWidth);
+                if (last > index)
+                {
+                    string owner = member.Mirrored ? "local" : "value";
+                    body.Add("writer.EnsureAdditionalCapacity(" + WidthText(runWidth) + ");");
+                    body.Add("if (" + BinaryEmitter.Proof(w, model.Members, index, last, owner, readOnly: true) + ")");
+                    body.Add("\twriter.Write(ref " + BinaryEmitter.Bytes(w, member, owner, readOnly: true) + ", " + WidthText(runWidth) + ");");
+                    body.Add("else");
+                    body.Add("{");
+                    for (int fieldIndex = index; fieldIndex <= last; fieldIndex++)
+                        body.Add("writer.Write(in " + Access(model.Members[fieldIndex]) + ");");
+                    body.Add("}");
+                    body.Add("}");
+                    index = last;
+                    continue;
+                }
                 string width = w.A("Unsafe") + ".SizeOf<" + member.TypeName + ">()";
                 if (model.CircleWidths[index] == 0)
                     body.Add("if (" + width + " >= 255) writer.WriteVersionLength(" + width + ");");

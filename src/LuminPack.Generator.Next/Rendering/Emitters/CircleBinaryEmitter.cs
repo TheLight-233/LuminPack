@@ -310,8 +310,24 @@ internal static partial class CircleBinaryEmitter
             var member = members[index];
             if (member.IsFixed)
             {
-                body.Add(w.A("Unsafe") + ".WriteUnaligned<" + member.Scalar + ">(ref cursor, " + Access(member) + ");");
-                body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + member.Scalar + ">());");
+                int last = FixedRunEnd(model, index, lastReserved, read: false, out int width);
+                if (last > index)
+                {
+                    string owner = member.Mirrored ? "local" : "value";
+                    body.Add("if (" + BinaryEmitter.Proof(w, members, index, last, owner, readOnly: true) + ")");
+                    body.Add("\tcursor = ref " + w.A("LuminPackWriter") + ".WriteReservedBlock(ref cursor, ref " + BinaryEmitter.Bytes(w, member, owner, readOnly: true) + ", " + WidthText(width) + ");");
+                    body.Add("else");
+                    body.Add("{");
+                }
+                for (int fieldIndex = index; fieldIndex <= last; fieldIndex++)
+                {
+                    RenderMember field = members[fieldIndex];
+                    body.Add(w.A("Unsafe") + ".WriteUnaligned<" + field.Scalar + ">(ref cursor, " + Access(field) + ");");
+                    body.Add("cursor = ref " + w.A("Unsafe") + ".Add(ref cursor, " + w.A("Unsafe") + ".SizeOf<" + field.Scalar + ">());");
+                }
+                if (last > index)
+                    body.Add("}");
+                index = last;
                 continue;
             }
             string length = lengthSlot == 0 ? "length" : "length" + lengthSlot.ToString(CultureInfo.InvariantCulture);
@@ -469,7 +485,30 @@ internal static partial class CircleBinaryEmitter
                     body.Add("");
                     afterPayload = false;
                 }
-                BinaryEmitter.AddMemberRead(body, model, member, w, "reader", storage);
+                int last = FixedRunEnd(model, index, members.Length - 1, read: true, out int width);
+                if (last > index)
+                {
+                    string owner = member.Mirrored ? local : instance;
+                    body.Add("if (" + BinaryEmitter.Proof(w, members, index, last, owner, readOnly: false) + ")");
+                    body.Add("\treader.Read(ref " + BinaryEmitter.Bytes(w, member, owner, readOnly: false) + ", " + WidthText(width) + ");");
+                    body.Add("else");
+                    body.Add("{");
+                    string cursor = names.Next("cursor");
+                    body.Add("ref byte " + cursor + " = ref reader.Cursor;");
+                    body.Add("reader.Advance(" + WidthText(width) + ");");
+                    int offset = 0;
+                    for (int fieldIndex = index; fieldIndex <= last; fieldIndex++)
+                    {
+                        RenderMember field = members[fieldIndex];
+                        string address = offset == 0 ? cursor : memory + ".Add(ref " + cursor + ", " + WidthText(offset) + ")";
+                        body.Add(owner + "." + field.Name + " = " + w.A("LuminPackReader") + ".Read<" + field.Scalar + ">(ref " + address + ");");
+                        offset += field.Size;
+                    }
+                    body.Add("}");
+                    index = last;
+                }
+                else
+                    BinaryEmitter.AddMemberRead(body, model, member, w, "reader", storage);
                 continue;
             }
             string end = names.Next("end");
@@ -721,6 +760,34 @@ internal static partial class CircleBinaryEmitter
 
     /// <summary>The member storage expression of the write root's local view.</summary>
     private static string Access(RenderMember member) => (member.Mirrored ? "local" : "value") + "." + member.Name;
+
+    /// <summary>Finds the fixed slots that share one storage view and whose wire widths equal their storage widths.</summary>
+    /// <param name="model">The reference-tracked record.</param>
+    /// <param name="first">The first candidate field.</param>
+    /// <param name="end">The last field available in this portion of the operation.</param>
+    /// <param name="read">Whether untrusted Boolean bytes must keep their scalar validation.</param>
+    /// <param name="width">The byte count of the selected run.</param>
+    /// <returns>The last field of the run, or the starting index for scalar handling.</returns>
+    private static int FixedRunEnd(PayloadRenderModel model, int first, int end, bool read, out int width)
+    {
+        RenderMember start = model.Members[first];
+        width = start.Size;
+        int last = first;
+        if (CanCopy(first))
+            while (last < end && CanCopy(last + 1))
+                width += model.Members[++last].Size;
+        return last;
+
+        bool CanCopy(int index)
+        {
+            RenderMember field = model.Members[index];
+            return field.IsFixed && !field.Volatile && !field.Raw && field.Size > 0 && field.Size == model.CircleWidths[index] &&
+                field.Mirrored == start.Mirrored && (!read || model.Trusted || !field.IsBoolean);
+        }
+    }
+
+    /// <summary>Formats a constant field width or offset.</summary>
+    private static string WidthText(int width) => width.ToString(CultureInfo.InvariantCulture);
 
     private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
 

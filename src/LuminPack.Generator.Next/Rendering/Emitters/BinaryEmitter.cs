@@ -620,20 +620,26 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells a member's storage reinterpreted as bytes for a block copy or proof; see <see cref="At"/> for plain spellings.</summary>
-    private static string Bytes(CodeWriter w, RenderMember member, string owner, bool readOnly, bool plain = false)
+    internal static string Bytes(CodeWriter w, RenderMember member, string owner, bool readOnly, bool plain = false)
         => (plain ? "Unsafe" : w.A("Unsafe")) + ".As<" + member.Scalar + ", byte>(ref " + (readOnly ? (plain ? "Unsafe" : w.A("Unsafe")) + ".AsRef(in " + owner + "." + member.Name + ")" : owner + "." + member.Name) + ")";
 
     /// <summary>Spells the proof that a run of fixed fields is laid out contiguously on a 64-bit target.</summary>
-    private static string Proof(CodeWriter w, RenderMember[] members, int first, int last, string owner, bool readOnly)
+    internal static string Proof(CodeWriter w, RenderMember[] members, int first, int last, string owner, bool readOnly)
     {
         for (int index = first; index <= last; index++)
             if (members[index].Volatile)
                 return "false";
-        var terms = new List<string> { w.A("Unsafe") + ".SizeOf<global::System.IntPtr>() == 8" };
+        string memory = w.A("Unsafe");
+        var proof = new System.Text.StringBuilder().Append(memory).Append(".SizeOf<global::System.IntPtr>() == 8");
+        string address = Bytes(w, members[first], owner, readOnly);
         for (int index = first; index < last; index++)
-            terms.Add(w.A("Unsafe") + ".ByteOffset(ref " + Bytes(w, members[index], owner, readOnly) + ", ref " + Bytes(w, members[index + 1], owner, readOnly) +
-                ") == " + (members[index].Raw ? w.A("Unsafe") + ".SizeOf<" + members[index].Scalar + ">()" : members[index].Width));
-        return string.Join(" && ", terms);
+        {
+            string next = Bytes(w, members[index + 1], owner, readOnly);
+            proof.Append(" && ").Append(memory).Append(".ByteOffset(ref ").Append(address).Append(", ref ").Append(next)
+                .Append(") == ").Append(members[index].Raw ? memory + ".SizeOf<" + members[index].Scalar + ">()" : members[index].Width);
+            address = next;
+        }
+        return proof.ToString();
     }
 
     /// <summary>Ends a run of consecutive fixed members.</summary>

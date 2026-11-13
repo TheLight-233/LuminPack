@@ -31,6 +31,14 @@ internal static partial class Program
             .Select(static file => file.SourceText.ToString()));
         if (!generated.Contains("LuminInputReads_", StringComparison.Ordinal))
             return LuminPackExceptionHelper.ThrowInvalidOperation("The fixture did not exercise a root-owned checked copy.");
+        foreach (string type in new[] { "CircleAdjacent", "CircleGapped" })
+        {
+            string source = driver.GetRunResult().Results.Single().GeneratedSources.Single(file =>
+                file.HintName == "Binary/LuminPackGen." + type + ".g.cs").SourceText.ToString();
+            RequireIncremental(source.Contains(".ByteOffset(", StringComparison.Ordinal) &&
+                source.Contains(".SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
+                source.Contains(".Advance(", StringComparison.Ordinal), type + " must retain its guarded fixed group and checked fallback.");
+        }
         using var image = new MemoryStream();
         var emitted = output.Emit(image);
         if (!emitted.Success)
@@ -105,6 +113,22 @@ internal static partial class Program
         public partial class LimitedCircle { [LuminPackOrder(0)] public string Text { get; set; } }
         [LuminPackable(GeneratorType.CircleReference), LuminPackOption(MaxDepth = 2)]
         public partial class LimitedCycle { [LuminPackOrder(0)] public LimitedCycle Next; }
+        [LuminPackable(GeneratorType.CircleReference)]
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        public partial class CircleAdjacent
+        {
+            [LuminPackOrder(0)] public int First;
+            [LuminPackOrder(1)] public int Second;
+            [LuminPackOrder(2)] public bool Flag;
+            [LuminPackOrder(3)] public volatile int Last;
+        }
+        [LuminPackable(GeneratorType.CircleReference)]
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        public partial class CircleGapped
+        {
+            [LuminPackOrder(0)] public byte First;
+            [LuminPackOrder(1)] public long Second;
+        }
         [LuminPackable, LuminPackOption(MaxCollectionLength = 4)]
         public partial class LimitedCompressed { [LuminPackCompress] public int[] Values; }
         [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxCollectionLength = 4)]
@@ -170,7 +194,39 @@ internal static partial class Program
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
                 Check<LuminPackUtf16VarIntOptions>() + Check<LuminPackUtf8VarIntOptions>() +
-                Check<LuminPackUtf16TokenOptions>() + Check<LuminPackUtf8TokenOptions>() + CheckAdditionalRoots();
+                Check<LuminPackUtf16TokenOptions>() + Check<LuminPackUtf8TokenOptions>() + CheckAdditionalRoots() + CheckCircleGroups();
+
+            private static int CheckCircleGroups()
+            {
+                var adjacent = new CircleAdjacent { First = 1, Second = 2, Flag = true, Last = 3 };
+                byte[] bytes = LuminPackSerializer.Serialize(adjacent);
+                byte[] expected = { 4, 4, 4, 1, 4, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 3, 0, 0, 0 };
+                if (!bytes.AsSpan().SequenceEqual(expected)) throw new Exception("Adjacent CircleReference wire bytes changed.");
+                var existing = new CircleAdjacent();
+                var target = existing;
+                LuminPackSerializer.Deserialize(bytes, ref target);
+                if (!ReferenceEquals(existing, target) || target.First != 1 || target.Second != 2 || !target.Flag || target.Last != 3)
+                    throw new Exception("Same-table grouped read changed reference reuse or fields.");
+                bytes[14] = 2;
+                RejectRead(() => LuminPackSerializer.Deserialize<CircleAdjacent>(bytes));
+                for (int length = 6; length < 14; length++)
+                {
+                    byte[] truncated = bytes.AsSpan(0, length).ToArray();
+                    try
+                    {
+                        LuminPackSerializer.Deserialize<CircleAdjacent>(truncated);
+                        throw new Exception("A truncated CircleReference fixed run was accepted.");
+                    }
+                    catch (Exception error) when (error.GetType().Name == "LuminPackException" &&
+                        error.Message.StartsWith("Span out of range", StringComparison.Ordinal)) { }
+                }
+                byte[] gapped = LuminPackSerializer.Serialize(new CircleGapped { First = 5, Second = 9 });
+                byte[] gappedExpected = { 2, 1, 8, 0, 5, 9, 0, 0, 0, 0, 0, 0, 0 };
+                var copy = LuminPackSerializer.Deserialize<CircleGapped>(gapped);
+                if (!gapped.AsSpan().SequenceEqual(gappedExpected) || copy.First != 5 || copy.Second != 9)
+                    throw new Exception("The gapped CircleReference fallback must keep packed bytes.");
+                return 12;
+            }
 
             private static int CheckAdditionalRoots()
             {

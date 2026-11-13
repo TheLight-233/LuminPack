@@ -186,7 +186,7 @@ These keep the wire format but produce different code from legacy.
 | --- | --- | --- |
 | P1 | Nested record expansion | Legacy expands nested records inline, including records with mirrored members, callbacks, version tolerance or pooled construction; Next calls their owners. |
 | P1 | Collection members in record bodies | Record bodies call the owners of collection members, such as a list or dictionary of Union values, where legacy expands those writes in place. |
-| P1 | Adjacent fixed-field blocks | Legacy copies adjacent fixed fields as one block after field-address proofs; Next writes them field by field. |
+| P1 | Adjacent fixed-field blocks | Ordinary fixed record runs and eligible CircleReference runs use the 64-bit field-address proof and scalar fallback. CircleReference applies the proof to reserved and sequential writes and same-table reads. Remaining layout, construction and protocol combinations still need comparison. |
 | P1 | Unmanaged root sharing | Legacy shares closed-generic and array roots through substitution and binding proofs; Next publishes individual roots. |
 | P2 | Root inlining policy | Several interface and collection roots that legacy keeps `NoInlining` are inlined into Next entries, and the time zone and exact-interface entry forms are not specialized. |
 | P2 | JSON read allocations | A JSON read of the benchmark graph allocates about 2 KB more than legacy; the source is not identified. |
