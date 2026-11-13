@@ -20,7 +20,8 @@ internal sealed class InputRedirect
 {
     private readonly HashSet<string> _copyable;
     private readonly HashSet<string> _unchanged;
-    private readonly HashSet<string> _requested = new HashSet<string>(StringComparer.Ordinal);
+    private readonly IReadOnlyDictionary<string, string> _compressedChildren;
+    private readonly HashSet<(string Name, bool Compressed)> _requested = new();
 
     /// <summary>Captures the root and the targets whose read bodies can be copied.</summary>
     /// <param name="root">The root's readable name, whose own entry already applies these limits.</param>
@@ -28,7 +29,9 @@ internal sealed class InputRedirect
     /// <param name="limits">The root's frozen limits.</param>
     /// <param name="copyable">The readable names of owners and payloads with a copyable read body.</param>
     /// <param name="unchanged">Payloads that already check their input and need no copy for an unbounded root.</param>
-    internal InputRedirect(string root, string extension, InputLimits limits, HashSet<string> copyable, HashSet<string> unchanged = null)
+    /// <param name="compressedChildren">Jagged compressed owners and their immediate child owner names.</param>
+    internal InputRedirect(string root, string extension, InputLimits limits, HashSet<string> copyable,
+        HashSet<string> unchanged, IReadOnlyDictionary<string, string> compressedChildren)
     {
         Root = root;
         Limits = limits;
@@ -36,6 +39,7 @@ internal sealed class InputRedirect
         Helpers = "LuminInputReads_" + root;
         _copyable = copyable;
         _unchanged = unchanged;
+        _compressedChildren = compressedChildren;
     }
 
     /// <summary>The root's readable name.</summary>
@@ -51,7 +55,7 @@ internal sealed class InputRedirect
     internal readonly string Helpers;
 
     /// <summary>The readable names whose copies were requested, in request order.</summary>
-    internal readonly List<string> Targets = new List<string>();
+    internal readonly List<(string Name, bool Compressed)> Targets = new();
 
     /// <summary>Redirects one statement's nested owner read to the root's checked copy.</summary>
     /// <param name="line">The statement.</param>
@@ -64,8 +68,10 @@ internal sealed class InputRedirect
             int nameStart = search + OwnerPrefix.Length, nameEnd = nameStart;
             while (nameEnd < line.Length && (char.IsLetterOrDigit(line[nameEnd]) || line[nameEnd] == '_'))
                 nameEnd++;
+            bool compressed = nameEnd < line.Length && line[nameEnd] == RenderMember.CompressedOwner;
             const string read = ".Read<";
-            bool call = string.CompareOrdinal(line, nameEnd, read, 0, read.Length) == 0;
+            int readStart = compressed ? nameEnd + 1 : nameEnd;
+            bool call = string.CompareOrdinal(line, readStart, read, 0, read.Length) == 0;
             // The owner may be spelled through its namespace or directly.
             int start = search;
             const string qualified = "global::LuminPack.";
@@ -78,18 +84,40 @@ internal sealed class InputRedirect
                 continue;
             }
             string target = line.Substring(nameStart, nameEnd - nameStart);
-            if (target == Root || !_copyable.Contains(target) || _unchanged?.Contains(target) == true)
+            if (compressed ? Limits.Collection == int.MaxValue || !_compressedChildren.ContainsKey(target) :
+                target == Root || !_copyable.Contains(target) || _unchanged?.Contains(target) == true)
             {
                 search = nameEnd;
                 continue;
             }
-            if (_requested.Add(target))
-                Targets.Add(target);
-            string replacement = Helpers + ".Read_" + target + "<";
-            line = line.Substring(0, start) + replacement + line.Substring(nameEnd + read.Length);
+            string replacement = Request(target, compressed) + "<";
+            line = line.Substring(0, start) + replacement + line.Substring(readStart + read.Length);
             search = start + replacement.Length;
         }
         return line;
+    }
+
+    /// <summary>Registers a checked read and returns its generated method name.</summary>
+    private string Request(string target, bool compressed)
+    {
+        if (_requested.Add((target, compressed)))
+            Targets.Add((target, compressed));
+        return Helpers + (compressed ? ".ReadCompressed_" : ".Read_") + target;
+    }
+
+    /// <summary>Applies the collection limit at the compressed child before its read can allocate.</summary>
+    internal string ApplyCompressedChild(string line, string target, string policy)
+    {
+        const string operation = ".DeserializeWithCompress<";
+        int call = line.IndexOf(operation, StringComparison.Ordinal);
+        if (call < 0)
+            return line;
+        string child = _compressedChildren[target];
+        int start = line.Length - line.TrimStart().Length;
+        if (_compressedChildren.ContainsKey(child))
+            return line.Substring(0, start) + Request(child, compressed: true) + line.Substring(call + operation.Length - 1);
+        return line.Insert(start, policy + ".CheckCompressedCount(reader.GetSpan().Slice(reader.Position), " +
+            Limits.Collection.ToString(CultureInfo.InvariantCulture) + "); ");
     }
 }
 
@@ -258,13 +286,13 @@ internal static class InputReadRenderer
         using var payloadWriter = new CheckedPayloadFile(aliases, scoped, redirect.Helpers);
         for (int index = 0; index < redirect.Targets.Count; index++)
         {
-            string target = redirect.Targets[index];
-            if (payloads.TryGetValue(target, out PayloadRenderModel payload))
+            var (target, compressed) = redirect.Targets[index];
+            if (!compressed && payloads.TryGetValue(target, out PayloadRenderModel payload))
             {
                 payloadWriter.Emit(payload.WithInput(redirect.Limits, payload.Recursive, redirect));
                 continue;
             }
-            string source = InputFormatterRenderer.Render(set, target, redirect) ??
+            string source = (compressed ? null : InputFormatterRenderer.Render(set, target, redirect)) ??
                 sources.FirstOrDefault(text => FindClass(text, "LuminRoots_" + target) >= 0);
             if (source != null && GenericFormatterReuse.ClosedSource(source) is { } closed)
                 source = closed;
@@ -276,7 +304,7 @@ internal static class InputReadRenderer
                 if (trimmed.StartsWith("using ", StringComparison.Ordinal) && trimmed.EndsWith(";", StringComparison.Ordinal))
                     usings.Add(trimmed);
             }
-            methods.Add(Copy(source, target, redirect));
+            methods.Add(Copy(source, target, redirect, compressed));
         }
         payloadCopies = payloadWriter.Complete();
         if (methods.Count == 0)
@@ -350,17 +378,19 @@ internal static class InputReadRenderer
     /// <param name="source">The target's file.</param>
     /// <param name="target">The target's readable name.</param>
     /// <param name="redirect">The root's checked-copy context.</param>
+    /// <param name="compressed">Whether the target's compressed operation is being copied.</param>
     /// <returns>The helper method.</returns>
-    private static string Copy(string source, string target, InputRedirect redirect)
+    private static string Copy(string source, string target, InputRedirect redirect, bool compressed)
     {
         int classStart = FindClass(source, "LuminRoots_" + target);
         int classOpen = source.IndexOf('{', classStart);
         int classClose = Matching(source, classOpen, '{', '}');
         string container = source.Substring(classOpen, classClose - classOpen + 1);
         // A record of fixed members publishes a root read without a profile parameter.
-        string signature = "RootRead<TLuminProfile>(";
+        string profile = compressed ? "TOptions" : "TLuminProfile";
+        string signature = compressed ? "RootReadCompressed<TOptions>(" : "RootRead<TLuminProfile>(";
         int method = container.IndexOf(signature, StringComparison.Ordinal);
-        if (method < 0)
+        if (method < 0 && !compressed)
         {
             signature = "RootRead(";
             method = container.IndexOf(" " + signature, StringComparison.Ordinal) + 1;
@@ -396,9 +426,10 @@ internal static class InputReadRenderer
         string valueType = ValueType(parameters);
         var helper = new StringBuilder(1024);
         helper.Append("            [global::LuminPack.Attribute.Preserve]\n");
-        helper.Append("            internal static void Read_").Append(target).Append("<TLuminProfile>(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref ")
+        helper.Append(compressed ? "            internal static void ReadCompressed_" : "            internal static void Read_")
+            .Append(target).Append('<').Append(profile).Append(">(scoped ref global::LuminPack.Core.LuminPackReader reader, scoped ref ")
             .Append(valueType).Append(" value)\n");
-        helper.Append("                where TLuminProfile : struct, global::LuminPack.Option.ILuminPackOptions\n");
+        helper.Append("                where ").Append(profile).Append(" : struct, global::LuminPack.Option.ILuminPackOptions\n");
         helper.Append("            {\n");
         // Internal members of the target's class stay reachable through the class; private methods move with the body under a
         // helper-specific name, as the original expansion copies an operation's local operations. Private state or types keep
@@ -432,13 +463,19 @@ internal static class InputReadRenderer
             }
         }
         if (forward)
+        {
+            if (compressed)
+                throw new InvalidOperationException("The compressed read of '" + target + "' requires a closed root body.");
             helper.Append("                global::LuminPack.").Append(redirect.OwnerPrefix).Append(target)
                 .Append(".Read<TLuminProfile>(ref reader, ref value);\n");
+        }
         else
             foreach (string raw in body.Split('\n'))
             {
                 string line = Rename(raw.TrimEnd('\r'), renames);
-                line = redirect.Apply(Project(line, redirect.Limits, Policy));
+                if (compressed)
+                    line = redirect.ApplyCompressedChild(line, target, Policy);
+                line = Project(redirect.Apply(line), redirect.Limits, Policy);
                 helper.Append(line).Append('\n');
             }
         helper.Append("            }\n");
@@ -447,7 +484,7 @@ internal static class InputReadRenderer
             {
                 helper.Append('\n');
                 foreach (string raw in companion.Split('\n'))
-                    helper.Append(redirect.Apply(Project(Rename(raw.TrimEnd('\r'), renames), redirect.Limits, Policy))).Append('\n');
+                    helper.Append(Project(redirect.Apply(Rename(raw.TrimEnd('\r'), renames)), redirect.Limits, Policy)).Append('\n');
             }
         return helper.ToString();
     }

@@ -495,12 +495,11 @@ internal static partial class TypeModelFactory
                 if (storage == MemberStorage.Field && !_compilation.IsSymbolAccessibleWithin(member, _compilation.Assembly))
                     storage = MemberStorage.IncludedField;
                 WirePolicy policy = MemberPolicy(member, ownerPolicy);
-                MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path,
-                    HasAttribute(member, PackableObjectAttribute));
+                bool ownFormatter = HasAttribute(member, PackableObjectAttribute);
+                MemberModel? model = Classify(MemberSite.Of(member), storage, policy, symbol, depth, issues, path, ownFormatter);
                 if (model == null)
                     continue;
-                // An array or list of unmanaged elements declared compressed keeps the compressed binary representation.
-                if (HasAttribute(member, CompressAttribute) && CompressibleCollection(StorageType(member)))
+                if (HasAttribute(member, CompressAttribute) && CompressibleCollection(StorageType(member), ownFormatter))
                     model = model.WithCompression();
                 if (!names.Add(model.Name))
                 {
@@ -2980,7 +2979,8 @@ internal static partial class TypeModelFactory
 
             var names = new HashSet<string>(StringComparer.Ordinal);
             var oldNames = new string[members.Length][];
-            var fieldTypes = new int[members.Length];
+            var fields = new (int Type, bool Compressed)[members.Length];
+            var widths = new int[members.Length];
             var memberTypes = new ITypeSymbol[members.Length];
             for (int index = 0; index < members.Length; index++)
             {
@@ -3013,20 +3013,23 @@ internal static partial class TypeModelFactory
                         return null;
                     }
                 }
-                int? fieldType = VersionFieldType(memberType);
+                // The complete-formatter annotation records the legacy Other classification. Non-object
+                // packable records retain their declared class or struct classification in the name table.
+                bool ownFormatter = HasAttribute(declared, PackableObjectAttribute);
+                int? fieldType = ownFormatter ? VersionOwnFormatterType(memberType) : VersionFieldType(memberType);
                 if (fieldType == null)
                 {
                     issues.Add("version tolerant: members '" + declared.Name + "'");
                     return null;
                 }
                 oldNames[index] = aliases!;
-                fieldTypes[index] = fieldType.Value;
+                fields[index] = (fieldType.Value, members[index].Compressed || ownFormatter && HasAttribute(declared, CompressAttribute));
+                widths[index] = ownFormatter ? 255 : VersionWidth(fieldType.Value, memberType);
                 memberTypes[index] = memberType;
             }
 
             bool dynamic = false;
             var metadata = new List<byte>();
-            var widths = new int[members.Length];
             var entries = new string[members.Length];
             var tempTypes = new string[members.Length];
             var typeNames = new string[members.Length];
@@ -3037,10 +3040,10 @@ internal static partial class TypeModelFactory
                 string serialized = oldNames[index].Length == 0 ? members[index].Name : oldNames[index][0];
                 string? typeIdentity = VersionTypeIdentity(memberType);
                 dynamic |= typeIdentity == null;
-                string representation = VersionRepresentation(fieldTypes[index], members[index].Policy, members[index].Compressed);
+                var (fieldType, compressed) = fields[index];
+                string representation = VersionRepresentation(fieldType, members[index].Policy, compressed);
                 AppendVersionLength(metadata, serialized);
-                AppendVersionLength(metadata, representation + (VersionIsDirectPrimitive(fieldTypes[index], memberType) ? string.Empty : typeIdentity));
-                widths[index] = VersionWidth(fieldTypes[index], memberType);
+                AppendVersionLength(metadata, representation + (VersionIsDirectPrimitive(fieldType, memberType) ? string.Empty : typeIdentity));
                 dynamic |= widths[index] == 0;
                 string[] aliasLiterals = new[] { members[index].Name }.Concat(oldNames[index]).Where(alias => alias != serialized)
                     .Select(VersionLiteral).ToArray();
@@ -3158,6 +3161,13 @@ internal static partial class TypeModelFactory
             return "LuminLayout_" + digest + "_" + PortableSlotSuffix(type) + "_Local" + local +
                 (type.IsDefinition && type.TypeParameters.Length != 0 ? "<" + string.Join(", ", type.TypeParameters.Select(parameter => parameter.Name)) + ">" : string.Empty);
         }
+
+        /// <summary>Returns the name-table classification of a member with an explicit formatter annotation.</summary>
+        /// <param name="type">The declared member type.</param>
+        /// <returns>The legacy Other code, or the declared class or struct code of a non-object packable.</returns>
+        private static int VersionOwnFormatterType(ITypeSymbol type) =>
+            type is INamedTypeSymbol { IsRecord: false, IsAbstract: false, TypeKind: TypeKind.Class or TypeKind.Struct } named &&
+            IsPackable(named) && GenerationMode(named) != "Object" ? named.TypeKind == TypeKind.Class ? 16 : 15 : 19;
 
         /// <summary>Classifies a member's declared type with the legacy schema codes.</summary>
         /// <param name="type">The declared member type.</param>
@@ -3753,16 +3763,29 @@ internal static partial class TypeModelFactory
 
     private const string CompressAttribute = "LuminPack.Attribute.LuminPackCompressAttribute";
 
-    /// <summary>Whether a declared member type is an array or list of unmanaged elements, which the compressed kernels accept.</summary>
+    /// <summary>Whether a declared member uses the compressed sequence formatter.</summary>
     /// <param name="type">The declared member type.</param>
+    /// <param name="ownFormatter">Whether the member opts into complete formatter dispatch.</param>
     /// <returns>Whether the compress declaration applies.</returns>
-    private static bool CompressibleCollection(ITypeSymbol type) => type switch
+    private static bool CompressibleCollection(ITypeSymbol type, bool ownFormatter)
     {
-        IArrayTypeSymbol { Rank: 1 } array => array.ElementType.IsUnmanagedType,
-        INamedTypeSymbol { TypeArguments.Length: 1 } list when list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
-            => list.TypeArguments[0].IsUnmanagedType,
-        _ => false,
-    };
+        ITypeSymbol? element = type switch
+        {
+            IArrayTypeSymbol { IsSZArray: true } array => array.ElementType,
+            INamedTypeSymbol { TypeArguments.Length: 1 } list when list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
+                => list.TypeArguments[0],
+            _ => null,
+        };
+        if (element == null || element.IsUnmanagedType)
+            return element != null;
+        if (!ownFormatter || element is not IArrayTypeSymbol { IsSZArray: true })
+            return false;
+
+        // The original managed sequence formatter propagates compression down jagged arrays of known values.
+        while (element is IArrayTypeSymbol { IsSZArray: true } array)
+            element = array.ElementType;
+        return KnownValueTypes.Contains(Session.FormatterSpelling(element));
+    }
 
     /// <summary>Reads a packable declaration's generation mode.</summary>
     /// <param name="symbol">The candidate type.</param>

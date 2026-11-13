@@ -78,12 +78,12 @@ internal static partial class BinaryEmitter
                     result.Add(w.A("LuminPackInputPolicy") + ".CheckLength(" + line.Substring(1) + ", " + Literal(limits.Collection) + ");");
                 continue;
             }
-            if (project)
-                line = InputReadRenderer.Project(line, limits, w.A("LuminPackInputPolicy"));
             // A raw primitive collection keeps its runtime kernel; the placeholder after it checks the count.
             bool rawCollection = index + 1 < body.Count && body[index + 1].Length != 0 && body[index + 1][0] == CollectionCheck;
             if (redirect != null && !rawCollection)
                 line = redirect.Apply(line);
+            if (project)
+                line = InputReadRenderer.Project(line, limits, w.A("LuminPackInputPolicy"));
             result.Add(line);
         }
         if (limits == null || !model.Recursive || limits.Depth == int.MaxValue)

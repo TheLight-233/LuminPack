@@ -79,6 +79,7 @@ internal static partial class Program
 
     private const string InputLimitFixture = """
         using System;
+        using System.Collections.Generic;
         using System.IO;
         using LuminPack;
         using LuminPack.Attribute;
@@ -137,6 +138,23 @@ internal static partial class Program
         public partial class LimitedVersionCompressed { [LuminPackCompress] public int[] Values; }
         [LuminPackable(GeneratorType.VersionTolerant)]
         public partial class EarlierVersionCompressed { [LuminPackCompress] public int[] Values; public int Removed; }
+        [LuminPackable, LuminPackOption(MaxCollectionLength = 4)]
+        public sealed class LimitedJaggedCompressed
+        {
+            [LuminPackableObject, LuminPackCompress] public int[][] Array;
+            [LuminPackableObject, LuminPackCompress] public List<int[][]> List;
+        }
+        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxCollectionLength = 4)]
+        public sealed class LimitedVersionJaggedCompressed
+        {
+            [LuminPackableObject, LuminPackCompress] public int[][] Array;
+        }
+        [LuminPackable(GeneratorType.VersionTolerant)]
+        public sealed class EarlierVersionJaggedCompressed
+        {
+            [LuminPackableObject, LuminPackCompress] public int[][] Array;
+            public int Removed;
+        }
         [LuminPackable, LuminPackOption(MaxInputBytes = 5)]
         public partial class LimitedStream { public int Value; }
         [LuminPackable, LuminPackOption(UntrustedData = true)]
@@ -368,6 +386,38 @@ internal static partial class Program
                 byte[] oversizedCompressed = LuminPackSerializer.Serialize(earlierCompressed);
                 RejectRead(() => LuminPackSerializer.Deserialize<LimitedVersionCompressed>(oversizedCompressed));
 
+                var jagged = new LimitedJaggedCompressed { Array = new[] { new[] { 17, 18 }, null },
+                    List = new List<int[][]> { new[] { System.Array.Empty<int>() }, new[] { new[] { 19 } } } };
+                var jaggedCopy = LuminPackSerializer.Deserialize<LimitedJaggedCompressed>(LuminPackSerializer.Serialize(jagged));
+                if (jaggedCopy.Array[0][1] != 18 || jaggedCopy.Array[1] != null || jaggedCopy.List[0][0].Length != 0 ||
+                    jaggedCopy.List[1][0][0] != 19)
+                    throw new Exception("A checked jagged compressed collection changed valid wire reads.");
+                jagged.Array = new int[5][];
+                byte[] oversizedJaggedArray = LuminPackSerializer.Serialize(jagged);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedJaggedCompressed>(oversizedJaggedArray));
+                jagged.Array = null;
+                jagged.List.AddRange(new int[3][][]);
+                byte[] oversizedJaggedList = LuminPackSerializer.Serialize(jagged);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedJaggedCompressed>(oversizedJaggedList));
+                jagged.List.Clear();
+                jagged.Array = new[] { new int[5] };
+                byte[] oversizedJaggedArrayLeaf = LuminPackSerializer.Serialize(jagged);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedJaggedCompressed>(oversizedJaggedArrayLeaf));
+                jagged.Array = null;
+                jagged.List.Add(new int[5][]);
+                byte[] oversizedJaggedListChild = LuminPackSerializer.Serialize(jagged);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedJaggedCompressed>(oversizedJaggedListChild));
+                jagged.List[0] = new[] { new int[5] };
+                byte[] oversizedJaggedListLeaf = LuminPackSerializer.Serialize(jagged);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedJaggedCompressed>(oversizedJaggedListLeaf));
+
+                var earlierJagged = new EarlierVersionJaggedCompressed { Array = new[] { new[] { 23 } }, Removed = 42 };
+                if (LuminPackSerializer.Deserialize<LimitedVersionJaggedCompressed>(LuminPackSerializer.Serialize(earlierJagged)).Array[0][0] != 23)
+                    throw new Exception("The evolved schema changed a valid jagged compressed read.");
+                earlierJagged.Array = new[] { new int[5] };
+                byte[] oversizedVersionJaggedLeaf = LuminPackSerializer.Serialize(earlierJagged);
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedVersionJaggedCompressed>(oversizedVersionJaggedLeaf));
+
                 var cycle = new LimitedCycle { Next = new LimitedCycle() };
                 cycle.Next.Next = cycle;
                 var cycleCopy = LuminPackSerializer.Deserialize<LimitedCycle>(LuminPackSerializer.Serialize(cycle));
@@ -443,7 +493,7 @@ internal static partial class Program
                     throw new Exception("An open generic case changed its valid framing.");
                 byte[] openOversized = LuminPackSerializer.Serialize(NewOpenCase<int>("oversized"));
                 RejectRead(() => LuminPackSerializer.Deserialize<LimitedOpenUnion<int>>(openOversized));
-                return 41 + CheckNestedContracts();
+                return 49 + CheckNestedContracts();
             }
 
             private static int CheckNestedContracts()

@@ -290,6 +290,7 @@ internal static partial class NextPipeline
         Dictionary<string, PayloadRenderModel>? inputCandidates = null;
         HashSet<string>? copyable = null;
         List<string>? sharedInputSources = null;
+        Dictionary<string, string>? compressedChildren = null;
         HashSet<string>? unchangedUnboundedReads = null;
         var trustedReads = TrustedReadReach.Create(retained);
         Dictionary<string, (TypeModel Payload, GeneratedOperations Operations)>? checkedOwners = null;
@@ -444,8 +445,28 @@ internal static partial class NextPipeline
                     if (trustedReads?.NeedsCopy(candidate.Value.GlobalName) != true && !candidate.Value.Trusted)
                         unchangedUnboundedReads.Add(candidate.Key);
             }
+            if (limits.Collection != int.MaxValue && compressedChildren == null)
+            {
+                compressedChildren = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (FormatterModel owner in set.GeneralOwners ?? Array.Empty<FormatterModel>())
+                    if ((owner.Definition == FormatterDefinitions.Array && owner.Rank == 1 ||
+                         owner.Definition == "System.Collections.Generic.List") &&
+                        owner.Arguments[0].Definition == FormatterDefinitions.Array && owner.Arguments[0].Rank == 1)
+                        AddCompressedChild(owner.Type, owner.Arguments[0].Type);
+                foreach (SequenceOwnerFact owner in set.SequenceOwners ?? Array.Empty<SequenceOwnerFact>())
+                    if ((owner.Family == FormatterRegistry.Array || owner.Family.Kind == CollectionKind.List) &&
+                        owner.ForwardedType is { } child)
+                        AddCompressedChild(owner.DeclaredType, child);
+            }
             return new InputRedirect(readable, GeneratedNames.Extension(options.AssemblyName), limits, copyable,
-                limits.Bounded ? null : unchangedUnboundedReads);
+                limits.Bounded ? null : unchangedUnboundedReads, compressedChildren!);
+
+            void AddCompressedChild(string type, string child)
+            {
+                if (child.IndexOf('<') < 0 && child.EndsWith("[]", StringComparison.Ordinal))
+                    compressedChildren![ReadableTypeName.Of(GeneratedNames.PayloadKey(type))] =
+                        ReadableTypeName.Of(GeneratedNames.PayloadKey(child));
+            }
         }
 
         void AddCopies(string hint, InputRedirect redirect)
