@@ -207,6 +207,8 @@ internal static class ListForwardingOwnerFile
     {
         string operation = compressed ? "SerializeWithCompress" : "Write";
         w.Line(w.Preserve);
+        if (stringElements)
+            w.Line(w.MethodImpl("NoInlining"));
         w.Line("internal static void " + method + "<TOptions>(scoped ref " + writer + " writer, in " + collection + " value)");
         w.Line("    where TOptions : struct, " + options);
         w.Open();
@@ -249,6 +251,8 @@ internal static class ListForwardingOwnerFile
     {
         string operation = compressed ? "DeserializeWithCompress" : "Read";
         w.Line(w.Preserve);
+        if (stringElements)
+            w.Line(w.MethodImpl("NoInlining"));
         w.Line("internal static void " + method + "<TOptions>(scoped ref " + reader + " reader, ref " + collection + " value)");
         w.Line("    where TOptions : struct, " + options);
         w.Open();

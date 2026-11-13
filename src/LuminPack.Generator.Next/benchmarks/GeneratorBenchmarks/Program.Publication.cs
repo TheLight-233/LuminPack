@@ -44,6 +44,12 @@ internal static partial class Program
         Check(all.Contains("Utf16SnapshotRecordLength(snapshot)", StringComparison.Ordinal) &&
             all.Contains("WriteSmallHashSetRaw(ref writer, exact)", StringComparison.Ordinal) &&
             all.Contains("SerializeInterfaceSlow", StringComparison.Ordinal), "Allocating entry specialization");
+        var roots = output.GetTypeByMetadataName("LuminPack.LuminPackSerializer")!;
+        CheckRootHint("ListOfStringFormatter", "Write", "NoInlining");
+        CheckRootHint("ListOfStringFormatter", "Read", "NoInlining");
+        CheckRootHint("SortedSetOfStringFormatter", "Read", "NoInlining");
+        CheckRootHint("IListOfIntFormatter", "Read", null);
+        CheckRootHint("IListOfIntFormatter", "Write", "NoInlining");
         VerifyPublicationLayout(formatter.GeneratedSources);
         var plainParse = parse.WithFeatures(Array.Empty<KeyValuePair<string, string>>());
         var layoutTree = CSharpSyntaxTree.ParseText("using LuminPack.Attribute; [LuminPackable] public partial class FirstRecord { public int Value; public string Name; } " +
@@ -69,6 +75,8 @@ internal static partial class Program
             return LuminPackExceptionHelper.ThrowInvalidOperation(string.Join(Environment.NewLine, emitted.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
         AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(coreDll));
         Assembly assembly = Assembly.Load(stream.ToArray());
+        Check(HasNoInlining("ListOfStringFormatter", "Write") && HasNoInlining("ListOfStringFormatter", "Read") &&
+            HasNoInlining("SortedSetOfStringFormatter", "Read"), "Runtime no-inlining flags");
         int checks = (int)assembly.GetType("PublicationFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
         Console.WriteLine($"Runtime publication contracts: {checks} checks passed.");
         Dictionary<string, string> expectedSources = Sources(driver);
@@ -91,6 +99,21 @@ internal static partial class Program
         }
         Console.WriteLine("Source shape, compilation, wire profiles, reuse, registration, concurrency and incremental contracts passed.");
         return 0;
+        bool HasNoInlining(string owner, string operation)
+        {
+            var method = assembly.GetType("LuminPack.LuminPackSerializer+" + owner)!
+                .GetMethod(operation, BindingFlags.Static | BindingFlags.NonPublic)!;
+            return (method.GetMethodImplementationFlags() & MethodImplAttributes.NoInlining) != 0;
+        }
+
+        void CheckRootHint(string owner, string operation, string? hint)
+        {
+            var method = roots.GetTypeMembers(owner).Single().GetMembers(operation).OfType<IMethodSymbol>().Single();
+            var attributes = method.DeclaringSyntaxReferences.Single().GetSyntax() is MethodDeclarationSyntax declaration
+                ? declaration.AttributeLists.ToString() : string.Empty;
+            Check(hint == null ? !attributes.Contains("MethodImpl", StringComparison.Ordinal) :
+                attributes.Contains("MethodImplOptions." + hint, StringComparison.Ordinal), owner + "." + operation + " inlining policy");
+        }
         static string[] Snapshot(GeneratorDriver current) => current.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .Select(file => file.HintName + "\n" + file.SourceText).Order(StringComparer.Ordinal).ToArray();
         static void Check(bool condition, string name)
@@ -324,6 +347,10 @@ public static class PublicationFixture
 
         IList<int> list = new List<int> { 1, 3 };
         IList<int> alternate = new[] { 1, 3 };
+        var textList = new List<string> { "one", "two" };
+        var sorted = new SortedSet<string>(StringComparer.Ordinal) { "two", "one" };
+        Check(LuminPackSerializer.Deserialize<List<string>>(LuminPackSerializer.Serialize(textList))[1] == "two");
+        Check(LuminPackSerializer.Deserialize<SortedSet<string>>(LuminPackSerializer.Serialize(sorted)).SetEquals(sorted));
         byte[] exactList = LuminPackSerializer.Serialize(list);
         Check(exactList.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(alternate)) &&
             LuminPackSerializer.Deserialize<IList<int>>(exactList)[1] == 3);

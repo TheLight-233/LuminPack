@@ -340,6 +340,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether the owner also declares the compressed entry points a forwarding parent calls, which equal the plain ones.</summary>
     internal bool CompressEntries { get; }
 
+    /// <summary>The inlining hint on the binary read root, or null for the default JIT policy.</summary>
+    internal string? ReadInlining { get; }
+
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name="writeBody">The write body used by this operation.</param>
     /// <param name="readBody">The read body used by this operation.</param>
@@ -349,10 +352,13 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="jsonCount">The json count used by this operation.</param>
     /// <param name="compressEntries">The compress entries used by this operation.</param>
     /// <param name="jsonAddBody">The json add body used by this operation.</param>
+    /// <param name="readInlining">The binary read root's inlining hint.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
-        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false, bool concurrentStackStaging = false, bool interfaceListReuse = false)
+        bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false,
+        bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "AggressiveInlining")
     {
+        ReadInlining = readInlining;
         InterfaceListReuse = interfaceListReuse;
         ConcurrentStackStaging = concurrentStackStaging;
         ArrayReuse = arrayReuse;
@@ -541,7 +547,9 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(inline);
+                    // The original scalar sequence interfaces leave the allocating read to the JIT's default budget.
+                    if (spec.ReadInlining != null && (text || !spec.InterfaceListReuse))
+                        w.Line(w.MethodImpl(spec.ReadInlining));
                     w.Line("internal static void RootRead" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
