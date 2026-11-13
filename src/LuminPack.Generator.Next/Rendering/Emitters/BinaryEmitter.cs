@@ -944,16 +944,18 @@ internal static partial class BinaryEmitter
     internal static List<string> UnionReadBody(PayloadRenderModel model, CodeWriter w)
         => AddReadCallbacks(model, ReadBody(model, w, union: true));
 
-    /// <summary>Emits the existing case payload read with the enclosing Union's checked input policy.</summary>
-    /// <param name="model">The case with its enclosing policy and nested read redirects applied.</param>
+    /// <summary>Emits an existing payload read under the enclosing root's checked input policy.</summary>
+    /// <param name="model">The payload with its enclosing policy and nested read redirects applied.</param>
     /// <param name="w">The source writer.</param>
-    internal static void EmitCheckedUnionCase(PayloadRenderModel model, CodeWriter w)
+    /// <param name="unionCase">Whether a class read consumes Union payload framing.</param>
+    internal static void EmitCheckedPayloadRead(PayloadRenderModel model, CodeWriter w, bool unionCase)
     {
         bool versioned = model.Version != null;
         // Interface Union struct cases call their ordinary owner and retain its record header.
-        var body = versioned ? VersionReadBody(model, w) : model.IsStruct ? StructReadBody(model, w, union: false) :
-            Mirrored(model, w, ReadBody(model, w, union: true), writes: false, union: true);
-        body = InputChecks(model, w, AddReadCallbacks(model, body), read: true);
+        var body = model.Circle ? CircleBinaryEmitter.ReadBody(model, w, union: false, expanded: null) :
+            versioned ? VersionReadBody(model, w) : model.IsStruct ? StructReadBody(model, w, union: false) :
+            Mirrored(model, w, ReadBody(model, w, unionCase), writes: false, unionCase);
+        body = InputChecks(model, w, model.Circle ? body : AddReadCallbacks(model, body), read: true);
         w.Line(w.Preserve);
         w.Line("internal static void Read_" + model.Readable + model.TypeArguments(Profile) + "(scoped ref " + w.A("LuminPackReader") +
             " reader, scoped ref " + model.GlobalName + (model.IsStruct ? " value)" : "? value)"));

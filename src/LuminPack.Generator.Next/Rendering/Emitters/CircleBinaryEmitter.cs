@@ -380,7 +380,7 @@ internal static partial class CircleBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="union">Whether the Union read is built, which expands the root's own type once.</param>
     /// <param name="expanded">Collects the member operations whose bodies were expanded, in expansion order.</param>
-    private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, List<PayloadRenderModel> expanded)
+    internal static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, List<PayloadRenderModel> expanded)
     {
         var state = new ReadState
         {

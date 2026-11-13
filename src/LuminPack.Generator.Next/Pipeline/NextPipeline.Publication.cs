@@ -299,7 +299,7 @@ internal static partial class NextPipeline
                             writer.Open();
                         }
                         var payload = item.Model;
-                        BinaryEmitter.EmitCheckedUnionCase(payload.WithInput(redirect.Limits, payload.Recursive, redirect), writer);
+                        BinaryEmitter.EmitCheckedPayloadRead(payload.WithInput(redirect.Limits, payload.Recursive, redirect), writer, unionCase: true);
                     }
                     if (redirect != null)
                     {
@@ -307,17 +307,17 @@ internal static partial class NextPipeline
                         writer.Close();
                         writer.Close();
                         Add(hint + ".UnionInput.g.cs", writer.Complete(false), GenerationKind.Binary);
-                        AddCopies(hint, redirect, operations);
+                        AddCopies(hint, redirect);
                     }
                 }
             }
             else if (BoundedRoot(model) && RenderModelFactory.Create(model, options) is { } root)
             {
                 var redirect = CreateRedirect(root.Readable, model.Policy.Limits);
-                binary = PayloadEmitter.Render(root.WithInput(model.Policy.Limits, ((RecordModel)model).Recursive, redirect), false,
+                binary = PayloadEmitter.Render(root.WithInput(model.Policy.Limits, root.Recursive, redirect), false,
                     options.AvailableAliases, operations);
                 if ((operations & GeneratedOperations.BinaryRead) != 0)
-                    AddCopies(hint, redirect, operations);
+                    AddCopies(hint, redirect);
                 json = JsonRenderer.Instance.Render(model, renderContext);
             }
             else
@@ -344,9 +344,8 @@ internal static partial class NextPipeline
                 copyable = new HashSet<string>(StringComparer.Ordinal);
                 inputCandidates = new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal);
                 foreach (TypeModel candidate in retained)
-                    if (plan.For(candidate) != GeneratedOperations.None && candidate is RecordModel { Rejection: null, Versioned: false } &&
-                        RenderModelFactory.Create(candidate, options) is { Circle: false, IsStruct: false, Mirror: null, Version: null } rendered &&
-                        rendered.Mirrors.Length == 0)
+                    if ((plan.For(candidate) & GeneratedOperations.BinaryRead) != 0 && CanCopyPayload(candidate) &&
+                        RenderModelFactory.Create(candidate, options) is { Rejection: null } rendered)
                     {
                         inputCandidates[rendered.Readable] = rendered;
                         copyable.Add(rendered.Readable);
@@ -363,9 +362,13 @@ internal static partial class NextPipeline
             return new InputRedirect(readable, GeneratedNames.Extension(options.AssemblyName), limits, copyable);
         }
 
-        void AddCopies(string hint, InputRedirect redirect, GeneratedOperations operations) =>
-            Add(hint + ".InputReads.g.cs", InputReadRenderer.RenderCopies(redirect, inputCandidates!, sharedInputSources!,
-                options.AvailableAliases, operations, set), GenerationKind.Binary);
+        void AddCopies(string hint, InputRedirect redirect)
+        {
+            string formatters = InputReadRenderer.RenderCopies(redirect, inputCandidates!, sharedInputSources!,
+                options.AvailableAliases, options.Net8, set, out string payloadCopies);
+            Add(hint + ".InputReads.g.cs", formatters, GenerationKind.Binary);
+            Add(hint + ".InputPayloadReads.g.cs", payloadCopies, GenerationKind.Binary);
+        }
 
         var obsolete = new List<string>();
         foreach (string name in snapshot.Payloads.Keys)
@@ -390,8 +393,14 @@ internal static partial class NextPipeline
     /// <summary>Reports whether a record freezes additional nested input limits.</summary>
     /// <param name="model">The normalized payload model.</param>
     /// <returns>Whether the record freezes additional nested input limits.</returns>
-    private static bool BoundedRoot(TypeModel model) => model is RecordModel { Rejection: null, Versioned: false } &&
+    private static bool BoundedRoot(TypeModel model) => CanCopyPayload(model) &&
         model.Policy.Input == InputPolicy.Untrusted && model.Policy.Limits.Bounded;
+
+    /// <summary>Whether a declaration owns a read that can be rendered in another input scope.</summary>
+    /// <param name="model">The declaration.</param>
+    /// <returns>Whether the read has a supported concrete record model.</returns>
+    private static bool CanCopyPayload(TypeModel model) => !model.Identity.IsGeneric &&
+        model is RecordModel { Rejection: null } or StructModel { Storage: StructStorage.ManagedRecord, Rejection: null } or CircleReferenceModel;
 
     /// <summary>Builds the closed operation catalog consumed by interception.</summary>
     /// <param name="payloads">The normalized declaration results.</param>

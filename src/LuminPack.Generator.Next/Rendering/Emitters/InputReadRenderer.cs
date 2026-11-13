@@ -236,26 +236,30 @@ internal static class InputReadRenderer
     /// <param name="set">The shared owner facts, used to check inline elements through their original family renderer.</param>
     /// <param name="sources">The shared owner files.</param>
     /// <param name="aliases">The alias mask the consumer leaves available.</param>
-    /// <param name="operations">The operations the project calls.</param>
+    /// <param name="scoped">Whether the consumer supports scoped reader parameters.</param>
+    /// <param name="payloadCopies">The directly emitted payload reads.</param>
     /// <returns>The helper file, or an empty string when nothing was redirected.</returns>
     internal static string RenderCopies(InputRedirect redirect, IReadOnlyDictionary<string, PayloadRenderModel> payloads,
-        IReadOnlyList<string> sources, int aliases, GeneratedOperations operations, SharedFormatterSet set)
+        IReadOnlyList<string> sources, int aliases, bool scoped, SharedFormatterSet set, out string payloadCopies)
     {
+        payloadCopies = string.Empty;
+        if (redirect.Targets.Count == 0)
+            return string.Empty;
         var methods = new List<string>();
         var usings = new SortedSet<string>(StringComparer.Ordinal);
+        using var payloadWriter = new CheckedPayloadFile(aliases, scoped, redirect.Helpers);
         for (int index = 0; index < redirect.Targets.Count; index++)
         {
             string target = redirect.Targets[index];
-            string source;
             if (payloads.TryGetValue(target, out PayloadRenderModel payload))
-                source = PayloadEmitter.Render(payload.WithInput(redirect.Limits, payload.Recursive, redirect), json: false, aliases, operations);
-            else
             {
-                source = InputFormatterRenderer.Render(set, target, redirect) ??
-                    sources.FirstOrDefault(text => FindClass(text, "LuminRoots_" + target) >= 0);
-                if (source != null && Formatters.GenericFormatterReuse.ClosedSource(source) is { } closed)
-                    source = closed;
+                payloadWriter.Emit(payload.WithInput(redirect.Limits, payload.Recursive, redirect));
+                continue;
             }
+            string source = InputFormatterRenderer.Render(set, target, redirect) ??
+                sources.FirstOrDefault(text => FindClass(text, "LuminRoots_" + target) >= 0);
+            if (source != null && GenericFormatterReuse.ClosedSource(source) is { } closed)
+                source = closed;
             if (source == null)
                 throw new InvalidOperationException("The checked copy of '" + target + "' has no source.");
             foreach (string line in source.Split('\n'))
@@ -264,8 +268,9 @@ internal static class InputReadRenderer
                 if (trimmed.StartsWith("using ", StringComparison.Ordinal) && trimmed.EndsWith(";", StringComparison.Ordinal))
                     usings.Add(trimmed);
             }
-            methods.Add(Copy(source, target, redirect, payload != null));
+            methods.Add(Copy(source, target, redirect));
         }
+        payloadCopies = payloadWriter.Complete();
         if (methods.Count == 0)
             return string.Empty;
         var file = new StringBuilder(4096);
@@ -274,19 +279,71 @@ internal static class InputReadRenderer
             file.Append(line).Append('\n');
         file.Append("\nnamespace LuminPack\n{\n    public static partial class LuminPackSerializer\n    {\n");
         file.Append("        /// <summary>Checked copies of the nested reads under one bounded untrusted root, with its limits frozen.</summary>\n");
-        file.Append("        internal static class ").Append(redirect.Helpers).Append("\n        {\n");
+        file.Append("        internal static partial class ").Append(redirect.Helpers).Append("\n        {\n");
         file.Append(string.Join("\n", methods));
         file.Append("        }\n    }\n}\n");
         return file.ToString();
+    }
+
+    /// <summary>Opens a source writer only when a requested copy has a payload model.</summary>
+    private sealed class CheckedPayloadFile : IDisposable
+    {
+        private readonly int _aliases;
+        private readonly bool _scoped;
+        private readonly string _helpers;
+        private CodeWriter _writer;
+
+        /// <summary>Captures the output settings for one root's checked payloads.</summary>
+        /// <param name="aliases">The alias mask.</param>
+        /// <param name="scoped">Whether scoped parameters are available.</param>
+        /// <param name="helpers">The shared helper container.</param>
+        internal CheckedPayloadFile(int aliases, bool scoped, string helpers)
+        {
+            _aliases = aliases;
+            _scoped = scoped;
+            _helpers = helpers;
+            _writer = null;
+        }
+
+        /// <summary>Appends the checked read of a modeled payload.</summary>
+        /// <param name="model">The payload with the root's input policy.</param>
+        internal void Emit(PayloadRenderModel model)
+        {
+            if (_writer == null)
+            {
+                _writer = new CodeWriter(_aliases) { Scoped = _scoped };
+                _writer.Line("namespace LuminPack");
+                _writer.Open();
+                _writer.Line("public static partial class LuminPackSerializer");
+                _writer.Open();
+                _writer.Line("internal static partial class " + _helpers);
+                _writer.Open();
+            }
+            BinaryEmitter.EmitCheckedPayloadRead(model, _writer, unionCase: false);
+        }
+
+        /// <summary>Returns the complete file, or empty text when there are no modeled reads.</summary>
+        /// <returns>The generated payload reads.</returns>
+        internal string Complete()
+        {
+            if (_writer == null)
+                return string.Empty;
+            _writer.Close();
+            _writer.Close();
+            _writer.Close();
+            return _writer.Complete(false);
+        }
+
+        /// <inheritdoc/>
+        public void Dispose() => _writer?.Dispose();
     }
 
     /// <summary>Copies one target's read body under the root's limits, or forwards to its own entry when the body cannot move.</summary>
     /// <param name="source">The target's file.</param>
     /// <param name="target">The target's readable name.</param>
     /// <param name="redirect">The root's checked-copy context.</param>
-    /// <param name="projected">Whether the payload emitter already applied the limits to the body.</param>
     /// <returns>The helper method.</returns>
-    private static string Copy(string source, string target, InputRedirect redirect, bool projected)
+    private static string Copy(string source, string target, InputRedirect redirect)
     {
         int classStart = FindClass(source, "LuminRoots_" + target);
         int classOpen = source.IndexOf('{', classStart);
@@ -373,8 +430,7 @@ internal static class InputReadRenderer
             foreach (string raw in body.Split('\n'))
             {
                 string line = Rename(raw.TrimEnd('\r'), renames);
-                if (!projected)
-                    line = redirect.Apply(Project(line, redirect.Limits, Policy));
+                line = redirect.Apply(Project(line, redirect.Limits, Policy));
                 helper.Append(line).Append('\n');
             }
         helper.Append("            }\n");

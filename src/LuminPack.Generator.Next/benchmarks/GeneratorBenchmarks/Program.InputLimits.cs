@@ -142,6 +142,30 @@ internal static partial class Program
         public abstract partial class LimitedOpenUnion<T> where T : struct { }
         [LuminPackable, LuminPackOption(UntrustedData = false)]
         public sealed partial class TrustedOpenCase<T> : LimitedOpenUnion<T> where T : struct { public string Text; }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public partial class TrustedMirror { public string Text { get; set; } }
+        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(UntrustedData = false)]
+        public partial class TrustedVersion { public string Text { get; set; } }
+        [LuminPackable, LuminPackOption(UntrustedData = false)]
+        public partial struct TrustedStruct { public string Text { get; set; } }
+        [LuminPackable(GeneratorType.CircleReference), LuminPackOption(UntrustedData = false)]
+        public partial class TrustedCircle
+        {
+            [LuminPackOrder(0)] public string Text { get; set; }
+            [LuminPackOrder(1)] public TrustedCircle Next;
+        }
+        [LuminPackable, LuminPackOption(MaxStringLength = 4)]
+        public partial class LimitedNestedContracts
+        {
+            public TrustedMirror Mirror;
+            public TrustedVersion Version;
+            public TrustedStruct Structure;
+            public TrustedCircle Circle;
+        }
+        [LuminPackable(GeneratorType.VersionTolerant), LuminPackOption(MaxStringLength = 4)]
+        public partial class LimitedVersionParent { public TrustedMirror Child; }
+        [LuminPackable, LuminPackOption(MaxStringLength = 4)]
+        public partial struct LimitedStructParent { public TrustedVersion Child; }
         public static class InputLimitFixture
         {
             public static int Exercise() => Check<LuminPackUtf16LengthOptions>() + Check<LuminPackUtf8LengthOptions>() +
@@ -261,7 +285,43 @@ internal static partial class Program
                     throw new Exception("An open generic case changed its valid framing.");
                 byte[] openOversized = LuminPackSerializer.Serialize(NewOpenCase<int>("oversized"));
                 RejectRead(() => LuminPackSerializer.Deserialize<LimitedOpenUnion<int>>(openOversized));
-                return 41;
+                return 41 + CheckNestedContracts();
+            }
+
+            private static int CheckNestedContracts()
+            {
+                var source = new LimitedNestedContracts
+                {
+                    Mirror = new TrustedMirror { Text = "ok" },
+                    Version = new TrustedVersion { Text = "ok" },
+                    Structure = new TrustedStruct { Text = "ok" },
+                    Circle = new TrustedCircle { Text = "ok" },
+                };
+                source.Circle.Next = source.Circle;
+                byte[] bytes = LuminPackSerializer.Serialize(source);
+                var target = new LimitedNestedContracts { Mirror = new TrustedMirror(), Circle = new TrustedCircle() };
+                var mirror = target.Mirror;
+                var circle = target.Circle;
+                if (LuminPackSerializer.Deserialize(bytes, ref target) != bytes.Length || !ReferenceEquals(mirror, target.Mirror) ||
+                    !ReferenceEquals(circle, target.Circle) || !ReferenceEquals(circle, circle.Next) ||
+                    target.Mirror.Text != "ok" || target.Version.Text != "ok" || target.Structure.Text != "ok" || target.Circle.Text != "ok")
+                    throw new Exception("Nested checked reads changed framing or reuse.");
+                source.Mirror.Text = "oversized";
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedNestedContracts>(LuminPackSerializer.Serialize(source)));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedVersionParent>(
+                    LuminPackSerializer.Serialize(new LimitedVersionParent { Child = source.Mirror })));
+                source.Mirror.Text = "ok";
+                source.Version.Text = "oversized";
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedNestedContracts>(LuminPackSerializer.Serialize(source)));
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedStructParent>(
+                    LuminPackSerializer.Serialize(new LimitedStructParent { Child = source.Version })));
+                source.Version.Text = "ok";
+                source.Structure.Text = "oversized";
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedNestedContracts>(LuminPackSerializer.Serialize(source)));
+                source.Structure.Text = "ok";
+                source.Circle.Text = "oversized";
+                RejectRead(() => LuminPackSerializer.Deserialize<LimitedNestedContracts>(LuminPackSerializer.Serialize(source)));
+                return 7;
             }
 
             private static LimitedOpenUnion<T> NewOpenCase<T>(string text) where T : struct =>
