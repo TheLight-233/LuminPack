@@ -11,17 +11,11 @@ namespace LuminPackUnitTest
     /// <summary>Verifies registered dispatch from source methods that forward an open payload to the serializer facade.</summary>
     public class GenericForwardingWrapperTest
     {
-        /// <summary>Verifies a generic method pair uses explicit registration while a closed facade call binds directly.</summary>
+        /// <summary>Verifies a generic method pair uses the automatically registered closed payload.</summary>
         [Fact]
         public void ForwardedGenericPayloadRoundTrips()
         {
             var value = new ForwardedBox<double> { Value = 1.5, Count = 2 };
-            var missing = Record.Exception(() => ForwardingCodec.Write(value));
-            Assert.NotNull(missing);
-            Assert.Contains("No formatter is registered", missing.Message);
-            LuminPackSerializer.Register<ForwardedBox<double>>(
-                static (ref LuminPackWriter writer, in ForwardedBox<double> item) => LuminPackSerializer.Serialize(ref writer, in item),
-                static (ref LuminPackReader reader, ref ForwardedBox<double> item) => LuminPackSerializer.Deserialize(ref reader, ref item));
             byte[] bytes = ForwardingCodec.Write(value);
             Assert.Equal(LuminPackSerializer.Serialize(new ForwardedBox<double> { Value = 1.5, Count = 2 }), bytes);
             ForwardedBox<double> copy = ForwardingCodec.Read<ForwardedBox<double>>(bytes);

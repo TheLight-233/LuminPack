@@ -71,7 +71,8 @@ internal static class GeneratorOptionsFactory
         bool ilRewrite = !interceptors && symbols.Contains("LUMINPACK_IL_REWRITE");
         return new GeneratorOptions(net8, csharp == null ? 0 : (int)csharp.LanguageVersion, csharp?.Options.AllowUnsafe ?? false, unity,
             Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite,
-            PointerCursor(compilation, net8), AmbiguousNames(compilation), FormatterInterfaces(compilation));
+            PointerCursor(compilation, net8), AmbiguousNames(compilation), FormatterInterfaces(compilation),
+            compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackKnownFormatters") != null);
     }
 
     /// <summary>Reads whether the referenced runtime declares the formatter interfaces that shared generic formatters call.</summary>

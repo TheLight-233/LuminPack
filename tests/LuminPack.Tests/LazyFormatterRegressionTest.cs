@@ -13,13 +13,18 @@ public class LazyFormatterRegressionTest
 {
     private readonly OpaqueSerializer _fallback = new();
 
-    /// <summary>Closed generic calls preserve declaration profiles while opaque calls require registration.</summary>
+    /// <summary>Closed calls preserve declaration profiles and Next can round-trip through opaque generic calls.</summary>
     [Fact]
     public void GenericEntriesPreserveDeclaredProfiles()
     {
         var value = new LazyProfileNode { Text = "\u00E9\u4E2D\uD83D\uDE00", Next = new LazyProfileNode { Text = "tail" } };
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(value.Text, _fallback.Deserialize<LazyProfileNode>(_fallback.Serialize(value)).Text);
+        Assert.Equal(value.Text, _fallback.DeserializeJson<LazyProfileNode>(_fallback.SerializeJson(value)).Text);
+#else
         Assert.ThrowsAny<Exception>(() => _fallback.Serialize(value));
         Assert.ThrowsAny<Exception>(() => _fallback.SerializeJson(value));
+#endif
         byte[] bytes = LuminPackSerializer.Serialize(value);
         Assert.Equal(bytes, LuminPackSerializer.Serialize<LazyProfileNode>(value));
         var copy = global::LuminPackUnitTest.ConcreteReads.Read<LazyProfileNode>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
@@ -41,13 +46,17 @@ public class LazyFormatterRegressionTest
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<LazyProfileNode>(bytes, static (ReadOnlySpan<byte> concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
-    /// <summary>Manual registration invalidates an earlier missing lookup and leaves concrete roots unchanged.</summary>
+    /// <summary>Manual registration takes priority after the first generic lookup and leaves concrete roots unchanged.</summary>
     [Fact]
     public unsafe void ManualRegistrationOverridesFallbackAndLeavesStaticEntriesUnchanged()
     {
         var value = new LazyOverridePayload { Value = 17 };
         byte[] direct = LuminPackSerializer.Serialize(value);
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(direct, _fallback.Serialize(value));
+#else
         Assert.ThrowsAny<Exception>(() => _fallback.Serialize(value));
+#endif
         nint key = LuminPackMarshal.GetMethodTable(typeof(LazyOverridePayload));
         Assert.False(LuminPackFormatterRegistry.TryGetValue(in key, out _));
         LuminPackFormatterRegistry.Register(typeof(LazyOverridePayload),
@@ -58,7 +67,11 @@ public class LazyFormatterRegressionTest
         Assert.Equal(99, _fallback.Deserialize<LazyOverridePayload>(bytes).Value);
         Assert.Equal(direct, LuminPackSerializer.Serialize(value));
         Assert.Equal(direct, LuminPackSerializer.Serialize<LazyOverridePayload>(value));
+#if LUMINPACK_NEXT_GENERATOR
+        Assert.Equal(LuminPackSerializer.SerializeJson(value), _fallback.SerializeJson(value));
+#else
         Assert.ThrowsAny<Exception>(() => _fallback.SerializeJson(value));
+#endif
     }
 
     /// <summary>Checks complete concurrent publication, revision invalidation and collectible payload lifetime.</summary>
@@ -99,6 +112,14 @@ public class LazyFormatterRegressionTest
         /// <param name="bytes">The registered representation.</param>
         /// <returns>The decoded payload.</returns>
         internal T Deserialize<T>(ReadOnlySpan<byte> bytes) => LuminPackSerializer.Deserialize<T>(bytes);
+
+#if LUMINPACK_NEXT_GENERATOR
+        /// <summary>Reads a JSON document through the registered operation.</summary>
+        /// <typeparam name="T">The runtime-selected payload type.</typeparam>
+        /// <param name="json">The registered representation.</param>
+        /// <returns>The decoded payload.</returns>
+        internal T DeserializeJson<T>(string json) => LuminPackSerializer.DeserializeJson<T>(json);
+#endif
     }
 
 }

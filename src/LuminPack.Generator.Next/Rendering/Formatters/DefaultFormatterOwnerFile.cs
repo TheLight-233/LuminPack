@@ -151,6 +151,7 @@ internal static class DefaultFormatterOwnerFile
         w.Line("Invoke(ref " + state + ", " + modifier + " value);");
         w.Line("static void Invoke<T>(ref global::LuminPack.Core.LuminPack" + (json ? "Json" : "") + (write ? "Writer" : "Reader") + " state, " + modifier + " T input)");
         w.Open();
+        w.Line("global::LuminPack.LuminPackSerializer.EnsureFormatterRegistration();");
         w.Line(method + "<T>(out var registration);");
         w.Line("if (registration." + callback + " is not global::LuminPack.Code.LuminPack" + (json ? "Json" : "") + (write ? "Write" : "Read") + "Delegate<T> operation)");
         w.Open();

@@ -118,6 +118,8 @@ internal static partial class NextPipeline
                     snapshot.SharedInputs = new SharedFormatterInputs(retained, roots, _options);
                 SharedFormatterSet formatters = snapshot.SharedInputs.Set;
                 var sources = NextPipeline.Render(_payloads, formatters, _options, _policy, snapshot, plan);
+                if (_options.RegisterMode != RegisterMode.Disabled)
+                    AddFormatterRegistration(sources, _payloads, _calls, formatters, plan, _options, _policy);
                 // Compiler interception needs the host's location API; the IL rewriter binds the same entries after compilation.
                 if (_options.Interceptors && !_calls.IsEmpty)
                 {
@@ -219,12 +221,9 @@ internal static partial class NextPipeline
     {
         var sources = new List<GeneratedSource>();
         var retained = new List<TypeModel>();
-        var registrations = new List<string>();
         var pending = new Stack<TypeModel>();
         foreach (ModeledPayload payload in payloads)
         {
-            if (payload.CustomRegistration != null)
-                registrations.Add(payload.CustomRegistration);
             if (payload.Result.IsComplete && payload.Result.Model is { } model)
             {
                 retained.Add(model);
@@ -260,17 +259,12 @@ internal static partial class NextPipeline
         {
             GeneratedOperations operations = plan.For(model);
             if (operations == GeneratedOperations.None)
-            {
-                // A payload that no called operation reaches publishes nothing; its Union tags stay reserved.
-                AddReservation(model);
                 continue;
-            }
             bool cacheable = !BoundedRoot(model);
             if (cacheable && snapshot.Payloads.TryGetValue(model.Identity.GlobalName, out var cached) && cached.Operations == operations &&
                 cached.Model.Equals(model) && cached.Options.Equals(options))
             {
                 sources.AddRange(cached.Sources);
-                AddReservation(model);
                 continue;
             }
             int first = sources.Count;
@@ -282,7 +276,6 @@ internal static partial class NextPipeline
             {
                 binary = UnionRenderer.Instance.RenderBinary(model, renderContext);
                 json = UnionRenderer.Instance.RenderJson(model, renderContext);
-                AddReservation(model);
             }
             else if (BoundedRoot(model) && RenderModelFactory.Create(model, options) is { } root)
             {
@@ -338,21 +331,12 @@ internal static partial class NextPipeline
                 obsolete.Add(name);
         foreach (string name in obsolete)
             snapshot.Payloads.Remove(name);
-        Add("LuminPackGen.CustomFormatterRegistry.g.cs", CustomRegistrationSource.Render(registrations, options.AssemblyName, options.Unity), GenerationKind.Formatter);
         Add("LuminPackGen.Registration.g.cs", SerializerRegistrationSource.Render(options), GenerationKind.Formatter);
         Add("LuminPackGen.FormatterDispatch.Options.g.cs", DispatchOptionsSource.Render(ProfileNames.Type(policy.Strings),
             policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1, policy.Input == InputPolicy.Untrusted, policy.Limits.Input,
             options.RegisterMode != RegisterMode.Disabled, ProfileNames.Type(policy.JsonInput)), GenerationKind.Formatter);
         Add("LuminPackGen.Options.g.cs", ProfileSource.Render(retained, policy), GenerationKind.Formatter);
         return sources;
-
-        void AddReservation(TypeModel model)
-        {
-            if (options.RegisterMode != RegisterMode.Disabled && model is UnionModel && !model.Identity.IsGeneric &&
-                RenderModelFactory.Create(model, options) is { } union)
-                registrations.Add("global::LuminPack.Code.LuminPackUnionFormatter<" + model.Identity.GlobalName +
-                    ">.ReserveTags(new int[] { " + string.Join(", ", union.UnionCases.Select(item => item.Id).Distinct()) + " });");
-        }
 
         void Add(string hint, string text, GenerationKind family)
         {

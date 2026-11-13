@@ -53,6 +53,8 @@ namespace LuminPack
             {
                 global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, %PROFILE%>>.TryGetCachedValue<T>(out var registration);
                 if (registration.WriteValue == null)
+                    registration = FindGeneratedFormatter<T, TLuminProfile>();
+                if (registration.WriteValue == null)
                 {
                     LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");
                     return;
@@ -66,6 +68,8 @@ namespace LuminPack
                 where TLuminProfile : struct, ILuminPackOptions
             {
                 global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, %PROFILE%>>.TryGetCachedValue<T>(out var registration);
+                if (registration.ReadValue == null)
+                    registration = FindGeneratedFormatter<T, TLuminProfile>();
                 if (registration.ReadValue == null)
                 {
                     LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");
@@ -81,6 +85,8 @@ namespace LuminPack
             {
                 global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, %PROFILE%>>.TryGetCachedJsonValue<T>(out var registration);
                 if (registration.WriteValueJson == null)
+                    registration = FindGeneratedFormatter<T, TLuminProfile>();
+                if (registration.WriteValueJson == null)
                 {
                     LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");
                     return;
@@ -94,6 +100,8 @@ namespace LuminPack
                 where TLuminProfile : struct, ILuminPackOptions
             {
                 global::LuminPack.Code.LuminPackFormatterRegistry<global::LuminPack.Option.LuminPackFallbackOptions<TLuminProfile, %PROFILE%>>.TryGetCachedJsonValue<T>(out var registration);
+                if (registration.ReadValueJson == null)
+                    registration = FindGeneratedFormatter<T, TLuminProfile>();
                 if (registration.ReadValueJson == null)
                 {
                     LuminPackExceptionHelper.ThrowMessage(""No formatter is registered for type '"" + typeof(T) + ""' and the requested operation. Call LuminPackSerializer.Register before using generic entry points."");

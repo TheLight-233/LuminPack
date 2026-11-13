@@ -54,11 +54,15 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// owners are kept.</summary>
     internal readonly int FormatterInterfaces;
 
+    /// <summary>Whether the referenced Core supplies the built-in formatter table.</summary>
+    internal readonly bool KnownFormatters;
+
     /// <summary>Captures the project facts.</summary>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
-        int formatterInterfaces = 0)
+        int formatterInterfaces = 0, bool knownFormatters = false)
     {
+        KnownFormatters = knownFormatters;
         FormatterInterfaces = formatterInterfaces;
         AmbiguousNames = ambiguousNames ?? Array.Empty<string>();
         PointerCursor = pointerCursor;
@@ -78,6 +82,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         CSharpVersion == other.CSharpVersion && Unsafe == other.Unsafe && Unity == other.Unity &&
         RegisterMode == other.RegisterMode && AvailableAliases == other.AvailableAliases && AssemblyName == other.AssemblyName &&
         Interceptors == other.Interceptors && IlRewrite == other.IlRewrite && PointerCursor == other.PointerCursor && FormatterInterfaces == other.FormatterInterfaces &&
+        KnownFormatters == other.KnownFormatters &&
         System.Linq.Enumerable.SequenceEqual(AmbiguousNames, other.AmbiguousNames);
 
     /// <inheritdoc/>

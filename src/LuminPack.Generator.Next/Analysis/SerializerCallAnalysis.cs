@@ -54,7 +54,7 @@ internal static class SerializerCallAnalysis
     {
         GeneratorOptions options = GeneratorOptionsFactory.From(compilation);
         bool intercept = options.Interceptors && (LocationMethod != null || options.IlRewrite);
-        if (candidates.IsEmpty || !intercept && OperationUsageAnalysis.Fixed(compilation) == GeneratedOperations.All)
+        if (candidates.IsEmpty || !intercept && options.RegisterMode == RegisterMode.Disabled && OperationUsageAnalysis.Fixed(compilation) == GeneratedOperations.All)
             return ImmutableArray<CallFact>.Empty;
         var facts = Bindings.GetValue(compilation, static item => new BindingFacts(item));
         var trees = new Dictionary<SyntaxTree, List<int>>();

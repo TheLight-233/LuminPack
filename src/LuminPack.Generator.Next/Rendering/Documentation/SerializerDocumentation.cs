@@ -120,7 +120,7 @@ internal static class SerializerDocumentation
                 read ? "The decoded payload." : method.Returns == "string" ? "The complete JSON document." : "A new array containing the complete encoded payload.") + "</returns>");
         Line(xml, method.Indent, "<remarks>");
         if (method.Name.StartsWith("Serialize", StringComparison.Ordinal) || read)
-            Line(xml, method.Indent, "<para>Statically bound calls use generated concrete entries. Calls that cannot bind statically require explicit or Custom registration for the requested operation; missing registrations throw LuminPackException. Default fallback document boundaries use assembly options; explicit profiles select their compiled document policy.</para>");
+            Line(xml, method.Indent, "<para>Statically bound calls use generated concrete entries. Generic fallback uses explicit, Custom, built-in or generated formatter registrations. Registration initializes on first use when enabled. Missing operations throw LuminPackException. Default fallback document boundaries use assembly options; explicit profiles select their compiled document policy.</para>");
         if (buffer)
             Line(xml, method.Indent, read ?
                 "<para>The caller exclusively owns the reusable buffer and its reference state for this operation.</para>" :

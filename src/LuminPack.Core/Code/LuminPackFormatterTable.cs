@@ -11,6 +11,24 @@ public sealed class LuminPackFormatterTable
     private readonly ConditionalWeakTable<Type, Entry> _owners = new();
     private readonly ConcurrentDictionary<nint, WeakReference<Entry>> _entries = new();
 
+    /// <summary>Publishes the generated operations available for a payload in one consuming assembly.</summary>
+    /// <typeparam name="T">The exact closed payload type.</typeparam>
+    /// <param name="write">The binary writer, when emitted.</param>
+    /// <param name="read">The binary reader, when emitted.</param>
+    /// <param name="writeJson">The JSON writer, when emitted.</param>
+    /// <param name="readJson">The JSON reader, when emitted.</param>
+    internal void RegisterGenerated<T>(LuminPackWriteDelegate<T>? write, LuminPackReadDelegate<T>? read,
+        LuminPackJsonWriteDelegate<T>? writeJson, LuminPackJsonReadDelegate<T>? readJson)
+    {
+        TryAdd(typeof(T), new LuminPackFormatter
+        {
+            WriteValue = write,
+            ReadValue = read,
+            WriteValueJson = writeJson,
+            ReadValueJson = readJson
+        });
+    }
+
     /// <summary>Publishes one complete registration for a payload type.</summary>
     /// <param name="type">The registration's lifetime owner.</param>
     /// <param name="formatter">The complete immutable registration value.</param>

@@ -61,6 +61,33 @@ internal static partial class Program
             RequireIncremental(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
             checks += (int)Assembly.Load(image.ToArray()).GetType("AssemblyInputFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
         }
+        foreach (bool intercept in new[] { true, false })
+        {
+            var result = GenerateAssembly(AutomaticRegistrationFixture, OutputKind.DynamicallyLinkedLibrary, allowUnsafe: false,
+                intercept ? parse : parse.WithFeatures(Array.Empty<KeyValuePair<string, string>>()));
+            var files = result.Driver.GetRunResult().Results.Single().GeneratedSources;
+            string registry = files.Single(file => file.HintName.EndsWith("CustomFormatterRegistry.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+            RequireIncremental(registry.Contains("static LuminPackSerializer()", StringComparison.Ordinal) &&
+                !registry.Contains("ModuleInitializer", StringComparison.Ordinal), "Formatter registration must run on first facade use.");
+            RequireIncremental(registry.Contains("RegisterGenerated<global::System.Collections.Generic.Dictionary<int, string>>", StringComparison.Ordinal) &&
+                !registry.Contains("RegisterGenerated<int>", StringComparison.Ordinal), "Only the closed collection needs a generated registration.");
+            foreach (var file in files.Where(file => file.HintName.EndsWith("Interceptors.g.cs", StringComparison.Ordinal)))
+            {
+                foreach (var method in file.SyntaxTree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>())
+                {
+                    if (method.Body is not { } body)
+                        continue;
+                    var declaration = method.GetFirstToken().GetLocation().GetLineSpan().StartLinePosition;
+                    var open = body.OpenBraceToken.GetLocation().GetLineSpan().StartLinePosition;
+                    var close = body.CloseBraceToken.GetLocation().GetLineSpan().StartLinePosition;
+                    RequireIncremental(declaration.Character == open.Character && declaration.Character == close.Character, "Interceptor brace indentation.");
+                }
+            }
+            using var image = new MemoryStream();
+            var emitted = result.Output.Emit(image);
+            RequireIncremental(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
+            checks += (int)Assembly.Load(image.ToArray()).GetType("AutomaticRegistrationFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
+        }
         Console.WriteLine($"Next assembly-option contracts: {checks} matrix and runtime checks passed.");
         return 0;
 
@@ -81,12 +108,13 @@ internal static partial class Program
             checks++;
         }
 
-        (GeneratorDriver Driver, Compilation Output) GenerateAssembly(string source, OutputKind kind, bool allowUnsafe)
+        (GeneratorDriver Driver, Compilation Output) GenerateAssembly(string source, OutputKind kind, bool allowUnsafe, CSharpParseOptions? parseOverride = null)
         {
-            var tree = CSharpSyntaxTree.ParseText(source, parse, "AssemblyOptions.cs");
+            CSharpParseOptions syntax = parseOverride ?? parse;
+            var tree = CSharpSyntaxTree.ParseText(source, syntax, "AssemblyOptions.cs");
             var input = CSharpCompilation.Create("AssemblyOptions" + checks++, new[] { tree }, references,
                 new CSharpCompilationOptions(kind, allowUnsafe: allowUnsafe, optimizationLevel: OptimizationLevel.Release));
-            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: syntax)
                 .RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             foreach (var result in driver.GetRunResult().Results)
                 RequireIncremental(result.Exception == null, result.Exception?.ToString() ?? string.Empty);
@@ -97,6 +125,57 @@ internal static partial class Program
 
         static string Bool(bool value) => value ? "true" : "false";
     }
+
+    private const string AutomaticRegistrationFixture = """
+        using System;
+        using System.Collections.Generic;
+        using LuminPack;
+        using LuminPack.Attribute;
+        using LuminPack.Code;
+        using LuminPack.Core;
+        using LuminPack.Option;
+
+        [LuminPackable] public sealed class AutoPayload
+        {
+            public Dictionary<int, string> Values = new();
+        }
+
+        [LuminPackable(GeneratorType.Custom)] public sealed class AutoCustom
+        {
+            public int Number;
+            public static void Serialize(ref LuminPackWriter writer, in AutoCustom value) => writer.Write(value.Number);
+            public static void Deserialize(ref LuminPackReader reader, ref AutoCustom value) => value = new AutoCustom { Number = reader.Read<int>() };
+            public static void SerializeJson(ref LuminPackJsonWriter writer, in AutoCustom value) => writer.Write<LuminPackUtf16LengthOptions>(value.Number);
+            public static void DeserializeJson(ref LuminPackJsonReader reader, ref AutoCustom value) => value = new AutoCustom { Number = reader.Read<int, LuminPackUtf16LengthOptions>() };
+        }
+
+        public static class AutomaticRegistrationFixture
+        {
+            public static int Exercise()
+            {
+                nint key = LuminPackMarshal.GetMethodTable(typeof(AutoCustom));
+                if (LuminPackFormatterRegistry.TryGetValue(key, out _)) throw new Exception("Custom registration ran at module load.");
+                if (Read<int>(Write(17)) != 17) throw new Exception("Built-in binary registration.");
+                if (ReadJson<AutoCustom>(WriteJson(new AutoCustom { Number = 23 })).Number != 23) throw new Exception("Custom first-use registration.");
+                var values = new Dictionary<int, string> { [7] = "seven" };
+                if (Read<AutoPayload>(Write(new AutoPayload { Values = values })).Values[7] != "seven") throw new Exception("Generated model registration.");
+                if (Read<Dictionary<int, string>>(Write(values))[7] != "seven") throw new Exception("Closed collection binary registration.");
+                if (ReadUtf8Json<Dictionary<int, string>>(WriteUtf8Json(values))[7] != "seven") throw new Exception("Closed collection profile registration.");
+                if (!LuminPackSerializer.Serialize(values).AsSpan().SequenceEqual(Write(values))) throw new Exception("Concrete and generic bytes differ.");
+                LuminPackSerializer.Register<AutoPayload>(
+                    static (ref LuminPackWriter writer, in AutoPayload value) => writer.Write(123),
+                    static (ref LuminPackReader reader, ref AutoPayload value) => value = new AutoPayload { Values = { [reader.Read<int>()] = "manual" } });
+                if (Read<AutoPayload>(Write(new AutoPayload())).Values[123] != "manual") throw new Exception("Explicit registration lost priority.");
+                return 7;
+            }
+            private static byte[] Write<T>(T value) => LuminPackSerializer.Serialize(value);
+            private static T Read<T>(byte[] bytes) => LuminPackSerializer.Deserialize<T>(bytes);
+            private static string WriteJson<T>(T value) => LuminPackSerializer.SerializeJson(value);
+            private static T ReadJson<T>(string json) => LuminPackSerializer.DeserializeJson<T>(json);
+            private static string WriteUtf8Json<T>(T value) => LuminPackSerializer.SerializeJson<T, LuminPackUtf8LengthOptions>(value);
+            private static T ReadUtf8Json<T>(string json) => LuminPackSerializer.DeserializeJson<T, LuminPackUtf8LengthOptions>(json);
+        }
+        """;
 
     private const string AssemblyRegistrationFixture = """
         using System;

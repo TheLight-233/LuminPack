@@ -4,7 +4,7 @@
 
 ## `GeneratorType.Custom`
 
-`[LuminPackable(GeneratorType.Custom)]` replaces the generated representation with static methods you write on the type. The generator validates them and registers them in a module initializer; you never call `Register` yourself.
+`[LuminPackable(GeneratorType.Custom)]` replaces the generated representation with static methods you write on the type. The generator validates them and registers them automatically. With [Next](generator-next.md), registration runs on first use of `LuminPackSerializer`. The original generator runs it in a module initializer on .NET 5 and later.
 
 ```csharp
 using LuminPack.Attribute;
@@ -47,7 +47,7 @@ Provide exactly one of these method sets:
 
 ## Runtime registration
 
-`LuminPackSerializer.Register<T>` registers typed delegates for generic fallback entry points. Registration is required when the implementation is opaque or the call remains open, even for built-in and source-generated types. On the modern [interceptor backend](generation-modes.md#static-interception), closed generic syntax can bind a concrete Root directly and does not request registered dispatch. The installed IL backend provides the same static bindings on older compilers; without either integration, generic payload APIs require registration. Pass method groups directly; registration does not require `AllowUnsafeBlocks` or an `unsafe` block.
+`LuminPackSerializer.Register<T>` registers typed delegates for generic fallback entry points. Register opaque operations explicitly. With Next, an open call can also use the automatically registered operations of supported closed types. On the modern [interceptor backend](generation-modes.md#static-interception), closed generic syntax can bind a concrete Root directly and does not request registered dispatch. The installed IL backend provides the same static bindings on older compilers; generic payload APIs use registered fallback when both integrations are disabled. Pass method groups directly; registration does not require `AllowUnsafeBlocks` or an `unsafe` block.
 
 ```csharp
 static void Write(ref LuminPackWriter writer, in LegacyModel value)
@@ -85,7 +85,7 @@ LuminPackSerializer.Register<Person>(WritePerson, ReadPerson);
 Those callback bodies select concrete operations. A closed `Serialize<Person>` call can also be intercepted; an opaque open generic callback must not call itself through registered fallback.
 
 - Registering the same type twice throws `ArgumentException`.
-- Concrete roots and intercepted calls never consult the registry. Generic fallback bodies use explicit and `Custom` registrations only. An absent registration or missing operation throws `LuminPackException`; there is no automatic generated fallback. With `LuminPackRegisterMode.Disabled`, fallback operations cannot use Register. Fallback JSON boundaries and input staging use the consuming assembly defaults or the explicit profile; the registered callback owns its representation and any declaration-specific policy. Intercepted roots retain declaration-owned policies.
+- Concrete roots and intercepted calls never consult the registry. Next also registers the built-in scalar and string formatters and the emitted operations of discovered closed types on first use. Explicit registrations take precedence. The original generator uses explicit and `Custom` registrations for generic fallback. An absent registration or missing operation throws `LuminPackException`. With `LuminPackRegisterMode.Disabled`, fallback operations cannot use Register. Fallback JSON boundaries and input staging use the consuming assembly defaults or the explicit profile; the registered callback owns its representation and any declaration-specific policy. Intercepted roots retain declaration-owned policies.
 - Delegate registrations remain alive with their payload type. Conditional weak ownership allows collectible payload assemblies to unload; a noncollectible payload keeps its registered delegates and their targets alive.
 
 ## Member-level formatters
