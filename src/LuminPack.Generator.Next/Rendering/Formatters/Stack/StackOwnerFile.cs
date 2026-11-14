@@ -202,7 +202,7 @@ internal static class StackOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line(inline);
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
