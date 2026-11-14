@@ -833,17 +833,23 @@ internal sealed class RootCatalog
     /// <summary>The shared root keys by their spelling-independent key.</summary>
     private readonly Dictionary<string, string> _canonical;
     private readonly string? _extension;
+    private readonly string _assemblyProfile;
+    private readonly string _assemblyJsonReadProfile;
 
     /// <summary>Indexes the published roots by payload identity.</summary>
     /// <param name="entries">The payload roots keyed by payload spelling.</param>
     /// <param name="shared">The readable names of the roots that shared owners publish.</param>
     /// <param name="extension">The assembly extension container of the shared owners.</param>
+    /// <param name="assemblyProfile">The consuming assembly's compiled default profile.</param>
+    /// <param name="assemblyJsonReadProfile">The default profile for JSON reads, including its grammar policy.</param>
     /// <param name="measured">The shared roots with exact record measurements.</param>
     internal RootCatalog(IEnumerable<KeyValuePair<string, RootEntry>> entries, IEnumerable<string> shared, string? extension,
-        IEnumerable<string>? measured = null)
+        string assemblyProfile, string assemblyJsonReadProfile, IEnumerable<string>? measured = null)
     {
         Measured = new HashSet<string>(measured ?? Array.Empty<string>(), StringComparer.Ordinal);
         _extension = extension;
+        _assemblyProfile = assemblyProfile;
+        _assemblyJsonReadProfile = assemblyJsonReadProfile;
         var ordered = shared.OrderBy(name => name, StringComparer.Ordinal).ToArray();
         Shared = new HashSet<string>(ordered, StringComparer.Ordinal);
         _canonical = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -882,7 +888,8 @@ internal sealed class RootCatalog
             return new RootEntry(readable, union.DeclaredProfile, union.Binary, union.Json, limit: union.Limit, encoding: union.Encoding,
                 jsonReadProfile: union.JsonReadProfile, rootName: union.RootName, rootArguments: call.TypeArguments + ", ");
         if (call.Root != null && _extension != null && Shared.Contains(key))
-            return new RootEntry(readable, RootEntry.DefaultProfile, binary: true, json: true, owner: "global::LuminPack.Binary_" + _extension + "_" + readable);
+            return new RootEntry(readable, _assemblyProfile, binary: true, json: true,
+                owner: "global::LuminPack.Binary_" + _extension + "_" + readable, jsonReadProfile: _assemblyJsonReadProfile);
         // Without a closed owner, a closed generic payload calls its definition's generic roots from an entry named for the closed type.
         if (call.Definition != null && _entries.TryGetValue(call.Definition, out RootEntry? definition) && definition.Owner == null)
             return new RootEntry(readable, definition.DeclaredProfile, definition.Binary, definition.Json, limit: definition.Limit,

@@ -153,7 +153,7 @@ internal static partial class NextPipeline
                 // Compiler interception needs the host's location API; the IL rewriter binds the same entries after compilation.
                 if (intercept)
                 {
-                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, sharedRoots!, snapshot.SharedSources), _options.IlRewrite);
+                    string interceptors = InterceptorRenderer.Render(_calls, Catalog(_payloads, formatters, sharedRoots!, snapshot.SharedSources, _policy), _options.IlRewrite);
                     if (interceptors.Length != 0)
                         sources.Add(new GeneratedSource("LuminPackGen.Interceptors.g.cs", interceptors, GenerationKind.Binary));
                 }
@@ -538,9 +538,10 @@ internal static partial class NextPipeline
     /// <param name="set">The shared formatter requirements.</param>
     /// <param name="shared">The already rendered shared formatter sources.</param>
     /// <param name="sharedRoots">The shared roots with unambiguous names.</param>
+    /// <param name="assemblyPolicy">The consuming assembly's default wire policy.</param>
     /// <returns>The closed operation catalog.</returns>
     private static RootCatalog Catalog(ImmutableArray<ModeledPayload> payloads, SharedFormatterSet set,
-        HashSet<string> sharedRoots, KeyValuePair<string, string>[] shared)
+        HashSet<string> sharedRoots, KeyValuePair<string, string>[] shared, WirePolicy assemblyPolicy)
     {
         var entries = new List<KeyValuePair<string, RootEntry>>();
         foreach (ModeledPayload payload in payloads)
@@ -570,6 +571,7 @@ internal static partial class NextPipeline
         foreach (var source in shared)
             foreach (Match match in Regex.Matches(source.Value, @"static void MeasureRecord_(\w+?)(?:<TLuminProfile>)?\(", RegexOptions.CultureInvariant))
                 measures.Add(match.Groups[1].Value);
-        return new RootCatalog(entries, sharedRoots, set.Extension, measures);
+        return new RootCatalog(entries, sharedRoots, set.Extension, ProfileNames.Type(assemblyPolicy.Strings),
+            ProfileNames.Type(assemblyPolicy.JsonInput), measures);
     }
 }
