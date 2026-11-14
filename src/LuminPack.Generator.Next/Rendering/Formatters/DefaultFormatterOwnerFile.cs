@@ -69,7 +69,8 @@ internal static class DefaultFormatterOwnerFile
         {
             w.Line("writer.EnsureAdditionalCapacity(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">());");
             w.Line("writer.Write(in value);");
-        }, (w, _) => w.Line("reader.Read(ref value);"), (w, _) => FrameworkScalarBody.Emit(w, model, true), (w, _) => FrameworkScalarBody.Emit(w, model, false), w =>
+        }, (w, _) => w.Line("reader.Read(ref value);"), (w, _) => FrameworkScalarBody.Emit(w, model, true),
+            (w, _) => FrameworkScalarBody.Emit(w, model, false, set.Options?.QuotedScalarReader == true), w =>
         {
             w.Line("private static string ReadText<TOptions>(ref global::LuminPack.Core.LuminPackJsonReader reader)");
             w.Line("    where TOptions : struct, global::LuminPack.Option.ILuminPackOptions");

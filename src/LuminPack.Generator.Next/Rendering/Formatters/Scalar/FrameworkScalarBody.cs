@@ -41,13 +41,14 @@ internal static class FrameworkScalarBody
     /// <param name = "writer">The source writer or operation writer.</param>
     /// <param name = "model">The normalized formatter or storage contract.</param>
     /// <param name = "write">Whether to emit the write operation.</param>
-    internal static void Emit(CodeWriter writer, FormatterModel model, bool write)
+    /// <param name="quotedScalarReader">Whether the referenced Core exposes the shared parser.</param>
+    internal static void Emit(CodeWriter writer, FormatterModel model, bool write, bool quotedScalarReader = false)
     {
         var body = new StringBuilder();
         if (write)
             GenerateJsonSerializeCode(model, body);
         else
-            GenerateJsonDeserializeCode(model, body);
+            GenerateJsonDeserializeCode(model, body, quotedScalarReader);
         string text = body.ToString();
         var methods = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -244,7 +245,8 @@ internal static class FrameworkScalarBody
     /// <summary>Appends JSON reading statements for unmanaged values.</summary>
     /// <param name = "data">The metadata describing the serializable type.</param>
     /// <param name = "sb">The builder receiving generated source code.</param>
-    public static void GenerateJsonDeserializeCode(FormatterModel data, StringBuilder sb)
+    /// <param name="quotedScalarReader">Whether the referenced Core exposes the shared parser.</param>
+    public static void GenerateJsonDeserializeCode(FormatterModel data, StringBuilder sb, bool quotedScalarReader = false)
     {
         string read = data.Type switch
         {
@@ -275,31 +277,19 @@ internal static class FrameworkScalarBody
         switch (data.Type)
         {
             case "global::System.Guid":
-                sb.AppendLine("            value = global::System.Guid.Parse(reader.ReadString());");
-                break;
             case "global::System.DateTime":
-                sb.AppendLine("            value = global::System.DateTime.Parse(reader.ReadString(), null, global::System.Globalization.DateTimeStyles.RoundtripKind);");
-                break;
             case "global::System.DateTimeOffset":
-                sb.AppendLine("            value = global::System.DateTimeOffset.Parse(reader.ReadString(), null, global::System.Globalization.DateTimeStyles.RoundtripKind);");
-                break;
             case "global::System.TimeSpan":
-                sb.AppendLine("            value = global::System.TimeSpan.Parse(reader.ReadString());");
+            case "global::System.TimeOnly":
+            case "global::System.Int128":
+            case "global::System.UInt128":
+                sb.AppendLine("            value = " + QuotedScalarRead(data.Type, quotedScalarReader) + ";");
                 break;
             case "global::System.Half":
                 sb.AppendLine("            value = (global::System.Half)reader.ReadFloat();");
                 break;
-            case "global::System.Int128":
-                sb.AppendLine("            value = global::System.Int128.Parse(reader.ReadString(), global::System.Globalization.CultureInfo.InvariantCulture);");
-                break;
-            case "global::System.UInt128":
-                sb.AppendLine("            value = global::System.UInt128.Parse(reader.ReadString(), global::System.Globalization.CultureInfo.InvariantCulture);");
-                break;
             case "global::System.DateOnly":
                 AppendDateOnlyRead(sb);
-                break;
-            case "global::System.TimeOnly":
-                sb.AppendLine("            value = global::System.TimeOnly.Parse(reader.ReadString());");
                 break;
             case "global::System.Text.Rune":
                 sb.AppendLine("            value = new global::System.Text.Rune(reader.ReadInt());");
@@ -364,6 +354,30 @@ internal static class FrameworkScalarBody
                 sb.AppendLine("            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotSupportedException(\"No JSON formatter is available for " + data.Type + "\");");
                 break;
         }
+    }
+
+    /// <summary>Checks which scalar types use the shared quoted text reader.</summary>
+    /// <param name="type">The emitted framework type.</param>
+    /// <returns>Whether the type has a shared parser.</returns>
+    internal static bool IsQuotedScalar(string type) => type is
+        "global::System.Guid" or "global::System.TimeSpan" or "global::System.DateTime" or "global::System.DateTimeOffset" or
+        "global::System.TimeOnly" or "global::System.Int128" or "global::System.UInt128";
+
+    /// <summary>Selects the shared parser or the original string parser for older runtime references.</summary>
+    /// <param name="type">The framework type with equivalent string and span parsers.</param>
+    /// <param name="shared">Whether the shared runtime method is available.</param>
+    /// <returns>The generated read expression.</returns>
+    internal static string QuotedScalarRead(string type, bool shared)
+    {
+        if (shared)
+            return "reader.ReadQuotedScalar<" + type + ", TLuminProfile>()";
+        string arguments = type switch
+        {
+            "global::System.DateTime" or "global::System.DateTimeOffset" => ", null, global::System.Globalization.DateTimeStyles.RoundtripKind",
+            "global::System.Int128" or "global::System.UInt128" => ", global::System.Globalization.CultureInfo.InvariantCulture",
+            _ => ""
+        };
+        return type + ".Parse(reader.Read<string, TLuminProfile>()!" + arguments + ")";
     }
 
     /// <summary>Parses a canonical date directly from token storage, retaining the platform parser and its fallback.</summary>

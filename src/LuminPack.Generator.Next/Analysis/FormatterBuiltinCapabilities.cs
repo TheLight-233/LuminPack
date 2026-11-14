@@ -6,6 +6,22 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Preserves the runtime capability checks of specialized framework formatters.</summary>
 internal static class FormatterBuiltinCapabilities
 {
+    /// <summary>Checks the exact optional shared quoted scalar operation.</summary>
+    /// <param name="compilation">The consuming compilation and runtime references.</param>
+    /// <returns>Whether both type arguments and the return value match the generated call.</returns>
+    internal static bool HasQuotedScalarReader(Compilation compilation)
+    {
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        return options is not null && reader?.GetMembers("ReadQuotedScalar").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: false, Arity: 2, DeclaredAccessibility: Accessibility.Public, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.Parameters.IsEmpty && SymbolEqualityComparer.Default.Equals(method.ReturnType, method.TypeParameters[0]) &&
+            method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.IsEmpty && method.TypeParameters[1].HasValueTypeConstraint &&
+            !method.TypeParameters[1].HasUnmanagedTypeConstraint && method.TypeParameters[1].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[1].ConstraintTypes[0], options)) == true;
+    }
+
     /// <summary>Captures optional built-in operations from the exact consumer metadata.</summary>
     /// <param name = "compilation">The consuming compilation and its runtime references.</param>
     /// <param name = "type">The declared type or its source-ready spelling.</param>

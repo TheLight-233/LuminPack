@@ -57,11 +57,15 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     /// <summary>Whether the referenced Core supplies the built-in formatter table.</summary>
     internal readonly bool KnownFormatters;
 
+    /// <summary>Whether the referenced Core exposes a shared reader for quoted framework scalars.</summary>
+    internal readonly bool QuotedScalarReader;
+
     /// <summary>Captures the project facts.</summary>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
-        int formatterInterfaces = 0, bool knownFormatters = false)
+        int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false)
     {
+        QuotedScalarReader = quotedScalarReader;
         KnownFormatters = knownFormatters;
         FormatterInterfaces = formatterInterfaces;
         AmbiguousNames = ambiguousNames ?? Array.Empty<string>();
@@ -82,7 +86,7 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
         CSharpVersion == other.CSharpVersion && Unsafe == other.Unsafe && Unity == other.Unity &&
         RegisterMode == other.RegisterMode && AvailableAliases == other.AvailableAliases && AssemblyName == other.AssemblyName &&
         Interceptors == other.Interceptors && IlRewrite == other.IlRewrite && PointerCursor == other.PointerCursor && FormatterInterfaces == other.FormatterInterfaces &&
-        KnownFormatters == other.KnownFormatters &&
+        KnownFormatters == other.KnownFormatters && QuotedScalarReader == other.QuotedScalarReader &&
         System.Linq.Enumerable.SequenceEqual(AmbiguousNames, other.AmbiguousNames);
 
     /// <inheritdoc/>

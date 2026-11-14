@@ -74,7 +74,8 @@ internal static class GeneratorOptionsFactory
         return new GeneratorOptions(net8, csharp == null ? 0 : (int)csharp.LanguageVersion, csharp?.Options.AllowUnsafe ?? false, unity,
             Registration(compilation), availableAliases: -1, compilation.AssemblyName ?? "Assembly", interceptors || ilRewrite, ilRewrite,
             PointerCursor(compilation, net8), AmbiguousNames(compilation), FormatterInterfaces(compilation),
-            compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackKnownFormatters") != null);
+            compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackKnownFormatters") != null,
+            FormatterBuiltinCapabilities.HasQuotedScalarReader(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>

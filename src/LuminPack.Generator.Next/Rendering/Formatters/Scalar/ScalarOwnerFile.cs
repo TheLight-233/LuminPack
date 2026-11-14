@@ -196,15 +196,10 @@ internal static class ScalarOwnerFile
                     w.Line(inline);
                     w.Line("internal static void RootReadJson<TLuminProfile>(scoped ref " + jsonReader + " reader, scoped ref " + scalar +
                         " value)");
-                    // The framework built-ins are stored as strings in the JSON form and parsed back.
-                    string text = "reader.Read<string, " + readJson + ">()!";
-                    string read = underlying != null ? "(" + scalar + ")reader.Read<" + underlying + ", " + readJson + ">();" :
-                        scalar == "global::System.Guid" ? "global::System.Guid.Parse(" + text + ");" :
-                        scalar == "global::System.TimeSpan" ? "global::System.TimeSpan.Parse(" + text + ");" :
-                        scalar is "global::System.DateTime" or "global::System.DateTimeOffset" ?
-                            scalar + ".Parse(" + text + ", null, global::System.Globalization.DateTimeStyles.RoundtripKind);" :
-                        "reader.Read<" + scalar + ", " + readJson + ">();";
-                    w.Line("    where TLuminProfile : struct, " + options + " => value = " + read);
+                    string read = underlying != null ? "(" + scalar + ")reader.Read<" + underlying + ", " + readJson + ">()" :
+                        FrameworkScalarBody.IsQuotedScalar(scalar) ? FrameworkScalarBody.QuotedScalarRead(scalar, set.Options?.QuotedScalarReader == true) :
+                        "reader.Read<" + scalar + ", " + readJson + ">()";
+                    w.Line("    where TLuminProfile : struct, " + options + " => value = " + read + ";");
                     w.Blank();
                     break;
                 }

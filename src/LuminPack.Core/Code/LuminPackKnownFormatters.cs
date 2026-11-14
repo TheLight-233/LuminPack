@@ -75,6 +75,38 @@ public static class LuminPackKnownFormatters
             RegisterValue<nuint>(table,
                 static (ref LuminPackJsonWriter writer, in nuint value) => writer.Write<TOptions>((ulong)value),
                 static (ref LuminPackJsonReader reader, ref nuint value) => value = (nuint)reader.Read<ulong, TOptions>());
+#if NET8_0_OR_GREATER
+            RegisterValue<Guid>(table,
+                static (ref LuminPackJsonWriter writer, in Guid value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref Guid value) => value = reader.ReadQuotedScalar<Guid, TOptions>());
+            RegisterValue<DateTime>(table,
+                static (ref LuminPackJsonWriter writer, in DateTime value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref DateTime value) => value = reader.ReadQuotedScalar<DateTime, TOptions>());
+            RegisterValue<DateTimeOffset>(table,
+                static (ref LuminPackJsonWriter writer, in DateTimeOffset value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref DateTimeOffset value) => value = reader.ReadQuotedScalar<DateTimeOffset, TOptions>());
+            RegisterValue<TimeSpan>(table,
+                static (ref LuminPackJsonWriter writer, in TimeSpan value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref TimeSpan value) => value = reader.ReadQuotedScalar<TimeSpan, TOptions>());
+            RegisterValue<Half>(table,
+                static (ref LuminPackJsonWriter writer, in Half value) => writer.Write<TOptions>((float)value),
+                static (ref LuminPackJsonReader reader, ref Half value) => value = (Half)reader.Read<float, TOptions>());
+            RegisterValue<Int128>(table,
+                static (ref LuminPackJsonWriter writer, in Int128 value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref Int128 value) => value = reader.ReadQuotedScalar<Int128, TOptions>());
+            RegisterValue<UInt128>(table,
+                static (ref LuminPackJsonWriter writer, in UInt128 value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref UInt128 value) => value = reader.ReadQuotedScalar<UInt128, TOptions>());
+            RegisterValue<DateOnly>(table,
+                static (ref LuminPackJsonWriter writer, in DateOnly value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref DateOnly value) => value = ReadDateOnly<TOptions>(ref reader));
+            RegisterValue<TimeOnly>(table,
+                static (ref LuminPackJsonWriter writer, in TimeOnly value) => writer.Write<TOptions>(value),
+                static (ref LuminPackJsonReader reader, ref TimeOnly value) => value = reader.ReadQuotedScalar<TimeOnly, TOptions>());
+            RegisterValue<Rune>(table,
+                static (ref LuminPackJsonWriter writer, in Rune value) => writer.Write<TOptions>(value.Value),
+                static (ref LuminPackJsonReader reader, ref Rune value) => value = new Rune(reader.Read<int, TOptions>()));
+#else
             RegisterValue<Guid>(table,
                 static (ref LuminPackJsonWriter writer, in Guid value) => writer.Write<TOptions>(value),
                 static (ref LuminPackJsonReader reader, ref Guid value) => value = Guid.Parse(reader.Read<string, TOptions>()));
@@ -87,25 +119,6 @@ public static class LuminPackKnownFormatters
             RegisterValue<TimeSpan>(table,
                 static (ref LuminPackJsonWriter writer, in TimeSpan value) => writer.Write<TOptions>(value),
                 static (ref LuminPackJsonReader reader, ref TimeSpan value) => value = TimeSpan.Parse(reader.Read<string, TOptions>()));
-#if NET8_0_OR_GREATER
-            RegisterValue<Half>(table,
-                static (ref LuminPackJsonWriter writer, in Half value) => writer.Write<TOptions>((float)value),
-                static (ref LuminPackJsonReader reader, ref Half value) => value = (Half)reader.Read<float, TOptions>());
-            RegisterValue<Int128>(table,
-                static (ref LuminPackJsonWriter writer, in Int128 value) => writer.Write<TOptions>(value),
-                static (ref LuminPackJsonReader reader, ref Int128 value) => value = Int128.Parse(reader.Read<string, TOptions>(), CultureInfo.InvariantCulture));
-            RegisterValue<UInt128>(table,
-                static (ref LuminPackJsonWriter writer, in UInt128 value) => writer.Write<TOptions>(value),
-                static (ref LuminPackJsonReader reader, ref UInt128 value) => value = UInt128.Parse(reader.Read<string, TOptions>(), CultureInfo.InvariantCulture));
-            RegisterValue<DateOnly>(table,
-                static (ref LuminPackJsonWriter writer, in DateOnly value) => writer.Write<TOptions>(value),
-                static (ref LuminPackJsonReader reader, ref DateOnly value) => value = ReadDateOnly<TOptions>(ref reader));
-            RegisterValue<TimeOnly>(table,
-                static (ref LuminPackJsonWriter writer, in TimeOnly value) => writer.Write<TOptions>(value),
-                static (ref LuminPackJsonReader reader, ref TimeOnly value) => value = TimeOnly.Parse(reader.Read<string, TOptions>()));
-            RegisterValue<Rune>(table,
-                static (ref LuminPackJsonWriter writer, in Rune value) => writer.Write<TOptions>(value.Value),
-                static (ref LuminPackJsonReader reader, ref Rune value) => value = new Rune(reader.Read<int, TOptions>()));
 #endif
             RegisterValue<Complex>(table, WriteComplex<TOptions>, ReadComplex<TOptions>);
             RegisterValue<Plane>(table, WritePlane<TOptions>, ReadPlane<TOptions>);

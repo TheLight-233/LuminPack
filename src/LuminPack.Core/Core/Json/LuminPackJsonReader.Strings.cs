@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Buffers.Text;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -16,6 +17,142 @@ namespace LuminPack.Core
     public unsafe ref partial struct LuminPackJsonReader
 #endif
     {
+#if NET8_0_OR_GREATER
+        /// <summary>Reads a quoted framework value through its original parser.</summary>
+        /// <typeparam name="T">The requested framework scalar type.</typeparam>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>The parsed scalar.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public T ReadQuotedScalar<T, TOptions>() where T : struct where TOptions : struct, ILuminPackOptions
+        {
+            if (typeof(T) != typeof(DateTime) && typeof(T) != typeof(DateTimeOffset) &&
+                typeof(T) != typeof(TimeSpan) && typeof(T) != typeof(Guid) &&
+                typeof(T) != typeof(TimeOnly) && typeof(T) != typeof(Int128) && typeof(T) != typeof(UInt128))
+            {
+                LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+                return default;
+            }
+
+            if (CurrentTokenType == JsonTokenType.String && LuminPackMarshal.ConstantStringProfile<TOptions>())
+            {
+                const int StackTokenLimit = 128;
+                if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+                {
+                    var utf8 = ReadStringUtf8<TOptions>();
+                    if (utf8.Length <= StackTokenLimit)
+                    {
+                        Span<char> decoded = stackalloc char[utf8.Length];
+                        int length = Utf8PlatformDecoder.Decode(utf8, decoded);
+                        CompleteValue();
+                        return ParseQuotedScalar<T>(decoded.Slice(0, length));
+                    }
+
+                    string decodedString = CreateUtf8String(utf8);
+                    CompleteValue();
+                    return ParseQuotedScalar<T>(decodedString);
+                }
+
+                var token = ReadStringUtf16<TOptions>();
+                if (token.Length <= StackTokenLimit)
+                {
+                    // A culture callback can reenter the serializer or change the original input.
+                    Span<char> text = stackalloc char[token.Length];
+                    token.CopyTo(text);
+                    CompleteValue();
+                    return ParseQuotedScalar<T>(text);
+                }
+
+                string fullText = new string(token);
+                CompleteValue();
+                return ParseQuotedScalar<T>(fullText);
+            }
+            return ParseQuotedScalar<T>(Read<string, TOptions>());
+        }
+
+        /// <summary>Parses a complete private character range through the framework's span overloads.</summary>
+        /// <typeparam name="T">The validated framework scalar type.</typeparam>
+        /// <param name="text">The isolated characters.</param>
+        /// <returns>The parsed scalar.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static T ParseQuotedScalar<T>(scoped ReadOnlySpan<char> text) where T : struct
+        {
+            if (typeof(T) == typeof(DateTime))
+            {
+                DateTime value = DateTime.Parse(text, null, DateTimeStyles.RoundtripKind);
+                return Unsafe.As<DateTime, T>(ref value);
+            }
+            if (typeof(T) == typeof(DateTimeOffset))
+            {
+                DateTimeOffset value = DateTimeOffset.Parse(text, null, DateTimeStyles.RoundtripKind);
+                return Unsafe.As<DateTimeOffset, T>(ref value);
+            }
+            if (typeof(T) == typeof(TimeSpan))
+            {
+                TimeSpan value = TimeSpan.Parse(text);
+                return Unsafe.As<TimeSpan, T>(ref value);
+            }
+            if (typeof(T) == typeof(TimeOnly))
+            {
+                TimeOnly value = TimeOnly.Parse(text);
+                return Unsafe.As<TimeOnly, T>(ref value);
+            }
+            if (typeof(T) == typeof(Int128))
+            {
+                Int128 value = Int128.Parse(text, CultureInfo.InvariantCulture);
+                return Unsafe.As<Int128, T>(ref value);
+            }
+            if (typeof(T) == typeof(UInt128))
+            {
+                UInt128 value = UInt128.Parse(text, CultureInfo.InvariantCulture);
+                return Unsafe.As<UInt128, T>(ref value);
+            }
+            Guid guid = Guid.Parse(text);
+            return Unsafe.As<Guid, T>(ref guid);
+        }
+
+        /// <summary>Preserves the original string overloads, including their behavior on null tokens.</summary>
+        /// <typeparam name="T">The validated framework scalar type.</typeparam>
+        /// <param name="text">The decoded string from the original reader.</param>
+        /// <returns>The parsed scalar.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static T ParseQuotedScalar<T>(string text) where T : struct
+        {
+            if (typeof(T) == typeof(DateTime))
+            {
+                DateTime value = DateTime.Parse(text, null, DateTimeStyles.RoundtripKind);
+                return Unsafe.As<DateTime, T>(ref value);
+            }
+            if (typeof(T) == typeof(DateTimeOffset))
+            {
+                DateTimeOffset value = DateTimeOffset.Parse(text, null, DateTimeStyles.RoundtripKind);
+                return Unsafe.As<DateTimeOffset, T>(ref value);
+            }
+            if (typeof(T) == typeof(TimeSpan))
+            {
+                TimeSpan value = TimeSpan.Parse(text);
+                return Unsafe.As<TimeSpan, T>(ref value);
+            }
+            if (typeof(T) == typeof(TimeOnly))
+            {
+                TimeOnly value = TimeOnly.Parse(text);
+                return Unsafe.As<TimeOnly, T>(ref value);
+            }
+            if (typeof(T) == typeof(Int128))
+            {
+                Int128 value = Int128.Parse(text, CultureInfo.InvariantCulture);
+                return Unsafe.As<Int128, T>(ref value);
+            }
+            if (typeof(T) == typeof(UInt128))
+            {
+                UInt128 value = UInt128.Parse(text, CultureInfo.InvariantCulture);
+                return Unsafe.As<UInt128, T>(ref value);
+            }
+            Guid guid = Guid.Parse(text);
+            return Unsafe.As<Guid, T>(ref guid);
+        }
+#endif
+
         /// <summary>Reads an invariant quoted decimal integer with the library default profile.</summary>
         /// <returns>The parsed arbitrary-precision integer.</returns>
         public System.Numerics.BigInteger ReadBigInteger() => ReadBigInteger<LuminPackDefaultOptions>();
