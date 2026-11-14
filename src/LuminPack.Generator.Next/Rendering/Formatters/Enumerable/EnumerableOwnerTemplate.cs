@@ -515,6 +515,7 @@ internal static class EnumerableOwnerTemplate
             text ? "1" : memory + ".SizeOf<" + scalar + ">()";
         FormatterModel? element = fact.ForwardedType == null ? null : set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference);
         var context = new EnumerableOwnerContext(w, sequence, scalar, memory, marshal, payload, set, element, fact.Family.ContiguousElements);
+        bool concurrentStack = sequence.StartsWith("global::System.Collections.Concurrent.ConcurrentStack<", StringComparison.Ordinal);
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead,
@@ -731,7 +732,7 @@ internal static class EnumerableOwnerTemplate
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
                     if (spec.JsonCount)
                     {
-                        w.Line("if (value.Count == 0)");
+                        w.Line(concurrentStack ? "if (value.IsEmpty)" : "if (value.Count == 0)");
                         w.Open();
                         w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                         w.Line("return;");
@@ -778,8 +779,7 @@ internal static class EnumerableOwnerTemplate
                         if (scopedFallback)
                             w.Open();
                         w.Line("bool isFirst = true;");
-                        string source = sequence.StartsWith("global::System.Collections.Concurrent.ConcurrentStack<", StringComparison.Ordinal)
-                            ? context.Source("value") : "value";
+                        string source = concurrentStack ? context.Source("value") : "value";
                         w.Line("foreach (var item in " + source + ")");
                         w.Open();
                         if (fact.Family.Kind == CollectionKind.HashSet)
