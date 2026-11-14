@@ -147,7 +147,7 @@ internal static class ImmutableStackOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -166,36 +166,21 @@ internal static class ImmutableStackOwnerFile
                     w.Line("value = " + sequence + ".Empty;");
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
-                    w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
-                    w.Line("try");
-                    w.Open();
-                    w.Line("global::System.Span<" + scalar + "> items = " + marshal + ".CreateSpan<" + scalar + ">(");
-                    w.Indented(() =>
-                    {
-                        w.Line("ref " + memory + ".As<byte, " + scalar + ">(ref operationState.Cursor),");
-                        w.Line("0);");
-                    });
-                    w.Line("items = pooled.AsSpan(0, length);");
-                    w.Line("if (length != 0)");
-                    w.Indented(() =>
-                    {
-                        w.Line("operationState.Read(");
-                        w.Indented(() =>
-                        {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
-                            w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                        });
-                    });
-                    w.Blank();
+                    w.Line("int width = " + memory + ".SizeOf<" + scalar + ">();");
+                    w.Line("int offset = checked(length * width);");
+                    w.Line("ref byte first = ref " + marshal + ".GetReference(operationState.Buffer);");
+                    w.Line("ref byte start = ref " + memory + ".Add(ref first, unchecked((nint)(uint)operationState.Position));");
+                    // Advance validates the complete fixed element window before the address-based reads.
+                    w.Line("operationState.Advance(offset);");
                     w.Line("var stack = " + sequence + ".Empty;");
-                    w.Line("for (int index = length - 1; index >= 0; index--)");
-                    w.Line("    stack = stack.Push(pooled[index]);");
-                    w.Line("value = stack;");
-                    w.Close();
-                    w.Line("finally");
+                    w.Line("do");
                     w.Open();
-                    w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(pooled, false);");
+                    w.Line("offset -= width;");
+                    w.Line("stack = stack.Push(global::LuminPack.Core.LuminPackReader.Read<" + scalar + ">(");
+                    w.Indented(() => w.Line("ref " + memory + ".Add(ref start, unchecked((nint)(uint)offset))));"));
                     w.Close();
+                    w.Line("while (offset != 0);");
+                    w.Line("value = stack;");
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));
@@ -244,6 +229,7 @@ internal static class ImmutableStackOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + sequence + " input)");
@@ -260,13 +246,7 @@ internal static class ImmutableStackOwnerFile
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in value)");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line("var temp = item;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
+                    JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner);
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
@@ -314,6 +294,7 @@ internal static class ImmutableStackOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

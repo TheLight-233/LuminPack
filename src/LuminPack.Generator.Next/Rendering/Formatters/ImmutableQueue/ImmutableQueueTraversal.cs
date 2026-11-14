@@ -15,10 +15,9 @@ internal static class ImmutableQueueTraversal
     /// <param name="firstAlias">The first stack's Boolean alias.</param>
     /// <param name="secondAlias">The second stack's Boolean alias.</param>
     /// <param name="thirdAlias">The enumerator fallback's Boolean alias.</param>
-    /// <param name="reversedAlias">The reversed buffer's Boolean alias.</param>
     /// <param name="checkedAlias">The checked buffer fallback's Boolean alias.</param>
     internal static void Write(List<string> body, string element, string local, CodeWriter w, string firstAlias,
-        string secondAlias, string thirdAlias, string reversedAlias, string checkedAlias)
+        string secondAlias, string thirdAlias, string checkedAlias)
     {
         bool boolean = element == "bool";
         body.Add("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(" + local +
@@ -85,25 +84,16 @@ internal static class ImmutableQueueTraversal
         body.Add("var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count3);");
         body.Add("try");
         body.Add("{");
+        body.Add("var reversed = new global::System.ReadOnlySpan<" + element + ">(items, 0, count3);");
+        body.Add("long reversedBytes = reversed.Length * (long)" + w.A("Unsafe") + ".SizeOf<" + element + ">();");
+        body.Add("if (writer2.RecordRoom() >= reversedBytes)");
         body.Add("{");
-        body.Add("int reversedCount = new global::System.ReadOnlySpan<" + element + ">(items, 0, count3).Length;");
-        body.Add("long reversedBytes = reversedCount * ((long)(" + w.A("Unsafe") + ".SizeOf<" + element + ">()));");
-        body.Add("if (writer2.TryEnsureCapacity(reversedBytes))");
-        body.Add("{");
-        body.Add("foreach (var item4 in new global::System.ReadOnlySpan<" + element + ">(items, 0, count3))");
-        body.Add("{");
-        body.Add("\t;");
-        body.Add("var v4 = item4;");
-        body.Add(boolean
-            ? "ref readonly bool " + reversedAlias + " = ref v4;"
-            : "writer2.Write(in v4);");
-        if (boolean)
-            body.Add("writer2.Write(in " + reversedAlias + ");");
-        body.Add("}");
+        body.Add("ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(reversed);");
+        body.Add("writer2.Write(ref " + w.A("Unsafe") + ".As<" + element + ", byte>(ref first), (int)reversedBytes);");
         body.Add("}");
         body.Add("else");
         body.Add("{");
-        body.Add("foreach (var item5 in new global::System.ReadOnlySpan<" + element + ">(items, 0, count3))");
+        body.Add("foreach (var item5 in reversed)");
         body.Add("{");
         body.Add("writer2.CheckBuffer();");
         body.Add("var v5 = item5;");
@@ -112,7 +102,6 @@ internal static class ImmutableQueueTraversal
             : "writer2.Write(in v5);");
         if (boolean)
             body.Add("writer2.Write(in " + checkedAlias + ");");
-        body.Add("}");
         body.Add("}");
         body.Add("}");
         body.Add("return count3;");

@@ -341,13 +341,7 @@ internal static class ImmutableHashSetOwnerFile
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in new global::System.ReadOnlySpan<" + scalar + ">(items, 0, count))");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer2.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer2.SetFirstElement(true);");
-                    w.Line("var temp = item;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer2, temp);");
+                    JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner, writer: "writer2");
                     w.Close();
                     w.Close();
                     w.Line("finally");
@@ -406,6 +400,7 @@ internal static class ImmutableHashSetOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

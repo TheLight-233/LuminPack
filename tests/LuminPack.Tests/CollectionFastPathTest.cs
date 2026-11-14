@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Core;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -197,6 +198,29 @@ public class CollectionFastPathTest
             Assert.Equal(LuminPackSerializer.Serialize(stack.ToList()), stackBytes);
             Assert.Equal(stack, global::LuminPackUnitTest.ConcreteReads.Read<ImmutableStack<int>>(stackBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableStack<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
             Assert.Equal(stack, global::LuminPackUnitTest.ConcreteReads.Read<IImmutableStack<int>>(LuminPackSerializer.Serialize((IImmutableStack<int>)(stack)), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IImmutableStack<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        }
+    }
+
+    /// <summary>Checks that the raw stack validates its complete input before replacing the target or advancing the caller.</summary>
+    [Fact]
+    public void TruncatedRawImmutableStackLeavesReaderAndTargetUnchanged()
+    {
+        var source = ImmutableStack.CreateRange(new[] { long.MinValue, -1L, long.MaxValue });
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        ReadOnlySpan<byte> input = bytes.AsSpan(0, bytes.Length - 1);
+        var reader = new LuminPackReader(ref input);
+        var previous = ImmutableStack.Create(11L);
+        var target = previous;
+
+        try
+        {
+            LuminPackSerializer.Deserialize(ref reader, ref target);
+            Assert.Fail("A truncated fixed-width stack payload was accepted.");
+        }
+        catch (Exception exception) when (exception.GetType().Name == "LuminPackException")
+        {
+            Assert.Same(previous, target);
+            Assert.Equal(0, reader.Position);
         }
     }
 

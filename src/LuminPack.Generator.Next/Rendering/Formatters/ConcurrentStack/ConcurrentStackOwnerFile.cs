@@ -242,7 +242,7 @@ internal static class ConcurrentStackOwnerFile
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in global::LuminPack.Code.LuminPackCollectionAccess.EnumerateConcurrentStack(value))");
                     w.Open();
-                    ConcurrentJsonElementWriter.Emit(w, set, stack, scalar, elementOwner);
+                    JsonSequenceElementWriter.Emit(w, set, stack, scalar, elementOwner);
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");

@@ -647,7 +647,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    bool integerPair = context.Supports("ConcurrentJsonIntegerPair") && context.RawPairs &&
+                    bool integerPair = context.Supports("JsonIntegerPair") && context.RawPairs &&
                         (key == "int" || GenericFormatterReuse.IsUnmanagedPlaceholder(key)) &&
                         (value is "int" or "long" || GenericFormatterReuse.IsUnmanagedPlaceholder(value));
                     bool sharedPair = integerPair && (GenericFormatterReuse.IsUnmanagedPlaceholder(key) ||

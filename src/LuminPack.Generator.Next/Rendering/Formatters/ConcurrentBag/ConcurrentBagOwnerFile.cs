@@ -268,7 +268,7 @@ internal static class ConcurrentBagOwnerFile
                     w.Line("var elements = new global::System.ReadOnlySpan<" + scalar + ">(snapshot, 0, count);");
                     w.Line("foreach (var item in elements)");
                     w.Open();
-                    ConcurrentJsonElementWriter.Emit(w, set, bag, scalar, elementOwner);
+                    JsonSequenceElementWriter.Emit(w, set, bag, scalar, elementOwner);
                     w.Close();
                     w.Close();
                     w.Line("finally");

@@ -162,6 +162,54 @@ public static partial class LuminTreeStorage
             destination[position++] = pair;
     }
 
+    /// <summary>Writes an immutable list's raw elements directly into a proven output record when possible.</summary>
+    /// <typeparam name="T">The unmanaged list element type.</typeparam>
+    /// <param name="writer">The writer receiving the complete list record.</param>
+    /// <param name="list">The non-null immutable list.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void WriteRawList<T>(ref LuminPackWriter writer, ImmutableList<T> list) where T : unmanaged
+    {
+        int count = list.Count;
+#if NET8_0_OR_GREATER
+        // Restrict direct typed stores to the same architecture-specific contract as individual scalar stores.
+        if (count != 0 && (Unsafe.SizeOf<IntPtr>() == 8 || Unsafe.SizeOf<T>() <= 4) && ImmutableListLayout<T>.Available)
+        {
+            long width = sizeof(int) + (long)count * Unsafe.SizeOf<T>();
+            if (writer.RecordRoom() >= width)
+            {
+                ref byte header = ref writer.Cursor;
+                LuminPackWriter.Write<int>(ref header, count);
+                var output = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, T>(ref Unsafe.Add(ref header, sizeof(int))), count);
+                int index = 0;
+                WalkAvl(Field<object>(list, ImmutableListLayout<T>.Root), in ImmutableListLayout<T>.Nodes, output, ref index);
+                writer.Advance((int)width);
+                return;
+            }
+        }
+#endif
+        WriteStaged(ref writer, list, count);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static void WriteStaged(ref LuminPackWriter writer, ImmutableList<T> list, int count)
+        {
+            if (count == 0)
+            {
+                writer.Write<T>(ReadOnlySpan<T>.Empty, 0);
+                return;
+            }
+            var items = System.Buffers.ArrayPool<T>.Shared.Rent(count);
+            try
+            {
+                list.CopyTo(items);
+                writer.Write<T>(items.AsSpan(0, count), count);
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<T>.Shared.Return(items);
+            }
+        }
+    }
+
     /// <summary>Writes a sorted set of raw elements as the count followed by the elements in order.</summary>
     /// <typeparam name="T">The raw element type, written as its storage.</typeparam>
     /// <param name="writer">The writer receiving the record.</param>

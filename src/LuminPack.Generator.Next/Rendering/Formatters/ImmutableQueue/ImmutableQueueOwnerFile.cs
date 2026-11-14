@@ -40,7 +40,7 @@ internal static class ImmutableQueueOwnerFile
         string elementOwner = "global::LuminPack.Binary_" + extension + "_" + readable;
         string owner = "Binary_" + extension + "_ImmutableQueueOf" + readable;
         bool boolean = scalar == "bool";
-        string firstAlias = "value2", secondAlias = "value3", thirdAlias = "value4", reversedAlias = "value5", checkedAlias = "value6";
+        string firstAlias = "value2", secondAlias = "value3", thirdAlias = "value4", checkedAlias = "value5";
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -87,7 +87,7 @@ internal static class ImmutableQueueOwnerFile
                     w.Blank();
                     var traversal = new global::System.Collections.Generic.List<string>();
                     ImmutableQueueTraversal.Write(traversal, scalar, "value", w, firstAlias, secondAlias, thirdAlias,
-                        reversedAlias, checkedAlias);
+                        checkedAlias);
                     foreach (string line in traversal)
                         w.Line(line);
                     w.Blank();
@@ -138,7 +138,7 @@ internal static class ImmutableQueueOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + queue + " value)");
@@ -221,6 +221,7 @@ internal static class ImmutableQueueOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + queue + " input)");
@@ -237,20 +238,25 @@ internal static class ImmutableQueueOwnerFile
                     w.Line("bool isFirst = true;");
                     w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(value, out var forwards, out var backwards, out var reverse))");
                     w.Open();
-                    w.Line("foreach (var item in forwards!)");
-                    EmitJsonElement("item", "temp");
+                    w.Line("WriteStack(ref writer, forwards!, ref isFirst);");
                     w.Line("if (reverse)");
                     w.Indented(() => w.Line("WriteReversed(ref writer, backwards!, ref isFirst);"));
                     w.Line("else");
-                    w.Open();
-                    w.Line("foreach (var item2 in backwards!)");
-                    EmitJsonElement("item2", "temp2");
-                    w.Close();
+                    w.Indented(() => w.Line("WriteStack(ref writer, backwards!, ref isFirst);"));
                     w.Close();
                     w.Line("else");
                     w.Open();
                     w.Line("foreach (var item3 in value)");
-                    EmitJsonElement("item3", "temp3");
+                    EmitJsonElement("item3");
+                    w.Close();
+                    w.Blank();
+                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line("static void WriteStack(ref " + jsonWriter + " writer2, " + stack + " stack, ref bool isFirst2)");
+                    w.Open();
+                    w.Line("foreach (var item in stack)");
+                    w.Open();
+                    JsonSequenceElementWriter.Emit(w, set, queue, scalar, elementOwner, "writer2", "isFirst2");
+                    w.Close();
                     w.Close();
                     w.Blank();
                     w.Line(w.MethodImpl("NoInlining"));
@@ -261,13 +267,7 @@ internal static class ImmutableQueueOwnerFile
                     w.Open();
                     w.Line("foreach (var item4 in new global::System.ReadOnlySpan<" + scalar + ">(items, 0, count))");
                     w.Open();
-                    w.Line("if (!isFirst2)");
-                    w.Line("    writer2.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst2 = false;");
-                    w.Line("writer2.SetFirstElement(true);");
-                    w.Line("var temp4 = item4;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer2, temp4);");
+                    JsonSequenceElementWriter.Emit(w, set, queue, scalar, elementOwner, "writer2", "isFirst2", "item4");
                     w.Close();
                     w.Close();
                     w.Line("finally { global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(items, " +
@@ -296,16 +296,10 @@ internal static class ImmutableQueueOwnerFile
             }
         }
 
-        void EmitJsonElement(string variable, string temp)
+        void EmitJsonElement(string variable)
         {
             w.Open();
-            w.Line("if (!isFirst)");
-            w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-            w.Line("else");
-            w.Line("    isFirst = false;");
-            w.Line("writer.SetFirstElement(true);");
-            w.Line("var " + temp + " = " + variable + ";");
-            w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, " + temp + ");");
+            JsonSequenceElementWriter.Emit(w, set, queue, scalar, elementOwner, item: variable);
             w.Close();
         }
 
@@ -332,6 +326,7 @@ internal static class ImmutableQueueOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + queue + " value)");

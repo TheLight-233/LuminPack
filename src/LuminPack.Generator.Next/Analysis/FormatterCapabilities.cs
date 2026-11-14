@@ -29,6 +29,8 @@ internal static class FormatterCapabilities
                 result.Add("ImmutableBuilder");
             if (concrete is "ImmutableQueue" or "ImmutableList" && FormatterRuntimeTraits.CanCreateImmutableSequenceFromSpan(compilation, concrete))
                 result.Add("ImmutableSpan");
+            if (definition == "System.Collections.Immutable.ImmutableList" && FormatterImmutableTraits.HasRawListWriter(compilation))
+                result.Add("ImmutableRawListWrite");
         }
 
         if (definition == "System.Collections.Generic.Dictionary" && named.TypeArguments[0].SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasEnumeratedStringKeyCheck(compilation))
@@ -88,11 +90,14 @@ internal static class FormatterCapabilities
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.CanStageStack(compilation, named.TypeArguments[0]))
             result.Add("StageConcurrentStack");
         if (definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
+            or "System.Collections.Immutable.ImmutableArray" or "System.Collections.Immutable.ImmutableList" or "System.Collections.Immutable.ImmutableQueue"
+            or "System.Collections.Immutable.ImmutableStack" or "System.Collections.Immutable.ImmutableHashSet" or "System.Collections.Immutable.ImmutableSortedSet"
             && FormatterConcurrentTraits.HasJsonIntegerElement(compilation, named.TypeArguments[0]))
-            result.Add("ConcurrentJsonIntegerElement");
-        if (definition == "System.Collections.Concurrent.ConcurrentDictionary" &&
+            result.Add("JsonIntegerElement");
+        if (definition is "System.Collections.Concurrent.ConcurrentDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
+            "System.Collections.Immutable.ImmutableSortedDictionary" &&
             FormatterConcurrentTraits.HasJsonIntegerPairs(compilation))
-            result.Add("ConcurrentJsonIntegerPair");
+            result.Add("JsonIntegerPair");
         if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))

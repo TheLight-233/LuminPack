@@ -3,9 +3,8 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared binary and JSON formatter owner of one closed <c>ImmutableList&lt;T&gt;</c> of raw scalars.</summary>
-/// <remarks>The members mirror the legacy formatter generator's immutable-list roots and extension methods. The binary write
-/// copies the tree into pooled storage and stores the span; the read rebuilds the list from the pooled span; the JSON roots
-/// transfer their elements through the shared scalar owner.</remarks>
+/// <remarks>The binary write uses the runtime tree writer when present. The read rebuilds the list from a pooled span.
+/// The JSON roots transfer their elements through the shared scalar owner.</remarks>
 internal static class ImmutableListOwnerFile
 {
     /// <summary>Renders the file.</summary>
@@ -36,6 +35,7 @@ internal static class ImmutableListOwnerFile
         string roots = "LuminRoots_ImmutableListOf" + readable;
         string elementOwner = "global::LuminPack.Binary_" + extension + "_" + readable;
         string owner = "Binary_" + extension + "_ImmutableListOf" + readable;
+        bool rawWriter = set.FindFormatter(sequence)?.Supports("ImmutableRawListWrite") == true;
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -63,7 +63,7 @@ internal static class ImmutableListOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(rawWriter ? inline : w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWrite(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    " + sequence + " input)");
@@ -77,6 +77,13 @@ internal static class ImmutableListOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
+                    if (rawWriter)
+                    {
+                        w.Line("global::LuminPack.Utility.LuminTreeStorage.WriteRawList(ref writer, value);");
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     w.Line("int count = value.Count;");
                     w.Line("var items = count == 0 ? null : global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(count);");
                     w.Line("try");
@@ -134,7 +141,7 @@ internal static class ImmutableListOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -257,13 +264,7 @@ internal static class ImmutableListOwnerFile
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in new global::System.ReadOnlySpan<" + scalar + ">(items, 0, count))");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer2.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer2.SetFirstElement(true);");
-                    w.Line("var temp = item;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer2, temp);");
+                    JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner, writer: "writer2");
                     w.Close();
                     w.Close();
                     w.Line("finally");
@@ -322,6 +323,7 @@ internal static class ImmutableListOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

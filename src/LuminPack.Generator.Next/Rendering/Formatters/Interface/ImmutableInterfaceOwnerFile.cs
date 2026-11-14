@@ -14,15 +14,15 @@ internal static class ImmutableInterfaceOwnerFile
     private const string Namespace = "global::System.Collections.Immutable.";
 
     private static readonly EnumerableOwnerSpec ListSpec = new EnumerableOwnerSpec(Write, c => Read(c, Builder),
-        "staged.Add(item);", BeforeBuilder, AfterBuilder);
+        "staged.Add(item);", BeforeBuilder, AfterBuilder, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec QueueSpec = new EnumerableOwnerSpec(QueueWrite, c => Read(c, Queue),
         "staged = staged.Enqueue(item);", c => c.W.Line("var staged = " + Namespace + "ImmutableQueue<" + c.Scalar + ">.Empty;"),
-        c => c.W.Line("value = staged;"), jsonCount: false);
+        c => c.W.Line("value = staged;"), jsonCount: false, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec StackSpec = new EnumerableOwnerSpec(Write, c => Read(c, Stack),
         "staged.Add(item);", c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"), AfterStack,
-        jsonCount: false);
+        jsonCount: false, readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders an immutable list or set owner.</summary>
     /// <param name="set">The required owners and the extension container.</param>

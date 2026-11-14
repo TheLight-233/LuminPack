@@ -9,7 +9,7 @@ internal static class ImmutableSortedDictionaryOwnerFile
 {
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.TreeWrite(), Read, "staged[key] = itemValue;",
         c => ImmutableBuilderLifetime.Begin(c.W, "SortedDictionary", c.Key + ", " + c.Value, c.Supports("ImmutableBuilder"), "staged"),
-        AfterJson);
+        AfterJson, outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -35,6 +35,7 @@ internal static class ImmutableSortedDictionaryOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
-        c.ReadPairs(() => w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateImmutableSortedDictionary(pairs, length);"));
+        c.ReadPairs(() => w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateImmutableSortedDictionary(pairs, length);"),
+            knownNonEmpty: c.UsesRawOrStringEntries);
     }
 }

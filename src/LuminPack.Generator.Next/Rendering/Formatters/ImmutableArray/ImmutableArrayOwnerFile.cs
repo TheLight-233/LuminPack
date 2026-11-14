@@ -273,6 +273,7 @@ internal static class ImmutableArrayOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    scoped in " + sequence + " input)");
@@ -295,13 +296,7 @@ internal static class ImmutableArrayOwnerFile
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in value)");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line("var temp = item;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
+                    JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner);
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
@@ -349,6 +344,7 @@ internal static class ImmutableArrayOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

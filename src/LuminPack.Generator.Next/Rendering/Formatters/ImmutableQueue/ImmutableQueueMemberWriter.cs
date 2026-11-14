@@ -25,13 +25,12 @@ internal static class ImmutableQueueMemberWriter
         string element = member.Scalar!;
         bool boolean = element == "bool";
         // The two traversed stacks and the enumerator fallback each isolate their element alias, as the presentation does.
-        string firstAlias = null, secondAlias = null, thirdAlias = null, reversedAlias = null, checkedAlias = null;
+        string firstAlias = null, secondAlias = null, thirdAlias = null, checkedAlias = null;
         if (boolean)
         {
             firstAlias = BinaryEmitter.RoleName(names, "value");
             secondAlias = BinaryEmitter.RoleName(names, "value");
             thirdAlias = BinaryEmitter.RoleName(names, "value");
-            reversedAlias = BinaryEmitter.RoleName(names, "value");
             checkedAlias = BinaryEmitter.RoleName(names, "value");
         }
         body.Add("{");
@@ -46,7 +45,7 @@ internal static class ImmutableQueueMemberWriter
         body.Add(w.A("LuminPackWriter") + " operationState = default;");
         body.Add(w.A("LuminPackWriter") + " operationStateFallback = default;");
         body.Add("writer.CopyTo(ref operationState);");
-        ImmutableQueueTraversal.Write(body, element, local, w, firstAlias, secondAlias, thirdAlias, reversedAlias, checkedAlias);
+        ImmutableQueueTraversal.Write(body, element, local, w, firstAlias, secondAlias, thirdAlias, checkedAlias);
         body.Add("operationState.CopyTo(ref writer);");
         body.Add(exit + ":");
         body.Add("\t;");

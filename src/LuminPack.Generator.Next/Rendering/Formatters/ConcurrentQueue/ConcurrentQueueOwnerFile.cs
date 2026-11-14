@@ -291,7 +291,7 @@ internal static class ConcurrentQueueOwnerFile
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in value)");
                     w.Open();
-                    ConcurrentJsonElementWriter.Emit(w, set, queue, scalar, elementOwner);
+                    JsonSequenceElementWriter.Emit(w, set, queue, scalar, elementOwner);
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
