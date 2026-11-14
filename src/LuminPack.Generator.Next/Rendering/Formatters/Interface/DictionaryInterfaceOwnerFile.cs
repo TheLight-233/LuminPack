@@ -72,20 +72,31 @@ internal static class DictionaryInterfaceOwnerFile
         bool rawKernel = c.RawPairs && c.Supports("BinaryRawPairs");
         bool textKernel = c.UsesRawOrStringEntries && (c.Key == "string" || c.Value == "string") && c.Supports("BinaryTextPair");
         bool textPair = c.Key == "string" && c.Value == "string";
+        bool denseText = textKernel && textPair && c.Supports("DenseDictionaryView");
         const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
+        const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+        const string textPairFits = "operationState.RecordRoom() >= 2 * sizeof(int) + ((long)(key?.Length ?? 0) + (itemValue?.Length ?? 0)) * sizeof(char)";
         string keyWidth = c.Memory + ".SizeOf<" + c.Key + ">()";
         string width = keyWidth + " + " + c.Memory + ".SizeOf<" + c.Value + ">()";
         string rawWidth = c.Memory + ".SizeOf<" + (c.Key == "string" ? c.Value : c.Key) + ">()";
+        if (denseText)
+        {
+            w.Line("var dictionary = value.GetType() == typeof(" + concrete + ") ? " + c.Memory + ".As<" + concrete + ">(value) : null;");
+            w.Line("if (dictionary is not null && TryWriteDense(ref operationState, dictionary))");
+            w.Indented(() => w.Line("goto operationComplete_RootWrite;"));
+        }
         w.Line("int countPosition = operationState.BeginCollection();");
-        w.Line("int count = value.GetType() == typeof(" + concrete + ")");
+        w.Line(denseText ? "int count = dictionary is not null" : "int count = value.GetType() == typeof(" + concrete + ")");
         w.Indented(() =>
         {
-            w.Line("? WriteKnown(ref operationState, " + c.Memory + ".As<" + concrete + ">(value))");
+            w.Line("? WriteKnown(ref operationState, " + (denseText ? "dictionary" : c.Memory + ".As<" + concrete + ">(value)") + ")");
             w.Line(": WriteInterface(ref operationState, value);");
         });
         w.Line("operationState.EndCollection(countPosition, count);");
         w.Line("operationState.CheckBuffer();");
         w.Blank();
+        if (denseText)
+            EmitDenseText();
         EmitLoop("WriteKnown", concrete);
         EmitLoop("WriteInterface", c.Dictionary);
         if (rawKernel || textKernel)
@@ -96,6 +107,62 @@ internal static class DictionaryInterfaceOwnerFile
             c.WriteMember(c.Key, "key");
             c.WriteMember(c.Value, "itemValue");
             w.Close();
+        }
+
+        void EmitDenseText()
+        {
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static bool TryWriteDense(scoped ref " + writer + " operationState, " + concrete + " items)");
+            w.Open();
+            w.Line("if (" + c.Memory + ".SizeOf<global::System.IntPtr>() != 8 ||");
+            w.Line("    !" + marshal + ".TryGetDictionaryView(items, out var view))");
+            w.Indented(() => w.Line("return false;"));
+            w.Line("int count = items.Count;");
+            w.Line("if (view._count != count || view._freeCount != 0)");
+            w.Indented(() => w.Line("return false;"));
+            w.Line("var entries = view._entries;");
+            w.Line("if (count != 0 && (entries is null || (uint)count > (uint)entries.Length))");
+            w.Indented(() => w.Line("return false;"));
+            w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+            w.Line("operationState.WriteCollectionHeader(count);");
+            w.Line("if (count != 0)");
+            w.Open();
+            w.Line("int version = view._version;");
+            w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(entries!);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("ref var entry = ref " + c.Memory + ".Add(ref first, (nint)(uint)index);");
+            w.Line("var key = entry.Key;");
+            w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+            w.Open();
+            w.Line("var itemValue = entry.Value;");
+            w.Line("if (" + textPairFits + ")");
+            w.Open();
+            EmitTextPairStores();
+            w.Line("continue;");
+            w.Close();
+            w.Close();
+            c.WriteMember(c.Key, "key");
+            w.Line("var remainingValue = entry.Value;");
+            c.WriteMember(c.Value, "remainingValue");
+            w.Close();
+            w.Line("while (++index < count);");
+            w.Line("if (view._version != version || view._count != count || view._freeCount != 0)");
+            w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();"));
+            w.Close();
+            w.Line("operationState.CheckBuffer();");
+            w.Line("return true;");
+            w.Close();
+            w.Blank();
+        }
+
+        void EmitTextPairStores()
+        {
+            w.Line("ref byte record = ref operationState.Cursor;");
+            w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref record, key);");
+            w.Line("written += " + runtimeWriter + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), itemValue);");
+            w.Line("operationState.CompleteRun(written);");
         }
 
         void EmitLoop(string method, string input)
@@ -128,25 +195,22 @@ internal static class DictionaryInterfaceOwnerFile
                 string text = c.Key == "string" ? "key" : "itemValue";
                 w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
                 if (textPair)
-                    w.Line("    operationState.RecordRoom() >= 2 * sizeof(int) + ((long)(key?.Length ?? 0) + (itemValue?.Length ?? 0)) * sizeof(char))");
+                    w.Line("    " + textPairFits + ")");
                 else
                     w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
                 w.Open();
-                w.Line("ref byte record = ref operationState.Cursor;");
                 if (textPair)
-                {
-                    w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref record, key);");
-                    w.Line("written += " + runtimeWriter + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), itemValue);");
-                    w.Line("operationState.CompleteRun(written);");
-                }
+                    EmitTextPairStores();
                 else if (c.Key == "string")
                 {
+                    w.Line("ref byte record = ref operationState.Cursor;");
                     w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref record, key);");
                     w.Line(runtimeWriter + ".Write(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), in itemValue);");
                     w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
                 }
                 else
                 {
+                    w.Line("ref byte record = ref operationState.Cursor;");
                     w.Line(runtimeWriter + ".Write(ref record, in key);");
                     w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), itemValue);");
                     w.Line("operationState.CompleteRun(written + " + rawWidth + ");");

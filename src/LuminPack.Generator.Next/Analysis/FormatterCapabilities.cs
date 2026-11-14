@@ -286,6 +286,11 @@ internal static class FormatterCapabilities
               named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].SpecialType == SpecialType.System_String)) &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("BinaryTextPair");
+        if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
+            modern && !unity && named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
+            compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2") is { } dictionary &&
+            FormatterConcurrentTraits.HasDictionaryView(compilation, dictionary))
+            result.Add("DenseDictionaryView");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))
             result.Add("ConcurrentTraversal");
         if (definition == "System.Collections.Frozen.FrozenSet")

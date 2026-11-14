@@ -424,6 +424,27 @@ public static partial class LuminPackMarshal
         return new DictionaryView<TKey, TValue?>(dict!);
     }
 
+    /// <summary>Obtains a dictionary view when the runtime storage is recognized.</summary>
+    /// <param name="dictionary">The exact framework dictionary.</param>
+    /// <param name="view">The validated layout view.</param>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <returns>Whether the runtime layout supports direct entry access.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryGetDictionaryView<TKey, TValue>(Dictionary<TKey, TValue> dictionary, out DictionaryView<TKey, TValue> view)
+        where TKey : notnull
+    {
+        if (DictionaryView<TKey, TValue>.Recognized)
+        {
+            view = new DictionaryView<TKey, TValue>(dictionary);
+            return true;
+        }
+
+        view = default;
+        return false;
+    }
+
     private static readonly bool UsesLegacyHashTableFreeEntryEncoding =
         string.Equals(typeof(object).Assembly.GetName().Name, "mscorlib", StringComparison.Ordinal);
 

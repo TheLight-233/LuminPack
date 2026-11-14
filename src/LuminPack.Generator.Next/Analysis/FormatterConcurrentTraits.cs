@@ -22,6 +22,24 @@ internal static class FormatterConcurrentTraits
                 (SpecialType.System_Int32, RefKind.None));
     }
 
+    /// <summary>Checks the closed dictionary's nonthrowing layout probe.</summary>
+    internal static bool HasDictionaryView(Compilation compilation, INamedTypeSymbol dictionary)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");
+        var view = owner?.GetTypeMembers("DictionaryView", 2).SingleOrDefault();
+        return owner is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            view is { IsValueType: true, DeclaredAccessibility: Accessibility.Public } &&
+            owner.GetMembers("TryGetDictionaryView").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 2,
+                    ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 2 &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[1].RefKind == RefKind.Out &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type,
+                    dictionary.Construct(method.TypeParameters[0], method.TypeParameters[1])) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type,
+                    view.Construct(method.TypeParameters[0], method.TypeParameters[1])));
+    }
+
     /// <summary>Checks reservation operations shared by the fixed pair writers.</summary>
     /// <param name="compilation">The consuming compilation and its runtime references.</param>
     /// <returns>Whether a generated pair can validate and advance once.</returns>
