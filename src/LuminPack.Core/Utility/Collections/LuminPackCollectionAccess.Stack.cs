@@ -10,6 +10,28 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackCollectionAccess
 {
+    /// <summary>Writes a nonempty raw stack as one bottom-first binary record within the current output window.</summary>
+    /// <typeparam name="T">The reference-free stack element.</typeparam>
+    /// <param name="writer">The writer positioned at the collection header.</param>
+    /// <param name="stack">The nonempty source stack.</param>
+    /// <param name="count">The captured element count.</param>
+    /// <returns>Whether the complete record was written without growing the buffer.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryWriteStackRecord<T>(scoped ref LuminPackWriter writer, Stack<T> stack, int count) where T : unmanaged
+    {
+        long bytes = sizeof(int) + (long)count * Unsafe.SizeOf<T>();
+        if (writer.Position < 0 || writer.RecordRoom() < bytes || !TryGetStackArray(stack, count, out var array))
+            return false;
+        var items = LuminPackMarshal.CreateReadOnlySpan(ref LuminPackMarshal.GetNotNullArrayReference(array), count);
+        if (MemoryMarshal.AsBytes(items).Overlaps(writer.Buffer))
+            return false;
+
+        int written = LuminPackWriter.WriteReservedSpan(ref writer.CurrentReference, false, items);
+        writer.CompleteRun(written);
+        return true;
+    }
+
     /// <summary>Copies bottom-first stack storage into an already started binary record.</summary>
     /// <typeparam name="T">The reference-free stack element.</typeparam>
     /// <param name="writer">The writer positioned after the collection header.</param>

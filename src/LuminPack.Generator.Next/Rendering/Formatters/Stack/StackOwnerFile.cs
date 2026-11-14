@@ -106,6 +106,11 @@ internal static class StackOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("int count = value.Count;");
+                    if (contract?.Supports("WriteStackRecord") == true)
+                    {
+                        w.Line("if (" + access + "TryWriteStackRecord(ref operationState, value, count))");
+                        w.Indented(() => w.Line("goto operationComplete_RootWrite;"));
+                    }
                     w.Line("int countPosition = operationState.BeginCollection();");
                     w.Line("if (count != 0" + (contract?.Supports("WriteStackStorage") == true ?
                         " && !" + access + "TryWriteStackStorage(ref operationState, value, count)" : "") + ")");

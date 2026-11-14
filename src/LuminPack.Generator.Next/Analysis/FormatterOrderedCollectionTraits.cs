@@ -123,6 +123,8 @@ internal static class FormatterOrderedCollectionTraits
         }
         else if (element.IsUnmanagedType)
         {
+            if (HasKernel("TryWriteStackRecord", "LuminPackWriter", 1, true, false))
+                result.Add("WriteStackRecord");
             if (HasKernel("TryWriteStackStorage", "LuminPackWriter", 1, true, false))
                 result.Add("WriteStackStorage");
             if (HasKernel("TryReadStackStorage", "LuminPackReader", 1, true, false))

@@ -139,12 +139,14 @@ namespace LuminPack.Core
         public readonly void CopyTo(ref LuminPackReader destination)
         {
             destination._options = _options;
+            destination._buffer = _buffer;
 #if NET8_0_OR_GREATER
             destination.Cursor = ref Cursor;
+            destination._end = ref _end;
 #else
             destination.Cursor = Cursor;
+            destination._end = _end;
 #endif
-            destination.Buffer = _buffer;
         }
 
         /// <summary>Gets the initialized reference context, creating an independent implicit scope on first access.</summary>
