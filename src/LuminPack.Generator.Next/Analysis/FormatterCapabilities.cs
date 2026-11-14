@@ -85,14 +85,34 @@ internal static class FormatterCapabilities
                 result.Add("InterfaceTargetReuse");
         }
 
-        if (definition == "System.Collections.Generic.HashSet" && FormatterRuntimeTraits.CanGroupSmallHashSetWrites(named.TypeArguments[0], compilation))
-            result.Add("SmallHashSetWrite");
+        if (definition == "System.Collections.Generic.HashSet")
+        {
+            var element = named.TypeArguments[0];
+            if (FormatterRuntimeTraits.CanGroupSmallHashSetWrites(element, compilation))
+                result.Add("SmallHashSetWrite");
+            if (modern && !unity && RawCallbackFreeSetElement(element) && FormatterRuntimeTraits.HasSetTransfer(compilation, named,
+                    "LuminPack.Code.LuminPackMarshal", "ReadRawHashSet", "LuminPackReader", SpecialType.System_Void, takesCount: true))
+                result.Add("ReadRawHashSet");
+        }
         if (definition == "System.Collections.Generic.SortedSet")
         {
-            if (FormatterRuntimeTraits.CanBuildSortedSet(named.TypeArguments[0], compilation))
+            var element = named.TypeArguments[0];
+            if (FormatterRuntimeTraits.CanBuildSortedSet(element, compilation))
                 result.Add("BuildSortedSet");
-            if (FormatterRuntimeTraits.CanRebuildSortedSet(named.TypeArguments[0], compilation))
+            if (FormatterRuntimeTraits.CanRebuildSortedSet(element, compilation))
                 result.Add("RebuildSortedSet");
+            if (element.SpecialType == SpecialType.System_String &&
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteCheckedStrings", element))
+                result.Add("WriteCheckedStringSpan");
+            if (element.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64)
+            {
+                if (FormatterRuntimeTraits.HasSetTransfer(compilation, named, "LuminPack.Utility.LuminTreeStorage",
+                        "TryWriteIntegerSortedSetJson", "LuminPackJsonWriter", SpecialType.System_Boolean, takesCount: false))
+                    result.Add("SortedSetIntegerTraversal");
+                if (FormatterRuntimeTraits.HasSetTransfer(compilation, named, "LuminPack.Utility.LuminTreeStorage",
+                        "TryReadIntegerSortedSetJson", "LuminPackJsonReader", SpecialType.System_Boolean, takesCount: false))
+                    result.Add("SortedSetIntegerConstruction");
+            }
         }
 
         if (definition == "System.Collections.Generic.SortedList")
@@ -119,7 +139,8 @@ internal static class FormatterCapabilities
         if ((definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
             or "System.Collections.Immutable.ImmutableArray" or "System.Collections.Immutable.ImmutableList" or "System.Collections.Immutable.ImmutableQueue"
             or "System.Collections.Immutable.ImmutableStack" or "System.Collections.Immutable.ImmutableHashSet" or "System.Collections.Immutable.ImmutableSortedSet" ||
-            SequenceInterface(definition) || definition is "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet") &&
+            SequenceInterface(definition) || definition is "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" or
+                "System.Collections.Generic.HashSet") &&
             FormatterConcurrentTraits.HasJsonIntegerElement(compilation, named.TypeArguments[0]))
             result.Add("JsonIntegerElement");
         if (definition is "System.Collections.Concurrent.ConcurrentDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
@@ -138,8 +159,20 @@ internal static class FormatterCapabilities
             result.Add("ConcurrentBinaryTextPair");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))
             result.Add("ConcurrentTraversal");
-        if (definition == "System.Collections.Frozen.FrozenSet" && FormatterFrozenTraits.Available(compilation, "Set", 1))
-            result.Add("RentFrozenSet");
+        if (definition == "System.Collections.Frozen.FrozenSet")
+        {
+            var element = named.TypeArguments[0];
+            ContiguousCapabilities(compilation, element, result);
+            if (element.SpecialType == SpecialType.System_String &&
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element))
+                result.Add("WriteFrozenStrings");
+            if (FormatterFrozenTraits.Available(compilation, "Set", 1))
+                result.Add("RentFrozenSet");
+            if (RawCallbackFreeSetElement(element) && compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1") is { } hashSet &&
+                FormatterRuntimeTraits.HasSetTransfer(compilation, hashSet, "LuminPack.Utility.LuminFrozenConstruction",
+                    "AddRawSetItems", "LuminPackReader", SpecialType.System_Void, takesCount: true))
+                result.Add("ReadFrozenRawSetItems");
+        }
         if (definition == "System.Collections.Frozen.FrozenDictionary")
         {
             if (FormatterFrozenTraits.Available(compilation, "Dictionary", 2))
@@ -173,6 +206,14 @@ internal static class FormatterCapabilities
     /// <param name = "type">The declared type or its source-ready spelling.</param>
     /// <returns>Whether the requested contract or capability is available.</returns>
     private static bool CallbackFree(ITypeSymbol type) => type is INamedTypeSymbol { IsValueType: true, IsGenericType: false } && (type.TypeKind == TypeKind.Enum || type.IsUnmanagedType && (type.SpecialType != SpecialType.None || Rendering.Formatters.FrameworkScalarBody.Contains(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))));
+
+    // These element moves preserve every wire byte and the default hash cannot invoke application code.
+    // Boolean retains canonical validation. The caller separately selects the raw wire representation.
+    private static bool RawCallbackFreeSetElement(ITypeSymbol type) =>
+        type.TypeKind == TypeKind.Enum || type.SpecialType is SpecialType.System_Byte or SpecialType.System_SByte or
+        SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
+        SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_IntPtr or
+        SpecialType.System_UIntPtr or SpecialType.System_Single or SpecialType.System_Double;
     /// <summary>Certifies a nonnull sealed leaf whose read cannot invoke user code while a dictionary entry ref is retained.</summary>
     /// <param name = "type">The declared type or its source-ready spelling.</param>
     /// <param name = "compilation">The consuming compilation and its runtime references.</param>

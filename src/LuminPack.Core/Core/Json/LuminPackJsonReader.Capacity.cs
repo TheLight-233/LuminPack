@@ -31,14 +31,17 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly int GetArrayCapacityHint<TOptions>(int minimum)
             where TOptions : struct, ILuminPackOptions
+            => HasArrayCapacityInput<TOptions>(minimum) ? Math.Max(0, GetArrayLengthHint<TOptions>()) : 0;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal readonly bool HasArrayCapacityInput<TOptions>(int minimum)
+            where TOptions : struct, ILuminPackOptions
         {
             int position = Position;
             if ((uint)position > (uint)Buffer.Length)
-                return 0;
+                return false;
             int step = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 1 : 2;
-            if ((uint)minimum > (uint)(Buffer.Length - position) / (uint)step)
-                return 0;
-            return Math.Max(0, GetArrayLengthHint<TOptions>());
+            return (uint)minimum <= (uint)(Buffer.Length - position) / (uint)step;
         }
 
         /// <summary>Counts outer array separators while ignoring quoted and nested contents.</summary>

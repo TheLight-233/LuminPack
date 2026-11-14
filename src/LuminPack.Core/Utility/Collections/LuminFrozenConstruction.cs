@@ -70,6 +70,27 @@ public static class LuminFrozenConstruction
             Cache<HashSet<T>>.Items.TryStore(value);
     }
 
+    /// <summary>Adds a complete fixed-width payload to a frozen set's exclusive builder without staging an item array.</summary>
+    /// <typeparam name="T">A fixed primitive or enum whose hashing and equality have no callbacks.</typeparam>
+    /// <param name="reader">The binary state after the count has been read.</param>
+    /// <param name="set">The destination builder, sized for the complete element count.</param>
+    /// <param name="count">The declared element count.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void AddRawSetItems<T>(scoped ref LuminPackReader reader, HashSet<T> set, int count) where T : unmanaged
+    {
+        int width = Unsafe.SizeOf<T>();
+        int bytes = checked(count * width);
+        reader.EnsureReadable(reader.Position, bytes);
+        ref byte source = ref reader.PeekInput(0, out _);
+        reader.Advance(bytes);
+        while (count > 0)
+        {
+            set.Add(LuminPackReader.Read<T>(ref source));
+            source = ref Unsafe.Add(ref source, width);
+            count--;
+        }
+    }
+
     /// <summary>Writes matching scalar key/value arrays after one complete payload reservation.</summary>
     /// <typeparam name="TKey">The complete raw scalar key representation.</typeparam>
     /// <typeparam name="TValue">The complete raw scalar value representation.</typeparam>

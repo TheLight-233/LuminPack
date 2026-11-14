@@ -4,13 +4,12 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>FrozenSet&lt;T&gt;</c> of raw scalars.</summary>
-/// <remarks>The write stores the item array as one block. The read returns the empty instance for an empty payload, otherwise
-/// reads one pooled block into a presized hash set and freezes it. The JSON read stages elements in a hash set that is frozen
-/// after the last element.</remarks>
+/// <remarks>Raw writes store the item array as one block. Reads preserve the empty instance and freeze a private hash-set
+/// builder after all elements are read. Fixed callback-free elements can fill the builder directly from checked input.</remarks>
 internal static class FrozenSetOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "staged.Add(item);",
-        BeforeJson, AfterJson);
+        BeforeJson, AfterJson, readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -22,6 +21,15 @@ internal static class FrozenSetOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
+        if (c.Text && c.Supports("WriteFrozenStrings"))
+        {
+            c.W.Line("int countPosition = operationState.BeginCollection();");
+            c.W.Line("var items = value.Items.AsSpan();");
+            c.W.Line("operationState.WriteStrings<TLuminProfile>(items);");
+            c.W.Line("operationState.EndCollection(countPosition, items.Length);");
+            c.W.Line("operationState.CheckBuffer();");
+            return;
+        }
         if (c.Payload != null || c.Forwarded)
         {
             c.CountedWrite("value");
@@ -46,7 +54,12 @@ internal static class FrozenSetOwnerFile
         w.Line(rented ? "var hashSet = global::LuminPack.Utility.LuminFrozenConstruction.RentSet<" + c.Scalar + ">(length);" :
             "var hashSet = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">(length);");
         if (rented) { w.Line("try"); w.Open(); }
-        c.PooledRead(() =>
+        if (!c.Counted && c.Supports("ReadFrozenRawSetItems"))
+        {
+            w.Line("global::LuminPack.Utility.LuminFrozenConstruction.AddRawSetItems(ref operationState, hashSet, length);");
+            w.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(hashSet);");
+        }
+        else c.PooledRead(() =>
         {
             w.Blank();
             w.Line("for (int index = 0; index < length; index++)");

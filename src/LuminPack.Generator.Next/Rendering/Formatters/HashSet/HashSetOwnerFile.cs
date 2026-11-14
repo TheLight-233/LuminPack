@@ -4,11 +4,12 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared binary and JSON formatter owner of one closed <c>HashSet&lt;T&gt;</c> of raw scalars.</summary>
 /// <remarks>The members mirror the legacy hash-set operations. The binary write copies the live entries through the shared raw
-/// kernel; the binary read creates a presized set, reads each element straight into its entry and rebuilds the buckets, which
-/// requires the payload to hold unique values, while an empty payload reuses and clears a non-null destination.</remarks>
+/// kernel. The binary read creates a presized set and rebuilds its buckets in entry order. Fixed callback-free elements
+/// can build the buckets while loading the entries. An empty payload reuses and clears a non-null destination.</remarks>
 internal static class HashSetOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);",
+        readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -41,6 +42,11 @@ internal static class HashSetOwnerFile
         w.Blank();
         w.Line("value = new " + c.Sequence + "(length);");
         w.Blank();
+        if (!c.Counted && c.Supports("ReadRawHashSet"))
+        {
+            w.Line("global::LuminPack.Code.LuminPackMarshal.ReadRawHashSet(ref operationState, value, length);");
+            return;
+        }
         w.Line("var setView = global::LuminPack.Code.LuminPackMarshal.GetHashSetView(value);");
         w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(setView._entries);");
         w.Line("for (int index = 0; index < length; index++)");

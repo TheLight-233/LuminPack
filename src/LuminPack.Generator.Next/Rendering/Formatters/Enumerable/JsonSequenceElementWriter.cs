@@ -14,12 +14,19 @@ internal static class JsonSequenceElementWriter
     /// <param name="writer">The JSON writer local.</param>
     /// <param name="first">The first-element flag local.</param>
     /// <param name="item">The current element local.</param>
+    /// <param name="utf8Only">Whether to preserve individual UTF-16 writer calls for this traversal.</param>
     internal static void Emit(CodeWriter w, SharedFormatterSet set, string sequence, string scalar, string owner,
-        string writer = "writer", string first = "isFirst", string item = "item")
+        string writer = "writer", string first = "isFirst", string item = "item", bool utf8Only = false)
     {
-        if (GenericFormatterReuse.Real(scalar) is "int" or "long" &&
-            set.FindFormatter(sequence)?.Supports("JsonIntegerElement") == true)
+        bool fusedInteger = GenericFormatterReuse.Real(scalar) is "int" or "long" &&
+            set.FindFormatter(sequence)?.Supports("JsonIntegerElement") == true;
+        if (fusedInteger)
         {
+            if (utf8Only)
+            {
+                w.Line("if (default(TLuminProfile).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+                w.Open();
+            }
             string element = item;
             if (GenericFormatterReuse.IsUnmanagedPlaceholder(scalar))
             {
@@ -28,7 +35,11 @@ internal static class JsonSequenceElementWriter
             }
             w.Line(writer + ".WriteEnumerationElement<TLuminProfile>(" + element + ", !" + first + ");");
             w.Line(first + " = false;");
-            return;
+            if (!utf8Only)
+                return;
+            w.Close();
+            w.Line("else");
+            w.Open();
         }
 
         w.Line("if (!" + first + ")");
@@ -38,5 +49,7 @@ internal static class JsonSequenceElementWriter
         w.Line(writer + ".SetFirstElement(true);");
         w.Line("var temp = " + item + ";");
         w.Line(owner + ".Write<TLuminProfile>(ref " + writer + ", temp);");
+        if (utf8Only && fusedInteger)
+            w.Close();
     }
 }

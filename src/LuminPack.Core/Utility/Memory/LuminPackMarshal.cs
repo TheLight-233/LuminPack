@@ -1576,6 +1576,53 @@ public static partial class LuminPackMarshal
         return true;
     }
 
+#if NET8_0_OR_GREATER
+    /// <summary>Reads a complete fixed-width payload into a fresh default-comparer set and builds its buckets.</summary>
+    /// <typeparam name="T">The fixed primitive or enum whose default hash has no callbacks.</typeparam>
+    /// <param name="reader">The binary state positioned at the start of the payload.</param>
+    /// <param name="set">The fresh default-comparer set allocated for this count.</param>
+    /// <param name="count">The declared count of fixed-width elements.</param>
+    /// <remarks>As in the staged entry rebuild, each wire slot is preserved in order and duplicates are not removed.</remarks>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void ReadRawHashSet<T>(scoped ref LuminPackReader reader, HashSet<T> set, int count) where T : unmanaged
+    {
+        var view = GetHashSetView(set);
+        var entries = view._entries;
+        var buckets = view._buckets;
+        if (count <= 0 || entries is null || (uint)count > (uint)entries.Length || buckets is null || buckets.Length == 0 ||
+            view._count != 0 || view._comparer is not null)
+        {
+            LuminPackExceptionHelper.ThrowInvalidCollectionLength(count);
+            return;
+        }
+
+        uint bucketCount = (uint)buckets.Length;
+        ulong multiplier = IntPtr.Size == 8 ? GetFastModMultiplier(bucketCount) : 0;
+        int width = Unsafe.SizeOf<T>();
+        int bytes = checked(count * width);
+        reader.EnsureReadable(reader.Position, bytes);
+        ref byte source = ref reader.PeekInput(0, out _);
+        reader.Advance(bytes);
+        ref var entry = ref GetArrayReference(entries);
+        ref int firstBucket = ref GetArrayReference(buckets);
+        int index = 0;
+        do
+        {
+            T item = LuminPackReader.Read<T>(ref source);
+            uint hashCode = unchecked((uint)item.GetHashCode());
+            ref int bucket = ref Unsafe.Add(ref firstBucket, (nint)(nuint)GetBucketIndex(hashCode, bucketCount, multiplier));
+            entry.Value = item;
+            entry.HashCode = hashCode;
+            entry.Next = bucket - 1;
+            bucket = ++index;
+            entry = ref Unsafe.Add(ref entry, 1);
+            source = ref Unsafe.Add(ref source, width);
+        } while (index < count);
+        view._count = count;
+    }
+#endif
+
     /// <summary>
     /// Rebuilds HashSet buckets and count after deserialization writes directly to entries.
     /// Bypasses HashSet.Add hashing, duplicate-value checks, and capacity growth.

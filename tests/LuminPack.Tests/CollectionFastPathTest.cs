@@ -210,6 +210,36 @@ public class CollectionFastPathTest
         Assert.Equal(prefix + "7]", output.Text);
     }
 
+    /// <summary>Checks collection mutation during output and completed elements after a failed read into a reused set.</summary>
+    [Fact]
+    public void SortedSetJsonPreservesMutationAndReuseBoundaries()
+    {
+        var source = new SortedSet<int> { int.MinValue, 7, 9 };
+        var output = new MutatingJsonOutput(() => source.Remove(9));
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            var writer = new LuminPackJsonWriter(output, default!, 12);
+            LuminPackSerializer.SerializeJson<SortedSet<int>, LuminPackUtf8LengthOptions>(ref writer, source);
+            writer.FlushToBufferWriter();
+        });
+        Assert.StartsWith("[-2147483648", output.Text);
+
+        int[] prefix = Enumerable.Range(0, 128).ToArray();
+        string json = "[" + string.Join(',', prefix);
+        var target = new SortedSet<int> { -1 };
+        var original = target;
+        var invalid = System.Text.Encoding.UTF8.GetBytes(json + ",-]");
+        Assert.NotNull(Record.Exception(() =>
+            LuminPackSerializer.DeserializeJson<SortedSet<int>, LuminPackUtf8LengthOptions>(invalid, ref target)));
+        Assert.Same(original, target);
+        Assert.Equal(prefix, target);
+
+        var unsorted = System.Text.Encoding.UTF8.GetBytes(json + ",3,-1]");
+        LuminPackSerializer.DeserializeJson<SortedSet<int>, LuminPackUtf8LengthOptions>(unsorted, ref target);
+        Assert.Same(original, target);
+        Assert.Equal(prefix.Prepend(-1), target);
+    }
+
     /// <summary>Uses an exact first window and observes its commit before the separator.</summary>
     private sealed class MutatingJsonOutput(Action onFirstAdvance) : IBufferWriter<byte>
     {

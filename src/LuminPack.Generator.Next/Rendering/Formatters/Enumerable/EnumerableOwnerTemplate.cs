@@ -665,20 +665,27 @@ internal static class EnumerableOwnerTemplate
                         w.Line("return;");
                         w.Close();
                     }
+                    bool wroteFrozenRun = fact.Family.Kind == CollectionKind.Frozen &&
+                        JsonIntegerRunWriter.TryEmit(w, set, sequence, scalar, "value.Items.AsSpan()", readBeforeSeparator: true);
                     if (spec.InterfaceListReuse || spec.InterfaceSetTraversal)
                         InterfaceJsonTraversal.Write(w, set, sequence, scalar, elementOwner, jsonWriter, spec.InterfaceSetTraversal);
-                    else
+                    else if (!wroteFrozenRun)
                     {
                         w.Line("bool isFirst = true;");
                         w.Line("foreach (var item in value)");
                         w.Open();
-                        w.Line("if (!isFirst)");
-                        w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                        w.Line("else");
-                        w.Line("    isFirst = false;");
-                        w.Line("writer.SetFirstElement(true);");
-                        w.Line("var temp = item;");
-                        w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
+                        if (fact.Family.Kind == CollectionKind.HashSet)
+                            JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner, utf8Only: true);
+                        else
+                        {
+                            w.Line("if (!isFirst)");
+                            w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                            w.Line("else");
+                            w.Line("    isFirst = false;");
+                            w.Line("writer.SetFirstElement(true);");
+                            w.Line("var temp = item;");
+                            w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
+                        }
                         w.Close();
                     }
                     w.Blank();

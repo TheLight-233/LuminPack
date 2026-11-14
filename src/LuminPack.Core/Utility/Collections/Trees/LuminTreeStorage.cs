@@ -1,9 +1,11 @@
+using System.Buffers;
 using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
 using LuminPack.Core;
+using LuminPack.Option;
 using static LuminPack.Code.LuminFieldLayout;
 
 namespace LuminPack.Utility;
@@ -43,6 +45,130 @@ public static partial class LuminTreeStorage
         int position = 0;
         foreach (var item in set)
             destination[position++] = item;
+    }
+
+    /// <summary>Writes the UTF-8 integer elements of an exact sorted set in enumeration order.</summary>
+    /// <typeparam name="TOptions">The compiled JSON profile.</typeparam>
+    /// <typeparam name="T">The framework integer type.</typeparam>
+    /// <param name="writer">The JSON writer after opening the array.</param>
+    /// <param name="set">The nonempty collection to traverse.</param>
+    /// <returns>Whether the validated tree walk was selected.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool TryWriteIntegerSortedSetJson<TOptions, T>(scoped ref LuminPackJsonWriter writer, SortedSet<T> set)
+        where TOptions : struct, ILuminPackOptions where T : unmanaged
+    {
+        if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8 ||
+            (typeof(T) != typeof(int) && typeof(T) != typeof(long)) ||
+            !SortedSetLayout<T>.Available || set.GetType() != typeof(SortedSet<T>))
+            return false;
+
+        ref int version = ref Field<int>(set, SortedSetLayout<T>.Version);
+        int captured = version;
+        WriteIntegerTree<TOptions, T>(ref writer, Field<object?>(set, SortedSetLayout<T>.Root),
+            in SortedSetLayout<T>.Nodes, ref version, captured);
+        return true;
+    }
+
+    private static void WriteIntegerTree<TOptions, T>(scoped ref LuminPackJsonWriter writer, object? node,
+        in NodeOffsets offsets, scoped ref int version, int captured)
+        where TOptions : struct, ILuminPackOptions where T : unmanaged
+    {
+        int left = offsets.Left, right = offsets.Right, key = offsets.Key;
+        while (node is not null)
+        {
+            object? child = Field<object?>(node, left);
+            if (child is not null)
+                WriteIntegerTree<TOptions, T>(ref writer, child, in offsets, ref version, captured);
+            T item = Field<T>(node, key);
+            bool separate = !writer.IsFirstElement;
+            if (typeof(T) == typeof(int))
+                writer.WriteEnumerationElement<TOptions>(Unsafe.As<T, int>(ref item), separate);
+            else
+                writer.WriteEnumerationElement<TOptions>(Unsafe.As<T, long>(ref item), separate);
+
+            // The original enumerator checks on its next MoveNext, including after the final item.
+            if (version != captured)
+                LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+            node = Field<object?>(node, right);
+        }
+    }
+
+    /// <summary>Reads a sorted integer array into an already prepared default-comparer set.</summary>
+    /// <typeparam name="TOptions">The compiled JSON profile.</typeparam>
+    /// <typeparam name="T">The framework integer type.</typeparam>
+    /// <param name="reader">The reader after consuming the start of the array.</param>
+    /// <param name="set">The original, now empty destination.</param>
+    /// <returns>Whether the operation consumed the array.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryReadIntegerSortedSetJson<TOptions, T>(scoped ref LuminPackJsonReader reader, SortedSet<T> set)
+        where TOptions : struct, ILuminPackOptions where T : unmanaged
+    {
+        if (!reader.HasArrayCapacityInput<TOptions>(128))
+            return false;
+        return ReadIntegerSortedSetJson<TOptions, T>(ref reader, set);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool ReadIntegerSortedSetJson<TOptions, T>(scoped ref LuminPackJsonReader reader, SortedSet<T> set)
+        where TOptions : struct, ILuminPackOptions where T : unmanaged
+    {
+        if ((typeof(T) != typeof(int) && typeof(T) != typeof(long)) || !CanRebuildSortedSet(set) || set.Count != 0)
+            return false;
+
+        int capacity = reader.GetArrayLengthHint<TOptions>();
+        if (capacity < 16)
+            return false;
+        var items = ArrayPool<T>.Shared.Rent(capacity);
+        int count = 0;
+        bool streaming = false;
+        try
+        {
+            try
+            {
+                while (reader.Read<TOptions>())
+                {
+                    if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                        break;
+                    if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ObjectEnd)
+                        continue;
+
+                    T item = reader.Read<T, TOptions>();
+                    if (!streaming)
+                    {
+                        if (count < items.Length && (count == 0 || Comparer<T>.Default.Compare(items[count - 1], item) < 0))
+                        {
+                            items[count++] = item;
+                            continue;
+                        }
+
+                        // A hint is never a parsing bound. The first duplicate, decrease or excess resumes Add in input order.
+                        streaming = true;
+                        AddPrefix();
+                    }
+                    set.Add(item);
+                }
+            }
+            catch
+            {
+                if (!streaming)
+                    AddPrefix();
+                throw;
+            }
+
+            if (!streaming && count != 0)
+                PublishOrderedSortedSet(set, items, count);
+            return true;
+        }
+        finally
+        {
+            ArrayPool<T>.Shared.Return(items);
+        }
+
+        void AddPrefix()
+        {
+            for (int i = 0; i < count; i++)
+                set.Add(items[i]);
+        }
     }
 
     /// <summary>Copies a sorted dictionary's pairs in key order.</summary>
@@ -376,12 +502,17 @@ public static partial class LuminTreeStorage
             return true;
         if (count > 1 && !IsStrictlyAscending(items, count))
             return false;
+        PublishOrderedSortedSet(set, items, count);
+        return true;
+    }
+
+    private static void PublishOrderedSortedSet<T>(SortedSet<T> set, T[] items, int count)
+    {
         var offsets = SortedSetLayout<T>.Nodes;
         object? root = BuildRedBlack(in offsets, items, count);
         Field<object?>(set, SortedSetLayout<T>.Root) = root;
         Field<int>(set, SortedSetLayout<T>.Count) = count;
         Field<int>(set, SortedSetLayout<T>.Version) = unchecked(Field<int>(set, SortedSetLayout<T>.Version) + count);
-        return true;
     }
 
     /// <summary>Builds an immutable sorted set with the default comparer from items.</summary>

@@ -8,7 +8,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// each string; the read creates the set or clears the reused one and adds each string read into a pooled block.</remarks>
 internal static class SortedSetTextOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);", readInlining: "NoInlining");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);",
+        readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

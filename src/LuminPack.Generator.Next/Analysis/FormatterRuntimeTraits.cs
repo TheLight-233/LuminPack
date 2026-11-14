@@ -6,6 +6,40 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional formatter runtime APIs against the consumer metadata.</summary>
 internal static class FormatterRuntimeTraits
 {
+    /// <summary>Checks a complete set operation against the actual referenced API.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <param name="collection">The framework set type.</param>
+    /// <param name="owner">The fully qualified operation owner.</param>
+    /// <param name="name">The operation name.</param>
+    /// <param name="state">The reader or writer type name.</param>
+    /// <param name="result">The required result type.</param>
+    /// <param name="takesCount">Whether the operation takes a count, with no profile type parameter.</param>
+    /// <returns>Whether the exact public signature exists.</returns>
+    internal static bool HasSetTransfer(Compilation compilation, INamedTypeSymbol collection, string owner, string name,
+        string state, SpecialType result, bool takesCount)
+    {
+        var access = compilation.GetTypeByMetadataName(owner);
+        var operationState = compilation.GetTypeByMetadataName("LuminPack.Core." + state);
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        if (access is null || !access.IsStatic || access.DeclaredAccessibility != Accessibility.Public ||
+            operationState is null || (!takesCount && options is null))
+            return false;
+        return access.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+            method.IsStatic && method.DeclaredAccessibility == Accessibility.Public &&
+            method.Arity == (takesCount ? 1 : 2) && method.ReturnType.SpecialType == result &&
+            !method.ReturnsByRef && !method.ReturnsByRefReadonly &&
+            method.TypeParameters[method.Arity - 1].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[method.Arity - 1].ConstraintTypes.IsEmpty &&
+            (takesCount || (method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options))) &&
+            method.Parameters.Length == (takesCount ? 3 : 2) &&
+            method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, operationState) &&
+            method.Parameters[1].RefKind == RefKind.None &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, collection.OriginalDefinition.Construct(method.TypeParameters[method.Arity - 1])) &&
+            (!takesCount || (method.Parameters[2].RefKind == RefKind.None && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32)));
+    }
+
     /// <summary>Checks a profile-aware span operation on a reader or writer.</summary>
     /// <param name="compilation">The referenced runtime and framework metadata.</param>
     /// <param name="owner">The short reader or writer name.</param>

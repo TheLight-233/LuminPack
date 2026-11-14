@@ -149,6 +149,7 @@ internal static class SortedSetOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -209,6 +210,7 @@ internal static class SortedSetOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + sequence + " input)");
@@ -228,17 +230,19 @@ internal static class SortedSetOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
+                    bool treeTraversal = set.FindFormatter(sequence)?.Supports("SortedSetIntegerTraversal") == true;
+                    if (treeTraversal)
+                    {
+                        w.Line("if (!" + tree + ".TryWriteIntegerSortedSetJson<TLuminProfile, " + scalar + ">(ref writer, value))");
+                        w.Open();
+                    }
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in value)");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line("var temp = item;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
+                    JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner);
                     w.Close();
+                    if (treeTraversal)
+                        w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
@@ -285,6 +289,7 @@ internal static class SortedSetOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -302,6 +307,12 @@ internal static class SortedSetOwnerFile
                     w.Line("else");
                     w.Indented(() => w.Line("value.Clear();"));
                     w.Blank();
+                    if (set.FindFormatter(sequence)?.Supports("SortedSetIntegerConstruction") == true)
+                    {
+                        w.Line("if (" + tree + ".TryReadIntegerSortedSetJson<TLuminProfile, " + scalar + ">(ref reader, value))");
+                        w.Line("    return;");
+                        w.Blank();
+                    }
                     w.Line("while (reader.Read<TLuminProfile>())");
                     w.Open();
                     w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");

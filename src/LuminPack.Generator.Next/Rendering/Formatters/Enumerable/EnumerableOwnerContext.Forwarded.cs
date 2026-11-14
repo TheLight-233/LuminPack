@@ -175,7 +175,15 @@ internal sealed partial class EnumerableOwnerContext
         W.Line("try");
         W.Open();
         W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(" + local + ", snapshot);");
-        WriteSpan("new global::System.ReadOnlySpan<" + Scalar + ">(snapshot, 0, count)");
+        if (Text && Supports("WriteCheckedStringSpan"))
+        {
+            W.Line("operationState.EnsureAdditionalCapacity(4);");
+            W.Line("operationState.WriteCollectionHeader(count);");
+            W.Line("operationState.WriteCheckedStrings<TLuminProfile>(snapshot.AsSpan(0, count));");
+            W.Line("operationState.CheckBuffer();");
+        }
+        else
+            WriteSpan("new global::System.ReadOnlySpan<" + Scalar + ">(snapshot, 0, count)");
         W.Close();
         W.Line("finally");
         W.Open();
