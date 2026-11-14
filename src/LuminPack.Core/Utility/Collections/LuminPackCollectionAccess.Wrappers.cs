@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using LuminPack.Core;
 using LuminPack.Option;
@@ -65,7 +66,8 @@ public static partial class LuminPackCollectionAccess
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
         if (!LuminPackMarshal.ConstantStringProfile<TOptions>() ||
-            default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8 ||
+            (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 &&
+                CultureInfo.CurrentCulture.GetType() != typeof(CultureInfo)) ||
             (typeof(T) != typeof(int) && typeof(T) != typeof(long)))
             return false;
 
@@ -93,21 +95,22 @@ public static partial class LuminPackCollectionAccess
         where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
         int index = 0;
-        while (index < count)
+        if (count == 0)
+            return;
+        do
         {
             // Capacity may replace the array without changing the enumerator's version.
-            var items = arrayField.AsSpan(index, count - index);
-            int written = writer.WriteOrderedIntegerWindow<T>(items, reverse: false);
+            var items = new ReadOnlySpan<T>(arrayField, index, count - index);
+            int written = writer.WriteOrderedIntegerWindow<TOptions, T>(items, reverse: false);
             if (version != captured)
                 LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
-            index += written;
-            if (index == count)
+            if (written == items.Length)
                 return;
             WriteOrderedIntegerBoundary<TOptions, T>(ref writer, items[written]);
             if (version != captured)
                 LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
-            index++;
-        }
+            index += written + 1;
+        } while (index < count);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

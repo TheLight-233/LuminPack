@@ -138,7 +138,7 @@ public static partial class LuminPackCollectionAccess
                 LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
             if (items.IsEmpty)
                 return;
-            int count = writer.WriteOrderedIntegerWindow(items, reverse);
+            int count = writer.WriteOrderedIntegerWindow<TOptions, T>(items, reverse);
             if (version != captured)
                 LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
             if (count == items.Length)

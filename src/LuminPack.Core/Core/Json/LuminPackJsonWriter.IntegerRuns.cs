@@ -43,12 +43,14 @@ public unsafe ref partial struct LuminPackJsonWriter
     }
 
     /// <summary>Writes an ordered integer run that fits the current window.</summary>
+    /// <typeparam name="TOptions">The fixed document profile.</typeparam>
     /// <typeparam name="T">The exact framework integer type.</typeparam>
     /// <param name="items">The remaining values in storage order.</param>
     /// <param name="reverse">Whether the collection enumerates its storage backward.</param>
     /// <returns>The number of values written without calling the output owner.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal int WriteOrderedIntegerWindow<T>(scoped ReadOnlySpan<T> items, bool reverse) where T : unmanaged
+    internal int WriteOrderedIntegerWindow<TOptions, T>(scoped ReadOnlySpan<T> items, bool reverse)
+        where TOptions : struct, ILuminPackOptions where T : unmanaged
     {
         if (items.IsEmpty)
             return 0;
@@ -59,24 +61,28 @@ public unsafe ref partial struct LuminPackJsonWriter
 #else
         long room = (long)unchecked((nint)_end - (nint)Cursor);
 #endif
+        bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+        int scale = utf8 ? 1 : 2;
         int digits = typeof(T) == typeof(int) ? 11 : 20;
-        int maximum = digits + 1;
-        if (room < maximum || IntegerRunOverlaps(items, ref start, room))
+        int maximum = (digits + 1) * scale;
+        if (room < maximum || (!utf8 && CultureInfo.CurrentCulture.GetType() != typeof(CultureInfo)) ||
+            IntegerRunOverlaps(items, ref start, room))
             return 0;
         int written = 0;
-        int separator = IsFirstElement ? 0 : 1;
+        int separator = IsFirstElement ? 0 : scale;
         int step = reverse ? -1 : 1;
         int index = reverse ? items.Length - 1 : 0;
         do
         {
             T item = Unsafe.Add(ref first, (nint)(uint)index);
             ref byte output = ref Unsafe.Add(ref start, (nint)(uint)written);
-            output = Comma;
-            ref byte number = ref Unsafe.Add(ref output, separator);
-            written += separator + (typeof(T) == typeof(int)
-                ? LuminPackJsonNumberFormatter.WriteInt32(MemoryMarshal.CreateSpan(ref number, 11), Unsafe.As<T, int>(ref item))
-                : LuminPackJsonNumberFormatter.WriteLong(MemoryMarshal.CreateSpan(ref number, 20), Unsafe.As<T, long>(ref item)));
-            separator = 1;
+            if (utf8)
+                output = Comma;
+            else
+                Unsafe.WriteUnaligned(ref output, ',');
+            ref byte number = ref Unsafe.Add(ref output, (nint)(uint)separator);
+            written += separator + WriteBoundedInteger(ref number, item, digits, utf8);
+            separator = scale;
             index += step;
         } while ((uint)index < (uint)items.Length && room - written >= maximum);
         Advance(written);
@@ -123,32 +129,37 @@ public unsafe ref partial struct LuminPackJsonWriter
                     T item = Unsafe.Add(ref first, (nint)(uint)index++);
                     ref byte output = ref Unsafe.Add(ref start, (nint)(uint)written);
                     if (utf8)
-                    {
                         output = Comma;
-                        var destination = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, 1), digits);
-                        written += 1 + (typeof(T) == typeof(int)
-                            ? LuminPackJsonNumberFormatter.WriteInt32(destination, Unsafe.As<T, int>(ref item))
-                            : LuminPackJsonNumberFormatter.WriteLong(destination, Unsafe.As<T, long>(ref item)));
-                    }
                     else
-                    {
                         Unsafe.WriteUnaligned(ref output, ',');
-                        ref char next = ref Unsafe.As<byte, char>(ref Unsafe.Add(ref output, 2));
-                        var destination = MemoryMarshal.CreateSpan(ref next, digits);
-                        int count;
-                        if (typeof(T) == typeof(int))
-                            Unsafe.As<T, int>(ref item).TryFormat(destination, out count);
-                        else
-                            Unsafe.As<T, long>(ref item).TryFormat(destination, out count);
-                        written += (1 + count) << 1;
-                    }
+                    written += scale + WriteBoundedInteger(ref Unsafe.Add(ref output, (nint)(uint)scale), item, digits, utf8);
                 } while (index < items.Length && room - written >= maximum);
                 Advance(written);
             }
             if (index == items.Length)
                 return;
-            WriteIntegerRunElement<TOptions, T>(in items[index++], readBeforeSeparator);
+            WriteIntegerRunElement<TOptions, T>(in Unsafe.Add(ref first, (nint)(uint)index++), readBeforeSeparator);
         }
+    }
+
+    // The caller has reserved enough room for the number, including any overstore in its scalar kernel.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int WriteBoundedInteger<T>(ref byte output, T item, int digits, bool utf8) where T : unmanaged
+    {
+        if (utf8)
+        {
+            var destination = MemoryMarshal.CreateSpan(ref output, digits);
+            return typeof(T) == typeof(int)
+                ? LuminPackJsonNumberFormatter.WriteInt32(destination, Unsafe.As<T, int>(ref item))
+                : LuminPackJsonNumberFormatter.WriteLong(destination, Unsafe.As<T, long>(ref item));
+        }
+        var characters = MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref output), digits);
+        int length;
+        if (typeof(T) == typeof(int))
+            Unsafe.As<T, int>(ref item).TryFormat(characters, out length);
+        else
+            Unsafe.As<T, long>(ref item).TryFormat(characters, out length);
+        return length * sizeof(char);
     }
 
     /// <summary>Checks whether writing the current window can change a remaining input value.</summary>
