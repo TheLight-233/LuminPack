@@ -10,7 +10,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class ConcurrentStackTextOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "staged.Add(item);", Before, After, jsonAddBody: JsonAdd,
-        concurrentStackStaging: true);
+        concurrentStackStaging: true, readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

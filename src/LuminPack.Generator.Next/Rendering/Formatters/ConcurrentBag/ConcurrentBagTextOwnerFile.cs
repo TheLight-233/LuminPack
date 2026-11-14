@@ -8,7 +8,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// and adds each string read into a pooled block.</remarks>
 internal static class ConcurrentBagTextOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);", jsonCount: false);
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Add(item);", jsonCount: false,
+        readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

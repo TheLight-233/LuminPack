@@ -152,7 +152,7 @@ internal static class ConcurrentBagOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + bag + " value)");
@@ -240,6 +240,7 @@ internal static class ConcurrentBagOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + bag + " input)");
@@ -327,6 +328,7 @@ internal static class ConcurrentBagOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + bag + " value)");

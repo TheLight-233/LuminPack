@@ -178,6 +178,7 @@ internal static class BlockingCollectionOwnerFile
         {
             string parameter = read ? " reader, scoped ref " : " writer, scoped in ";
             w.Line(w.Preserve);
+            w.Line(w.MethodImpl("NoInlining"));
             w.Line("internal static void " + method + "<TOptions>(scoped ref " + state + parameter + type + " value)");
             w.Line("    where TOptions : struct, " + options);
             w.Open();

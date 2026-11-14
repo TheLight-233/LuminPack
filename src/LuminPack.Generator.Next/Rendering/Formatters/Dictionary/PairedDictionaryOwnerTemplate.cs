@@ -61,7 +61,10 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Whether matching keys may seed a string or ordinary object value.</summary>
     internal bool ReferenceValue => Value == "string" || Payload != null || _contract?.Arguments[1].OrdinaryObject == true;
 
-    internal bool RawPairs => _contract == null && Payload == null && !_forwardedValue && Key != "string" && Value != "string";
+    internal bool RawPairs => UsesRawOrStringEntries && Key != "string" && Value != "string";
+
+    /// <summary>Whether both members use the direct scalar or string operations.</summary>
+    internal bool UsesRawOrStringEntries => _contract == null && Payload == null && !_forwardedValue;
     private int _ends, _cursors, _spans, _readCursors, _readStrings, _readEnds;
 
     /// <summary>Processes the current formatter contract.</summary>
@@ -217,19 +220,31 @@ internal sealed partial class PairedDictionaryContext
 
     /// <summary>Emits the staged read of <c>length</c> entries into a pooled pair array.</summary>
     /// <param name="consume">The statements that consume the pooled <c>pairs</c> and <c>length</c>.</param>
-    internal void ReadPairs(Action consume)
+    /// <param name="knownNonEmpty">Whether the caller has proved the count is positive.</param>
+    internal void ReadPairs(Action consume, bool knownNonEmpty = false)
     {
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(length);");
         W.Line("try");
         W.Open();
-        W.Line("for (int index = 0; index < length; index++)");
+        if (knownNonEmpty)
+        {
+            // Rent guarantees at least length slots. Each field is still checked before storing its pair.
+            W.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
+            W.Line("int index = 0;");
+            W.Line("do");
+        }
+        else
+            W.Line("for (int index = 0; index < length; index++)");
         W.Open();
         W.Line(Key + " k = default !;");
         W.Line(Value + " v = default !;");
         ReadMember(Key, "k");
         ReadMember(Value, "v");
-        W.Line("pairs[index] = new " + Pair + "(k!, v);");
+        string slot = knownNonEmpty ? Memory + ".Add(ref first, unchecked((nint)(uint)index))" : "pairs[index]";
+        W.Line(slot + " = new " + Pair + "(k!, v);");
         W.Close();
+        if (knownNonEmpty)
+            W.Line("while (++index < length);");
         consume();
         W.Close();
         W.Line("finally");
@@ -370,6 +385,9 @@ internal sealed class PairedDictionarySpec
     /// <summary>Whether the binary read reads the count header itself.</summary>
     internal bool ReadsHeader { get; }
 
+    /// <summary>Whether the JSON roots are kept out of their callers.</summary>
+    internal bool OutlineJson { get; }
+
     /// <summary>The expression that enumerates the entries of <c>value</c>.</summary>
     internal string Source { get; }
 
@@ -379,9 +397,20 @@ internal sealed class PairedDictionarySpec
     /// <summary>The entry member that holds the value.</summary>
     internal string ValueMember { get; }
 
+    /// <summary>Describes the dictionary family's framing, traversal and insertion operations.</summary>
+    /// <param name="writeBody">The binary entry writer.</param>
+    /// <param name="readBody">The binary entry reader.</param>
+    /// <param name="jsonAdd">The JSON insertion statement.</param>
+    /// <param name="jsonBefore">The optional JSON destination preparation.</param>
+    /// <param name="jsonAfter">The optional publication of staged JSON entries.</param>
+    /// <param name="readsHeader">Whether the binary reader owns its count header.</param>
+    /// <param name="source">The expression that enumerates the entries.</param>
+    /// <param name="keyMember">The member exposing each key.</param>
+    /// <param name="valueMember">The member exposing each value.</param>
+    /// <param name="outlineJson">Whether to keep the JSON roots out of their callers.</param>
     internal PairedDictionarySpec(Action<PairedDictionaryContext> writeBody, Action<PairedDictionaryContext> readBody, string jsonAdd,
         Action<PairedDictionaryContext>? jsonBefore = null, Action<PairedDictionaryContext>? jsonAfter = null, bool readsHeader = false,
-        string source = "value", string keyMember = "Key", string valueMember = "Value")
+        string source = "value", string keyMember = "Key", string valueMember = "Value", bool outlineJson = false)
     {
         Source = source;
         KeyMember = keyMember;
@@ -392,6 +421,7 @@ internal sealed class PairedDictionarySpec
         JsonBefore = jsonBefore;
         JsonAfter = jsonAfter;
         ReadsHeader = readsHeader;
+        OutlineJson = outlineJson;
     }
 }
 
@@ -602,6 +632,8 @@ internal static class PairedDictionaryOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    if (spec.OutlineJson)
+                        w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + dictionary + " input)");
@@ -677,6 +709,8 @@ internal static class PairedDictionaryOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    if (spec.OutlineJson)
+                        w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + dictionary + " value)");

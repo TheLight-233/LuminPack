@@ -77,6 +77,13 @@ internal static partial class Program
         Assembly assembly = Assembly.Load(stream.ToArray());
         Check(HasNoInlining("ListOfStringFormatter", "Write") && HasNoInlining("ListOfStringFormatter", "Read") &&
             HasNoInlining("SortedSetOfStringFormatter", "Read"), "Runtime no-inlining flags");
+        foreach (string owner in new[] { "ConcurrentQueueOfStringFormatter", "ConcurrentStackOfStringFormatter",
+                     "ConcurrentBagOfStringFormatter", "ConcurrentDictionaryOfStringAndStringFormatter",
+                     "BlockingCollectionOfStringFormatter" })
+        {
+            foreach (string operation in new[] { "Write", "Read", "WriteJson", "ReadJson" })
+                Check(HasNoInlining(owner, operation), owner + "." + operation + " stays outside its callers");
+        }
         int checks = (int)assembly.GetType("PublicationFixture")!.GetMethod("Exercise")!.Invoke(null, null)!;
         Console.WriteLine($"Runtime publication contracts: {checks} checks passed.");
         Dictionary<string, string> expectedSources = Sources(driver);
@@ -214,6 +221,7 @@ internal static partial class Program
 
     private const string PublicationFixture = """
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Attribute;
@@ -256,6 +264,15 @@ public sealed class ExternalShape : IShape { public int Number; }
 public sealed class PublishedTrustedFlag { public bool Flag; }
 [LuminPackable, LuminPackOption(UntrustedData = false)]
 public sealed class PublishedTrustedFlagHolder { public PublishedTrustedFlag Child; public bool Flag; }
+[LuminPackable]
+public sealed partial class ConcurrentRecord
+{
+    public ConcurrentQueue<string> Queue = new();
+    public ConcurrentStack<string> Stack = new();
+    public ConcurrentBag<string> Bag = new();
+    public ConcurrentDictionary<string, string> Dictionary = new();
+    public BlockingCollection<string> Blocking = new();
+}
 public static class PublicationFixture
 {
     private static int s_checks;
@@ -265,6 +282,7 @@ public static class PublicationFixture
         Profile<LuminPackUtf8LengthOptions>(); Profile<LuminPackUtf8TokenOptions>(); Profile<LuminPackUtf8VarIntOptions>();
         Profile<LuminPackUtf16LengthOptions>(); Profile<LuminPackUtf16TokenOptions>(); Profile<LuminPackUtf16VarIntOptions>();
         CheckAllocatingEntries();
+        CheckConcurrentCollections();
         var ordinary = new Ordinary { Number = 7, Name = "value", Values = new[] { 1, 2 }, Items = new List<int> { 3, 4 }, Longs = new List<long> { 5 }, @event = 42 };
         byte[] bytes = LuminPackSerializer.Serialize(ordinary);
         Ordinary read = null;
@@ -366,6 +384,47 @@ public static class PublicationFixture
             LuminPackSerializer.Deserialize<ISet<byte>>(exactSet).SetEquals(alternateSet));
         IReadOnlySet<int> readOnlySet = new HashSet<int> { 7, 9 };
         Check(LuminPackSerializer.Deserialize<IReadOnlySet<int>>(LuminPackSerializer.Serialize(readOnlySet)).SetEquals(readOnlySet));
+    }
+    private static void CheckConcurrentCollections()
+    {
+        var value = new ConcurrentRecord();
+        value.Queue.Enqueue("queue");
+        value.Stack.Push("stack");
+        value.Bag.Add("bag");
+        value.Dictionary["key"] = "value";
+        value.Blocking.Add("blocked");
+
+        var binary = LuminPackSerializer.Deserialize<ConcurrentRecord>(LuminPackSerializer.Serialize(value));
+        var json = LuminPackSerializer.DeserializeJson<ConcurrentRecord>(LuminPackSerializer.SerializeJson(value));
+        foreach (var result in new[] { binary, json })
+        {
+            Check(result.Queue.TryPeek(out var queue) && queue == "queue");
+            Check(result.Stack.TryPeek(out var stack) && stack == "stack");
+            Check(result.Bag.TryPeek(out var bag) && bag == "bag");
+            Check(result.Dictionary.TryGetValue("key", out var entry) && entry == "value");
+            Check(result.Blocking.TryTake(out var blocked) && blocked == "blocked");
+        }
+
+        foreach (int count in new[] { 0, 1, 65 })
+        {
+            var map = new ConcurrentDictionary<int, string>();
+            for (int i = 0; i < count; i++)
+                map[i] = i % 2 == 0 ? null : "value";
+            byte[] bytes = LuminPackSerializer.Serialize(map);
+            ConcurrentDictionary<int, string> fresh = null;
+            LuminPackSerializer.Deserialize(bytes, ref fresh);
+            Check(fresh.Count == count);
+            foreach (var pair in map)
+                Check(fresh.TryGetValue(pair.Key, out var item) && item == pair.Value);
+            if (count > 0)
+            {
+                fresh = null;
+                bool rejected = false;
+                try { LuminPackSerializer.Deserialize(bytes.AsSpan(0, bytes.Length - 1), ref fresh); }
+                catch (Exception error) when (error.GetType().Name == "LuminPackException") { rejected = true; }
+                Check(rejected && fresh == null);
+            }
+        }
     }
     private static void Profile<TOptions>() where TOptions : struct, ILuminPackOptions
     {

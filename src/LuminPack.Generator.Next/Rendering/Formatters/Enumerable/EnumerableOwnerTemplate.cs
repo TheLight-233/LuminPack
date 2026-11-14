@@ -343,6 +343,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>The inlining hint on the binary read root, or null for the default JIT policy.</summary>
     internal string? ReadInlining { get; }
 
+    /// <summary>Whether the JSON roots are kept out of their callers.</summary>
+    internal bool OutlineJson { get; }
+
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name="writeBody">The write body used by this operation.</param>
     /// <param name="readBody">The read body used by this operation.</param>
@@ -353,12 +356,15 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="compressEntries">The compress entries used by this operation.</param>
     /// <param name="jsonAddBody">The json add body used by this operation.</param>
     /// <param name="readInlining">The binary read root's inlining hint.</param>
+    /// <param name="outlineJson">Whether to keep the JSON roots out of their callers.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
         bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false,
-        bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "AggressiveInlining")
+        bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "AggressiveInlining",
+        bool outlineJson = false)
     {
         ReadInlining = readInlining;
+        OutlineJson = outlineJson;
         InterfaceListReuse = interfaceListReuse;
         ConcurrentStackStaging = concurrentStackStaging;
         ArrayReuse = arrayReuse;
@@ -620,6 +626,8 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    if (spec.OutlineJson)
+                        w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + sequence + " input)");
@@ -697,6 +705,8 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    if (spec.OutlineJson)
+                        w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");

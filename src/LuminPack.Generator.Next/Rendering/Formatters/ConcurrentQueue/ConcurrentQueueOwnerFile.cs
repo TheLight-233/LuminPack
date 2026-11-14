@@ -149,7 +149,7 @@ internal static class ConcurrentQueueOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead" + (ownerRead ? "<TLuminProfile>" : string.Empty) + "(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + queue + " value)");
@@ -268,6 +268,7 @@ internal static class ConcurrentQueueOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + queue + " input)");
@@ -344,6 +345,7 @@ internal static class ConcurrentQueueOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + queue + " value)");

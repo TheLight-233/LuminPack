@@ -6,7 +6,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// pairs through the collection-access helper, or clears and refills a non-null destination with <c>TryAdd</c>.</remarks>
 internal static class ConcurrentDictionaryOwnerFile
 {
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.CountedWrite(), Read, "value.TryAdd(key, itemValue);");
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.CountedWrite(), Read,
+        "value.TryAdd(key, itemValue);", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -16,6 +17,8 @@ internal static class ConcurrentDictionaryOwnerFile
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Stages fresh pairs and refills reused targets in wire order.</summary>
+    /// <param name="c">The generated dictionary read context.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -26,7 +29,8 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentDictionary(global::System.Array.Empty<" + c.Pair + ">(), length);");
         w.Line("goto operationComplete_RootRead;");
         w.Close();
-        c.ReadPairs(() => w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentDictionary(pairs, length);"));
+        c.ReadPairs(() => w.Line("value = global::LuminPack.Code.LuminPackCollectionAccess.CreateConcurrentDictionary(pairs, length);"),
+            knownNonEmpty: c.UsesRawOrStringEntries);
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
