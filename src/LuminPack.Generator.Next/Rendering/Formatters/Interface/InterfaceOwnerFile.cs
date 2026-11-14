@@ -76,9 +76,12 @@ internal static class InterfaceOwnerFile
         string arrayType = ContiguousOwnerFile.ArrayType(scalar);
         string type = "global::System.Collections.Generic." + (setInterface ? "HashSet" : "List") + "<" + scalar + ">";
         bool outlineFallback = c.Counted || setInterface;
+        bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
         w.Line("if (value.GetType() == typeof(" + type + "))");
         w.Open();
-        if (c.Counted)
+        if (stringSpan)
+            w.Line("WriteStringSpan(ref operationState, global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + c.Memory + ".As<" + type + ">(value)));");
+        else if (c.Counted)
             w.Line("WriteKnown(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
         else if (setInterface)
             w.Line("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
@@ -94,7 +97,9 @@ internal static class InterfaceOwnerFile
             w.Line("else if (value.GetType() == typeof(" + arrayType + "))");
             w.Open();
             string array = c.Memory + ".As<" + arrayType + ">(value)";
-            if (c.Counted)
+            if (stringSpan)
+                w.Line("WriteStringSpan(ref operationState, new global::System.ReadOnlySpan<string>(" + array + "));");
+            else if (c.Counted)
                 w.Line("WriteArray(ref operationState, " + array + ");");
             else
             {
@@ -115,26 +120,23 @@ internal static class InterfaceOwnerFile
         }
         w.Blank();
 
-        if (c.Counted)
+        if (stringSpan)
+        {
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static void WriteStringSpan(scoped ref " + writer + " operationState, scoped global::System.ReadOnlySpan<string> items)");
+            w.Open();
+            w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+            w.Line("operationState.WriteCollectionHeader(items.Length);");
+            w.Line("operationState.WriteStrings<TLuminProfile>(items);");
+            w.Line("operationState.CheckBuffer();");
+            w.Close();
+            w.Blank();
+        }
+        else if (c.Counted)
         {
             WriteCounted("WriteKnown", type);
             if (!setInterface)
-            {
-                if (c.Text)
-                {
-                    w.Line(w.MethodImpl("NoInlining"));
-                    w.Line("static void WriteArray(scoped ref " + writer + " operationState, string[] items)");
-                    w.Open();
-                    w.Line("int countPosition = operationState.BeginCollection();");
-                    w.Line("operationState.WriteStrings<TLuminProfile>(items);");
-                    w.Line("operationState.EndCollection(countPosition, items.Length);");
-                    w.Line("operationState.CheckBuffer();");
-                    w.Close();
-                    w.Blank();
-                }
-                else
-                    WriteCounted("WriteArray", arrayType);
-            }
+                WriteCounted("WriteArray", arrayType);
         }
         if (outlineFallback)
             WriteCounted("WriteInterface", c.Sequence);

@@ -67,7 +67,8 @@ internal static class ImmutableInterfaceOwnerFile
     {
         bool hash = WriteTree("ImmutableHashSet", "CopyImmutableHashTree");
         bool sorted = WriteTree("ImmutableSortedSet", "CopyImmutableSortedTree");
-        if (!hash && !sorted || c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal))
+        bool list = WriteTree("ImmutableList", "CopyImmutableListTree");
+        if (!hash && !sorted && !list || c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal))
             c.CountedWrite("value");
 
         bool WriteTree(string family, string capability)
@@ -79,7 +80,8 @@ internal static class ImmutableInterfaceOwnerFile
             {
                 w.Open();
                 if (c.RawTreeElements && c.Supports("WriteRaw" + family))
-                    w.Line("global::LuminPack.Utility.LuminTreeStorage.WriteRaw(ref operationState, " + source + ");");
+                    w.Line("global::LuminPack.Utility.LuminTreeStorage.WriteRaw" + (family == "ImmutableList" ? "List" : "") +
+                        "(ref operationState, " + source + ");");
                 else
                 {
                     w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
@@ -104,7 +106,8 @@ internal static class ImmutableInterfaceOwnerFile
     {
         bool hash = Write("ImmutableHashSet", "CopyImmutableHashTree");
         bool sorted = Write("ImmutableSortedSet", "CopyImmutableSortedTree");
-        return (hash || sorted) && !c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal);
+        bool list = Write("ImmutableList", "CopyImmutableListTree");
+        return (hash || sorted || list) && !c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal);
 
         bool Write(string family, string capability)
         {
@@ -133,11 +136,12 @@ internal static class ImmutableInterfaceOwnerFile
     internal static bool ReadJsonTree(EnumerableOwnerContext c, string owner, string reader)
     {
         bool sorted = c.Supports("BuildOrderedImmutableSortedSet");
-        if (!sorted && !c.Supports("BuildFrameworkImmutableHashSet"))
+        bool list = c.Supports("ImmutableSpan") && Concrete(c) == "ImmutableList";
+        if (!sorted && !list && !c.Supports("BuildFrameworkImmutableHashSet"))
             return false;
 
         var w = c.W;
-        string concrete = Namespace + (sorted ? "ImmutableSortedSet" : "ImmutableHashSet") + "<" + c.Scalar + ">";
+        string concrete = Namespace + Concrete(c) + "<" + c.Scalar + ">";
         string pool = "global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared";
         string clear = "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Scalar + ">()";
         bool guardedCulture = sorted && c.Text;
@@ -203,6 +207,8 @@ internal static class ImmutableInterfaceOwnerFile
             w.Line("value = sortedBuilder.ToImmutable();");
             ImmutableBuilderLifetime.End(w, "SortedSet", c.Supports("ImmutableBuilder"), "sortedBuilder");
         }
+        else if (list)
+            w.Line("value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + c.Scalar + ">(items!, 0, count));");
         else
             w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(items!, count);");
         w.Close();

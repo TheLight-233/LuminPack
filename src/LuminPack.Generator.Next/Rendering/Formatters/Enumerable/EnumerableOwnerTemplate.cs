@@ -738,7 +738,8 @@ internal static class EnumerableOwnerTemplate
                         InterfaceJsonTraversal.Write(w, set, sequence, scalar, elementOwner, jsonWriter, spec.InterfaceSetTraversal);
                     else if (!wroteFrozenRun)
                     {
-                        bool scopedFallback = context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree");
+                        bool scopedFallback = context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree") ||
+                            context.Supports("CopyImmutableListTree");
                         if (scopedFallback)
                             w.Open();
                         w.Line("bool isFirst = true;");

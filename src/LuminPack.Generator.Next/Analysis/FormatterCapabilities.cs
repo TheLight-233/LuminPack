@@ -83,6 +83,13 @@ internal static class FormatterCapabilities
                 result.Add("ImmutableSpan");
             if (definition == "System.Collections.Immutable.ImmutableList" && FormatterImmutableTraits.HasRawListWriter(compilation))
                 result.Add("ImmutableRawListWrite");
+            if (concrete == "ImmutableList" && FormatterImmutableTraits.HasTreeCopy(compilation, concrete, 1))
+            {
+                result.Add("CopyImmutableListTree");
+                ContiguousCapabilities(compilation, named.TypeArguments[0], result);
+                if (FormatterImmutableTraits.HasRawListWriter(compilation))
+                    result.Add("WriteRawImmutableList");
+            }
             if (definition is "System.Collections.Immutable.IImmutableSet" or "System.Collections.Immutable.ImmutableHashSet" or
                 "System.Collections.Immutable.ImmutableSortedSet" or "System.Collections.Immutable.IImmutableDictionary" or
                 "System.Collections.Immutable.ImmutableDictionary" or "System.Collections.Immutable.ImmutableSortedDictionary")
@@ -146,6 +153,9 @@ internal static class FormatterCapabilities
             if (FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
                 result.Add("InterfaceJsonCapacity");
             ITypeSymbol element = named.TypeArguments[0];
+            if (element.SpecialType == SpecialType.System_String &&
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element))
+                result.Add("WriteInterfaceStrings");
             bool ordinary = element is INamedTypeSymbol { TypeKind: TypeKind.Class } payload && payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackableAttribute" && (attribute.ConstructorArguments.Length == 0 || Convert.ToInt32(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture) == 0)) && !payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
             if (element.SpecialType == SpecialType.System_String || element.IsUnmanagedType && (element.SpecialType != SpecialType.None || Rendering.Formatters.FrameworkScalarBody.Contains(element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) || ordinary)
                 result.Add("InterfaceTargetReuse");
