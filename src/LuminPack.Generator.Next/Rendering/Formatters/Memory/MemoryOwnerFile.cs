@@ -28,7 +28,8 @@ internal static class MemoryOwnerFile
             (w, c) => Read(w, c, definition, element, declared),
             (w, c) => JsonWrite(w, c, definition, element, owner, set, declared),
             (w, c) => JsonRead(w, c, element, declared, owner),
-            outlineJson: true, outlineBinaryWrite: definition == GenericIdentity.ReadOnlySequence || element == "string");
+            outlineJson: true, outlineBinaryWrite: definition == GenericIdentity.ReadOnlySequence || element == "string",
+            jsonWriteRun: definition != GenericIdentity.ReadOnlySequence && JsonIntegerRunWriter.Supports(set, declared, element));
     }
 
     private static string Span(string definition, string element) => definition switch

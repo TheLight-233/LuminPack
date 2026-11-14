@@ -70,7 +70,8 @@ internal static class ContiguousOwnerFile
             if (layout != null)
                 FormatterStorageEmitter.Support(w, layout);
         }, compressedEntries: shape is ContiguousShape.Array or ContiguousShape.List, outlineJson: true,
-            outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"));
+            outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"),
+            jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type));
         void NullWrite(CodeWriter w, bool json)
         {
             if (absent == "false")

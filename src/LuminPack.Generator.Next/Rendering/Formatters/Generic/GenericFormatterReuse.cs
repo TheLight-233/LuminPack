@@ -540,10 +540,14 @@ internal static class GenericFormatterReuse
                     string constraint = "where " + strategy + " : struct, " + string.Join(", ", Interfaces(placeholder, required));
                     text = text.Replace(constraint, constraint + ", " + string.Join(", ", BlockInterfaces(placeholder, blocks)));
                 }
-            // Ordinary raw list operations copy the payload without an element loop.
-            bool inlineRawList = family.Definition == "System.Collections.Generic.List" &&
-                plan.Categories[0] == Category.Unmanaged;
-            text = NoInliningRoots(text, inlineRawList);
+            // These raw owners copy contiguous storage without an element loop.
+            bool inlineRawStorage = plan.Categories[0] == Category.Unmanaged &&
+                (family == ArrayFamily || family.Definition is "System.Collections.Generic.List" or
+                    "System.Collections.Immutable.ImmutableArray" or "System.Memory" or "System.ReadOnlyMemory" or "System.ArraySegment");
+            bool inlineIntegerJsonWrite = (family == ArrayFamily || family.Definition is "System.Collections.Generic.List" or
+                GenericIdentity.Memory or GenericIdentity.ReadOnlyMemory or GenericIdentity.ArraySegment or "System.Collections.Frozen.FrozenSet") &&
+                JsonIntegerRunWriter.Supports(_set, plan.Closed.Type, plan.Closed.Arguments[0].Type);
+            text = NoInliningRoots(text, inlineRawStorage, inlineIntegerJsonWrite);
             string state = "global::LuminPack.Binary_" + _set.Extension + "_";
             // The template names its own roots after the placeholder spelling; inside the generic owner they are unqualified.
             string own = ReadableTypeName.Of(GeneratedNames.PayloadKey(spelling));
@@ -825,12 +829,13 @@ internal static class GenericFormatterReuse
 
     /// <summary>Keeps shared collection roots with substantial bodies out of their callers.</summary>
     /// <param name="text">The placeholder owner render.</param>
-    /// <param name="inlineRawList">Whether to keep the original inlining hints on ordinary raw list operations.</param>
+    /// <param name="inlineRawStorage">Whether to keep the original inlining hints on loop-free binary storage operations.</param>
+    /// <param name="inlineIntegerJsonWrite">Whether the JSON root only frames an out-of-line integer run.</param>
     /// <returns>The render with <c>NoInlining</c> on the outlined binary and JSON roots.</returns>
     /// <remarks>LuminPack trades one call into a collection for inlining inside it: an inlined collection root would spend the
     /// caller's inline budget on the loop and leave the element calls in the loop uninlined. Local helpers and private
     /// continuations keep their own attributes.</remarks>
-    private static string NoInliningRoots(string text, bool inlineRawList)
+    private static string NoInliningRoots(string text, bool inlineRawStorage, bool inlineIntegerJsonWrite)
     {
         const string attribute = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]";
         string[] lines = text.Split('\n');
@@ -840,9 +845,11 @@ internal static class GenericFormatterReuse
         {
             keep[index] = true;
             string trimmed = lines[index].TrimStart();
-            if (!trimmed.StartsWith("internal static void Root", StringComparison.Ordinal) ||
-                (inlineRawList && (trimmed.StartsWith("internal static void RootRead(", StringComparison.Ordinal) ||
-                    trimmed.StartsWith("internal static void RootWrite(", StringComparison.Ordinal))))
+            if (!trimmed.StartsWith("internal static void Root", StringComparison.Ordinal))
+                continue;
+            bool jsonWrite = trimmed.StartsWith("internal static void RootWriteJson", StringComparison.Ordinal);
+            bool jsonRead = trimmed.StartsWith("internal static void RootReadJson", StringComparison.Ordinal);
+            if ((!jsonWrite && !jsonRead && inlineRawStorage) || (jsonWrite && inlineIntegerJsonWrite))
                 continue;
             string indent = lines[index].Substring(0, lines[index].Length - trimmed.Length);
             bool attributed = false;

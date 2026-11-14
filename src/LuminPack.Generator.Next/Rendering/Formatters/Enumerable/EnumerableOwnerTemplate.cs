@@ -725,7 +725,8 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    if (spec.OutlineJson)
+                    if (spec.OutlineJson && (fact.Family.Kind != CollectionKind.Frozen ||
+                        !JsonIntegerRunWriter.Supports(set, sequence, scalar)))
                         w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");

@@ -266,7 +266,8 @@ internal static class ArrayScalarOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(w.MethodImpl("NoInlining"));
+                    if (!JsonIntegerRunWriter.Supports(set, collection, scalar))
+                        w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(scoped ref " + jsonWriter + " writer, " + collection + " input)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
