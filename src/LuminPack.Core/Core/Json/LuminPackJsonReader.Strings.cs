@@ -1051,8 +1051,17 @@ namespace LuminPack.Core
         private void SkipStringToken<TOptions>()
             where TOptions : struct, ILuminPackOptions
         {
-            if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
-                SkipStringUtf8<TOptions>();
+            // The scalar token switch already selected a string or a property name.
+            // Keep the original encoding checks for profiles that can execute customer code.
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                if (LuminPackMarshal.ConstantStringProfile<TOptions>())
+                    _ = ReadSelectedStringUtf8<TOptions>(false);
+                else
+                    SkipStringUtf8<TOptions>();
+            }
+            else if (LuminPackMarshal.ConstantStringProfile<TOptions>())
+                _ = ReadSelectedStringUtf16<TOptions>(false);
             else
                 SkipStringUtf16<TOptions>();
         }
@@ -1075,6 +1084,17 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
             if (!(default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-16 JSON");
+            return ReadSelectedStringUtf8<TOptions>(unescape);
+        }
+
+        /// <summary>Checks and consumes UTF-8 content after selecting a string token and its encoding.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <param name="unescape">Whether to decode escapes after validating them.</param>
+        /// <returns>The string content.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ReadOnlySpan<byte> ReadSelectedStringUtf8<TOptions>(bool unescape)
+            where TOptions : struct, ILuminPackOptions
+        {
             Advance(1);
             int start = Position;
             int scan = Position;
@@ -1242,6 +1262,17 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
             if ((default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8))
                 LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-8 JSON");
+            return ReadSelectedStringUtf16<TOptions>(unescape);
+        }
+
+        /// <summary>Checks and consumes UTF-16 content after selecting a string token and its encoding.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <param name="unescape">Whether to decode escapes after validating them.</param>
+        /// <returns>The string content.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ReadOnlySpan<char> ReadSelectedStringUtf16<TOptions>(bool unescape)
+            where TOptions : struct, ILuminPackOptions
+        {
             Advance(2);
             int start = Position;
             int scan = Position;
