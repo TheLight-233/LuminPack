@@ -285,8 +285,7 @@ internal static class DictionaryOwnerFile
             w.Line("private static void WriteTextPair<TLuminProfile>(scoped ref " + writer + " operationState, in " + key + " key, in " + value + " itemValue)");
             w.Line(generic + options);
             w.Open();
-            w.Line("if ((typeof(TLuminProfile) == typeof(" + utf16 + ") ||");
-            w.Line("     typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions)) &&");
+            w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
             w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
             w.Open();
             w.Line("ref byte cursor = ref operationState.Cursor;");

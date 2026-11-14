@@ -117,8 +117,7 @@ internal static class DictionaryInterfaceOwnerFile
             else if (textKernel && method == "WriteKnown")
             {
                 string text = c.Key == "string" ? "key" : "itemValue";
-                w.Line("if ((typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
-                w.Line("     typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions)) &&");
+                w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
                 w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
                 w.Open();
                 w.Line("ref byte record = ref operationState.Cursor;");

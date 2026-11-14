@@ -30,8 +30,7 @@ internal static class ConcurrentDictionaryOwnerFile
         var w = c.W;
         const string writer = "global::LuminPack.Core.LuminPackWriter";
         string width = c.Memory + ".SizeOf<" + c.Value + ">()";
-        w.Line("if (typeof(TLuminProfile) != typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) &&");
-        w.Line("    typeof(TLuminProfile) != typeof(global::LuminPack.Option.LuminPackDefaultOptions))");
+        w.Line("if (!" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
         w.Open();
         w.Line("WriteCounted(ref operationState, value);");
         w.Line("goto operationComplete_RootWrite;");

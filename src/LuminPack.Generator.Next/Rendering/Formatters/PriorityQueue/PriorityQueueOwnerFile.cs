@@ -46,8 +46,7 @@ internal static class PriorityQueueOwnerFile
         string text = c.Key == "string" ? "element" : "priority";
         w.Line("int position = operationState.BeginCollection();");
         w.Line("int count = 0;");
-        w.Line("if ((typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
-        w.Line("     typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions)) &&");
+        w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
         w.Line("    value.GetType() == typeof(" + c.Dictionary + ") &&");
         w.Line("    " + access + ".TryGetPriorityQueueTraversal(value, out var nodes, out int version))");
         w.Open();

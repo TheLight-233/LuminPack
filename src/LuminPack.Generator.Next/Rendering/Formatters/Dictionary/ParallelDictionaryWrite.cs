@@ -7,6 +7,13 @@ internal static class ParallelDictionaryWrite
 {
     private const string Writer = "global::LuminPack.Core.LuminPackWriter";
 
+    /// <summary>Tests the built-in profiles for which the writer can skip reading option properties.</summary>
+    internal const string FixedUtf16LengthProfile =
+        "(typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) || " +
+        "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions) || " +
+        "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackFixedOptions<global::LuminPack.Option.LuminPackUtf16LengthOptions>) || " +
+        "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackFixedOptions<global::LuminPack.Option.LuminPackDefaultOptions>))";
+
     /// <summary>Writes a nonempty range, preserving the key-before-value load on writer growth.</summary>
     internal static void Emit(PairedDictionaryContext c, string count, bool allowMixed = true)
     {
@@ -17,10 +24,7 @@ internal static class ParallelDictionaryWrite
                      c.Supports("BinaryTextPair");
         string rawWidth = c.Memory + ".SizeOf<" + (c.Key == "string" ? c.Value : c.Key) + ">()";
         if (mixed)
-        {
-            w.Line("bool utf16Length = typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
-            w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions);");
-        }
+            w.Line("bool utf16Length = " + FixedUtf16LengthProfile + ";");
         w.Line("int index = 0;");
         w.Line("do");
         w.Open();
