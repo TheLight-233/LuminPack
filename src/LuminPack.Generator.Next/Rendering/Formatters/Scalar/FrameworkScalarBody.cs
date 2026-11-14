@@ -115,12 +115,24 @@ internal static class FrameworkScalarBody
                 writer.Line(line.TrimStart());
     }
 
-    /// <summary>Matches the existing fixed property names from their decoded string.</summary>
-    /// <param name = "sb">The sb used by this operation.</param>
-    /// <param name = "first">The first used by this operation.</param>
-    /// <param name = "second">The second used by this operation.</param>
-    private static void AppendPropertyChoice(StringBuilder sb, string first, string second)
+    /// <summary>Matches fixed property names from their decoded token storage.</summary>
+    /// <param name="data">The formatter's runtime capabilities.</param>
+    /// <param name="sb">The output receiving generated statements.</param>
+    /// <param name="first">The first ASCII property name.</param>
+    /// <param name="second">The second ASCII property name.</param>
+    private static void AppendPropertyChoice(FormatterModel data, StringBuilder sb, string first, string second)
     {
+        if (data.Supports("CanReadJsonStringChoice"))
+        {
+            // The span conversion of a constant byte array is emitted as static data by Roslyn.
+            string Bytes(string name) => "new byte[] { " + string.Join(", ", name.Select(character =>
+                ((int)character).ToString(System.Globalization.CultureInfo.InvariantCulture))) + " }";
+            sb.AppendLine("int propertyChoice = reader.ReadStringChoice<TLuminProfile>(" + Bytes(first) + ", \"" + first + "\".AsSpan(), " +
+                Bytes(second) + ", \"" + second + "\".AsSpan());");
+            sb.AppendLine("reader.CompleteValue();");
+            return;
+        }
+
         sb.AppendLine("string propertyName = reader.Read<string, TLuminProfile>();");
         sb.AppendLine("int propertyChoice = propertyName == \"" + first + "\" ? 1 : propertyName == \"" + second + "\" ? 2 : 0;");
     }
@@ -299,7 +311,7 @@ internal static class FrameworkScalarBody
                 sb.AppendLine("            {");
                 sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
                 sb.AppendLine("                {");
-                AppendPropertyChoice(sb, "Real", "Imaginary");
+                AppendPropertyChoice(data, sb, "Real", "Imaginary");
                 sb.AppendLine("                    reader.Read();");
                 sb.AppendLine("                    if (propertyChoice == 1) real = reader.ReadDouble();");
                 sb.AppendLine("                    else if (propertyChoice == 2) imaginary = reader.ReadDouble();");
@@ -316,7 +328,7 @@ internal static class FrameworkScalarBody
                 sb.AppendLine("            {");
                 sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
                 sb.AppendLine("                {");
-                AppendPropertyChoice(sb, "Normal", "D");
+                AppendPropertyChoice(data, sb, "Normal", "D");
                 sb.AppendLine("                    reader.Read();");
                 sb.AppendLine("                    if (propertyChoice == 1)");
                 sb.AppendLine("                    {");

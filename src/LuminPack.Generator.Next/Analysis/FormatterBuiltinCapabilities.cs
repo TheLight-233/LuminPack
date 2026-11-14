@@ -57,6 +57,9 @@ internal static class FormatterBuiltinCapabilities
                 result.Add("CanCopyStringBuilder");
         }
 
+        if ((display is "global::System.Numerics.Complex" or "global::System.Numerics.Plane") && HasJsonStringChoice(compilation))
+            result.Add("CanReadJsonStringChoice");
+
         if (display == "global::System.Collections.BitArray")
         {
             if (FormatterRuntimeTraits.CanWriteBitArrayPayload(compilation))
@@ -64,5 +67,28 @@ internal static class FormatterBuiltinCapabilities
             if (FormatterRuntimeTraits.CanCreateBitArrayPayload(compilation))
                 result.Add("CanCreateBitArrayPayload");
         }
+    }
+
+    /// <summary>Checks the referenced runtime for a profile-aware comparison of two decoded JSON names.</summary>
+    /// <param name="compilation">The consuming compilation and runtime metadata.</param>
+    /// <returns>Whether the current reader exposes the expected operation.</returns>
+    private static bool HasJsonStringChoice(Compilation compilation)
+    {
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        if (reader is null || options is null || span is null)
+            return false;
+
+        var bytes = span.Construct(compilation.GetSpecialType(SpecialType.System_Byte));
+        var chars = span.Construct(compilation.GetSpecialType(SpecialType.System_Char));
+        return reader.GetMembers("ReadStringChoice").OfType<IMethodSymbol>().Any(method =>
+            !method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public &&
+            !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.ReturnType.SpecialType == SpecialType.System_Int32 &&
+            method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+            method.Parameters.Length == 4 && method.Parameters.Select((parameter, index) => parameter.RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(parameter.Type, index % 2 == 0 ? bytes : chars)).All(matches => matches));
     }
 }

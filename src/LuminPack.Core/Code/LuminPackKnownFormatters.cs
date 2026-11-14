@@ -409,14 +409,15 @@ public static class LuminPackKnownFormatters
         {
             if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.String)
                 continue;
-            string name = reader.Read<string, TOptions>();
+            int property = reader.ReadStringChoice<TOptions>("Real"u8, "Real".AsSpan(), "Imaginary"u8, "Imaginary".AsSpan());
+            reader.CompleteValue();
             reader.Read<TOptions>();
-            switch (name)
+            switch (property)
             {
-                case "Real":
+                case 1:
                     real = reader.Read<double, TOptions>();
                     break;
-                case "Imaginary":
+                case 2:
                     imaginary = reader.Read<double, TOptions>();
                     break;
                 default:
@@ -460,14 +461,15 @@ public static class LuminPackKnownFormatters
         {
             if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.String)
                 continue;
-            string name = reader.Read<string, TOptions>();
+            int property = reader.ReadStringChoice<TOptions>("Normal"u8, "Normal".AsSpan(), "D"u8, "D".AsSpan());
+            reader.CompleteValue();
             reader.Read<TOptions>();
-            switch (name)
+            switch (property)
             {
-                case "Normal":
+                case 1:
                     ReadVector3<TOptions>(ref reader, ref normal);
                     break;
-                case "D":
+                case 2:
                     d = reader.Read<float, TOptions>();
                     break;
                 default:
