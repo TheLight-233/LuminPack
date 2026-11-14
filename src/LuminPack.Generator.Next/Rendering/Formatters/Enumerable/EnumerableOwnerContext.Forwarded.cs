@@ -209,6 +209,11 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name = "concurrent">The concurrent used by this operation.</param>
     private void ForwardedStackWrite(string local, bool concurrent)
     {
+        if (!concurrent && Text && Supports("WriteStringStackStorage"))
+        {
+            W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteStringStackStorage<TLuminProfile>(ref operationState, " + local + ", true))");
+            W.Line("    goto operationComplete_RootWrite;");
+        }
         if (concurrent)
             W.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(" + local + ", out var count);");
         else

@@ -35,6 +35,7 @@ public static class LuminCollectionLayouts
     public static readonly int StackArray = s_stack[0];
     /// <summary>Gets the offset of the size of <c>Stack&lt;T&gt;</c>.</summary>
     public static readonly int StackSize = s_stack[1];
+    internal static readonly int StackVersion = s_stack[2];
 
     // Queue<T>
     private static readonly int[] s_queue = Family(typeof(Queue<int>), typeof(Queue<object>), CompiledQueue(), "_array|_items", "_head", "_tail", "_size", "_version");
@@ -46,6 +47,7 @@ public static class LuminCollectionLayouts
     public static readonly int QueueTail = s_queue[2];
     /// <summary>Gets the offset of the size of <c>Queue&lt;T&gt;</c>.</summary>
     public static readonly int QueueSize = s_queue[3];
+    internal static readonly int QueueVersion = s_queue[4];
 
     // HashSet<T>
     private static readonly int[] s_hashSet = Family(typeof(HashSet<int>), typeof(HashSet<object>), CompiledHashSet(),

@@ -22,6 +22,21 @@ internal static class FormatterCapabilities
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
+        if (definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.Stack")
+            FormatterOrderedCollectionTraits.Capture(compilation, named, definition == "System.Collections.Generic.Stack", result);
+        if (definition == "System.Collections.Generic.PriorityQueue" && FormatterOrderedCollectionTraits.HasPriorityTraversal(compilation, named))
+        {
+            result.Add("PriorityQueueTraversal");
+            if (FormatterOrderedCollectionTraits.HasPriorityReader(compilation, named))
+                result.Add("ReadPriorityQueueStorage");
+            if (FormatterOrderedCollectionTraits.HasPriorityWriter(compilation, named))
+                result.Add("WritePriorityQueueStorage");
+            if ((named.TypeArguments[0].SpecialType == SpecialType.System_String || named.TypeArguments[1].SpecialType == SpecialType.System_String) &&
+                FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
+                result.Add("PriorityJsonCapacity");
+            if (FormatterConcurrentTraits.HasJsonIntegerPairs(compilation))
+                result.Add("JsonIntegerPair");
+        }
         if (definition is "System.Collections.Generic.List" or "System.Memory" or "System.ReadOnlyMemory" or
             "System.ArraySegment" or "System.Buffers.ReadOnlySequence")
             ContiguousCapabilities(compilation, named.TypeArguments[0], result);

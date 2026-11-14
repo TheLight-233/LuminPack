@@ -10,7 +10,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// non-null destination is cleared and reused.</remarks>
 internal static class QueueOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Enqueue(item);");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Enqueue(item);",
+        outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -22,6 +23,12 @@ internal static class QueueOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
+        if (c.Text && c.Supports("WriteStringQueueStorage"))
+        {
+            c.W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteStringQueueStorage<TLuminProfile>(ref operationState, value, " +
+                (c.Forwarded ? "true" : "false") + "))");
+            c.W.Line("    goto operationComplete_RootWrite;");
+        }
         if (c.Payload != null || c.Forwarded)
         {
             c.QueuePayloadWrite("value");

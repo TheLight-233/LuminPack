@@ -3,10 +3,8 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared binary and JSON formatter owner of one closed <c>Stack&lt;T&gt;</c>.</summary>
-/// <remarks>The members mirror the legacy stack roots and extension methods. The binary write copies the stack once and stores
-/// the elements in their internal bottom-to-top order, which is the reverse of the public enumeration; the binary read takes the
-/// pooled block and pushes it back from the bottom, and both JSON roots transfer their elements through the shared element owner,
-/// staging the top-first JSON order before rebuilding the stack.</remarks>
+/// <remarks>Binary stores active stack elements bottom first. Unrecognized storage and insufficient output room use the pooled
+/// traversal. JSON writes in public pop order and stages the decoded elements before restoring the stack.</remarks>
 internal static class StackOwnerFile
 {
     /// <summary>Renders the file.</summary>
@@ -38,6 +36,8 @@ internal static class StackOwnerFile
         string roots = "LuminRoots_StackOf" + readable;
         string elementOwner = "global::LuminPack.Binary_" + extension + "_" + readable;
         string owner = "Binary_" + extension + "_StackOf" + readable;
+        var contract = set.FindFormatter(sequence);
+        const string access = "global::LuminPack.Code.LuminPackCollectionAccess.";
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -107,7 +107,19 @@ internal static class StackOwnerFile
                     w.Blank();
                     w.Line("int count = value.Count;");
                     w.Line("int countPosition = operationState.BeginCollection();");
-                    w.Line("if (count != 0)");
+                    w.Line("if (count != 0" + (contract?.Supports("WriteStackStorage") == true ?
+                        " && !" + access + "TryWriteStackStorage(ref operationState, value, count)" : "") + ")");
+                    w.Indented(() => w.Line("WriteStaged(ref operationState, value, count);"));
+                    w.Blank();
+                    w.Line("operationState.EndCollection(countPosition, count);");
+                    w.Line("operationState.CheckBuffer();");
+                    w.Blank();
+                    w.Line("operationComplete_RootWrite:");
+                    w.Indented(() => w.Line(";"));
+                    w.Line("operationState.CopyTo(ref writer);");
+                    w.Blank();
+                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line("static void WriteStaged(scoped ref " + writer + " operationState, " + sequence + " value, int count)");
                     w.Open();
                     w.Line("var buffer = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(count);");
                     w.Line("try");
@@ -138,13 +150,6 @@ internal static class StackOwnerFile
                     });
                     w.Close();
                     w.Close();
-                    w.Blank();
-                    w.Line("operationState.EndCollection(countPosition, count);");
-                    w.Line("operationState.CheckBuffer();");
-                    w.Blank();
-                    w.Line("operationComplete_RootWrite:");
-                    w.Indented(() => w.Line(";"));
-                    w.Line("operationState.CopyTo(ref writer);");
                     w.Close();
                     w.Blank();
                     break;
@@ -189,7 +194,7 @@ internal static class StackOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootRead(");
                     w.Line("    scoped ref " + reader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -208,22 +213,27 @@ internal static class StackOwnerFile
                     w.Line("else");
                     w.Indented(() => w.Line("value.Clear();"));
                     w.Blank();
-                    w.Line("if (length == 0)");
+                    w.Line("if (length == 0" + (contract?.Supports("ReadStackStorage") == true ?
+                        " || " + access + "TryReadStackStorage(ref operationState, value, length)" : "") + ")");
                     w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+                    w.Line("ReadStaged(ref operationState, value, length);");
                     w.Blank();
+                    w.Line("operationComplete_RootRead:");
+                    w.Indented(() => w.Line(";"));
+                    w.Line("operationState.CopyTo(ref reader);");
+                    w.Blank();
+                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line("static void ReadStaged(scoped ref " + reader + " operationState, " + sequence + " value, int length)");
+                    w.Open();
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
                     w.Line("global::System.Span<" + scalar + "> items = pooled.AsSpan(0, length);");
-                    w.Line("if (length != 0)");
+                    w.Line("operationState.Read(");
                     w.Indented(() =>
                     {
-                        w.Line("operationState.Read(");
-                        w.Indented(() =>
-                        {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
-                            w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                        });
+                        w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
+                        w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     });
                     w.Blank();
                     // The stored block is bottom first, so each element is pushed in slot order.
@@ -239,10 +249,7 @@ internal static class StackOwnerFile
                         w.Line("global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + scalar + ">());");
                     });
                     w.Close();
-                    w.Blank();
-                    w.Line("operationComplete_RootRead:");
-                    w.Indented(() => w.Line(";"));
-                    w.Line("operationState.CopyTo(ref reader);");
+                    w.Close();
                     w.Close();
                     w.Blank();
                     break;
@@ -287,6 +294,7 @@ internal static class StackOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + sequence + " input)");
@@ -306,6 +314,14 @@ internal static class StackOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
+                    if (contract?.Supports("OrderedIntegerJson") == true && GenericFormatterReuse.Real(scalar) is "int" or "long")
+                    {
+                        w.Line("if (" + access + "TryWriteIntegerStackJson<TLuminProfile, " + scalar + ">(ref writer, value))");
+                        w.Open();
+                        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                        w.Line("return;");
+                        w.Close();
+                    }
                     w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in value)");
                     w.Open();
@@ -363,6 +379,7 @@ internal static class StackOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -376,39 +393,8 @@ internal static class StackOwnerFile
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     w.Blank();
-                    // Stack elements arrive top first; a pooled staging array restores their push order without a list.
-                    w.Line("const int initialCapacity = 16;");
-                    w.Line("var buffer = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(initialCapacity);");
-                    w.Line("var count = 0;");
-                    w.Line("try");
-                    w.Open();
-                    w.Line("while (reader.Read<TLuminProfile>())");
-                    w.Open();
-                    w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
-                    w.Line("    break;");
-                    w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
-                    w.Line("    continue;");
-                    w.Line("if (count >= buffer.Length)");
-                    w.Open();
-                    w.Line("var newBuffer = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(buffer.Length * 2);");
-                    w.Line("global::System.Array.Copy(buffer, newBuffer, count);");
-                    w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(buffer, clearArray: false);");
-                    w.Line("buffer = newBuffer;");
-                    w.Close();
-                    w.Blank();
-                    w.Line(scalar + " item = default !;");
-                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                    w.Line("buffer[count++] = item;");
-                    w.Close();
-                    w.Blank();
-                    w.Line("value = new " + sequence + "(count);");
-                    w.Line("for (int index = count - 1; index >= 0; index--)");
-                    w.Line("    value.Push(buffer[index]);");
-                    w.Close();
-                    w.Line("finally");
-                    w.Open();
-                    w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(buffer, clearArray: false);");
-                    w.Close();
+                    StackJsonStaging.Emit(w, sequence, scalar, elementOwner, jsonReader, clear: false,
+                        bulkRestore: contract?.Supports("RestoreStackFromTop") == true);
                     w.Close();
                     w.Blank();
                     break;

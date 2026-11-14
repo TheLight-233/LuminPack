@@ -656,6 +656,15 @@ internal static class EnumerableOwnerTemplate
                         w.Close();
                     }
                     w.Blank();
+                    if (fact.Family.Kind == CollectionKind.Queue && context.Supports("OrderedIntegerJson") &&
+                        GenericFormatterReuse.Real(scalar) is "int" or "long")
+                    {
+                        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteIntegerQueueJson<TLuminProfile, " + scalar + ">(ref writer, value))");
+                        w.Open();
+                        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                        w.Line("return;");
+                        w.Close();
+                    }
                     if (spec.InterfaceListReuse || spec.InterfaceSetTraversal)
                         InterfaceJsonTraversal.Write(w, set, sequence, scalar, elementOwner, jsonWriter, spec.InterfaceSetTraversal);
                     else
@@ -778,6 +787,13 @@ internal static class EnumerableOwnerTemplate
                     if (spec.ConcurrentStackStaging && context.Supports("StageConcurrentStack"))
                     {
                         ConcurrentStackJsonReader.Emit(w, sequence, scalar, elementOwner, jsonReader, clear: true);
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
+                    if (fact.Family.Kind == CollectionKind.Stack && context.Text && context.Supports("RestoreStackFromTop"))
+                    {
+                        StackJsonStaging.Emit(w, sequence, scalar, elementOwner, jsonReader, clear: true, bulkRestore: true);
                         w.Close();
                         w.Blank();
                         break;

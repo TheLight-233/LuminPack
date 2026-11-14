@@ -9,7 +9,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class StackPayloadOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(c => c.StackPayloadWrite("value", false), Read,
-        "staged.Add(item);", Before, After);
+        "staged.Add(item);", Before, After, readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -27,7 +27,8 @@ internal static class StackPayloadOwnerFile
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
-        w.Line("if (length == 0)");
+        w.Line("if (length == 0" + (c.Text && c.Supports("ReadStringStackStorage") ?
+            " || global::LuminPack.Code.LuminPackCollectionAccess.TryReadStringStackStorage<TLuminProfile>(ref operationState, value, length)" : "") + ")");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
         c.PooledRead(() =>
@@ -37,8 +38,8 @@ internal static class StackPayloadOwnerFile
         });
     }
 
-    private static void Before(EnumerableOwnerContext c) =>
-        c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();");
+    private static void Before(EnumerableOwnerContext c)
+        => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();");
 
     private static void After(EnumerableOwnerContext c)
     {

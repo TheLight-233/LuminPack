@@ -682,7 +682,8 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value, context.Supports("JsonIntegerPair") && context.RawPairs);
+                    var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value,
+                        context.Supports("JsonIntegerPair") && context.RawPairs, utf8Only: context.Supports("PriorityQueueTraversal"));
                     if (context.Supports("SortedListTraversal"))
                     {
                         w.Line("if (value.GetType() == typeof(" + dictionary + ") &&");
@@ -702,6 +703,24 @@ internal static class PairedDictionaryOwnerTemplate
                         w.Indented(() => w.Line("WriteEnumerated(ref writer, value);"));
                         EmitLocalLoop("WriteEnumerated", dictionary);
                     }
+                    else if (context.Supports("PriorityQueueTraversal"))
+                    {
+                        const string access = "global::LuminPack.Code.LuminPackCollectionAccess.";
+                        w.Line("if (value.GetType() == typeof(" + dictionary + ") &&");
+                        w.Line("    " + access + "TryGetPriorityQueueTraversal(value, out var nodes, out int version))");
+                        w.Open();
+                        pairWriter.Begin();
+                        w.Line("foreach (var node in nodes)");
+                        w.Open();
+                        w.Line(access + "CheckPriorityQueueTraversalVersion(value, version);");
+                        pairWriter.Write("node.Element", "node.Priority");
+                        w.Close();
+                        w.Line(access + "CheckPriorityQueueTraversalVersion(value, version);");
+                        w.Close();
+                        w.Line("else");
+                        w.Indented(() => w.Line("WriteEnumerated(ref writer, value);"));
+                        EmitLocalLoop("WriteEnumerated", dictionary, "items.UnorderedItems");
+                    }
                     else if (fact.Family.ForwardsToDictionary)
                     {
                         string concrete = "global::System.Collections.Generic.Dictionary<" + key + ", " + value + ">";
@@ -720,13 +739,13 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     break;
 
-                    void EmitLocalLoop(string method, string input)
+                    void EmitLocalLoop(string method, string input, string source = "items")
                     {
                         w.Blank();
                         w.Line(w.MethodImpl("NoInlining"));
                         w.Line("static void " + method + "(scoped ref " + jsonWriter + " writer, " + input + " items)");
                         w.Open();
-                        EmitLoop("items");
+                        EmitLoop(source);
                         w.Close();
                     }
 
@@ -820,6 +839,14 @@ internal static class PairedDictionaryOwnerTemplate
                     }
                     if (spec.JsonBefore != null)
                         spec.JsonBefore(context);
+                    else if (context.Supports("PriorityJsonCapacity"))
+                    {
+                        w.Line("bool fresh = value is null;");
+                        w.Line("if (fresh)");
+                        w.Indented(() => w.Line("value = new " + dictionary + "();"));
+                        w.Line("else");
+                        w.Indented(() => w.Line("value.Clear();"));
+                    }
                     else
                     {
                         w.Line("if (value is null)");
@@ -829,6 +856,14 @@ internal static class PairedDictionaryOwnerTemplate
                     }
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
+                    if (spec.JsonBefore == null && context.Supports("PriorityJsonCapacity"))
+                    {
+                        w.Line("if (fresh)");
+                        w.Open();
+                        w.Line("int capacity = reader.GetArrayCapacityHint<TLuminProfile>(8192);");
+                        w.Line("if (capacity >= 1024) value.EnsureCapacity(capacity);");
+                        w.Close();
+                    }
                     w.Line("while (reader.Read<TLuminProfile>())");
                     w.Open();
                     w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");

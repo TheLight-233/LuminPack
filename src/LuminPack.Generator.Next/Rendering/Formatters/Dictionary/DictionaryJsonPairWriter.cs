@@ -11,6 +11,7 @@ internal sealed class DictionaryJsonPairWriter
     private readonly string _keyType;
     private readonly string _valueType;
     private readonly bool _integer;
+    private readonly bool _utf8Only;
 
     /// <summary>Captures the compiled key and value operations.</summary>
     /// <param name="writer">The generated source writer.</param>
@@ -19,7 +20,8 @@ internal sealed class DictionaryJsonPairWriter
     /// <param name="keyType">The emitted key type.</param>
     /// <param name="valueType">The emitted value type.</param>
     /// <param name="integer">Whether the runtime exposes the scalar entry writer.</param>
-    internal DictionaryJsonPairWriter(CodeWriter writer, string keyOwner, string valueOwner, string keyType, string valueType, bool integer)
+    /// <param name="utf8Only">Whether UTF-16 retains the original formatting callback boundaries.</param>
+    internal DictionaryJsonPairWriter(CodeWriter writer, string keyOwner, string valueOwner, string keyType, string valueType, bool integer, bool utf8Only = false)
     {
         _writer = writer;
         _keyOwner = keyOwner;
@@ -28,12 +30,13 @@ internal sealed class DictionaryJsonPairWriter
         _valueType = valueType;
         _integer = integer && GenericFormatterReuse.Real(keyType) == "int" &&
             (GenericFormatterReuse.Real(valueType) is "int" or "long");
+        _utf8Only = utf8Only;
     }
 
     /// <summary>Initializes the separator state used by the individual formatter calls.</summary>
     internal void Begin()
     {
-        if (!_integer)
+        if (!_integer || _utf8Only)
             _writer.Line("bool isFirst = true;");
     }
 
@@ -46,10 +49,20 @@ internal sealed class DictionaryJsonPairWriter
         if (_integer)
         {
             string memory = w.A("Unsafe");
-            w.Line("var key = " + key + ";");
-            w.Line("var itemValue = " + value + ";");
-            w.Line("writer.WriteIntegerEntry<TLuminProfile>(" + Integer("key", _keyType) + ", " + Integer("itemValue", _valueType) + ");");
-            return;
+            if (_utf8Only)
+            {
+                w.Line("if (default(TLuminProfile).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+                w.Open();
+            }
+            string pairKey = _utf8Only ? "integerKey" : "key";
+            string pairValue = _utf8Only ? "integerValue" : "itemValue";
+            w.Line("var " + pairKey + " = " + key + ";");
+            w.Line("var " + pairValue + " = " + value + ";");
+            w.Line("writer.WriteIntegerEntry<TLuminProfile>(" + Integer(pairKey, _keyType) + ", " + Integer(pairValue, _valueType) + ");");
+            if (!_utf8Only)
+                return;
+            w.Line("continue;");
+            w.Close();
 
             string Integer(string local, string type) => GenericFormatterReuse.IsUnmanagedPlaceholder(type)
                 ? memory + ".As<" + type + ", " + GenericFormatterReuse.Real(type) + ">(ref " + local + ")" : local;

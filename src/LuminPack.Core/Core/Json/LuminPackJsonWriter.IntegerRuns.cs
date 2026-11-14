@@ -42,6 +42,48 @@ public unsafe ref partial struct LuminPackJsonWriter
             WriteIntegerRunCore<TOptions, long>(items, readBeforeSeparator);
     }
 
+    /// <summary>Writes an ordered integer run that fits the current window.</summary>
+    /// <typeparam name="T">The exact framework integer type.</typeparam>
+    /// <param name="items">The remaining values in storage order.</param>
+    /// <param name="reverse">Whether the collection enumerates its storage backward.</param>
+    /// <returns>The number of values written without calling the output owner.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int WriteOrderedIntegerWindow<T>(scoped ReadOnlySpan<T> items, bool reverse) where T : unmanaged
+    {
+        if (items.IsEmpty)
+            return 0;
+        ref T first = ref MemoryMarshal.GetReference(items);
+        ref byte start = ref Current;
+#if NET8_0_OR_GREATER
+        long room = (long)Unsafe.ByteOffset(ref start, ref _end);
+#else
+        long room = (long)unchecked((nint)_end - (nint)Cursor);
+#endif
+        int digits = typeof(T) == typeof(int) ? 11 : 20;
+        int maximum = digits + 1;
+        if (room < maximum || IntegerRunOverlaps(items, ref start, room))
+            return 0;
+        int written = 0;
+        int separator = IsFirstElement ? 0 : 1;
+        int step = reverse ? -1 : 1;
+        int index = reverse ? items.Length - 1 : 0;
+        do
+        {
+            T item = Unsafe.Add(ref first, (nint)(uint)index);
+            ref byte output = ref Unsafe.Add(ref start, (nint)(uint)written);
+            output = Comma;
+            ref byte number = ref Unsafe.Add(ref output, separator);
+            written += separator + (typeof(T) == typeof(int)
+                ? LuminPackJsonNumberFormatter.WriteInt32(MemoryMarshal.CreateSpan(ref number, 11), Unsafe.As<T, int>(ref item))
+                : LuminPackJsonNumberFormatter.WriteLong(MemoryMarshal.CreateSpan(ref number, 20), Unsafe.As<T, long>(ref item)));
+            separator = 1;
+            index += step;
+        } while ((uint)index < (uint)items.Length && room - written >= maximum);
+        Advance(written);
+        IsFirstElement = false;
+        return reverse ? items.Length - 1 - index : index;
+    }
+
     /// <summary>Writes a run using a local output offset until the next element needs a capacity check.</summary>
     /// <typeparam name="TOptions">The compiled JSON profile.</typeparam>
     /// <typeparam name="T">An integer type selected by the overload.</typeparam>

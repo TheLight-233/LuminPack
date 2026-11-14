@@ -111,6 +111,11 @@ internal static class StackStringOwnerFile
                     w.Line("goto operationComplete_RootWrite;");
                     w.Close();
                     w.Blank();
+                    if (set.FindFormatter(sequence)?.Supports("WriteStringStackStorage") == true)
+                    {
+                        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteStringStackStorage<TLuminProfile>(ref operationState, value, false))");
+                        w.Line("    goto operationComplete_RootWrite;");
+                    }
                     w.Line("int count = value.Count;");
                     w.Line("int countPosition = operationState.BeginCollection();");
                     w.Line("if (count != 0)");
@@ -203,7 +208,8 @@ internal static class StackStringOwnerFile
                     w.Line("else");
                     w.Indented(() => w.Line("value.Clear();"));
                     w.Blank();
-                    w.Line("if (length == 0)");
+                    w.Line("if (length == 0" + (set.FindFormatter(sequence)?.Supports("ReadStringStackStorage") == true ?
+                        " || global::LuminPack.Code.LuminPackCollectionAccess.TryReadStringStackStorage<TLuminProfile>(ref operationState, value, length)" : "") + ")");
                     w.Indented(() => w.Line("goto operationComplete_RootRead;"));
                     w.Blank();
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Rent(length);");
@@ -273,6 +279,7 @@ internal static class StackStringOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + sequence + " input)");
@@ -349,6 +356,7 @@ internal static class StackStringOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + sequence + " value)");
@@ -362,39 +370,8 @@ internal static class StackStringOwnerFile
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     w.Blank();
-                    // Stack elements arrive top first; a pooled staging array restores their push order without a list.
-                    w.Line("const int initialCapacity = 16;");
-                    w.Line("var buffer = global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Rent(initialCapacity);");
-                    w.Line("var count = 0;");
-                    w.Line("try");
-                    w.Open();
-                    w.Line("while (reader.Read<TLuminProfile>())");
-                    w.Open();
-                    w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
-                    w.Line("    break;");
-                    w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
-                    w.Line("    continue;");
-                    w.Line("if (count >= buffer.Length)");
-                    w.Open();
-                    w.Line("var newBuffer = global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Rent(buffer.Length * 2);");
-                    w.Line("global::System.Array.Copy(buffer, newBuffer, count);");
-                    w.Line("global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Return(buffer, clearArray: true);");
-                    w.Line("buffer = newBuffer;");
-                    w.Close();
-                    w.Blank();
-                    w.Line(itemType + " item = default !;");
-                    w.Line(element + ".Read<TLuminProfile>(ref reader, ref item);");
-                    w.Line("buffer[count++] = item;");
-                    w.Close();
-                    w.Blank();
-                    w.Line("value = new " + sequence + "(count);");
-                    w.Line("for (int index = count - 1; index >= 0; index--)");
-                    w.Line("    value.Push(buffer[index]);");
-                    w.Close();
-                    w.Line("finally");
-                    w.Open();
-                    w.Line("global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Return(buffer, clearArray: true);");
-                    w.Close();
+                    StackJsonStaging.Emit(w, sequence, itemType, element, jsonReader, clear: true,
+                        bulkRestore: set.FindFormatter(sequence)?.Supports("RestoreStackFromTop") == true);
                     w.Close();
                     w.Blank();
                     break;

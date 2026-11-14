@@ -7,8 +7,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// stored, which rebuilds the heap array that was written. The JSON form is an array of element and priority arrays.</remarks>
 internal static class PriorityQueueOwnerFile
 {
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.CountedWrite(), Read, "value.Enqueue(key!, itemValue);",
-        source: "value.UnorderedItems", keyMember: "Element", valueMember: "Priority");
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Enqueue(key!, itemValue);",
+        source: "value.UnorderedItems", keyMember: "Element", valueMember: "Priority", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -18,6 +18,18 @@ internal static class PriorityQueueOwnerFile
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Writes heap order without allocating the unordered-items view when storage is recognized.</summary>
+    /// <param name="c">The priority-queue formatter context.</param>
+    private static void Write(PairedDictionaryContext c)
+    {
+        if (c.RawPairs && c.Supports("WritePriorityQueueStorage"))
+        {
+            c.W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWritePriorityQueueStorage(ref operationState, value))");
+            c.W.Line("    goto operationComplete_RootWrite;");
+        }
+        c.CountedWrite();
+    }
+
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -26,6 +38,11 @@ internal static class PriorityQueueOwnerFile
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
+        if (c.RawPairs && c.Supports("PriorityQueueTraversal") && c.Supports("ReadPriorityQueueStorage"))
+        {
+            w.Line("if (length != 0 && global::LuminPack.Code.LuminPackCollectionAccess.TryReadPriorityQueueStorage(ref operationState, value, length))");
+            w.Line("    goto operationComplete_RootRead;");
+        }
         w.Line("for (int index = 0; index < length; index++)");
         w.Open();
         w.Line(c.Key + " element = default !;");
