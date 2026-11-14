@@ -123,6 +123,59 @@ internal static class WrapperTraversal
         w.Close();
     }
 
+    /// <summary>Emits the concrete sequence loops selected by an exact wrapper with known backing storage.</summary>
+    /// <param name="c">The owner context.</param>
+    /// <param name="elementOwner">The compiled element formatter.</param>
+    internal static void WriteJsonStorage(EnumerableOwnerContext c, string elementOwner)
+    {
+        if (!c.Supports("WrapperJsonStorage") ||
+            c.Supports("WriteWrappedIntegers") && GenericFormatterReuse.Real(c.Scalar) is "int" or "long")
+            return;
+
+        var w = c.W;
+        w.Line("var wrapperStorage = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + c.Scalar + ">(value);");
+        w.Line("if (wrapperStorage is global::System.Collections.Generic.List<" + c.Scalar + "> wrapperList)");
+        w.Open();
+        w.Line("bool first = true;");
+        // The concrete enumerator checks List's version before obtaining the next item, including after the last write.
+        w.Line("foreach (var item in wrapperList)");
+        w.Open();
+        WriteElement("!first");
+        w.Line("first = false;");
+        w.Close();
+        Complete();
+        w.Close();
+        w.Line("if (wrapperStorage is " + ContiguousOwnerFile.ArrayType(c.Scalar) + " wrapperArray)");
+        w.Open();
+        w.Line("int count = wrapperArray.Length;");
+        w.Line("if (count != 0)");
+        w.Open();
+        w.Line("ref var firstItem = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(wrapperArray);");
+        w.Line("int index = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("var item = global::System.Runtime.CompilerServices.Unsafe.Add(ref firstItem, (nint)(uint)index);");
+        WriteElement("index != 0");
+        w.Close();
+        w.Line("while (++index < count);");
+        w.Close();
+        Complete();
+        w.Close();
+
+        void WriteElement(string separate)
+        {
+            w.Line("if (" + separate + ") writer.WriteByteRaw<TLuminProfile>((byte)',');");
+            w.Line("writer.SetFirstElement(true);");
+            w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, item);");
+        }
+
+        void Complete()
+        {
+            w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+            w.Line("return;");
+        }
+    }
+
     /// <summary>Emits the builder write for an owner root.</summary>
     /// <param name="c">The owner context.</param>
     internal static void WriteBuilderRoot(EnumerableOwnerContext c)
@@ -192,7 +245,7 @@ internal static class WrapperTraversal
     internal static void SizeObservableJson(EnumerableOwnerContext c, string target)
     {
         string capacity = JsonCapacity(c);
-        if (capacity.Length == 0 || !c.Supports("ObservableJsonStorage"))
+        if (capacity.Length == 0 || !c.Supports("WrapperJsonStorage"))
             return;
         c.W.Line("int capacity = " + capacity + ";");
         c.W.Line("if (capacity > 0 && global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + c.Scalar +

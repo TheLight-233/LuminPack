@@ -186,7 +186,8 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Emits the read of one element into an assignable location.</summary>
     /// <param name="destination">The assignable destination.</param>
-    internal void ReadElement(string destination)
+    /// <param name="fresh">Whether the destination is a newly initialized default local.</param>
+    internal void ReadElement(string destination, bool fresh = false)
     {
         if (Scalar == "bool")
         {
@@ -202,7 +203,7 @@ internal sealed partial class EnumerableOwnerContext
                 if (NativeNullableElement)
                     W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + destination + "), " + Memory + ".SizeOf<" + Scalar + ">());");
                 else
-                    FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState");
+                    FormatterElementEmitter.Read(W, _set, _element!, destination, "operationState", fresh: fresh);
             }
             return;
         }
@@ -268,6 +269,11 @@ internal sealed partial class EnumerableOwnerContext
     /// <param name="span">The destination span expression.</param>
     internal void ReadBlock(string span, bool foreign = false)
     {
+        if (!foreign && Text && Supports("ReadInterfaceStrings"))
+        {
+            W.Line("operationState.ReadStrings<TLuminProfile>(" + span + ");");
+            return;
+        }
         if (Forwarded && Contiguous && (_element!.RawCollection || _element.Layout != null))
         {
             ReadContiguous(span);
@@ -285,7 +291,7 @@ internal sealed partial class EnumerableOwnerContext
             if (foreign)
             {
                 W.Line(Scalar + " blockItem = default!;");
-                ReadElement("blockItem");
+                ReadElement("blockItem", fresh: true);
                 W.Line("blockSlot = blockItem;");
             }
             else
@@ -357,7 +363,7 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("do");
             W.Open();
             W.Line(Scalar + " current = default!;");
-            ReadElement("current");
+            ReadElement("current", fresh: true);
             W.Line(Memory + ".Add(ref firstItem, (nint)(uint)completed) = current;");
             W.Close();
             W.Line("while (++completed < length);");
@@ -742,7 +748,10 @@ internal static class EnumerableOwnerTemplate
                         w.Close();
                     }
                     if (fact.Family.Kind == CollectionKind.Wrapper)
+                    {
                         WrapperTraversal.WriteJsonIntegers(context);
+                        WrapperTraversal.WriteJsonStorage(context, elementOwner);
+                    }
                     ImmutableLinearTraversal.WriteJson(context, set, elementOwner, jsonWriter);
                     if (ImmutableInterfaceOwnerFile.WriteJsonTree(context, set, elementOwner))
                     {
@@ -843,12 +852,14 @@ internal static class EnumerableOwnerTemplate
                         w.Blank();
                         break;
                     }
-                    if (spec.InterfaceListReuse && (context.Payload != null || context.Forwarded))
+                    if (spec.InterfaceListReuse)
                     {
                         // The original interface read refills an existing array of the same exact length in place and otherwise
                         // streams into an existing list of the exact type, or a new one, whose tail it trims.
                         string list = "global::System.Collections.Generic.List<" + scalar + ">";
-                        w.Line("if (value is " + scalar + "[] existingArray && existingArray.GetType() == typeof(" + scalar + "[]) &&");
+                        string array = ContiguousOwnerFile.ArrayType(scalar);
+                        string capacity = context.Supports("InterfaceJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(10)" : string.Empty;
+                        w.Line("if (value is " + array + " existingArray && existingArray.GetType() == typeof(" + array + ") &&");
                         w.Line("    reader.CountArrayElements<TLuminProfile>() == existingArray.Length)");
                         w.Open();
                         ReadJsonArraySlots("existingArray");
@@ -859,7 +870,7 @@ internal static class EnumerableOwnerTemplate
                         w.Blank();
                         w.Line("var list = value as " + list + ";");
                         w.Line("if (list is null || list.GetType() != typeof(" + list + "))");
-                        w.Line("    list = new " + list + "(reader.GetArrayCapacityHint<TLuminProfile>(10));");
+                        w.Line("    list = new " + list + "(" + capacity + ");");
                         w.Blank();
                         w.Line("int count = 0;");
                         w.Line("while (reader.Read<TLuminProfile>())");

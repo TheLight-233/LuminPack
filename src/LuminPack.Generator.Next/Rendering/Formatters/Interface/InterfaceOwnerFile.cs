@@ -6,20 +6,17 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <remarks>The write tests the exact runtime type of the common implementations first and counts the enumeration of every other
 /// one. The enumerable, collection and read-only collection interfaces read into an array, the list interfaces into a fresh list
 /// filled in place, and the set interfaces into a presized hash set whose entries are read directly before its buckets are
-/// rebuilt. The JSON read stages elements in a list or hash set that the interface then holds.</remarks>
+/// rebuilt. JSON list-like reads refill exact lists and matching arrays. Set reads build a hash set.</remarks>
 internal static class InterfaceOwnerFile
 {
     private static readonly EnumerableOwnerSpec ArraySpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadArray, "staged.Add(item);",
-        BeginJsonList,
-        c => c.W.Line("value = staged;"), jsonCount: false, interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
+        jsonCount: false, interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec CountedArraySpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadArray, "staged.Add(item);",
-        BeginJsonList,
-        c => c.W.Line("value = staged;"), interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
+        interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec ListSpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadList, "staged.Add(item);",
-        BeginJsonList,
-        c => c.W.Line("value = staged;"), interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
+        interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec SetSpec = new EnumerableOwnerSpec(c => WriteLines(c, true), ReadSet, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">();"),
@@ -56,14 +53,6 @@ internal static class InterfaceOwnerFile
     /// <returns>The complete source.</returns>
     internal static string RenderSet(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, SetSpec);
-
-    /// <summary>Presizes fresh JSON lists with the same structural hint as the concrete List reader.</summary>
-    /// <param name="c">The sequence owner's read context.</param>
-    private static void BeginJsonList(EnumerableOwnerContext c)
-    {
-        string capacity = c.Supports("InterfaceJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(10)" : string.Empty;
-        c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">(" + capacity + ");");
-    }
 
     /// <summary>Separates common concrete writes from the interface enumeration.</summary>
     /// <param name="c">The sequence owner's write context.</param>
@@ -169,7 +158,8 @@ internal static class InterfaceOwnerFile
         w.Close();
         w.Blank();
         w.Line("var array = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + c.Scalar + ">(length);");
-        w.Line("global::System.Span<" + c.Scalar + "> span = array.AsSpan();");
+        w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(array);");
+        w.Line("var span = global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref first, length);");
         Block(c);
         w.Line("value = array;");
     }
@@ -200,11 +190,13 @@ internal static class InterfaceOwnerFile
         w.Line("var hashSet = new " + set + "(length);");
         w.Line("var setView = global::LuminPack.Code.LuminPackMarshal.GetHashSetView(hashSet);");
         w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(setView._entries);");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int index = 0;");
+        w.Line("do");
         w.Open();
         w.Line("ref var entry = ref " + c.Memory + ".Add(ref entryRef, (nint)(uint)index);");
         c.ReadElement("entry.Value");
         w.Close();
+        w.Line("while (++index < length);");
         w.Line("global::LuminPack.Code.LuminPackMarshal.RebuildHashSetBuckets(setView, length);");
         w.Line("value = hashSet;");
     }

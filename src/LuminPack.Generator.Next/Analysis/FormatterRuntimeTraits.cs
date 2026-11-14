@@ -123,6 +123,25 @@ internal static class FormatterRuntimeTraits
                 method.Parameters[1].Type.SpecialType == SpecialType.System_Boolean));
     }
 
+    /// <summary>Checks the profile-aware string slot reader on the referenced binary runtime.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <param name="element">The string element of the destination span.</param>
+    /// <returns>Whether a compatible public reader is available.</returns>
+    internal static bool HasStringSpanReader(Compilation compilation, ITypeSymbol element)
+    {
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var span = compilation.GetTypeByMetadataName("System.Span`1")?.Construct(element);
+        return reader is not null && options is not null && span is not null &&
+            reader.GetMembers("ReadStrings").OfType<IMethodSymbol>().Any(method =>
+                !method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.ReturnsVoid &&
+                method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span));
+    }
+
     /// <summary>Checks both halves of the checked sorted-list traversal.</summary>
     /// <param name="compilation">The consumer's referenced runtime.</param>
     /// <returns>Whether the runtime can capture and validate the matching sorted-list storage.</returns>

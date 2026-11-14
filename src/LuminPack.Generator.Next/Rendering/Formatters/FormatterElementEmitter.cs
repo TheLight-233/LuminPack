@@ -41,7 +41,9 @@ internal static class FormatterElementEmitter
     /// <param name = "expression">The addressable value expression.</param>
     /// <param name = "state">The operation-state variable name.</param>
     /// <param name = "profile">The compiled profile type parameter name.</param>
-    internal static void Read(CodeWriter w, SharedFormatterSet set, FormatterModel model, string expression, string state = "reader", string profile = "TLuminProfile")
+    /// <param name = "fresh">Whether the destination is a newly initialized default local.</param>
+    internal static void Read(CodeWriter w, SharedFormatterSet set, FormatterModel model, string expression, string state = "reader",
+        string profile = "TLuminProfile", bool fresh = false)
     {
         if (model.Type == "bool")
         {
@@ -56,9 +58,8 @@ internal static class FormatterElementEmitter
             return;
         }
 
-        // As in the original element read, a null marker clears the slot and the element's own read still runs: it raises the
-        // deserializing callbacks before it consumes the marker.
-        if (model.OrdinaryObject)
+        // Clear a reused slot on a null marker before the element's own read runs its deserializing callbacks.
+        if (model.OrdinaryObject && !fresh)
         {
             w.Line("if (" + state + ".PeekIsNullObject())");
             w.Indented(() => w.Line(expression + " = default!;"));

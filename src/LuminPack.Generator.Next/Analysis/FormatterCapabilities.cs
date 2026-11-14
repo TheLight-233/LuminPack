@@ -36,6 +36,9 @@ internal static class FormatterCapabilities
             var element = named.TypeArguments[0];
             if (FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
                 result.Add("WrapperJsonCapacity");
+            if (definition != "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder" &&
+                FormatterRuntimeTraits.HasSequenceStorage(compilation))
+                result.Add("WrapperJsonStorage");
             if (element.SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasWrappedStringWriter(compilation))
                 result.Add("WriteWrappedStrings");
             if (compilation.GetTypeByMetadataName("System.Collections.Generic.IEnumerable`1") is { } enumerable)
@@ -50,8 +53,6 @@ internal static class FormatterCapabilities
         {
             if (FormatterRuntimeTraits.HasObservableAppend(compilation))
                 result.Add("AppendObservable");
-            if (FormatterRuntimeTraits.HasSequenceStorage(compilation))
-                result.Add("ObservableJsonStorage");
         }
         if (definition == "System.Collections.Generic.PriorityQueue" && FormatterOrderedCollectionTraits.HasPriorityTraversal(compilation, named))
         {
@@ -160,9 +161,13 @@ internal static class FormatterCapabilities
             if (FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
                 result.Add("InterfaceJsonCapacity");
             ITypeSymbol element = named.TypeArguments[0];
-            if (element.SpecialType == SpecialType.System_String &&
-                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element))
-                result.Add("WriteInterfaceStrings");
+            if (element.SpecialType == SpecialType.System_String)
+            {
+                if (FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element))
+                    result.Add("WriteInterfaceStrings");
+                if (FormatterRuntimeTraits.HasStringSpanReader(compilation, element))
+                    result.Add("ReadInterfaceStrings");
+            }
             bool ordinary = element is INamedTypeSymbol { TypeKind: TypeKind.Class } payload && payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackableAttribute" && (attribute.ConstructorArguments.Length == 0 || Convert.ToInt32(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture) == 0)) && !payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
             if (element.SpecialType == SpecialType.System_String || element.IsUnmanagedType && (element.SpecialType != SpecialType.None || Rendering.Formatters.FrameworkScalarBody.Contains(element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) || ordinary)
                 result.Add("InterfaceTargetReuse");
