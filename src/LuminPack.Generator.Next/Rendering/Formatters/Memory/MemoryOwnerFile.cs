@@ -154,6 +154,7 @@ internal static class MemoryOwnerFile
         }
         w.Line("writer.WriteArrayStart<" + c.Profile + ">();");
         bool run = JsonIntegerRunWriter.Supports(set, declared, element);
+        bool readBeforeSeparator = definition != GenericIdentity.Memory;
         if (!run)
             w.Line("bool isFirst = true;");
         if (definition == GenericIdentity.ReadOnlySequence)
@@ -172,9 +173,10 @@ internal static class MemoryOwnerFile
 
         void WriteItems(string items)
         {
-            if (!JsonIntegerRunWriter.TryEmit(w, set, declared, element, items, readBeforeSeparator: true, c.Profile))
+            if (!JsonIntegerRunWriter.TryEmit(w, set, declared, element, items, readBeforeSeparator, c.Profile))
             {
-                w.Line("foreach (var item in " + items + ")");
+                // Mutable Memory reads the referenced slot after the separator callback.
+                w.Line((readBeforeSeparator ? "foreach (var item in " : "foreach (ref var item in ") + items + ")");
                 JsonElement(w, c, element, owner);
             }
         }

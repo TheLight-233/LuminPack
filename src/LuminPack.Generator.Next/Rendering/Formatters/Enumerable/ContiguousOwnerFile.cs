@@ -392,6 +392,7 @@ internal static class ContiguousOwnerFile
 
         void JsonWrite(CodeWriter w, SpecialOwnerContext c)
         {
+            bool readBeforeSeparator = shape != ContiguousShape.Memory;
             NullWrite(w, true);
             w.Line("writer.WriteArrayStart<TLuminProfile>();");
             if (shape == ContiguousShape.ReadOnlySequence)
@@ -406,7 +407,7 @@ internal static class ContiguousOwnerFile
                     JsonElements("memory.Span");
                 w.Close();
             }
-            else if (!JsonIntegerRunWriter.TryEmit(w, set, model.Type, element.Type, span, readBeforeSeparator: true))
+            else if (!JsonIntegerRunWriter.TryEmit(w, set, model.Type, element.Type, span, readBeforeSeparator))
             {
                 w.Line("bool first = true;");
                 JsonElements(span);
@@ -423,11 +424,15 @@ internal static class ContiguousOwnerFile
                 w.Line("int index = 0;");
                 w.Line("do");
                 w.Open();
-                // Capture the item before writing the separator, which can call the output owner.
-                w.Line("var item = " + Unsafe + ".Add(ref firstItem, (nint)(uint)index);");
+                string load = "var item = " + Unsafe + ".Add(ref firstItem, (nint)(uint)index);";
+                // Mutable Memory reads the slot after the separator can call the output owner.
+                if (readBeforeSeparator)
+                    w.Line(load);
                 w.Line("if (!first) writer.WriteByteRaw<TLuminProfile>((byte)',');");
                 w.Line("first = false;");
                 w.Line("writer.SetFirstElement(true);");
+                if (!readBeforeSeparator)
+                    w.Line(load);
                 w.Line(FormatterElementEmitter.Owner(set, element) + ".Write<TLuminProfile>(ref writer, in item);");
                 w.Close();
                 w.Line("while (++index < length);");
