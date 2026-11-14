@@ -205,11 +205,10 @@ internal static class GenericOwnerFile
         w.Open();
         w.Line("if (reader.CurrentTokenType == " + c.JsonReader + ".JsonTokenType.ObjectEnd)");
         w.Line("    break;");
-        w.Line("string propertyName = \"Value\";");
-        w.Line("reader.Read<" + c.Profile + ">(ref propertyName);");
+        ReadLazyPropertyName(w, c.Profile, c.JsonReader);
         w.Line("reader.CompleteValue();");
         w.Line("reader.Read<" + c.Profile + ">();");
-        w.Line("if (propertyName == \"Value\")");
+        w.Line("if (isValueProperty)");
         w.Open();
         w.Line(Owner(extension, type) + ".Read<" + c.Profile + ">(ref reader, ref item);");
         w.Line("hasValue = true;");
@@ -220,6 +219,32 @@ internal static class GenericOwnerFile
         w.Line("if (!hasValue)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"A Lazy JSON object requires a Value property.\");"));
         w.Line("value = new " + declared + "(" + (type == "string" ? "item!" : "item") + ");");
+    }
+
+    /// <summary>Compares the decoded lazy property name in its original encoding.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="profile">The document profile type parameter.</param>
+    /// <param name="reader">The JSON reader type name.</param>
+    internal static void ReadLazyPropertyName(CodeWriter w, string profile, string reader)
+    {
+        const string match = "isValueProperty = propertyName.Length == 5 && propertyName[0] == 86 && propertyName[1] == 97 && propertyName[2] == 108 && propertyName[3] == 117 && propertyName[4] == 101;";
+        w.Line("bool isValueProperty;");
+        w.Line("if (reader.CurrentTokenType != " + reader + ".JsonTokenType.String)");
+        w.Open();
+        w.Line("string propertyName = \"Value\";");
+        w.Line("reader.Read<" + profile + ">(ref propertyName);");
+        w.Line("isValueProperty = propertyName == \"Value\";");
+        w.Close();
+        w.Line("else if (default(" + profile + ").StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+        w.Open();
+        w.Line("var propertyName = reader.ReadStringUtf8<" + profile + ">();");
+        w.Line(match);
+        w.Close();
+        w.Line("else");
+        w.Open();
+        w.Line("var propertyName = reader.ReadStringUtf16<" + profile + ">();");
+        w.Line(match);
+        w.Close();
     }
 
     private static string ItemName(int index) => "Item" + (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);

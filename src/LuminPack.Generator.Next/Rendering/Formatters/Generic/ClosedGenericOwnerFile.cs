@@ -233,11 +233,10 @@ internal static class ClosedGenericOwnerFile
                 w.Line("while (reader.Read<TLuminProfile>())");
                 w.Open();
                 w.Line("if (reader.CurrentTokenType == " + c.JsonReader + ".JsonTokenType.ObjectEnd) break;");
-                w.Line("string property = \"Value\";");
-                w.Line("reader.Read<TLuminProfile>(ref property);");
+                GenericOwnerFile.ReadLazyPropertyName(w, "TLuminProfile", c.JsonReader);
                 w.Line("reader.CompleteValue();");
                 w.Line("reader.Read<TLuminProfile>();");
-                w.Line("if (property == \"Value\")");
+                w.Line("if (isValueProperty)");
                 w.Open();
                 w.Line(FormatterElementEmitter.Owner(set, model.Arguments[0]) + ".Read<TLuminProfile>(ref reader, ref item0);");
                 w.Line("hasValue = true;");
