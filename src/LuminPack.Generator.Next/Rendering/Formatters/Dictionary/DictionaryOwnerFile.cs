@@ -64,6 +64,8 @@ internal static class DictionaryOwnerFile
         string dictionary = fact.DeclaredType;
         var contractModel = set.FindFormatter(dictionary);
         bool rawPairWrite = pair && contractModel?.Supports("BinaryRawPairs") == true;
+        bool textPairWrite = !sparse && rawKey != rawValue && contractModel?.Supports("BinaryTextPair") == true;
+        string rawWidth = memory + ".SizeOf<" + (rawKey ? key : value) + ">()";
         bool readRawPair = pair && GenericFormatterReuse.Real(key) == "int" &&
             (GenericFormatterReuse.Real(value) is "int" or "long");
         string keyWidth = memory + ".SizeOf<" + key + ">()";
@@ -190,13 +192,19 @@ internal static class DictionaryOwnerFile
                     else
                     {
                         w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
-                        w.Line("for (int index = 0; index < count; index++)");
+                        w.Line("int index = 0;");
+                        w.Line("do");
                         w.Open();
-                        w.Line("ref var entry = ref entryRef;");
-                        WriteMember("operationState", key, "entry.Key");
-                        WriteMember("operationState", value, "entry.Value");
-                        w.Line("entryRef = ref " + memory + ".Add(ref entryRef, 1);");
+                        w.Line("ref var entry = ref " + memory + ".Add(ref entryRef, (nint)(uint)index);");
+                        if (textPairWrite)
+                            w.Line("WriteTextPair<TLuminProfile>(ref operationState, in entry.Key, in entry.Value);");
+                        else
+                        {
+                            WriteMember("operationState", key, "entry.Key");
+                            WriteMember("operationState", value, "entry.Value");
+                        }
                         w.Close();
+                        w.Line("while (++index < count);");
                     }
                     w.Line("if (dictionaryView._version != version || dictionaryView._count != count || dictionaryView._freeCount != 0)");
                     w.Indented(() => w.Line(exception + ".ThrowCollectionModifiedDuringSerialization();"));
@@ -224,6 +232,11 @@ internal static class DictionaryOwnerFile
                         w.Line("else");
                         w.Indented(() => w.Line("WriteSparsePair<TLuminProfile>(ref operationState, key, itemValue);"));
                     }
+                    else if (textPairWrite)
+                    {
+                        w.Line("var itemValue = item.Value;");
+                        w.Line("WriteTextPair<TLuminProfile>(ref operationState, in key, in itemValue);");
+                    }
                     else
                     {
                         WriteMember("operationState", key, "key");
@@ -244,6 +257,8 @@ internal static class DictionaryOwnerFile
                         w.Close();
                         w.Blank();
                     }
+                    if (textPairWrite)
+                        EmitTextPair();
                     break;
                 case FormatterSection.Owner:
                     w.Line(inline);
@@ -260,6 +275,45 @@ internal static class DictionaryOwnerFile
                     w.Blank();
                     break;
             }
+        }
+
+        void EmitTextPair()
+        {
+            string text = rawKey ? "itemValue" : "key";
+            string scalar = rawKey ? "key" : "itemValue";
+            w.Line(inline);
+            w.Line("private static void WriteTextPair<TLuminProfile>(scoped ref " + writer + " operationState, in " + key + " key, in " + value + " itemValue)");
+            w.Line(generic + options);
+            w.Open();
+            w.Line("if ((typeof(TLuminProfile) == typeof(" + utf16 + ") ||");
+            w.Line("     typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions)) &&");
+            w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
+            w.Open();
+            w.Line("ref byte cursor = ref operationState.Cursor;");
+            if (rawKey)
+            {
+                w.Line(runtimeWriter + ".Write(ref cursor, in " + scalar + ");");
+                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref " + memory + ".Add(ref cursor, " + rawWidth + "), " + text + ");");
+            }
+            else
+            {
+                w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref cursor, " + text + ");");
+                w.Line(runtimeWriter + ".Write(ref " + memory + ".Add(ref cursor, (nint)(uint)written), in " + scalar + ");");
+            }
+            w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
+            w.Line("return;");
+            w.Close();
+            w.Line("WriteTextPairSlow<TLuminProfile>(ref operationState, in key, in itemValue);");
+            w.Close();
+            w.Blank();
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("private static void WriteTextPairSlow<TLuminProfile>(scoped ref " + writer + " operationState, in " + key + " key, in " + value + " itemValue)");
+            w.Line(generic + options);
+            w.Open();
+            WriteMember("operationState", key, "key");
+            WriteMember("operationState", value, "itemValue");
+            w.Close();
+            w.Blank();
         }
 
         void EmitBinaryRead(FormatterSection section)

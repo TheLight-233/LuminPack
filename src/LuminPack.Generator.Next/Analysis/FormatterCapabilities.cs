@@ -223,6 +223,11 @@ internal static class FormatterCapabilities
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("ConcurrentBinaryTextPair");
+        if (definition == "System.Collections.Generic.Dictionary" && modern && !unity &&
+            ((named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType) ||
+             (named.TypeArguments[1].SpecialType == SpecialType.System_String && named.TypeArguments[0].IsUnmanagedType)) &&
+            FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
+            result.Add("BinaryTextPair");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))
             result.Add("ConcurrentTraversal");
         if (definition == "System.Collections.Frozen.FrozenSet")
