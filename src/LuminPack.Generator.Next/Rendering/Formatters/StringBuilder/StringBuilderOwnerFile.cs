@@ -13,7 +13,20 @@ internal static class StringBuilderOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations) =>
         SpecialOwnerFile.Render(set, operations, "StringBuilder", "global::System.Text.StringBuilder", true, (w, c) => BinaryWrite(w, c, set),
-            BinaryRead, (w, c) => JsonWrite(w, c, set), (w, c) => JsonRead(w, c, set));
+            BinaryRead, (w, c) => JsonWrite(w, c, set), (w, c) => JsonRead(w, c, set), binaryWriteEntries: MeasureRecord);
+
+    private static void MeasureRecord(CodeWriter w)
+    {
+        w.Line(w.Preserve);
+        w.Line(w.MethodImpl("AggressiveInlining"));
+        w.Line("internal static void MeasureRecord_StringBuilder<TLuminProfile>(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator,");
+        w.Line("    scoped ref global::System.Text.StringBuilder value)");
+        w.Line("    where TLuminProfile : struct, " + w.A("ILuminPackOptions"));
+        w.Open();
+        w.Line("evaluator.Add(value is null ? sizeof(int) : checked(sizeof(int) + value.Length * sizeof(char)));");
+        w.Close();
+        w.Blank();
+    }
 
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
@@ -24,7 +37,11 @@ internal static class StringBuilderOwnerFile
         w.Line("writer.WriteCollectionHeader(length);");
         if (set.FindFormatter("global::System.Text.StringBuilder")?.Supports("CanCopyStringBuilder") == true)
         {
+            w.Line("#if NET8_0_OR_GREATER");
+            w.Line("var destination = global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref global::System.Runtime.CompilerServices.Unsafe.As<byte, char>(ref writer.Cursor), length);");
+            w.Line("#else");
             w.Line("var destination = global::System.Runtime.InteropServices.MemoryMarshal.Cast<byte, char>(writer.Buffer.Slice(writer.Position, byteCount));");
+            w.Line("#endif");
             w.Line("value.CopyTo(0, destination, length);");
             w.Line("writer.Advance(byteCount);");
         }
@@ -52,7 +69,8 @@ internal static class StringBuilderOwnerFile
         w.Line("return;");
         w.Close();
         w.Blank();
-        w.Line("reader.EnsureCollectionPayload(reader.Position, checked(length * sizeof(char)));");
+        w.Line("int bytes = checked(length * sizeof(char));");
+        w.Line("reader.EnsureCollectionPayload(reader.Position, bytes);");
         w.Line("if (value is null)");
         w.Open();
         w.Line("value = new global::System.Text.StringBuilder(length);");
@@ -63,8 +81,11 @@ internal static class StringBuilderOwnerFile
         w.Line("value.EnsureCapacity(length);");
         w.Close();
         w.Blank();
-        w.Line("int bytes = checked(length * sizeof(char));");
+        w.Line("#if NET8_0_OR_GREATER");
+        w.Line("var chars = global::System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref global::System.Runtime.CompilerServices.Unsafe.As<byte, char>(ref reader.Cursor), length);");
+        w.Line("#else");
         w.Line("var chars = global::System.Runtime.InteropServices.MemoryMarshal.Cast<byte, char>(reader.Buffer.Slice(reader.Position, bytes));");
+        w.Line("#endif");
         w.Line("value.Append(chars);");
         w.Line("reader.Advance(bytes);");
     }

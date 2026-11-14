@@ -308,9 +308,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
             SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue;
         var bodyKey = (Api: api, Shape: binaryShape ? bound.Shape : EntryShape.Pooled, Measured: binaryShape && measured);
-        if (bodyKey.Shape.Kind == EntryKind.RawCollectionSpan)
+        if (bodyKey.Shape.Kind == EntryKind.StatelessSpanRecord)
         {
-            // These standard raw element readers need no operation state for a complete input span. Keep the measured
+            // These framework readers need no operation state for a complete input span. Keep the measured
             // direct-record selection for allocating writes and the existing selection for explicit profiles and streams.
             bool span = !bound.OpenProfile && api is (SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef);
             bodyKey.Shape = new EntryShape(span ? EntryKind.StatelessRead : EntryKind.DirectRecord);

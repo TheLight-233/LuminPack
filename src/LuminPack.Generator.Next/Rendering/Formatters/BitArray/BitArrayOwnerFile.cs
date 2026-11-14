@@ -12,11 +12,25 @@ internal static class BitArrayOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations) =>
         SpecialOwnerFile.Render(set, operations, "BitArray", "global::System.Collections.BitArray", true, BinaryWrite,
-            BinaryRead, JsonWrite, JsonRead, outlineJson: true);
+            BinaryRead, JsonWrite, JsonRead, outlineJson: true, binaryWriteEntries: MeasureRecord);
+
+    private static void MeasureRecord(CodeWriter w)
+    {
+        w.Line(w.Preserve);
+        w.Line(w.MethodImpl("AggressiveInlining"));
+        w.Line("internal static void MeasureRecord_BitArray<TLuminProfile>(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator,");
+        w.Line("    scoped ref global::System.Collections.BitArray value)");
+        w.Line("    where TLuminProfile : struct, " + w.A("ILuminPackOptions"));
+        w.Open();
+        w.Line("int words = value is null ? 0 : (int)(((uint)value.Length + 31) >> 5);");
+        w.Line("evaluator.Add(sizeof(int) + words * sizeof(int));");
+        w.Close();
+        w.Blank();
+    }
 
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
     {
-        w.Line("if (value is null) { writer.WriteNullCollectionHeader(); return; }");
+        w.Line("if (value is null) { writer.EnsureAdditionalCapacity(sizeof(int)); writer.WriteNullCollectionHeader(); return; }");
         w.Line("int length = value.Length;");
         w.Line("int words = (int)(((uint)length + 31) >> 5);");
         w.Line("#if NET8_0_OR_GREATER");

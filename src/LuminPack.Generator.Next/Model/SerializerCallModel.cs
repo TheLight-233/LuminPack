@@ -120,8 +120,8 @@ internal enum EntryKind
     /// <summary>An interface sequence of known scalars, read without reference-tracking state.</summary>
     StatelessRead,
 
-    /// <summary>A framework queue or linked list with a stateless raw-element span reader.</summary>
-    RawCollectionSpan,
+    /// <summary>A framework record that needs no reference-tracking state for span reads.</summary>
+    StatelessSpanRecord,
 
     /// <summary>A UTF-16 length-prefixed time zone snapshot sized from its cached text.</summary>
     TimeZoneSnapshot,
