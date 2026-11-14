@@ -540,7 +540,10 @@ internal static class GenericFormatterReuse
                     string constraint = "where " + strategy + " : struct, " + string.Join(", ", Interfaces(placeholder, required));
                     text = text.Replace(constraint, constraint + ", " + string.Join(", ", BlockInterfaces(placeholder, blocks)));
                 }
-            text = NoInliningRoots(text);
+            // The ordinary raw list read is a checked bulk copy without an element loop.
+            bool inlineRawListRead = family.Definition == "System.Collections.Generic.List" &&
+                plan.Categories[0] == Category.Unmanaged;
+            text = NoInliningRoots(text, inlineRawListRead);
             string state = "global::LuminPack.Binary_" + _set.Extension + "_";
             // The template names its own roots after the placeholder spelling; inside the generic owner they are unqualified.
             string own = ReadableTypeName.Of(GeneratedNames.PayloadKey(spelling));
@@ -820,13 +823,14 @@ internal static class GenericFormatterReuse
     /// <summary>Rejects a placeholder render; the reason documents the closed spelling that keeps the owner closed.</summary>
     private static string? Reject(Plan plan, string reason, string text) => null;
 
-    /// <summary>Keeps every root of a shared collection owner out of its callers.</summary>
+    /// <summary>Keeps shared collection roots with substantial bodies out of their callers.</summary>
     /// <param name="text">The placeholder owner render.</param>
-    /// <returns>The render with <c>NoInlining</c> on each binary and JSON root.</returns>
+    /// <param name="inlineRawListRead">Whether to keep the original inlining hint on the ordinary raw list reader.</param>
+    /// <returns>The render with <c>NoInlining</c> on the outlined binary and JSON roots.</returns>
     /// <remarks>LuminPack trades one call into a collection for inlining inside it: an inlined collection root would spend the
     /// caller's inline budget on the loop and leave the element calls in the loop uninlined. Local helpers and private
     /// continuations keep their own attributes.</remarks>
-    private static string NoInliningRoots(string text)
+    private static string NoInliningRoots(string text, bool inlineRawListRead)
     {
         const string attribute = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]";
         string[] lines = text.Split('\n');
@@ -836,7 +840,8 @@ internal static class GenericFormatterReuse
         {
             keep[index] = true;
             string trimmed = lines[index].TrimStart();
-            if (!trimmed.StartsWith("internal static void Root", StringComparison.Ordinal))
+            if (!trimmed.StartsWith("internal static void Root", StringComparison.Ordinal) ||
+                (inlineRawListRead && trimmed.StartsWith("internal static void RootRead(", StringComparison.Ordinal)))
                 continue;
             string indent = lines[index].Substring(0, lines[index].Length - trimmed.Length);
             bool attributed = false;
