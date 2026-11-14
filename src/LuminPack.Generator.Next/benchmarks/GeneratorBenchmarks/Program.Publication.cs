@@ -425,6 +425,75 @@ public static class PublicationFixture
                 Check(rejected && fresh == null);
             }
         }
+
+        CheckConcurrentIntegerJson<LuminPackUtf8LengthOptions>();
+        CheckConcurrentIntegerJson<LuminPackUtf16LengthOptions>();
+        CheckConcurrentReadEdges();
+        CheckConcurrentBinaryPairs<LuminPackUtf16LengthOptions>();
+        CheckConcurrentBinaryPairs<LuminPackUtf8VarIntOptions>();
+    }
+
+    private static void CheckConcurrentReadEdges()
+    {
+        ConcurrentStack<string> stack = new ConcurrentStack<string>(new[] { "old" });
+        var same = stack;
+        LuminPackSerializer.DeserializeJson<ConcurrentStack<string>, LuminPackUtf8LengthOptions>("[]", ref stack);
+        Check(ReferenceEquals(same, stack) && stack.IsEmpty);
+        bool rejected = false;
+        try { LuminPackSerializer.DeserializeJson<ConcurrentStack<string>, LuminPackUtf8LengthOptions>("[\"first\",\"second\",\"", ref stack); }
+        catch (FormatException) { rejected = true; }
+        Check(rejected && ReferenceEquals(same, stack) && string.Join(",", stack) == "second,first");
+    }
+
+    private static void CheckConcurrentBinaryPairs<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        var source = new ConcurrentDictionary<string, Guid>();
+        for (int i = 0; i < 1024; i++)
+            source.TryAdd(i + "\u952e" + new string('x', 48), new Guid(i, 2, 3, 1, 2, 3, 4, 5, 6, 7, 8));
+
+        using var buffer = LuminBufferWriterPool.Rent();
+        LuminPackSerializer.Serialize<ConcurrentDictionary<string, Guid>, TOptions>(source, buffer);
+        byte[] bytes = buffer.GetSpan().ToArray();
+        Check(bytes.Length > 32768);
+        Span<byte> output = new byte[bytes.Length];
+        var writer = new LuminPackWriter(ref output);
+        LuminPackSerializer.Serialize<ConcurrentDictionary<string, Guid>, TOptions>(ref writer, in source);
+        Check(writer.CurrentIndex == bytes.Length && output.SequenceEqual(bytes));
+        var read = LuminPackSerializer.Deserialize<ConcurrentDictionary<string, Guid>, TOptions>(bytes);
+        Check(read.Count == source.Count);
+        foreach (var pair in source)
+            Check(read.TryGetValue(pair.Key, out var value) && value == pair.Value);
+    }
+
+    private static void CheckConcurrentIntegerJson<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        var queue = new ConcurrentQueue<int>(new[] { int.MinValue, 0, int.MaxValue });
+        var stack = new ConcurrentStack<long>(new[] { long.MinValue, 0, long.MaxValue });
+        var bag = new ConcurrentBag<int>(new[] { 1, 2, 3 });
+        var ints = new ConcurrentDictionary<int, int>();
+        ints.TryAdd(int.MinValue, int.MaxValue);
+        ints.TryAdd(0, -1);
+        var longs = new ConcurrentDictionary<int, long>();
+        longs.TryAdd(int.MaxValue, long.MinValue);
+        longs.TryAdd(0, long.MaxValue);
+        var other = new ConcurrentDictionary<long, long>();
+        other.TryAdd(long.MinValue, long.MaxValue);
+        other.TryAdd(0, -1);
+
+        Check(LuminPackSerializer.SerializeJson<ConcurrentQueue<int>, TOptions>(queue) == "[-2147483648,0,2147483647]");
+        Check(LuminPackSerializer.SerializeJson<ConcurrentStack<long>, TOptions>(stack) == "[9223372036854775807,0,-9223372036854775808]");
+        Check(LuminPackSerializer.SerializeJson<ConcurrentBag<int>, TOptions>(bag) == "[" + string.Join(",", bag) + "]");
+        Check(LuminPackSerializer.SerializeJson<ConcurrentDictionary<int, int>, TOptions>(ints) == PairArray(ints));
+        Check(LuminPackSerializer.SerializeJson<ConcurrentDictionary<int, long>, TOptions>(longs) == PairArray(longs));
+        Check(LuminPackSerializer.SerializeJson<ConcurrentDictionary<long, long>, TOptions>(other) == PairArray(other));
+
+        static string PairArray<TKey, TValue>(IEnumerable<KeyValuePair<TKey, TValue>> source)
+        {
+            var entries = new List<string>();
+            foreach (var pair in source)
+                entries.Add("[" + pair.Key + "," + pair.Value + "]");
+            return "[" + string.Join(",", entries) + "]";
+        }
     }
     private static void Profile<TOptions>() where TOptions : struct, ILuminPackOptions
     {

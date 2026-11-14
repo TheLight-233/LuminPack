@@ -647,23 +647,42 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("bool isFirst = true;");
+                    bool integerPair = context.Supports("ConcurrentJsonIntegerPair") && context.RawPairs &&
+                        (key == "int" || GenericFormatterReuse.IsUnmanagedPlaceholder(key)) &&
+                        (value is "int" or "long" || GenericFormatterReuse.IsUnmanagedPlaceholder(value));
+                    bool sharedPair = integerPair && (GenericFormatterReuse.IsUnmanagedPlaceholder(key) ||
+                        GenericFormatterReuse.IsUnmanagedPlaceholder(value));
+                    if (!integerPair || sharedPair)
+                        w.Line("bool isFirst = true;");
                     w.Line("foreach (var item in " + context.Source + ")");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("var key = item." + spec.KeyMember + ";");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line(keyOwner + ".Write<TLuminProfile>(ref writer, key);");
-                    w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("var itemValue = item." + spec.ValueMember + ";");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line(valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
-                    w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                    if (integerPair)
+                    {
+                        if (sharedPair)
+                        {
+                            EmitSharedIntegerPair("int");
+                            EmitSharedIntegerPair("long");
+                        }
+                        else
+                            w.Line("writer.WriteIntegerEntry<TLuminProfile>(item.Key, item.Value);");
+                    }
+                    if (!integerPair || sharedPair)
+                    {
+                        w.Line("if (!isFirst)");
+                        w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                        w.Line("else");
+                        w.Line("    isFirst = false;");
+                        w.Line("writer.SetFirstElement(true);");
+                        w.Line("writer.WriteArrayStart<TLuminProfile>();");
+                        w.Line("var key = item." + spec.KeyMember + ";");
+                        w.Line("writer.SetFirstElement(true);");
+                        w.Line(keyOwner + ".Write<TLuminProfile>(ref writer, key);");
+                        w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                        w.Line("var itemValue = item." + spec.ValueMember + ";");
+                        w.Line("writer.SetFirstElement(true);");
+                        w.Line(valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
+                        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                    }
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
@@ -684,6 +703,19 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("    where TOptions : struct, " + options + " => " + serializer + "." + roots + ".RootWriteJson<TOptions>(ref state, value);");
                     w.Blank();
                     break;
+            }
+
+            void EmitSharedIntegerPair(string integerValue)
+            {
+                // Exact type tests are constant for each unmanaged JIT and AOT instantiation.
+                w.Line("if (typeof(" + key + ") == typeof(int) && typeof(" + value + ") == typeof(" + integerValue + "))");
+                w.Open();
+                w.Line("var integerKey = item.Key;");
+                w.Line("var integerValue = item.Value;");
+                w.Line("writer.WriteIntegerEntry<TLuminProfile>(" + memory + ".As<" + key + ", int>(ref integerKey),");
+                w.Indented(() => w.Line(memory + ".As<" + value + ", " + integerValue + ">(ref integerValue));"));
+                w.Line("continue;");
+                w.Close();
             }
         }
 

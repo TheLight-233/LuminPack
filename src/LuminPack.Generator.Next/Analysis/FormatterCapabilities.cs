@@ -87,6 +87,16 @@ internal static class FormatterCapabilities
 
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.CanStageStack(compilation, named.TypeArguments[0]))
             result.Add("StageConcurrentStack");
+        if (definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
+            && FormatterConcurrentTraits.HasJsonIntegerElement(compilation, named.TypeArguments[0]))
+            result.Add("ConcurrentJsonIntegerElement");
+        if (definition == "System.Collections.Concurrent.ConcurrentDictionary" &&
+            FormatterConcurrentTraits.HasJsonIntegerPairs(compilation))
+            result.Add("ConcurrentJsonIntegerPair");
+        if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
+            FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
+            result.Add("ConcurrentBinaryTextPair");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))
             result.Add("ConcurrentTraversal");
         if (definition == "System.Collections.Frozen.FrozenSet" && FormatterFrozenTraits.Available(compilation, "Set", 1))

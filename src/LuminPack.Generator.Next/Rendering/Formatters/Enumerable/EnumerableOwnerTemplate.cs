@@ -766,50 +766,7 @@ internal static class EnumerableOwnerTemplate
                     }
                     if (spec.ConcurrentStackStaging && context.Supports("StageConcurrentStack"))
                     {
-                        // The original read stages the elements in a pooled block and publishes what it read even when the
-                        // document fails, before rethrowing.
-                        string pool = "global::System.Buffers.ArrayPool<" + scalar + ">.Shared";
-                        w.Line("if (value is null)");
-                        w.Line("    value = new " + sequence + "();");
-                        w.Line("else");
-                        w.Line("    value.Clear();");
-                        w.Line("var items = " + pool + ".Rent(16);");
-                        w.Line("int count = 0;");
-                        w.Line("try");
-                        w.Open();
-                        w.Line("try");
-                        w.Open();
-                        w.Line("while (reader.Read<TLuminProfile>())");
-                        w.Open();
-                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
-                        w.Line("    break;");
-                        w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
-                        w.Line("    continue;");
-                        w.Line(scalar + " item = default!;");
-                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                        w.Line("if (count == items.Length)");
-                        w.Open();
-                        w.Line("var larger = " + pool + ".Rent(checked(count * 2));");
-                        w.Line("global::System.Array.Copy(items, larger, count);");
-                        w.Line(pool + ".Return(items, true);");
-                        w.Line("items = larger;");
-                        w.Close();
-                        w.Blank();
-                        w.Line("items[count++] = item;");
-                        w.Close();
-                        w.Close();
-                        w.Line("catch (global::System.Exception error)");
-                        w.Open();
-                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, items, count, false);");
-                        w.Line("global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(error);");
-                        w.Close();
-                        w.Blank();
-                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.PublishConcurrentStack(value, items, count, true);");
-                        w.Close();
-                        w.Line("finally");
-                        w.Open();
-                        w.Line(pool + ".Return(items, true);");
-                        w.Close();
+                        ConcurrentStackJsonReader.Emit(w, sequence, scalar, elementOwner, jsonReader, clear: true);
                         w.Close();
                         w.Blank();
                         break;

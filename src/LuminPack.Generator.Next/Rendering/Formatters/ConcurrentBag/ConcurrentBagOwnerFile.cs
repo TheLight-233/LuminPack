@@ -268,13 +268,7 @@ internal static class ConcurrentBagOwnerFile
                     w.Line("var elements = new global::System.ReadOnlySpan<" + scalar + ">(snapshot, 0, count);");
                     w.Line("foreach (var item in elements)");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line("var temp = item;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
+                    ConcurrentJsonElementWriter.Emit(w, set, bag, scalar, elementOwner);
                     w.Close();
                     w.Close();
                     w.Line("finally");

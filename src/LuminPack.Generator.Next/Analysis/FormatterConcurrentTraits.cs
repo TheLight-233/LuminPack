@@ -6,6 +6,85 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Selects compatible value traversals without changing concurrent capture contracts.</summary>
 internal static class FormatterConcurrentTraits
 {
+    /// <summary>Checks the binary writer operations for a bounded UTF-16 key and raw value.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <returns>Whether all fixed record operations required by the generated loop are available.</returns>
+    internal static bool HasBinaryTextPairWriter(Compilation compilation)
+    {
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return writer != null &&
+            HasBinaryWriterOperation(writer, "RecordRoom", false, SpecialType.System_Int32) &&
+            HasBinaryWriterOperation(writer, "Utf16RecordBound", true, SpecialType.System_Int32,
+                (SpecialType.System_String, RefKind.None)) &&
+            HasBinaryWriterOperation(writer, "WriteReservedUtf16Record", true, SpecialType.System_Int32,
+                (SpecialType.System_Byte, RefKind.Ref), (SpecialType.System_String, RefKind.None)) &&
+            HasBinaryWriterOperation(writer, "CompleteRun", false, SpecialType.System_Void,
+                (SpecialType.System_Int32, RefKind.None));
+    }
+
+    /// <summary>Checks a non-generic binary writer operation against its expected signature.</summary>
+    /// <param name="owner">The binary writer type.</param>
+    /// <param name="name">The operation name.</param>
+    /// <param name="isStatic">Whether the operation is static.</param>
+    /// <param name="result">The operation's return type.</param>
+    /// <param name="parameters">The required types and passing conventions.</param>
+    /// <returns>Whether the operation can be called by generated code.</returns>
+    private static bool HasBinaryWriterOperation(INamedTypeSymbol owner, string name, bool isStatic, SpecialType result,
+        params (SpecialType Type, RefKind Passing)[] parameters)
+    {
+        foreach (IMethodSymbol method in owner.GetMembers(name).OfType<IMethodSymbol>())
+        {
+            if (method.DeclaredAccessibility != Accessibility.Public || method.IsStatic != isStatic || method.Arity != 0 ||
+                method.ReturnType.SpecialType != result || method.ReturnsByRef || method.ReturnsByRefReadonly ||
+                method.Parameters.Length != parameters.Length)
+                continue;
+            if (method.Parameters.Select(parameter => (parameter.Type.SpecialType, parameter.RefKind)).SequenceEqual(parameters))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Checks the existing JSON writer's bounded integer element operation.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <param name="element">The concrete sequence element.</param>
+    /// <returns>Whether the formatter can combine its separator and integer output.</returns>
+    internal static bool HasJsonIntegerElement(Compilation compilation, ITypeSymbol element)
+    {
+        if (element.SpecialType is not (SpecialType.System_Int32 or SpecialType.System_Int64))
+            return false;
+        return HasJsonWriterOperation(compilation, "WriteEnumerationElement", element, compilation.GetSpecialType(SpecialType.System_Boolean));
+    }
+
+    /// <summary>Checks both complete integer entry writer overloads for generic scalar roots.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <returns>Whether the runtime can combine one pair's framing and numeric writes.</returns>
+    internal static bool HasJsonIntegerPairs(Compilation compilation)
+    {
+        var int32 = compilation.GetSpecialType(SpecialType.System_Int32);
+        return HasJsonWriterOperation(compilation, "WriteIntegerEntry", int32, int32) &&
+            HasJsonWriterOperation(compilation, "WriteIntegerEntry", int32, compilation.GetSpecialType(SpecialType.System_Int64));
+    }
+
+    /// <summary>Checks a profile-specialized JSON writer overload with two by-value operands.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <param name="name">The operation name.</param>
+    /// <param name="first">The first operand's type.</param>
+    /// <param name="second">The second operand's type.</param>
+    /// <returns>Whether the public operation has the expected signature.</returns>
+    private static bool HasJsonWriterOperation(Compilation compilation, string name, ITypeSymbol first, ITypeSymbol second)
+    {
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter");
+        return options != null && writer?.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+            !method.IsStatic && method.Arity == 1 && method.ReturnsVoid && method.DeclaredAccessibility == Accessibility.Public &&
+            method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+            method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, first) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, second)) == true;
+    }
+
     /// <summary>Checks the callback-free framework contract and complete staged-publication helper.</summary>
     /// <param name = "compilation">The actual consumer metadata.</param>
     /// <param name = "element">The declared stack element.</param>
