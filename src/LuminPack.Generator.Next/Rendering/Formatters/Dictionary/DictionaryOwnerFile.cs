@@ -62,6 +62,13 @@ internal static class DictionaryOwnerFile
             set.FindFormatter(item)?.Underlying != null || set.Scalars.Any(scalar => scalar.StartsWith(item + "=", System.StringComparison.Ordinal));
         bool observeRawLookup = pair && CallbackFree(key) && CallbackFree(value);
         string dictionary = fact.DeclaredType;
+        var contractModel = set.FindFormatter(dictionary);
+        bool rawPairWrite = pair && contractModel?.Supports("BinaryRawPairs") == true;
+        bool readRawPair = pair && GenericFormatterReuse.Real(key) == "int" &&
+            (GenericFormatterReuse.Real(value) is "int" or "long");
+        string keyWidth = memory + ".SizeOf<" + key + ">()";
+        string pairWidth = "(" + keyWidth + " + " + memory + ".SizeOf<" + value + ">())";
+        const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
         string type = ReadableTypeName.Of(GeneratedNames.PayloadKey(dictionary));
         string roots = "LuminRoots_" + type;
         string owner = "Binary_" + extension + "_" + type;
@@ -204,12 +211,39 @@ internal static class DictionaryOwnerFile
                     w.Line("foreach (var item in source)");
                     w.Open();
                     w.Line(key + " key = item.Key;");
-                    WriteMember("operationState", key, "key");
-                    w.Line(value + " itemValue = item.Value;");
-                    WriteMember("operationState", value, "itemValue");
+                    if (rawPairWrite)
+                    {
+                        w.Line(value + " itemValue = item.Value;");
+                        w.Line("if (operationState.RecordRoom() >= " + pairWidth + ")");
+                        w.Open();
+                        w.Line("ref byte record = ref operationState.Cursor;");
+                        w.Line(runtimeWriter + ".Write(ref record, in key);");
+                        w.Line(runtimeWriter + ".Write(ref " + memory + ".Add(ref record, " + keyWidth + "), in itemValue);");
+                        w.Line("operationState.CompleteRun(" + pairWidth + ");");
+                        w.Close();
+                        w.Line("else");
+                        w.Indented(() => w.Line("WriteSparsePair<TLuminProfile>(ref operationState, key, itemValue);"));
+                    }
+                    else
+                    {
+                        WriteMember("operationState", key, "key");
+                        w.Line(value + " itemValue = item.Value;");
+                        WriteMember("operationState", value, "itemValue");
+                    }
                     w.Close();
                     w.Close();
                     w.Blank();
+                    if (rawPairWrite)
+                    {
+                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line("private static void WriteSparsePair<TLuminProfile>(ref " + writer + " operationState, " + key + " key, " + value + " itemValue)");
+                        w.Line(generic + options);
+                        w.Open();
+                        WriteMember("operationState", key, "key");
+                        WriteMember("operationState", value, "itemValue");
+                        w.Close();
+                        w.Blank();
+                    }
                     break;
                 case FormatterSection.Owner:
                     w.Line(inline);
@@ -331,36 +365,63 @@ internal static class DictionaryOwnerFile
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
                     w.Blank();
+                    if (readRawPair)
+                    {
+                        // An oversized claim cannot fit after the collection header, so Advance rejects the saturated width.
+                        w.Line("long required = (long)length * " + pairWidth + ";");
+                        w.Line("int byteCount = (int)global::System.Math.Min(required, int.MaxValue);");
+                        w.Line("ref byte source = ref operationState.Cursor;");
+                        // Validate and consume the complete input before issuing any address-only loads.
+                        w.Line("operationState.Advance(byteCount);");
+                    }
                     w.Line("var result = new " + dictionary + "(length);");
                     w.Line("var dictionaryView = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(result);");
                     w.Line("var entries = dictionaryView._entries!;");
-                    w.Line("for (int index = 0; index < length; index++)");
-                    w.Open();
-                    w.Line("ref var entry = ref entries[index];");
-                    if (pair)
+                    if (readRawPair)
                     {
-                        ReadMember("operationState", key, "entry.Key");
-                        ReadMember("operationState", value, "entry.Value");
+                        const string read = "global::LuminPack.Core.LuminPackReader.Read";
+                        w.Line("ref var entry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(entries);");
+                        // The storage was allocated for length entries, and the payload check dominates this loop.
+                        w.Line("int remaining = length;");
+                        w.Line("do");
+                        w.Open();
+                        w.Line(read + "(ref source, out entry.Key);");
+                        w.Line(read + "(ref " + memory + ".Add(ref source, " + keyWidth + "), out entry.Value);");
+                        w.Line("entry = ref " + memory + ".Add(ref entry, 1);");
+                        w.Line("source = ref " + memory + ".Add(ref source, " + pairWidth + ");");
+                        w.Close();
+                        w.Line("while (--remaining != 0);");
                     }
                     else
                     {
-                        // A fresh entry starts with default values; read into locals, then store.
-                        w.Line(key + " key = default !;");
-                        w.Line(value + " itemValue = default !;");
-                        ReadMember("operationState", key, "key");
-                        ReadMember("operationState", value, "itemValue");
-                        w.Line("entry.Key = key;");
-                        w.Line("entry.Value = itemValue;");
+                        w.Line("for (int index = 0; index < length; index++)");
+                        w.Open();
+                        w.Line("ref var entry = ref entries[index];");
+                        if (pair)
+                        {
+                            ReadMember("operationState", key, "entry.Key");
+                            ReadMember("operationState", value, "entry.Value");
+                        }
+                        else
+                        {
+                            // A fresh entry starts with default values; read into locals, then store.
+                            w.Line(key + " key = default !;");
+                            w.Line(value + " itemValue = default !;");
+                            ReadMember("operationState", key, "key");
+                            ReadMember("operationState", value, "itemValue");
+                            w.Line("entry.Key = key;");
+                            w.Line("entry.Value = itemValue;");
+                        }
+                        w.Close();
                     }
-                    w.Close();
                     w.Blank();
                     w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(dictionaryView, length))");
                     w.Open();
                     w.Line("var rebuilt = new " + dictionary + "(length);");
                     w.Line("for (int index = 0; index < length; index++)");
                     w.Open();
-                    w.Line("ref var entry = ref entries[index];");
-                    w.Line("rebuilt.Add(entry.Key, entry.Value);");
+                    w.Line("ref var item = ref entries[index];");
+                    w.Line("rebuilt.Add(item.Key, item.Value);");
                     w.Close();
                     w.Line("result = rebuilt;");
                     w.Close();
@@ -461,6 +522,7 @@ internal static class DictionaryOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + dictionary + " input)");
@@ -474,23 +536,12 @@ internal static class DictionaryOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("bool isFirst = true;");
+                    var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value,
+                        pair && set.FindFormatter(dictionary)?.Supports("JsonIntegerPair") == true);
+                    pairWriter.Begin();
                     w.Line("foreach (var item in value)");
                     w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("var key = item.Key;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line(keyOwner + ".Write<TLuminProfile>(ref writer, key);");
-                    w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("var itemValue = item.Value;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line(valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
-                    w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                    pairWriter.Write("item.Key", "item.Value");
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
@@ -536,6 +587,7 @@ internal static class DictionaryOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + dictionary + " value)");

@@ -7,7 +7,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// ascending keys under the default comparer in one pass and adds any other input pair by pair.</remarks>
 internal static class SortedDictionaryOwnerFile
 {
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.TreeWrite(), Read, "value.Add(key, itemValue);");
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.TreeWrite(batchRaw: true), Read,
+        "value.Add(key, itemValue);", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

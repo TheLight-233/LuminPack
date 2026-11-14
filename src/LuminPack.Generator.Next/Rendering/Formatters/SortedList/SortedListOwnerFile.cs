@@ -9,7 +9,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// adds each pair.</remarks>
 internal static partial class SortedListOwnerFile
 {
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Add(key!, itemValue);");
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Add(key!, itemValue);", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -30,6 +30,7 @@ internal static partial class SortedListOwnerFile
         w.Open();
         w.Line("var keySpan = new global::System.ReadOnlySpan<" + c.Key + ">(storedKeys, 0, count);");
         w.Line("var valueSpan = new global::System.ReadOnlySpan<" + c.Value + ">(storedValues, 0, count);");
+        bool fused = c.BeginRawRun("keySpan[index]", "valueSpan[index]");
         w.Line("for (int index = 0; index < keySpan.Length; index++)");
         w.Open();
         w.Line(c.Key + " key = keySpan[index];");
@@ -37,6 +38,8 @@ internal static partial class SortedListOwnerFile
         w.Line(c.Value + " itemValue = valueSpan[index];");
         c.WriteMember(c.Value, "itemValue");
         w.Close();
+        if (fused)
+            w.Close();
         w.Close();
         w.Line("else");
         w.Open();

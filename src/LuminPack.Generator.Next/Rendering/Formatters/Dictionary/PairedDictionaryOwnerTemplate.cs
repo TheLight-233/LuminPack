@@ -335,7 +335,8 @@ internal sealed partial class PairedDictionaryContext
     }
 
     /// <summary>Emits the write that copies a tree-backed dictionary's pairs once before writing them in order.</summary>
-    internal void TreeWrite()
+    /// <param name="batchRaw">Whether the family can fuse a complete staged raw payload.</param>
+    internal void TreeWrite(bool batchRaw = false)
     {
         W.Line("int count = value.Count;");
         W.Line("int countPosition = operationState.BeginCollection();");
@@ -345,6 +346,7 @@ internal sealed partial class PairedDictionaryContext
         W.Line("try");
         W.Open();
         W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(value, pairs);");
+        bool fused = batchRaw && BeginRawRun("pairs[index].Key", "pairs[index].Value");
         W.Line("for (int index = 0; index < count; index++)");
         W.Open();
         W.Line(Key + " key = pairs[index].Key;");
@@ -352,6 +354,8 @@ internal sealed partial class PairedDictionaryContext
         W.Line(Value + " itemValue = pairs[index].Value;");
         WriteMember(Value, "itemValue");
         W.Close();
+        if (fused)
+            W.Close();
         W.Close();
         W.Line("finally");
         W.Open();
@@ -361,6 +365,36 @@ internal sealed partial class PairedDictionaryContext
         W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
+    }
+
+    /// <summary>Writes a bounded raw run and opens the original checked fallback block when supported.</summary>
+    /// <param name="key">The current key expression.</param>
+    /// <param name="value">The current value expression.</param>
+    /// <returns>Whether the checked fallback block was opened.</returns>
+    internal bool BeginRawRun(string key, string value)
+    {
+        if (!RawPairs || !Supports("BinaryRawPairs"))
+            return false;
+        string keyWidth = Memory + ".SizeOf<" + Key + ">()";
+        string pairWidth = "(" + keyWidth + " + " + Memory + ".SizeOf<" + Value + ">())";
+        const string writer = "global::LuminPack.Core.LuminPackWriter";
+        W.Line("long byteCount = (long)count * " + pairWidth + ";");
+        W.Line("if (operationState.RecordRoom() >= byteCount)");
+        W.Open();
+        W.Line("ref byte record = ref operationState.Cursor;");
+        W.Line("int index = 0;");
+        W.Line("do");
+        W.Open();
+        W.Line(writer + ".Write(ref record, " + key + ");");
+        W.Line(writer + ".Write(ref " + Memory + ".Add(ref record, " + keyWidth + "), " + value + ");");
+        W.Line("record = ref " + Memory + ".Add(ref record, " + pairWidth + ");");
+        W.Close();
+        W.Line("while (++index < count);");
+        W.Line("operationState.CompleteRun((int)byteCount);");
+        W.Close();
+        W.Line("else");
+        W.Open();
+        return true;
     }
 }
 
@@ -648,12 +682,27 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    bool integerPair = context.Supports("JsonIntegerPair") && context.RawPairs &&
-                        (key == "int" || GenericFormatterReuse.IsUnmanagedPlaceholder(key)) &&
-                        (value is "int" or "long" || GenericFormatterReuse.IsUnmanagedPlaceholder(value));
-                    bool sharedPair = integerPair && (GenericFormatterReuse.IsUnmanagedPlaceholder(key) ||
-                        GenericFormatterReuse.IsUnmanagedPlaceholder(value));
-                    if (fact.Family.ForwardsToDictionary)
+                    var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value, context.Supports("JsonIntegerPair") && context.RawPairs);
+                    if (context.Supports("SortedListTraversal"))
+                    {
+                        w.Line("if (value.GetType() == typeof(" + dictionary + ") &&");
+                        w.Line("    global::LuminPack.Code.LuminPackCollectionAccess.TryGetSortedListTraversal(value, out var keys, out var values, out int version))");
+                        w.Open();
+                        pairWriter.Begin();
+                        w.Line("for (int index = 0; index < keys.Length; index++)");
+                        w.Open();
+                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
+                        w.Line("var currentKey = keys[index];");
+                        w.Line("var currentValue = values[index];");
+                        pairWriter.Write("currentKey", "currentValue");
+                        w.Close();
+                        w.Line("global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
+                        w.Close();
+                        w.Line("else");
+                        w.Indented(() => w.Line("WriteEnumerated(ref writer, value);"));
+                        EmitLocalLoop("WriteEnumerated", dictionary);
+                    }
+                    else if (fact.Family.ForwardsToDictionary)
                     {
                         string concrete = "global::System.Collections.Generic.Dictionary<" + key + ", " + value + ">";
                         w.Line("if (value.GetType() == typeof(" + concrete + "))");
@@ -683,37 +732,10 @@ internal static class PairedDictionaryOwnerTemplate
 
                     void EmitLoop(string source)
                     {
-                        if (!integerPair || sharedPair)
-                            w.Line("bool isFirst = true;");
+                        pairWriter.Begin();
                         w.Line("foreach (var item in " + source + ")");
                         w.Open();
-                        if (integerPair)
-                        {
-                            if (sharedPair)
-                            {
-                                EmitSharedIntegerPair("int");
-                                EmitSharedIntegerPair("long");
-                            }
-                            else
-                                w.Line("writer.WriteIntegerEntry<TLuminProfile>(item.Key, item.Value);");
-                        }
-                        if (!integerPair || sharedPair)
-                        {
-                            w.Line("if (!isFirst)");
-                            w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                            w.Line("else");
-                            w.Line("    isFirst = false;");
-                            w.Line("writer.SetFirstElement(true);");
-                            w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                            w.Line("var key = item." + spec.KeyMember + ";");
-                            w.Line("writer.SetFirstElement(true);");
-                            w.Line(keyOwner + ".Write<TLuminProfile>(ref writer, key);");
-                            w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                            w.Line("var itemValue = item." + spec.ValueMember + ";");
-                            w.Line("writer.SetFirstElement(true);");
-                            w.Line(valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
-                            w.Line("writer.WriteArrayEnd<TLuminProfile>();");
-                        }
+                        pairWriter.Write("item." + spec.KeyMember, "item." + spec.ValueMember);
                         w.Close();
                     }
                 }
@@ -733,18 +755,6 @@ internal static class PairedDictionaryOwnerTemplate
                     break;
             }
 
-            void EmitSharedIntegerPair(string integerValue)
-            {
-                // Exact type tests are constant for each unmanaged JIT and AOT instantiation.
-                w.Line("if (typeof(" + key + ") == typeof(int) && typeof(" + value + ") == typeof(" + integerValue + "))");
-                w.Open();
-                w.Line("var integerKey = item.Key;");
-                w.Line("var integerValue = item.Value;");
-                w.Line("writer.WriteIntegerEntry<TLuminProfile>(" + memory + ".As<" + key + ", int>(ref integerKey),");
-                w.Indented(() => w.Line(memory + ".As<" + value + ", " + integerValue + ">(ref integerValue));"));
-                w.Line("continue;");
-                w.Close();
-            }
         }
 
         void EmitJsonRead(FormatterSection section)

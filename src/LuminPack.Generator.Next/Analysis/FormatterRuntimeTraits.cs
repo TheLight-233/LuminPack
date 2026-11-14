@@ -6,6 +6,34 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional formatter runtime APIs against the consumer metadata.</summary>
 internal static class FormatterRuntimeTraits
 {
+    /// <summary>Checks both halves of the checked sorted-list traversal.</summary>
+    /// <param name="compilation">The consumer's referenced runtime.</param>
+    /// <returns>Whether the runtime can capture and validate the matching sorted-list storage.</returns>
+    internal static bool HasSortedListTraversal(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var list = compilation.GetTypeByMetadataName("System.Collections.Generic.SortedList`2");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        if (access is null || list is null || span is null)
+            return false;
+        bool Matches(IMethodSymbol method, bool capture)
+        {
+            if (!method.IsStatic || method.DeclaredAccessibility != Accessibility.Public || method.Arity != 2 ||
+                method.Parameters.Length != (capture ? 4 : 2) || method.Parameters[0].RefKind != RefKind.None ||
+                !SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, list.Construct(method.TypeParameters[0], method.TypeParameters[1])))
+                return false;
+            var version = method.Parameters[capture ? 3 : 1];
+            if (version.Type.SpecialType != SpecialType.System_Int32 || version.RefKind != (capture ? RefKind.Out : RefKind.None))
+                return false;
+            return capture ? method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+                method.Parameters[1].RefKind == RefKind.Out && method.Parameters[2].RefKind == RefKind.Out &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, span.Construct(method.TypeParameters[1])) : method.ReturnsVoid;
+        }
+        return access.GetMembers("TryGetSortedListTraversal").OfType<IMethodSymbol>().Any(method => Matches(method, true)) &&
+            access.GetMembers("CheckSortedListTraversalVersion").OfType<IMethodSymbol>().Any(method => Matches(method, false));
+    }
+
     /// <summary>Checks the read-only structural hint before emitting a presized JSON list.</summary>
     /// <param name="compilation">The consuming compilation and its runtime references.</param>
     /// <returns>Whether the runtime exposes the profile-aware capacity hint.</returns>

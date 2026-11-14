@@ -74,6 +74,8 @@ internal static class FormatterCapabilities
 
         if (definition == "System.Collections.Generic.SortedList")
         {
+            if (FormatterRuntimeTraits.HasSortedListTraversal(compilation))
+                result.Add("SortedListTraversal");
             if (FormatterRuntimeTraits.CanAppendSortedListOrdered(named.TypeArguments[0], compilation))
                 result.Add("AppendSortedList");
             ITypeSymbol key = named.TypeArguments[0];
@@ -99,10 +101,12 @@ internal static class FormatterCapabilities
             result.Add("JsonIntegerElement");
         if (definition is "System.Collections.Concurrent.ConcurrentDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
             "System.Collections.Immutable.ImmutableSortedDictionary" or "System.Collections.Generic.IDictionary" or
-            "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Immutable.IImmutableDictionary" &&
+            "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Immutable.IImmutableDictionary" or
+            "System.Collections.Generic.Dictionary" or "System.Collections.Generic.SortedDictionary" or "System.Collections.Generic.SortedList" &&
             FormatterConcurrentTraits.HasJsonIntegerPairs(compilation))
             result.Add("JsonIntegerPair");
-        if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
+        if (definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" or
+            "System.Collections.Generic.SortedList" or "System.Collections.Generic.SortedDictionary" &&
             FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
             result.Add("BinaryRawPairs");
         if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&

@@ -115,6 +115,27 @@ public class CollectionFastPathTest
             LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, long>, LuminPackUtf16LengthOptions>(source));
     }
 
+    /// <summary>Checks that a freshly allocated raw dictionary is published only after the full pair block is readable.</summary>
+    [Fact]
+    public void TruncatedRawDictionaryLeavesReaderAndTargetUnchanged()
+    {
+        var source = new Dictionary<int, long> { [-1] = long.MinValue, [7] = long.MaxValue };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        ReadOnlySpan<byte> input = bytes.AsSpan(0, bytes.Length - 1);
+        var reader = new LuminPackReader(ref input);
+        Dictionary<int, long>? target = null;
+        try
+        {
+            LuminPackSerializer.Deserialize(ref reader, ref target);
+            Assert.Fail("A truncated fixed-width pair block was accepted.");
+        }
+        catch (Exception error) when (error.GetType().Name == "LuminPackException")
+        {
+            Assert.Null(target);
+            Assert.Equal(0, reader.Position);
+        }
+    }
+
     /// <summary>Reimplements generic enumeration without changing the concrete list's storage.</summary>
     private sealed class ReorderedList : List<int>, IList<int>
     {
