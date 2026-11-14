@@ -26,8 +26,9 @@ internal static class MemoryOwnerFile
         return SpecialOwnerFile.Render(set, operations, shortName, declared, false,
             (w, c) => Write(w, c, definition, element),
             (w, c) => Read(w, c, definition, element, declared),
-            (w, c) => JsonWrite(w, c, definition, element, owner),
-            (w, c) => JsonRead(w, c, element, declared, owner));
+            (w, c) => JsonWrite(w, c, definition, element, owner, set, declared),
+            (w, c) => JsonRead(w, c, element, declared, owner),
+            outlineJson: true, outlineBinaryWrite: definition == GenericIdentity.ReadOnlySequence);
     }
 
     private static string Span(string definition) => definition switch
@@ -121,7 +122,8 @@ internal static class MemoryOwnerFile
         w.Line("value = new " + declared + "(array);");
     }
 
-    private static void JsonWrite(CodeWriter w, SpecialOwnerContext c, string definition, string element, string owner)
+    private static void JsonWrite(CodeWriter w, SpecialOwnerContext c, string definition, string element, string owner,
+        SharedFormatterSet set, string declared)
     {
         if (definition == GenericIdentity.ArraySegment)
         {
@@ -133,22 +135,31 @@ internal static class MemoryOwnerFile
             w.Blank();
         }
         w.Line("writer.WriteArrayStart<" + c.Profile + ">();");
-        w.Line("bool isFirst = true;");
+        bool run = JsonIntegerRunWriter.Supports(set, declared, element);
+        if (!run)
+            w.Line("bool isFirst = true;");
         if (definition == GenericIdentity.ReadOnlySequence)
         {
             w.Line("var position = value.Start;");
             w.Line("while (value.TryGet(ref position, out var memory))");
             w.Open();
-            w.Line("foreach (var item in memory.Span)");
-            JsonElement(w, c, element, owner);
+            WriteItems("memory.Span");
             w.Close();
         }
         else
         {
-            w.Line("foreach (var item in " + Span(definition) + ")");
-            JsonElement(w, c, element, owner);
+            WriteItems(Span(definition));
         }
         w.Line("writer.WriteArrayEnd<" + c.Profile + ">();");
+
+        void WriteItems(string items)
+        {
+            if (!JsonIntegerRunWriter.TryEmit(w, set, declared, element, items, readBeforeSeparator: true, c.Profile))
+            {
+                w.Line("foreach (var item in " + items + ")");
+                JsonElement(w, c, element, owner);
+            }
+        }
     }
 
     private static void JsonElement(CodeWriter w, SpecialOwnerContext c, string element, string owner)

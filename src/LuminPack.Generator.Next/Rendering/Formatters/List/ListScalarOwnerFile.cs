@@ -348,6 +348,7 @@ internal static class ListScalarOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + collection + " input)");
@@ -368,16 +369,19 @@ internal static class ListScalarOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("var span = " + formatter + ".GetListSpan(value);");
-                    w.Line("bool isFirst = true;");
-                    w.Line("foreach (ref var item in span)");
-                    w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, item);");
-                    w.Close();
+                    if (!JsonIntegerRunWriter.TryEmit(w, set, collection, scalar, "span", readBeforeSeparator: false))
+                    {
+                        w.Line("bool isFirst = true;");
+                        w.Line("foreach (ref var item in span)");
+                        w.Open();
+                        w.Line("if (!isFirst)");
+                        w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                        w.Line("else");
+                        w.Line("    isFirst = false;");
+                        w.Line("writer.SetFirstElement(true);");
+                        w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, item);");
+                        w.Close();
+                    }
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
@@ -422,6 +426,7 @@ internal static class ListScalarOwnerFile
                 case FormatterSection.Roots:
                 {
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + collection + " value)");

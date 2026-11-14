@@ -67,7 +67,8 @@ internal static class ContiguousOwnerFile
         {
             if (layout != null)
                 FormatterStorageEmitter.Support(w, layout);
-        }, compressedEntries: shape is ContiguousShape.Array or ContiguousShape.List);
+        }, compressedEntries: shape is ContiguousShape.Array or ContiguousShape.List, outlineJson: true,
+            outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"));
         void NullWrite(CodeWriter w, bool json)
         {
             if (absent == "false")
@@ -96,11 +97,20 @@ internal static class ContiguousOwnerFile
                 w.Line("var position = value.Start;");
                 w.Line("while (value.TryGet(ref position, out var memory))");
                 w.Open();
-                w.Line("foreach (var item in memory.Span)");
-                w.Open();
-                w.Line("count++;");
-                FormatterElementEmitter.Write(w, set, element, "item");
-                w.Close();
+                if (element.Type == "string" && model.Supports("WriteCheckedStringSpan"))
+                {
+                    w.Line("var items = memory.Span;");
+                    w.Line("writer.WriteCheckedStrings<TLuminProfile>(items);");
+                    w.Line("count += items.Length;");
+                }
+                else
+                {
+                    w.Line("foreach (var item in memory.Span)");
+                    w.Open();
+                    w.Line("count++;");
+                    FormatterElementEmitter.Write(w, set, element, "item");
+                    w.Close();
+                }
                 w.Close();
                 w.Line("writer.EndCollection(countPosition, count);");
                 w.Line("writer.CheckBuffer();");
@@ -357,25 +367,35 @@ internal static class ContiguousOwnerFile
         {
             NullWrite(w, true);
             w.Line("writer.WriteArrayStart<TLuminProfile>();");
-            w.Line("bool first = true;");
             if (shape == ContiguousShape.ReadOnlySequence)
             {
                 w.Line("var position = value.Start;");
+                bool run = JsonIntegerRunWriter.Supports(set, model.Type, element.Type);
+                if (!run)
+                    w.Line("bool first = true;");
                 w.Line("while (value.TryGet(ref position, out var memory))");
                 w.Open();
-                w.Line("foreach (var item in memory.Span)");
-            }
-            else
-                w.Line("foreach (var item in " + span + ")");
-            w.Open();
-            w.Line("if (!first) writer.WriteByteRaw<TLuminProfile>((byte)',');");
-            w.Line("first = false;");
-            w.Line("writer.SetFirstElement(true);");
-            w.Line(FormatterElementEmitter.Owner(set, element) + ".Write<TLuminProfile>(ref writer, in item);");
-            w.Close();
-            if (shape == ContiguousShape.ReadOnlySequence)
+                if (!JsonIntegerRunWriter.TryEmit(w, set, model.Type, element.Type, "memory.Span", readBeforeSeparator: true))
+                    JsonElements("memory.Span");
                 w.Close();
+            }
+            else if (!JsonIntegerRunWriter.TryEmit(w, set, model.Type, element.Type, span, readBeforeSeparator: true))
+            {
+                w.Line("bool first = true;");
+                JsonElements(span);
+            }
             w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+
+            void JsonElements(string items)
+            {
+                w.Line("foreach (var item in " + items + ")");
+                w.Open();
+                w.Line("if (!first) writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                w.Line("first = false;");
+                w.Line("writer.SetFirstElement(true);");
+                w.Line(FormatterElementEmitter.Owner(set, element) + ".Write<TLuminProfile>(ref writer, in item);");
+                w.Close();
+            }
         }
 
         void JsonRead(CodeWriter w, SpecialOwnerContext c)

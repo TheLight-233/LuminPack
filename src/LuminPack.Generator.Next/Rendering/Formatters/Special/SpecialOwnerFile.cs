@@ -48,9 +48,12 @@ internal static class SpecialOwnerFile
     /// <returns>The complete source.</returns>
     /// <param name="support">The optional shared support declarations.</param>
     /// <param name="compressedEntries">The compressed entries used by this operation.</param>
+    /// <param name="outlineJson">Whether JSON roots are kept out of their callers.</param>
+    /// <param name="outlineBinaryWrite">Whether the binary write root is kept out of its callers.</param>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations, string shortName, string typeName,
         bool referenceType, Action<CodeWriter, SpecialOwnerContext> binaryWrite, Action<CodeWriter, SpecialOwnerContext> binaryRead,
-        Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null, bool compressedEntries = false)
+        Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null,
+        bool compressedEntries = false, bool outlineJson = false, bool outlineBinaryWrite = false)
     {
         using var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
         string serializer = w.A("LuminPackSerializer");
@@ -100,7 +103,7 @@ internal static class SpecialOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(outlineBinaryWrite ? w.MethodImpl("NoInlining") : inline);
                     w.Line("internal static void RootWrite<TLuminProfile>(scoped ref " + writer + " writer, " + Input() + ")");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
@@ -199,7 +202,7 @@ internal static class SpecialOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(outlineJson ? w.MethodImpl("NoInlining") : inline);
                     w.Line("internal static void RootWriteJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonWriter + " writer,");
                     w.Line("    " + Input() + ")");
@@ -247,7 +250,7 @@ internal static class SpecialOwnerFile
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(inline);
+                    w.Line(outlineJson ? w.MethodImpl("NoInlining") : inline);
                     w.Line("internal static void RootReadJson<TLuminProfile>(");
                     w.Line("    scoped ref " + jsonReader + " reader,");
                     w.Line("    scoped ref " + typeName + " value)");

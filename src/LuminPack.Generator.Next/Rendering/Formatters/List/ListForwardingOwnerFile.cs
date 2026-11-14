@@ -98,6 +98,7 @@ internal static class ListForwardingOwnerFile
             {
                 case FormatterSection.Roots:
                     w.Line(w.Preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TOptions>(scoped ref " + jsonWriter + " writer, in " + collection + " value)");
                     w.Line("    where TOptions : struct, " + options);
                     w.Open();
@@ -139,6 +140,7 @@ internal static class ListForwardingOwnerFile
             {
                 case FormatterSection.Roots:
                     w.Line(w.Preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TOptions>(scoped ref " + jsonReader + " reader, ref " + collection + " value)");
                     w.Line("    where TOptions : struct, " + options);
                     w.Open();

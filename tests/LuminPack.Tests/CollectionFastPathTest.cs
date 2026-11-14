@@ -136,6 +136,126 @@ public class CollectionFastPathTest
         }
     }
 
+    /// <summary>Checks integer JSON run separators across empty segments and output growth.</summary>
+    [Fact]
+    public void JsonIntegerSequenceMatchesContiguousWire()
+    {
+        int[] items = Enumerable.Range(0, 9000).Select(index => int.MinValue + index).ToArray();
+        var first = new IntegerSegment(ReadOnlyMemory<int>.Empty);
+        var last = first.Append(items.AsMemory(0, 4500)).Append(ReadOnlyMemory<int>.Empty).Append(items.AsMemory(4500));
+        var sequence = new ReadOnlySequence<int>(first, 0, last, last.Memory.Length);
+        var expected = new ArrayBufferWriter<byte>();
+        var actual = new ArrayBufferWriter<byte>();
+        LuminPackSerializer.SerializeJson<int[], LuminPackUtf8LengthOptions>(items, expected);
+        LuminPackSerializer.SerializeJson<ReadOnlySequence<int>, LuminPackUtf8LengthOptions>(sequence, actual);
+        Assert.Equal(expected.WrittenSpan.ToArray(), actual.WrittenSpan.ToArray());
+        Assert.Equal(LuminPackSerializer.SerializeJson<int[], LuminPackUtf16LengthOptions>(items),
+            LuminPackSerializer.SerializeJson<ReadOnlySequence<int>, LuminPackUtf16LengthOptions>(sequence));
+    }
+
+    /// <summary>Checks row-major integer JSON with an array that has nonzero lower bounds.</summary>
+    [Fact]
+    public void JsonIntegerMatrixKeepsLowerBoundsAndStorageOrder()
+    {
+        var matrix = (int[,])Array.CreateInstance(typeof(int), [2, 2], [-2, 4]);
+        matrix[-2, 4] = int.MinValue;
+        matrix[-2, 5] = 7;
+        matrix[-1, 4] = int.MaxValue;
+        matrix[-1, 5] = -19;
+        var output = new ArrayBufferWriter<byte>();
+        LuminPackSerializer.SerializeJson<int[,], LuminPackUtf8LengthOptions>(matrix, output);
+        Assert.Equal("{\"Lengths\":[2,2],\"LowerBounds\":[-2,4],\"Values\":[-2147483648,7,2147483647,-19]}",
+            System.Text.Encoding.UTF8.GetString(output.WrittenSpan));
+        int[,]? restored = null;
+        LuminPackSerializer.DeserializeJson<int[,], LuminPackUtf8LengthOptions>(output.WrittenSpan, ref restored);
+        Assert.NotNull(restored);
+        Assert.Equal(-2, restored.GetLowerBound(0));
+        Assert.Equal(4, restored.GetLowerBound(1));
+        Assert.Equal(new[] { int.MinValue, 7, int.MaxValue, -19 }, restored.Cast<int>());
+    }
+
+    /// <summary>Checks source reads on either side of a streaming separator flush.</summary>
+    [Fact]
+    public void JsonIntegerRunsPreserveStreamingCaptureOrder()
+    {
+        const string prefix = "[-2147483648,";
+        int[] array = [int.MinValue, 7];
+        var list = new List<int>(array);
+        var memory = new[] { int.MinValue, 7 }.AsMemory();
+        int[] segmentItems = [int.MinValue, 7];
+        var sequence = new ReadOnlySequence<int>(segmentItems);
+
+        var output = new MutatingJsonOutput(() => array[1] = 1234);
+        var writer = new LuminPackJsonWriter(output, default!, 12);
+        LuminPackSerializer.SerializeJson<int[], LuminPackUtf8LengthOptions>(ref writer, array);
+        writer.FlushToBufferWriter();
+        Assert.Equal(prefix + "1234]", output.Text);
+
+        output = new MutatingJsonOutput(() => list[1] = 1234);
+        writer = new LuminPackJsonWriter(output, default!, 12);
+        LuminPackSerializer.SerializeJson<List<int>, LuminPackUtf8LengthOptions>(ref writer, list);
+        writer.FlushToBufferWriter();
+        Assert.Equal(prefix + "1234]", output.Text);
+
+        output = new MutatingJsonOutput(() => memory.Span[1] = 1234);
+        writer = new LuminPackJsonWriter(output, default!, 12);
+        LuminPackSerializer.SerializeJson<Memory<int>, LuminPackUtf8LengthOptions>(ref writer, memory);
+        writer.FlushToBufferWriter();
+        Assert.Equal(prefix + "7]", output.Text);
+
+        output = new MutatingJsonOutput(() => segmentItems[1] = 1234);
+        writer = new LuminPackJsonWriter(output, default!, 12);
+        LuminPackSerializer.SerializeJson<ReadOnlySequence<int>, LuminPackUtf8LengthOptions>(ref writer, sequence);
+        writer.FlushToBufferWriter();
+        Assert.Equal(prefix + "7]", output.Text);
+    }
+
+    /// <summary>Uses an exact first window and observes its commit before the separator.</summary>
+    private sealed class MutatingJsonOutput(Action onFirstAdvance) : IBufferWriter<byte>
+    {
+        private readonly List<byte> _bytes = new();
+        private byte[] _window = [];
+        private bool _first = true;
+
+        /// <summary>Gets the complete UTF-8 output.</summary>
+        internal string Text => System.Text.Encoding.UTF8.GetString(_bytes.ToArray());
+
+        /// <inheritdoc />
+        public void Advance(int count)
+        {
+            _bytes.AddRange(_window.AsSpan(0, count).ToArray());
+            if (_first)
+            {
+                _first = false;
+                onFirstAdvance();
+            }
+        }
+
+        /// <inheritdoc />
+        public Memory<byte> GetMemory(int sizeHint = 0) => _window = new byte[Math.Max(12, sizeHint)];
+
+        /// <inheritdoc />
+        public Span<byte> GetSpan(int sizeHint = 0) => GetMemory(sizeHint).Span;
+    }
+
+    /// <summary>Builds the segmented integer input for the JSON boundary test.</summary>
+    private sealed class IntegerSegment : ReadOnlySequenceSegment<int>
+    {
+        /// <summary>Starts a segment with the given memory.</summary>
+        /// <param name="memory">The values in this segment.</param>
+        internal IntegerSegment(ReadOnlyMemory<int> memory) => Memory = memory;
+
+        /// <summary>Appends the next segment.</summary>
+        /// <param name="memory">The next values.</param>
+        /// <returns>The appended segment.</returns>
+        internal IntegerSegment Append(ReadOnlyMemory<int> memory)
+        {
+            var next = new IntegerSegment(memory) { RunningIndex = RunningIndex + Memory.Length };
+            Next = next;
+            return next;
+        }
+    }
+
     /// <summary>Reimplements generic enumeration without changing the concrete list's storage.</summary>
     private sealed class ReorderedList : List<int>, IList<int>
     {

@@ -6,6 +6,32 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional formatter runtime APIs against the consumer metadata.</summary>
 internal static class FormatterRuntimeTraits
 {
+    /// <summary>Checks a profile-aware span operation on a reader or writer.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <param name="owner">The short reader or writer name.</param>
+    /// <param name="name">The optional runtime operation.</param>
+    /// <param name="element">The span's element type.</param>
+    /// <param name="withCaptureOrder">Whether the operation takes a second argument for the input load order.</param>
+    /// <returns>Whether the expected public overload exists.</returns>
+    internal static bool HasReadOnlySpanWriter(Compilation compilation, string owner, string name, ITypeSymbol element, bool withCaptureOrder = false)
+    {
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        var type = compilation.GetTypeByMetadataName("LuminPack.Core." + owner);
+        if (options is null || span is null || type is null)
+            return false;
+        var closedSpan = span.Construct(element);
+        return type.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+            !method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public && method.ReturnsVoid &&
+            method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+            method.Parameters.Length == (withCaptureOrder ? 2 : 1) && method.Parameters[0].RefKind == RefKind.None &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, closedSpan) &&
+            (!withCaptureOrder || method.Parameters[1].RefKind == RefKind.None &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Boolean));
+    }
+
     /// <summary>Checks both halves of the checked sorted-list traversal.</summary>
     /// <param name="compilation">The consumer's referenced runtime.</param>
     /// <returns>Whether the runtime can capture and validate the matching sorted-list storage.</returns>

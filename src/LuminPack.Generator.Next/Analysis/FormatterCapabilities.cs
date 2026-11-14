@@ -17,9 +17,17 @@ internal static class FormatterCapabilities
     {
         var result = new List<string>();
         FormatterBuiltinCapabilities.Capture(compilation, type, result);
+        if (type is IArrayTypeSymbol array)
+            ContiguousCapabilities(compilation, array.ElementType, result);
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
+        if (definition is "System.Collections.Generic.List" or "System.Memory" or "System.ReadOnlyMemory" or
+            "System.ArraySegment" or "System.Buffers.ReadOnlySequence")
+            ContiguousCapabilities(compilation, named.TypeArguments[0], result);
+        if (definition == "System.Buffers.ReadOnlySequence" && named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteCheckedStrings", named.TypeArguments[0]))
+            result.Add("WriteCheckedStringSpan");
         if (definition.StartsWith("System.Collections.Immutable.", StringComparison.Ordinal))
         {
             string concrete = named.Name.StartsWith("IImmutable", StringComparison.Ordinal) ? named.Name.Substring(1) : named.Name;
@@ -134,6 +142,17 @@ internal static class FormatterCapabilities
     private static bool SequenceInterface(string definition) => definition is "System.Collections.Generic.IEnumerable" or
         "System.Collections.Generic.ICollection" or "System.Collections.Generic.IReadOnlyCollection" or
         "System.Collections.Generic.IList" or "System.Collections.Generic.IReadOnlyList";
+
+    /// <summary>Captures optional kernels for the exact element types of contiguous sequences.</summary>
+    /// <param name="compilation">The actual consumer metadata.</param>
+    /// <param name="element">The sequence element.</param>
+    /// <param name="result">The resulting capabilities.</param>
+    private static void ContiguousCapabilities(Compilation compilation, ITypeSymbol element, List<string> result)
+    {
+        if (element.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64 &&
+            FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackJsonWriter", "WriteIntegerRun", element, withCaptureOrder: true))
+            result.Add("JsonIntegerRun");
+    }
 
     /// <summary>Recognizes a callback-free fixed framework key or a raw enum.</summary>
     /// <param name = "type">The declared type or its source-ready spelling.</param>

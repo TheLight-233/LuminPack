@@ -381,6 +381,37 @@ namespace LuminPack.Core
                 Write<TOptions>(value);
         }
 
+        /// <summary>Writes a contiguous segment of strings whose original traversal checks the buffer before every record.</summary>
+        /// <typeparam name="TOptions">The stateless binary string profile.</typeparam>
+        /// <param name="values">The values in segment order.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteCheckedStrings<TOptions>(scoped ReadOnlySpan<string?> values) where TOptions : struct, ILuminPackOptions
+        {
+            if (UsesUtf16LengthRecords<TOptions>())
+            {
+                int index = 0;
+                while (index < values.Length)
+                {
+                    uint limit = Math.Min((uint)_buffer.Length, BufferCheckLimit - 1);
+                    uint position = (uint)Position;
+                    AdvanceProven(WriteUtf16Run(ref Current, position < limit ? limit - position : 0, values, ref index));
+                    if (index == values.Length)
+                        return;
+                    string? value = values[index++];
+                    CheckBuffer();
+                    Write<TOptions>(value);
+                }
+                return;
+            }
+
+            foreach (string? value in values)
+            {
+                CheckBuffer();
+                Write<TOptions>(value);
+            }
+        }
+
         /// <summary>Returns whether the default profile writes UTF-16 length records, the form of reserved runs.</summary>
         /// <returns>Whether reserved runs apply.</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]

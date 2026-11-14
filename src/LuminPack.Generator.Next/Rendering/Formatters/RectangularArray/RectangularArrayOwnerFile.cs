@@ -45,7 +45,8 @@ internal static class RectangularArrayOwnerFile
         return SpecialOwnerFile.Render(set, operations, suffix, type, referenceType: true,
             (w, _) => BinaryWrite(w), (w, _) => BinaryRead(w), (w, _) => JsonWrite(w),
             (w, context) => JsonRead(w, context.JsonReader),
-            w => { if (layout != null) FormatterStorageEmitter.Support(w, layout); });
+            w => { if (layout != null) FormatterStorageEmitter.Support(w, layout); },
+            outlineJson: true, outlineBinaryWrite: !raw && !text && layout == null);
 
         void BinaryWrite(CodeWriter w)
         {
@@ -163,12 +164,15 @@ internal static class RectangularArrayOwnerFile
             WriteShape(w, "LowerBounds", "GetLowerBound");
             w.Line("writer.WritePropertyName<" + Profile + ">(\"Values\");");
             w.Line("writer.WriteArrayStart<" + Profile + ">();");
-            First(w, item);
-            w.Line("for (int i = 0; i < value.Length; i++)");
-            w.Open();
-            w.Line("ref var item = ref " + Unsafe + ".Add(ref first, (nint)(uint)i);");
-            w.Line(owner + ".Write<" + Profile + ">(ref writer, in item);");
-            w.Close();
+            FirstJson(w);
+            if (!JsonIntegerRunWriter.TryEmit(w, set, type, item, Marshal + ".CreateReadOnlySpan(ref first, value.Length)", readBeforeSeparator: true))
+            {
+                w.Line("for (int i = 0; i < value.Length; i++)");
+                w.Open();
+                w.Line("ref var item = ref " + Unsafe + ".Add(ref first, (nint)(uint)i);");
+                w.Line(owner + ".Write<" + Profile + ">(ref writer, in item);");
+                w.Close();
+            }
             w.Line("writer.WriteArrayEnd<" + Profile + ">();");
             w.Line("writer.WriteObjectEnd<" + Profile + ">();");
         }
@@ -252,14 +256,23 @@ internal static class RectangularArrayOwnerFile
             w.Line("#else");
             w.Line("value = (" + type + ")global::System.Array.CreateInstance(typeof(" + item + "), lengths, lowerBounds);");
             w.Line("#endif");
-            First(w, item);
-            w.Line("for (int i = 0; i < itemCount; i++)");
-            w.Line("    " + Unsafe + ".Add(ref first, (nint)(uint)i) = items[i];");
+            FirstJson(w);
+            w.Line("items.AsSpan(0, itemCount).CopyTo(" + Marshal + ".CreateSpan(ref first, itemCount));");
             w.Close();
             w.Line("finally");
             w.Open();
             w.Line("if (items.Length != 0) " + release);
             w.Close();
+        }
+
+        void FirstJson(CodeWriter w)
+        {
+            w.Line("#if NET8_0_OR_GREATER");
+            w.Line("ref var first = ref " + Unsafe + ".As<byte, " + item + ">(ref " + Marshal + ".GetArrayDataReference((global::System.Array)value));");
+            w.Line("#else");
+            w.Line("ref var first = ref (value.Length == 0 ? ref " + Unsafe + ".NullRef<" + item + ">() : ref value[" +
+                string.Join(", ", axes.Select(axis => "value.GetLowerBound(" + axis + ")")) + "]);");
+            w.Line("#endif");
         }
     }
 
