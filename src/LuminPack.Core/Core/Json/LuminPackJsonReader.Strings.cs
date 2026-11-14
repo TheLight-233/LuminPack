@@ -1109,14 +1109,14 @@ namespace LuminPack.Core
             int start = Position;
             int scan = Position;
 #if NET8_0_OR_GREATER
-            int available = (Buffer.Length - Position) & ~1;
-            var charSpan = MemoryMarshal.Cast<byte, char>(Buffer.Slice(Position, available));
+            int available = (Buffer.Length - start) / sizeof(char);
+            ref char first = ref Unsafe.As<byte, char>(ref Current);
+            var charSpan = LuminPackMarshal.CreateReadOnlySpan(ref first, available);
             int special = charSpan.IndexOfAny(NumberCharLookup.StringSpecialChars);
             if (special >= 0 && charSpan[special] == '"')
             {
-                var result = charSpan[..special];
                 Advance((special + 1) * 2);
-                return result;
+                return LuminPackMarshal.CreateReadOnlySpan(ref first, special);
             }
 
             if (special < 0)

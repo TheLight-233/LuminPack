@@ -46,7 +46,7 @@ internal static class RectangularArrayOwnerFile
             (w, _) => BinaryWrite(w), (w, _) => BinaryRead(w), (w, _) => JsonWrite(w),
             (w, context) => JsonRead(w, context.JsonReader),
             w => { if (layout != null) FormatterStorageEmitter.Support(w, layout); },
-            outlineJson: true, outlineBinaryWrite: !raw && !text && layout == null);
+            outlineJson: true, outlineBinaryWrite: !raw && layout == null);
 
         void BinaryWrite(CodeWriter w)
         {
@@ -83,11 +83,17 @@ internal static class RectangularArrayOwnerFile
             }
             else
             {
+                w.Line("int length = value.Length;");
+                w.Line("if (length != 0)");
+                w.Open();
                 First(w, item);
-                w.Line("for (nint i = 0; i < value.Length; i++)");
+                w.Line("int index = 0;");
+                w.Line("do");
                 w.Open();
                 w.Line("writer.CheckBuffer();");
-                w.Line(owner + ".Write<" + Profile + ">(ref writer, in " + Unsafe + ".Add(ref first, i));");
+                w.Line(owner + ".Write<" + Profile + ">(ref writer, in " + Unsafe + ".Add(ref first, (nint)(uint)index));");
+                w.Close();
+                w.Line("while (++index < length);");
                 w.Close();
             }
             w.Line("writer.CheckBuffer();");
@@ -146,10 +152,13 @@ internal static class RectangularArrayOwnerFile
                 FormatterStorageEmitter.Payload(w, layout, "first", "length", false);
                 return;
             }
-            w.Line("for (nint i = 0; i < length; i++)");
+            w.Line("if (length == 0) return;");
+            w.Line("int index = 0;");
+            w.Line("do");
             w.Open();
-            w.Line(owner + ".Read<" + Profile + ">(ref reader, ref " + Unsafe + ".Add(ref first, i));");
+            w.Line(owner + ".Read<" + Profile + ">(ref reader, ref " + Unsafe + ".Add(ref first, (nint)(uint)index));");
             w.Close();
+            w.Line("while (++index < length);");
         }
 
         void JsonWrite(CodeWriter w)
@@ -167,10 +176,16 @@ internal static class RectangularArrayOwnerFile
             FirstJson(w);
             if (!JsonIntegerRunWriter.TryEmit(w, set, type, item, Marshal + ".CreateReadOnlySpan(ref first, value.Length)", readBeforeSeparator: true))
             {
-                w.Line("for (int i = 0; i < value.Length; i++)");
+                w.Line("int length = value.Length;");
+                w.Line("if (length != 0)");
                 w.Open();
-                w.Line("ref var item = ref " + Unsafe + ".Add(ref first, (nint)(uint)i);");
+                w.Line("int index = 0;");
+                w.Line("do");
+                w.Open();
+                w.Line("ref var item = ref " + Unsafe + ".Add(ref first, (nint)(uint)index);");
                 w.Line(owner + ".Write<" + Profile + ">(ref writer, in item);");
+                w.Close();
+                w.Line("while (++index < length);");
                 w.Close();
             }
             w.Line("writer.WriteArrayEnd<" + Profile + ">();");
@@ -194,7 +209,10 @@ internal static class RectangularArrayOwnerFile
             w.Line("return;");
             w.Close();
             w.Line("reader.TryConsumeObjectStart<" + Profile + ">();");
-            w.Line("int[] lengths = null, lowerBounds = null;");
+            string rankText = rank.ToString(CultureInfo.InvariantCulture);
+            w.Line("global::System.Span<int> lengths = stackalloc int[" + rankText + "];");
+            w.Line("global::System.Span<int> lowerBounds = stackalloc int[" + rankText + "];");
+            w.Line("bool hasLengths = false, hasLowerBounds = false;");
             w.Line("bool hasValues = false;");
             w.Line("var items = global::System.Array.Empty<" + item + ">();");
             w.Line("int itemCount = 0;");
@@ -210,15 +228,18 @@ internal static class RectangularArrayOwnerFile
             w.Line("if (property == 1 || property == 2)");
             w.Open();
             w.Line("reader.TryConsumeArrayStart<" + Profile + ">();");
-            w.Line("var shape = new int[" + rank.ToString(CultureInfo.InvariantCulture) + "];");
-            w.Line("for (int i = 0; i < shape.Length; i++)");
+            w.Line("var shape = property == 1 ? lengths : lowerBounds;");
+            w.Line("ref int firstDimension = ref " + Marshal + ".GetReference(shape);");
+            w.Line("int index = 0;");
+            w.Line("do");
             w.Open();
             w.Line("reader.Read<" + Profile + ">();");
-            w.Line("shape[i] = reader.Read<int, " + Profile + ">();");
+            w.Line(Unsafe + ".Add(ref firstDimension, (nint)(uint)index) = reader.Read<int, " + Profile + ">();");
             w.Close();
+            w.Line("while (++index < shape.Length);");
             w.Line("reader.ConsumeArrayEnd<" + Profile + ">();");
-            w.Line("if (property == 1) lengths = shape;");
-            w.Line("else lowerBounds = shape;");
+            w.Line("if (property == 1) hasLengths = true;");
+            w.Line("else hasLowerBounds = true;");
             w.Close();
             w.Line("else if (property == 3)");
             w.Open();
@@ -232,32 +253,47 @@ internal static class RectangularArrayOwnerFile
             w.Line("items = " + pool + ".Rent(counted);");
             w.Close();
             w.Line("itemCount = 0;");
+            w.Line("ref var firstItem = ref " + PackMarshal + ".GetNotNullArrayReference(items);");
             w.Line("while (reader.Read<" + Profile + ">())");
             w.Open();
             w.Line("if (reader.CurrentTokenType == " + reader + ".JsonTokenType.ArrayEnd) break;");
             w.Line(item + " item = default!;");
             w.Line(owner + ".Read<" + Profile + ">(ref reader, ref item);");
             w.Line("if (itemCount == items.Length) " + Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
-            w.Line("items[itemCount++] = item;");
+            w.Line(Unsafe + ".Add(ref firstItem, (nint)(uint)itemCount++) = item;");
             w.Close();
             w.Close();
             w.Line("else reader.Skip<" + Profile + ">();");
             w.Close();
-            w.Line("if (lengths is null || lowerBounds is null || !hasValues) " + Error +
+            w.Line("if (!hasLengths || !hasLowerBounds || !hasValues) " + Error +
                 ".ThrowFormatException(\"A multidimensional JSON object requires Lengths, LowerBounds and Values properties.\");");
-            w.Line("long expectedLength = global::System.Array.IndexOf(lengths, 0) >= 0 ? 0 : 1;");
-            w.Line("for (int i = 0; i < lengths.Length; i++)");
+            w.Line("long expectedLength = " + string.Join(" || ", axes.Select(axis => "lengths[" + axis + "] == 0")) + " ? 0 : 1;");
+            w.Line("ref int firstLength = ref " + Marshal + ".GetReference(lengths);");
+            w.Line("int lengthIndex = 0;");
+            w.Line("do");
             w.Open();
-            AccumulateDimension(w, "lengths[i]");
+            w.Line("int dimension = " + Unsafe + ".Add(ref firstLength, (nint)(uint)lengthIndex);");
+            AccumulateDimension(w, "dimension");
             w.Close();
+            w.Line("while (++lengthIndex < lengths.Length);");
             w.Line("if (expectedLength != itemCount) " + Error + ".ThrowMultiDimensionalArrayLengthMismatch();");
+            w.Line("if (" + string.Join(" && ", axes.Select(axis => "lowerBounds[" + axis + "] == 0")) + ")");
+            w.Open();
+            for (int axis = 0; axis < rank; axis++)
+                w.Line("int " + dimensions[axis] + " = lengths[" + axes[axis] + "];");
+            w.Line("value = " + array + ";");
+            w.Close();
+            w.Line("else");
+            w.Open();
             w.Line("#if NET9_0_OR_GREATER");
-            w.Line("value = (" + type + ")global::System.Array.CreateInstanceFromArrayType(typeof(" + type + "), lengths, lowerBounds);");
+            w.Line("value = (" + type + ")global::System.Array.CreateInstanceFromArrayType(typeof(" + type + "), lengths.ToArray(), lowerBounds.ToArray());");
             w.Line("#else");
-            w.Line("value = (" + type + ")global::System.Array.CreateInstance(typeof(" + item + "), lengths, lowerBounds);");
+            w.Line("value = (" + type + ")global::System.Array.CreateInstance(typeof(" + item + "), lengths.ToArray(), lowerBounds.ToArray());");
             w.Line("#endif");
+            w.Close();
             FirstJson(w);
-            w.Line("items.AsSpan(0, itemCount).CopyTo(" + Marshal + ".CreateSpan(ref first, itemCount));");
+            w.Line(PackMarshal + ".CreateReadOnlySpan(ref " + PackMarshal + ".GetNotNullArrayReference(items), itemCount).CopyTo(" +
+                PackMarshal + ".CreateSpan(ref first, itemCount));");
             w.Close();
             w.Line("finally");
             w.Open();
