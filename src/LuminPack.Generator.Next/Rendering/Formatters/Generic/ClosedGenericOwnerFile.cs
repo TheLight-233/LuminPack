@@ -19,6 +19,9 @@ internal static class ClosedGenericOwnerFile
         bool reference = model.Definition is GenericIdentity.Tuple or GenericIdentity.Lazy;
         bool nullable = model.Definition == GenericIdentity.Nullable;
         bool lazy = model.Definition == GenericIdentity.Lazy;
+        bool fixedCompound = !nullable && model.Layout == null && model.Arguments.All(argument =>
+            (!lazy && argument.Type == "string") ||
+            argument.Raw && argument.RawStorage && argument.Payload == null && argument.Layout == null);
         string absent = nullable ? "!value.HasValue" : "value is null";
         string[] names = tuple ? Enumerable.Range(0, model.Arguments.Length).Select(i => i == 7 ? "Rest" : "Item" + (i + 1)).ToArray() : model.Definition == GenericIdentity.KeyValuePair ? new[]
         {
@@ -30,12 +33,61 @@ internal static class ClosedGenericOwnerFile
         {
             "Value"
         };
-        return SpecialOwnerFile.Render(set, operations, suffix, model.Type, reference, BinaryWrite, BinaryRead, JsonWrite, JsonRead, w =>
+        return SpecialOwnerFile.Render(set, operations, suffix, model.Type, reference, (w, c) => BinaryWrite(w, c, exact: false), BinaryRead, JsonWrite, JsonRead, w =>
         {
             if (model.Layout != null)
                 FormatterStorageEmitter.Support(w, model.Layout);
-        });
-        void BinaryWrite(CodeWriter w, SpecialOwnerContext c)
+        }, binaryWriteEntries: fixedCompound ? DirectEntries : null);
+
+        void DirectEntries(CodeWriter w)
+        {
+            w.Line(w.Preserve);
+            w.Line(w.MethodImpl("AggressiveInlining"));
+            w.Line("internal static void MeasureRecord_" + suffix + "<TLuminProfile>(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + model.Type + " value)");
+            w.Line("    where TLuminProfile : struct, " + w.A("ILuminPackOptions"));
+            w.Open();
+            if (reference)
+            {
+                w.Line("if (value is null)");
+                w.Open();
+                w.Line("evaluator.Add(1);");
+                w.Line("return;");
+                w.Close();
+            }
+            string width = model.Raw ? Width(model.Type) : "checked(" + (reference ? "1" : "0");
+            if (!model.Raw)
+            {
+                for (int i = 0; i < model.Arguments.Length; i++)
+                {
+                    FormatterModel argument = model.Arguments[i];
+                    if (argument.Type == "string")
+                    {
+                        string name = "item" + i;
+                        w.Line("string? " + name + " = value." + names[i] + ";");
+                        width += " + evaluator.GetStringLength<TLuminProfile>(ref " + name + ")";
+                    }
+                    else
+                        width += " + " + Width(argument.Type);
+                }
+                width += ")";
+            }
+            // A fixed Lazy value contributes its width without evaluating Value during measurement.
+            w.Line("evaluator.Add(" + width + ");");
+            w.Close();
+            w.Blank();
+
+            w.Line(w.Preserve);
+            w.Line(w.MethodImpl("AggressiveInlining"));
+            w.Line("internal static void WriteExact_" + suffix + "(scoped ref LuminPackWriter writer, scoped in " + model.Type + " value)");
+            w.Open();
+            BinaryWrite(w, new SpecialOwnerContext(w.A("LuminPackUtf16LengthOptions"), "", ""), exact: true);
+            w.Close();
+            w.Blank();
+
+            static string Width(string type) => "global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + type + ">()";
+        }
+
+        void BinaryWrite(CodeWriter w, SpecialOwnerContext c, bool exact)
         {
             if (model.Definition == GenericIdentity.ValueTuple && model.Layout != null)
             {
@@ -45,14 +97,16 @@ internal static class ClosedGenericOwnerFile
 
             if (model.Raw)
             {
-                w.Line("writer.EnsureAdditionalCapacity(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">());");
+                if (!exact)
+                    w.Line("writer.EnsureAdditionalCapacity(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + model.Type + ">());");
                 w.Line("writer.Write(in value);");
                 return;
             }
 
             if (reference || nullable)
             {
-                w.Line("writer.EnsureAdditionalCapacity(1);");
+                if (!exact)
+                    w.Line("writer.EnsureAdditionalCapacity(1);");
                 w.Line("if (" + absent + ")");
                 w.Open();
                 w.Line("writer.WriteNullObjectHeader();");
@@ -65,7 +119,11 @@ internal static class ClosedGenericOwnerFile
             {
                 FormatterModel argument = model.Arguments[i];
                 w.Line(argument.Type + " item" + i + " = value." + names[i] + ";");
-                FormatterElementEmitter.Write(w, set, argument, "item" + i);
+                // A compact UTF-16 string still uses its bounded writer because the exact array covers its encoded width only.
+                if (exact)
+                    w.Line(argument.Type == "string" ? "writer.Write<" + c.Profile + ">(item" + i + ");" : "writer.Write(in item" + i + ");");
+                else
+                    FormatterElementEmitter.Write(w, set, argument, "item" + i);
             }
         }
 

@@ -50,10 +50,12 @@ internal static class SpecialOwnerFile
     /// <param name="compressedEntries">The compressed entries used by this operation.</param>
     /// <param name="outlineJson">Whether JSON roots are kept out of their callers.</param>
     /// <param name="outlineBinaryWrite">Whether the binary write root is kept out of its callers.</param>
+    /// <param name="binaryWriteEntries">The optional measurement declarations that accompany the write entries.</param>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations, string shortName, string typeName,
         bool referenceType, Action<CodeWriter, SpecialOwnerContext> binaryWrite, Action<CodeWriter, SpecialOwnerContext> binaryRead,
         Action<CodeWriter, SpecialOwnerContext> jsonWrite, Action<CodeWriter, SpecialOwnerContext> jsonRead, Action<CodeWriter>? support = null,
-        bool compressedEntries = false, bool outlineJson = false, bool outlineBinaryWrite = false)
+        bool compressedEntries = false, bool outlineJson = false, bool outlineBinaryWrite = false,
+        Action<CodeWriter>? binaryWriteEntries = null)
     {
         using var w = new CodeWriter(set.AvailableAliases) { Scoped = set.Options == null || set.Options.CSharpVersion >= 1100 };
         string serializer = w.A("LuminPackSerializer");
@@ -100,6 +102,7 @@ internal static class SpecialOwnerFile
                     w.Line("    scoped in " + typeName + " input)");
                     w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite<TLuminProfile>(ref writer, input);");
                     w.Blank();
+                    binaryWriteEntries?.Invoke(w);
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);

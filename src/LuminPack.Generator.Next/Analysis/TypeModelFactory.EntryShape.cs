@@ -61,6 +61,12 @@ internal static partial class TypeModelFactory
                     return new EntryShape(EntryKind.NullableDirect, FormatterName(nullable.TypeArguments[0]));
                 if (name == "global::System.Numerics.BigInteger")
                     return new EntryShape(EntryKind.BigInteger);
+                if (!fixedRecord && type is INamedTypeSymbol compound)
+                {
+                    string definition = compound.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + compound.Name;
+                    if (definition is GenericIdentity.Tuple or GenericIdentity.ValueTuple or GenericIdentity.KeyValuePair or GenericIdentity.Lazy)
+                        return new EntryShape(EntryKind.CompoundDirect);
+                }
                 return new EntryShape(fixedRecord ? EntryKind.FixedRecord : EntryKind.DirectRecord);
             }
             if (type is INamedTypeSymbol { TypeArguments.Length: 1 } sequence &&

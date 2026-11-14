@@ -102,6 +102,9 @@ internal enum EntryKind
     /// <summary>A record measured into an exact array, with pooled output when the measure was not exact.</summary>
     DirectRecord,
 
+    /// <summary>A framework compound measured into an exact array for the fixed UTF-16 length profile.</summary>
+    CompoundDirect,
+
     /// <summary>An enum written at its native width.</summary>
     FixedEnum,
 

@@ -315,13 +315,16 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
             SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue;
         var bodyKey = (Api: api, Shape: binaryShape ? bound.Shape : EntryShape.Pooled, Measured: binaryShape && measured);
+        if (bodyKey.Shape.Kind == EntryKind.CompoundDirect &&
+            (api != SerializerApi.SerializeArray || !bodyKey.Measured || bound.OpenProfile || profile != RootEntry.DefaultProfile))
+            bodyKey = (api, EntryShape.Pooled, false);
         if (!documentBodies.TryGetValue(bodyKey, out string? body))
         {
             body = DocumentBody(bodyKey.Api, bodyKey.Shape, bodyKey.Measured);
             documentBodies.Add(bodyKey, body);
         }
         string measure = "LuminPackSerializer.MeasureRecord_" + root.RootName + "<" + root.RootArguments + profile + ">";
-        AppendBody(w, Limits(body, type, root), type, profile, measure, target);
+        AppendBody(w, Limits(body, type, root), type, profile, measure, target, root.RootName);
         w.Append('\n');
     }
 
@@ -332,7 +335,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     /// <param name="profile">The declared or forwarded profile.</param>
     /// <param name="measure">The exact record measurement call target.</param>
     /// <param name="target">The existing static read or write target.</param>
-    private static void AppendBody(StringBuilder writer, string body, string type, string profile, string measure, string target)
+    /// <param name="rootName">The nested root's published suffix.</param>
+    private static void AppendBody(StringBuilder writer, string body, string type, string profile, string measure, string target,
+        string rootName)
     {
         int start = 0;
         for (int marker = body.IndexOf('%'); marker >= 0; marker = body.IndexOf('%', start))
@@ -347,6 +352,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                 case "PROFILE": writer.Append(profile); break;
                 case "MEASURE": writer.Append(measure); break;
                 case "WRITE": writer.Append(target).Append("(ref writer, in value);"); break;
+                case "WRITEDIRECT": writer.Append("LuminPackSerializer.WriteExact_").Append(rootName).Append("(ref writer, in directValue);"); break;
                 case "FALLBACKWRITE": writer.Append(target).Append("(ref fallbackWriter, in value);"); break;
                 case "READ": writer.Append(target).Append("(ref reader, ref value);"); break;
                 default: writer.Append(body, marker, end - marker + 1); break;
@@ -460,11 +466,15 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             EntryKind.NullableDirect => "                int directLength = value.HasValue ? 1 + Unsafe.SizeOf<" + shape.Element + ">() : 1;\n",
             EntryKind.RawSequence => "                int directLength = checked(sizeof(int) + checked((int)value.Length) * Unsafe.SizeOf<" + shape.Element + ">());\n",
             EntryKind.FixedRecord or EntryKind.DirectRecord when measured => MeasureRecord,
+            EntryKind.CompoundDirect when measured => MeasureRecord,
             _ => null,
         };
         if (size == null)
             return PooledWrite;
         bool exact = shape.Kind is EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.FixedRecord;
+        if (shape.Kind == EntryKind.CompoundDirect)
+            return size + "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n" +
+                DirectWrite.Replace("%WRITE%", "%WRITEDIRECT%") + "                return directBuffer;\n";
         return size + (exact ? "                var directBuffer = new byte[directLength];\n" :
             "                var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);\n") +
             DirectWrite + (exact ? "                return directBuffer;\n" : MeasuredFallback);
