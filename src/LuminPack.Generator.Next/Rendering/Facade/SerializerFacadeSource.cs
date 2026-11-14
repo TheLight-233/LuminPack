@@ -934,10 +934,6 @@ namespace LuminPack
         public static T DeserializeJson<T, TLuminProfile>(string buffer)
             where TLuminProfile : struct, ILuminPackOptions
         {
-            LuminPackInputPolicy.CheckCharacters(
-                buffer.AsSpan(),
-                (int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<T>(),
-                LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>());
             if (buffer is null)
                 LuminPackExceptionHelper.ThrowArgumentNullException(nameof(buffer));
             return DeserializeJson<T, TLuminProfile>(buffer.AsSpan());
@@ -1007,10 +1003,6 @@ namespace LuminPack
         public static T DeserializeJson<T, TLuminProfile>(ReadOnlySpan<char> buffer)
             where TLuminProfile : struct, ILuminPackOptions
         {
-            LuminPackInputPolicy.CheckCharacters(
-                buffer,
-                (int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<T>(),
-                LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>());
             T value = default !;
             DeserializeJson<T, TLuminProfile>(buffer, ref value);
             return value;
@@ -1137,10 +1129,6 @@ namespace LuminPack
         public static int DeserializeJson<T, TLuminProfile>(string buffer, ref T value)
             where TLuminProfile : struct, ILuminPackOptions
         {
-            LuminPackInputPolicy.CheckCharacters(
-                buffer.AsSpan(),
-                (int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<T>(),
-                LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>());
             if (buffer is null)
                 LuminPackExceptionHelper.ThrowArgumentNullException(nameof(buffer));
             return DeserializeJson<T, TLuminProfile>(buffer.AsSpan(), ref value);
@@ -1234,11 +1222,12 @@ namespace LuminPack
         public static int DeserializeJson<T, TLuminProfile>(ReadOnlySpan<char> buffer, ref T value)
             where TLuminProfile : struct, ILuminPackOptions
         {
+            var encoding = FormatterDispatch.LuminPackJsonEncoding<T, TLuminProfile>();
             LuminPackInputPolicy.CheckCharacters(
                 buffer,
-                (int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<T>(),
+                (int)encoding,
                 LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<T>());
-            if (FormatterDispatch.LuminPackJsonEncoding<T, TLuminProfile>() is LuminPackStringEncoding.UTF16)
+            if (encoding is LuminPackStringEncoding.UTF16)
                 return DeserializeJson<T, TLuminProfile>(MemoryMarshal.AsBytes(buffer), ref value);
             int byteCount = Encoding.UTF8.GetByteCount(buffer);
             byte[] rented = ArrayPool<byte>.Shared.Rent(byteCount);

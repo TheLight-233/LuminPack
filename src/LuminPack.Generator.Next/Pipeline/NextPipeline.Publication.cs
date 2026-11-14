@@ -563,7 +563,6 @@ internal static partial class NextPipeline
                 entries.Add(new KeyValuePair<string, RootEntry>(model.Identity.GlobalName,
                     new RootEntry(ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Identity.GlobalName)), profile, true, true,
                         limit: policy.Input == InputPolicy.Untrusted ? policy.Limits.Input : null,
-                        encoding: policy.Strings.Encoding == StringEncoding.Utf8 ? 0 : 1,
                         jsonReadProfile: policy.JsonInput.Equals(policy.Strings) ? null : ProfileNames.Type(policy.JsonInput),
                         genericUnion: model is UnionModel && model.Identity.IsGeneric, measured: measured)));
             }

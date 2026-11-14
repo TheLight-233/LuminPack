@@ -33,9 +33,6 @@ internal sealed class RootEntry
     /// <remarks>Shared owners keep the assembly cap through the generic dispatch selector.</remarks>
     internal readonly int? Limit;
 
-    /// <summary>The payload's JSON encoding, used to bound character input: zero for UTF-8, one for UTF-16.</summary>
-    internal readonly int Encoding;
-
     /// <summary>The strict profile that replaces the declared profile in JSON reads of an explicitly untrusted payload, or null.</summary>
     internal readonly string? JsonReadProfile;
 
@@ -58,21 +55,19 @@ internal sealed class RootEntry
     /// <param name="json">Whether JSON roots are published.</param>
     /// <param name="owner">The shared formatter state owner, if any.</param>
     /// <param name="limit">The payload's frozen input cap.</param>
-    /// <param name="encoding">The payload's JSON character encoding.</param>
     /// <param name="jsonReadProfile">The payload's strict JSON profile, if any.</param>
     /// <param name="rootName">The named root's method suffix.</param>
     /// <param name="rootArguments">The root's closed type arguments before the profile.</param>
     /// <param name="genericUnion">Whether the entry describes an open Union definition.</param>
     /// <param name="measured">Whether the root has an exact record measurement.</param>
     internal RootEntry(string readable, string declaredProfile, bool binary, bool json, string? owner = null, int? limit = null,
-        int encoding = 1, string? jsonReadProfile = null, string? rootName = null, string rootArguments = "", bool genericUnion = false, bool measured = false)
+        string? jsonReadProfile = null, string? rootName = null, string rootArguments = "", bool genericUnion = false, bool measured = false)
     {
         Measured = measured;
         GenericUnion = genericUnion;
         RootName = rootName ?? readable;
         RootArguments = rootArguments;
         Limit = limit;
-        Encoding = encoding;
         JsonReadProfile = jsonReadProfile;
         Owner = owner;
         Readable = readable;
@@ -175,12 +170,10 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             ? streamLimit.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()");
         if (root.Owner != null)
-            return text.Replace("%LIMIT%", "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()")
-                .Replace("%ENCODING%", "(int)LuminPackSerializer.FormatterDispatch.LuminPackJsonEncoding<" + type + ">()");
+            return text.Replace("%LIMIT%", "LuminPackSerializer.FormatterDispatch.LuminPackInputLimit<" + type + ">()");
         if (root.Limit is not { } limit)
             return string.Join("\n", text.Split('\n').Where(line => line.IndexOf("%LIMIT%", StringComparison.Ordinal) < 0));
-        return text.Replace("%LIMIT%", limit.ToString(System.Globalization.CultureInfo.InvariantCulture))
-            .Replace("%ENCODING%", root.Encoding.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return text.Replace("%LIMIT%", limit.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>Writes an interceptor with the facade signature and its root invocation.</summary>
@@ -715,8 +708,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         """ + "\n";
 
     private const string JsonCharacterRead = """
-                        LuminPackInputPolicy.CheckCharacters(buffer, %ENCODING%, %LIMIT%);
-                        if (default(%PROFILE%).StringEncoding is LuminPackStringEncoding.UTF16)
+                        var encoding = default(%PROFILE%).StringEncoding;
+                        LuminPackInputPolicy.CheckCharacters(buffer, (int)encoding, %LIMIT%);
+                        if (encoding is LuminPackStringEncoding.UTF16)
                             return ReadBytes(MemoryMarshal.AsBytes(buffer), ref value);
                         if (buffer.Length <= 1024)
                         {
@@ -885,7 +879,7 @@ internal sealed class RootCatalog
         string readable = Emitters.ReadableTypeName.Of(key);
         // A generic Union has no closed owner; its closed uses dispatch through the generic root, as in the original.
         if (call.Definition != null && _entries.TryGetValue(call.Definition, out RootEntry? union) && union.GenericUnion)
-            return new RootEntry(readable, union.DeclaredProfile, union.Binary, union.Json, limit: union.Limit, encoding: union.Encoding,
+            return new RootEntry(readable, union.DeclaredProfile, union.Binary, union.Json, limit: union.Limit,
                 jsonReadProfile: union.JsonReadProfile, rootName: union.RootName, rootArguments: call.TypeArguments + ", ");
         if (call.Root != null && _extension != null && Shared.Contains(key))
             return new RootEntry(readable, _assemblyProfile, binary: true, json: true,
@@ -893,7 +887,7 @@ internal sealed class RootCatalog
         // Without a closed owner, a closed generic payload calls its definition's generic roots from an entry named for the closed type.
         if (call.Definition != null && _entries.TryGetValue(call.Definition, out RootEntry? definition) && definition.Owner == null)
             return new RootEntry(readable, definition.DeclaredProfile, definition.Binary, definition.Json, limit: definition.Limit,
-                encoding: definition.Encoding, jsonReadProfile: definition.JsonReadProfile, rootName: definition.RootName,
+                jsonReadProfile: definition.JsonReadProfile, rootName: definition.RootName,
                 rootArguments: call.TypeArguments + ", ");
         return null;
     }
