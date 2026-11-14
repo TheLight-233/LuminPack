@@ -471,11 +471,97 @@ internal static class ContiguousOwnerFile
                 w.Indented(() => w.Line("value.RemoveRange(count, value.Count - count);"));
                 return;
             }
+            bool pooled = shape == ContiguousShape.Array || (shape == ContiguousShape.ImmutableArray && element.Type != "string");
+            if (pooled)
+            {
+                // Exact mutable arrays need the count before reusing element slots. Only the trusted built-in
+                // profiles can decode a fresh result before validating the rest of the array.
+                w.Line("if (typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
+                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf8LengthOptions) ||");
+                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16TokenOptions) ||");
+                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf8TokenOptions) ||");
+                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions))");
+                w.Open();
+                if (shape == ContiguousShape.Array)
+                {
+                    w.Line("if (value is not null && value.GetType() == typeof(" + model.Type + ") &&");
+                    w.Line("    reader.CountArrayElements<TLuminProfile>() == value.Length)");
+                    w.Open();
+                    w.Line("int length = value.Length;");
+                    w.Line("var items = " + Marshal + ".CreateSpan(ref " + Marshal + ".GetNotNullArrayReference(value), length);");
+                    ReadSlots(w, json: true);
+                    w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
+                    w.Line("return;");
+                    w.Close();
+                }
+                ReadPooledJsonArray(w, c);
+                w.Line("return;");
+                w.Close();
+                w.Line("else");
+                w.Open();
+            }
             w.Line("int length = reader.CountArrayElements<TLuminProfile>();");
             Prepare(w);
             ReadSlots(w, json: true);
             w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
             Publish(w);
+            if (pooled)
+                w.Close();
+        }
+
+        void ReadPooledJsonArray(CodeWriter w, SpecialOwnerContext c)
+        {
+            string arrayType = ArrayType(element.Type);
+            string arrayEnd = c.JsonReader + ".JsonTokenType.ArrayEnd";
+            string objectEnd = c.JsonReader + ".JsonTokenType.ObjectEnd";
+            string unterminated = "global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"Unterminated JSON array\");";
+            w.Line("int arrayDepth = reader.Depth - 1;");
+            w.Line("if (!reader.Read<TLuminProfile>()) " + unterminated);
+            w.Line("if (reader.CurrentTokenType == " + arrayEnd + ")");
+            w.Open();
+            w.Line("if (reader.Depth != arrayDepth) " + unterminated);
+            w.Line(shape == ContiguousShape.Array ? "value = global::System.Array.Empty<" + element.Type + ">();" :
+                "value = " + model.Type + ".Empty;");
+            w.Line("return;");
+            w.Close();
+            w.Line(arrayType + " array;");
+            w.Line("var pool = global::System.Buffers.ArrayPool<" + element.Type + ">.Shared;");
+            w.Line("var buffer = pool.Rent(" + (shape == ContiguousShape.Array ? "4" : "16") + ");");
+            w.Line("bool clear = global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + element.Type + ">();");
+            w.Line("int count = 0;");
+            w.Line("try");
+            w.Open();
+            w.Line("int capacity = buffer.Length;");
+            w.Line("ref var first = ref " + Marshal + ".GetNotNullArrayReference(buffer);");
+            w.Line("do");
+            w.Open();
+            w.Line("if (reader.CurrentTokenType == " + objectEnd + ") " + unterminated);
+            w.Line("if (count == capacity)");
+            w.Open();
+            w.Line("var larger = pool.Rent(checked(capacity * 2));");
+            w.Line("global::System.Array.Copy(buffer, larger, count);");
+            w.Line("pool.Return(buffer, clear);");
+            w.Line("buffer = larger;");
+            w.Line("capacity = larger.Length;");
+            w.Line("first = ref " + Marshal + ".GetNotNullArrayReference(larger);");
+            w.Close();
+            w.Line(element.Type + " item = default!;");
+            w.Line(FormatterElementEmitter.Owner(set, element) + ".Read<TLuminProfile>(ref reader, ref item);");
+            w.Line(Unsafe + ".Add(ref first, (nint)(uint)count++) = item;");
+            w.Line("if (!reader.Read<TLuminProfile>()) " + unterminated);
+            w.Close();
+            w.Line("while (reader.CurrentTokenType != " + arrayEnd + ");");
+            w.Line("if (reader.Depth != arrayDepth) " + unterminated);
+            w.Line("array = " + Marshal + ".CreateReadOnlySpan(ref first, count).ToArray();");
+            w.Close();
+            w.Line("finally");
+            w.Open();
+            w.Line("pool.Return(buffer, clear);");
+            w.Close();
+            if (shape == ContiguousShape.Array)
+                w.Line("value = array;");
+            else
+                Publish(w);
         }
 
         void ReadSlots(CodeWriter w, bool json)
