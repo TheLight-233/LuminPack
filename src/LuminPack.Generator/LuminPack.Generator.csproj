@@ -25,12 +25,14 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../LuminPack.Core/Internal/XxHash3Algorithm.cs" Link="Internal/XxHash3Algorithm.cs" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all" />
     <ProjectReference Include="../LuminPack.CodeFixes/LuminPack.CodeFixes.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="../LuminPack.ILPostProcessor/LuminPack.ILPostProcessor.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <ProjectReference Include="../LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
                       Condition="'$(LuminPackPackNext)' == 'true'" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="../../docs/xxhash-LICENSE.txt" Pack="true" PackagePath="licenses/xxhash-LICENSE.txt" />
     <None Update="buildTransitive/LuminPack.Generator.props" Pack="true" PackagePath="buildTransitive/LuminPack.Generator.props" />
     <None Update="buildTransitive/LuminPack.Generator.targets" Pack="true" PackagePath="buildTransitive/LuminPack.Generator.targets" />
   </ItemGroup>

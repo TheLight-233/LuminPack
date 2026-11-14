@@ -7,6 +7,12 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 const int CompilationCount = 32;
 const int ValidTypesPerCompilation = 16;
 
+if (args.Contains("--verify-json-name-hash", StringComparer.Ordinal))
+{
+    JsonNameHashRegression.Run();
+    return;
+}
+
 var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
     .Split(Path.PathSeparator)
     .Select(static path => MetadataReference.CreateFromFile(path))
@@ -212,6 +218,7 @@ if (args.Contains("--verify-automatic-generation", StringComparer.Ordinal))
     return;
 }
 
+JsonNameHashRegression.Run();
 var failures = new ConcurrentQueue<string>();
 Parallel.For(0, CompilationCount, compilationIndex =>
 {

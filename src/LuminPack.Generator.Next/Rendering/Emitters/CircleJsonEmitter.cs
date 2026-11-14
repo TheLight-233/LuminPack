@@ -497,7 +497,7 @@ internal static class CircleJsonEmitter
         w.Suppressed = false;
     }
 
-    /// <summary>Writes one encoding's name lookup: a length switch for up to eight names, otherwise a hash switch.</summary>
+    /// <summary>Writes a length switch for small tables or sparse length buckets, otherwise a hash switch.</summary>
     private static void Lookup(PayloadRenderModel model, CodeWriter w, bool utf8)
     {
         var candidates = model.Members.Select((member, index) => (Name: member.Name, Index: index, Table: (utf8 ? "Utf8." : "Utf16.") + Member(member)))
@@ -507,11 +507,12 @@ internal static class CircleJsonEmitter
                 (Name: "$ref", Index: -3, Table: (utf8 ? "Utf8." : "Utf16.") + "@ref"),
             })
             .ToArray();
-        bool small = candidates.Length <= 8;
+        bool small = candidates.Length <= 8 || JsonNameDispatch.HasSmallBuckets(
+            candidates.Select(item => utf8 ? Encoding.UTF8.GetByteCount(item.Name) : item.Name.Length));
         string element = utf8 ? "byte" : "char";
         w.Line("internal static int GetJsonPropertyIndex" + (utf8 ? "Utf8" : "Utf16") + "(global::System.ReadOnlySpan<" + element + "> name)");
         var body = new List<string>();
-        body.Add(small ? "switch (name.Length)" : "switch (global::LuminPack.Internal.XxHash3.Hash64" + (utf8 ? "Utf8" : "Utf16") + "(name))");
+        body.Add(small ? "switch (name.Length)" : "switch (" + JsonNameDispatch.HashExpression(utf8) + ")");
         body.Add("{");
         var groups = candidates.Select(item => (item.Name, item.Index, item.Table, Bytes: Encoding.UTF8.GetBytes(item.Name)))
             .GroupBy(item => small ? (ulong)(utf8 ? item.Bytes.Length : item.Name.Length)

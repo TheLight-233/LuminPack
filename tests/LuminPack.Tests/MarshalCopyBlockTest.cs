@@ -11,7 +11,7 @@ namespace LuminPackUnitTest;
 [Collection(nameof(RuntimeStateCollection))]
 public unsafe class MarshalCopyBlockTest
 {
-    /// <summary>Checks retained hash outputs across all short/long boundaries and unaligned input slices.</summary>
+    /// <summary>Checks standard XXH3 outputs across all short/long boundaries and unaligned input slices.</summary>
     [Fact]
     public void RefHashKernelsRetainAllLengthBoundaries()
     {
@@ -24,13 +24,85 @@ public unsafe class MarshalCopyBlockTest
         {
             var data = input.AsSpan(offset, length);
             ulong hash = LuminPack.Internal.XxHash3.Hash64Utf8(data);
+            Assert.Equal(hash, LuminPack.Internal.XxHash3.Hash64(ref MemoryMarshal.GetReference(data), (uint)data.Length));
             System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(word, hash);
             digest.AppendData(word);
             var chars = MemoryMarshal.Cast<byte, char>(data.Slice(0, length & ~1));
             Assert.Equal(LuminPack.Internal.XxHash3.Hash64Utf8(MemoryMarshal.AsBytes(chars)),
                 LuminPack.Internal.XxHash3.Hash64Utf16(chars));
         }
-        Assert.Equal("3A1A666138A4029094B40BAC238844FBAAF70A3A6CFA98E39500DE9EC01B18F6", Convert.ToHexString(digest.GetHashAndReset()));
+        // Independently computed with System.IO.Hashing 10.0.13, XxHash3.HashToUInt64 and seed zero.
+        Assert.Equal("286B64BC5B07CA994AA38EF7A5CF748D96D3FFC1ED9538CB31F28F26E621A4A8", Convert.ToHexString(digest.GetHashAndReset()));
+    }
+
+    /// <summary>Checks independent standard seed-zero vectors for the JSON name length bands.</summary>
+    /// <param name="name">The property name.</param>
+    /// <param name="expected">The System.IO.Hashing 10.0.13 reference value.</param>
+    [Theory]
+    [InlineData("", 0x2D06800538D394C2UL)]
+    [InlineData("a", 0xE6C632B61E964E1FUL)]
+    [InlineData("abc", 0x78AF5F94892F3950UL)]
+    [InlineData("Item", 0x6DA5FB32BA7D29CDUL)]
+    [InlineData("Count", 0xA89017B09331A439UL)]
+    [InlineData("Enabled", 0xB1908C6E6BE576B4UL)]
+    [InlineData("Timestamp", 0x4751805ADDEBC0B4UL)]
+    [InlineData("DisplayName", 0xDBFB57CBDE200BEAUL)]
+    [InlineData("InventoryItemCount", 0x01E85C9D52144266UL)]
+    [InlineData("\u540d\u79f0\U0001f680", 0x1843DA27FF5A8226UL)]
+    public void NameHashMatchesStandardVectors(string name, ulong expected)
+    {
+        Assert.Equal(expected, LuminPack.Internal.XxHash3.Hash64Utf8(System.Text.Encoding.UTF8.GetBytes(name)));
+    }
+
+    /// <summary>Regresses length-insensitive short hashes and commutative long block accumulation.</summary>
+    [Fact]
+    public void NameHashDistinguishesRepeatedLengthsAndBlockPermutations()
+    {
+        Assert.Equal(0x2D06800538D394C2UL, LuminPack.Internal.XxHash3.Hash64(ref Unsafe.NullRef<byte>(), 0));
+        var utf8 = new HashSet<ulong>();
+        var utf16 = new HashSet<ulong>();
+        for (int length = 0; length <= 256; length++)
+        {
+            string name = new string('a', length);
+            Assert.True(utf8.Add(LuminPack.Internal.XxHash3.Hash64Utf8(System.Text.Encoding.UTF8.GetBytes(name))));
+            Assert.True(utf16.Add(LuminPack.Internal.XxHash3.Hash64Utf16(name)));
+        }
+        const string first = "AAAAAAAA11111111BBBBBBBB22222222";
+        const string second = "BBBBBBBB22222222AAAAAAAA11111111";
+        Assert.NotEqual(LuminPack.Internal.XxHash3.Hash64Utf8(System.Text.Encoding.UTF8.GetBytes(first)),
+            LuminPack.Internal.XxHash3.Hash64Utf8(System.Text.Encoding.UTF8.GetBytes(second)));
+        Assert.NotEqual(LuminPack.Internal.XxHash3.Hash64Utf16(first), LuminPack.Internal.XxHash3.Hash64Utf16(second));
+    }
+
+    /// <summary>Checks every short and long tail against inaccessible pages, including unaligned UTF-16 names.</summary>
+    [Fact]
+    public void NameHashDoesNotReadOutsideGuardedPages()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        nuint page = (nuint)Environment.SystemPageSize;
+        byte* pages = (byte*)AllocatePages(null, page * 3, 0x3000, 0x01);
+        try
+        {
+            Assert.True(pages != null);
+            Assert.True(ProtectPages(pages + page, page, 0x04, out _));
+            new Random(79231).NextBytes(new Span<byte>(pages + page, (int)page));
+            Assert.True(ProtectPages(pages + page, page, 0x02, out _));
+            for (int length = 0; length <= (int)page; length++)
+            foreach (bool atEnd in new[] { false, true })
+            {
+                byte* source = atEnd ? pages + page * 2 - length : pages + page;
+                var input = new ReadOnlySpan<byte>(source, length);
+                Assert.Equal(LuminPack.Internal.XxHash3.Hash64Utf8(input.ToArray()), LuminPack.Internal.XxHash3.Hash64Utf8(input));
+                var chars = new ReadOnlySpan<char>(source, length / 2);
+                Assert.Equal(LuminPack.Internal.XxHash3.Hash64Utf8(MemoryMarshal.AsBytes(chars)), LuminPack.Internal.XxHash3.Hash64Utf16(chars));
+            }
+        }
+        finally
+        {
+            if (pages != null)
+                ReleasePages(pages, 0, 0x8000);
+        }
     }
 
     /// <summary>Checks that span conversion retains partial output and legacy malformed-surrogate behavior.</summary>
@@ -261,6 +333,7 @@ public unsafe class MarshalCopyBlockTest
         byte[] mediumDestination = new byte[4097];
         new Random(1129).NextBytes(source);
         new Random(8191).NextBytes(mediumSource);
+        ulong expectedHash = LuminPack.Internal.XxHash3.Hash64Utf8(source);
         using var cancellation = new CancellationTokenSource();
         GCLargeObjectHeapCompactionMode previousMode = GCSettings.LargeObjectHeapCompactionMode;
         Task pressure = Task.Run(() =>
@@ -278,6 +351,7 @@ public unsafe class MarshalCopyBlockTest
             {
                 LuminPackMarshal.CopyBlockUnaligned(ref destination[1], ref source[0], (uint)source.Length);
                 LuminPackMarshal.CopyBlockUnaligned(ref mediumDestination[1], ref mediumSource[0], (uint)mediumSource.Length);
+                Assert.Equal(expectedHash, LuminPack.Internal.XxHash3.Hash64(ref source[0], (uint)source.Length));
             }
             Assert.True(source.AsSpan().SequenceEqual(destination.AsSpan(1, source.Length)));
             Assert.True(mediumSource.AsSpan().SequenceEqual(mediumDestination.AsSpan(1, mediumSource.Length)));

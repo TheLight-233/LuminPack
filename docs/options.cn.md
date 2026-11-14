@@ -39,6 +39,8 @@ public partial class Message
 
 二进制数据可以按成员混用不同编码，但写入方和读取方必须使用相同的声明。JSON 的编码、深度和语法校验总是作用于整份文档。
 
+JSON 属性名使用针对各编码生成的[名称查找](json-name-lookup.cn.md)，哈希不会代替完整名称比较。
+
 ## Union 类型契约开关
 
 将 Union 的类型级声明集中到一个特性：

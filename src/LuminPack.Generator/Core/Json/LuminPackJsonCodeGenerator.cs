@@ -16,18 +16,18 @@ public static class LuminPackJsonCodeGenerator
     /// <summary>Performs the compute utf8 hash step for the current operation.</summary>
     /// <param name="str">The str used by this operation.</param>
     /// <returns>The result of the operation.</returns>
-    internal unsafe static ulong ComputeUtf8Hash(string str)
+    internal static ulong ComputeUtf8Hash(string str)
     {
         return ComputeUtf8BytesHash(Encoding.UTF8.GetBytes(str));
     }
 
     /// <summary>Hashes already encoded name bytes without allocating the same payload again.</summary>
     /// <param name="bytes">The complete UTF-8 encoding.</param>
-    /// <returns>The unchanged name hash.</returns>
-    private unsafe static ulong ComputeUtf8BytesHash(byte[] bytes)
+    /// <returns>The standard seed-zero XXH3 hash.</returns>
+    private static ulong ComputeUtf8BytesHash(byte[] bytes)
     {
-        fixed (byte* input = bytes)
-            return ComputeXxHash3(input, bytes.Length);
+        return global::LuminPack.Internal.XxHash3Algorithm.Compute(
+            ref System.Runtime.InteropServices.MemoryMarshal.GetReference(new System.ReadOnlySpan<byte>(bytes)), (uint)bytes.Length);
     }
 
     /// <summary>Retains name facts only for one metadata emission, never across compilations.</summary>
@@ -58,88 +58,13 @@ public static class LuminPackJsonCodeGenerator
     /// <summary>Performs the compute utf16 hash step for the current operation.</summary>
     /// <param name="str">The str used by this operation.</param>
     /// <returns>The result of the operation.</returns>
-    internal unsafe static ulong ComputeUtf16Hash(string str)
+    internal static ulong ComputeUtf16Hash(string str)
     {
-        fixed (char* ptr = str)
-        {
-            byte* input = (byte*)ptr;
-            return ComputeXxHash3(input, str.Length * 2);
-        }
+        return global::LuminPack.Internal.XxHash3Algorithm.Compute(
+            ref System.Runtime.CompilerServices.Unsafe.As<char, byte>(ref System.Runtime.InteropServices.MemoryMarshal.GetReference(System.MemoryExtensions.AsSpan(str))),
+            (uint)str.Length * sizeof(char));
     }
 
-    /// <summary>Performs the compute xx hash3 step for the current operation.</summary>
-    /// <param name="input">The input data to process.</param>
-    /// <param name="length">The number of bytes or elements to process.</param>
-    /// <returns>The result of the operation.</returns>
-    private unsafe static ulong ComputeXxHash3(byte* input, int length)
-    {
-        if (length == 0)
-        {
-            return 12661295479421362729uL;
-        }
-        if (length <= 16)
-        {
-            if (length > 8)
-            {
-                long num = *(long*)input ^ -7046029254386353067L;
-                ulong num2 = (ulong)(*((long*)(input + length) - 1) ^ 0x27D4EB2F16566805L);
-                long num3 = num + (long)num2 + length;
-                long num4 = (num3 ^ (num3 >>> 37)) * 1609587929392839161L;
-                return (ulong)(num4 ^ (num4 >>> 32));
-            }
-            if (length >= 4)
-            {
-                ulong num5 = *(uint*)input;
-                ulong num6 = *((uint*)(input + length) - 1);
-                ulong num7 = 2870177450012600261L + num5 + ((num6 << 32) | num6);
-                ulong num8 = (num7 ^ (num7 >> 37)) * 1609587929392839161L;
-                return num8 ^ (num8 >> 32);
-            }
-            byte num9 = *input;
-            byte b = input[length >> 1];
-            byte b2 = input[length - 1];
-            uint num10 = (uint)((num9 << 16) | (b << 24) | b2 | (length << 8));
-            long num11 = -7046029254386353131L + num10;
-            long num12 = (num11 ^ (num11 >>> 37)) * 1609587929392839161L;
-            return (ulong)(num12 ^ (num12 >>> 32));
-        }
-        ulong num13 = (ulong)(length * -7046029288634856825L);
-        int num14 = length;
-        byte* ptr = input;
-        while (num14 >= 16)
-        {
-            ulong num15 = *(ulong*)ptr;
-            ulong num16 = ((ulong*)ptr)[1];
-            num13 += (ulong)((long)num15 * -7046029288634856825L);
-            num13 += num16 * 1609587929392839161L;
-            ptr += 16;
-            num14 -= 16;
-        }
-        if (num14 > 0)
-        {
-            if (num14 >= 8)
-            {
-                num13 += (ulong)(*(long*)ptr * -7046029288634856825L);
-                ptr += 8;
-                num14 -= 8;
-            }
-            if (num14 >= 4)
-            {
-                num13 += (ulong)((long)(uint)(*(int*)ptr) * 1609587929392839161L);
-                ptr += 4;
-                num14 -= 4;
-            }
-            while (num14 > 0)
-            {
-                num13 += (ulong)(*ptr * -7046029288634856825L);
-                ptr++;
-                num14--;
-            }
-        }
-        num13 ^= num13 >> 37;
-        num13 *= 1609587929392839161L;
-        return num13 ^ (num13 >> 32);
-    }
 
     /// <summary>Builds the static utf8 fields source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
@@ -266,6 +191,7 @@ public static class LuminPackJsonCodeGenerator
     /// <param name="utf8">Whether the existing UTF-8 lookup is being rendered.</param>
     private static void GenerateJsonPropertyLookup(StringBuilder sb, List<JsonNameFact> names, bool small, bool utf8)
     {
+        small = small || JsonNameDispatch.HasSmallBuckets(names.Select(item => utf8 ? item.Utf8Bytes.Length : item.Name.Length));
         string encoding = utf8 ? "Utf8" : "Utf16";
         string element = utf8 ? "byte" : "char";
         string prefix = utf8 ? "_utf8_" : "_utf16_";
@@ -273,7 +199,7 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine("        {");
         sb.AppendLine(small
             ? "            switch (name.Length)"
-            : "            switch (global::LuminPack.Internal.XxHash3.Hash64" + encoding + "(name))");
+            : "            switch (" + JsonNameDispatch.HashExpression(utf8) + ")");
         sb.AppendLine("            {");
         // Group equal keys so even a compile-time hash collision produces valid C#.
         var groups = names.GroupBy(item => small

@@ -39,6 +39,8 @@ public partial class Message
 
 Binary data may mix encodings member by member, but the writer and reader must use the same declarations. JSON encoding, depth and syntax checking always apply to a complete document.
 
+JSON property names use encoding-specific, generated [name lookups](json-name-lookup.md); hashes never replace exact name comparison.
+
 ## Union contract switches
 
 Group type-level Union declarations in one attribute:

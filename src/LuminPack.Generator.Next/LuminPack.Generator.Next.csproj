@@ -13,6 +13,8 @@
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../LuminPack.Core/Internal/XxHash3Algorithm.cs" Link="Internal/XxHash3Algorithm.cs" />
+    <Compile Include="../LuminPack.Generator/Core/Json/JsonNameDispatch.cs" Link="Rendering/Emitters/JsonNameDispatch.cs" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
