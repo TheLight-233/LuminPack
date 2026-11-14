@@ -23,12 +23,16 @@ public static partial class LuminPackCollectionAccess
         long bytes = sizeof(int) + (long)count * Unsafe.SizeOf<T>();
         if (writer.Position < 0 || writer.RecordRoom() < bytes || !TryGetStackArray(stack, count, out var array))
             return false;
-        var items = LuminPackMarshal.CreateReadOnlySpan(ref LuminPackMarshal.GetNotNullArrayReference(array), count);
-        if (MemoryMarshal.AsBytes(items).Overlaps(writer.Buffer))
+        int recordBytes = (int)bytes;
+        int payloadBytes = recordBytes - sizeof(int);
+        ref byte source = ref Unsafe.As<T, byte>(ref LuminPackMarshal.GetNotNullArrayReference(array));
+        if (LuminPackMarshal.CreateReadOnlySpan(ref source, payloadBytes).Overlaps(writer.Buffer))
             return false;
 
-        int written = LuminPackWriter.WriteReservedSpan(ref writer.CurrentReference, false, items);
-        writer.CompleteRun(written);
+        ref byte output = ref writer.CurrentReference;
+        LuminPackWriter.Write(ref output, count);
+        LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref output, sizeof(int)), ref source, (uint)payloadBytes);
+        writer.CompleteRun(recordBytes);
         return true;
     }
 
