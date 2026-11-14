@@ -29,6 +29,11 @@ internal static class FormatterCapabilities
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
         if (definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.Stack")
             FormatterOrderedCollectionTraits.Capture(compilation, named, definition == "System.Collections.Generic.Stack", result);
+        if (definition == "System.Collections.Generic.Queue" && FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
+            result.Add("QueueJsonCapacity");
+        if (definition == "System.Collections.Generic.LinkedList" && named.TypeArguments[0].IsUnmanagedType &&
+            FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
+            result.Add("LinkedListRawWindow");
         if (definition is "System.Collections.ObjectModel.Collection" or "System.Collections.ObjectModel.ObservableCollection" or
             "System.Collections.ObjectModel.ReadOnlyCollection" or "System.Collections.ObjectModel.ReadOnlyObservableCollection" or
             "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder")
@@ -36,9 +41,15 @@ internal static class FormatterCapabilities
             var element = named.TypeArguments[0];
             if (FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
                 result.Add("WrapperJsonCapacity");
+            if (definition == "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder" && FormatterRuntimeTraits.HasBuilderTraversal(compilation, named))
+                result.Add("WrapperBuilderTraversal");
             if (definition != "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder" &&
                 FormatterRuntimeTraits.HasSequenceStorage(compilation))
+            {
                 result.Add("WrapperJsonStorage");
+                if (FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
+                    result.Add("WrapperArrayWrite");
+            }
             if (element.SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasWrappedStringWriter(compilation))
                 result.Add("WriteWrappedStrings");
             if (compilation.GetTypeByMetadataName("System.Collections.Generic.IEnumerable`1") is { } enumerable)
@@ -247,9 +258,13 @@ internal static class FormatterCapabilities
             result.Add("ConcurrentBinaryTextPair");
         if ((definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or
              "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Generic.SortedList" or
+             "System.Collections.Generic.SortedDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
+             "System.Collections.Immutable.ImmutableSortedDictionary" or "System.Collections.Immutable.IImmutableDictionary" or
              "System.Collections.Frozen.FrozenDictionary" or "System.Collections.Generic.PriorityQueue") && modern && !unity &&
             ((named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType) ||
-             (named.TypeArguments[1].SpecialType == SpecialType.System_String && named.TypeArguments[0].IsUnmanagedType)) &&
+             (named.TypeArguments[1].SpecialType == SpecialType.System_String && named.TypeArguments[0].IsUnmanagedType) ||
+             ((definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary") &&
+              named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].SpecialType == SpecialType.System_String)) &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("BinaryTextPair");
         if (definition.StartsWith("System.Collections.Concurrent.Concurrent", StringComparison.Ordinal) && FormatterConcurrentTraits.Available(compilation, named.Name, named.Arity))

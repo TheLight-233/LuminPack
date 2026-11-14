@@ -38,10 +38,24 @@ internal static class InterfaceJsonTraversal
             w.Line("static void " + method + "(scoped ref " + writer + " writer, " + type + " items)");
             w.Open();
             w.Line("bool isFirst = true;");
-            w.Line("foreach (var item in items)");
+            bool array = !setInterface && method == "WriteOther";
+            if (array)
+            {
+                w.Line("int length = items.Length;");
+                w.Line("if (length == 0) return;");
+                w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items);");
+                w.Line("int index = 0;");
+                w.Line("do");
+            }
+            else
+                w.Line("foreach (var item in items)");
             w.Open();
+            if (array)
+                w.Line("var item = " + memory + ".Add(ref first, (nint)(uint)index);");
             JsonSequenceElementWriter.Emit(w, set, sequence, scalar, owner);
             w.Close();
+            if (array)
+                w.Line("while (++index < length);");
             w.Close();
             w.Blank();
         }

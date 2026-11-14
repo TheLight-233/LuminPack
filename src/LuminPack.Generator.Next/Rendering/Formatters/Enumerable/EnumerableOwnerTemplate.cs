@@ -738,6 +738,14 @@ internal static class EnumerableOwnerTemplate
                         w.Close();
                     }
                     w.Blank();
+                    if (context.Supports("BagSnapshot"))
+                    {
+                        ConcurrentBagOwnerFile.WriteJsonSnapshot(w, set, sequence, scalar, elementOwner, pooledSnapshot: true);
+                        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     if (fact.Family.Kind == CollectionKind.Queue && context.Supports("OrderedIntegerJson") &&
                         GenericFormatterReuse.Real(scalar) is "int" or "long")
                     {
@@ -770,7 +778,9 @@ internal static class EnumerableOwnerTemplate
                         if (scopedFallback)
                             w.Open();
                         w.Line("bool isFirst = true;");
-                        w.Line("foreach (var item in value)");
+                        string source = sequence.StartsWith("global::System.Collections.Concurrent.ConcurrentStack<", StringComparison.Ordinal)
+                            ? context.Source("value") : "value";
+                        w.Line("foreach (var item in " + source + ")");
                         w.Open();
                         if (fact.Family.Kind == CollectionKind.HashSet)
                             JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner, utf8Only: true);
@@ -902,7 +912,7 @@ internal static class EnumerableOwnerTemplate
                         w.Blank();
                         break;
                     }
-                    if (fact.Family.Kind == CollectionKind.Stack && context.Text && context.Supports("RestoreStackFromTop"))
+                    if (fact.Family.Kind == CollectionKind.Stack && context.Supports("RestoreStackFromTop"))
                     {
                         StackJsonStaging.Emit(w, sequence, scalar, elementOwner, jsonReader, clear: true, bulkRestore: true);
                         w.Close();

@@ -12,6 +12,7 @@ internal sealed class DictionaryJsonPairWriter
     private readonly string _valueType;
     private readonly bool _integer;
     private readonly bool _utf8Only;
+    private readonly bool _scalarSeparators;
 
     /// <summary>Captures the compiled key and value operations.</summary>
     /// <param name="writer">The generated source writer.</param>
@@ -21,7 +22,9 @@ internal sealed class DictionaryJsonPairWriter
     /// <param name="valueType">The emitted value type.</param>
     /// <param name="integer">Whether the runtime exposes the scalar entry writer.</param>
     /// <param name="utf8Only">Whether UTF-16 retains the original formatting callback boundaries.</param>
-    internal DictionaryJsonPairWriter(CodeWriter writer, string keyOwner, string valueOwner, string keyType, string valueType, bool integer, bool utf8Only = false)
+    /// <param name="capturedPair">Whether both members come from an already captured dictionary entry.</param>
+    internal DictionaryJsonPairWriter(CodeWriter writer, string keyOwner, string valueOwner, string keyType, string valueType, bool integer,
+        bool utf8Only = false, bool capturedPair = false)
     {
         _writer = writer;
         _keyOwner = keyOwner;
@@ -31,12 +34,16 @@ internal sealed class DictionaryJsonPairWriter
         _integer = integer && GenericFormatterReuse.Real(keyType) == "int" &&
             (GenericFormatterReuse.Real(valueType) is "int" or "long");
         _utf8Only = utf8Only;
+        _scalarSeparators = capturedPair && !_integer && UsesScalarSeparator(keyType) && UsesScalarSeparator(valueType);
     }
+
+    // These concrete owners write exactly one value and always handle its leading comma, including null strings.
+    private static bool UsesScalarSeparator(string type) => type is "string" or "int" or "uint" or "long" or "ulong";
 
     /// <summary>Initializes the separator state used by the individual formatter calls.</summary>
     internal void Begin()
     {
-        if (!_integer || _utf8Only)
+        if (!_scalarSeparators && (!_integer || _utf8Only))
             _writer.Line("bool isFirst = true;");
     }
 
@@ -68,18 +75,24 @@ internal sealed class DictionaryJsonPairWriter
                 ? memory + ".As<" + type + ", " + GenericFormatterReuse.Real(type) + ">(ref " + local + ")" : local;
         }
 
-        w.Line("if (!isFirst)");
-        w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-        w.Line("else");
-        w.Line("    isFirst = false;");
-        w.Line("writer.SetFirstElement(true);");
+        if (!_scalarSeparators)
+        {
+            w.Line("if (!isFirst)");
+            w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
+            w.Line("else");
+            w.Line("    isFirst = false;");
+            w.Line("writer.SetFirstElement(true);");
+        }
         w.Line("writer.WriteArrayStart<TLuminProfile>();");
         w.Line("var key = " + key + ";");
-        w.Line("writer.SetFirstElement(true);");
+        if (!_scalarSeparators)
+            w.Line("writer.SetFirstElement(true);");
         w.Line(_keyOwner + ".Write<TLuminProfile>(ref writer, key);");
-        w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
+        if (!_scalarSeparators)
+            w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
         w.Line("var itemValue = " + value + ";");
-        w.Line("writer.SetFirstElement(true);");
+        if (!_scalarSeparators)
+            w.Line("writer.SetFirstElement(true);");
         w.Line(_valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
         w.Line("writer.WriteArrayEnd<TLuminProfile>();");
     }

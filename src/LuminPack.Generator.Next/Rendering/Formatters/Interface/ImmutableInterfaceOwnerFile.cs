@@ -167,6 +167,8 @@ internal static class ImmutableInterfaceOwnerFile
         }
         w.Line(c.Scalar + "[] items = null;");
         w.Line("int count = 0;");
+        w.Line("int capacity = 0;");
+        w.Line("ref var first = ref " + c.Memory + ".NullRef<" + c.Scalar + ">();");
         w.Line("try");
         w.Open();
         w.Line("if (reader.Read<TLuminProfile>())");
@@ -179,16 +181,19 @@ internal static class ImmutableInterfaceOwnerFile
         w.Line("    continue;");
         w.Line(c.Scalar + " item = default!;");
         w.Line(owner + ".Read<TLuminProfile>(ref reader, ref item);");
-        w.Line("if (items is null)");
-        w.Line("    items = " + pool + ".Rent(16);");
-        w.Line("else if (count == items.Length)");
+        w.Line("if (count == capacity)");
         w.Open();
-        w.Line("var larger = " + pool + ".Rent(checked(count * 2));");
+        w.Line("var larger = " + pool + ".Rent(count == 0 ? 16 : checked(count * 2));");
+        w.Line("if (items is not null)");
+        w.Open();
         w.Line("global::System.Array.Copy(items, larger, count);");
         w.Line(pool + ".Return(items, " + clear + ");");
-        w.Line("items = larger;");
         w.Close();
-        w.Line(c.Memory + ".Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items), (nint)(uint)count++) = item;");
+        w.Line("items = larger;");
+        w.Line("capacity = larger.Length;");
+        w.Line("first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(larger);");
+        w.Close();
+        w.Line(c.Memory + ".Add(ref first, (nint)(uint)count++) = item;");
         w.Close();
         w.Line("while (reader.Read<TLuminProfile>());");
         w.Close();
@@ -206,7 +211,6 @@ internal static class ImmutableInterfaceOwnerFile
             w.Line("return;");
             w.Close();
             ImmutableBuilderLifetime.Begin(w, "SortedSet", c.Scalar, c.Supports("ImmutableBuilder"), "sortedBuilder");
-            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items!);");
             w.Line("int index = 0;");
             w.Line("do");
             w.Open();
@@ -218,7 +222,6 @@ internal static class ImmutableInterfaceOwnerFile
         }
         else if (linear)
         {
-            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items!);");
             if (family == "ImmutableStack")
                 BuildStack(c, "count");
             else

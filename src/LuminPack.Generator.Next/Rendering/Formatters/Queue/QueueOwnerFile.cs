@@ -11,7 +11,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class QueueOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.Enqueue(item);",
-        outlineJson: true);
+        jsonBefore: PrepareJson, outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -20,6 +20,17 @@ internal static class QueueOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
+
+    /// <summary>Sizes a fresh queue from the structural hint and clears a reused queue before its element loop.</summary>
+    /// <param name="c">The queue owner's JSON read context.</param>
+    private static void PrepareJson(EnumerableOwnerContext c)
+    {
+        string capacity = c.Supports("QueueJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(10)" : "";
+        c.W.Line("if (value is null)");
+        c.W.Indented(() => c.W.Line("value = new " + c.Sequence + "(" + capacity + ");"));
+        c.W.Line("else");
+        c.W.Indented(() => c.W.Line("value.Clear();"));
+    }
 
     private static void Write(EnumerableOwnerContext c)
     {
@@ -35,7 +46,7 @@ internal static class QueueOwnerFile
             return;
         }
         var traversal = new List<string>();
-        QueueTraversal.Write(traversal, c.Scalar, "value", c.Memory, c.Marshal);
+        QueueTraversal.Write(traversal, c.Scalar, "value", c.Memory, c.Marshal, c.Supports("WriteQueueRecord"));
         foreach (string line in traversal)
             c.W.Line(line);
     }

@@ -1200,38 +1200,25 @@ namespace LuminPack.Core
         public void Skip<TOptions>()
             where TOptions : struct, ILuminPackOptions
         {
-            switch (CurrentTokenType)
+            if (CurrentTokenType is JsonTokenType.ObjectStart or JsonTokenType.ArrayStart)
+                SkipContainer<TOptions>();
+            else
+                SkipScalarToken<TOptions>();
+        }
+
+        /// <summary>Skips an open container through the same tokenizer and scalar validation as the outer reader.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void SkipContainer<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            int initialDepth = Depth;
+            while (Read<TOptions>())
             {
-                case JsonTokenType.ObjectStart:
-                case JsonTokenType.ArrayStart:
-                {
-                    int initialDepth = Depth;
-                    while (Read<TOptions>())
-                    {
-                        if ((CurrentTokenType == JsonTokenType.ObjectEnd || CurrentTokenType == JsonTokenType.ArrayEnd) && Depth < initialDepth)
-                        {
-                            return;
-                        }
-
-                        SkipScalarToken<TOptions>();
-                    }
-
-                    LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
-                    break;
-                }
-
-                case JsonTokenType.String:
-                case JsonTokenType.PropertyName:
-                    SkipStringToken<TOptions>();
-                    break;
-                case JsonTokenType.Number:
-                    SkipNumberToken<TOptions>();
-                    break;
-                case JsonTokenType.True:
-                case JsonTokenType.False:
-                case JsonTokenType.Null:
-                    break;
+                if ((CurrentTokenType is JsonTokenType.ObjectEnd or JsonTokenType.ArrayEnd) && Depth < initialDepth)
+                    return;
+                SkipScalarToken<TOptions>();
             }
+            LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
         }
 
         /// <summary>Verifies that no non-whitespace JSON remains after the current top-level value.</summary>
@@ -1330,11 +1317,9 @@ namespace LuminPack.Core
             }
 
             int intStart = i;
-            int intDigits = 0;
             if (!IsNumberAtEnd<TOptions>(i) && NumberCharAt<TOptions>(i) == '0')
             {
                 i += step;
-                intDigits = 1;
             }
             else
             {
@@ -1344,11 +1329,10 @@ namespace LuminPack.Core
                     if (d > 9u)
                         break;
                     i += step;
-                    intDigits++;
                 }
             }
 
-            if (intDigits == 0)
+            if (i == intStart)
                 ThrowMalformedJson("Invalid JSON number: expected an integer part");
             int intEnd = i;
             int fracStart = i;

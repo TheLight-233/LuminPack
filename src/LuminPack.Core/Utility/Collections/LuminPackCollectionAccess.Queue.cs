@@ -10,6 +10,44 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackCollectionAccess
 {
+    /// <summary>Writes a nonempty raw queue as one complete record within the current binary output window.</summary>
+    /// <typeparam name="T">The reference-free queue element.</typeparam>
+    /// <param name="writer">The writer positioned at the queue's count header.</param>
+    /// <param name="queue">The source queue.</param>
+    /// <param name="count">The captured element count.</param>
+    /// <returns>Whether the entire record was written without growing the buffer.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryWriteQueueRecord<T>(scoped ref LuminPackWriter writer, Queue<T> queue, int count) where T : unmanaged
+    {
+        const int headerBytes = 4 * sizeof(int);
+        int elementBytes = Unsafe.SizeOf<T>();
+        long recordBytes = headerBytes + (long)count * elementBytes;
+        if (writer.Position < 0 || writer.RecordRoom() < recordBytes || !TryGetQueueArray(queue, count, out var array, out int head) ||
+            queue.Count != count)
+            return false;
+
+        int firstCount = Math.Min(count, array.Length - head);
+        int secondCount = count - firstCount;
+        ref T start = ref LuminPackMarshal.GetNotNullArrayReference(array);
+        var first = MemoryMarshal.AsBytes(LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref start, (nint)(uint)head), firstCount));
+        var second = MemoryMarshal.AsBytes(LuminPackMarshal.CreateReadOnlySpan(ref start, secondCount));
+        if (first.Overlaps(writer.Buffer) || second.Overlaps(writer.Buffer))
+            return false;
+
+        ref byte output = ref writer.CurrentReference;
+        LuminPackWriter.Write(ref output, count);
+        LuminPackWriter.Write(ref Unsafe.Add(ref output, sizeof(int)), 0);
+        LuminPackWriter.Write(ref Unsafe.Add(ref output, 2 * sizeof(int)), 0);
+        LuminPackWriter.Write(ref Unsafe.Add(ref output, 3 * sizeof(int)), count);
+        LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref output, headerBytes), ref MemoryMarshal.GetReference(first), (uint)first.Length);
+        if (!second.IsEmpty)
+            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref output, (nint)(uint)(headerBytes + first.Length)),
+                ref MemoryMarshal.GetReference(second), (uint)second.Length);
+        writer.CompleteRun((int)recordBytes);
+        return true;
+    }
+
     /// <summary>Writes the active strings directly from a recognized ring buffer in dequeue order.</summary>
     /// <typeparam name="TOptions">The compiled binary profile.</typeparam>
     /// <param name="writer">The writer positioned at the queue's count header.</param>

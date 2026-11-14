@@ -609,7 +609,7 @@ internal static class DictionaryOwnerFile
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
                     var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value,
-                        pair && set.FindFormatter(dictionary)?.Supports("JsonIntegerPair") == true);
+                        pair && contractModel?.Supports("JsonIntegerPair") == true, capturedPair: true);
                     pairWriter.Begin();
                     w.Line("foreach (var item in value)");
                     w.Open();

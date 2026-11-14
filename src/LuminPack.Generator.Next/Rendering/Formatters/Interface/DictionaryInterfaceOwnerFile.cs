@@ -15,8 +15,8 @@ internal static class DictionaryInterfaceOwnerFile
 
     private static readonly PairedDictionarySpec ImmutableSpec = new PairedDictionarySpec(WriteImmutable, ReadImmutable,
         "staged[key!] = itemValue;",
-        c => c.W.Line("var staged = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<" + c.Key + ", " + c.Value + ">();"),
-        c => c.W.Line("value = staged.ToImmutable();"), outlineJson: true);
+        c => ImmutableBuilderLifetime.Begin(c.W, "Dictionary", c.Key + ", " + c.Value, c.Supports("ImmutableBuilder"), "staged"),
+        AfterImmutableJson, outlineJson: true);
 
     /// <summary>Renders an <c>IDictionary</c> or <c>IReadOnlyDictionary</c> owner.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -33,6 +33,14 @@ internal static class DictionaryInterfaceOwnerFile
     /// <returns>The complete source.</returns>
     internal static string RenderImmutable(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, ImmutableSpec);
+
+    /// <summary>Publishes the completed JSON dictionary and releases the optional builder lease.</summary>
+    /// <param name="c">The dictionary owner's read context.</param>
+    private static void AfterImmutableJson(PairedDictionaryContext c)
+    {
+        c.W.Line("value = staged.ToImmutable();");
+        ImmutableBuilderLifetime.End(c.W, "Dictionary", c.Supports("ImmutableBuilder"), "staged");
+    }
 
     private static void WriteImmutable(PairedDictionaryContext c)
     {
@@ -62,7 +70,8 @@ internal static class DictionaryInterfaceOwnerFile
         string concrete = "global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">";
         string writer = w.A("LuminPackWriter");
         bool rawKernel = c.RawPairs && c.Supports("BinaryRawPairs");
-        bool textKernel = c.UsesRawOrStringEntries && (c.Key == "string") != (c.Value == "string") && c.Supports("BinaryTextPair");
+        bool textKernel = c.UsesRawOrStringEntries && (c.Key == "string" || c.Value == "string") && c.Supports("BinaryTextPair");
+        bool textPair = c.Key == "string" && c.Value == "string";
         const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
         string keyWidth = c.Memory + ".SizeOf<" + c.Key + ">()";
         string width = keyWidth + " + " + c.Memory + ".SizeOf<" + c.Value + ">()";
@@ -118,20 +127,30 @@ internal static class DictionaryInterfaceOwnerFile
             {
                 string text = c.Key == "string" ? "key" : "itemValue";
                 w.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
-                w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
+                if (textPair)
+                    w.Line("    operationState.RecordRoom() >= 2 * sizeof(int) + ((long)(key?.Length ?? 0) + (itemValue?.Length ?? 0)) * sizeof(char))");
+                else
+                    w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
                 w.Open();
                 w.Line("ref byte record = ref operationState.Cursor;");
-                if (c.Key == "string")
+                if (textPair)
+                {
+                    w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref record, key);");
+                    w.Line("written += " + runtimeWriter + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), itemValue);");
+                    w.Line("operationState.CompleteRun(written);");
+                }
+                else if (c.Key == "string")
                 {
                     w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref record, key);");
                     w.Line(runtimeWriter + ".Write(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), in itemValue);");
+                    w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
                 }
                 else
                 {
                     w.Line(runtimeWriter + ".Write(ref record, in key);");
                     w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), itemValue);");
+                    w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
                 }
-                w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
                 w.Close();
                 w.Line("else");
                 w.Indented(() => w.Line("WritePairSlow(ref operationState, key, itemValue);"));
@@ -167,7 +186,8 @@ internal static class DictionaryInterfaceOwnerFile
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
-        w.Line("var builder = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<" + c.Key + ", " + c.Value + ">();");
+        bool pooled = c.Supports("ImmutableBuilder");
+        ImmutableBuilderLifetime.Begin(w, "Dictionary", c.Key + ", " + c.Value, pooled, "builder");
         w.Line("int index = 0;");
         w.Line("do");
         w.Open();
@@ -179,5 +199,6 @@ internal static class DictionaryInterfaceOwnerFile
         w.Close();
         w.Line("while (++index < length);");
         w.Line("value = builder.ToImmutable();");
+        ImmutableBuilderLifetime.End(w, "Dictionary", pooled, "builder");
     }
 }

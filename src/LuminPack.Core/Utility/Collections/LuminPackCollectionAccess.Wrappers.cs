@@ -8,6 +8,68 @@ namespace LuminPack.Code;
 
 public static partial class LuminPackCollectionAccess
 {
+    /// <summary>Captures the version needed to traverse a collection builder without allocating an enumerator.</summary>
+    /// <typeparam name="T">The builder element type.</typeparam>
+    /// <param name="builder">The source builder.</param>
+    /// <param name="traversal">The captured traversal when the layout is recognized.</param>
+    /// <returns>Whether the generated caller can use the value traversal.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static bool TryGetBuilderTraversal<T>(ReadOnlyCollectionBuilder<T>? builder, out BuilderTraversal<T> traversal)
+    {
+        int offset = BuilderVersion<T>.Offset;
+        if (offset >= 0 && builder is not null)
+        {
+            traversal = new BuilderTraversal<T>(builder, offset);
+            return true;
+        }
+        traversal = default;
+        return false;
+    }
+
+    /// <summary>Reads the next builder item at the original version and capture boundary.</summary>
+    /// <typeparam name="T">The builder element type.</typeparam>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public struct BuilderTraversal<T>
+    {
+        private readonly ReadOnlyCollectionBuilder<T>? _builder;
+        private readonly int _versionOffset;
+        private readonly int _version;
+        private int _index;
+
+        internal BuilderTraversal(ReadOnlyCollectionBuilder<T> builder, int versionOffset)
+        {
+            _builder = builder;
+            _versionOffset = versionOffset;
+            _version = LuminFieldLayout.Field<int>(builder, versionOffset);
+            _index = 0;
+        }
+
+        /// <summary>Checks the version, then captures an element from the builder's current storage.</summary>
+        /// <param name="item">The captured item, when available.</param>
+        /// <returns>Whether another element was captured.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool MoveNext(out T item)
+        {
+            var builder = _builder;
+            if (builder is null)
+            {
+                item = default!;
+                return false;
+            }
+            if (LuminFieldLayout.Field<int>(builder, _versionOffset) != _version)
+                LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+            if (_index >= builder.Count)
+            {
+                item = default!;
+                return false;
+            }
+
+            // A capacity change may replace the array without changing the version.
+            item = builder[_index++];
+            return true;
+        }
+    }
+
     /// <summary>Writes a wrapped string sequence with the same capture and count publication as its enumerator.</summary>
     /// <typeparam name="TOptions">The compiled binary profile.</typeparam>
     /// <param name="writer">The original collection writer.</param>

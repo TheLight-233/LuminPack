@@ -1095,21 +1095,23 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private int WriteUtf16PairPrefix(scoped ReadOnlySpan<KeyValuePair<string, string?>> pairs)
         {
-            ref byte start = ref Current;
             int room = (int)PrefixRoom();
-            if (room == 0)
+            int count = pairs.Length;
+            if (room == 0 || count == 0)
                 return 0;
+            ref byte start = ref Current;
+            ref var first = ref MemoryMarshal.GetReference(pairs);
             int written = 0;
             int i = 0;
-            for (; i < pairs.Length; i++)
+            do
             {
-                var pair = pairs[i];
+                var pair = Unsafe.Add(ref first, (nint)(uint)i);
                 long chars = (long)(pair.Key?.Length ?? 0) + (pair.Value?.Length ?? 0);
                 if (2 * sizeof(int) + chars * sizeof(char) > (long)room - written)
                     break;
                 written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Key);
                 written += WriteReservedUtf16Record(ref Unsafe.Add(ref start, written), pair.Value);
-            }
+            } while (++i < count);
             AdvanceProven(written);
             return i;
         }
@@ -1125,11 +1127,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static int WriteUtf16PairRun(ref byte current, uint room, scoped ReadOnlySpan<string?> keys, scoped ReadOnlySpan<string?> values, ref int index)
         {
+            int count = keys.Length;
+            int i = index;
+            if ((uint)i >= (uint)count)
+                return 0;
             ref string? firstKey = ref MemoryMarshal.GetReference(keys);
             ref string? firstValue = ref MemoryMarshal.GetReference(values);
             uint used = 0;
-            int i = index;
-            for (; (uint)i < (uint)keys.Length; i++)
+            do
             {
                 string? key = Unsafe.Add(ref firstKey, (nint)(uint)i);
                 string? value = Unsafe.Add(ref firstValue, (nint)(uint)i);
@@ -1139,7 +1144,7 @@ namespace LuminPack.Core
                     break;
                 used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), key);
                 used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), value);
-            }
+            } while (++i < count);
 
             index = i;
             return (int)used;
@@ -1171,10 +1176,13 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static int WriteGeneralUtf16Run(ref byte current, uint room, scoped ReadOnlySpan<string?> values, ref int index)
         {
+            int count = values.Length;
+            int i = index;
+            if ((uint)i >= (uint)count)
+                return 0;
             ref string? first = ref MemoryMarshal.GetReference(values);
             uint used = 0;
-            int i = index;
-            for (; (uint)i < (uint)values.Length; i++)
+            do
             {
                 string? value = Unsafe.Add(ref first, (nint)(uint)i);
                 // A string holds at most 0x3FFFFFDF characters, so the raw bound fits uint.
@@ -1182,7 +1190,7 @@ namespace LuminPack.Core
                 if (bound > room - used)
                     break;
                 used += (uint)WriteUtf16Record(ref Unsafe.Add(ref current, (nint)used), value);
-            }
+            } while (++i < count);
 
             index = i;
             return (int)used;
@@ -1198,11 +1206,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static int WriteMediumUtf16Run(ref byte current, uint room, scoped ReadOnlySpan<string?> values, ref int index)
         {
-            uint used = 0;
+            int count = values.Length;
             int i = index;
-            for (; (uint)i < (uint)values.Length; i++)
+            if ((uint)i >= (uint)count)
+                return 0;
+            ref string? first = ref MemoryMarshal.GetReference(values);
+            uint used = 0;
+            do
             {
-                string? value = values[i];
+                string? value = Unsafe.Add(ref first, (nint)(uint)i);
                 if (value is null || (uint)(value.Length - 17) > 15)
                 {
                     index = i;
@@ -1212,7 +1224,7 @@ namespace LuminPack.Core
                 if (bound > room - used)
                     break;
                 used += (uint)WriteMediumUtf16RunRecord(ref Unsafe.Add(ref current, (nint)used), value);
-            }
+            } while (++i < count);
 
             index = i;
             return (int)used;

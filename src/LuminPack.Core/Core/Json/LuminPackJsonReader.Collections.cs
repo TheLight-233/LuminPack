@@ -25,6 +25,21 @@ namespace LuminPack.Core
         /// <returns>The number of complete elements in the current array.</returns>
         public int CountArrayElements<TOptions>() where TOptions : struct, ILuminPackOptions
         {
+            if (LuminPackMarshal.ConstantStringProfile<TOptions>() && !default(TOptions).ValidateJsonSyntax)
+            {
+                var scan = this;
+                return scan.CountArrayElementsCore<TOptions>();
+            }
+
+            return CountArrayElementsWithGrammarStorage<TOptions>();
+        }
+
+        /// <summary>Isolates mutable deep grammar storage for profiles that may need it.</summary>
+        /// <typeparam name="TOptions">The original document profile.</typeparam>
+        /// <returns>The number of complete elements in the current array.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int CountArrayElementsWithGrammarStorage<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
             var scan = this;
             // Deep grammar storage is mutable; a lookahead must own its copy.
             scan._pooledLookahead = true;
@@ -34,25 +49,40 @@ namespace LuminPack.Core
                 if (default(TOptions).ValidateJsonSyntax && DeepContainerKinds is not null)
                 {
                     scan.DeepContainerKinds = ArrayPool<byte>.Shared.Rent(DeepContainerKinds.Length);
-                    DeepContainerKinds.AsSpan().CopyTo(scan.DeepContainerKinds);
+                    new ReadOnlySpan<byte>(DeepContainerKinds).CopyTo(scan.DeepContainerKinds);
                 }
-                scan.TryConsumeArrayStart<TOptions>();
-                int count = 0;
-                while (scan.Read<TOptions>())
-                {
-                    if (scan.CurrentTokenType == JsonTokenType.ArrayEnd)
-                        return count;
-                    scan.Skip<TOptions>();
-                    count = checked(count + 1);
-                }
-                LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON array");
-                return 0;
+                return scan.CountArrayElementsCore<TOptions>();
             }
             finally
             {
                 if (scan.DeepContainerKinds is not null)
                     ArrayPool<byte>.Shared.Return(scan.DeepContainerKinds);
             }
+        }
+
+        /// <summary>Counts complete values on the isolated reader with the original tokenizer and nesting checks.</summary>
+        /// <typeparam name="TOptions">The original document profile.</typeparam>
+        /// <returns>The number of complete elements in the current array.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int CountArrayElementsCore<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            TryConsumeArrayStart<TOptions>();
+            int count = 0;
+            while (Read<TOptions>())
+            {
+                JsonTokenType token = CurrentTokenType;
+                if (token == JsonTokenType.ArrayEnd)
+                    return count;
+
+                if (token is JsonTokenType.ObjectStart or JsonTokenType.ArrayStart)
+                    SkipContainer<TOptions>();
+                else if (token is not (JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null))
+                    Skip<TOptions>();
+
+                count = checked(count + 1);
+            }
+            LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON array");
+            return 0;
         }
 
         /// <summary>Attempts to consume array start and reports whether it succeeded.</summary>

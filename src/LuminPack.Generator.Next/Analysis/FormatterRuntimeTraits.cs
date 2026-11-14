@@ -6,6 +6,28 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional formatter runtime APIs against the consumer metadata.</summary>
 internal static class FormatterRuntimeTraits
 {
+    /// <summary>Checks the optional collection builder traversal and its element capture operation.</summary>
+    /// <param name="compilation">The consumer's runtime references.</param>
+    /// <param name="builder">The closed framework builder.</param>
+    /// <returns>Whether generated code can use the complete value traversal.</returns>
+    internal static bool HasBuilderTraversal(Compilation compilation, INamedTypeSymbol builder)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var traversal = access?.GetTypeMembers("BuilderTraversal", 1).SingleOrDefault();
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            traversal is { IsValueType: true, DeclaredAccessibility: Accessibility.Public } &&
+            traversal.GetMembers("MoveNext").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: false, DeclaredAccessibility: Accessibility.Public, Arity: 0, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 1 &&
+                method.Parameters[0].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, traversal.TypeParameters[0])) &&
+            access.GetMembers("TryGetBuilderTraversal").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 2 &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[1].RefKind == RefKind.Out &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, builder.OriginalDefinition.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, traversal.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the existing listener-aware insertion API.</summary>
     /// <param name="compilation">The referenced runtime and framework metadata.</param>
     /// <returns>Whether the exact append operation is available.</returns>

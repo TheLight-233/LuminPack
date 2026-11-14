@@ -431,7 +431,13 @@ namespace LuminPack.Core
                 int position = Position;
                 if ((uint)position > (uint)Buffer.Length || Buffer.Length - position < step * 2)
                     return false;
-                head = NumberCharAt<TOptions>(position + step);
+                if (LuminPackMarshal.ConstantStringProfile<TOptions>())
+                {
+                    ref byte next = ref Unsafe.Add(ref Current, step);
+                    head = step == 1 ? (char)next : LuminPackReader.Read<char>(ref next);
+                }
+                else
+                    head = NumberCharAt<TOptions>(position + step);
                 skip = step;
             }
 

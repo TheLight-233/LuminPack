@@ -141,7 +141,7 @@ internal static class InterfaceOwnerFile
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static void " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
             w.Open();
-            c.CountedWrite("items", outlineText: c.Text);
+            c.CountedWrite("items", outlineText: c.Text && (!setInterface || method != "WriteKnown"));
             w.Close();
             w.Blank();
         }

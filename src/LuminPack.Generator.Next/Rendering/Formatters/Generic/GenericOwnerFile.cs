@@ -205,7 +205,7 @@ internal static class GenericOwnerFile
         w.Open();
         w.Line("if (reader.CurrentTokenType == " + c.JsonReader + ".JsonTokenType.ObjectEnd)");
         w.Line("    break;");
-        w.Line("string? propertyName = null;");
+        w.Line("string propertyName = \"Value\";");
         w.Line("reader.Read<" + c.Profile + ">(ref propertyName);");
         w.Line("reader.CompleteValue();");
         w.Line("reader.Read<" + c.Profile + ">();");

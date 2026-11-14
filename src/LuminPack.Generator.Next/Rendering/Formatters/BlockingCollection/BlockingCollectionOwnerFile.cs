@@ -96,8 +96,10 @@ internal static class BlockingCollectionOwnerFile
                 w.Line("while (++index < length);");
                 w.Close();
             }
-            w.Line("global::System.Collections.Generic.IEnumerable<" + item + "> source = length == items.Length");
-            w.Line("    ? items : length == 0 ? global::System.Array.Empty<" + item + ">()");
+            // Without the interface casts, the conditional can convert both array branches to ArraySegment<T>.
+            string source = "global::System.Collections.Generic.IEnumerable<" + item + ">";
+            w.Line(source + " source = length == items.Length");
+            w.Line("    ? (" + source + ")items : length == 0 ? (" + source + ")global::System.Array.Empty<" + item + ">()");
             w.Line("    : new global::System.ArraySegment<" + item + ">(items, 0, length);");
             w.Line("value = new " + type + "(new global::System.Collections.Concurrent.ConcurrentQueue<" + item + ">(source));");
             w.Close();

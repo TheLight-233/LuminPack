@@ -584,9 +584,16 @@ public static partial class LuminTreeStorage
         if (culture.GetType() != typeof(System.Globalization.CultureInfo))
             return null;
         var comparison = culture.CompareInfo;
-        for (int i = 1; i < count; i++)
-            if (comparison.Compare(items[i - 1], items[i]) >= 0)
+        ref string first = ref LuminPackMarshal.GetNotNullArrayReference(items);
+        string previous = first;
+        int i = 1;
+        do
+        {
+            string current = Unsafe.Add(ref first, (nint)(uint)i);
+            if (comparison.Compare(previous, current) >= 0)
                 return null;
+            previous = current;
+        } while (++i < count);
         return ReferenceEquals(culture, System.Globalization.CultureInfo.CurrentCulture)
             ? BclTrees.ImmutableSortedSet<string>.Build(items, count) : null;
     }
@@ -1180,11 +1187,15 @@ public static partial class LuminTreeStorage
     /// <param name="keys">Caller-owned storage for a hash code above each item index.</param>
     private static bool TrySortHashes<T>(T[] items, int count, long[] keys)
     {
-        var comparer = EqualityComparer<T>.Default;
-        for (int i = 0; i < count; i++)
+        if (count > 0)
         {
-            var item = items[i];
-            keys[i] = ((long)(item is null ? 0 : comparer.GetHashCode(item)) << 32) | (uint)i;
+            var comparer = EqualityComparer<T>.Default;
+            int i = 0;
+            do
+            {
+                var item = items[i];
+                keys[i] = ((long)(item is null ? 0 : comparer.GetHashCode(item)) << 32) | (uint)i;
+            } while (++i < count);
         }
         return SortDistinct(keys, count);
     }
@@ -1198,13 +1209,17 @@ public static partial class LuminTreeStorage
     /// <param name="keys">Caller-owned storage for a hash code above each pair index.</param>
     private static bool TrySortHashes<TKey, TValue>(KeyValuePair<TKey, TValue>[] pairs, int count, long[] keys)
     {
-        var comparer = EqualityComparer<TKey>.Default;
-        for (int i = 0; i < count; i++)
+        if (count > 0)
         {
-            var key = pairs[i].Key;
-            if (key is null)
-                return false;
-            keys[i] = ((long)comparer.GetHashCode(key) << 32) | (uint)i;
+            var comparer = EqualityComparer<TKey>.Default;
+            int i = 0;
+            do
+            {
+                var key = pairs[i].Key;
+                if (key is null)
+                    return false;
+                keys[i] = ((long)comparer.GetHashCode(key) << 32) | (uint)i;
+            } while (++i < count);
         }
         return SortDistinct(keys, count);
     }

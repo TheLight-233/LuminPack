@@ -83,8 +83,7 @@ internal static class ImmutableLinearTraversal
             }
             else
             {
-                w.Line("bool firstElement = true;");
-                w.Line("WriteKnownStack(ref writer, " + source + ", ref firstElement);");
+                w.Line("WriteKnownStack(ref writer, " + source + ");");
             }
             w.Line("writer.WriteArrayEnd<TLuminProfile>();");
             w.Line("return;");
@@ -95,8 +94,11 @@ internal static class ImmutableLinearTraversal
         string stack = Namespace + "ImmutableStack<" + c.Scalar + ">";
         w.Blank();
         w.Line(w.MethodImpl("NoInlining"));
-        w.Line("static void WriteKnownStack(scoped ref " + writer + " output, " + stack + " stack, ref bool firstElement)");
+        w.Line("static void WriteKnownStack(scoped ref " + writer + " output, " + stack + " stack" +
+            (queue ? ", ref bool firstElement)" : ")"));
         w.Open();
+        if (!queue)
+            w.Line("bool firstElement = true;");
         w.Line("foreach (var item in stack)");
         w.Open();
         EmitElement();

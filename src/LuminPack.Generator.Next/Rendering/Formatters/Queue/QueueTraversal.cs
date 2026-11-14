@@ -12,11 +12,12 @@ internal static class QueueTraversal
     /// <param name="local">The nonnull queue expression.</param>
     /// <param name="memory">The spelling of the unsafe memory helper.</param>
     /// <param name="marshal">The spelling of the memory marshal helper.</param>
+    /// <param name="completeRecord">Whether the root can write a proven complete record in its current output window.</param>
     /// <remarks>The wire is the element count, the head, tail and size storage words (zero, zero, count), then the live elements
     /// in dequeue order, which the circular storage splits into at most two copied segments. Runtimes without storage access copy
     /// the queue into one pooled array instead. A string element has no raw storage, so the strings are written one at a time in
     /// dequeue order.</remarks>
-    internal static void Write(List<string> body, string element, string local, string memory, string marshal)
+    internal static void Write(List<string> body, string element, string local, string memory, string marshal, bool completeRecord = false)
     {
         if (element == "string")
         {
@@ -24,6 +25,11 @@ internal static class QueueTraversal
             return;
         }
         body.Add("int queueSize = " + local + ".Count;");
+        if (completeRecord)
+        {
+            body.Add("if (queueSize != 0 && global::LuminPack.Code.LuminPackCollectionAccess.TryWriteQueueRecord(ref operationState, " + local + ", queueSize))");
+            body.Add("    goto operationComplete_RootWrite;");
+        }
         body.Add("int countPosition = operationState.BeginCollection();");
         body.Add("if (queueSize != 0)");
         body.Add("{");

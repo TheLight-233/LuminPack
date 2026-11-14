@@ -8,6 +8,45 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// roots transfer their elements through the shared scalar owner.</remarks>
 internal static class ConcurrentBagOwnerFile
 {
+    /// <summary>Writes the established bag snapshot with locks released before element formatting.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="set">The available formatter capabilities.</param>
+    /// <param name="bag">The closed bag type.</param>
+    /// <param name="scalar">The element type spelling.</param>
+    /// <param name="owner">The existing element formatter.</param>
+    /// <param name="pooledSnapshot">Whether Core exposes the checked snapshot lease.</param>
+    internal static void WriteJsonSnapshot(CodeWriter w, SharedFormatterSet set, string bag, string scalar, string owner, bool pooledSnapshot)
+    {
+        if (pooledSnapshot)
+            w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentConcurrentBagSnapshot(value, out int count, out bool pooled);");
+        else
+        {
+            w.Line("var snapshot = value.ToArray();");
+            w.Line("int count = snapshot.Length;");
+            w.Line("bool pooled = false;");
+        }
+        w.Line("try");
+        w.Open();
+        w.Line("if (count != 0)");
+        w.Open();
+        w.Line("bool isFirst = true;");
+        w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(snapshot);");
+        w.Line("int index = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("var item = " + w.A("Unsafe") + ".Add(ref first, (nint)(uint)index);");
+        JsonSequenceElementWriter.Emit(w, set, bag, scalar, owner);
+        w.Close();
+        w.Line("while (++index < count);");
+        w.Close();
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("if (pooled)");
+        w.Line("    global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(snapshot, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + scalar + ">());");
+        w.Close();
+    }
+
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
     /// <param name="fact">The closed sequence owner.</param>
@@ -256,28 +295,7 @@ internal static class ConcurrentBagOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    if (set.FindFormatter(bag)?.Supports("BagSnapshot") == true)
-                        w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentConcurrentBagSnapshot(value, out int count, out bool pooled);");
-                    else
-                    {
-                        w.Line("var snapshot = value.ToArray();");
-                        w.Line("int count = snapshot.Length;");
-                        w.Line("bool pooled = false;");
-                    }
-                    w.Line("try");
-                    w.Open();
-                    w.Line("bool isFirst = true;");
-                    w.Line("var elements = new global::System.ReadOnlySpan<" + scalar + ">(snapshot, 0, count);");
-                    w.Line("foreach (var item in elements)");
-                    w.Open();
-                    JsonSequenceElementWriter.Emit(w, set, bag, scalar, elementOwner);
-                    w.Close();
-                    w.Close();
-                    w.Line("finally");
-                    w.Open();
-                    w.Line("if (pooled)");
-                    w.Line("    global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(snapshot, false);");
-                    w.Close();
+                    WriteJsonSnapshot(w, set, bag, scalar, elementOwner, set.FindFormatter(bag)?.Supports("BagSnapshot") == true);
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();

@@ -381,14 +381,20 @@ internal sealed partial class PairedDictionaryContext
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(count);");
         W.Line("try");
         W.Open();
-        W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(" + source + ", new global::System.Span<" + Pair + ">(pairs, 0, count));");
-        W.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
+        const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+        W.Line("ref var firstPair = ref " + marshal + ".GetNotNullArrayReference(pairs);");
+        W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(" + source + ", " + marshal + ".CreateSpan(ref firstPair, count));");
         bool fused = batchRaw && BeginRawRun("pair.Key", "pair.Value",
             "ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
+        bool mixed = ParallelDictionaryWrite.SupportsMixed(this);
+        if (mixed)
+            W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ";");
         W.Line("int index = 0;");
         W.Line("do");
         W.Open();
         W.Line("ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
+        if (mixed)
+            ParallelDictionaryWrite.WriteMixedIfFits(this, "pair.Key", "pair.Value", byRef: false);
         W.Line(Key + " key = pair.Key;");
         WriteMember(Key, "key");
         W.Line(Value + " itemValue = pair.Value;");

@@ -14,15 +14,52 @@ internal static class ParallelDictionaryWrite
         "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackFixedOptions<global::LuminPack.Option.LuminPackUtf16LengthOptions>) || " +
         "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackFixedOptions<global::LuminPack.Option.LuminPackDefaultOptions>))";
 
+    /// <summary>Checks whether both members can use the fixed mixed-record writer.</summary>
+    /// <param name="c">The dictionary writer's contracts.</param>
+    /// <returns>Whether a string and a native value can share a bounded record.</returns>
+    internal static bool SupportsMixed(PairedDictionaryContext c) => c.UsesRawOrStringEntries &&
+        (c.Key == "string") != (c.Value == "string") && c.Supports("BinaryTextPair");
+
+    /// <summary>Writes a complete mixed record when the fixed profile and current room permit it.</summary>
+    /// <param name="c">The dictionary writer's contracts.</param>
+    /// <param name="key">The current key expression.</param>
+    /// <param name="value">The current value expression.</param>
+    /// <param name="byRef">Whether the native member expression denotes a storage location.</param>
+    internal static void WriteMixedIfFits(PairedDictionaryContext c, string key, string value, bool byRef)
+    {
+        var w = c.W;
+        bool textKey = c.Key == "string";
+        string rawWidth = c.Memory + ".SizeOf<" + (textKey ? c.Value : c.Key) + ">()";
+        string native = (byRef ? "in " : "") + (textKey ? value : key);
+        w.Line("if (utf16Length)");
+        w.Open();
+        w.Line("string text = " + (textKey ? key : value) + ";");
+        w.Line("if ((long)operationState.RecordRoom() - " + rawWidth + " >= sizeof(int) + (long)(text?.Length ?? 0) * sizeof(char))");
+        w.Open();
+        w.Line("ref byte record = ref operationState.Cursor;");
+        if (textKey)
+        {
+            w.Line("int written = " + Writer + ".WriteReservedUtf16Record(ref record, text);");
+            w.Line(Writer + ".Write(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), " + native + ");");
+        }
+        else
+        {
+            w.Line(Writer + ".Write(ref record, " + native + ");");
+            w.Line("int written = " + Writer + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), text);");
+        }
+        w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
+        w.Line("continue;");
+        w.Close();
+        w.Close();
+    }
+
     /// <summary>Writes a nonempty range, preserving the key-before-value load on writer growth.</summary>
     internal static void Emit(PairedDictionaryContext c, string count, bool allowMixed = true)
     {
         var w = c.W;
         string keySlot = c.Memory + ".Add(ref firstKey, (nint)(uint)index)";
         string valueSlot = c.Memory + ".Add(ref firstValue, (nint)(uint)index)";
-        bool mixed = allowMixed && c.UsesRawOrStringEntries && (c.Key == "string") != (c.Value == "string") &&
-                     c.Supports("BinaryTextPair");
-        string rawWidth = c.Memory + ".SizeOf<" + (c.Key == "string" ? c.Value : c.Key) + ">()";
+        bool mixed = allowMixed && SupportsMixed(c);
         if (mixed)
             w.Line("bool utf16Length = " + FixedUtf16LengthProfile + ";");
         w.Line("int index = 0;");
@@ -30,27 +67,7 @@ internal static class ParallelDictionaryWrite
         w.Open();
         if (mixed)
         {
-            w.Line("if (utf16Length)");
-            w.Open();
-            string text = c.Key == "string" ? keySlot : valueSlot;
-            w.Line("string text = " + text + ";");
-            w.Line("if ((long)operationState.RecordRoom() - " + rawWidth + " >= " + Writer + ".Utf16RecordBound(text))");
-            w.Open();
-            w.Line("ref byte record = ref operationState.Cursor;");
-            if (c.Key == "string")
-            {
-                w.Line("int written = " + Writer + ".WriteReservedUtf16Record(ref record, text);");
-                w.Line(Writer + ".Write(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), in " + valueSlot + ");");
-            }
-            else
-            {
-                w.Line(Writer + ".Write(ref record, in " + keySlot + ");");
-                w.Line("int written = " + Writer + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), text);");
-            }
-            w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
-            w.Line("continue;");
-            w.Close();
-            w.Close();
+            WriteMixedIfFits(c, keySlot, valueSlot, byRef: true);
             w.Line("WritePairSlow(ref operationState, " + keySlot + ", ref " + valueSlot + ");");
         }
         else

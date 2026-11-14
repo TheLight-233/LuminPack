@@ -11,9 +11,10 @@ internal static class WrapperTraversal
     /// <param name="body">The generated statements.</param>
     /// <param name="element">The scalar element type.</param>
     /// <param name="local">The nonnull wrapper expression.</param>
-    /// <remarks>A wrapper over a plain list writes the list's elements as one contiguous block; the bytes equal the wrapper's own
-    /// enumeration. Any other backing collection is counted while it is enumerated.</remarks>
-    internal static void Write(List<string> body, string element, string local)
+    /// <param name="exactArray">Whether proven array backing may write through the root's bulk record path.</param>
+    /// <remarks>A wrapper over a plain list or a proven array in a bounded output window writes one contiguous block.
+    /// Other backing collections are counted while they are enumerated.</remarks>
+    internal static void Write(List<string> body, string element, string local, bool exactArray = false)
     {
         // A string element has no contiguous raw storage, so the wrapper is counted while it is enumerated.
         if (element == "string")
@@ -31,6 +32,20 @@ internal static class WrapperTraversal
         body.Add("}");
         body.Add("else");
         body.Add("{");
+        if (exactArray)
+        {
+            body.Add("if (global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + element + ">(" + local + ") is " +
+                ContiguousOwnerFile.ArrayType(element) + " backingArray && operationState.Position >= 0 &&");
+            body.Add("    operationState.RecordRoom() >= sizeof(int) + (long)backingArray.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + element + ">())");
+            body.Add("{");
+            body.Add("var items = global::LuminPack.Code.LuminPackMarshal.CreateReadOnlySpan(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(backingArray), backingArray.Length);");
+            body.Add("if (!global::System.MemoryExtensions.Overlaps(global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(items), operationState.Buffer))");
+            body.Add("{");
+            body.Add("operationState.Write<" + element + ">(items, items.Length);");
+            body.Add("goto operationComplete_RootWrite;");
+            body.Add("}");
+            body.Add("}");
+        }
         body.Add("int wrapperPosition = operationState.BeginCollection();");
         body.Add("int wrapperCount = 0;");
         body.Add("foreach (var wrapperItem in " + local + ")");
@@ -103,9 +118,16 @@ internal static class WrapperTraversal
             return;
         }
         var lines = new List<string>();
-        Write(lines, c.Scalar, "value");
+        Write(lines, c.Scalar, "value", c.Supports("WrapperArrayWrite"));
         foreach (string line in lines)
-            c.W.Line(line);
+        {
+            switch (line)
+            {
+                case "{": c.W.Open(); break;
+                case "}": c.W.Close(); break;
+                default: c.W.Line(line); break;
+            }
+        }
     }
 
     /// <summary>Emits the checked JSON storage writer and its completed-array exit where available.</summary>
@@ -128,11 +150,24 @@ internal static class WrapperTraversal
     /// <param name="elementOwner">The compiled element formatter.</param>
     internal static void WriteJsonStorage(EnumerableOwnerContext c, string elementOwner)
     {
+        var w = c.W;
+        if (c.Supports("WrapperBuilderTraversal"))
+        {
+            w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetBuilderTraversal(value, out var builderTraversal))");
+            w.Open();
+            w.Line("bool isFirstBuilderItem = true;");
+            w.Line("while (builderTraversal.MoveNext(out var item))");
+            w.Open();
+            WriteElement("!isFirstBuilderItem");
+            w.Line("isFirstBuilderItem = false;");
+            w.Close();
+            Complete();
+            w.Close();
+        }
         if (!c.Supports("WrapperJsonStorage") ||
             c.Supports("WriteWrappedIntegers") && GenericFormatterReuse.Real(c.Scalar) is "int" or "long")
             return;
 
-        var w = c.W;
         w.Line("var wrapperStorage = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + c.Scalar + ">(value);");
         w.Line("if (wrapperStorage is global::System.Collections.Generic.List<" + c.Scalar + "> wrapperList)");
         w.Open();

@@ -357,11 +357,11 @@ internal static class ContiguousOwnerFile
                     w.Line("var array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
                     if (element.Type == "string")
                         w.Line("if (!value.IsDefault) value.AsSpan().Slice(0, global::System.Math.Min(value.Length, length)).CopyTo(array);");
-                    w.Line("var items = new global::System.Span<" + element.Type + ">(array);");
+                    w.Line("var items = " + Marshal + ".CreateSpan(ref " + Marshal + ".GetNotNullArrayReference(array), length);");
                     break;
                 default:
                     w.Line("var array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
-                    w.Line("var items = new global::System.Span<" + element.Type + ">(array);");
+                    w.Line("var items = " + Marshal + ".CreateSpan(ref " + Marshal + ".GetNotNullArrayReference(array), length);");
                     break;
             }
         }

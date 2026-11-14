@@ -30,6 +30,27 @@ internal static class LinkedListOwnerFile
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("int count = 0;");
         w.Line("var node = value.First;");
+        if (!c.Text && !c.Forwarded && c.Supports("LinkedListRawWindow"))
+        {
+            w.Line("int expectedCount = value.Count;");
+            w.Line("int width = " + c.Memory + ".SizeOf<" + c.Scalar + ">();");
+            w.Line("if (node is not null && expectedCount > 0 && operationState.Position >= 0 &&");
+            w.Line("    operationState.RecordRoom() >= (long)expectedCount * width)");
+            w.Open();
+            w.Line("ref byte cursor = ref operationState.Cursor;");
+            w.Line("int remaining = expectedCount;");
+            w.Line("do");
+            w.Open();
+            w.Line("var item = node.Value;");
+            w.Line("global::LuminPack.Core.LuminPackWriter.Write(ref cursor, in item);");
+            w.Line("cursor = ref " + c.Memory + ".Add(ref cursor, (nint)(uint)width);");
+            w.Line("node = node.Next;");
+            w.Close();
+            w.Line("while (--remaining != 0 && node is not null);");
+            w.Line("count = expectedCount - remaining;");
+            w.Line("operationState.CompleteRun(count * width);");
+            w.Close();
+        }
         w.Line("if (node is not null)");
         w.Open();
         w.Line("do");

@@ -105,6 +105,8 @@ internal static class FormatterOrderedCollectionTraits
             if (element.SpecialType == SpecialType.System_String &&
                 HasKernel("TryWriteStringQueueStorage", "LuminPackWriter", 1, true, true, SpecialType.System_Boolean))
                 result.Add("WriteStringQueueStorage");
+            if (element.IsUnmanagedType && HasKernel("TryWriteQueueRecord", "LuminPackWriter", 1, true, false))
+                result.Add("WriteQueueRecord");
             return;
         }
         var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
