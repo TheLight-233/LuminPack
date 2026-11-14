@@ -39,6 +39,8 @@ Runtime entry points and cursor state live in `src/LuminPack.Core/Core`; the opt
 
 Physical placement never changes namespaces or representations.
 
+Core reuse caches share `Utility/Pool/AtomicSlotPool<T>`, with an inline first slot and bounded overflow scans. Each slot owns its reference independently; take/store hints only choose scan starts. `ObjectPool<T>` retains one identity-checked TLS item per closed type and thread, and uses the same shared storage as writer, immutable-builder and frozen-construction caches. See [pooling and retained memory](pooling.md).
+
 ## Runtime execution model
 
 Modern Core assets provide typed JSON writer overloads for `DateOnly`, `TimeOnly`, `Int128` and `UInt128`. They format into bounded stack buffers and retain their JSON string representations (`O` for dates/times, invariant decimal for 128-bit integers). Their formatting bodies remain outside generated callers. The generator checks the referenced Core API before selecting them; consumers referencing an older or netstandard asset retain the existing string conversion path, regardless of the consumer's framework symbols.

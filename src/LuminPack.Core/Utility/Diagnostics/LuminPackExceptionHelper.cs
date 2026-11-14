@@ -12,6 +12,14 @@ namespace LuminPack.Code
     [Preserve]
     public static class LuminPackExceptionHelper
     {
+        /// <summary>Reports disposal failures after every excess pooled item has been released.</summary>
+        /// <param name="errors">The exceptions observed during the completed drain.</param>
+        [DoesNotReturn]
+        internal static void ThrowPoolDisposalException(IEnumerable<Exception> errors)
+        {
+            throw new AggregateException("One or more pooled objects failed to dispose.", errors);
+        }
+
         /// <summary>Rethrows an exception after cleanup while preserving its original stack trace.</summary>
         /// <param name="exception">The exception caught by the caller.</param>
         [DoesNotReturn]

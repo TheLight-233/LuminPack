@@ -16,6 +16,8 @@ internal static class LuminBufferWriterPoolRegressionTest
         RunCase(results, nameof(CentralSlotsAreBoundedAndUnordered), CentralSlotsAreBoundedAndUnordered);
         RunCase(results, nameof(OversizedWriterIsDisposedInsteadOfCached), OversizedWriterIsDisposedInsteadOfCached);
         RunCase(results, nameof(AtomicSlotsNeverDuplicateAnItem), AtomicSlotsNeverDuplicateAnItem);
+        RunCase(results, nameof(AtomicSlotCapacityAndDrainBoundaries), AtomicSlotCapacityAndDrainBoundaries);
+        RunCase(results, nameof(AtomicDrainPreservesItemsAfterCallbackFailure), AtomicDrainPreservesItemsAfterCallbackFailure);
         RunCase(results, nameof(WriterPoolNeverDoubleRentsOrReturnsDisposedWriter), WriterPoolNeverDoubleRentsOrReturnsDisposedWriter);
     }
 
@@ -143,7 +145,52 @@ internal static class LuminBufferWriterPoolRegressionTest
         pool.Drain(static _ => { });
     }
 
-    /// <summary>Writes r pool never double rents or returns disposed writer to the current output.</summary>
+    /// <summary>Checks empty, full, non-power-of-two and wrapped scans without assuming retention order.</summary>
+    private static void AtomicSlotCapacityAndDrainBoundaries()
+    {
+        foreach (var capacity in new[] { 0, 1, 2, 3, 16, 32, 257 })
+        {
+            var pool = new AtomicSlotPool<SlotItem>(capacity);
+            var items = Enumerable.Range(0, capacity).Select(_ => new SlotItem()).ToArray();
+            for (var cycle = 0; cycle < 5; cycle++)
+            {
+                Assert(pool.TryTake() is null, "An empty cache returned an item.");
+                foreach (var item in items)
+                    Assert(pool.TryStore(item), "A quiescent cache rejected an available slot.");
+                Assert(!pool.TryStore(new SlotItem()), "A full cache accepted an extra item.");
+                Assert(pool.ApproximateCount == capacity && pool.Snapshot().Length == capacity, "Quiescent diagnostics lost an item.");
+                var expected = new HashSet<SlotItem>(items);
+                for (var i = 0; i < capacity; i++)
+                    Assert(pool.TryTake() is { } item && expected.Remove(item), "A take duplicated or lost an item.");
+                Assert(expected.Count == 0 && pool.TryTake() is null, "The cache did not become empty.");
+            }
+            foreach (var item in items)
+                pool.TryStore(item);
+            var drained = new HashSet<SlotItem>();
+            pool.Drain(item => Assert(drained.Add(item), "Drain transferred ownership twice."));
+            Assert(drained.Count == capacity && pool.ApproximateCount == 0, "Drain left quiescent storage occupied.");
+        }
+    }
+
+    /// <summary>Checks that a failed consumer does not discard items still owned by the cache.</summary>
+    private static void AtomicDrainPreservesItemsAfterCallbackFailure()
+    {
+        var pool = new AtomicSlotPool<SlotItem>(3);
+        for (var i = 0; i < 3; i++)
+            pool.TryStore(new SlotItem());
+        try
+        {
+            pool.Drain(_ => throw new InvalidOperationException("Drain probe."));
+            Assert(false, "Drain swallowed the callback failure.");
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Drain probe.") { }
+        Assert(pool.ApproximateCount == 2, "Drain discarded items after the failing consumer.");
+        var remaining = 0;
+        pool.Drain(_ => remaining++);
+        Assert(remaining == 2 && pool.TryTake() is null, "Drain could not resume after failure.");
+    }
+
+    /// <summary>Checks concurrent writer leases and disposal state.</summary>
     private static void WriterPoolNeverDoubleRentsOrReturnsDisposedWriter()
     {
         ClearPool();
