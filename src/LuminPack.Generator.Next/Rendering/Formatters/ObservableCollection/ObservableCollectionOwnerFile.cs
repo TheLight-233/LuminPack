@@ -7,7 +7,13 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// in place.</remarks>
 internal static class ObservableCollectionOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "value.Add(item);");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "value.Add(item);",
+        jsonBefore: c => WrapperTraversal.PrepareJson(c, () =>
+        {
+            c.W.Line("value = new " + c.Sequence + "();");
+            WrapperTraversal.SizeObservableJson(c, "value");
+        }),
+        jsonAddBody: c => WrapperTraversal.AppendObservable(c, "value"), readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

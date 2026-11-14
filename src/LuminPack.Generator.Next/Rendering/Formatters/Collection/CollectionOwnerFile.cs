@@ -7,7 +7,13 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// reused one, then fills the list storage in place, or adds each element when the wrapper holds another list type.</remarks>
 internal static class CollectionOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "value.Add(item);");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "value.Add(item);",
+        jsonBefore: c => WrapperTraversal.PrepareJson(c, () =>
+        {
+            string capacity = WrapperTraversal.JsonCapacity(c);
+            string items = capacity.Length == 0 ? "" : "new global::System.Collections.Generic.List<" + c.Scalar + ">(" + capacity + ")";
+            c.W.Line("value = new " + c.Sequence + "(" + items + ");");
+        }), readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

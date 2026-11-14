@@ -6,31 +6,88 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional formatter runtime APIs against the consumer metadata.</summary>
 internal static class FormatterRuntimeTraits
 {
-    /// <summary>Checks a complete set operation against the actual referenced API.</summary>
+    /// <summary>Checks the existing listener-aware insertion API.</summary>
     /// <param name="compilation">The referenced runtime and framework metadata.</param>
-    /// <param name="collection">The framework set type.</param>
+    /// <returns>Whether the exact append operation is available.</returns>
+    internal static bool HasObservableAppend(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var collection = compilation.GetTypeByMetadataName("System.Collections.ObjectModel.ObservableCollection`1");
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && collection is not null &&
+            access.GetMembers("AppendObservable").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, collection.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, method.TypeParameters[0]));
+    }
+
+    /// <summary>Checks the existing exact sequence storage API used to size fresh observable results.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <returns>Whether the public storage operation is available.</returns>
+    internal static bool HasSequenceStorage(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var sequence = compilation.GetTypeByMetadataName("System.Collections.Generic.IEnumerable`1");
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && sequence is not null &&
+            access.GetMembers("GetSequenceStorage").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Object &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, sequence.Construct(method.TypeParameters[0])));
+    }
+
+    /// <summary>Checks the binary writer that accepts an enumerable string wrapper.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <returns>Whether the exact profile-aware operation is available.</returns>
+    internal static bool HasWrappedStringWriter(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var sequence = compilation.GetTypeByMetadataName("System.Collections.Generic.IEnumerable`1");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return access is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } &&
+            options is not null && sequence is not null && writer is not null &&
+            access.GetMembers("TryWriteWrappedStrings").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+                method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) && method.Parameters[1].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, sequence.Construct(compilation.GetSpecialType(SpecialType.System_String))));
+    }
+
+    /// <summary>Checks a complete collection operation against the actual referenced API.</summary>
+    /// <param name="compilation">The referenced runtime and framework metadata.</param>
+    /// <param name="collection">The framework collection type.</param>
     /// <param name="owner">The fully qualified operation owner.</param>
     /// <param name="name">The operation name.</param>
     /// <param name="state">The reader or writer type name.</param>
     /// <param name="result">The required result type.</param>
     /// <param name="takesCount">Whether the operation takes a count, with no profile type parameter.</param>
     /// <returns>Whether the exact public signature exists.</returns>
-    internal static bool HasSetTransfer(Compilation compilation, INamedTypeSymbol collection, string owner, string name,
+    internal static bool HasCollectionTransfer(Compilation compilation, INamedTypeSymbol collection, string owner, string name,
         string state, SpecialType result, bool takesCount)
     {
         var access = compilation.GetTypeByMetadataName(owner);
         var operationState = compilation.GetTypeByMetadataName("LuminPack.Core." + state);
         var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        bool hasProfile = !takesCount;
         if (access is null || !access.IsStatic || access.DeclaredAccessibility != Accessibility.Public ||
-            operationState is null || (!takesCount && options is null))
+            operationState is null || (hasProfile && options is null))
             return false;
         return access.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
             method.IsStatic && method.DeclaredAccessibility == Accessibility.Public &&
-            method.Arity == (takesCount ? 1 : 2) && method.ReturnType.SpecialType == result &&
+            method.Arity == (hasProfile ? 2 : 1) && method.ReturnType.SpecialType == result &&
             !method.ReturnsByRef && !method.ReturnsByRefReadonly &&
             method.TypeParameters[method.Arity - 1].HasUnmanagedTypeConstraint &&
             method.TypeParameters[method.Arity - 1].ConstraintTypes.IsEmpty &&
-            (takesCount || (method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            (!hasProfile || (method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
                 method.TypeParameters[0].ConstraintTypes.Length == 1 &&
                 SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options))) &&
             method.Parameters.Length == (takesCount ? 3 : 2) &&

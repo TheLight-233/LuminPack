@@ -8,8 +8,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class ReadOnlyCollectionOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "staged.Add(item);",
-        c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = new " + c.Sequence + "(staged);"));
+        c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">(" + WrapperTraversal.JsonCapacity(c) + ");"),
+        c => c.W.Line("value = new " + c.Sequence + "(staged);"), readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

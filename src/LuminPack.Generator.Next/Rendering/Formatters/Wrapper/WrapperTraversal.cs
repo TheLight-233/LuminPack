@@ -90,6 +90,8 @@ internal static class WrapperTraversal
     /// <param name="c">The owner context.</param>
     internal static void WriteRoot(EnumerableOwnerContext c)
     {
+        if (WriteStringStorage(c))
+            return;
         if (c.Forwarded)
         {
             c.WrapperWrite("value");
@@ -106,10 +108,27 @@ internal static class WrapperTraversal
             c.W.Line(line);
     }
 
+    /// <summary>Emits the checked JSON storage writer and its completed-array exit where available.</summary>
+    /// <param name="c">The owner context.</param>
+    internal static void WriteJsonIntegers(EnumerableOwnerContext c)
+    {
+        if (!c.Supports("WriteWrappedIntegers") || GenericFormatterReuse.Real(c.Scalar) is not ("int" or "long"))
+            return;
+
+        var w = c.W;
+        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteWrappedIntegers<TLuminProfile, " + c.Scalar + ">(ref writer, value))");
+        w.Open();
+        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+        w.Line("return;");
+        w.Close();
+    }
+
     /// <summary>Emits the builder write for an owner root.</summary>
     /// <param name="c">The owner context.</param>
     internal static void WriteBuilderRoot(EnumerableOwnerContext c)
     {
+        if (WriteStringStorage(c))
+            return;
         if (c.Forwarded)
         {
             c.BuilderWrite("value");
@@ -124,5 +143,60 @@ internal static class WrapperTraversal
         WriteBuilder(lines, c.Scalar, c.Sequence, "value");
         foreach (string line in lines)
             c.W.Line(line);
+    }
+
+    private static bool WriteStringStorage(EnumerableOwnerContext c)
+    {
+        if (!c.Text || !c.Supports("WriteWrappedStrings"))
+            return false;
+        c.W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryWriteWrappedStrings<TLuminProfile>(ref operationState, value))");
+        c.W.Line("    goto operationComplete_RootWrite;");
+        var lines = new List<string>();
+        InterfaceTraversal.Counted(lines, c.Scalar, "value");
+        foreach (var line in lines)
+            c.W.Line(line);
+        return true;
+    }
+
+    /// <summary>Emits insertion after the element formatter and checks the target's current subscribers.</summary>
+    /// <param name="c">The owner context.</param>
+    /// <param name="target">The observable target local.</param>
+    internal static void AppendObservable(EnumerableOwnerContext c, string target) =>
+        c.W.Line(c.Supports("AppendObservable") ?
+            "global::LuminPack.Code.LuminPackCollectionAccess.AppendObservable(" + target + ", item);" :
+            target + ".Add(item);");
+
+    /// <summary>Gets the optional capacity expression for a newly owned backing collection.</summary>
+    /// <param name="c">The owner context.</param>
+    /// <returns>A constructor argument, or the empty string for the original constructor.</returns>
+    internal static string JsonCapacity(EnumerableOwnerContext c) =>
+        c.Supports("WrapperJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(128)" : "";
+
+    /// <summary>Creates a fresh JSON wrapper or clears the original through its public operation.</summary>
+    /// <param name="c">The owner context.</param>
+    /// <param name="fresh">The statements that create the fresh result.</param>
+    internal static void PrepareJson(EnumerableOwnerContext c, System.Action fresh)
+    {
+        var w = c.W;
+        w.Line("if (value is null)");
+        w.Open();
+        fresh();
+        w.Close();
+        w.Line("else");
+        w.Indented(() => w.Line("value.Clear();"));
+    }
+
+    /// <summary>Sizes the constructor-owned list of a fresh observable result when the hint and storage APIs are present.</summary>
+    /// <param name="c">The owner context.</param>
+    /// <param name="target">The fresh observable target local.</param>
+    internal static void SizeObservableJson(EnumerableOwnerContext c, string target)
+    {
+        string capacity = JsonCapacity(c);
+        if (capacity.Length == 0 || !c.Supports("ObservableJsonStorage"))
+            return;
+        c.W.Line("int capacity = " + capacity + ";");
+        c.W.Line("if (capacity > 0 && global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + c.Scalar +
+            ">(" + target + ") is global::System.Collections.Generic.List<" + c.Scalar + "> backing)");
+        c.W.Indented(() => c.W.Line("backing.Capacity = capacity;"));
     }
 }

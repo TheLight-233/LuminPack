@@ -665,6 +665,8 @@ internal static class EnumerableOwnerTemplate
                         w.Line("return;");
                         w.Close();
                     }
+                    if (fact.Family.Kind == CollectionKind.Wrapper)
+                        WrapperTraversal.WriteJsonIntegers(context);
                     bool wroteFrozenRun = fact.Family.Kind == CollectionKind.Frozen &&
                         JsonIntegerRunWriter.TryEmit(w, set, sequence, scalar, "value.Items.AsSpan()", readBeforeSeparator: true);
                     if (spec.InterfaceListReuse || spec.InterfaceSetTraversal)

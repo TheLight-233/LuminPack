@@ -461,6 +461,48 @@ public class CollectionFastPathTest
         Assert.True(global::LuminPackUnitTest.ConcreteReads.Read<ImmutableArray<string>>(LuminPackSerializer.Serialize(default(ImmutableArray<string>)), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableArray<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).IsDefault);
     }
 
+    /// <summary>Checks wrapper enumeration, mutation at an output boundary and observable reuse notifications.</summary>
+    [Fact]
+    public void WrapperFastPathsPreservePublicBehavior()
+    {
+        var reversed = new Collection<string>(new ReverseEnumerableList { "a", "b" });
+        Assert.Equal(LuminPackSerializer.Serialize(new[] { "b", "a" }), LuminPackSerializer.Serialize(reversed));
+
+        var items = new List<int> { int.MinValue, 7, 9 };
+        var wrapper = new ReadOnlyCollection<int>(items);
+        var output = new MutatingJsonOutput(() => items.Capacity += 16);
+        var writer = new LuminPackJsonWriter(output, default!, 12);
+        LuminPackSerializer.SerializeJson<ReadOnlyCollection<int>, LuminPackUtf8LengthOptions>(ref writer, wrapper);
+        writer.FlushToBufferWriter();
+        Assert.Equal("[-2147483648,7,9]", output.Text);
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            var mutatedOutput = new MutatingJsonOutput(() => items.Add(11));
+            var mutatedWriter = new LuminPackJsonWriter(mutatedOutput, default!, 12);
+            LuminPackSerializer.SerializeJson<ReadOnlyCollection<int>, LuminPackUtf8LengthOptions>(ref mutatedWriter, wrapper);
+            mutatedWriter.FlushToBufferWriter();
+        });
+
+        var observable = new ObservableCollection<int> { -1 };
+        var original = observable;
+        var actions = new List<System.Collections.Specialized.NotifyCollectionChangedAction>();
+        observable.CollectionChanged += (_, e) => actions.Add(e.Action);
+        LuminPackSerializer.DeserializeJson("[1,2]", ref observable);
+        Assert.Same(original, observable);
+        Assert.Equal(new[] { 1, 2 }, observable);
+        Assert.Equal(new[]
+        {
+            System.Collections.Specialized.NotifyCollectionChangedAction.Reset,
+            System.Collections.Specialized.NotifyCollectionChangedAction.Add,
+            System.Collections.Specialized.NotifyCollectionChangedAction.Add
+        }, actions);
+    }
+
+    private sealed class ReverseEnumerableList : List<string>, IList<string>
+    {
+        IEnumerator<string> IEnumerable<string>.GetEnumerator() => Enumerable.Reverse(ToArray()).GetEnumerator();
+    }
+
     /// <summary>Checks pooled read storage never merges into stale references left in the shared pool by other code.</summary>
     [Fact]
     public void PooledReadsDoNotMergeIntoStaleElements()

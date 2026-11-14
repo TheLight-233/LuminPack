@@ -7,7 +7,18 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// capacity, or clears and grows a reused one, fills the backing array in place and publishes the size.</remarks>
 internal static class ReadOnlyCollectionBuilderOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteBuilderRoot, Read, "value.Add(item);");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteBuilderRoot, Read, "value.Add(item);",
+        jsonBefore: c => WrapperTraversal.PrepareJson(c, () =>
+        {
+            c.W.Line("value = new " + c.Sequence + "();");
+            string capacity = WrapperTraversal.JsonCapacity(c);
+            if (capacity.Length != 0)
+            {
+                c.W.Line("int capacity = " + capacity + ";");
+                c.W.Line("if (capacity > 0) value.Capacity = capacity;");
+            }
+        }),
+        readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

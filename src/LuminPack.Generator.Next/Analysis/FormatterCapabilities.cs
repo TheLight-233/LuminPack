@@ -24,6 +24,30 @@ internal static class FormatterCapabilities
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
         if (definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.Stack")
             FormatterOrderedCollectionTraits.Capture(compilation, named, definition == "System.Collections.Generic.Stack", result);
+        if (definition is "System.Collections.ObjectModel.Collection" or "System.Collections.ObjectModel.ObservableCollection" or
+            "System.Collections.ObjectModel.ReadOnlyCollection" or "System.Collections.ObjectModel.ReadOnlyObservableCollection" or
+            "System.Runtime.CompilerServices.ReadOnlyCollectionBuilder")
+        {
+            var element = named.TypeArguments[0];
+            if (FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
+                result.Add("WrapperJsonCapacity");
+            if (element.SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasWrappedStringWriter(compilation))
+                result.Add("WriteWrappedStrings");
+            if (compilation.GetTypeByMetadataName("System.Collections.Generic.IEnumerable`1") is { } enumerable)
+            {
+                if (element.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64 &&
+                    FormatterRuntimeTraits.HasCollectionTransfer(compilation, enumerable, "LuminPack.Code.LuminPackCollectionAccess",
+                        "TryWriteWrappedIntegers", "LuminPackJsonWriter", SpecialType.System_Boolean, takesCount: false))
+                    result.Add("WriteWrappedIntegers");
+            }
+        }
+        if (definition is "System.Collections.ObjectModel.ObservableCollection" or "System.Collections.ObjectModel.ReadOnlyObservableCollection")
+        {
+            if (FormatterRuntimeTraits.HasObservableAppend(compilation))
+                result.Add("AppendObservable");
+            if (FormatterRuntimeTraits.HasSequenceStorage(compilation))
+                result.Add("ObservableJsonStorage");
+        }
         if (definition == "System.Collections.Generic.PriorityQueue" && FormatterOrderedCollectionTraits.HasPriorityTraversal(compilation, named))
         {
             result.Add("PriorityQueueTraversal");
@@ -90,7 +114,7 @@ internal static class FormatterCapabilities
             var element = named.TypeArguments[0];
             if (FormatterRuntimeTraits.CanGroupSmallHashSetWrites(element, compilation))
                 result.Add("SmallHashSetWrite");
-            if (modern && !unity && RawCallbackFreeSetElement(element) && FormatterRuntimeTraits.HasSetTransfer(compilation, named,
+            if (modern && !unity && RawCallbackFreeSetElement(element) && FormatterRuntimeTraits.HasCollectionTransfer(compilation, named,
                     "LuminPack.Code.LuminPackMarshal", "ReadRawHashSet", "LuminPackReader", SpecialType.System_Void, takesCount: true))
                 result.Add("ReadRawHashSet");
         }
@@ -106,10 +130,10 @@ internal static class FormatterCapabilities
                 result.Add("WriteCheckedStringSpan");
             if (element.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64)
             {
-                if (FormatterRuntimeTraits.HasSetTransfer(compilation, named, "LuminPack.Utility.LuminTreeStorage",
+                if (FormatterRuntimeTraits.HasCollectionTransfer(compilation, named, "LuminPack.Utility.LuminTreeStorage",
                         "TryWriteIntegerSortedSetJson", "LuminPackJsonWriter", SpecialType.System_Boolean, takesCount: false))
                     result.Add("SortedSetIntegerTraversal");
-                if (FormatterRuntimeTraits.HasSetTransfer(compilation, named, "LuminPack.Utility.LuminTreeStorage",
+                if (FormatterRuntimeTraits.HasCollectionTransfer(compilation, named, "LuminPack.Utility.LuminTreeStorage",
                         "TryReadIntegerSortedSetJson", "LuminPackJsonReader", SpecialType.System_Boolean, takesCount: false))
                     result.Add("SortedSetIntegerConstruction");
             }
@@ -169,7 +193,7 @@ internal static class FormatterCapabilities
             if (FormatterFrozenTraits.Available(compilation, "Set", 1))
                 result.Add("RentFrozenSet");
             if (RawCallbackFreeSetElement(element) && compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1") is { } hashSet &&
-                FormatterRuntimeTraits.HasSetTransfer(compilation, hashSet, "LuminPack.Utility.LuminFrozenConstruction",
+                FormatterRuntimeTraits.HasCollectionTransfer(compilation, hashSet, "LuminPack.Utility.LuminFrozenConstruction",
                     "AddRawSetItems", "LuminPackReader", SpecialType.System_Void, takesCount: true))
                 result.Add("ReadFrozenRawSetItems");
         }
