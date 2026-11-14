@@ -9,6 +9,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// adds each pair.</remarks>
 internal static partial class SortedListOwnerFile
 {
+    private const string ArrayReference = "global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference";
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Add(key!, itemValue);", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
@@ -28,16 +29,13 @@ internal static partial class SortedListOwnerFile
         w.Open();
         w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetSortedListStorage(value, out var storedKeys, out var storedValues))");
         w.Open();
-        w.Line("var keySpan = new global::System.ReadOnlySpan<" + c.Key + ">(storedKeys, 0, count);");
-        w.Line("var valueSpan = new global::System.ReadOnlySpan<" + c.Value + ">(storedValues, 0, count);");
-        bool fused = c.BeginRawRun("keySpan[index]", "valueSpan[index]");
-        w.Line("for (int index = 0; index < keySpan.Length; index++)");
-        w.Open();
-        w.Line(c.Key + " key = keySpan[index];");
-        c.WriteMember(c.Key, "key");
-        w.Line(c.Value + " itemValue = valueSpan[index];");
-        c.WriteMember(c.Value, "itemValue");
-        w.Close();
+        w.Line("if ((uint)count > (uint)storedKeys!.Length || (uint)count > (uint)storedValues!.Length)");
+        w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();"));
+        w.Line("ref var firstKey = ref " + ArrayReference + "(storedKeys);");
+        w.Line("ref var firstValue = ref " + ArrayReference + "(storedValues);");
+        bool fused = c.BeginRawRun(c.Memory + ".Add(ref firstKey, (nint)(uint)index)",
+            c.Memory + ".Add(ref firstValue, (nint)(uint)index)");
+        ParallelDictionaryWrite.Emit(c, "count");
         if (fused)
             w.Close();
         w.Close();
@@ -51,13 +49,9 @@ internal static partial class SortedListOwnerFile
         w.Line("values = global::System.Buffers.ArrayPool<" + c.Value + ">.Shared.Rent(count);");
         w.Line("value.Keys.CopyTo(keys, 0);");
         w.Line("value.Values.CopyTo(values, 0);");
-        w.Line("for (int index = 0; index < count; index++)");
-        w.Open();
-        w.Line(c.Key + " key = keys[index];");
-        c.WriteMember(c.Key, "key");
-        w.Line(c.Value + " itemValue = values[index];");
-        c.WriteMember(c.Value, "itemValue");
-        w.Close();
+        w.Line("ref var firstKey = ref " + ArrayReference + "(keys);");
+        w.Line("ref var firstValue = ref " + ArrayReference + "(values);");
+        ParallelDictionaryWrite.Emit(c, "count", allowMixed: false);
         w.Close();
         w.Line("finally");
         w.Open();
@@ -89,7 +83,10 @@ internal static partial class SortedListOwnerFile
         w.Line("try");
         w.Open();
         w.Line("values = global::System.Buffers.ArrayPool<" + c.Value + ">.Shared.Rent(length);");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("ref var firstKey = ref " + ArrayReference + "(keys);");
+        w.Line("ref var firstValue = ref " + ArrayReference + "(values);");
+        w.Line("int index = 0;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -100,9 +97,10 @@ internal static partial class SortedListOwnerFile
             w.Line("if (k is null)");
             w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(\"key\");"));
         }
-        w.Line("keys[index] = k!;");
-        w.Line("values[index] = v;");
+        w.Line(c.Memory + ".Add(ref firstKey, (nint)(uint)index) = k!;");
+        w.Line(c.Memory + ".Add(ref firstValue, (nint)(uint)index) = v;");
         w.Close();
+        w.Line("while (++index < length);");
         // Keys already in order are stored directly; other input is sorted first, and duplicates reach the bulk construction.
         w.Line("value = new " + list + "(length);");
         w.Line("if (!global::LuminPack.Code.LuminPackCollectionAccess.TryFillSortedList(value, keys, values, length))");
@@ -130,6 +128,7 @@ internal static partial class SortedListOwnerFile
         w.Indented(() => w.Line("value = new " + list + "(length);"));
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
+        w.Line("if (length == 0) goto operationComplete_RootRead;");
         bool append = c.Supports("AppendSortedList");
         if (append)
         {
@@ -137,7 +136,8 @@ internal static partial class SortedListOwnerFile
             w.Line("var appendCulture = global::System.Globalization.CultureInfo.CurrentCulture;");
             w.Line("bool canAppendOrdered = global::LuminPack.Code.LuminPackCollectionAccess.CanAppendSortedListOrdered(value);");
         }
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int remaining = length;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -145,5 +145,6 @@ internal static partial class SortedListOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line(append ? "if (!canAppendOrdered || !global::System.Object.ReferenceEquals(value, appendDestination) || !global::System.Object.ReferenceEquals(global::System.Globalization.CultureInfo.CurrentCulture, appendCulture) || !global::LuminPack.Code.LuminPackCollectionAccess.TryAppendSortedListOrdered(value, k!, v, true)) value.Add(k!, v);" : "value.Add(k!, v);");
         w.Close();
+        w.Line("while (--remaining != 0);");
     }
 }

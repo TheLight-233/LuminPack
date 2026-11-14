@@ -62,8 +62,13 @@ internal static class FrozenSetOwnerFile
         else c.PooledRead(() =>
         {
             w.Blank();
-            w.Line("for (int index = 0; index < length; index++)");
-            w.Indented(() => w.Line("hashSet.Add(pooled[index]);"));
+            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("hashSet.Add(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
+            w.Close();
+            w.Line("while (++index < length);");
             w.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(hashSet);");
         });
         if (rented)

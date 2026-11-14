@@ -16,6 +16,8 @@ internal static partial class SortedListOwnerFile
         w.Line("try");
         w.Open();
         w.Line("values = global::System.Buffers.ArrayPool<" + c.Value + ">.Shared.Rent(length);");
+        w.Line("ref var firstKey = ref " + ArrayReference + "(keys);");
+        w.Line("ref var firstValue = ref " + ArrayReference + "(values);");
         w.Line("if (" + access + ".TryGetSortedListStorage(value, out var priorKeys, out var priorValues))");
         w.Open();
         w.Line("global::System.Array.Copy(priorKeys!, keys, reuseCount);");
@@ -23,43 +25,52 @@ internal static partial class SortedListOwnerFile
         w.Close();
         w.Line("else");
         w.Open();
-        w.Line("for (int index = 0; index < reuseCount; index++)");
+        w.Line("if (reuseCount != 0)");
         w.Open();
-        w.Line("keys[index] = value.Keys[index];");
-        w.Line("values[index] = value.Values[index];");
+        w.Line("int index = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line(c.Memory + ".Add(ref firstKey, (nint)(uint)index) = value.Keys[index];");
+        w.Line(c.Memory + ".Add(ref firstValue, (nint)(uint)index) = value.Values[index];");
+        w.Close();
+        w.Line("while (++index < reuseCount);");
         w.Close();
         w.Close();
         w.Line("value.Clear();");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int pairIndex = 0;");
+        w.Line("do");
         w.Open();
+        w.Line("ref var keySlot = ref " + c.Memory + ".Add(ref firstKey, (nint)(uint)pairIndex);");
+        w.Line("ref var valueSlot = ref " + c.Memory + ".Add(ref firstValue, (nint)(uint)pairIndex);");
         if (c.Key == "string" || c.Key.StartsWith("global::System.Nullable<", System.StringComparison.Ordinal))
         {
-            w.Line("string? priorKey = index < reuseCount ? keys[index] : null;");
+            w.Line("string? priorKey = pairIndex < reuseCount ? keySlot : null;");
             w.Line("string key = priorKey!;");
             c.ReadMember(c.Key, "key");
-            w.Line(c.Value + " item = priorKey is not null && global::System.String.Equals(key, priorKey, global::System.StringComparison.Ordinal) ? values[index] : default!;");
+            w.Line(c.Value + " item = priorKey is not null && global::System.String.Equals(key, priorKey, global::System.StringComparison.Ordinal) ? valueSlot : default!;");
         }
         else
         {
             w.Line(c.Key + " key = default;");
             c.ReadMember(c.Key, "key");
-            w.Line(c.Value + " item = index < reuseCount && global::System.Collections.Generic.EqualityComparer<" + c.Key + ">.Default.Equals(key, keys[index]) ? values[index] : default!;");
+            w.Line(c.Value + " item = pairIndex < reuseCount && global::System.Collections.Generic.EqualityComparer<" + c.Key + ">.Default.Equals(key, keySlot) ? valueSlot : default!;");
         }
 
         c.ReadMember(c.Value, "item");
         if (c.Key == "string" || c.Key.StartsWith("global::System.Nullable<", System.StringComparison.Ordinal))
             w.Line("if (key is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(\"key\");");
-        w.Line("keys[index] = key;");
-        w.Line("values[index] = item;");
-        w.Line("completed = index + 1;");
+        w.Line("keySlot = key;");
+        w.Line("valueSlot = item;");
+        w.Line("completed = pairIndex + 1;");
         w.Close();
+        w.Line("while (++pairIndex < length);");
         w.Line("completed = -1;");
         w.Line("if (!" + access + ".TryFillSortedList(value, keys, values, length))");
-        w.Line("    for (int index = 0; index < length; index++) value.Add(keys[index], values[index]);");
+        w.Indented(() => w.Line("ReplayPairs(value, keys, values, length);"));
         w.Close();
         w.Line("catch (global::System.Exception error) when (completed >= 0)");
         w.Open();
-        w.Line("for (int index = 0; index < completed; index++) value.Add(keys[index], values![index]);");
+        w.Line("if (completed != 0) ReplayPairs(value, keys, values!, completed);");
         w.Line("global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(error);");
         w.Close();
         w.Line("finally");
@@ -68,6 +79,19 @@ internal static partial class SortedListOwnerFile
         w.Line("if (values is not null) global::System.Buffers.ArrayPool<" + c.Value + ">.Shared.Return(values, true);");
         w.Close();
         w.Line("goto operationComplete_RootRead;");
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static void ReplayPairs(" + c.Dictionary + " destination, " + ContiguousOwnerFile.ArrayType(c.Key) + " keys, " +
+            ContiguousOwnerFile.ArrayType(c.Value) + " values, int count)");
+        w.Open();
+        w.Line("ref var firstKey = ref " + ArrayReference + "(keys);");
+        w.Line("ref var firstValue = ref " + ArrayReference + "(values);");
+        w.Line("int index = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("destination.Add(" + c.Memory + ".Add(ref firstKey, (nint)(uint)index), " + c.Memory + ".Add(ref firstValue, (nint)(uint)index));");
+        w.Close();
+        w.Line("while (++index < count);");
+        w.Close();
         w.Close();
     }
 }

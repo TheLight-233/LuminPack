@@ -30,18 +30,18 @@ internal static class FrozenDictionaryOwnerFile
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("var keys = value.Keys.AsSpan();");
         w.Line("var values = value.Values.AsSpan();");
-        w.Line("int written = 0;");
-        w.Line("while (written < keys.Length)");
+        w.Line("int pairCount = keys.Length;");
+        w.Line("if (pairCount != 0)");
         w.Open();
-        w.Line(c.Key + " key = keys[written];");
-        w.Line(c.Value + " itemValue = values[written];");
-        w.Line("written++;");
-        c.WriteMember(c.Key, "key");
-        c.WriteMember(c.Value, "itemValue");
+        w.Line("if (values.Length < pairCount)");
+        w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();"));
+        w.Line("ref var firstKey = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(keys);");
+        w.Line("ref var firstValue = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(values);");
+        ParallelDictionaryWrite.Emit(c, "pairCount");
         w.Close();
         w.Line("operationState.EndCollection(countPosition, count);");
         w.Line("operationState.CheckBuffer();");
-        w.Line("if (written != count)");
+        w.Line("if (pairCount != count)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();"));
     }
 
@@ -58,7 +58,8 @@ internal static class FrozenDictionaryOwnerFile
         w.Line(rented ? "var dict = global::LuminPack.Utility.LuminFrozenConstruction.RentDictionary<" + c.Key + ", " + c.Value + ">(length);" :
             "var dict = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">(length);");
         if (rented) { w.Line("try"); w.Open(); }
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int remaining = length;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -66,6 +67,7 @@ internal static class FrozenDictionaryOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line("dict.Add(k!, v);");
         w.Close();
+        w.Line("while (--remaining != 0);");
         w.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");
         if (rented)
         {

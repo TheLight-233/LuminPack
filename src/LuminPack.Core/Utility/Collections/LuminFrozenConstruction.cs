@@ -83,12 +83,13 @@ public static class LuminFrozenConstruction
         reader.EnsureReadable(reader.Position, bytes);
         ref byte source = ref reader.PeekInput(0, out _);
         reader.Advance(bytes);
-        while (count > 0)
+        if (count == 0)
+            return;
+        do
         {
             set.Add(LuminPackReader.Read<T>(ref source));
             source = ref Unsafe.Add(ref source, width);
-            count--;
-        }
+        } while (--count != 0);
     }
 
     /// <summary>Writes matching scalar key/value arrays after one complete payload reservation.</summary>
@@ -108,14 +109,18 @@ public static class LuminFrozenConstruction
         int bytes = checked(keys.Length * checked(keyWidth + valueWidth));
         writer.EnsureAdditionalCapacity(checked(bytes + 4));
         writer.WriteCollectionHeader(keys.Length);
-        ref byte destination = ref MemoryMarshal.GetReference(writer.Buffer.Slice(writer.Position, bytes));
-        ref TKey firstKey = ref MemoryMarshal.GetReference(keys);
-        ref TValue firstValue = ref MemoryMarshal.GetReference(values);
-        for (nuint i = 0; i < (nuint)(uint)keys.Length; i++)
+        if (!keys.IsEmpty)
         {
-            WriteScalar(ref destination, ref Unsafe.Add(ref firstKey, (nint)i));
-            WriteScalar(ref Unsafe.Add(ref destination, keyWidth), ref Unsafe.Add(ref firstValue, (nint)i));
-            destination = ref Unsafe.Add(ref destination, keyWidth + valueWidth);
+            ref byte destination = ref MemoryMarshal.GetReference(writer.Buffer.Slice(writer.Position, bytes));
+            ref TKey firstKey = ref MemoryMarshal.GetReference(keys);
+            ref TValue firstValue = ref MemoryMarshal.GetReference(values);
+            int index = 0;
+            do
+            {
+                WriteScalar(ref destination, ref Unsafe.Add(ref firstKey, (nint)(uint)index));
+                WriteScalar(ref Unsafe.Add(ref destination, keyWidth), ref Unsafe.Add(ref firstValue, (nint)(uint)index));
+                destination = ref Unsafe.Add(ref destination, keyWidth + valueWidth);
+            } while (++index < keys.Length);
         }
         writer.Advance(bytes);
         writer.CheckBuffer();

@@ -241,7 +241,8 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("ConcurrentBinaryTextPair");
         if ((definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or
-             "System.Collections.Generic.IReadOnlyDictionary") && modern && !unity &&
+             "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Generic.SortedList" or
+             "System.Collections.Frozen.FrozenDictionary") && modern && !unity &&
             ((named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType) ||
              (named.TypeArguments[1].SpecialType == SpecialType.System_String && named.TypeArguments[0].IsUnmanagedType)) &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))

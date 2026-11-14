@@ -30,6 +30,8 @@ internal static class DictionaryJsonReuseEmitter
         w.Line("int count = 0;");
         w.Line("try");
         w.Open();
+        w.Line("ref var firstEntry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(entries);");
+        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
         if (key == "string")
         {
             w.Line("int oldIndex = 0;");
@@ -65,11 +67,17 @@ internal static class DictionaryJsonReuseEmitter
         w.Line("entries[count++] = new " + pair + "(key!, itemValue);");
         w.Close();
         w.Line("value.Clear();");
-        w.Line("for (int index = 0; index < count; index++)");
+        w.Line("if (count != 0)");
         w.Open();
-        w.Line("var key = entries[index].Key;");
-        w.Line("var itemValue = entries[index].Value;");
+        w.Line("int index = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("var entry = " + unsafeType + ".Add(ref firstEntry, (nint)(uint)index);");
+        w.Line("var key = entry.Key;");
+        w.Line("var itemValue = entry.Value;");
         w.Line(store);
+        w.Close();
+        w.Line("while (++index < count);");
         w.Close();
         w.Close();
         w.Line("finally");
