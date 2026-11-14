@@ -19,18 +19,33 @@ internal static class InterfaceJsonTraversal
         const string collections = "global::System.Collections.Generic.";
         string firstType = collections + (setInterface ? "HashSet" : "List") + "<" + scalar + ">";
         string secondType = setInterface ? collections + "SortedSet<" + scalar + ">" : ContiguousOwnerFile.ArrayType(scalar);
+        bool frozenSet = setInterface && set.FindFormatter(sequence)?.Supports("FrozenSetInterfaceTraversal") == true;
+        string frozenType = "global::System.Collections.Frozen.FrozenSet<" + scalar + ">";
         string memory = w.A("Unsafe");
         w.Line("var actualType = value.GetType();");
         w.Line("if (actualType == typeof(" + firstType + "))");
         w.Indented(() => w.Line("WriteKnown(ref writer, " + memory + ".As<" + firstType + ">(value));"));
         w.Line("else if (actualType == typeof(" + secondType + "))");
         w.Indented(() => w.Line("WriteOther(ref writer, " + memory + ".As<" + secondType + ">(value));"));
+        if (frozenSet)
+        {
+            w.Line("#if NET8_0_OR_GREATER");
+            w.Line("else if (value is " + frozenType + " frozen)");
+            w.Indented(() => w.Line("WriteFrozen(ref writer, frozen);"));
+            w.Line("#endif");
+        }
         w.Line("else");
         w.Indented(() => w.Line("WriteInterface(ref writer, value);"));
         w.Blank();
         EmitLoop("WriteKnown", firstType);
         EmitLoop("WriteOther", secondType);
         EmitLoop("WriteInterface", sequence);
+        if (frozenSet)
+        {
+            w.Line("#if NET8_0_OR_GREATER");
+            EmitLoop("WriteFrozen", frozenType);
+            w.Line("#endif");
+        }
 
         void EmitLoop(string method, string type)
         {

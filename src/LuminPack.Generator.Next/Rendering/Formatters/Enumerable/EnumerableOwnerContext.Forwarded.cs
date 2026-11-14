@@ -159,7 +159,21 @@ internal sealed partial class EnumerableOwnerContext
 
         W.Line("try");
         W.Open();
+        if (Text && Supports("WriteCheckedStringSpan"))
+        {
+            W.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+            W.Open();
+            W.Line("operationState.EnsureAdditionalCapacity(4);");
+            W.Line("operationState.WriteCollectionHeader(count);");
+            W.Line("operationState.WriteCheckedStrings<TLuminProfile>(new global::System.ReadOnlySpan<string>(snapshot, 0, count));");
+            W.Line("operationState.CheckBuffer();");
+            W.Close();
+            W.Line("else");
+            W.Open();
+        }
         WriteSpan("new global::System.ReadOnlySpan<" + Scalar + ">(snapshot, 0, count)");
+        if (Text && Supports("WriteCheckedStringSpan"))
+            W.Close();
         W.Close();
         W.Line("finally");
         W.Open();
@@ -239,6 +253,17 @@ internal sealed partial class EnumerableOwnerContext
         {
             W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
             W.Line("operationState.WriteCollectionHeader(count);");
+            bool checkedRun = concurrent && Supports("WriteCheckedStringSpan");
+            if (checkedRun)
+            {
+                W.Line("if (" + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+                W.Open();
+                W.Line("var items = new global::System.Span<string>(snapshot, 0, count);");
+                W.Line("global::System.MemoryExtensions.Reverse(items);");
+                W.Line("operationState.WriteCheckedStrings<TLuminProfile>(items);");
+                W.Close();
+                W.Line("else");
+            }
             W.Line("if (count != 0)");
             W.Open();
             W.Line("ref var first = ref " + PackMarshal + ".GetNotNullArrayReference(snapshot);");

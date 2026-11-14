@@ -301,8 +301,15 @@ internal static class ImmutableInterfaceOwnerFile
             CandidateTextSetRead(c);
             return;
         }
-        if (c.Sequence.StartsWith(Namespace + "IImmutableSet<", System.StringComparison.Ordinal) &&
-            c.Supports("BuildFrameworkImmutableHashSet"))
+        if (c.Supports("BuildBinaryImmutableSortedSet"))
+        {
+            c.PooledRead(() => w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateImmutableSortedSet(pooled, length);"));
+            return;
+        }
+        bool buildHashTree = c.Supports("BuildBinaryImmutableHashSet");
+        bool buildFrameworkInterface = c.Sequence.StartsWith(Namespace + "IImmutableSet<", System.StringComparison.Ordinal) &&
+            c.Supports("BuildFrameworkImmutableHashSet");
+        if (buildHashTree || buildFrameworkInterface)
         {
             w.Line("if (length == 1)");
             w.Open();
@@ -311,9 +318,12 @@ internal static class ImmutableInterfaceOwnerFile
             w.Line("value = global::System.Collections.Immutable.ImmutableHashSet.Create(item);");
             w.Line("goto operationComplete_RootRead;");
             w.Close();
-            c.PooledRead(() => w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(pooled, length);"),
-                rawBlock: c.RawTreeElements);
-            return;
+            if (buildFrameworkInterface)
+            {
+                c.PooledRead(() => w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(pooled, length);"),
+                    rawBlock: c.RawTreeElements);
+                return;
+            }
         }
         string family = Concrete(c);
         if (family == "ImmutableStack" && c.RawTreeElements)
@@ -441,6 +451,11 @@ internal static class ImmutableInterfaceOwnerFile
             w.Line("goto operationComplete_RootRead;");
             w.Close();
             w.Blank();
+        }
+        if (c.Supports("BuildBinaryImmutableHashSet"))
+        {
+            w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateImmutableHashSet(pooled, length);");
+            return;
         }
         string family = Concrete(c).Substring(9);
         ImmutableBuilderLifetime.Begin(w, family, c.Scalar, c.Supports("ImmutableBuilder"), "builder");

@@ -64,6 +64,9 @@ internal static class InterfaceOwnerFile
         string scalar = c.Scalar;
         string arrayType = ContiguousOwnerFile.ArrayType(scalar);
         string type = "global::System.Collections.Generic." + (setInterface ? "HashSet" : "List") + "<" + scalar + ">";
+        string sorted = "global::System.Collections.Generic.SortedSet<" + scalar + ">";
+        string frozen = "global::System.Collections.Frozen.FrozenSet<" + scalar + ">";
+        bool frozenSet = setInterface && c.Supports("FrozenSetInterfaceTraversal");
         bool outlineFallback = c.Counted || setInterface;
         bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
         w.Line("if (value.GetType() == typeof(" + type + "))");
@@ -98,6 +101,18 @@ internal static class InterfaceOwnerFile
             }
             w.Close();
         }
+        if (setInterface)
+        {
+            w.Line("else if (value.GetType() == typeof(" + sorted + "))");
+            w.Indented(() => w.Line("WriteSorted(ref operationState, " + c.Memory + ".As<" + sorted + ">(value));"));
+            if (frozenSet)
+            {
+                w.Line("#if NET8_0_OR_GREATER");
+                w.Line("else if (value is " + frozen + " frozen)");
+                w.Indented(() => w.Line("WriteFrozen(ref operationState, frozen);"));
+                w.Line("#endif");
+            }
+        }
         w.Line("else");
         if (outlineFallback)
             w.Indented(() => w.Line("WriteInterface(ref operationState, value);"));
@@ -129,6 +144,14 @@ internal static class InterfaceOwnerFile
         }
         if (outlineFallback)
             WriteCounted("WriteInterface", c.Sequence);
+        if (setInterface)
+            WriteCounted("WriteSorted", sorted);
+        if (frozenSet)
+        {
+            w.Line("#if NET8_0_OR_GREATER");
+            WriteCounted("WriteFrozen", frozen);
+            w.Line("#endif");
+        }
         if (c.Text)
         {
             w.Line(w.MethodImpl("NoInlining"));
@@ -141,7 +164,7 @@ internal static class InterfaceOwnerFile
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static void " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
             w.Open();
-            c.CountedWrite("items", outlineText: c.Text && (!setInterface || method != "WriteKnown"));
+            c.CountedWrite("items", outlineText: c.Text && (!setInterface || method == "WriteInterface"));
             w.Close();
             w.Blank();
         }

@@ -143,6 +143,12 @@ internal static class FormatterCapabilities
                     FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateOrderedSetIfSupported"))
                     result.Add("BuildOrderedImmutableSortedSet");
             }
+            if (definition == "System.Collections.Immutable.ImmutableSortedSet" &&
+                FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateImmutableSortedSet"))
+                result.Add("BuildBinaryImmutableSortedSet");
+            if (definition == "System.Collections.Immutable.ImmutableHashSet" &&
+                FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateImmutableHashSet"))
+                result.Add("BuildBinaryImmutableHashSet");
             if (modern && !unity && definition == "System.Collections.Immutable.ImmutableHashSet" &&
                 FormatterImmutableTraits.IsIdentityHashElement(compilation, element) &&
                 FormatterImmutableTraits.HasIdentityHashSetFactory(compilation))
@@ -237,8 +243,17 @@ internal static class FormatterCapabilities
                 result.Add("BagRawWrite");
         }
 
+        if (definition is "System.Collections.Concurrent.ConcurrentBag" or "System.Collections.Concurrent.ConcurrentStack" &&
+            named.TypeArguments[0].SpecialType == SpecialType.System_String &&
+            FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteCheckedStrings", named.TypeArguments[0]))
+            result.Add("WriteCheckedStringSpan");
+
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.CanStageStack(compilation, named.TypeArguments[0]))
             result.Add("StageConcurrentStack");
+        if (definition == "System.Collections.Generic.IReadOnlySet" && modern &&
+            compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1") is { } frozenSet &&
+            frozenSet.Construct(named.TypeArguments[0]).AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, named)))
+            result.Add("FrozenSetInterfaceTraversal");
         if ((definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
             or "System.Collections.Immutable.ImmutableArray" or "System.Collections.Immutable.ImmutableList" or "System.Collections.Immutable.ImmutableQueue"
             or "System.Collections.Immutable.ImmutableStack" or "System.Collections.Immutable.ImmutableHashSet" or "System.Collections.Immutable.ImmutableSortedSet" ||
