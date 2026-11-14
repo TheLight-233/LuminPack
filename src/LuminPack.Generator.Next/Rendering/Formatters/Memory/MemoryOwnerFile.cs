@@ -28,12 +28,12 @@ internal static class MemoryOwnerFile
             (w, c) => Read(w, c, definition, element, declared),
             (w, c) => JsonWrite(w, c, definition, element, owner, set, declared),
             (w, c) => JsonRead(w, c, element, declared, owner),
-            outlineJson: true, outlineBinaryWrite: definition == GenericIdentity.ReadOnlySequence);
+            outlineJson: true, outlineBinaryWrite: definition == GenericIdentity.ReadOnlySequence || element == "string");
     }
 
-    private static string Span(string definition) => definition switch
+    private static string Span(string definition, string element) => definition switch
     {
-        GenericIdentity.ArraySegment => "value.AsSpan()",
+        GenericIdentity.ArraySegment => "new global::System.ReadOnlySpan<" + element + ">(value.Array, value.Offset, value.Count)",
         _ => "value.Span",
     };
 
@@ -83,16 +83,24 @@ internal static class MemoryOwnerFile
 
         if (element != "string")
         {
-            w.Line("global::System.ReadOnlySpan<" + element + "> items = " + Span(definition) + ";");
+            w.Line("global::System.ReadOnlySpan<" + element + "> items = " + Span(definition, element) + ";");
             w.Line("writer.Write<" + element + ">(items, items.Length);");
             w.Line("writer.CheckBuffer();");
             return;
         }
 
-        w.Line("var span = " + Span(definition) + ";");
+        w.Line("global::System.ReadOnlySpan<string> span = " + Span(definition, element) + ";");
         w.Line("int countPosition = writer.BeginCollection();");
-        w.Line("for (int index = 0; index < span.Length; index++)");
-        w.Indented(() => w.Line("writer.Write<" + c.Profile + ">(span[index]);"));
+        w.Line("if (!span.IsEmpty)");
+        w.Open();
+        w.Line("ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);");
+        w.Line("int index = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("writer.Write<" + c.Profile + ">(global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)index));");
+        w.Close();
+        w.Line("while (++index < span.Length);");
+        w.Close();
         w.Line("writer.EndCollection(countPosition, span.Length);");
         w.Line("writer.CheckBuffer();");
     }
@@ -107,16 +115,25 @@ internal static class MemoryOwnerFile
         w.Line("return;");
         w.Close();
         w.Blank();
-        w.Line("var array = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + element + ">(length);");
+        const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+        w.Line("var array = " + marshal + ".AllocateUninitializedArray<" + element + ">(length);");
         if (element == "string")
         {
-            w.Line("for (int index = 0; index < length; index++)");
-            w.Indented(() => w.Line("reader.Read<" + c.Profile + ">(ref array[index]);"));
+            w.Line("if (length != 0)");
+            w.Open();
+            w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(array);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("reader.Read<" + c.Profile + ">(ref " + unsafeType + ".Add(ref first, (nint)(uint)index));");
+            w.Close();
+            w.Line("while (++index < length);");
+            w.Close();
         }
         else
         {
             w.Line("if (length != 0)");
-            w.Indented(() => w.Line("reader.Read(ref " + unsafeType + ".As<" + element + ", byte>(ref array[0]), unchecked(length * " +
+            w.Indented(() => w.Line("reader.Read(ref " + unsafeType + ".As<" + element + ", byte>(ref " + marshal + ".GetNotNullArrayReference(array)), unchecked(length * " +
                 unsafeType + ".SizeOf<" + element + ">()));"));
         }
         w.Line("value = new " + declared + "(array);");
@@ -148,7 +165,7 @@ internal static class MemoryOwnerFile
         }
         else
         {
-            WriteItems(Span(definition));
+            WriteItems(Span(definition, element));
         }
         w.Line("writer.WriteArrayEnd<" + c.Profile + ">();");
 

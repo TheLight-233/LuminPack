@@ -38,7 +38,7 @@ internal static class ConcurrentQueueStringOwnerFile
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string code = w.A("LuminPackCode");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
+        string marshal = w.A("LuminPackMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -177,13 +177,18 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("ref var first = ref " + marshal + ".GetReference<" + itemType + ">(pooled.AsSpan(0, length));");
-                    w.Line("for (int i = 0; i < length; i++)");
+                    w.Line("if (length != 0)");
+                    w.Open();
+                    w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(pooled);");
+                    w.Line("int i = 0;");
+                    w.Line("do");
                     w.Open();
                     w.Line(itemType + " item = default !;");
                     ForwardedElementRead.Emit(w, itemType, "operationState", "item",
                         element + ".Read<TLuminProfile>(ref operationState, ref item);");
-                    w.Line(memory + ".Add(ref first, unchecked((nint)(uint)(i))) = item;");
+                    w.Line(memory + ".Add(ref first, (nint)(uint)i) = item;");
+                    w.Close();
+                    w.Line("while (++i < length);");
                     w.Close();
                     w.Blank();
                     w.Line("value = new " + queue + "(length == pooled.Length");
@@ -207,13 +212,17 @@ internal static class ConcurrentQueueStringOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("value.Clear();");
-                    w.Line("for (int i2 = 0; i2 < length; i2++)");
+                    w.Line("if (length == 0)");
+                    w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+                    w.Line("int remaining = length;");
+                    w.Line("do");
                     w.Open();
                     w.Line(itemType + " v = default !;");
                     ForwardedElementRead.Emit(w, itemType, "operationState", "v",
                         element + ".Read<TLuminProfile>(ref operationState, ref v);");
                     w.Line("value.Enqueue(v);");
                     w.Close();
+                    w.Line("while (--remaining != 0);");
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));

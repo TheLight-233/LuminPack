@@ -34,10 +34,9 @@ internal static class ConcurrentStackMemberWriter
         body.Add("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(" + local + ", out var count);");
         body.Add("try");
         body.Add("{");
-        body.Add("global::System.MemoryExtensions.Reverse(global::System.MemoryExtensions.AsSpan(snapshot, 0, count));");
         body.Add("{");
-        body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = new global::System.ReadOnlySpan<" + member.Scalar +
-            ">(snapshot, 0, count);");
+        body.Add("var items = global::LuminPack.Code.LuminPackMarshal.CreateSpan(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(snapshot), count);");
+        body.Add("global::System.MemoryExtensions.Reverse(items);");
         body.Add("writer.Write<" + member.Scalar + ">(items, items.Length);");
         body.Add("}");
         body.Add("}");

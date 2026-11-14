@@ -737,7 +737,7 @@ public static partial class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ReadOnlySpan<T> CreateReadOnlySpan<T>(scoped ref T reference, int length)
     {
-        return MemoryMarshal.CreateSpan(ref reference, length);
+        return MemoryMarshal.CreateReadOnlySpan(ref reference, length);
     }
 
     /// <summary>Performs the as step for the current operation.</summary>

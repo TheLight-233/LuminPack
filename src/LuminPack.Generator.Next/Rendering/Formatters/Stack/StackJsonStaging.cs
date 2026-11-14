@@ -17,6 +17,8 @@ internal static class StackJsonStaging
     {
         string pool = "global::System.Buffers.ArrayPool<" + element + ">.Shared";
         string release = pool + ".Return(buffer, clearArray: " + (clear ? "true" : "false") + ");";
+        const string marshal = "global::LuminPack.Code.LuminPackMarshal";
+        const string memory = "global::System.Runtime.CompilerServices.Unsafe";
         w.Line("var buffer = " + pool + ".Rent(16);");
         w.Line("int count = 0;");
         w.Line("try");
@@ -36,15 +38,22 @@ internal static class StackJsonStaging
         w.Close();
         w.Line(element + " item = default!;");
         w.Line(owner + ".Read<TLuminProfile>(ref reader, ref item);");
-        w.Line("buffer[count++] = item;");
+        w.Line(memory + ".Add(ref " + marshal + ".GetNotNullArrayReference(buffer), (nint)(uint)count++) = item;");
         w.Close();
         w.Line("value = new " + sequence + "(count);");
         if (bulkRestore)
-            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.RestoreStackFromTop(value, buffer.AsSpan(0, count));");
+            w.Line("global::LuminPack.Code.LuminPackCollectionAccess.RestoreStackFromTop(value, " + marshal + ".CreateReadOnlySpan(ref " + marshal + ".GetNotNullArrayReference(buffer), count));");
         else
         {
-            w.Line("for (int index = count - 1; index >= 0; index--)");
-            w.Indented(() => w.Line("value.Push(buffer[index]);"));
+            w.Line("if (count != 0)");
+            w.Open();
+            w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(buffer);");
+            w.Line("do");
+            w.Open();
+            w.Line("value.Push(" + memory + ".Add(ref first, (nint)(uint)--count));");
+            w.Close();
+            w.Line("while (count != 0);");
+            w.Close();
         }
         w.Close();
         w.Line("finally");

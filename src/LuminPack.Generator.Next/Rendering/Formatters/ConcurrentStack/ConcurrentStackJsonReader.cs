@@ -50,7 +50,7 @@ internal static class ConcurrentStackJsonReader
         w.Line(returnItems);
         w.Line("items = larger;");
         w.Close();
-        w.Line("items[count++] = item;");
+        w.Line("global::System.Runtime.CompilerServices.Unsafe.Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items), (nint)(uint)count++) = item;");
         w.Close();
         w.Line("while (reader.Read<TLuminProfile>());");
         w.Close();

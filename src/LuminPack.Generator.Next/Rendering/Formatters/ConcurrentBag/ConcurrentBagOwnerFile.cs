@@ -26,7 +26,7 @@ internal static class ConcurrentBagOwnerFile
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string code = w.A("LuminPackCode");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
+        string marshal = w.A("LuminPackMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -171,22 +171,24 @@ internal static class ConcurrentBagOwnerFile
                     w.Line("else");
                     w.Indented(() => w.Line("value.Clear();"));
                     w.Blank();
+                    w.Line("if (length == 0)");
+                    w.Indented(() => w.Line("goto operationComplete_RootRead;"));
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("global::System.Span<" + scalar + "> items = pooled.AsSpan(0, length);");
-                    w.Line("if (length != 0)");
+                    w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(pooled);");
+                    w.Line("operationState.Read(");
                     w.Indented(() =>
                     {
-                        w.Line("operationState.Read(");
-                        w.Indented(() =>
-                        {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
-                            w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                        });
+                        w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref first),");
+                        w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     });
-                    w.Line("for (int i = 0; i < length; i++)");
-                    w.Line("    value.Add(pooled[i]);");
+                    w.Line("int index = 0;");
+                    w.Line("do");
+                    w.Open();
+                    w.Line("value.Add(" + memory + ".Add(ref first, (nint)(uint)index));");
+                    w.Close();
+                    w.Line("while (++index < length);");
                     w.Close();
                     w.Line("finally");
                     w.Open();

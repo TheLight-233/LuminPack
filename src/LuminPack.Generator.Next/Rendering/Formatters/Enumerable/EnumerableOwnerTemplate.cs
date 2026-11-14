@@ -912,7 +912,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("return;");
                         w.Close();
                         w.Blank();
-                        w.Line(scalar + "[]? buffer = " + pool + ".Rent(4);");
+                        w.Line(scalar + "[] buffer = " + pool + ".Rent(4);");
                         w.Line("int count = 0;");
                         w.Line("int capacity = buffer.Length;");
                         w.Line("try");
@@ -940,12 +940,11 @@ internal static class EnumerableOwnerTemplate
                         w.Line(memory + ".Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(buffer), (nint)(uint)count++) = item;");
                         w.Close();
                         w.Blank();
-                        w.Line("value = new global::System.ReadOnlySpan<" + scalar + ">(buffer, 0, count).ToArray();");
+                        w.Line("value = global::LuminPack.Code.LuminPackMarshal.CreateReadOnlySpan(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(buffer), count).ToArray();");
                         w.Close();
                         w.Line("finally");
                         w.Open();
-                        w.Line("if (buffer != null)");
-                        w.Line("    " + pool + ".Return(buffer, clearArray: true);");
+                        w.Line(pool + ".Return(buffer, clearArray: true);");
                         w.Close();
                         w.Close();
                         w.Blank();

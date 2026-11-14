@@ -23,7 +23,8 @@ public static partial class LuminPackCollectionAccess
         long bytes = (long)count * Unsafe.SizeOf<T>();
         if (writer.RecordRoom() < bytes || !TryGetStackArray(stack, count, out var array))
             return false;
-        var payload = MemoryMarshal.AsBytes(array.AsSpan(0, count));
+        var payload = MemoryMarshal.AsBytes(LuminPackMarshal.CreateReadOnlySpan(
+            ref LuminPackMarshal.GetNotNullArrayReference(array), count));
         if (payload.Overlaps(writer.Buffer))
             return false;
         writer.Write(ref MemoryMarshal.GetReference(payload), (int)bytes);
@@ -45,10 +46,11 @@ public static partial class LuminPackCollectionAccess
         if (!writer.UsesUtf16LengthRecords<TOptions>() || !TryGetStackArray(stack, count, out var array))
             return false;
         int position = writer.BeginCollection();
+        var slots = LuminPackMarshal.CreateReadOnlySpan(ref LuminPackMarshal.GetNotNullArrayReference(array), count);
         if (checkEachRecord)
-            writer.WriteCheckedStrings<TOptions>(array.AsSpan(0, count));
+            writer.WriteCheckedStrings<TOptions>(slots);
         else
-            writer.WriteStrings<TOptions>(array.AsSpan(0, count));
+            writer.WriteStrings<TOptions>(slots);
         writer.EndCollection(position, count);
         writer.CheckBuffer();
         return true;
@@ -69,7 +71,8 @@ public static partial class LuminPackCollectionAccess
         var array = LuminFieldLayout.Field<T[]>(stack, LuminCollectionLayouts.StackArray);
         if ((uint)count > (uint)array.Length)
             return false;
-        var payload = MemoryMarshal.AsBytes(array.AsSpan(0, count));
+        var payload = MemoryMarshal.AsBytes(LuminPackMarshal.CreateSpan(
+            ref LuminPackMarshal.GetNotNullArrayReference(array), count));
         if (payload.Overlaps(reader.Buffer))
             return false;
         reader.Read(ref MemoryMarshal.GetReference(payload), payload.Length);
@@ -93,7 +96,7 @@ public static partial class LuminPackCollectionAccess
         var array = LuminFieldLayout.Field<string?[]>(stack, LuminCollectionLayouts.StackArray);
         if ((uint)count > (uint)array.Length)
             return false;
-        var slots = array.AsSpan(0, count);
+        var slots = LuminPackMarshal.CreateSpan(ref LuminPackMarshal.GetNotNullArrayReference(array), count);
         try
         {
             // Stack.Clear guarantees empty active slots. Decode independently of hidden inactive references.
@@ -119,21 +122,28 @@ public static partial class LuminPackCollectionAccess
     {
         if (items.IsEmpty)
             return;
+        ref T source = ref MemoryMarshal.GetReference(items);
+        int count = items.Length;
         if (StackStorage.Available && stack.GetType() == typeof(Stack<T>) && stack.Count == 0)
         {
             var array = LuminFieldLayout.Field<T[]>(stack, LuminCollectionLayouts.StackArray);
-            if (items.Length <= array.Length && !items.Overlaps(array))
+            if (count <= array.Length && !items.Overlaps(new ReadOnlySpan<T>(array)))
             {
-                ref T source = ref MemoryMarshal.GetReference(items);
-                ref T target = ref MemoryMarshal.GetReference(array.AsSpan());
-                for (int i = 0; i < items.Length; i++)
-                    Unsafe.Add(ref target, (nint)(uint)i) = Unsafe.Add(ref source, (nint)(uint)(items.Length - i - 1));
-                PublishStackSize(stack, items.Length);
+                ref T target = ref LuminPackMarshal.GetNotNullArrayReference(array);
+                int index = 0;
+                do
+                {
+                    Unsafe.Add(ref target, (nint)(uint)index) = Unsafe.Add(ref source, (nint)(uint)(count - index - 1));
+                } while (++index < count);
+                PublishStackSize(stack, count);
                 return;
             }
         }
-        for (int i = items.Length - 1; i >= 0; i--)
-            stack.Push(items[i]);
+        int remaining = count;
+        do
+        {
+            stack.Push(Unsafe.Add(ref source, (nint)(uint)--remaining));
+        } while (remaining != 0);
     }
 
     /// <summary>Publishes a complete empty-target fill with the version change of one push per item.</summary>
@@ -166,7 +176,8 @@ public static partial class LuminPackCollectionAccess
         if (!TryGetStackArray(stack, count, out var array))
             return false;
         ref int version = ref LuminFieldLayout.Field<int>(stack, LuminCollectionLayouts.StackVersion);
-        WriteOrderedIntegerItems<TOptions, T>(ref writer, array.AsSpan(0, count), ref version, version, reverse: true);
+        var items = LuminPackMarshal.CreateReadOnlySpan(ref LuminPackMarshal.GetNotNullArrayReference(array), count);
+        WriteOrderedIntegerItems<TOptions, T>(ref writer, items, ref version, version, reverse: true);
         return true;
     }
 

@@ -90,7 +90,10 @@ internal static class ConcurrentDictionaryOwnerFile
         w.Close();
         w.Blank();
         w.Line("value.Clear();");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("if (length == 0)");
+        w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+        w.Line("int remaining = length;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -98,5 +101,6 @@ internal static class ConcurrentDictionaryOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line("value.TryAdd(k!, v);");
         w.Close();
+        w.Line("while (--remaining != 0);");
     }
 }

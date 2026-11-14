@@ -4,7 +4,7 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>ConcurrentStack&lt;string&gt;</c> and owns its inline text write.</summary>
-/// <remarks>The write leases one snapshot, reverses it to the bottom-up order the record stores and writes each string; the read
+/// <remarks>The write walks one leased snapshot backward in the bottom-up order the record stores; the read
 /// reads the strings into a pooled block and pushes it back with one range push. The JSON read stages the strings in their top-first
 /// order and publishes them through the collection-access helper.</remarks>
 internal static class ConcurrentStackTextOwnerFile
@@ -28,10 +28,17 @@ internal static class ConcurrentStackTextOwnerFile
         body.Add("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(" + local + ", out var count);");
         body.Add("try");
         body.Add("{");
-        body.Add("global::System.MemoryExtensions.Reverse(global::System.MemoryExtensions.AsSpan(snapshot, 0, count));");
         body.Add("int countPosition = operationState.BeginCollection();");
-        body.Add("for (int index = 0; index < count; index++)");
-        body.Add("operationState.Write<TLuminProfile>(snapshot[index]);");
+        body.Add("if (count != 0)");
+        body.Add("{");
+        body.Add("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(snapshot);");
+        body.Add("int remaining = count;");
+        body.Add("do");
+        body.Add("{");
+        body.Add("operationState.Write<TLuminProfile>(global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)--remaining));");
+        body.Add("}");
+        body.Add("while (remaining != 0);");
+        body.Add("}");
         body.Add("operationState.EndCollection(countPosition, count);");
         body.Add("operationState.CheckBuffer();");
         body.Add("}");

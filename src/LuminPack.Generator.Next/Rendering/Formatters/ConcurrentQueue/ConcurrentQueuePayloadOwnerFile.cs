@@ -30,7 +30,7 @@ internal static class ConcurrentQueuePayloadOwnerFile
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string code = w.A("LuminPackCode");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
+        string marshal = w.A("LuminPackMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -169,8 +169,11 @@ internal static class ConcurrentQueuePayloadOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("ref var first = ref " + marshal + ".GetReference<" + elementType + ">(pooled.AsSpan(0, length));");
-                    w.Line("for (int i = 0; i < length; i++)");
+                    w.Line("if (length != 0)");
+                    w.Open();
+                    w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(pooled);");
+                    w.Line("int i = 0;");
+                    w.Line("do");
                     w.Open();
                     w.Line(elementType + " item = default !;");
                     var readNames = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -179,7 +182,9 @@ internal static class ConcurrentQueuePayloadOwnerFile
                     BinaryEmitter.AddSequenceElementRead(readBody, element, "item", null, w, readNames, ref readCursors, ref readStrings, ref readEnds);
                     foreach (string line in readBody)
                         w.Line(line);
-                    w.Line(memory + ".Add(ref first, unchecked((nint)(uint)(i))) = item;");
+                    w.Line(memory + ".Add(ref first, (nint)(uint)i) = item;");
+                    w.Close();
+                    w.Line("while (++i < length);");
                     w.Close();
                     w.Blank();
                     w.Line("value = new " + queue + "(length == pooled.Length");
@@ -203,7 +208,10 @@ internal static class ConcurrentQueuePayloadOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("value.Clear();");
-                    w.Line("for (int i2 = 0; i2 < length; i2++)");
+                    w.Line("if (length == 0)");
+                    w.Indented(() => w.Line("return;"));
+                    w.Line("int remaining = length;");
+                    w.Line("do");
                     w.Open();
                     w.Line(elementType + " v = default !;");
                     var secondBody = new List<string>();
@@ -212,6 +220,7 @@ internal static class ConcurrentQueuePayloadOwnerFile
                         w.Line(line);
                     w.Line("value.Enqueue(v);");
                     w.Close();
+                    w.Line("while (--remaining != 0);");
                     w.Close();
                     w.Blank();
                     break;

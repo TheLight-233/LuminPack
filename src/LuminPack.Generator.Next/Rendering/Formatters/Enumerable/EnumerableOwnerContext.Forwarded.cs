@@ -4,6 +4,7 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal sealed partial class EnumerableOwnerContext
 {
+    private const string PackMarshal = "global::LuminPack.Code.LuminPackMarshal";
     /// <summary>Preserves optional concurrent traversal without changing its capture boundary.</summary>
     /// <param name = "local">The local used by this operation.</param>
     /// <returns>The generated source or selected source-ready name.</returns>
@@ -140,7 +141,7 @@ internal sealed partial class EnumerableOwnerContext
     internal void BuilderWrite(string local)
     {
         W.Line("var builderView = global::LuminPack.Code.LuminPackMarshal.As<" + Sequence + ", global::LuminPack.Code.ReadOnlyCollectionBuilderView<" + Scalar + ">>(ref " + Memory + ".AsRef(in " + local + "));");
-        WriteSpan("global::System.MemoryExtensions.AsSpan(builderView.items, 0, " + local + ".Count)");
+        WriteSpan("new global::System.ReadOnlySpan<" + Scalar + ">(builderView.items, 0, " + local + ".Count)");
     }
 
     /// <summary>Writes a stable concurrent-bag snapshot through its contiguous element contract.</summary>
@@ -179,7 +180,7 @@ internal sealed partial class EnumerableOwnerContext
         {
             W.Line("operationState.EnsureAdditionalCapacity(4);");
             W.Line("operationState.WriteCollectionHeader(count);");
-            W.Line("operationState.WriteCheckedStrings<TLuminProfile>(snapshot.AsSpan(0, count));");
+            W.Line("operationState.WriteCheckedStrings<TLuminProfile>(" + PackMarshal + ".CreateReadOnlySpan(ref " + PackMarshal + ".GetNotNullArrayReference(snapshot), count));");
             W.Line("operationState.CheckBuffer();");
         }
         else
@@ -234,17 +235,42 @@ internal sealed partial class EnumerableOwnerContext
         W.Open();
         if (!concurrent)
             W.Line(local + ".CopyTo(snapshot, 0);");
-        if (Contiguous)
+        if (Text && Contiguous)
         {
-            W.Line("global::System.MemoryExtensions.Reverse(global::System.MemoryExtensions.AsSpan(snapshot, 0, count));");
-            WriteSpan("new global::System.ReadOnlySpan<" + Scalar + ">(snapshot, 0, count)");
+            W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+            W.Line("operationState.WriteCollectionHeader(count);");
+            W.Line("if (count != 0)");
+            W.Open();
+            W.Line("ref var first = ref " + PackMarshal + ".GetNotNullArrayReference(snapshot);");
+            W.Line("int remaining = count;");
+            W.Line("do");
+            W.Open();
+            W.Line("operationState.CheckBuffer();");
+            W.Line("operationState.Write<TLuminProfile>(" + Memory + ".Add(ref first, (nint)(uint)--remaining));");
+            W.Close();
+            W.Line("while (remaining != 0);");
+            W.Close();
+            W.Line("operationState.CheckBuffer();");
+        }
+        else if (Contiguous)
+        {
+            W.Line("var active = " + PackMarshal + ".CreateSpan(ref " + PackMarshal + ".GetNotNullArrayReference(snapshot), count);");
+            W.Line("global::System.MemoryExtensions.Reverse(active);");
+            WriteSpan("active");
         }
         else
         {
             W.Line("int countPosition = operationState.BeginCollection();");
-            W.Line("for (int index = count - 1; index >= 0; index--)");
+            W.Line("if (count != 0)");
             W.Open();
-            WriteElement("snapshot[index]");
+            W.Line("ref var first = ref " + PackMarshal + ".GetNotNullArrayReference(snapshot);");
+            W.Line("int remaining = count;");
+            W.Line("do");
+            W.Open();
+            W.Line("ref var item = ref " + Memory + ".Add(ref first, (nint)(uint)--remaining);");
+            WriteElement("item");
+            W.Close();
+            W.Line("while (remaining != 0);");
             W.Close();
             W.Line("operationState.EndCollection(countPosition, count);");
             W.Line("operationState.CheckBuffer();");

@@ -27,7 +27,7 @@ internal static class ConcurrentStackOwnerFile
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string code = w.A("LuminPackCode");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
+        string marshal = w.A("LuminPackMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -81,9 +81,8 @@ internal static class ConcurrentStackOwnerFile
                     w.Line("var snapshot = global::LuminPack.Code.LuminPackCollectionAccess.RentSnapshot(value, out var count);");
                     w.Line("try");
                     w.Open();
-                    w.Line("global::System.MemoryExtensions.Reverse(global::System.MemoryExtensions.AsSpan(snapshot, 0, count));");
-                    w.Line("global::System.ReadOnlySpan<" + scalar + "> items = new global::System.ReadOnlySpan<" + scalar +
-                        ">(snapshot, 0, count);");
+                    w.Line("var items = " + marshal + ".CreateSpan(ref " + marshal + ".GetNotNullArrayReference(snapshot), count);");
+                    w.Line("global::System.MemoryExtensions.Reverse(items);");
                     w.Line("writer.Write<" + scalar + ">(items, items.Length);");
                     w.Close();
                     w.Line("finally");
@@ -157,16 +156,11 @@ internal static class ConcurrentStackOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("global::System.Span<" + scalar + "> items = pooled.AsSpan(0, length);");
-                    w.Line("if (length != 0)");
+                    w.Line("reader.Read(");
                     w.Indented(() =>
                     {
-                        w.Line("reader.Read(");
-                        w.Indented(() =>
-                        {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
-                            w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                        });
+                        w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetNotNullArrayReference(pooled)),");
+                        w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     });
                     w.Blank();
                     w.Line("value.PushRange(pooled, 0, length);");

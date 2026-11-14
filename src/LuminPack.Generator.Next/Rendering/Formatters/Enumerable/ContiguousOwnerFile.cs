@@ -314,7 +314,7 @@ internal static class ContiguousOwnerFile
             {
                 case ContiguousShape.Array:
                     w.Line("if (value is null || value.Length != length || value.GetType() != typeof(" + model.Type + ")) value = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
-                    w.Line("var items = new global::System.Span<" + element.Type + ">(value);");
+                    w.Line("var items = " + Marshal + ".CreateSpan(ref " + Marshal + ".GetNotNullArrayReference(value), length);");
                     break;
                 case ContiguousShape.List:
                     w.Line("value ??= new " + model.Type + "(length);");

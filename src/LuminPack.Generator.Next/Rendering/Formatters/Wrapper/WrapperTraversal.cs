@@ -67,7 +67,7 @@ internal static class WrapperTraversal
         }
         body.Add("var builderView = global::LuminPack.Code.LuminPackMarshal.As<" + type + ", global::LuminPack.Code.ReadOnlyCollectionBuilderView<" +
             element + ">>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in " + local + "));");
-        body.Add("global::System.ReadOnlySpan<" + element + "> builderItems = global::System.MemoryExtensions.AsSpan(builderView.items, 0, " + local + ".Count);");
+        body.Add("var builderItems = new global::System.ReadOnlySpan<" + element + ">(builderView.items, 0, " + local + ".Count);");
         body.Add("operationState.Write<" + element + ">(builderItems, builderItems.Length);");
         body.Add("operationState.CheckBuffer();");
     }

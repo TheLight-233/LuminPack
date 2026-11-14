@@ -33,8 +33,13 @@ internal static class StackPayloadOwnerFile
         w.Blank();
         c.PooledRead(() =>
         {
-            w.Line("for (int index = 0; index < length; index++)");
-            w.Indented(() => w.Line("value.Push(pooled[index]);"));
+            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("value.Push(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
+            w.Close();
+            w.Line("while (++index < length);");
         });
     }
 
@@ -45,7 +50,14 @@ internal static class StackPayloadOwnerFile
     {
         var w = c.W;
         w.Line("value = new " + c.Sequence + "(staged.Count);");
-        w.Line("for (int index = staged.Count - 1; index >= 0; index--)");
-        w.Indented(() => w.Line("value.Push(staged[index]);"));
+        w.Line("int remaining = staged.Count;");
+        w.Line("if (remaining != 0)");
+        w.Open();
+        w.Line("do");
+        w.Open();
+        w.Line("value.Push(staged[--remaining]);");
+        w.Close();
+        w.Line("while (remaining != 0);");
+        w.Close();
     }
 }

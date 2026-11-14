@@ -38,8 +38,13 @@ internal static class ConcurrentBagTextOwnerFile
         w.Blank();
         c.PooledRead(() =>
         {
-            w.Line("for (int index = 0; index < length; index++)");
-            w.Indented(() => w.Line("value.Add(pooled[index]);"));
+            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("value.Add(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
+            w.Close();
+            w.Line("while (++index < length);");
         });
     }
 }

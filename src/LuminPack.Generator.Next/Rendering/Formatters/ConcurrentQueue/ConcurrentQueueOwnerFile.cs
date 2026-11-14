@@ -28,7 +28,7 @@ internal static class ConcurrentQueueOwnerFile
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string code = w.A("LuminPackCode");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
+        string marshal = w.A("LuminPackMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -170,20 +170,13 @@ internal static class ConcurrentQueueOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("global::System.Span<" + scalar + "> items = " + marshal + ".CreateSpan<" + scalar + ">(");
-                    w.Indented(() =>
-                    {
-                        w.Line("ref " + memory + ".As<byte, " + scalar + ">(ref operationState.Cursor),");
-                        w.Line("0);");
-                    });
-                    w.Line("items = pooled.AsSpan(0, length);");
                     w.Line("if (length != 0)");
                     w.Indented(() =>
                     {
                         w.Line("operationState.Read(");
                         w.Indented(() =>
                         {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
+                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetNotNullArrayReference(pooled)),");
                             w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                         });
                     });
@@ -209,7 +202,10 @@ internal static class ConcurrentQueueOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("value.Clear();");
-                    w.Line("for (int i = 0; i < length; i++)");
+                    w.Line("if (length == 0)");
+                    w.Indented(() => w.Line("goto operationComplete_RootRead;"));
+                    w.Line("int remaining = length;");
+                    w.Line("do");
                     w.Open();
                     w.Line(scalar + " v = default !;");
                     if (ownerRead)
@@ -218,6 +214,7 @@ internal static class ConcurrentQueueOwnerFile
                         w.Line("operationState.Read(ref v);");
                     w.Line("value.Enqueue(v);");
                     w.Close();
+                    w.Line("while (--remaining != 0);");
                     w.Blank();
                     w.Line("operationComplete_RootRead:");
                     w.Indented(() => w.Line(";"));

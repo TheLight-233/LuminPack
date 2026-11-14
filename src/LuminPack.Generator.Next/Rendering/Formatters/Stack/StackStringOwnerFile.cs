@@ -29,7 +29,7 @@ internal static class StackStringOwnerFile
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string code = w.A("LuminPackCode");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
+        string marshal = w.A("LuminPackMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -125,12 +125,13 @@ internal static class StackStringOwnerFile
                     w.Open();
                     w.Line("value.CopyTo(buffer, 0);");
                     // The public enumeration is top first, so the stored block walks the copy from its last slot.
-                    w.Line("for (int index = count - 1; index >= 0; index--)");
+                    w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(buffer);");
+                    w.Line("int remaining = count;");
+                    w.Line("do");
                     w.Open();
-                    w.Line("var v = buffer[index];");
-                    w.Line("ref readonly " + itemType + " value2 = ref v;");
-                    w.Line("operationState.Write<TLuminProfile>(value2);");
+                    w.Line("operationState.Write<TLuminProfile>(" + memory + ".Add(ref first, (nint)(uint)--remaining));");
                     w.Close();
+                    w.Line("while (remaining != 0);");
                     w.Close();
                     w.Line("finally");
                     w.Open();
@@ -215,17 +216,23 @@ internal static class StackStringOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("ref var first = ref " + marshal + ".GetReference<" + itemType + ">(pooled.AsSpan(0, length));");
-                    w.Line("for (int index = 0; index < length; index++)");
+                    w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(pooled);");
+                    w.Line("int index = 0;");
+                    w.Line("do");
                     w.Open();
                     w.Line(itemType + " item = default !;");
                     w.Line(element + ".Read<TLuminProfile>(ref operationState, ref item);");
-                    w.Line(memory + ".Add(ref first, unchecked((nint)(uint)(index))) = item;");
+                    w.Line(memory + ".Add(ref first, (nint)(uint)index) = item;");
                     w.Close();
+                    w.Line("while (++index < length);");
                     w.Blank();
                     // The stored block is bottom first, so each element is pushed in slot order.
-                    w.Line("for (int index2 = 0; index2 < length; index2++)");
-                    w.Line("    value.Push(pooled[index2]);");
+                    w.Line("index = 0;");
+                    w.Line("do");
+                    w.Open();
+                    w.Line("value.Push(" + memory + ".Add(ref first, (nint)(uint)index));");
+                    w.Close();
+                    w.Line("while (++index < length);");
                     w.Close();
                     w.Line("finally");
                     w.Open();
