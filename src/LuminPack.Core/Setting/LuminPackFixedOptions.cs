@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace LuminPack.Option;
 
@@ -8,9 +9,17 @@ namespace LuminPack.Option;
 public readonly struct LuminPackFixedOptions<TOptions> : ILuminPackOptions where TOptions : struct, ILuminPackOptions
 {
     /// <inheritdoc/>
-    public LuminPackStringEncoding StringEncoding => default(TOptions).StringEncoding;
+    public LuminPackStringEncoding StringEncoding
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(TOptions).StringEncoding;
+    }
     /// <inheritdoc/>
-    public LuminPackStringRecording StringRecording => default(TOptions).StringRecording;
+    public LuminPackStringRecording StringRecording
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default(TOptions).StringRecording;
+    }
     /// <inheritdoc/>
     public StandardFormat StandardFormat => default(TOptions).StandardFormat;
     /// <inheritdoc/>
