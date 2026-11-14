@@ -66,6 +66,10 @@ internal static partial class TypeModelFactory
                     string definition = compound.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + compound.Name;
                     if (definition is GenericIdentity.Tuple or GenericIdentity.ValueTuple or GenericIdentity.KeyValuePair or GenericIdentity.Lazy)
                         return new EntryShape(EntryKind.CompoundDirect);
+                    if ((definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.LinkedList") &&
+                        compound.TypeArguments.Length == 1 && IsKnownScalar(compound.TypeArguments[0]) &&
+                        IsFrameworkCollection(compound, definition))
+                        return new EntryShape(EntryKind.RawCollectionSpan);
                 }
                 return new EntryShape(fixedRecord ? EntryKind.FixedRecord : EntryKind.DirectRecord);
             }
@@ -94,6 +98,17 @@ internal static partial class TypeModelFactory
                 }
             }
             return EntryShape.Pooled;
+        }
+
+        /// <summary>Recognizes the actual framework definition rather than a source or reference with the same type name.</summary>
+        private bool IsFrameworkCollection(INamedTypeSymbol type, string definition)
+        {
+            IAssemblySymbol assembly = type.ContainingAssembly;
+            if (!SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, _compilation.GetTypeByMetadataName(definition + "`1")))
+                return false;
+            return SymbolEqualityComparer.Default.Equals(assembly, _compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly) ||
+                assembly.Identity.Name == "System.Collections" && assembly.Identity.PublicKeyToken.SequenceEqual(
+                    new byte[] { 0xb0, 0x3f, 0x5f, 0x7f, 0x11, 0xd5, 0x0a, 0x3a });
         }
 
         private bool ReaderTargetsNetStandard() => _compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader")?.ContainingAssembly

@@ -308,9 +308,22 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
             SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue;
         var bodyKey = (Api: api, Shape: binaryShape ? bound.Shape : EntryShape.Pooled, Measured: binaryShape && measured);
-        if (bodyKey.Shape.Kind == EntryKind.CompoundDirect &&
-            (api != SerializerApi.SerializeArray || !bodyKey.Measured || bound.OpenProfile || profile != RootEntry.DefaultProfile))
-            bodyKey = (api, EntryShape.Pooled, false);
+        if (bodyKey.Shape.Kind == EntryKind.RawCollectionSpan)
+        {
+            // These standard raw element readers need no operation state for a complete input span. Keep the measured
+            // direct-record selection for allocating writes and the existing selection for explicit profiles and streams.
+            bool span = !bound.OpenProfile && api is (SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef);
+            bodyKey.Shape = new EntryShape(span ? EntryKind.StatelessRead : EntryKind.DirectRecord);
+        }
+        if (bodyKey.Shape.Kind == EntryKind.CompoundDirect)
+        {
+            // The same fixed element proof permits a checked span reader without operation state. The exact writer still
+            // encodes strings under its fixed UTF-16 length profile.
+            bool acceptsProfile = api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef ||
+                api == SerializerApi.SerializeArray && profile == RootEntry.DefaultProfile;
+            if (!bodyKey.Measured || bound.OpenProfile || !acceptsProfile)
+                bodyKey = (api, EntryShape.Pooled, false);
+        }
         if (!documentBodies.TryGetValue(bodyKey, out string? body))
         {
             body = DocumentBody(bodyKey.Api, bodyKey.Shape, bodyKey.Measured);
@@ -365,7 +378,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
         string binaryRead = BinarySpanRead;
         if (api is SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue)
         {
-            bool needsMeasure = shape.Kind is EntryKind.FixedRecord or EntryKind.DirectRecord;
+            bool needsMeasure = shape.Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.CompoundDirect;
             if (shape.Kind == EntryKind.RawScalar)
                 binaryRead = RawRead;
             else if (shape.StatelessRead && (!needsMeasure || measured))

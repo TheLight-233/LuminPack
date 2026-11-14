@@ -102,7 +102,7 @@ internal enum EntryKind
     /// <summary>A record measured into an exact array, with pooled output when the measure was not exact.</summary>
     DirectRecord,
 
-    /// <summary>A framework compound measured into an exact array for the fixed UTF-16 length profile.</summary>
+    /// <summary>A measured framework compound with an exact UTF-16 length writer and a stateless binary reader.</summary>
     CompoundDirect,
 
     /// <summary>An enum written at its native width.</summary>
@@ -119,6 +119,9 @@ internal enum EntryKind
 
     /// <summary>An interface sequence of known scalars, read without reference-tracking state.</summary>
     StatelessRead,
+
+    /// <summary>A framework queue or linked list with a stateless raw-element span reader.</summary>
+    RawCollectionSpan,
 
     /// <summary>A UTF-16 length-prefixed time zone snapshot sized from its cached text.</summary>
     TimeZoneSnapshot,
@@ -149,8 +152,8 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
     }
 
     /// <summary>Whether the binary reads construct a plain reader without leasing reference-tracking state.</summary>
-    internal bool StatelessRead => Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.FixedEnum or EntryKind.NullableDirect or
-        EntryKind.BigInteger or EntryKind.StatelessRead;
+    internal bool StatelessRead => Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.CompoundDirect or
+        EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.BigInteger or EntryKind.StatelessRead;
 
     public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element;
 
