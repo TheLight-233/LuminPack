@@ -55,9 +55,11 @@ internal static class RenderModelFactory
             return null;
         string extension = GeneratedNames.Extension(options.AssemblyName);
         var members = new RenderMember[model.Members.Length];
+        bool reserveRawArrays = !json && record?.Version == null && structure?.Version == null &&
+            !model.Members.Any(member => member is ScalarMember { Volatile: true });
         for (int index = 0; index < members.Length; index++)
         {
-            RenderMember? member = Member(model.Members[index], extension, options);
+            RenderMember? member = Member(model.Members[index], extension, options, reserveRawArrays);
             if (member == null)
                 return null;
             members[index] = member;
@@ -310,10 +312,11 @@ internal static class RenderModelFactory
     /// <param name="member">The immutable member contract.</param>
     /// <param name="extension">The generated assembly container.</param>
     /// <param name="options">The project facts.</param>
+    /// <param name="reserveRawArrays">Whether the enclosing positional write may capture scalar arrays in a reservation.</param>
     /// <returns>The complete member operation, or null.</returns>
-    internal static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options)
+    internal static RenderMember? Member(MemberModel member, string extension, GeneratorOptions options, bool reserveRawArrays = false)
     {
-        RenderMember? rendered = MemberCore(member, extension, options);
+        RenderMember? rendered = MemberCore(member, extension, options, reserveRawArrays);
         if (rendered != null && member.Compressed)
             rendered = rendered.Compressed("global::LuminPack." + GeneratedNames.Owner(extension, rendered.TypeName));
         return rendered == null || !member.Policy.Declared ? rendered : rendered.WithScope(ProfileNames.Type(member.Policy.Strings));
@@ -323,8 +326,9 @@ internal static class RenderModelFactory
     /// <param name="member">The immutable member contract.</param>
     /// <param name="extension">The generated assembly container.</param>
     /// <param name="options">The project facts.</param>
+    /// <param name="reserveRawArrays">Whether the enclosing positional write may capture scalar arrays in a reservation.</param>
     /// <returns>The complete member operation, or null.</returns>
-    private static RenderMember? MemberCore(MemberModel member, string extension, GeneratorOptions options)
+    private static RenderMember? MemberCore(MemberModel member, string extension, GeneratorOptions options, bool reserveRawArrays)
     {
         // Auto-property and included non-public storage keeps the same wire shapes as a public field; the mirror facts on the
         // payload decide how the emitters reach it.
@@ -363,7 +367,8 @@ internal static class RenderModelFactory
                 return new RenderMember(special.Name, RenderMemberKind.Special, ReadableTypeName.Of(special.Declared), special.Declared, 0,
                     "global::LuminPack." + GeneratedNames.Owner(extension, special.Declared), ScalarKind.Other, mirrored,
                     property: property, nullObjectGuard: special.Formatter?.OrdinaryObject == true, referencePayload: special.Nullable,
-                    seedExisting: special.Formatter?.Payload is StructModel { Storage: StructStorage.ManagedRecord });
+                    seedExisting: special.Formatter?.Payload is StructModel { Storage: StructStorage.ManagedRecord },
+                    reservableArray: reserveRawArrays && special.ReservableArray);
             case PayloadMember { Shape: PayloadShape.Inline, Nested: RecordModel { Derived: false } nested } payload
                 when !mirrored && nested.Policy.Bound == null && Element(nested, options) is { } element:
                 return new RenderMember(payload.Name, RenderMemberKind.Object, payload.Type.GlobalName, payload.Type.GlobalName,

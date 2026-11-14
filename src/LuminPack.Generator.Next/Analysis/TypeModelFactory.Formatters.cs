@@ -57,7 +57,9 @@ internal static partial class TypeModelFactory
             if (!genericContract && specialized != null && specializedIssues.Count == 0 && RenderModelFactory.Member(specialized, GeneratedNames.Extension(Options.AssemblyName), Options) != null)
                 return specialized;
             if (formatter != null)
-                return new SpecialMember(member.Name, storage, policy, formatter.Type, type.IsReferenceType, storage == MemberStorage.AutoProperty, formatter);
+                return new SpecialMember(member.Name, storage, policy, formatter.Type, type.IsReferenceType, storage == MemberStorage.AutoProperty,
+                    formatter, reservableArray: !member.Volatile && formatter.Definition == FormatterDefinitions.Array &&
+                        type is IArrayTypeSymbol { IsSZArray: true } array && Scalar(array.ElementType) != null);
             issues.AddRange(specializedIssues);
             return specialized;
         }

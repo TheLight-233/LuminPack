@@ -751,19 +751,18 @@ internal static partial class BinaryEmitter
             AddBoundExit(body, model, union);
             return body;
         }
-        // An inline object member needs no reservation, so the record writes its member count and then each member, with
-        // every inline object writing its own count and members in place.
-        if (model.StreamRecord)
+        // Inline objects and reserving members alternate: the leading members share the header's reservation, each object
+        // writes in place, and every following run reserves on its own.
+        if (model.MixedRecord || members.Any(member => member.ReservableArray))
         {
-            StreamWriteBody(model, w, union, body);
+            MixedWriteBody(model, w, union, body);
             AddBoundExit(body, model, union);
             return body;
         }
-        // Inline objects and reserving members alternate: the leading members share the header's reservation, each object
-        // writes in place, and every following run reserves on its own.
-        if (model.MixedRecord)
+        // A pure stream writes its member count and lets each remaining segment advance the writer.
+        if (model.StreamRecord)
         {
-            MixedWriteBody(model, w, union, body);
+            StreamWriteBody(model, w, union, body);
             AddBoundExit(body, model, union);
             return body;
         }
@@ -1068,7 +1067,7 @@ internal static partial class BinaryEmitter
                 continue;
             }
             // A framework member writes through its shared formatter owner, which frames its own null record.
-            if (member.Kind == RenderMemberKind.Special)
+            if (member.Kind == RenderMemberKind.Special && !member.ReservableArray)
             {
                 body.Add(member.BinaryFormatter + ".Write<" + WriteProfile(model, w, member) + ">(ref writer, value." + member.Name + ");");
                 index++;
@@ -1507,6 +1506,7 @@ internal static partial class BinaryEmitter
             names.Add(members[index].Name);
         body.Add("// Fields: " + string.Join(", ", names));
         var terms = new List<string>();
+        bool inlineSpans = false;
         if (header)
             terms.Add("1");
         for (int index = first; index <= last; index++)
@@ -1524,6 +1524,7 @@ internal static partial class BinaryEmitter
             {
                 body.Add("var " + snapshot + " = " + w.A("LuminPackWriter") + ".Capture(value." + member.Name + ");");
                 terms.Add(snapshot + ".Bound");
+                inlineSpans |= member.ReservableArray;
             }
         }
         body.Add("cursor = ref writer.ReserveRecord(ref cursor, checked(" + string.Join(" + ", terms) + "));");
@@ -1584,6 +1585,8 @@ internal static partial class BinaryEmitter
                 body.Add("cursor = ref writer.WriteReservedRecordString<" + WriteProfile(model, w, member) + ">(ref cursor, " + written + ");");
             else if (member.Kind == RenderMemberKind.Dictionary)
                 body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReserved(ref cursor, " + written + ");");
+            else if (inlineSpans)
+                body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanInline(ref cursor, " + written + ".IsNull, " + written + ".Elements);");
             else
                 body.Add("cursor = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref cursor, " + written + ");");
         }
@@ -1803,9 +1806,9 @@ internal static partial class BinaryEmitter
     private static bool IsElementList(RenderMember member) => member.Kind == RenderMemberKind.List && member.Nested != null;
 
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
-    private static bool IsInlineSegment(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
+    private static bool IsInlineSegment(RenderMember member) => !member.ReservableArray && (member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
-        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence;
+        member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence);
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
     private static bool IsInlineBlock(RenderMember member) =>

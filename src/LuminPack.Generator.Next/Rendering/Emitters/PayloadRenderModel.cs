@@ -168,6 +168,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <summary>Whether the member is a managed struct whose own read reuses the references the existing value holds, so a
     /// fresh enclosing struct starts it from the existing member, as the original expanded read reused them.</summary>
     internal readonly bool SeedExisting;
+    /// <summary>Whether a forwarded scalar vector can write inside an ordinary positional reservation.</summary>
+    internal readonly bool ReservableArray;
     /// <summary>Whether the member's declared type is a reference type, whose temporary local carries the nullable annotation.</summary>
     internal readonly bool ReferencePayload;
     /// <summary>The imported string options type a member-level declaration owns, or null when the member inherits the
@@ -182,9 +184,10 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
         bool bareParameter = false, bool nullObjectGuard = false, bool referencePayload = false, string scopeProfile = null, SequenceFormatter sequence = null, bool isVolatile = false,
-        bool seedExisting = false)
+        bool seedExisting = false, bool reservableArray = false)
     {
         SeedExisting = seedExisting;
+        ReservableArray = reservableArray;
         Volatile = isVolatile;
         Sequence = sequence;
         ScopeProfile = scopeProfile;
@@ -244,7 +247,7 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <returns>The compiled member scope.</returns>
     internal RenderMember WithScope(string profile) => new RenderMember(Name, Kind, Scalar, TypeName, Size, Formatter, FieldType,
         Mirrored, Underlying, Raw, Builtin, Nested, FormatterCall, Property, Dictionary, Collection, ValueTypeParameter,
-        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile);
+        BareParameter, NullObjectGuard, ReferencePayload, profile, Sequence, Volatile, reservableArray: ReservableArray);
 
     /// <summary>Whether fixed field access is volatile and excluded from adjacent-field copies.</summary>
     internal readonly bool Volatile;
@@ -272,7 +275,8 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         Property == other.Property && Equals(Dictionary, other.Dictionary) && Equals(Collection, other.Collection) &&
         ValueTypeParameter == other.ValueTypeParameter && BareParameter == other.BareParameter &&
         NullObjectGuard == other.NullObjectGuard && ReferencePayload == other.ReferencePayload &&
-        Volatile == other.Volatile && ReferenceEquals(Sequence, other.Sequence) && ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
+        Volatile == other.Volatile && ReservableArray == other.ReservableArray && ReferenceEquals(Sequence, other.Sequence) &&
+        ScopeProfile == other.ScopeProfile && Equals(Nested, other.Nested);
 
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as RenderMember);

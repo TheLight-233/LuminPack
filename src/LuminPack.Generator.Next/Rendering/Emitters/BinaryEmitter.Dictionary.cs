@@ -22,7 +22,7 @@ internal static partial class BinaryEmitter
         while (index < members.Length)
         {
             var member = members[index];
-            if (IsWriterBlock(member))
+            if (IsInlineSegment(member))
             {
                 if (header)
                 {
@@ -71,7 +71,7 @@ internal static partial class BinaryEmitter
                 continue;
             }
             int last = index;
-            while (last + 1 < members.Length && !IsWriterBlock(members[last + 1]) &&
+            while (last + 1 < members.Length && !IsInlineSegment(members[last + 1]) &&
                 !(members[last + 1].Kind == RenderMemberKind.Dictionary && !members[last + 1].Dictionary.Pair))
                 last++;
             if (!current && !header)
@@ -94,12 +94,6 @@ internal static partial class BinaryEmitter
         if (current)
             body.Add("writer.Cursor = ref cursor;");
     }
-
-    /// <summary>Whether a member writes in place through the writer rather than at the cursor: an inline object, a string
-    /// list, a list whose elements expand their record body or an array written by its formatter owner.</summary>
-    private static bool IsWriterBlock(RenderMember member) => member.Kind == RenderMemberKind.Object || IsTextList(member) ||
-        IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall || member.Kind is RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence or
-            RenderMemberKind.Special or RenderMemberKind.CultureInfo or RenderMemberKind.Parameter;
 
     /// <summary>Writes one fused-entry dictionary member at the cursor: the kernel under a UTF-16 record profile and the
     /// original operation as its fallback.</summary>

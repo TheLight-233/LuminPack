@@ -5,6 +5,7 @@ using LuminPack.Build;
 using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Emit;
 
 /// <summary>Verifies Next against the pointer runtime with the Roslyn 4.3 compiler.</summary>
@@ -44,6 +45,7 @@ internal static class NextCompatibilityRegression
                         if (file.HintName.IndexOf('/') >= 0)
                             throw new InvalidOperationException(name + ": a portable source hint retained a directory separator.");
                 }
+                VerifyScalarArrayReservation(driver, name);
                 using var pe = new MemoryStream();
                 using var pdb = new MemoryStream();
                 var emitted = output.Emit(pe, pdb, options: new EmitOptions(debugInformationFormat: DebugInformationFormat.PortablePdb));
@@ -66,7 +68,31 @@ internal static class NextCompatibilityRegression
         Console.WriteLine("Next portable compatibility: four C# 9/10 and Roslyn 4.3 backend combinations passed.");
     }
 
+    /// <summary>Checks that scalar arrays consume the same reservation in the portable record body.</summary>
+    /// <param name="driver">The completed generator driver.</param>
+    /// <param name="name">The fixture configuration.</param>
+    private static void VerifyScalarArrayReservation(GeneratorDriver driver, string name)
+    {
+        var write = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .Where(file => file.HintName.Contains("Payload", StringComparison.Ordinal))
+            .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Select(method => method.Body?.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Where(call => call.Expression is MemberAccessExpressionSyntax).ToArray())
+            .FirstOrDefault(calls => calls?.Any(call => Name(call) == "ReserveRecord") == true);
+        if (write == null || write.Count(call => Name(call) == "WriteReservedSpanInline") != 2 ||
+            write.Any(call => Name(call) == "WriteRecordSpan") ||
+            !write.Any(call => Name(call) == "ReserveRecord" &&
+                call.ArgumentList.Arguments[1].Expression.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
+                    .Count(term => term.Name.Identifier.ValueText == "Bound") == 2))
+            throw new InvalidOperationException(name + ": the scalar arrays lost their shared reservation." + Environment.NewLine +
+                (write == null ? "No reservation was emitted." : string.Join(Environment.NewLine, write.Select(call => call.ToString()))));
+
+        static string Name(InvocationExpressionSyntax call) => ((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.ValueText;
+    }
+
     private const string Fixture = """
+        using System;
+        using System.Linq;
         using LuminPack;
         using LuminPack.Attribute;
         using LuminPack.Option;
@@ -76,6 +102,8 @@ internal static class NextCompatibilityRegression
         public sealed class Payload
         {
             public long Wide;
+            public int[] Numbers;
+            public bool[] Flags;
             public int? Optional;
             public string Text;
         }
@@ -86,13 +114,20 @@ internal static class NextCompatibilityRegression
 
             public static bool Exercise()
             {
-                var value = new Payload { Wide = 0x102030405060708L, Optional = 23, Text = "\u4E2D" };
-                byte[] bytes = LuminPackSerializer.Serialize<Payload, LuminPackUtf8VarIntOptions>(value);
-                var binary = LuminPackSerializer.Deserialize<Payload, LuminPackUtf8VarIntOptions>(bytes);
-                string text = LuminPackSerializer.SerializeJson<Payload, LuminPackUtf8LengthOptions>(value);
-                var json = LuminPackSerializer.DeserializeJson<Payload, LuminPackUtf8LengthOptions>(text);
-                return binary.Wide == value.Wide && binary.Optional == 23 && binary.Text == value.Text &&
-                    json.Wide == value.Wide && json.Optional == 23 && json.Text == value.Text;
+                foreach (int[] numbers in new[] { null, Array.Empty<int>(), Enumerable.Range(0, 20000).ToArray() })
+                {
+                    var value = new Payload { Wide = 0x102030405060708L, Numbers = numbers, Flags = new[] { true, false }, Optional = 23, Text = "\u4E2D" };
+                    byte[] bytes = LuminPackSerializer.Serialize<Payload, LuminPackUtf8VarIntOptions>(value);
+                    var binary = LuminPackSerializer.Deserialize<Payload, LuminPackUtf8VarIntOptions>(bytes);
+                    string text = LuminPackSerializer.SerializeJson<Payload, LuminPackUtf8LengthOptions>(value);
+                    var json = LuminPackSerializer.DeserializeJson<Payload, LuminPackUtf8LengthOptions>(text);
+                    if (binary.Wide != value.Wide || binary.Optional != 23 || binary.Text != value.Text ||
+                        (numbers == null ? binary.Numbers != null : !numbers.SequenceEqual(binary.Numbers)) ||
+                        !value.Flags.SequenceEqual(binary.Flags) ||
+                        json.Wide != value.Wide || json.Optional != 23 || json.Text != value.Text)
+                        return false;
+                }
+                return true;
             }
         }
         """;
