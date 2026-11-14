@@ -472,16 +472,18 @@ internal static class ContiguousOwnerFile
                 w.Indented(() => w.Line("value.RemoveRange(count, value.Count - count);"));
                 return;
             }
-            bool pooled = shape == ContiguousShape.Array || (shape == ContiguousShape.ImmutableArray && element.Type != "string");
+            bool pooled = shape is ContiguousShape.Array or ContiguousShape.ImmutableArray;
             if (pooled)
             {
                 // Exact mutable arrays need the count before reusing element slots. Only the trusted built-in
                 // profiles can decode a fresh result before validating the rest of the array.
-                w.Line("if (typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
+                bool seedStrings = shape == ContiguousShape.ImmutableArray && element.Type == "string";
+                w.Line("if (" + (seedStrings ? "value.IsDefault && (" : "") +
+                    "typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
                 w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf8LengthOptions) ||");
                 w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16TokenOptions) ||");
                 w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf8TokenOptions) ||");
-                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions))");
+                w.Line("    typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions))" + (seedStrings ? ")" : ""));
                 w.Open();
                 if (shape == ContiguousShape.Array)
                 {
