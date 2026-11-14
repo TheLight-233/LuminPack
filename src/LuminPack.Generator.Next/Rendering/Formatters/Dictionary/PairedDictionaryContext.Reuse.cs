@@ -19,7 +19,9 @@ internal sealed partial class PairedDictionaryContext
                 W.Line("bool useEnumeratedValue = operationState.CanReuseEnumeratedStringKey<TLuminProfile>(value.Comparer);");
         }
 
-        W.Line("for (int index = 0; index < length; index++)");
+        W.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
+        W.Line("int index = 0;");
+        W.Line("do");
         W.Open();
         if (Key == "string")
             W.Line("var prior = previous.MoveNext() ? previous.Current : default;");
@@ -27,10 +29,17 @@ internal sealed partial class PairedDictionaryContext
         ReadMember(Key, "key");
         W.Line(Value + " item = " + (Key == "string" && Supports("EnumeratedStringKey") ? "useEnumeratedValue && key is not null && global::System.Object.ReferenceEquals(key, prior.Key) ? prior.Value : " : "") + (ValueKey ? "" : "key is not null && ") + "value.TryGetValue(key, out var existing) ? existing : default!;");
         ReadMember(Value, "item");
-        W.Line("pairs[index] = new " + Pair + "(key!, item);");
+        W.Line(Memory + ".Add(ref firstPair, (nint)(uint)index) = new " + Pair + "(key!, item);");
         W.Close();
+        W.Line("while (++index < length);");
         W.Line("value.Clear();");
-        W.Line("for (int index = 0; index < length; index++) value.Add(pairs[index].Key, pairs[index].Value);");
+        W.Line("index = 0;");
+        W.Line("do");
+        W.Open();
+        W.Line("ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
+        W.Line("value.Add(pair.Key, pair.Value);");
+        W.Close();
+        W.Line("while (++index < length);");
         W.Close();
         W.Line("finally");
         W.Open();

@@ -47,7 +47,8 @@ internal static class PayloadDictionaryOwnerFile
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int remaining = length;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -55,6 +56,7 @@ internal static class PayloadDictionaryOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line("value.Add(k!, v);");
         w.Close();
+        w.Line("while (--remaining != 0);");
     }
 
     /// <summary>The original fresh dictionary of Union values: entries are written into the new dictionary's storage with the
@@ -65,7 +67,8 @@ internal static class PayloadDictionaryOwnerFile
         w.Line("if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)");
         w.Open();
         w.Line("var fallback = new " + c.Dictionary + "(length);");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int fallbackRemaining = length;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -73,33 +76,38 @@ internal static class PayloadDictionaryOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line("fallback.Add(k!, v);");
         w.Close();
+        w.Line("while (--fallbackRemaining != 0);");
         w.Line("value = fallback;");
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();
         w.Line("var result = new " + c.Dictionary + "(length);");
         w.Line("var dictionaryView = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(result);");
-        w.Line("var entries = dictionaryView._entries!;");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
+        w.Line("int entryIndex = 0;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " key = default !;");
         w.Line(c.Value + " itemValue = default !;");
         c.ReadMember(c.Key, "key");
         UnionEmitter.FreshElementRead(union, w, "itemValue", "freshEnd", "operationState");
         w.Line("freshEnd:");
-        w.Line("ref var entry = ref entries[index];");
+        w.Line("ref var entry = ref " + c.Memory + ".Add(ref first, (nint)(uint)entryIndex);");
         w.Line("entry.Key = key;");
         w.Line("entry.Value = itemValue;");
         w.Close();
+        w.Line("while (++entryIndex < length);");
         w.Blank();
         w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(dictionaryView, length))");
         w.Open();
         w.Line("var rebuilt = new " + c.Dictionary + "(length);");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("entryIndex = 0;");
+        w.Line("do");
         w.Open();
-        w.Line("ref var entry = ref entries[index];");
+        w.Line("ref var entry = ref " + c.Memory + ".Add(ref first, (nint)(uint)entryIndex);");
         w.Line("rebuilt.Add(entry.Key, entry.Value);");
         w.Close();
+        w.Line("while (++entryIndex < length);");
         w.Line("result = rebuilt;");
         w.Close();
         w.Line("value = result;");

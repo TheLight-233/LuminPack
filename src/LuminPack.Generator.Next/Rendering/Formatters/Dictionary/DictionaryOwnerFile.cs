@@ -374,20 +374,25 @@ internal static class DictionaryOwnerFile
                         w.Line("int refillVersion = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(value)._version;");
                         w.Line("var refillView = global::LuminPack.Code.LuminPackMarshal.PrepareDictionaryRefill(value, length);");
                         w.Line("ref var refillRef = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(refillView._entries!);");
-                        w.Line("for (int index = 0; index < length; index++)");
+                        w.Line("int index = 0;");
+                        w.Line("do");
                         w.Open();
                         w.Line("ref var refillEntry = ref " + memory + ".Add(ref refillRef, (nint)(uint)index);");
                         ReadMember("operationState", key, "refillEntry.Key");
                         ReadMember("operationState", value, "refillEntry.Value");
                         w.Close();
+                        w.Line("while (++index < length);");
                         w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(refillView, length))");
                         w.Open();
                         w.Line("var pairs = new " + entry + "[length];");
-                        w.Line("for (int index = 0; index < length; index++)");
+                        w.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
+                        w.Line("index = 0;");
+                        w.Line("do");
                         w.Open();
                         w.Line("ref var refillEntry = ref " + memory + ".Add(ref refillRef, (nint)(uint)index);");
-                        w.Line("pairs[index] = new " + entry + "(refillEntry.Key, refillEntry.Value);");
+                        w.Line(memory + ".Add(ref firstPair, (nint)(uint)index) = new " + entry + "(refillEntry.Key, refillEntry.Value);");
                         w.Close();
+                        w.Line("while (++index < length);");
                         w.Line("value.Clear();");
                         w.Line("foreach (var item in pairs)");
                         w.Indented(() => w.Line("value.Add(item.Key, item.Value);"));
@@ -406,7 +411,8 @@ internal static class DictionaryOwnerFile
                     w.Line("if (" + memory + ".SizeOf<global::System.IntPtr>() != 8)");
                     w.Open();
                     w.Line("var fallback = new " + dictionary + "(length);");
-                    w.Line("for (int index = 0; index < length; index++)");
+                    w.Line("int fallbackRemaining = length;");
+                    w.Line("do");
                     w.Open();
                     w.Line(key + " key = default !;");
                     w.Line(value + " itemValue = default !;");
@@ -414,6 +420,7 @@ internal static class DictionaryOwnerFile
                     ReadMember("operationState", value, "itemValue");
                     w.Line("fallback.Add(key, itemValue);");
                     w.Close();
+                    w.Line("while (--fallbackRemaining != 0);");
                     w.Line("value = fallback;");
                     w.Line("goto operationComplete_RootRead;");
                     w.Close();
@@ -429,11 +436,11 @@ internal static class DictionaryOwnerFile
                     }
                     w.Line("var result = new " + dictionary + "(length);");
                     w.Line("var dictionaryView = global::LuminPack.Code.LuminPackMarshal.GetDictionaryView(result);");
-                    w.Line("var entries = dictionaryView._entries!;");
+                    w.Line("ref var firstEntry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
                     if (readRawPair)
                     {
                         const string read = "global::LuminPack.Core.LuminPackReader.Read";
-                        w.Line("ref var entry = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(entries);");
+                        w.Line("ref var entry = ref firstEntry;");
                         // The storage was allocated for length entries, and the payload check dominates this loop.
                         w.Line("int remaining = length;");
                         w.Line("do");
@@ -447,9 +454,10 @@ internal static class DictionaryOwnerFile
                     }
                     else
                     {
-                        w.Line("for (int index = 0; index < length; index++)");
+                        w.Line("int index = 0;");
+                        w.Line("do");
                         w.Open();
-                        w.Line("ref var entry = ref entries[index];");
+                        w.Line("ref var entry = ref " + memory + ".Add(ref firstEntry, (nint)(uint)index);");
                         if (pair)
                         {
                             ReadMember("operationState", key, "entry.Key");
@@ -466,16 +474,19 @@ internal static class DictionaryOwnerFile
                             w.Line("entry.Value = itemValue;");
                         }
                         w.Close();
+                        w.Line("while (++index < length);");
                     }
                     w.Blank();
                     w.Line("if (!global::LuminPack.Code.LuminPackMarshal.TryRebuildFreshDictionaryBuckets(dictionaryView, length))");
                     w.Open();
                     w.Line("var rebuilt = new " + dictionary + "(length);");
-                    w.Line("for (int index = 0; index < length; index++)");
+                    w.Line("int rebuildIndex = 0;");
+                    w.Line("do");
                     w.Open();
-                    w.Line("ref var item = ref entries[index];");
+                    w.Line("ref var item = ref " + memory + ".Add(ref firstEntry, (nint)(uint)rebuildIndex);");
                     w.Line("rebuilt.Add(item.Key, item.Value);");
                     w.Close();
+                    w.Line("while (++rebuildIndex < length);");
                     w.Line("result = rebuilt;");
                     w.Close();
                     w.Line("value = result;");
@@ -504,7 +515,9 @@ internal static class DictionaryOwnerFile
                     }
                     if (observeRawLookup)
                         w.Line("bool observeLookup = !global::System.Object.ReferenceEquals(destination.Comparer, global::System.Collections.Generic.EqualityComparer<" + key + ">.Default);");
-                    w.Line("for (int index = 0; index < count; index++)");
+                    w.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items);");
+                    w.Line("int index = 0;");
+                    w.Line("do");
                     w.Open();
                     if (key == "string") w.Line("var prior = previous.MoveNext() ? previous.Current : default;");
                     w.Line(key == "string" ? "string key = prior.Key;" : key + " key = default!;");
@@ -522,11 +535,17 @@ internal static class DictionaryOwnerFile
                             (key == "string" || key == "object" || key.EndsWith("?", System.StringComparison.Ordinal) ? "key is not null && " : "") +
                             "destination.TryGetValue(key, out var existing) ? existing : default!;");
                     ReadMember("operationState", value, "item");
-                    w.Line("items[index] = new " + entry + "(key, item);");
+                    w.Line(memory + ".Add(ref firstPair, (nint)(uint)index) = new " + entry + "(key, item);");
                     w.Close();
+                    w.Line("while (++index < count);");
                     w.Line("destination.Clear();");
-                    w.Line("for (int index = 0; index < count; index++)");
-                    w.Indented(() => w.Line("destination.Add(items[index].Key, items[index].Value);"));
+                    w.Line("index = 0;");
+                    w.Line("do");
+                    w.Open();
+                    w.Line("ref var pair = ref " + memory + ".Add(ref firstPair, (nint)(uint)index);");
+                    w.Line("destination.Add(pair.Key, pair.Value);");
+                    w.Close();
+                    w.Line("while (++index < count);");
                     w.Close();
                     w.Line("finally");
                     w.Open();
