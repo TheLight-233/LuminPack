@@ -372,9 +372,14 @@ namespace LuminPack.Core
         /// <summary>Advances the current buffer position by the supplied number of bytes.</summary>
         /// <param name = "count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Advance(int count)
+        public void Advance(int count) => AdvanceFromPosition(Position, count);
+
+        /// <summary>Advances after checking the range at the caller's current cursor position.</summary>
+        /// <param name="position">The current position, before any cursor changes.</param>
+        /// <param name="count">The number of bytes to advance.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void AdvanceFromPosition(int position, int count)
         {
-            int position = Position;
             if ((uint)position > (uint)Buffer.Length || (uint)count > (uint)(Buffer.Length - position))
                 LuminPackExceptionHelper.ThrowJsonAdvanceOutOfRange(position, count);
 #if NET8_0_OR_GREATER

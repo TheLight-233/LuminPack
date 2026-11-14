@@ -1273,17 +1273,18 @@ namespace LuminPack.Core
         private ReadOnlySpan<char> ReadSelectedStringUtf16<TOptions>(bool unescape)
             where TOptions : struct, ILuminPackOptions
         {
-            Advance(2);
-            int start = Position;
-            int scan = Position;
+            int position = Position;
+            AdvanceFromPosition(position, sizeof(char));
+            int start = position + sizeof(char);
+            int scan = start;
 #if NET8_0_OR_GREATER
-            int available = (Buffer.Length - start) / sizeof(char);
+            int available = (int)((uint)(Buffer.Length - start) >> 1);
             ref char first = ref Unsafe.As<byte, char>(ref Current);
             var charSpan = LuminPackMarshal.CreateReadOnlySpan(ref first, available);
             int special = charSpan.IndexOfAny(NumberCharLookup.StringSpecialChars);
             if (special >= 0 && charSpan[special] == '"')
             {
-                Advance((special + 1) * 2);
+                AdvanceFromPosition(start, (special + 1) * sizeof(char));
                 return LuminPackMarshal.CreateReadOnlySpan(ref first, special);
             }
 
