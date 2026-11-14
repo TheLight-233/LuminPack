@@ -8,13 +8,15 @@
 
 ## 输出结构
 
-一个增量生成器输出三个目录：
+一个增量生成器共用分析流程，并在 Roslyn 4.6 及以上输出三个目录：
 
 | 目录 | 内容 |
 | --- | --- |
 | `Binary` | 二进制入口、类型算法、Union 分派和拦截入口。 |
 | `Json` | JSON 入口、类型算法和 JSON Union 分派。 |
 | `Formatters` | 共享框架 Formatter、编译期配置和注册支持。 |
+
+较旧的 Roslyn 宿主使用带分类前缀的平铺文件名，例如 `Binary.LuminPackGen.Model.g.cs`。要查看磁盘上的目录结构，在消费项目运行 `dotnet build -p:EmitCompilerGeneratedFiles=true`，然后打开 `obj/<配置>/<目标框架>/generated` 下 Next 生成器的输出。项目树如何展示生成文件由 IDE 决定。
 
 文件名沿用旧生成器的 `LuminPackGen.<命名空间>.<类型名>.g.cs` 规则，以声明的泛型参数个数替代具体类型参数。基础标量合并至 `LuminPackGen.System.g.cs`，数组合并至 `LuminPackGen.Array.g.cs`，同一框架泛型定义的不同构造合并到一个文件。
 

@@ -44,9 +44,9 @@ internal static partial class NextPipeline
         });
     }
 
-    // Roslyn 4.3 rejects separators in AddSource. Keep the folder spelling on the modern host used for publication checks.
+    // AddSource accepts directory separators starting with Roslyn 4.6.
     private static readonly bool DirectoryHints = typeof(Compilation).Assembly.GetName().Version is { } version &&
-        (version.Major > 4 || version.Major == 4 && version.Minor >= 14);
+        (version.Major > 4 || version.Major == 4 && version.Minor >= 6);
 
     /// <summary>Uses directory hints on modern compiler hosts and an equivalent flat name on older hosts.</summary>
     private static string PublicationHint(string hint) => DirectoryHints ? hint : hint.Replace('/', '.');
