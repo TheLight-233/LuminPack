@@ -111,7 +111,8 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Writes one entry member to the isolated operation state.</summary>
     /// <param name="type">The member keyword or <c>string</c>.</param>
     /// <param name="expression">The member value expression.</param>
-    internal void WriteMember(string type, string expression)
+    /// <param name="checkBuffer">Whether the writer can still be beyond its growth threshold.</param>
+    internal void WriteMember(string type, string expression, bool checkBuffer = true)
     {
         if (_nativeEntries)
         {
@@ -134,7 +135,7 @@ internal sealed partial class PairedDictionaryContext
         }
         if (_contract != null)
         {
-            FormatterElementEmitter.Write(W, _set, _contract.Arguments[type == Key ? 0 : 1], expression, "operationState");
+            FormatterElementEmitter.Write(W, _set, _contract.Arguments[type == Key ? 0 : 1], expression, "operationState", checkBuffer: checkBuffer);
             return;
         }
         if (Payload != null && type == Payload.GlobalName)
@@ -283,6 +284,8 @@ internal sealed partial class PairedDictionaryContext
             return;
         }
         bool rawKey = _contract != null && _contract.Arguments[0] is { Raw: true, Payload: null } && Key != "bool";
+        bool boundedKey = rawKey && Key != Value && _contract!.Arguments[1] is { Raw: false } && Value != "string" && Supports("BinaryRawPairs");
+        string width = Memory + ".SizeOf<" + Key + ">()";
         string marshal = "global::LuminPack.Code.LuminPackMarshal";
         W.Line("int count = value.Count;");
         W.Line("operationState.WriteCollectionHeader(count);");
@@ -298,21 +301,36 @@ internal sealed partial class PairedDictionaryContext
         W.Line("int index = 0;");
         W.Line("do");
         W.Open();
-        W.Line("operationState.CheckBuffer();");
         W.Line("ref var entry = ref entryRef;");
-        if (rawKey)
+        if (boundedKey)
         {
-            W.Line(marshal + ".CopyBlockUnaligned(ref operationState.Cursor, ref " + Memory + ".As<" + Key + ", byte>(ref entry.Key), (uint)" +
-                Memory + ".SizeOf<" + Key + ">());");
-            W.Line("operationState.Advance(" + Memory + ".SizeOf<" + Key + ">());");
+            W.Line(Value + " itemValue;");
+            W.Line("if (operationState.RecordRoom() >= " + width + ")");
+            W.Open();
+            W.Line("operationState.CompleteRun(global::LuminPack.Core.LuminPackWriter.Write(ref operationState.Cursor, in entry.Key));");
+            W.Line("itemValue = entry.Value;");
+            W.Close();
+            W.Line("else");
+            W.Indented(() => W.Line("itemValue = WriteKeyAtBoundary(ref operationState, in entry.Key, in entry.Value);"));
+            WriteMember(Value, "itemValue", checkBuffer: false);
         }
         else
         {
-            W.Line(Key + " key = entry.Key;");
-            WriteMember(Key, "key");
+            W.Line("operationState.CheckBuffer();");
+            if (rawKey)
+            {
+                W.Line(marshal + ".CopyBlockUnaligned(ref operationState.Cursor, ref " + Memory + ".As<" + Key + ", byte>(ref entry.Key), (uint)" +
+                    width + ");");
+                W.Line("operationState.Advance(" + width + ");");
+            }
+            else
+            {
+                W.Line(Key + " key = entry.Key;");
+                WriteMember(Key, "key");
+            }
+            W.Line(Value + " itemValue = entry.Value;");
+            WriteMember(Value, "itemValue");
         }
-        W.Line(Value + " itemValue = entry.Value;");
-        WriteMember(Value, "itemValue");
         W.Line("entryRef = ref " + Memory + ".Add(ref entryRef, 1);");
         W.Close();
         W.Line("while (++index < count);");
@@ -322,6 +340,20 @@ internal sealed partial class PairedDictionaryContext
         W.Close();
         W.Line("operationState.CheckBuffer();");
         W.Blank();
+        if (boundedKey)
+        {
+            W.Line(W.MethodImpl("NoInlining"));
+            W.Line("static " + Value + " WriteKeyAtBoundary(ref global::LuminPack.Core.LuminPackWriter state, in " + Key + " key, in " + Value + " value)");
+            W.Open();
+            W.Line("state.CheckBuffer();");
+            W.Line("state.EnsureAdditionalCapacity(" + width + ");");
+            W.Line("state.Write(in key);");
+            W.Line(Value + " item = value;");
+            W.Line("state.CheckBuffer();");
+            W.Line("return item;");
+            W.Close();
+            W.Blank();
+        }
         W.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         W.Line("static void WriteSparseDictionary(ref global::LuminPack.Core.LuminPackWriter operationState, " + Dictionary + " source)");
         W.Open();

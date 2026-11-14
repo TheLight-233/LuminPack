@@ -17,9 +17,11 @@ internal static class FormatterElementEmitter
     /// <param name = "expression">The addressable value expression.</param>
     /// <param name = "state">The operation-state variable name.</param>
     /// <param name = "profile">The compiled profile type parameter name.</param>
-    internal static void Write(CodeWriter w, SharedFormatterSet set, FormatterModel model, string expression, string state = "writer", string profile = "TLuminProfile")
+    /// <param name = "checkBuffer">Whether the writer can still be beyond its growth threshold.</param>
+    internal static void Write(CodeWriter w, SharedFormatterSet set, FormatterModel model, string expression, string state = "writer", string profile = "TLuminProfile", bool checkBuffer = true)
     {
-        w.Line(state + ".CheckBuffer();");
+        if (checkBuffer)
+            w.Line(state + ".CheckBuffer();");
         // A packable payload is copied raw only when its own formatter is a plain storage copy, matching the owner read.
         if (model.Raw && (model.Payload == null || model.RawStorage))
         {
