@@ -6,6 +6,23 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional formatter runtime APIs against the consumer metadata.</summary>
 internal static class FormatterRuntimeTraits
 {
+    /// <summary>Checks the read-only structural hint before emitting a presized JSON list.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <returns>Whether the runtime exposes the profile-aware capacity hint.</returns>
+    internal static bool HasJsonArrayCapacityHint(Compilation compilation)
+    {
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader");
+        return options != null && reader?.GetMembers("GetArrayCapacityHint").OfType<IMethodSymbol>().Any(method =>
+            !method.IsStatic && method.Arity == 1 && method.DeclaredAccessibility == Accessibility.Public &&
+            !method.ReturnsByRef && !method.ReturnsByRefReadonly && method.ReturnType.SpecialType == SpecialType.System_Int32 &&
+            method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+            SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options) &&
+            method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+            method.Parameters[0].Type.SpecialType == SpecialType.System_Int32) == true;
+    }
+
     /// <summary>Recognizes established raw framework scalar storage.</summary>
     /// <param name = "type">The declared type or its source-ready spelling.</param>
     /// <returns>Whether the requested contract or capability is available.</returns>

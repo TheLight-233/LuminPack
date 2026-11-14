@@ -631,6 +631,7 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     break;
                 case FormatterSection.Roots:
+                {
                     w.Line(preserve);
                     if (spec.OutlineJson)
                         w.Line(w.MethodImpl("NoInlining"));
@@ -652,43 +653,70 @@ internal static class PairedDictionaryOwnerTemplate
                         (value is "int" or "long" || GenericFormatterReuse.IsUnmanagedPlaceholder(value));
                     bool sharedPair = integerPair && (GenericFormatterReuse.IsUnmanagedPlaceholder(key) ||
                         GenericFormatterReuse.IsUnmanagedPlaceholder(value));
-                    if (!integerPair || sharedPair)
-                        w.Line("bool isFirst = true;");
-                    w.Line("foreach (var item in " + context.Source + ")");
-                    w.Open();
-                    if (integerPair)
+                    if (fact.Family.ForwardsToDictionary)
                     {
-                        if (sharedPair)
-                        {
-                            EmitSharedIntegerPair("int");
-                            EmitSharedIntegerPair("long");
-                        }
-                        else
-                            w.Line("writer.WriteIntegerEntry<TLuminProfile>(item.Key, item.Value);");
-                    }
-                    if (!integerPair || sharedPair)
-                    {
-                        w.Line("if (!isFirst)");
-                        w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                        string concrete = "global::System.Collections.Generic.Dictionary<" + key + ", " + value + ">";
+                        w.Line("if (value.GetType() == typeof(" + concrete + "))");
+                        w.Indented(() => w.Line("WriteKnown(ref writer, " + memory + ".As<" + concrete + ">(value));"));
                         w.Line("else");
-                        w.Line("    isFirst = false;");
-                        w.Line("writer.SetFirstElement(true);");
-                        w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                        w.Line("var key = item." + spec.KeyMember + ";");
-                        w.Line("writer.SetFirstElement(true);");
-                        w.Line(keyOwner + ".Write<TLuminProfile>(ref writer, key);");
-                        w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                        w.Line("var itemValue = item." + spec.ValueMember + ";");
-                        w.Line("writer.SetFirstElement(true);");
-                        w.Line(valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
-                        w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                        w.Indented(() => w.Line("WriteInterface(ref writer, value);"));
+                        EmitLocalLoop("WriteKnown", concrete);
+                        EmitLocalLoop("WriteInterface", dictionary);
                     }
-                    w.Close();
+                    else
+                        EmitLoop(context.Source);
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
                     w.Blank();
                     break;
+
+                    void EmitLocalLoop(string method, string input)
+                    {
+                        w.Blank();
+                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line("static void " + method + "(scoped ref " + jsonWriter + " writer, " + input + " items)");
+                        w.Open();
+                        EmitLoop("items");
+                        w.Close();
+                    }
+
+                    void EmitLoop(string source)
+                    {
+                        if (!integerPair || sharedPair)
+                            w.Line("bool isFirst = true;");
+                        w.Line("foreach (var item in " + source + ")");
+                        w.Open();
+                        if (integerPair)
+                        {
+                            if (sharedPair)
+                            {
+                                EmitSharedIntegerPair("int");
+                                EmitSharedIntegerPair("long");
+                            }
+                            else
+                                w.Line("writer.WriteIntegerEntry<TLuminProfile>(item.Key, item.Value);");
+                        }
+                        if (!integerPair || sharedPair)
+                        {
+                            w.Line("if (!isFirst)");
+                            w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                            w.Line("else");
+                            w.Line("    isFirst = false;");
+                            w.Line("writer.SetFirstElement(true);");
+                            w.Line("writer.WriteArrayStart<TLuminProfile>();");
+                            w.Line("var key = item." + spec.KeyMember + ";");
+                            w.Line("writer.SetFirstElement(true);");
+                            w.Line(keyOwner + ".Write<TLuminProfile>(ref writer, key);");
+                            w.Line("writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                            w.Line("var itemValue = item." + spec.ValueMember + ";");
+                            w.Line("writer.SetFirstElement(true);");
+                            w.Line(valueOwner + ".Write<TLuminProfile>(ref writer, itemValue);");
+                            w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                        }
+                        w.Close();
+                    }
+                }
                 case FormatterSection.Owner:
                     w.Line(inline);
                     w.Line("internal static void Write(");

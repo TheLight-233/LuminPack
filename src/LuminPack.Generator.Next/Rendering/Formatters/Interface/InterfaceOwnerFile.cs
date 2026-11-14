@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -11,20 +10,20 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class InterfaceOwnerFile
 {
     private static readonly EnumerableOwnerSpec ArraySpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadArray, "staged.Add(item);",
-        c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged;"), jsonCount: false, interfaceListReuse: true);
+        BeginJsonList,
+        c => c.W.Line("value = staged;"), jsonCount: false, interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec CountedArraySpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadArray, "staged.Add(item);",
-        c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged;"), interfaceListReuse: true);
+        BeginJsonList,
+        c => c.W.Line("value = staged;"), interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec ListSpec = new EnumerableOwnerSpec(c => WriteLines(c, false), ReadList, "staged.Add(item);",
-        c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged;"), interfaceListReuse: true);
+        BeginJsonList,
+        c => c.W.Line("value = staged;"), interfaceListReuse: true, readInlining: "NoInlining", outlineJson: true);
 
     private static readonly EnumerableOwnerSpec SetSpec = new EnumerableOwnerSpec(c => WriteLines(c, true), ReadSet, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">();"),
-        c => c.W.Line("value = staged;"));
+        c => c.W.Line("value = staged;"), readInlining: "NoInlining", outlineJson: true, interfaceSetTraversal: true);
 
     /// <summary>Renders an <c>IEnumerable&lt;T&gt;</c> owner, whose count is unknown.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -58,20 +57,103 @@ internal static class InterfaceOwnerFile
     internal static string RenderSet(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, SetSpec);
 
+    /// <summary>Presizes fresh JSON lists with the same structural hint as the concrete List reader.</summary>
+    /// <param name="c">The sequence owner's read context.</param>
+    private static void BeginJsonList(EnumerableOwnerContext c)
+    {
+        string capacity = c.Supports("InterfaceJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(10)" : string.Empty;
+        c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">(" + capacity + ");");
+    }
+
+    /// <summary>Separates common concrete writes from the interface enumeration.</summary>
+    /// <param name="c">The sequence owner's write context.</param>
+    /// <param name="setInterface">Whether the interface can hold a framework set.</param>
     private static void WriteLines(EnumerableOwnerContext c, bool setInterface)
     {
-        if (c.Payload != null || c.Forwarded)
-        {
-            c.CountedWrite("value");
-            return;
-        }
-        var lines = new List<string>();
-        if (setInterface)
-            InterfaceTraversal.WriteSet(lines, c.Scalar, "value", c.Memory);
+        var w = c.W;
+        string writer = w.A("LuminPackWriter");
+        string scalar = c.Scalar;
+        string arrayType = ContiguousOwnerFile.ArrayType(scalar);
+        string type = "global::System.Collections.Generic." + (setInterface ? "HashSet" : "List") + "<" + scalar + ">";
+        bool outlineFallback = c.Counted || setInterface;
+        w.Line("if (value.GetType() == typeof(" + type + "))");
+        w.Open();
+        if (c.Counted)
+            w.Line("WriteKnown(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
+        else if (setInterface)
+            w.Line("global::LuminPack.Code.LuminPackMarshal.WriteHashSetRaw(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
         else
-            InterfaceTraversal.Write(lines, c.Scalar, "value", c.Memory);
-        foreach (string line in lines)
-            c.W.Line(line);
+        {
+            w.Line("var items = global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + c.Memory + ".As<" + type + ">(value));");
+            w.Line("operationState.Write<" + scalar + ">(items, items.Length);");
+            w.Line("operationState.CheckBuffer();");
+        }
+        w.Close();
+        if (!setInterface)
+        {
+            w.Line("else if (value.GetType() == typeof(" + arrayType + "))");
+            w.Open();
+            string array = c.Memory + ".As<" + arrayType + ">(value)";
+            if (c.Counted)
+                w.Line("WriteArray(ref operationState, " + array + ");");
+            else
+            {
+                w.Line("global::System.ReadOnlySpan<" + scalar + "> items = " + array + ";");
+                w.Line("operationState.Write<" + scalar + ">(items, items.Length);");
+                w.Line("operationState.CheckBuffer();");
+            }
+            w.Close();
+        }
+        w.Line("else");
+        if (outlineFallback)
+            w.Indented(() => w.Line("WriteInterface(ref operationState, value);"));
+        else
+        {
+            w.Open();
+            c.CountedWrite("value");
+            w.Close();
+        }
+        w.Blank();
+
+        if (c.Counted)
+        {
+            WriteCounted("WriteKnown", type);
+            if (!setInterface)
+            {
+                if (c.Text)
+                {
+                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line("static void WriteArray(scoped ref " + writer + " operationState, string[] items)");
+                    w.Open();
+                    w.Line("int countPosition = operationState.BeginCollection();");
+                    w.Line("operationState.WriteStrings<TLuminProfile>(items);");
+                    w.Line("operationState.EndCollection(countPosition, items.Length);");
+                    w.Line("operationState.CheckBuffer();");
+                    w.Close();
+                    w.Blank();
+                }
+                else
+                    WriteCounted("WriteArray", arrayType);
+            }
+        }
+        if (outlineFallback)
+            WriteCounted("WriteInterface", c.Sequence);
+        if (c.Text)
+        {
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static void WriteStringItem(scoped ref " + writer + " operationState, string item)");
+            w.Indented(() => w.Line("=> operationState.Write<TLuminProfile>(item);"));
+        }
+
+        void WriteCounted(string method, string input)
+        {
+            w.Line(w.MethodImpl("NoInlining"));
+            w.Line("static void " + method + "(scoped ref " + writer + " operationState, " + input + " items)");
+            w.Open();
+            c.CountedWrite("items", outlineText: c.Text);
+            w.Close();
+            w.Blank();
+        }
     }
 
     private static void ReadArray(EnumerableOwnerContext c)

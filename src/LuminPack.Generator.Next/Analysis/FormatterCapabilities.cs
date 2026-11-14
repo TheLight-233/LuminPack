@@ -52,8 +52,10 @@ internal static class FormatterCapabilities
             }
         }
 
-        if (definition is "System.Collections.Generic.IEnumerable" or "System.Collections.Generic.ICollection" or "System.Collections.Generic.IReadOnlyCollection" or "System.Collections.Generic.IList" or "System.Collections.Generic.IReadOnlyList")
+        if (SequenceInterface(definition))
         {
+            if (FormatterRuntimeTraits.HasJsonArrayCapacityHint(compilation))
+                result.Add("InterfaceJsonCapacity");
             ITypeSymbol element = named.TypeArguments[0];
             bool ordinary = element is INamedTypeSymbol { TypeKind: TypeKind.Class } payload && payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackableAttribute" && (attribute.ConstructorArguments.Length == 0 || Convert.ToInt32(attribute.ConstructorArguments[0].Value, System.Globalization.CultureInfo.InvariantCulture) == 0)) && !payload.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
             if (element.SpecialType == SpecialType.System_String || element.IsUnmanagedType && (element.SpecialType != SpecialType.None || Rendering.Formatters.FrameworkScalarBody.Contains(element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) || ordinary)
@@ -89,15 +91,20 @@ internal static class FormatterCapabilities
 
         if (definition == "System.Collections.Concurrent.ConcurrentStack" && FormatterConcurrentTraits.CanStageStack(compilation, named.TypeArguments[0]))
             result.Add("StageConcurrentStack");
-        if (definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
+        if ((definition is "System.Collections.Concurrent.ConcurrentQueue" or "System.Collections.Concurrent.ConcurrentStack" or "System.Collections.Concurrent.ConcurrentBag"
             or "System.Collections.Immutable.ImmutableArray" or "System.Collections.Immutable.ImmutableList" or "System.Collections.Immutable.ImmutableQueue"
-            or "System.Collections.Immutable.ImmutableStack" or "System.Collections.Immutable.ImmutableHashSet" or "System.Collections.Immutable.ImmutableSortedSet"
-            && FormatterConcurrentTraits.HasJsonIntegerElement(compilation, named.TypeArguments[0]))
+            or "System.Collections.Immutable.ImmutableStack" or "System.Collections.Immutable.ImmutableHashSet" or "System.Collections.Immutable.ImmutableSortedSet" ||
+            SequenceInterface(definition) || definition is "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet") &&
+            FormatterConcurrentTraits.HasJsonIntegerElement(compilation, named.TypeArguments[0]))
             result.Add("JsonIntegerElement");
         if (definition is "System.Collections.Concurrent.ConcurrentDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
-            "System.Collections.Immutable.ImmutableSortedDictionary" &&
+            "System.Collections.Immutable.ImmutableSortedDictionary" or "System.Collections.Generic.IDictionary" or
+            "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Immutable.IImmutableDictionary" &&
             FormatterConcurrentTraits.HasJsonIntegerPairs(compilation))
             result.Add("JsonIntegerPair");
+        if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
+            FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
+            result.Add("BinaryRawPairs");
         if (definition == "System.Collections.Concurrent.ConcurrentDictionary" && modern && !unity &&
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
@@ -116,6 +123,13 @@ internal static class FormatterCapabilities
 
         return result.ToArray();
     }
+
+    /// <summary>Identifies the five sequence interfaces whose exact list and array lanes share traversal.</summary>
+    /// <param name="definition">The open framework definition name.</param>
+    /// <returns>Whether this is a sequence interface that can hold a list or array.</returns>
+    private static bool SequenceInterface(string definition) => definition is "System.Collections.Generic.IEnumerable" or
+        "System.Collections.Generic.ICollection" or "System.Collections.Generic.IReadOnlyCollection" or
+        "System.Collections.Generic.IList" or "System.Collections.Generic.IReadOnlyList";
 
     /// <summary>Recognizes a callback-free fixed framework key or a raw enum.</summary>
     /// <param name = "type">The declared type or its source-ready spelling.</param>

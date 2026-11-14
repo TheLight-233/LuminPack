@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
+using LuminPack.Option;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -88,6 +89,40 @@ public class CollectionFastPathTest
             var sortedSet = new SortedSet<int>(ints);
             Assert.Equal(LuminPackSerializer.Serialize(sortedSet), LuminPackSerializer.Serialize((ISet<int>)(sortedSet)));
             Assert.True(set.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(LuminPackSerializer.Serialize((ISet<int>)(set)), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))!));
+        }
+    }
+
+    /// <summary>Checks that exact-type dispatch still calls a derived collection's interface enumerator.</summary>
+    [Fact]
+    public void DerivedSequenceInterfaceKeepsItsEnumeration()
+    {
+        IList<int> source = new ReorderedList { 1, 2, 3 };
+        var expected = new[] { 3, 2, 1 };
+        Assert.Equal(LuminPackSerializer.Serialize(expected), LuminPackSerializer.Serialize(source));
+        string json = LuminPackSerializer.SerializeJson<IList<int>, LuminPackUtf16LengthOptions>(source);
+        Assert.Equal("[3,2,1]", json);
+    }
+
+    /// <summary>Checks that integer pair fusion preserves a sparse dictionary's enumeration order and native widths.</summary>
+    [Fact]
+    public void SparseDictionaryInterfaceKeepsLongPairWire()
+    {
+        var dictionary = new Dictionary<int, long> { [7] = long.MinValue, [12] = 3, [-1] = long.MaxValue };
+        dictionary.Remove(12);
+        IReadOnlyDictionary<int, long> source = dictionary;
+        Assert.Equal(LuminPackSerializer.Serialize(dictionary), LuminPackSerializer.Serialize(source));
+        Assert.Equal("[[7,-9223372036854775808],[-1,9223372036854775807]]",
+            LuminPackSerializer.SerializeJson<IReadOnlyDictionary<int, long>, LuminPackUtf16LengthOptions>(source));
+    }
+
+    /// <summary>Reimplements generic enumeration without changing the concrete list's storage.</summary>
+    private sealed class ReorderedList : List<int>, IList<int>
+    {
+        /// <inheritdoc />
+        IEnumerator<int> IEnumerable<int>.GetEnumerator()
+        {
+            for (int index = Count - 1; index >= 0; index--)
+                yield return this[index];
         }
     }
 

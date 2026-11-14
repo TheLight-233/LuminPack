@@ -49,7 +49,8 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Emits the counted enumeration write of a nonnull sequence expression through <c>operationState</c>.</summary>
     /// <param name="local">The nonnull sequence expression.</param>
-    internal void CountedWrite(string local)
+    /// <param name="outlineText">Whether an enclosing operation supplies the outlined string write.</param>
+    internal void CountedWrite(string local, bool outlineText = false)
     {
         if (Forwarded)
         {
@@ -67,7 +68,7 @@ internal sealed partial class EnumerableOwnerContext
         if (Payload == null)
         {
             var lines = new List<string>();
-            InterfaceTraversal.Counted(lines, Scalar, local);
+            InterfaceTraversal.Counted(lines, Scalar, local, outlineText);
             foreach (string line in lines)
                 W.Line(line);
             return;
@@ -334,6 +335,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether an interface JSON read of packable elements reuses an existing exact array or list.</summary>
     internal bool InterfaceListReuse { get; }
 
+    /// <summary>Whether the JSON writer can use a concrete set enumerator after an exact type check.</summary>
+    internal bool InterfaceSetTraversal { get; }
+
     /// <summary>Whether the sequence exposes a count that short-circuits an empty JSON array.</summary>
     internal bool JsonCount { get; }
 
@@ -357,14 +361,16 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="jsonAddBody">The json add body used by this operation.</param>
     /// <param name="readInlining">The binary read root's inlining hint.</param>
     /// <param name="outlineJson">Whether to keep the JSON roots out of their callers.</param>
+    /// <param name="interfaceSetTraversal">Whether to probe for exact framework sets during JSON writes.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
         bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false,
         bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "AggressiveInlining",
-        bool outlineJson = false)
+        bool outlineJson = false, bool interfaceSetTraversal = false)
     {
         ReadInlining = readInlining;
         OutlineJson = outlineJson;
+        InterfaceSetTraversal = interfaceSetTraversal;
         InterfaceListReuse = interfaceListReuse;
         ConcurrentStackStaging = concurrentStackStaging;
         ArrayReuse = arrayReuse;
@@ -650,17 +656,22 @@ internal static class EnumerableOwnerTemplate
                         w.Close();
                     }
                     w.Blank();
-                    w.Line("bool isFirst = true;");
-                    w.Line("foreach (var item in value)");
-                    w.Open();
-                    w.Line("if (!isFirst)");
-                    w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
-                    w.Line("writer.SetFirstElement(true);");
-                    w.Line("var temp = item;");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
-                    w.Close();
+                    if (spec.InterfaceListReuse || spec.InterfaceSetTraversal)
+                        InterfaceJsonTraversal.Write(w, set, sequence, scalar, elementOwner, jsonWriter, spec.InterfaceSetTraversal);
+                    else
+                    {
+                        w.Line("bool isFirst = true;");
+                        w.Line("foreach (var item in value)");
+                        w.Open();
+                        w.Line("if (!isFirst)");
+                        w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
+                        w.Line("else");
+                        w.Line("    isFirst = false;");
+                        w.Line("writer.SetFirstElement(true);");
+                        w.Line("var temp = item;");
+                        w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
+                        w.Close();
+                    }
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();

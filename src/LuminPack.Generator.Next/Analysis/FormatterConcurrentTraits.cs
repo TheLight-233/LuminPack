@@ -22,6 +22,17 @@ internal static class FormatterConcurrentTraits
                 (SpecialType.System_Int32, RefKind.None));
     }
 
+    /// <summary>Checks reservation operations shared by the fixed pair writers.</summary>
+    /// <param name="compilation">The consuming compilation and its runtime references.</param>
+    /// <returns>Whether a generated pair can validate and advance once.</returns>
+    internal static bool HasBinaryRawPairWriter(Compilation compilation)
+    {
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return writer != null &&
+            HasBinaryWriterOperation(writer, "RecordRoom", false, SpecialType.System_Int32) &&
+            HasBinaryWriterOperation(writer, "CompleteRun", false, SpecialType.System_Void, (SpecialType.System_Int32, RefKind.None));
+    }
+
     /// <summary>Checks a non-generic binary writer operation against its expected signature.</summary>
     /// <param name="owner">The binary writer type.</param>
     /// <param name="name">The operation name.</param>
