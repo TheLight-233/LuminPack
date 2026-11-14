@@ -76,8 +76,15 @@ internal static class FormatterStorageEmitter
             int local = 0;
             Visit(w, current, "probe", ref local, (leaf, expression, _) =>
             {
+                if (leaf.WireSize == 0)
+                    return;
                 w.Line("int offset" + local + " = (int)" + Unsafe + ".ByteOffset(ref origin, ref " + Unsafe + ".As<" + leaf.Type + ", byte>(ref " + expression + "));");
-                w.Line("for (int i = 0; i < " + leaf.WireSize.ToString(CultureInfo.InvariantCulture) + "; i++) storageOffsets[next++] = offset" + local + " + i;");
+                w.Open();
+                w.Line("int i = 0;");
+                w.Line("do");
+                w.Indented(() => w.Line("storageOffsets[next++] = offset" + local + " + i;"));
+                w.Line("while (++i < " + leaf.WireSize.ToString(CultureInfo.InvariantCulture) + ");");
+                w.Close();
             });
             w.Close();
             if (current.Tagged)
@@ -101,7 +108,12 @@ internal static class FormatterStorageEmitter
                         int start = j++;
                         while (j < offsets.Length && offsets[j] == offsets[j - 1] + 1)
                             j++;
-                        w.Line("for (int i = 0; i < " + (j - start) + "; i++) storageOffsets[" + start + " + i] = " + offsets[start] + " + i;");
+                        w.Open();
+                        w.Line("int i = 0;");
+                        w.Line("do");
+                        w.Indented(() => w.Line("storageOffsets[" + start + " + i] = " + offsets[start] + " + i;"));
+                        w.Line("while (++i < " + (j - start) + ");");
+                        w.Close();
                     }
 
                     w.Line("return;");
