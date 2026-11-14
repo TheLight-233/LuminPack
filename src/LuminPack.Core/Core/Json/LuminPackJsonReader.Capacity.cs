@@ -303,13 +303,7 @@ namespace LuminPack.Core
                     quotes = RemoveEscapedQuotes(quotes, slashes, width, ref slashCarry);
                 if (quotes != 0 || quoted)
                 {
-                    ulong inside = quotes;
-                    inside ^= inside << 1;
-                    inside ^= inside << 2;
-                    inside ^= inside << 4;
-                    inside ^= inside << 8;
-                    inside ^= inside << 16;
-                    inside ^= inside << 32;
+                    ulong inside = GetQuotePrefix(quotes, width);
                     if (quoted)
                         inside = ~inside;
                     quoted = ((inside >> (width - 1)) & 1) != 0;
@@ -559,13 +553,7 @@ namespace LuminPack.Core
                     quotes = RemoveEscapedQuotes(quotes, slashes, width, ref slashCarry);
                 if (quotes != 0 || quoted)
                 {
-                    ulong inside = quotes;
-                    inside ^= inside << 1;
-                    inside ^= inside << 2;
-                    inside ^= inside << 4;
-                    inside ^= inside << 8;
-                    inside ^= inside << 16;
-                    inside ^= inside << 32;
+                    ulong inside = GetQuotePrefix(quotes, width);
                     if (quoted)
                         inside = ~inside;
                     quoted = ((inside >> (width - 1)) & 1) != 0;
@@ -609,6 +597,36 @@ namespace LuminPack.Core
             }
 
             return -1;
+        }
+
+        /// <summary>Computes inclusive quote parity for the valid lanes in this block.</summary>
+        /// <param name="quotes">Positions of unescaped quotes.</param>
+        /// <param name="width">The number of valid lanes.</param>
+        /// <returns>The parity in the low <paramref name="width"/> bits.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ulong GetQuotePrefix(ulong quotes, int width)
+        {
+#if NET8_0_OR_GREATER
+            if (Pclmulqdq.X64.IsSupported)
+            {
+                // A polynomial product by all ones xors each quote into every subsequent lane.
+                return Pclmulqdq.CarrylessMultiply(Vector128.CreateScalarUnsafe(quotes), Vector128.Create(ulong.MaxValue), 0).ToScalar();
+            }
+#endif
+            quotes ^= quotes << 1;
+            quotes ^= quotes << 2;
+            if (width > 4)
+            {
+                quotes ^= quotes << 4;
+                quotes ^= quotes << 8;
+                if (width > 16)
+                {
+                    quotes ^= quotes << 16;
+                    if (width > 32)
+                        quotes ^= quotes << 32;
+                }
+            }
+            return quotes;
         }
 
         /// <summary>Removes quotes preceded by odd-length backslash runs across block boundaries.</summary>
