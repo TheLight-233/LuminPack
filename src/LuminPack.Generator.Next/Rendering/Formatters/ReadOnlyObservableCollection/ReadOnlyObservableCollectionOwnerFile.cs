@@ -10,7 +10,8 @@ internal static class ReadOnlyObservableCollectionOwnerFile
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "staged.Add(item);",
         PrepareJson,
         c => c.W.Line("value = new " + c.Sequence + "(staged);"),
-        jsonAddBody: AppendJson, readInlining: "NoInlining", outlineJson: true);
+        jsonAddBody: c => WrapperTraversal.AppendObservable(c, "staged"), readInlining: "NoInlining", outlineJson: true,
+        jsonObservableBacking: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -41,20 +42,6 @@ internal static class ReadOnlyObservableCollectionOwnerFile
             w.Line("if (capacity > 0 && backing is not null)");
             w.Indented(() => w.Line("backing.Capacity = capacity;"));
         }
-    }
-
-    private static void AppendJson(EnumerableOwnerContext c)
-    {
-        if (!c.Counted && c.Supports("WrapperJsonStorage"))
-        {
-            c.W.Line("if (backing is not null)");
-            c.W.Indented(() => c.W.Line("backing.Add(item);"));
-            c.W.Line("else");
-            c.W.Indented(() => WrapperTraversal.AppendObservable(c, "staged"));
-            return;
-        }
-
-        WrapperTraversal.AppendObservable(c, "staged");
     }
 
     private static void Read(EnumerableOwnerContext c)

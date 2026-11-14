@@ -435,6 +435,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether JSON reads resolve the empty value before acquiring staging storage.</summary>
     internal bool JsonEmptyBeforeStaging { get; }
 
+    /// <summary>Whether the JSON read selects a private observable list before the element loop.</summary>
+    internal bool JsonObservableBacking { get; }
+
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name="writeBody">The write body used by this operation.</param>
     /// <param name="readBody">The read body used by this operation.</param>
@@ -448,11 +451,12 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="outlineJson">Whether to keep the JSON roots out of their callers.</param>
     /// <param name="interfaceSetTraversal">Whether to probe for exact framework sets during JSON writes.</param>
     /// <param name="jsonEmptyBeforeStaging">Whether an initial empty token or accepted end of input returns the empty value directly.</param>
+    /// <param name="jsonObservableBacking">Whether to select a private observable list before reading the elements.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
         bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false,
         bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "AggressiveInlining",
-        bool outlineJson = false, bool interfaceSetTraversal = false, bool jsonEmptyBeforeStaging = false)
+        bool outlineJson = false, bool interfaceSetTraversal = false, bool jsonEmptyBeforeStaging = false, bool jsonObservableBacking = false)
     {
         ReadInlining = readInlining;
         OutlineJson = outlineJson;
@@ -470,6 +474,7 @@ internal sealed class EnumerableOwnerSpec
         JsonBefore = jsonBefore;
         JsonAfter = jsonAfter;
         JsonEmptyBeforeStaging = jsonEmptyBeforeStaging;
+        JsonObservableBacking = jsonObservableBacking;
     }
 }
 
@@ -827,6 +832,30 @@ internal static class EnumerableOwnerTemplate
 
         void EmitJsonRead(FormatterSection section)
         {
+            void AppendJsonItem()
+            {
+                if (spec.JsonAddBody != null)
+                    spec.JsonAddBody(context);
+                else
+                    w.Line(spec.JsonAdd);
+            }
+
+            void ReadJsonItems(Action append, bool hasFirstToken)
+            {
+                w.Line(hasFirstToken ? "do" : "while (reader.Read<TLuminProfile>())");
+                w.Open();
+                w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
+                w.Line("    break;");
+                w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
+                w.Line("    continue;");
+                w.Line(scalar + " item = default !;");
+                w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                append();
+                w.Close();
+                if (hasFirstToken)
+                    w.Line("while (reader.Read<TLuminProfile>());");
+            }
+
             switch (section)
             {
                 case FormatterSection.Entries:
@@ -1026,22 +1055,35 @@ internal static class EnumerableOwnerTemplate
                         w.Indented(() => w.Line("value.Clear();"));
                     }
                     w.Blank();
-                    w.Line(spec.JsonEmptyBeforeStaging ? "do" : "while (reader.Read<TLuminProfile>())");
-                    w.Open();
-                    w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
-                    w.Line("    break;");
-                    w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
-                    w.Line("    continue;");
-                    w.Line(scalar + " item = default !;");
-                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                    if (spec.JsonAddBody != null) spec.JsonAddBody(context);
-                    else w.Line(spec.JsonAdd);
-                    w.Close();
-                    if (spec.JsonEmptyBeforeStaging)
-                        w.Line("while (reader.Read<TLuminProfile>());");
+                    bool observableBacking = spec.JsonObservableBacking && !context.Counted && context.Supports("WrapperJsonStorage");
+                    if (observableBacking)
+                    {
+                        w.Line("if (backing is not null)");
+                        w.Open();
+                        ReadJsonItems(() => w.Line("backing.Add(item);"), false);
+                        w.Close();
+                        w.Line("else");
+                        w.Open();
+                        w.Line("ReadPortableJson<TLuminProfile>(ref reader, staged);");
+                        w.Close();
+                    }
+                    else
+                        ReadJsonItems(AppendJsonItem, spec.JsonEmptyBeforeStaging);
                     spec.JsonAfter?.Invoke(context);
                     w.Close();
                     w.Blank();
+                    if (observableBacking)
+                    {
+                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line("private static void ReadPortableJson<TLuminProfile>(");
+                        w.Line("    scoped ref " + jsonReader + " reader,");
+                        w.Line("    global::System.Collections.ObjectModel.ObservableCollection<" + scalar + "> staged)");
+                        w.Line("    where TLuminProfile : struct, " + options);
+                        w.Open();
+                        ReadJsonItems(AppendJsonItem, false);
+                        w.Close();
+                        w.Blank();
+                    }
                     break;
                 case FormatterSection.Owner:
                     w.Line(inline);
