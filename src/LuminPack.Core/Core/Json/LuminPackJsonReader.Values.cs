@@ -411,15 +411,15 @@ namespace LuminPack.Core
         {
             if (default(TOptions).ValidateJsonSyntax)
                 return ReadStrict<TOptions>();
-            if (TryReadAdjacentScalarToken<TOptions>())
+            if (TryReadAdjacentToken<TOptions>())
                 return true;
             return ReadTrusted<TOptions>();
         }
-        /// <summary>Selects a complete adjacent scalar head while retaining checked separator consumption.</summary>
+        /// <summary>Selects adjacent scalar and container tokens without running the whitespace scanner.</summary>
         /// <typeparam name="TOptions">The stateless encoding and grammar profile.</typeparam>
-        /// <returns>Whether the original String or Number token was selected without consuming its content.</returns>
+        /// <returns>Whether the fast path selected a complete token head.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private bool TryReadAdjacentScalarToken<TOptions>()
+        private bool TryReadAdjacentToken<TOptions>()
             where TOptions : struct, ILuminPackOptions
         {
             if (!TryReadCurrentChar<TOptions>(out char head))
@@ -441,10 +441,37 @@ namespace LuminPack.Core
             else if ((uint)(head - '0') <= 9u || head == '-')
                 selected = JsonTokenType.Number;
             else
-                return false;
+                return TryReadAdjacentContainer<TOptions>(head, skip);
             if (skip != 0)
                 Advance(skip);
             CurrentTokenType = selected;
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryReadAdjacentContainer<TOptions>(char head, int skip) where TOptions : struct, ILuminPackOptions
+        {
+            JsonTokenType token;
+            switch (head)
+            {
+                case '{': token = JsonTokenType.ObjectStart; break;
+                case '}': token = JsonTokenType.ObjectEnd; break;
+                case '[': token = JsonTokenType.ArrayStart; break;
+                case ']': token = JsonTokenType.ArrayEnd; break;
+                default: return false;
+            }
+
+            int step = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? 1 : 2;
+            CurrentTokenType = token;
+            Advance(skip + step);
+            if (head is '}' or ']')
+                Depth--;
+            else
+            {
+                Depth++;
+                if (default(TOptions).MaxJsonDepth > 0 && Depth > default(TOptions).MaxJsonDepth)
+                    LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
+            }
             return true;
         }
 
