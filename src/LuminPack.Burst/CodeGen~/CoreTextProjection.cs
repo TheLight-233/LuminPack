@@ -27,8 +27,8 @@ internal static class CoreTextProjection
         AppendOrigin(output, coreRoot, file);
         foreach (string name in methods)
         {
-            var method = modern.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == name);
-            AppendMethod(output, method);
+            foreach (var method in modern.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.ValueText == name))
+                AppendMethod(output, method);
         }
         foreach (var field in modern.DescendantNodes().OfType<FieldDeclarationSyntax>().Where(f => f.Declaration.Variables.Any(v => v.Identifier.ValueText == "Skip" || v.Identifier.ValueText.StartsWith("Bmp", StringComparison.Ordinal))))
             output.AppendLine(Rewrite(field));
@@ -80,6 +80,9 @@ internal static class CoreTextProjection
         var capacityNames = new HashSet<string> { "ScanHintByte", "ScanHintChar", "RemoveEscapedQuotes", "ExactZero64", "ExactZero32", "PackByte64", "PackChar64", "PackByte32", "PackChar32", "CountHintBits", "HintTrailingZero", "FindHintByte", "FindHintChar" };
         foreach (var method in Read(coreRoot, "Core/Json/LuminPackJsonReader.Capacity.cs", Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => capacityNames.Contains(m.Identifier.ValueText)))
             AppendMethod(output, method);
+        // Burst has no mapped polynomial-multiply primitive; project Core's exact portable parity fallback.
+        AppendMethod(output, Read(coreRoot, "Core/Json/LuminPackJsonReader.Capacity.cs", Portable).DescendantNodes()
+            .OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "GetQuotePrefix"));
         output.AppendLine("}");
         AppendCrypto(output, coreRoot);
         AppendLayout(output, coreRoot);

@@ -10,12 +10,9 @@ namespace LuminPack.Internal;
 /// <summary>Compares two-byte UTF-8 runs with existing UTF-16 storage without a decoded buffer.</summary>
 internal static class Utf8TwoByteComparer
 {
-    // Keep mask initialization off the ordinary ASCII and transcoding paths.
-    private static readonly Vector128<byte> PairMask = Vector128.Create((byte)0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15);
-
     /// <summary>Compares canonical two-byte vectors and delegates mixed tails to the validating decoder.</summary>
     /// <param name="bytes">The complete, bounds-validated UTF-8 payload.</param>
-    /// <param name="text">The existing text, selected on an x64 SSSE3 runtime with a two-byte first character.</param>
+    /// <param name="text">The existing text, selected on an x64 SSE2 runtime with a two-byte first character.</param>
     /// <returns>Whether the valid UTF-8 payload equals the existing text.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static bool Matches(ReadOnlySpan<byte> bytes, ReadOnlySpan<char> text)
@@ -23,19 +20,33 @@ internal static class Utf8TwoByteComparer
         int byteOffset = 0, charOffset = 0;
         ref byte source = ref MemoryMarshal.GetReference(bytes);
         ref ushort characters = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text));
+        if (Avx2.IsSupported)
+        {
+            while (text.Length - charOffset >= 16 && bytes.Length - byteOffset >= 32)
+            {
+                var value = Vector256.LoadUnsafe(ref characters, (nuint)(uint)charOffset);
+                var valid = Avx2.And(Avx2.CompareGreaterThan(value.AsInt16(), Vector256.Create((short)0x7F)),
+                    Avx2.CompareGreaterThan(Vector256.Create((short)0x800), value.AsInt16()));
+                if (Avx2.MoveMask(valid.AsByte()) != -1)
+                    break;
+                // Each UTF-16 lane becomes its little-endian UTF-8 byte pair without packing or shuffling.
+                var expected = (value >> 6) | ((value & Vector256.Create((ushort)0x3F)) << 8) | Vector256.Create((ushort)0x80C0);
+                if (!Vector256.EqualsAll(expected.AsByte(), Vector256.LoadUnsafe(ref source, (nuint)(uint)byteOffset)))
+                    return false;
+                byteOffset += 32;
+                charOffset += 16;
+            }
+        }
         while (text.Length - charOffset >= 8 && bytes.Length - byteOffset >= 16)
         {
             var value = Vector128.LoadUnsafe(ref characters, (nuint)(uint)charOffset);
-            var valid = Sse2.And(
-                Sse2.CompareEqual(Sse2.SubtractSaturate(Vector128.Create((ushort)0x80), value), Vector128<ushort>.Zero),
-                Sse2.CompareEqual(Sse2.SubtractSaturate(value, Vector128.Create((ushort)0x7FF)), Vector128<ushort>.Zero));
+            var valid = Sse2.And(Sse2.CompareGreaterThan(value.AsInt16(), Vector128.Create((short)0x7F)),
+                Sse2.CompareGreaterThan(Vector128.Create((short)0x800), value.AsInt16()));
             if (Sse2.MoveMask(valid.AsByte()) != 0xFFFF)
                 return StringSerializer.MatchesUtf8Chunks(bytes[byteOffset..], text[charOffset..]);
 
-            var lead = Sse2.Or(Sse2.ShiftRightLogical(value, 6), Vector128.Create((ushort)0xC0));
-            var tail = Sse2.Or(Sse2.And(value, Vector128.Create((ushort)0x3F)), Vector128.Create((ushort)0x80));
-            var expected = Ssse3.Shuffle(Sse2.PackUnsignedSaturate(lead.AsInt16(), tail.AsInt16()), PairMask);
-            if (!Vector128.EqualsAll(expected, Vector128.LoadUnsafe(ref source, (nuint)(uint)byteOffset)))
+            var expected = (value >> 6) | ((value & Vector128.Create((ushort)0x3F)) << 8) | Vector128.Create((ushort)0x80C0);
+            if (!Vector128.EqualsAll(expected.AsByte(), Vector128.LoadUnsafe(ref source, (nuint)(uint)byteOffset)))
                 return false;
             byteOffset += 16;
             charOffset += 8;

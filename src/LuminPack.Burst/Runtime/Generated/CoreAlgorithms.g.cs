@@ -61,7 +61,7 @@ internal static void CopyShortBlock(ref byte destination, ref byte source, uint 
     Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<Vector128<byte>>(ref source));
     Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(count - 16)), Unsafe.ReadUnaligned<Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(count - 16))));
 }
-// Core source SHA256: Utility/Compression/LuminCompressor.cs EC904D37329F17406EB27C201507F44AC929307A975BA58A7F17663E8CA85878
+// Core source SHA256: Utility/Compression/LuminCompressor.cs 7457FB9110FDB67D5C4AE1C955491519270680F59DD5AA3DD0D66862961DEB8A
 /// <summary>Copies match to the supplied destination.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
@@ -212,6 +212,14 @@ internal static int ExtendMatch(ref byte a, ref byte b, ref byte limit)
     // into its hot loop; only long matches ever pay the call. The IsHardwareAccelerated /
     // IsSupported checks are JIT-folded constants (no field reads).
     nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+    if (Vector128.IsHardwareAccelerated && remaining >= 16)
+    {
+        // Most hash hits end within a word. Reject them before loading a complete vector group.
+        ulong difference = ReadU64(ref a) ^ ReadU64(ref b);
+        if (difference != 0)
+            return TrailingZeroBytes(difference);
+    }
+
     if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && remaining >= 64)
         return ExtendMatch512(ref a, ref b, ref start, ref limit);
     if (Vector256.IsHardwareAccelerated && remaining >= 32)
@@ -252,6 +260,20 @@ internal static int ExtendMatch512(ref byte a, ref byte b, ref byte start, ref b
 internal static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref byte limit)
 {
     nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+    // Four complete vectors share one equality reduction; locate a mismatch only in the failing group.
+    while (remaining >= 128)
+    {
+        var d0 = Vector256.LoadUnsafe(ref a) ^ Vector256.LoadUnsafe(ref b);
+        var d1 = Vector256.LoadUnsafe(ref a, 32) ^ Vector256.LoadUnsafe(ref b, 32);
+        var d2 = Vector256.LoadUnsafe(ref a, 64) ^ Vector256.LoadUnsafe(ref b, 64);
+        var d3 = Vector256.LoadUnsafe(ref a, 96) ^ Vector256.LoadUnsafe(ref b, 96);
+        if (!Vector256.EqualsAll((d0 | d1) | (d2 | d3), Vector256<byte>.Zero))
+            break;
+        a = ref Unsafe.Add(ref a, 128);
+        b = ref Unsafe.Add(ref b, 128);
+        remaining -= 128;
+    }
+
     while (remaining >= 32)
     {
         uint mask = Vector256.Equals(Vector256.LoadUnsafe(ref a), Vector256.LoadUnsafe(ref b)).ExtractMostSignificantBits();
@@ -274,6 +296,20 @@ internal static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref b
 internal static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref byte limit)
 {
     nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+    // Four complete vectors share one equality reduction; locate a mismatch only in the failing group.
+    while (remaining >= 64)
+    {
+        var d0 = Vector128.LoadUnsafe(ref a) ^ Vector128.LoadUnsafe(ref b);
+        var d1 = Vector128.LoadUnsafe(ref a, 16) ^ Vector128.LoadUnsafe(ref b, 16);
+        var d2 = Vector128.LoadUnsafe(ref a, 32) ^ Vector128.LoadUnsafe(ref b, 32);
+        var d3 = Vector128.LoadUnsafe(ref a, 48) ^ Vector128.LoadUnsafe(ref b, 48);
+        if (!Vector128.EqualsAll((d0 | d1) | (d2 | d3), Vector128<byte>.Zero))
+            break;
+        a = ref Unsafe.Add(ref a, 64);
+        b = ref Unsafe.Add(ref b, 64);
+        remaining -= 64;
+    }
+
     while (remaining >= 16)
     {
         // Only the low 16 mask bits are meaningful for a 16-byte vector.
@@ -351,11 +387,11 @@ internal static int TrailingZeroBytes(ulong v)
 {
     return BitOperations.TrailingZeroCount(v) >> 3;
 }
-// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs 66B1619F7F591DC6DD15AC92084E061D6F148EA1156E4E44B3DECCBA06DF2BC0
+// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs 403AEB347EDDA6B35CBF990E4AC457087115CBA0CE0F2501D7E5436C8D318A25
 /// <summary>
 /// XORs <paramref name = "length"/> bytes of keystream <paramref name = "key"/> into
 /// <paramref name = "src"/>, writing the result to <paramref name = "dst"/>. Uses the widest
-/// available SIMD (AVX2 32B / SSE2 16B), falling back to 32-bit unaligned word XOR.
+/// available SIMD (AVX-512 64B / AVX2 32B / SSE2 or AdvSimd 16B), falling back to 32-bit unaligned word XOR.
 /// </summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
@@ -399,7 +435,7 @@ internal static void XorKeystream(byte* dst, byte* src, byte* key, int length)
         return;
     }
 
-    if (Sse2.IsSupported)
+    if (Vector128.IsHardwareAccelerated)
     {
         ref byte d = ref Unsafe.AsRef<byte>(dst);
         ref byte s = ref Unsafe.AsRef<byte>(src);

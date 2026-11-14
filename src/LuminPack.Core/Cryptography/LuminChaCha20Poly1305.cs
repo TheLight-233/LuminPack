@@ -337,7 +337,7 @@ namespace LuminPack.Cryptography
         /// <summary>
         /// XORs <paramref name="length"/> bytes of keystream <paramref name="key"/> into
         /// <paramref name="src"/>, writing the result to <paramref name="dst"/>. Uses the widest
-        /// available SIMD (AVX2 32B / SSE2 16B), falling back to 32-bit unaligned word XOR.
+        /// available SIMD (AVX-512 64B / AVX2 32B / SSE2 or AdvSimd 16B), falling back to 32-bit unaligned word XOR.
         /// </summary>
         /// <param name="dst">The destination receiving the result.</param>
         /// <param name="src">The input data to process.</param>
@@ -388,7 +388,7 @@ namespace LuminPack.Cryptography
                     Unsafe.Add(ref d, unchecked((nint)(uint)(i))) = (byte)(Unsafe.Add(ref s, unchecked((nint)(uint)(i))) ^ Unsafe.Add(ref k, unchecked((nint)(uint)(i))));
                 return;
             }
-            if (Sse2.IsSupported)
+            if (Vector128.IsHardwareAccelerated)
             {
                 ref byte d = ref Unsafe.AsRef<byte>(dst);
                 ref byte s = ref Unsafe.AsRef<byte>(src);

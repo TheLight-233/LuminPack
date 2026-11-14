@@ -930,6 +930,19 @@ public static class LuminCompressor
     private static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref byte limit)
     {
         nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+        // Four complete vectors share one equality reduction; locate a mismatch only in the failing group.
+        while (remaining >= 128)
+        {
+            var d0 = Vector256.LoadUnsafe(ref a) ^ Vector256.LoadUnsafe(ref b);
+            var d1 = Vector256.LoadUnsafe(ref a, 32) ^ Vector256.LoadUnsafe(ref b, 32);
+            var d2 = Vector256.LoadUnsafe(ref a, 64) ^ Vector256.LoadUnsafe(ref b, 64);
+            var d3 = Vector256.LoadUnsafe(ref a, 96) ^ Vector256.LoadUnsafe(ref b, 96);
+            if (!Vector256.EqualsAll((d0 | d1) | (d2 | d3), Vector256<byte>.Zero))
+                break;
+            a = ref Unsafe.Add(ref a, 128);
+            b = ref Unsafe.Add(ref b, 128);
+            remaining -= 128;
+        }
         while (remaining >= 32)
         {
             uint mask = Vector256.Equals(
@@ -955,6 +968,19 @@ public static class LuminCompressor
     private static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref byte limit)
     {
         nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+        // Four complete vectors share one equality reduction; locate a mismatch only in the failing group.
+        while (remaining >= 64)
+        {
+            var d0 = Vector128.LoadUnsafe(ref a) ^ Vector128.LoadUnsafe(ref b);
+            var d1 = Vector128.LoadUnsafe(ref a, 16) ^ Vector128.LoadUnsafe(ref b, 16);
+            var d2 = Vector128.LoadUnsafe(ref a, 32) ^ Vector128.LoadUnsafe(ref b, 32);
+            var d3 = Vector128.LoadUnsafe(ref a, 48) ^ Vector128.LoadUnsafe(ref b, 48);
+            if (!Vector128.EqualsAll((d0 | d1) | (d2 | d3), Vector128<byte>.Zero))
+                break;
+            a = ref Unsafe.Add(ref a, 64);
+            b = ref Unsafe.Add(ref b, 64);
+            remaining -= 64;
+        }
         while (remaining >= 16)
         {
             // Only the low 16 mask bits are meaningful for a 16-byte vector.
@@ -1036,6 +1062,13 @@ public static class LuminCompressor
         // into its hot loop; only long matches ever pay the call. The IsHardwareAccelerated /
         // IsSupported checks are JIT-folded constants (no field reads).
         nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+        if (Vector128.IsHardwareAccelerated && remaining >= 16)
+        {
+            // Most hash hits end within a word. Reject them before loading a complete vector group.
+            ulong difference = ReadU64(ref a) ^ ReadU64(ref b);
+            if (difference != 0)
+                return TrailingZeroBytes(difference);
+        }
         if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && remaining >= 64)
             return ExtendMatch512(ref a, ref b, ref start, ref limit);
         if (Vector256.IsHardwareAccelerated && remaining >= 32)

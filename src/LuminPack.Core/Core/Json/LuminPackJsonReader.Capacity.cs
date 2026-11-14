@@ -638,28 +638,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static ulong RemoveEscapedQuotes(ulong quotes, ulong slashes, int width, ref bool carry)
         {
-            ulong escaped = carry ? 1UL : 0UL;
-            bool next = false;
-            while (slashes != 0)
-            {
-                int start = HintTrailingZero(slashes);
-                int length = HintTrailingZero(~(slashes >> start));
-                if (length > width - start)
-                    length = width - start;
-                int end = start + length;
-                bool odd = ((length + (start == 0 && carry ? 1 : 0)) & 1) != 0;
-                if (odd)
-                {
-                    if (end == width)
-                        next = true;
-                    else
-                        escaped |= 1UL << end;
-                }
-
-                slashes = end == 64 ? 0 : slashes & (ulong.MaxValue << end);
-            }
-
-            carry = next;
+            // Subtraction propagates each run's parity without visiting its individual backslashes.
+            // The incoming escape consumes lane zero, including when that lane is another backslash.
+            // This is the escape/terminal mask identity used by simdjson's stage-one escape scanner.
+            const ulong odd = 0xAAAAAAAAAAAAAAAAUL;
+            ulong incoming = carry ? 1UL : 0UL;
+            ulong active = slashes & ~incoming;
+            ulong terminals = unchecked(((active << 1) | odd) - active) ^ odd;
+            ulong escaped = terminals ^ (slashes | incoming);
+            carry = ((terminals & slashes) >> (width - 1) & 1) != 0;
             return quotes & ~escaped;
         }
 

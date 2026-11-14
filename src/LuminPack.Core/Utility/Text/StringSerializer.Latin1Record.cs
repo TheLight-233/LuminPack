@@ -134,6 +134,13 @@ public static unsafe partial class StringSerializer
         }
 
         var high128 = Vector128.Create((ushort)0xFF00);
+        for (; i + 32 <= length; i += 32)
+        {
+            var first = Vector128.LoadUnsafe(ref chars, i) | Vector128.LoadUnsafe(ref chars, i + 8);
+            var second = Vector128.LoadUnsafe(ref chars, i + 16) | Vector128.LoadUnsafe(ref chars, i + 24);
+            if (((first | second) & high128) != Vector128<ushort>.Zero)
+                return false;
+        }
         var rest = Vector128.LoadUnsafe(ref chars, length - 8);
         for (; i + 8 < length; i += 8)
             rest |= Vector128.LoadUnsafe(ref chars, i);
@@ -185,7 +192,7 @@ public static unsafe partial class StringSerializer
                 var last = Vector128.LoadUnsafe(ref chars, (nuint)(uint)(length - 8));
                 if (((first | last) & Vector128.Create((ushort)0xFF00)) == Vector128<ushort>.Zero)
                 {
-                    var narrowed = Vector128.Narrow(first, last).AsUInt64();
+                    var narrowed = StringSerializer.NarrowValidatedLatin1(first, last).AsUInt64();
                     LuminPackWriter.Write(ref destination, narrowed.ToScalar());
                     LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 8)), narrowed.GetElement(1));
                     return Latin1Header(length);
@@ -241,7 +248,7 @@ public static unsafe partial class StringSerializer
             var last = Vector128.LoadUnsafe(ref chars, (nuint)(uint)(length - 8));
             if (((first | last) & Vector128.Create((ushort)0xFF00)) != Vector128<ushort>.Zero)
                 return 0;
-            var narrowed = Vector128.Narrow(first, last).AsUInt64();
+            var narrowed = StringSerializer.NarrowValidatedLatin1(first, last).AsUInt64();
             LuminPackWriter.Write(ref destination, narrowed.ToScalar());
             LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 8)), narrowed.GetElement(1));
             return Latin1Header(length);
@@ -325,7 +332,7 @@ public static unsafe partial class StringSerializer
                 var last = Vector128.LoadUnsafe(ref chars, (nuint)(uint)(length - 8));
                 if (((first | last) & Vector128.Create((ushort)0xFF00)) != Vector128<ushort>.Zero)
                     return false;
-                var narrowed = Vector128.Narrow(first, last).AsUInt64();
+                var narrowed = StringSerializer.NarrowValidatedLatin1(first, last).AsUInt64();
                 LuminPackWriter.Write(ref destination, narrowed.ToScalar());
                 LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 8)), narrowed.GetElement(1));
                 return true;
@@ -403,8 +410,8 @@ public static unsafe partial class StringSerializer
             var d = Vector128.LoadUnsafe(ref source, back + 8);
             if (((a | b | c | d) & Vector128.Create((ushort)0xFF00)) != Vector128<ushort>.Zero)
                 return false;
-            Vector128.Narrow(a, b).StoreUnsafe(ref destination);
-            Vector128.Narrow(c, d).StoreUnsafe(ref destination, back);
+            StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination);
+            StringSerializer.NarrowValidatedLatin1(c, d).StoreUnsafe(ref destination, back);
             return true;
         }
 
@@ -445,12 +452,8 @@ public static unsafe partial class StringSerializer
                 var d = Vector256.LoadUnsafe(ref source, i + 48);
                 if (((a | b | c | d) & high) != Vector256<ushort>.Zero)
                     return false;
-                (global::System.Runtime.Intrinsics.X86.Avx2.IsSupported
-                    ? global::System.Runtime.Intrinsics.X86.Avx2.Permute4x64(global::System.Runtime.Intrinsics.X86.Avx2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsUInt64(), 0xD8).AsByte()
-                    : Vector256.Narrow(a, b)).StoreUnsafe(ref destination, i);
-                (global::System.Runtime.Intrinsics.X86.Avx2.IsSupported
-                    ? global::System.Runtime.Intrinsics.X86.Avx2.Permute4x64(global::System.Runtime.Intrinsics.X86.Avx2.PackUnsignedSaturate(c.AsInt16(), d.AsInt16()).AsUInt64(), 0xD8).AsByte()
-                    : Vector256.Narrow(c, d)).StoreUnsafe(ref destination, i + 32);
+                StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, i);
+                StringSerializer.NarrowValidatedLatin1(c, d).StoreUnsafe(ref destination, i + 32);
                 i += 64;
             }
             if (i == length)
@@ -462,9 +465,7 @@ public static unsafe partial class StringSerializer
                 var b = Vector256.LoadUnsafe(ref source, i + 16);
                 if (((a | b) & high) != Vector256<ushort>.Zero)
                     return false;
-                (global::System.Runtime.Intrinsics.X86.Avx2.IsSupported
-                    ? global::System.Runtime.Intrinsics.X86.Avx2.Permute4x64(global::System.Runtime.Intrinsics.X86.Avx2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsUInt64(), 0xD8).AsByte()
-                    : Vector256.Narrow(a, b)).StoreUnsafe(ref destination, i);
+                StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, i);
                 i += 32;
             }
             {
@@ -472,9 +473,7 @@ public static unsafe partial class StringSerializer
                 var b = Vector256.LoadUnsafe(ref source, last + 16);
                 if (((a | b) & high) != Vector256<ushort>.Zero)
                     return false;
-                (global::System.Runtime.Intrinsics.X86.Avx2.IsSupported
-                    ? global::System.Runtime.Intrinsics.X86.Avx2.Permute4x64(global::System.Runtime.Intrinsics.X86.Avx2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsUInt64(), 0xD8).AsByte()
-                    : Vector256.Narrow(a, b)).StoreUnsafe(ref destination, last);
+                StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, last);
             }
             return true;
         }
@@ -489,7 +488,7 @@ public static unsafe partial class StringSerializer
                 var b = Vector128.LoadUnsafe(ref source, i + 8);
                 if (((a | b) & high) != Vector128<ushort>.Zero)
                     return false;
-                Vector128.Narrow(a, b).StoreUnsafe(ref destination, i);
+                StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, i);
                 i += 16;
             }
             {
@@ -497,7 +496,7 @@ public static unsafe partial class StringSerializer
                 var b = Vector128.LoadUnsafe(ref source, last + 8);
                 if (((a | b) & high) != Vector128<ushort>.Zero)
                     return false;
-                Vector128.Narrow(a, b).StoreUnsafe(ref destination, last);
+                StringSerializer.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, last);
             }
             return true;
         }
@@ -904,28 +903,28 @@ public static unsafe partial class StringSerializer
         nuint i = 0;
         if (Vector256.IsHardwareAccelerated && length >= 32)
         {
-            while (true)
+            nuint last256 = length - 32;
+            for (; i < last256; i += 32)
             {
-                nuint at = i + 32 <= length ? i : length - 32;
-                var (lower, upper) = Vector256.Widen(Vector256.LoadUnsafe(ref source, at));
-                if (((lower ^ Vector256.LoadUnsafe(ref chars, at)) | (upper ^ Vector256.LoadUnsafe(ref chars, at + 16))) != Vector256<ushort>.Zero)
+                var (lower, upper) = Vector256.Widen(Vector256.LoadUnsafe(ref source, i));
+                if (((lower ^ Vector256.LoadUnsafe(ref chars, i)) | (upper ^ Vector256.LoadUnsafe(ref chars, i + 16))) != Vector256<ushort>.Zero)
                     return false;
-                if (at + 32 == length)
-                    return true;
-                i = at + 32;
             }
+            var (tailLower256, tailUpper256) = Vector256.Widen(Vector256.LoadUnsafe(ref source, last256));
+            return ((tailLower256 ^ Vector256.LoadUnsafe(ref chars, last256)) |
+                (tailUpper256 ^ Vector256.LoadUnsafe(ref chars, last256 + 16))) == Vector256<ushort>.Zero;
         }
 
-        while (true)
+        nuint last128 = length - 16;
+        for (; i < last128; i += 16)
         {
-            nuint at = i + 16 <= length ? i : length - 16;
-            var (lower, upper) = Vector128.Widen(Vector128.LoadUnsafe(ref source, at));
-            if (((lower ^ Vector128.LoadUnsafe(ref chars, at)) | (upper ^ Vector128.LoadUnsafe(ref chars, at + 8))) != Vector128<ushort>.Zero)
+            var (lower, upper) = Vector128.Widen(Vector128.LoadUnsafe(ref source, i));
+            if (((lower ^ Vector128.LoadUnsafe(ref chars, i)) | (upper ^ Vector128.LoadUnsafe(ref chars, i + 8))) != Vector128<ushort>.Zero)
                 return false;
-            if (at + 16 == length)
-                return true;
-            i = at + 16;
         }
+        var (tailLower, tailUpper) = Vector128.Widen(Vector128.LoadUnsafe(ref source, last128));
+        return ((tailLower ^ Vector128.LoadUnsafe(ref chars, last128)) |
+            (tailUpper ^ Vector128.LoadUnsafe(ref chars, last128 + 8))) == Vector128<ushort>.Zero;
     }
 #endif
 }

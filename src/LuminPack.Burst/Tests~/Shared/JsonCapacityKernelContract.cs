@@ -25,6 +25,14 @@ namespace LuminPack.Burst.Tests
                 cases += Check("\"" + new string('x', length), -1, 0, utf8, utf16);
                 cases += Check("\"" + new string('x', length) + "\\", -1, 0, utf8, utf16);
             }
+            // Whole backslash blocks must carry parity into the following quote on every native width.
+            for (int padding = 0; padding < 65; padding++)
+            foreach (int slashes in new[] { 15, 16, 31, 32, 63, 64, 65, 127, 128, 129 })
+            {
+                string prefix = "\"" + new string('x', padding) + new string('\\', slashes);
+                string text = (slashes & 1) == 0 ? prefix + "\",1]" : prefix + "\",][{}\",1]";
+                cases += Check(text, 2, 0, utf8, utf16);
+            }
             if (utf8(null, 0, 0) != -1 || utf16(null, 0, 0) != -1 || utf8(null, -1, 0) != -1 ||
                 utf16(null, -1, 0) != -1 || utf8(null, 0, 2) != -1 || utf16(null, 0, 2) != -1)
                 LuminPackExceptionHelper.ThrowInvalidOperationException("Invalid sizing-kernel window or flags.");

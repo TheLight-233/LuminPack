@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs 5DC5BD1AD139CCAFC5105E7CAF24910FA483B1E82C48BF240ABBC635180D6493
+// Core source SHA256: Utility/Text/StringSerializer.cs 7B612F09BC490EFF0E84CB3E8F6C0BB2459503038F757B5E3E8FD27DD225A1F7
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -122,7 +122,19 @@ internal static unsafe OperationStatus SerializeAsciiRun(ReadOnlySpan<char> sour
     int limit = Math.Min(length, destination.Length);
     var nonAsciiBits = Vector256.Create((ushort)0xFF80);
     int index = 0;
-    for (; index + 32 <= limit; index += 32)
+    for (; index <= limit - 128; index += 64)
+    {
+        var a = Vector256.LoadUnsafe(ref input, (nuint)index);
+        var b = Vector256.LoadUnsafe(ref input, (nuint)index + 16);
+        var c = Vector256.LoadUnsafe(ref input, (nuint)index + 32);
+        var d = Vector256.LoadUnsafe(ref input, (nuint)index + 48);
+        if ((((a | b) | (c | d)) & nonAsciiBits) != Vector256<ushort>.Zero)
+            break;
+        NarrowValidatedLatin1(a, b).StoreUnsafe(ref output, (nuint)index);
+        NarrowValidatedLatin1(c, d).StoreUnsafe(ref output, (nuint)index + 32);
+    }
+
+    for (; index <= limit - 32; index += 32)
     {
         var lower = Vector256.LoadUnsafe(ref input, (nuint)index);
         var upper = Vector256.LoadUnsafe(ref input, (nuint)index + 16);
@@ -156,6 +168,17 @@ internal static unsafe OperationStatus SerializeAsciiRun(ReadOnlySpan<char> sour
     bytesWritten = index + written;
     return status;
 }
+/// <summary>Narrows two eight-character vectors whose lanes have already been validated as Latin-1 or ASCII.</summary>
+/// <param name = "lower">The first eight code units, all in 0..255.</param>
+/// <param name = "upper">The next eight code units, all in 0..255.</param>
+/// <returns>The sixteen bytes in input order.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe Vector128<byte> NarrowValidatedLatin1(Vector128<ushort> lower, Vector128<ushort> upper)
+{
+    if (Sse2.IsSupported)
+        return Sse2.PackUnsignedSaturate(lower.AsInt16(), upper.AsInt16());
+    return Vector128.Narrow(lower, upper);
+}
 /// <summary>Narrows two vectors whose lanes have already been validated as Latin-1 or ASCII.</summary>
 /// <param name = "lower">The first sixteen code units, all in 0..255.</param>
 /// <param name = "upper">The next sixteen code units, all in 0..255.</param>
@@ -177,7 +200,19 @@ internal static unsafe Vector256<byte> NarrowValidatedLatin1(Vector256<ushort> l
 internal static unsafe bool TryWidenAscii(ref byte source, int length, ref ushort destination)
 {
     int index = 0;
-    for (; index + 32 <= length; index += 32)
+    for (; index <= length - 64; index += 64)
+    {
+        var first = Vector256.LoadUnsafe(ref source, (nuint)index);
+        var second = Vector256.LoadUnsafe(ref source, (nuint)index + 32);
+        if ((first | second).ExtractMostSignificantBits() != 0)
+            return false;
+        Vector256.WidenLower(first).StoreUnsafe(ref destination, (nuint)index);
+        Vector256.WidenUpper(first).StoreUnsafe(ref destination, (nuint)index + 16);
+        Vector256.WidenLower(second).StoreUnsafe(ref destination, (nuint)index + 32);
+        Vector256.WidenUpper(second).StoreUnsafe(ref destination, (nuint)index + 48);
+    }
+
+    for (; index <= length - 32; index += 32)
     {
         var bytes = Vector256.LoadUnsafe(ref source, (nuint)index);
         if (bytes.ExtractMostSignificantBits() != 0)
@@ -886,7 +921,7 @@ internal static unsafe bool MatchesUtf8(ReadOnlySpan<byte> bytes, ReadOnlySpan<c
 {
     if (bytes.Length == text.Length)
         return Ascii.Equals(bytes, text);
-    if (Unsafe.SizeOf<IntPtr>() == 8 && Ssse3.IsSupported && text.Length >= 8 && (uint)bytes.Length == (uint)text.Length * 2 && text[0] is >= '\u0080' and <= '\u07FF')
+    if (Unsafe.SizeOf<IntPtr>() == 8 && Sse2.IsSupported && text.Length >= 8 && (uint)bytes.Length == (uint)text.Length * 2 && text[0] is >= '\u0080' and <= '\u07FF')
         return CoreTwoByteComparer.Matches(bytes, text);
     if (bytes.Length > 64)
         return MatchesUtf8Chunks(bytes, text);
@@ -1005,7 +1040,7 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
     }
 }
     }
-// Core source SHA256: Internal/ShortAsciiTranscoder.cs 4EE7806A14BDE431D8822F8C2F1AE348522EAE7ED310D76E587CFF392773428A
+// Core source SHA256: Internal/ShortAsciiTranscoder.cs 4A182F3A50A329AA3FB61D89F68024BD5D289424A18455C4D2D7DAB6AEE041E5
     internal static unsafe class CoreShortAscii
     {
 // Two overlapping loads/stores cover 4..32 characters without touching bytes
@@ -1033,7 +1068,7 @@ internal static unsafe bool TryEncode(ReadOnlySpan<char> source, Span<byte> dest
         var chars = Unsafe.SizeOf<IntPtr>() == 8 ? Vector128.Create(Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref input)), Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref input, unchecked((nint)(uint)(length - 4)))))).AsUInt16() : Vector128.Create(Vector64.LoadUnsafe(ref input), Vector64.LoadUnsafe(ref input, (nuint)(length - 4)));
         if ((chars & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
             return false;
-        var packed = Vector128.Narrow(chars, chars);
+        var packed = CoreTextAlgorithms.NarrowValidatedLatin1(chars, chars);
         if (escapeJson && NeedsJsonEscape(packed))
             return false;
         ref byte shortOutput = ref MemoryMarshal.GetReference(destination);
@@ -1046,7 +1081,7 @@ internal static unsafe bool TryEncode(ReadOnlySpan<char> source, Span<byte> dest
     var last = Vector128.LoadUnsafe(ref input, (nuint)(length - 8));
     if (((first | last) & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
         return false;
-    var bytes = Vector128.Narrow(first, last);
+    var bytes = CoreTextAlgorithms.NarrowValidatedLatin1(first, last);
     if (escapeJson && NeedsJsonEscape(bytes))
         return false;
     ref byte output = ref MemoryMarshal.GetReference(destination);
@@ -1173,14 +1208,12 @@ internal static unsafe void StoreLane(byte* destination, ref int offset, global:
     offset += length;
 }
     }
-// Core source SHA256: Internal/Utf8TwoByteComparer.cs 3F59A0A7E03419C97354C77EE3A231C436267686E9DC9CF0A0A24FDE3DD9D14A
+// Core source SHA256: Internal/Utf8TwoByteComparer.cs A9A652B6CA763A9EB303BB782EB837394B3F6CACBF95AE2A26A417BCA3A20738
     internal static unsafe class CoreTwoByteComparer
     {
-// Keep mask initialization off the ordinary ASCII and transcoding paths.
-private static readonly Vector128<byte> PairMask = Vector128.Create((byte)0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15);
 /// <summary>Compares canonical two-byte vectors and delegates mixed tails to the validating decoder.</summary>
 /// <param name = "bytes">The complete, bounds-validated UTF-8 payload.</param>
-/// <param name = "text">The existing text, selected on an x64 SSSE3 runtime with a two-byte first character.</param>
+/// <param name = "text">The existing text, selected on an x64 SSE2 runtime with a two-byte first character.</param>
 /// <returns>Whether the valid UTF-8 payload equals the existing text.</returns>
 [MethodImpl(MethodImplOptions.NoInlining)]
 internal static unsafe bool Matches(ReadOnlySpan<byte> bytes, ReadOnlySpan<char> text)
@@ -1188,16 +1221,31 @@ internal static unsafe bool Matches(ReadOnlySpan<byte> bytes, ReadOnlySpan<char>
     int byteOffset = 0, charOffset = 0;
     ref byte source = ref MemoryMarshal.GetReference(bytes);
     ref ushort characters = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text));
+    if (Avx2.IsSupported)
+    {
+        while (text.Length - charOffset >= 16 && bytes.Length - byteOffset >= 32)
+        {
+            var value = Vector256.LoadUnsafe(ref characters, (nuint)(uint)charOffset);
+            var valid = Avx2.And(Avx2.CompareGreaterThan(value.AsInt16(), Vector256.Create((short)0x7F)), Avx2.CompareGreaterThan(Vector256.Create((short)0x800), value.AsInt16()));
+            if (Avx2.MoveMask(valid.AsByte()) != -1)
+                break;
+            // Each UTF-16 lane becomes its little-endian UTF-8 byte pair without packing or shuffling.
+            var expected = (value >> 6) | ((value & Vector256.Create((ushort)0x3F)) << 8) | Vector256.Create((ushort)0x80C0);
+            if (!Vector256.EqualsAll(expected.AsByte(), Vector256.LoadUnsafe(ref source, (nuint)(uint)byteOffset)))
+                return false;
+            byteOffset += 32;
+            charOffset += 16;
+        }
+    }
+
     while (text.Length - charOffset >= 8 && bytes.Length - byteOffset >= 16)
     {
         var value = Vector128.LoadUnsafe(ref characters, (nuint)(uint)charOffset);
-        var valid = Sse2.And(Sse2.CompareEqual(Sse2.SubtractSaturate(Vector128.Create((ushort)0x80), value), Vector128<ushort>.Zero), Sse2.CompareEqual(Sse2.SubtractSaturate(value, Vector128.Create((ushort)0x7FF)), Vector128<ushort>.Zero));
+        var valid = Sse2.And(Sse2.CompareGreaterThan(value.AsInt16(), Vector128.Create((short)0x7F)), Sse2.CompareGreaterThan(Vector128.Create((short)0x800), value.AsInt16()));
         if (Sse2.MoveMask(valid.AsByte()) != 0xFFFF)
             return CoreTextAlgorithms.MatchesUtf8Chunks(bytes[byteOffset..], text[charOffset..]);
-        var lead = Sse2.Or(Sse2.ShiftRightLogical(value, 6), Vector128.Create((ushort)0xC0));
-        var tail = Sse2.Or(Sse2.And(value, Vector128.Create((ushort)0x3F)), Vector128.Create((ushort)0x80));
-        var expected = Ssse3.Shuffle(Sse2.PackUnsignedSaturate(lead.AsInt16(), tail.AsInt16()), PairMask);
-        if (!Vector128.EqualsAll(expected, Vector128.LoadUnsafe(ref source, (nuint)(uint)byteOffset)))
+        var expected = (value >> 6) | ((value & Vector128.Create((ushort)0x3F)) << 8) | Vector128.Create((ushort)0x80C0);
+        if (!Vector128.EqualsAll(expected.AsByte(), Vector128.LoadUnsafe(ref source, (nuint)(uint)byteOffset)))
             return false;
         byteOffset += 16;
         charOffset += 8;
@@ -1217,7 +1265,7 @@ internal static unsafe bool Matches(ReadOnlySpan<byte> bytes, ReadOnlySpan<char>
     return byteOffset == bytes.Length;
 }
     }
-// Core source SHA256: Core/Json/LuminPackJsonReader.Capacity.cs 2744E070158ACD3759108CABB09BAA975DC4B84C54B793A0AB9C028F7C285E4F
+// Core source SHA256: Core/Json/LuminPackJsonReader.Capacity.cs FBE4EC277F9AFF375E30F7393B452B3B3E19B7E68E4DAA9B072CE312BF9A63C1
 internal static unsafe class CoreJsonCapacity
 {
 /// <summary>Scans complete UTF-8 blocks with cross-block quote and escape state.</summary>
@@ -1362,13 +1410,7 @@ internal static unsafe int ScanHintByte(ReadOnlySpan<byte> input, bool entries =
             quotes = RemoveEscapedQuotes(quotes, slashes, width, ref slashCarry);
         if (quotes != 0 || quoted)
         {
-            ulong inside = quotes;
-            inside ^= inside << 1;
-            inside ^= inside << 2;
-            inside ^= inside << 4;
-            inside ^= inside << 8;
-            inside ^= inside << 16;
-            inside ^= inside << 32;
+            ulong inside = GetQuotePrefix(quotes, width);
             if (quoted)
                 inside = ~inside;
             quoted = ((inside >> (width - 1)) & 1) != 0;
@@ -1555,13 +1597,7 @@ internal static unsafe int ScanHintChar(ReadOnlySpan<char> input, bool entries =
             quotes = RemoveEscapedQuotes(quotes, slashes, width, ref slashCarry);
         if (quotes != 0 || quoted)
         {
-            ulong inside = quotes;
-            inside ^= inside << 1;
-            inside ^= inside << 2;
-            inside ^= inside << 4;
-            inside ^= inside << 8;
-            inside ^= inside << 16;
-            inside ^= inside << 32;
+            ulong inside = GetQuotePrefix(quotes, width);
             if (quoted)
                 inside = ~inside;
             quoted = ((inside >> (width - 1)) & 1) != 0;
@@ -1615,28 +1651,15 @@ internal static unsafe int ScanHintChar(ReadOnlySpan<char> input, bool entries =
 [MethodImpl(MethodImplOptions.NoInlining)]
 internal static unsafe ulong RemoveEscapedQuotes(ulong quotes, ulong slashes, int width, ref bool carry)
 {
-    ulong escaped = carry ? 1UL : 0UL;
-    bool next = false;
-    while (slashes != 0)
-    {
-        int start = HintTrailingZero(slashes);
-        int length = HintTrailingZero(~(slashes >> start));
-        if (length > width - start)
-            length = width - start;
-        int end = start + length;
-        bool odd = ((length + (start == 0 && carry ? 1 : 0)) & 1) != 0;
-        if (odd)
-        {
-            if (end == width)
-                next = true;
-            else
-                escaped |= 1UL << end;
-        }
-
-        slashes = end == 64 ? 0 : slashes & (ulong.MaxValue << end);
-    }
-
-    carry = next;
+    // Subtraction propagates each run's parity without visiting its individual backslashes.
+    // The incoming escape consumes lane zero, including when that lane is another backslash.
+    // This is the escape/terminal mask identity used by simdjson's stage-one escape scanner.
+    const ulong odd = 0xAAAAAAAAAAAAAAAAUL;
+    ulong incoming = carry ? 1UL : 0UL;
+    ulong active = slashes & ~incoming;
+    ulong terminals = unchecked(((active << 1) | odd) - active) ^ odd;
+    ulong escaped = terminals ^ (slashes | incoming);
+    carry = ((terminals & slashes) >> (width - 1) & 1) != 0;
     return quotes & ~escaped;
 }
 /// <summary>Identifies zero byte or word lanes without cross-lane borrow artifacts.</summary>
@@ -1768,6 +1791,29 @@ internal static unsafe int FindHintChar(ReadOnlySpan<char> input)
     }
 
     return -1;
+}
+/// <summary>Computes inclusive quote parity for the valid lanes in this block.</summary>
+/// <param name = "quotes">Positions of unescaped quotes.</param>
+/// <param name = "width">The number of valid lanes.</param>
+/// <returns>The parity in the low <paramref name = "width"/> bits.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe ulong GetQuotePrefix(ulong quotes, int width)
+{
+    quotes ^= quotes << 1;
+    quotes ^= quotes << 2;
+    if (width > 4)
+    {
+        quotes ^= quotes << 4;
+        quotes ^= quotes << 8;
+        if (width > 16)
+        {
+            quotes ^= quotes << 16;
+            if (width > 32)
+                quotes ^= quotes << 32;
+        }
+    }
+
+    return quotes;
 }
 }
 // Core source SHA256: Cryptography/ChaCha20.cs 7F5828D28558D0ACA00693AFC95A444F20ED3585F58A45189B920E0E8D501375
@@ -2358,7 +2404,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 37CFF3C76190F35BE5A40E3486AB52E3D7861453C7B73A411EDF6F6647A99FA1
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 5DD01A155E001A6B32DE3A3277E5C3624311966FFF46A1FCEB8EDFEAF761A712
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Checks a character span using the same bounded Latin-1 kernels as string records.</summary>
@@ -2435,6 +2481,14 @@ internal static unsafe bool IsLatin1Long(ref ushort chars, nuint length)
     }
 
     var high128 = Vector128.Create((ushort)0xFF00);
+    for (; i + 32 <= length; i += 32)
+    {
+        var first = Vector128.LoadUnsafe(ref chars, i) | Vector128.LoadUnsafe(ref chars, i + 8);
+        var second = Vector128.LoadUnsafe(ref chars, i + 16) | Vector128.LoadUnsafe(ref chars, i + 24);
+        if (((first | second) & high128) != Vector128<ushort>.Zero)
+            return false;
+    }
+
     var rest = Vector128.LoadUnsafe(ref chars, length - 8);
     for (; i + 8 < length; i += 8)
         rest |= Vector128.LoadUnsafe(ref chars, i);
@@ -2460,7 +2514,7 @@ internal static unsafe bool TryNarrowLatin1(ref char source, ref byte destinatio
             var last = Vector128.LoadUnsafe(ref chars, (nuint)(uint)(length - 8));
             if (((first | last) & Vector128.Create((ushort)0xFF00)) != Vector128<ushort>.Zero)
                 return false;
-            var narrowed = Vector128.Narrow(first, last).AsUInt64();
+            var narrowed = CoreTextAlgorithms.NarrowValidatedLatin1(first, last).AsUInt64();
             KernelMemory.WriteUnaligned(ref destination, narrowed.ToScalar());
             KernelMemory.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)(length - 8)), narrowed.GetElement(1));
             return true;
@@ -2536,8 +2590,8 @@ internal static unsafe bool TryNarrowLatin1Long(ref ushort source, ref byte dest
             var d = Vector256.LoadUnsafe(ref source, i + 48);
             if (((a | b | c | d) & high) != Vector256<ushort>.Zero)
                 return false;
-            (Avx2.IsSupported ? Avx2.Permute4x64(Avx2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsUInt64(), 0xD8).AsByte() : Vector256.Narrow(a, b)).StoreUnsafe(ref destination, i);
-            (Avx2.IsSupported ? Avx2.Permute4x64(Avx2.PackUnsignedSaturate(c.AsInt16(), d.AsInt16()).AsUInt64(), 0xD8).AsByte() : Vector256.Narrow(c, d)).StoreUnsafe(ref destination, i + 32);
+            CoreTextAlgorithms.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, i);
+            CoreTextAlgorithms.NarrowValidatedLatin1(c, d).StoreUnsafe(ref destination, i + 32);
             i += 64;
         }
 
@@ -2550,7 +2604,7 @@ internal static unsafe bool TryNarrowLatin1Long(ref ushort source, ref byte dest
             var b = Vector256.LoadUnsafe(ref source, i + 16);
             if (((a | b) & high) != Vector256<ushort>.Zero)
                 return false;
-            (Avx2.IsSupported ? Avx2.Permute4x64(Avx2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsUInt64(), 0xD8).AsByte() : Vector256.Narrow(a, b)).StoreUnsafe(ref destination, i);
+            CoreTextAlgorithms.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, i);
             i += 32;
         }
 
@@ -2559,7 +2613,7 @@ internal static unsafe bool TryNarrowLatin1Long(ref ushort source, ref byte dest
             var b = Vector256.LoadUnsafe(ref source, last + 16);
             if (((a | b) & high) != Vector256<ushort>.Zero)
                 return false;
-            (Avx2.IsSupported ? Avx2.Permute4x64(Avx2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsUInt64(), 0xD8).AsByte() : Vector256.Narrow(a, b)).StoreUnsafe(ref destination, last);
+            CoreTextAlgorithms.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, last);
         }
 
         return true;
@@ -2575,7 +2629,7 @@ internal static unsafe bool TryNarrowLatin1Long(ref ushort source, ref byte dest
             var b = Vector128.LoadUnsafe(ref source, i + 8);
             if (((a | b) & high) != Vector128<ushort>.Zero)
                 return false;
-            Vector128.Narrow(a, b).StoreUnsafe(ref destination, i);
+            CoreTextAlgorithms.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, i);
             i += 16;
         }
 
@@ -2584,7 +2638,7 @@ internal static unsafe bool TryNarrowLatin1Long(ref ushort source, ref byte dest
             var b = Vector128.LoadUnsafe(ref source, last + 8);
             if (((a | b) & high) != Vector128<ushort>.Zero)
                 return false;
-            Vector128.Narrow(a, b).StoreUnsafe(ref destination, last);
+            CoreTextAlgorithms.NarrowValidatedLatin1(a, b).StoreUnsafe(ref destination, last);
         }
 
         return true;
@@ -2756,28 +2810,28 @@ internal static unsafe bool MatchesLatin1Long(ref byte source, ref ushort chars,
     nuint i = 0;
     if (Vector256.IsHardwareAccelerated && length >= 32)
     {
-        while (true)
+        nuint last256 = length - 32;
+        for (; i < last256; i += 32)
         {
-            nuint at = i + 32 <= length ? i : length - 32;
-            var(lower, upper) = Vector256.Widen(Vector256.LoadUnsafe(ref source, at));
-            if (((lower ^ Vector256.LoadUnsafe(ref chars, at)) | (upper ^ Vector256.LoadUnsafe(ref chars, at + 16))) != Vector256<ushort>.Zero)
+            var(lower, upper) = Vector256.Widen(Vector256.LoadUnsafe(ref source, i));
+            if (((lower ^ Vector256.LoadUnsafe(ref chars, i)) | (upper ^ Vector256.LoadUnsafe(ref chars, i + 16))) != Vector256<ushort>.Zero)
                 return false;
-            if (at + 32 == length)
-                return true;
-            i = at + 32;
         }
+
+        var(tailLower256, tailUpper256) = Vector256.Widen(Vector256.LoadUnsafe(ref source, last256));
+        return ((tailLower256 ^ Vector256.LoadUnsafe(ref chars, last256)) | (tailUpper256 ^ Vector256.LoadUnsafe(ref chars, last256 + 16))) == Vector256<ushort>.Zero;
     }
 
-    while (true)
+    nuint last128 = length - 16;
+    for (; i < last128; i += 16)
     {
-        nuint at = i + 16 <= length ? i : length - 16;
-        var(lower, upper) = Vector128.Widen(Vector128.LoadUnsafe(ref source, at));
-        if (((lower ^ Vector128.LoadUnsafe(ref chars, at)) | (upper ^ Vector128.LoadUnsafe(ref chars, at + 8))) != Vector128<ushort>.Zero)
+        var(lower, upper) = Vector128.Widen(Vector128.LoadUnsafe(ref source, i));
+        if (((lower ^ Vector128.LoadUnsafe(ref chars, i)) | (upper ^ Vector128.LoadUnsafe(ref chars, i + 8))) != Vector128<ushort>.Zero)
             return false;
-        if (at + 16 == length)
-            return true;
-        i = at + 16;
     }
+
+    var(tailLower, tailUpper) = Vector128.Widen(Vector128.LoadUnsafe(ref source, last128));
+    return ((tailLower ^ Vector128.LoadUnsafe(ref chars, last128)) | (tailUpper ^ Vector128.LoadUnsafe(ref chars, last128 + 8))) == Vector128<ushort>.Zero;
 }
 }
 }

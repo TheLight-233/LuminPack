@@ -44,7 +44,7 @@ internal static class ShortAsciiTranscoder
                     Vector64.LoadUnsafe(ref input, (nuint)(length - 4)));
             if ((chars & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
                 return false;
-            var packed = Vector128.Narrow(chars, chars);
+            var packed = StringSerializer.NarrowValidatedLatin1(chars, chars);
             if (escapeJson && NeedsJsonEscape(packed))
                 return false;
             ref byte shortOutput = ref MemoryMarshal.GetReference(destination);
@@ -58,7 +58,7 @@ internal static class ShortAsciiTranscoder
         if (((first | last) & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
             return false;
 
-        var bytes = Vector128.Narrow(first, last);
+        var bytes = StringSerializer.NarrowValidatedLatin1(first, last);
         if (escapeJson && NeedsJsonEscape(bytes))
             return false;
 

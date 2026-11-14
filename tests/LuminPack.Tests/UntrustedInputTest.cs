@@ -106,7 +106,7 @@ public class UntrustedInputTest
     [Fact]
     public void UntrustedBooleanSequencesRejectEveryLane()
     {
-        foreach (int count in new[] { 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 130 })
+        foreach (int count in new[] { 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 130, 255, 256, 257, 511, 512, 513 })
         {
             var value = new UntrustedBooleans { Bits = Enumerable.Range(0, count).Select(index => index % 3 == 0).ToArray(), List = Enumerable.Repeat(true, count).ToList() };
             byte[] bytes = LuminPackSerializer.Serialize(value);

@@ -10,6 +10,62 @@ namespace LuminPackUnitTest;
 [Collection(nameof(RuntimeStateCollection))]
 public sealed unsafe class JsonCapacityScanTest
 {
+    private delegate ulong EscapeMask(ulong quotes, ulong slashes, int width, ref bool carry);
+
+    /// <summary>Checks every small escape mask and randomized full-width masks against a lane-by-lane state machine.</summary>
+    [Fact]
+    public void EscapeMasksPreserveParityAtEveryBlockWidth()
+    {
+        var kernel = typeof(LuminPackJsonReader).GetMethod("RemoveEscapedQuotes",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.CreateDelegate<EscapeMask>();
+        for (int width = 1; width <= 16; width++)
+            for (ulong slashes = 0; slashes < 1UL << width; slashes++)
+                CheckEscapeMask(kernel, slashes, width);
+        var random = new Random(73481);
+        byte[] storage = new byte[8];
+        foreach (int width in new[] { 17, 31, 32, 33, 63, 64 })
+        {
+            ulong valid = ulong.MaxValue >> (64 - width);
+            CheckEscapeMask(kernel, valid, width);
+            for (int lane = 0; lane < width; lane++)
+            {
+                CheckEscapeMask(kernel, valid << lane & valid, width);
+                CheckEscapeMask(kernel, valid >> lane, width);
+            }
+            for (int sample = 0; sample < 4096; sample++)
+            {
+                random.NextBytes(storage);
+                CheckEscapeMask(kernel, BitConverter.ToUInt64(storage) & valid, width);
+            }
+        }
+    }
+
+    /// <summary>Compares both incoming escape states with a scalar model of complete valid lanes.</summary>
+    /// <param name="kernel">The production mask kernel.</param><param name="slashes">Backslash lanes.</param>
+    /// <param name="width">Valid lane count.</param>
+    private static void CheckEscapeMask(EscapeMask kernel, ulong slashes, int width)
+    {
+        ulong quotes = ~slashes & (ulong.MaxValue >> (64 - width));
+        for (int incoming = 0; incoming < 2; incoming++)
+        {
+            bool expectedCarry = incoming != 0;
+            ulong expectedQuotes = 0;
+            for (int lane = 0; lane < width; lane++)
+            {
+                ulong bit = 1UL << lane;
+                if (expectedCarry)
+                    expectedCarry = false;
+                else if ((slashes & bit) != 0)
+                    expectedCarry = true;
+                else
+                    expectedQuotes |= bit;
+            }
+            bool carry = incoming != 0;
+            Assert.Equal(expectedQuotes, kernel(quotes, slashes, width, ref carry));
+            Assert.Equal(expectedCarry, carry);
+        }
+    }
+
     /// <summary>Checks nested values, long strings and quote/backslash runs across all vector and word boundaries.</summary>
     /// <param name="utf16">Whether the document contains UTF-16 code units.</param>
     [Theory]
