@@ -127,6 +127,8 @@ byte[] packed = LuminCompressor.Compress(bytes);
 byte[] unpacked = LuminCompressor.Decompress(packed);
 ```
 
+The codec uses `LUM2` frames with compact length extensions. See [compression](compression.md) for buffer sizing, wire encoding and validation.
+
 `LuminChaCha20Poly1305` (in `LuminPack.Cryptography`) provides RFC 8439 authenticated encryption (32-byte key, 12-byte nonce, 16-byte tag), synchronous and asynchronous. Decryption verifies the tag before writing plaintext. Key management and nonce uniqueness are your responsibility.
 
 ## Next steps

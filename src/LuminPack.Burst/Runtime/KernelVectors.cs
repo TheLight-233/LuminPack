@@ -190,6 +190,7 @@ namespace LuminPack.Burst
     internal unsafe struct Vector512<T> where T : unmanaged
     {
         internal Wide512 Value;
+        internal static Vector512<T> Zero => default;
         /// <summary>Stores one complete lane at the first output byte.</summary><param name="destination">Output.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void StoreUnsafe(ref byte destination) => StoreUnsafe(ref destination, 0);
@@ -206,11 +207,23 @@ namespace LuminPack.Burst
         /// <summary>Maps one vector XOR instruction.</summary><param name="left">First vector.</param><param name="right">Second vector.</param><returns>The XOR result.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector512<T> operator ^(Vector512<T> left, Vector512<T> right) => new Vector512<T> { Value = default };
+        /// <summary>Retains the OR primitive of the disabled 512-bit projection.</summary>
+        /// <param name="left">The first placeholder vector.</param>
+        /// <param name="right">The second placeholder vector.</param>
+        /// <returns>An unreachable placeholder; Burst has no 512-bit feature path.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector512<T> operator |(Vector512<T> left, Vector512<T> right) => default;
     }
     /// <summary>Maps the Core Vector512 primitive API to the supported native instruction set.</summary>
     internal static unsafe class Vector512
     {
         internal static bool IsHardwareAccelerated => false;
+        /// <summary>Retains the equality reduction of the disabled 512-bit projection.</summary>
+        /// <param name="left">The first placeholder vector.</param>
+        /// <param name="right">The second placeholder vector.</param>
+        /// <returns>An unreachable placeholder result; hardware dispatch remains disabled.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool EqualsAll(Vector512<byte> left, Vector512<byte> right) => false;
         /// <summary>Loads a complete unaligned lane from the first input byte.</summary><param name="source">Input.</param><returns>The loaded vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector512<byte> LoadUnsafe(ref byte source) => LoadUnsafe(ref source, 0);

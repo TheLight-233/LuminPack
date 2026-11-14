@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using LuminPack.Code;
 using LuminPack.Burst;
 
@@ -42,7 +43,7 @@ public static unsafe class KernelContract
         }
 
         for (int period = 1; period <= 80; period++)
-        for (int count = 0; count <= 193; count++)
+        foreach (int count in Enumerable.Range(0, 194).Concat(new[] { 255, 256, 257, 1023, 4097 }))
         {
             byte[] output = new byte[period + count + 13];
             random.NextBytes(output);

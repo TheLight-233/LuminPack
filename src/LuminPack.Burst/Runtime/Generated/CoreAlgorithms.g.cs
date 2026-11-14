@@ -61,7 +61,7 @@ internal static void CopyShortBlock(ref byte destination, ref byte source, uint 
     Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<Vector128<byte>>(ref source));
     Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(count - 16)), Unsafe.ReadUnaligned<Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(count - 16))));
 }
-// Core source SHA256: Utility/Compression/LuminCompressor.cs 7457FB9110FDB67D5C4AE1C955491519270680F59DD5AA3DD0D66862961DEB8A
+// Core source SHA256: Utility/Compression/LuminCompressor.cs 4F78C2AF76CC40350144B4EA825A6D2E209FF0D94A4A46F6E67829602889179F
 /// <summary>Copies match to the supplied destination.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
@@ -79,6 +79,12 @@ internal static void CopyMatch(ref byte dst, ref byte src, int len, int offset)
     if (len <= offset)
     {
         KernelMemory.CopyBlockUnaligned(ref dst, ref src, (uint)len);
+        return;
+    }
+
+    if (len >= 256 || (offset < 8 && len >= 64))
+    {
+        CopyLongMatch(ref dst, ref src, len, offset);
         return;
     }
 
@@ -120,78 +126,99 @@ internal static void CopyMatch(ref byte dst, ref byte src, int len, int offset)
     while (Unsafe.IsAddressLessThan(ref dst, ref end))
     {
         dst = src;
-        dst = ref Unsafe.Add(ref dst, 1);
-        src = ref Unsafe.Add(ref src, 1);
+        dst = ref Unsafe.Add(ref dst, (nint)(uint)1);
+        src = ref Unsafe.Add(ref src, (nint)(uint)1);
     }
 }
-/// <summary>8-byte wild-copy bulk path (offset ≥ 8), plus byte tail.</summary>
+/// <summary>Expands a periodic prefix with bounded non-overlapping copies of increasing size.</summary>
+/// <param name = "dst">The complete writable match range.</param>
+/// <param name = "src">The initialized prefix at the match distance before the destination.</param>
+/// <param name = "length">The validated output length.</param>
+/// <param name = "offset">The positive match distance, smaller than the output length.</param>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static void CopyLongMatch(ref byte dst, ref byte src, int length, int offset)
+{
+    // Each copy reads only the initialized prefix ending at its write
+    // position. Doubling that prefix breaks the per-vector dependency
+    // of short periods and lets the shared SIMD copy handle long runs.
+    uint copied = 0;
+    uint width = (uint)offset;
+    while (copied < (uint)length)
+    {
+        uint count = Math.Min(width, (uint)length - copied);
+        KernelMemory.CopyBlockUnaligned(ref Unsafe.Add(ref dst, (nint)(uint)copied), ref src, count);
+        copied += count;
+        width += count;
+    }
+}
+/// <summary>Bounded 8-byte copies for distances of at least eight, followed by a byte tail.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
 /// <param name = "end">The end used by this operation.</param>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static void CopyMatchCore8(ref byte dst, ref byte src, ref byte end)
 {
-    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 8), ref end))
+    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, (nint)(uint)8), ref end))
     {
-        if (KernelMemory.Is64Bit)
+        if (Unsafe.SizeOf<IntPtr>() == 8)
             Unsafe.WriteUnaligned(ref dst, Unsafe.ReadUnaligned<ulong>(ref src));
         else
             KernelMemory.CopyBlockUnaligned(ref dst, ref src, 8);
-        dst = ref Unsafe.Add(ref dst, 8);
-        src = ref Unsafe.Add(ref src, 8);
+        dst = ref Unsafe.Add(ref dst, (nint)(uint)8);
+        src = ref Unsafe.Add(ref src, (nint)(uint)8);
     }
 
     while (Unsafe.IsAddressLessThan(ref dst, ref end))
     {
         dst = src;
-        dst = ref Unsafe.Add(ref dst, 1);
-        src = ref Unsafe.Add(ref src, 1);
+        dst = ref Unsafe.Add(ref dst, (nint)(uint)1);
+        src = ref Unsafe.Add(ref src, (nint)(uint)1);
     }
 }
-/// <summary>64-byte wild copy (offset ≥ 64); delegates the residual to the 32-byte path.</summary>
+/// <summary>Bounded 64-byte copy (offset ≥ 64); delegates the residual to the 32-byte path.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
 /// <param name = "end">The end used by this operation.</param>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static void CopyMatch512(ref byte dst, ref byte src, ref byte end)
 {
-    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 64), ref end))
+    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, (nint)(uint)64), ref end))
     {
         Vector512.StoreUnsafe(Vector512.LoadUnsafe(ref src), ref dst);
-        dst = ref Unsafe.Add(ref dst, 64);
-        src = ref Unsafe.Add(ref src, 64);
+        dst = ref Unsafe.Add(ref dst, (nint)(uint)64);
+        src = ref Unsafe.Add(ref src, (nint)(uint)64);
     }
 
     CopyMatch256(ref dst, ref src, ref end);
 }
-/// <summary>32-byte wild copy (offset ≥ 32); delegates the residual to the 16-byte path.</summary>
+/// <summary>Bounded 32-byte copy (offset ≥ 32); delegates the residual to the 16-byte path.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
 /// <param name = "end">The end used by this operation.</param>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static void CopyMatch256(ref byte dst, ref byte src, ref byte end)
 {
-    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 32), ref end))
+    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, (nint)(uint)32), ref end))
     {
         Vector256.StoreUnsafe(Vector256.LoadUnsafe(ref src), ref dst);
-        dst = ref Unsafe.Add(ref dst, 32);
-        src = ref Unsafe.Add(ref src, 32);
+        dst = ref Unsafe.Add(ref dst, (nint)(uint)32);
+        src = ref Unsafe.Add(ref src, (nint)(uint)32);
     }
 
     CopyMatch128(ref dst, ref src, ref end);
 }
-/// <summary>16-byte wild copy (offset ≥ 16); delegates the residual to the 8-byte path.</summary>
+/// <summary>Bounded 16-byte copy (offset ≥ 16); delegates the residual to the 8-byte path.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
 /// <param name = "end">The end used by this operation.</param>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static void CopyMatch128(ref byte dst, ref byte src, ref byte end)
 {
-    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 16), ref end))
+    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, (nint)(uint)16), ref end))
     {
         Vector128.StoreUnsafe(Vector128.LoadUnsafe(ref src), ref dst);
-        dst = ref Unsafe.Add(ref dst, 16);
-        src = ref Unsafe.Add(ref src, 16);
+        dst = ref Unsafe.Add(ref dst, (nint)(uint)16);
+        src = ref Unsafe.Add(ref src, (nint)(uint)16);
     }
 
     CopyMatchCore8(ref dst, ref src, ref end);
@@ -238,13 +265,35 @@ internal static int ExtendMatch(ref byte a, ref byte b, ref byte limit)
 internal static int ExtendMatch512(ref byte a, ref byte b, ref byte start, ref byte limit)
 {
     nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+    while (remaining >= 256)
+    {
+        var d0 = Vector512.LoadUnsafe(ref a) ^ Vector512.LoadUnsafe(ref b);
+        var d1 = Vector512.LoadUnsafe(ref a, 64) ^ Vector512.LoadUnsafe(ref b, 64);
+        var d2 = Vector512.LoadUnsafe(ref a, 128) ^ Vector512.LoadUnsafe(ref b, 128);
+        var d3 = Vector512.LoadUnsafe(ref a, 192) ^ Vector512.LoadUnsafe(ref b, 192);
+        if (!Vector512.EqualsAll((d0 | d1) | (d2 | d3), Vector512<byte>.Zero))
+        {
+            if (!Vector512.EqualsAll(d0, Vector512<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + BitOperations.TrailingZeroCount(~Vector512.Equals(d0, Vector512<byte>.Zero).ExtractMostSignificantBits());
+            if (!Vector512.EqualsAll(d1, Vector512<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + 64 + BitOperations.TrailingZeroCount(~Vector512.Equals(d1, Vector512<byte>.Zero).ExtractMostSignificantBits());
+            if (!Vector512.EqualsAll(d2, Vector512<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + 128 + BitOperations.TrailingZeroCount(~Vector512.Equals(d2, Vector512<byte>.Zero).ExtractMostSignificantBits());
+            return (int)Unsafe.ByteOffset(ref start, ref a) + 192 + BitOperations.TrailingZeroCount(~Vector512.Equals(d3, Vector512<byte>.Zero).ExtractMostSignificantBits());
+        }
+
+        a = ref Unsafe.Add(ref a, (nint)(uint)256);
+        b = ref Unsafe.Add(ref b, (nint)(uint)256);
+        remaining -= 256;
+    }
+
     while (remaining >= 64)
     {
         ulong mask = Vector512.Equals(Vector512.LoadUnsafe(ref a), Vector512.LoadUnsafe(ref b)).ExtractMostSignificantBits();
         if (mask != ulong.MaxValue)
             return (int)Unsafe.ByteOffset(ref start, ref a) + (int)BitOperations.TrailingZeroCount(~mask);
-        a = ref Unsafe.Add(ref a, 64);
-        b = ref Unsafe.Add(ref b, 64);
+        a = ref Unsafe.Add(ref a, (nint)(uint)64);
+        b = ref Unsafe.Add(ref b, (nint)(uint)64);
         remaining -= 64;
     }
 
@@ -260,7 +309,6 @@ internal static int ExtendMatch512(ref byte a, ref byte b, ref byte start, ref b
 internal static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref byte limit)
 {
     nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
-    // Four complete vectors share one equality reduction; locate a mismatch only in the failing group.
     while (remaining >= 128)
     {
         var d0 = Vector256.LoadUnsafe(ref a) ^ Vector256.LoadUnsafe(ref b);
@@ -268,9 +316,18 @@ internal static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref b
         var d2 = Vector256.LoadUnsafe(ref a, 64) ^ Vector256.LoadUnsafe(ref b, 64);
         var d3 = Vector256.LoadUnsafe(ref a, 96) ^ Vector256.LoadUnsafe(ref b, 96);
         if (!Vector256.EqualsAll((d0 | d1) | (d2 | d3), Vector256<byte>.Zero))
-            break;
-        a = ref Unsafe.Add(ref a, 128);
-        b = ref Unsafe.Add(ref b, 128);
+        {
+            if (!Vector256.EqualsAll(d0, Vector256<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + BitOperations.TrailingZeroCount(~Vector256.Equals(d0, Vector256<byte>.Zero).ExtractMostSignificantBits());
+            if (!Vector256.EqualsAll(d1, Vector256<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + 32 + BitOperations.TrailingZeroCount(~Vector256.Equals(d1, Vector256<byte>.Zero).ExtractMostSignificantBits());
+            if (!Vector256.EqualsAll(d2, Vector256<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + 64 + BitOperations.TrailingZeroCount(~Vector256.Equals(d2, Vector256<byte>.Zero).ExtractMostSignificantBits());
+            return (int)Unsafe.ByteOffset(ref start, ref a) + 96 + BitOperations.TrailingZeroCount(~Vector256.Equals(d3, Vector256<byte>.Zero).ExtractMostSignificantBits());
+        }
+
+        a = ref Unsafe.Add(ref a, (nint)(uint)128);
+        b = ref Unsafe.Add(ref b, (nint)(uint)128);
         remaining -= 128;
     }
 
@@ -279,14 +336,14 @@ internal static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref b
         uint mask = Vector256.Equals(Vector256.LoadUnsafe(ref a), Vector256.LoadUnsafe(ref b)).ExtractMostSignificantBits();
         if (mask != uint.MaxValue)
             return (int)Unsafe.ByteOffset(ref start, ref a) + (int)BitOperations.TrailingZeroCount(~mask);
-        a = ref Unsafe.Add(ref a, 32);
-        b = ref Unsafe.Add(ref b, 32);
+        a = ref Unsafe.Add(ref a, (nint)(uint)32);
+        b = ref Unsafe.Add(ref b, (nint)(uint)32);
         remaining -= 32;
     }
 
     return ExtendMatch128(ref a, ref b, ref start, ref limit);
 }
-/// <summary>SIMD match extension, 16-byte stride (Vector128 / SSE2).</summary>
+/// <summary>SIMD match extension with bounded 128-bit vectors on x86 and ARM64.</summary>
 /// <param name = "a">The a used by this operation.</param>
 /// <param name = "b">The b used by this operation.</param>
 /// <param name = "start">The start used by this operation.</param>
@@ -296,7 +353,6 @@ internal static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref b
 internal static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref byte limit)
 {
     nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
-    // Four complete vectors share one equality reduction; locate a mismatch only in the failing group.
     while (remaining >= 64)
     {
         var d0 = Vector128.LoadUnsafe(ref a) ^ Vector128.LoadUnsafe(ref b);
@@ -304,9 +360,18 @@ internal static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref b
         var d2 = Vector128.LoadUnsafe(ref a, 32) ^ Vector128.LoadUnsafe(ref b, 32);
         var d3 = Vector128.LoadUnsafe(ref a, 48) ^ Vector128.LoadUnsafe(ref b, 48);
         if (!Vector128.EqualsAll((d0 | d1) | (d2 | d3), Vector128<byte>.Zero))
-            break;
-        a = ref Unsafe.Add(ref a, 64);
-        b = ref Unsafe.Add(ref b, 64);
+        {
+            if (!Vector128.EqualsAll(d0, Vector128<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + BitOperations.TrailingZeroCount(~Vector128.Equals(d0, Vector128<byte>.Zero).ExtractMostSignificantBits());
+            if (!Vector128.EqualsAll(d1, Vector128<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + 16 + BitOperations.TrailingZeroCount(~Vector128.Equals(d1, Vector128<byte>.Zero).ExtractMostSignificantBits());
+            if (!Vector128.EqualsAll(d2, Vector128<byte>.Zero))
+                return (int)Unsafe.ByteOffset(ref start, ref a) + 32 + BitOperations.TrailingZeroCount(~Vector128.Equals(d2, Vector128<byte>.Zero).ExtractMostSignificantBits());
+            return (int)Unsafe.ByteOffset(ref start, ref a) + 48 + BitOperations.TrailingZeroCount(~Vector128.Equals(d3, Vector128<byte>.Zero).ExtractMostSignificantBits());
+        }
+
+        a = ref Unsafe.Add(ref a, (nint)(uint)64);
+        b = ref Unsafe.Add(ref b, (nint)(uint)64);
         remaining -= 64;
     }
 
@@ -316,8 +381,8 @@ internal static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref b
         uint mask = Vector128.Equals(Vector128.LoadUnsafe(ref a), Vector128.LoadUnsafe(ref b)).ExtractMostSignificantBits();
         if ((mask & 0xFFFF) != 0xFFFF)
             return (int)Unsafe.ByteOffset(ref start, ref a) + (int)BitOperations.TrailingZeroCount(~mask);
-        a = ref Unsafe.Add(ref a, 16);
-        b = ref Unsafe.Add(ref b, 16);
+        a = ref Unsafe.Add(ref a, (nint)(uint)16);
+        b = ref Unsafe.Add(ref b, (nint)(uint)16);
         remaining -= 16;
     }
 
@@ -333,10 +398,10 @@ internal static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref b
 internal static int ExtendMatchScalar(ref byte a, ref byte b, ref byte start, ref byte limit)
 {
     // 16-byte unrolled loop: two ulong XOR per iteration.
-    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref a, 16), ref limit))
+    while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref a, (nint)(uint)16), ref limit))
     {
         ulong d0 = ReadU64(ref a) ^ ReadU64(ref b);
-        ulong d1 = ReadU64(ref Unsafe.Add(ref a, 8)) ^ ReadU64(ref Unsafe.Add(ref b, 8));
+        ulong d1 = ReadU64(ref Unsafe.Add(ref a, (nint)(uint)8)) ^ ReadU64(ref Unsafe.Add(ref b, (nint)(uint)8));
         if ((d0 | d1) != 0)
         {
             if (d0 != 0)
@@ -344,25 +409,25 @@ internal static int ExtendMatchScalar(ref byte a, ref byte b, ref byte start, re
             return (int)Unsafe.ByteOffset(ref start, ref a) + 8 + TrailingZeroBytes(d1);
         }
 
-        a = ref Unsafe.Add(ref a, 16);
-        b = ref Unsafe.Add(ref b, 16);
+        a = ref Unsafe.Add(ref a, (nint)(uint)16);
+        b = ref Unsafe.Add(ref b, (nint)(uint)16);
     }
 
     // 8-byte tail
-    if (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref a, 8), ref limit))
+    if (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref a, (nint)(uint)8), ref limit))
     {
         ulong diff = ReadU64(ref a) ^ ReadU64(ref b);
         if (diff != 0)
             return (int)Unsafe.ByteOffset(ref start, ref a) + TrailingZeroBytes(diff);
-        a = ref Unsafe.Add(ref a, 8);
-        b = ref Unsafe.Add(ref b, 8);
+        a = ref Unsafe.Add(ref a, (nint)(uint)8);
+        b = ref Unsafe.Add(ref b, (nint)(uint)8);
     }
 
     // byte tail
     while (Unsafe.IsAddressLessThan(ref a, ref limit) && a == b)
     {
-        a = ref Unsafe.Add(ref a, 1);
-        b = ref Unsafe.Add(ref b, 1);
+        a = ref Unsafe.Add(ref a, (nint)(uint)1);
+        b = ref Unsafe.Add(ref b, (nint)(uint)1);
     }
 
     return (int)Unsafe.ByteOffset(ref start, ref a);
@@ -373,7 +438,7 @@ internal static int ExtendMatchScalar(ref byte a, ref byte b, ref byte start, re
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static ulong ReadU64(ref byte p)
 {
-    if (KernelMemory.Is64Bit)
+    if (Unsafe.SizeOf<IntPtr>() == 8)
         return Unsafe.ReadUnaligned<ulong>(ref p);
     ulong value = default;
     KernelMemory.CopyBlockUnaligned(ref Unsafe.As<ulong, byte>(ref value), ref p, 8);

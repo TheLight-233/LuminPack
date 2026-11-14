@@ -38,6 +38,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Strings** default to fixed-width UTF-16 length records, with the compact Latin-1 form; UTF-8 and token profiles stay available. Opt-in `VarInt` recording encodes each existing length header plus one as canonical unsigned base-128, preserving payload encodings and distinct null and empty records. UTF-8 keeps both length fields. Fixed-width defaults and their wire bytes remain unchanged; both endpoints select the same profile. Token records share the empty terminator.
 - **JSON** keeps its envelopes (`$type`/`$value`, `$id`/`$ref`, `Lazy`, multidimensional arrays) and rejects non-finite numbers.
 - **Byte order** is little-endian. No mode performs endian conversion.
+- **Compression** uses `LUM2` frames with single-byte length extensions below 255 and an escaped canonical unsigned base-128 remainder for longer lengths, a 64 KiB match window and the per-thread position table. High-ratio allocating reads validate complete sequence structure before allocation. Earlier `LUMZ` frames are rejected. Match hooks, bounded SIMD tails, decoder checks and 32-bit access rules remain in force; see [compression](compression.md).
 - Changing any wire byte needs explicit approval and updated wire fixtures.
 
 ### Dispatch

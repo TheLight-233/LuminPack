@@ -127,6 +127,8 @@ byte[] packed = LuminCompressor.Compress(bytes);
 byte[] unpacked = LuminCompressor.Decompress(packed);
 ```
 
+编解码器采用带紧凑长度扩展的 `LUM2` 帧。缓冲区容量、帧编码和验证规则参见[压缩](compression.cn.md)。
+
 `LuminChaCha20Poly1305`（位于 `LuminPack.Cryptography`）提供 RFC 8439 认证加密（32 字节密钥、12 字节 nonce、16 字节标签），支持同步和异步。解密时先校验标签，再写出明文。密钥管理和 nonce 唯一性由你负责。
 
 ## 下一步

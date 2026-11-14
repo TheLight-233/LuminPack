@@ -154,7 +154,7 @@ Readers and writers advance a cursor (`ref byte`, or `byte*` on netstandard2.1).
 
 ## Helpers
 
-- `LuminCompressor` (`LuminPack.Utility`): `Compress(ReadOnlySpan<byte>)`, `Decompress(ReadOnlySpan<byte>)`, span and `LuminBufferWriter` overloads; LuminPack LZ frames.
+- `LuminCompressor` (`LuminPack.Utility`): `Compress(ReadOnlySpan<byte>)`, `Decompress(ReadOnlySpan<byte>)`, span and `LuminBufferWriter` overloads; `LUM2` LZ frames with short length bytes and escaped canonical base-128 remainders. Size span destinations with `GetMaxCompressedSize` (compression) or `GetDecompressedSize` (decompression). The latter validates high-ratio frame structure before allocation; ordinary sequence validation remains in `Decompress`. See [compression](../../../docs/compression.md).
 - `LuminChaCha20Poly1305` (`LuminPack.Cryptography`): RFC 8439 AEAD (32-byte key, 12-byte nonce, 16-byte tag), sync and async; decryption verifies the tag first and reports failure with a `bool`.
 
 ## Formats

@@ -450,6 +450,9 @@ public sealed unsafe class BurstHookTest : IDisposable
         }
         Assert.True(_matchCalls > 0);
         Assert.True(_expandCalls > 0);
+        var results = new List<string>();
+        CompressionSafetyPerfTest.Run(results);
+        Assert.All(results, result => Assert.StartsWith("✓", result));
     }
 
     /// <summary>Checks registered crypto kernels against the platform AEAD and verifies authentication precedes decryption.</summary>
