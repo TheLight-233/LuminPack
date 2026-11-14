@@ -8,13 +8,9 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class ReadOnlyObservableCollectionOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(WrapperTraversal.WriteRoot, Read, "staged.Add(item);",
-        c =>
-        {
-            c.W.Line("var staged = new global::System.Collections.ObjectModel.ObservableCollection<" + c.Scalar + ">();");
-            WrapperTraversal.SizeObservableJson(c, "staged");
-        },
+        PrepareJson,
         c => c.W.Line("value = new " + c.Sequence + "(staged);"),
-        jsonAddBody: c => WrapperTraversal.AppendObservable(c, "staged"), readInlining: "NoInlining", outlineJson: true);
+        jsonAddBody: AppendJson, readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -23,6 +19,43 @@ internal static class ReadOnlyObservableCollectionOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
+
+    private static void PrepareJson(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("var staged = new global::System.Collections.ObjectModel.ObservableCollection<" + c.Scalar + ">();");
+        if (c.Counted || !c.Supports("WrapperJsonStorage"))
+        {
+            WrapperTraversal.SizeObservableJson(c, "staged");
+            return;
+        }
+
+        string capacity = WrapperTraversal.JsonCapacity(c);
+        if (capacity.Length != 0)
+            w.Line("int capacity = " + capacity + ";");
+        // The exact observable stays private until the read-only wrapper is created after the loop.
+        w.Line("var backing = global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + c.Scalar +
+            ">(staged) as global::System.Collections.Generic.List<" + c.Scalar + ">;");
+        if (capacity.Length != 0)
+        {
+            w.Line("if (capacity > 0 && backing is not null)");
+            w.Indented(() => w.Line("backing.Capacity = capacity;"));
+        }
+    }
+
+    private static void AppendJson(EnumerableOwnerContext c)
+    {
+        if (!c.Counted && c.Supports("WrapperJsonStorage"))
+        {
+            c.W.Line("if (backing is not null)");
+            c.W.Indented(() => c.W.Line("backing.Add(item);"));
+            c.W.Line("else");
+            c.W.Indented(() => WrapperTraversal.AppendObservable(c, "staged"));
+            return;
+        }
+
+        WrapperTraversal.AppendObservable(c, "staged");
+    }
 
     private static void Read(EnumerableOwnerContext c)
     {
