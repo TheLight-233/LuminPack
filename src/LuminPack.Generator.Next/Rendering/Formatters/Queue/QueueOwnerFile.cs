@@ -57,25 +57,38 @@ internal static class QueueOwnerFile
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
-        // The checked reads validate each storage word before it is used.
-        w.Line("int storedHead = 0;");
-        w.Line("int storedTail = 0;");
-        w.Line("int storedSize = 0;");
+        // A truncated header still consumes its complete words before reporting the failed read.
+        w.Line("ref byte storageWords = ref operationState.PeekInput(3 * sizeof(int), out bool completeHeader);");
+        w.Line("int storedHead, storedTail, storedSize;");
+        w.Line("if (completeHeader)");
+        w.Open();
+        w.Line("operationState.Advance(3 * sizeof(int));");
+        const string reader = "global::LuminPack.Core.LuminPackReader";
+        w.Line("storedHead = " + reader + ".Read<int>(ref storageWords);");
+        w.Line("storedTail = " + reader + ".Read<int>(ref " + c.Memory + ".Add(ref storageWords, sizeof(int)));");
+        w.Line("storedSize = " + reader + ".Read<int>(ref " + c.Memory + ".Add(ref storageWords, 2 * sizeof(int)));");
+        w.Close();
+        w.Line("else");
+        w.Open();
+        w.Line("storedHead = storedTail = storedSize = 0;");
         w.Line("operationState.Read(ref " + c.Memory + ".As<int, byte>(ref storedHead), sizeof(int));");
         w.Line("operationState.Read(ref " + c.Memory + ".As<int, byte>(ref storedTail), sizeof(int));");
         w.Line("operationState.Read(ref " + c.Memory + ".As<int, byte>(ref storedSize), sizeof(int));");
+        w.Close();
         w.Line("if (storedSize != length || storedHead < 0 || storedTail < 0)");
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidRange(storedSize, length);"));
         w.Blank();
         if (c.Counted)
         {
             // A string or packable element is read and enqueued one at a time.
-            w.Line("for (int index = 0; index < length; index++)");
+            w.Line("int remaining = length;");
+            w.Line("do");
             w.Open();
             w.Line(scalar + " item = default;");
             c.ReadElement("item");
             w.Line("value.Enqueue(item);");
             w.Close();
+            w.Line("while (--remaining != 0);");
             return;
         }
         w.Line("#if NET8_0_OR_GREATER");
@@ -89,12 +102,14 @@ internal static class QueueOwnerFile
         });
         w.Line("global::LuminPack.Code.LuminPackMarshal.SetQueueSize(value, normalizedTail, 0, length);");
         w.Line("#else");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int remaining = length;");
+        w.Line("do");
         w.Open();
         w.Line(scalar + " item = default;");
         w.Line("operationState.Read(ref " + c.Memory + ".As<" + scalar + ", byte>(ref item), " + c.Memory + ".SizeOf<" + scalar + ">());");
         w.Line("value.Enqueue(item);");
         w.Close();
+        w.Line("while (--remaining != 0);");
         w.Line("#endif");
     }
 }

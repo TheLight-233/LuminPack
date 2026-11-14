@@ -29,10 +29,7 @@ internal static class QueueTraversal
         body.Add("{");
         body.Add("int queuePayload = checked(queueSize * " + memory + ".SizeOf<" + element + ">());");
         body.Add("operationState.EnsureAdditionalCapacity(checked(sizeof(int) * 3 + queuePayload));");
-        body.Add("int queueZero = 0;");
-        body.Add("operationState.Write(in queueZero);");
-        body.Add("operationState.Write(in queueZero);");
-        body.Add("operationState.Write(in queueSize);");
+        WriteStorageWords(body, memory);
         body.Add("#if NET8_0_OR_GREATER");
         body.Add("global::LuminPack.Code.LuminPackMarshal.GetQueueSize(" + local + ", out _, out var queueHead, out _);");
         body.Add("var queueStorage = global::LuminPack.Code.LuminPackMarshal.GetQueueSpan(" + local + ");");
@@ -62,7 +59,7 @@ internal static class QueueTraversal
         body.Add(local + ".CopyTo(queueBuffer, 0);");
         body.Add("global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(");
         body.Add("    ref operationState.Cursor,");
-        body.Add("    ref " + memory + ".As<" + element + ", byte>(ref queueBuffer[0]),");
+        body.Add("    ref " + memory + ".As<" + element + ", byte>(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(queueBuffer)),");
         body.Add("    (uint)queuePayload);");
         body.Add("}");
         body.Add("finally");
@@ -86,15 +83,23 @@ internal static class QueueTraversal
         body.Add("if (queueSize != 0)");
         body.Add("{");
         body.Add("operationState.EnsureAdditionalCapacity(sizeof(int) * 3);");
-        body.Add("int queueZero = 0;");
-        body.Add("operationState.Write(in queueZero);");
-        body.Add("operationState.Write(in queueZero);");
-        body.Add("operationState.Write(in queueSize);");
+        WriteStorageWords(body, "global::System.Runtime.CompilerServices.Unsafe");
         body.Add("foreach (var queueItem in " + local + ")");
         body.Add("operationState.Write<TLuminProfile>(queueItem);");
         body.Add("}");
         body.Add("");
         body.Add("operationState.EndCollection(countPosition, queueSize);");
         body.Add("operationState.CheckBuffer();");
+    }
+
+    /// <summary>Stores the three already-reserved wire words using the architecture-aware scalar writer.</summary>
+    private static void WriteStorageWords(List<string> body, string memory)
+    {
+        const string writer = "global::LuminPack.Core.LuminPackWriter";
+        body.Add("ref byte queueWords = ref operationState.Cursor;");
+        body.Add(writer + ".Write(ref queueWords, 0);");
+        body.Add(writer + ".Write(ref " + memory + ".Add(ref queueWords, sizeof(int)), 0);");
+        body.Add(writer + ".Write(ref " + memory + ".Add(ref queueWords, 2 * sizeof(int)), queueSize);");
+        body.Add("operationState.Advance(3 * sizeof(int));");
     }
 }

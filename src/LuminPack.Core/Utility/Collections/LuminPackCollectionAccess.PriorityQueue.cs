@@ -31,12 +31,18 @@ public static partial class LuminPackCollectionAccess
         if (writer.RecordRoom() < sizeof(int) + payloadBytes || MemoryMarshal.AsBytes(nodes).Overlaps(writer.Buffer))
             return false;
         int header = writer.BeginCollection();
-        ref byte output = ref MemoryMarshal.GetReference(writer.Buffer.Slice(writer.Position));
-        foreach (ref readonly var node in nodes)
+        if (!nodes.IsEmpty)
         {
-            LuminPackWriter.Write(ref output, in node.Element);
-            LuminPackWriter.Write(ref Unsafe.Add(ref output, (nint)(uint)elementBytes), in node.Priority);
-            output = ref Unsafe.Add(ref output, (nint)(uint)pairBytes);
+            ref byte output = ref writer.Cursor;
+            ref var first = ref MemoryMarshal.GetReference(nodes);
+            int index = 0;
+            do
+            {
+                ref readonly var node = ref Unsafe.Add(ref first, (nint)(uint)index);
+                LuminPackWriter.Write(ref output, in node.Element);
+                LuminPackWriter.Write(ref Unsafe.Add(ref output, (nint)(uint)elementBytes), in node.Priority);
+                output = ref Unsafe.Add(ref output, (nint)(uint)pairBytes);
+            } while (++index < nodes.Length);
         }
         writer.CompleteRun((int)payloadBytes);
         CheckPriorityQueueTraversalVersion(queue, version);
@@ -64,7 +70,10 @@ public static partial class LuminPackCollectionAccess
             !PriorityQueueStorage.Available || !PriorityQueueParents.Available)
             return false;
         var nodes = LuminFieldLayout.Field<(TElement Element, TPriority Priority)[]>(queue, LuminCollectionLayouts.PriorityQueueNodes);
-        if (count > nodes.Length || MemoryMarshal.AsBytes(nodes.AsSpan(0, count)).Overlaps(reader.Buffer))
+        if (count > nodes.Length)
+            return false;
+        ref var first = ref LuminPackMarshal.GetNotNullArrayReference(nodes);
+        if (MemoryMarshal.AsBytes(LuminPackMarshal.CreateReadOnlySpan(ref first, count)).Overlaps(reader.Buffer))
             return false;
 
         int elementBytes = Unsafe.SizeOf<TElement>();
@@ -74,7 +83,6 @@ public static partial class LuminPackCollectionAccess
         if (!available)
             return false;
 
-        ref var first = ref MemoryMarshal.GetArrayDataReference(nodes);
         var comparer = Comparer<TPriority>.Default;
         int index = 0;
         do
@@ -93,14 +101,16 @@ public static partial class LuminPackCollectionAccess
         LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueSize) = index;
         ref int version = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion);
         version = unchecked(version + index);
-        for (; index < count; index++)
+        if (index == count)
+            return true;
+        do
         {
             TElement element = default;
             TPriority priority = default;
             reader.Read(ref Unsafe.As<TElement, byte>(ref element), elementBytes);
             reader.Read(ref Unsafe.As<TPriority, byte>(ref priority), pairBytes - elementBytes);
             queue.Enqueue(element, priority);
-        }
+        } while (++index < count);
         return true;
     }
 

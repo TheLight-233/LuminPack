@@ -36,9 +36,10 @@ public static partial class LuminPackCollectionAccess
             writer.CompleteRun(3 * sizeof(int));
         }
         int first = Math.Min(count, array.Length - head);
-        WriteQueueStrings<TOptions>(ref writer, array.AsSpan(head, first), checkEachRecord);
+        ref string? start = ref LuminPackMarshal.GetNotNullArrayReference(array);
+        WriteQueueStrings<TOptions>(ref writer, LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref start, (nint)(uint)head), first), checkEachRecord);
         if (first != count)
-            WriteQueueStrings<TOptions>(ref writer, array.AsSpan(0, count - first), checkEachRecord);
+            WriteQueueStrings<TOptions>(ref writer, LuminPackMarshal.CreateReadOnlySpan(ref start, count - first), checkEachRecord);
         if (version != captured)
             LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
         writer.EndCollection(header, count);
@@ -81,9 +82,10 @@ public static partial class LuminPackCollectionAccess
         ref int version = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.QueueVersion);
         int captured = version;
         int first = Math.Min(count, array.Length - head);
-        WriteIntegerQueueItems<TOptions, T>(ref writer, array.AsSpan(head, first), ref version, captured);
+        ref T start = ref LuminPackMarshal.GetNotNullArrayReference(array);
+        WriteIntegerQueueItems<TOptions, T>(ref writer, LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref start, (nint)(uint)head), first), ref version, captured);
         if (first != count)
-            WriteIntegerQueueItems<TOptions, T>(ref writer, array.AsSpan(0, count - first), ref version, captured);
+            WriteIntegerQueueItems<TOptions, T>(ref writer, LuminPackMarshal.CreateReadOnlySpan(ref start, count - first), ref version, captured);
         return true;
     }
 

@@ -33,7 +33,10 @@ internal static class LinkedListMemberWriter
         body.Add("}");
         body.Add("int countPosition = writer.BeginCollection();");
         body.Add("int count = 0;");
-        body.Add("for (var node = " + local + ".First; node is not null; node = node.Next)");
+        body.Add("var node = " + local + ".First;");
+        body.Add("if (node is not null)");
+        body.Add("{");
+        body.Add("do");
         body.Add("{");
         if (member.Scalar != "string")
             body.Add("writer.CheckBuffer();");
@@ -50,6 +53,9 @@ internal static class LinkedListMemberWriter
         }
         else
             body.Add("writer.Write(in v);");
+        body.Add("node = node.Next;");
+        body.Add("}");
+        body.Add("while (node is not null);");
         body.Add("}");
         body.Add("");
         body.Add("writer.EndCollection(countPosition, count);");

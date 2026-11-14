@@ -79,15 +79,21 @@ internal static class BlockingCollectionOwnerFile
             w.Line("try");
             w.Open();
             if (raw)
-                w.Line("reader.Read<" + item + ">(items.AsSpan(0, length));");
+                w.Line("reader.Read<" + item + ">(global::LuminPack.Code.LuminPackMarshal.CreateSpan(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items), length));");
             else
             {
-                w.Line("for (int i = 0; i < length; i++)");
+                w.Line("if (length != 0)");
+                w.Open();
+                w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items);");
+                w.Line("int index = 0;");
+                w.Line("do");
                 w.Open();
                 w.Line(item + " item = default!;");
                 ForwardedElementRead.Emit(w, item, "reader", "item",
                     element + ".Read<TOptions>(ref reader, ref item);");
-                w.Line("items[i] = item;");
+                w.Line(w.A("Unsafe") + ".Add(ref first, (nint)(uint)index) = item;");
+                w.Close();
+                w.Line("while (++index < length);");
                 w.Close();
             }
             w.Line("global::System.Collections.Generic.IEnumerable<" + item + "> source = length == items.Length");

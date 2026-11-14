@@ -8,7 +8,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// through the collection-access helper, reusing a non-null destination after clearing it.</remarks>
 internal static class LinkedListOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.AddLast(item);");
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "value.AddLast(item);",
+        readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
@@ -28,7 +29,10 @@ internal static class LinkedListOwnerFile
         }
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("int count = 0;");
-        w.Line("for (var node = value.First; node is not null; node = node.Next)");
+        w.Line("var node = value.First;");
+        w.Line("if (node is not null)");
+        w.Open();
+        w.Line("do");
         w.Open();
         if (!c.Text)
             w.Line("operationState.CheckBuffer();");
@@ -46,6 +50,9 @@ internal static class LinkedListOwnerFile
         }
         else
             w.Line("operationState.Write(in v);");
+        w.Line("node = node.Next;");
+        w.Close();
+        w.Line("while (node is not null);");
         w.Close();
         w.Blank();
         w.Line("operationState.EndCollection(countPosition, count);");
