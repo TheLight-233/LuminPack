@@ -1273,7 +1273,7 @@ internal static partial class BinaryEmitter
     /// <param name="state">The writer state the expanded body advances: the record's <c>writer</c>, or the isolated
     /// <c>operationState</c> a sequence owner writes through.</param>
     private static void AddElementWrite(List<string> body, PayloadRenderModel element, string owner, int depth, CodeWriter w,
-        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans, string state = "writer")
+        Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans, string state = "writer", bool inlineSpan = false)
     {
         var members = element.Members;
         string count = members.Length.ToString(CultureInfo.InvariantCulture);
@@ -1377,6 +1377,12 @@ internal static partial class BinaryEmitter
             body.Add("// Field: " + member.Name);
             if (member.Kind == RenderMemberKind.Text)
                 body.Add(elementCursor + " = ref " + state + ".WriteReservedRecordString<" + Profile + ">(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
+            else if (inlineSpan)
+            {
+                string snapshot = Snapshot(element, index, camel: true);
+                body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanInline(ref " + elementCursor +
+                    ", " + snapshot + ".IsNull, " + snapshot + ".Elements);");
+            }
             else
                 body.Add(elementCursor + " = ref " + w.A("LuminPackWriter") + ".WriteReservedSpanRecord(ref " + elementCursor + ", " + Snapshot(element, index, camel: true) + ");");
         }
@@ -1397,8 +1403,9 @@ internal static partial class BinaryEmitter
     /// <param name="ends">The exit label counter shared by the whole method.</param>
     /// <param name="cursors">The cursor local counter shared by the whole method.</param>
     /// <param name="spans">The span counter shared by the whole method.</param>
+    /// <param name="inlineSpan">Whether to keep raw span writes in the already reserved element body.</param>
     internal static void AddSequenceElementWrite(List<string> body, PayloadRenderModel element, string source, string elementExit,
-        string state, int depth, CodeWriter w, Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
+        string state, int depth, CodeWriter w, Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans, bool inlineSpan = false)
     {
         string input = RoleName(names, "input");
         string value = RoleName(names, "value");
@@ -1412,7 +1419,7 @@ internal static partial class BinaryEmitter
         body.Add("goto " + elementExit + ";");
         body.Add("}");
         body.Add("");
-        AddElementWrite(body, element, value, depth, w, names, ref ends, ref cursors, ref spans, state);
+        AddElementWrite(body, element, value, depth, w, names, ref ends, ref cursors, ref spans, state, inlineSpan);
         body.Add(elementExit + ":");
         body.Add("\t;");
         body.Add("}");

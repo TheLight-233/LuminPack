@@ -69,10 +69,21 @@ internal static class InterfaceOwnerFile
         bool frozenSet = setInterface && c.Supports("FrozenSetInterfaceTraversal");
         bool outlineFallback = c.Counted || setInterface;
         bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
+        var reservedElement = setInterface ? null : c.ReservableListElement();
         w.Line("if (value.GetType() == typeof(" + type + "))");
         w.Open();
         if (stringSpan)
             w.Line("WriteStringSpan(ref operationState, global::LuminPack.Code.LuminPackMarshal.GetListSpan(" + c.Memory + ".As<" + type + ">(value)));");
+        else if (reservedElement != null)
+        {
+            string list = c.Memory + ".As<" + type + ">(value)";
+            w.Line("if (operationState.Owner is not null && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + ")");
+            w.Open();
+            c.WriteReservedList(list, reservedElement);
+            w.Close();
+            w.Line("else");
+            w.Indented(() => w.Line("WriteKnown(ref operationState, " + list + ");"));
+        }
         else if (c.Counted)
             w.Line("WriteKnown(ref operationState, " + c.Memory + ".As<" + type + ">(value));");
         else if (setInterface)

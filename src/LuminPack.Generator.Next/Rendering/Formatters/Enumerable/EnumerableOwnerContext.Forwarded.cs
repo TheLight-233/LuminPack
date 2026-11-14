@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -5,6 +7,50 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal sealed partial class EnumerableOwnerContext
 {
     private const string PackMarshal = "global::LuminPack.Code.LuminPackMarshal";
+
+    /// <summary>Finds a concrete record that the legacy exact List writer can reserve and write together.</summary>
+    internal PayloadRenderModel? ReservableListElement()
+    {
+        if (_element?.Payload is not RecordModel { Derived: false, Versioned: false, Rejection: null } record ||
+            _set.Options == null || !_set.Options.Net8 || RenderModelFactory.Create(record, _set.Options) is not { } element ||
+            element.HasCallbacks || element.Bounded != null || element.DeclaredProfile != null || element.Mirror != null ||
+            element.TypeParameters.Length != 0)
+            return null;
+        return element.Members.Any(RawList) && element.Members.All(member => !member.Volatile && !member.Mirrored &&
+            !member.Property && member.ScopeProfile == null && (member.IsFixed || member.Kind == RenderMemberKind.Text || RawList(member)))
+            ? element : null;
+
+        bool RawList(RenderMember member) => member.Nested == null && !member.FormatterCall &&
+            (member.Kind == RenderMemberKind.List && GenericIdentity.IsRaw(member.Scalar) ||
+                member.Kind == RenderMemberKind.Special && !member.Formatter.EndsWith(RenderMember.CompressedOwner.ToString(), System.StringComparison.Ordinal) &&
+                _set.FindFormatter(member.TypeName) is { Definition: "System.Collections.Generic.List", Arguments.Length: 1 } list &&
+                list.Arguments[0] is { Raw: true, Layout: null } item && GenericIdentity.IsRaw(item.Type));
+    }
+
+    /// <summary>Writes an exact framework List with the legacy counted span and record reservation.</summary>
+    internal void WriteReservedList(string list, PayloadRenderModel element)
+    {
+        W.Line("var items = " + PackMarshal + ".GetListSpan(" + list + ");");
+        W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+        W.Line("operationState.WriteCollectionHeader(items.Length);");
+        W.Line("if (!items.IsEmpty)");
+        W.Open();
+        W.Line("ref var first = ref " + Marshal + ".GetReference(items);");
+        W.Line("int index = 0;");
+        W.Line("do");
+        W.Open();
+        W.Line("operationState.CheckBuffer();");
+        var body = new List<string>();
+        string elementExit = "end" + (_ends++).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        BinaryEmitter.AddSequenceElementWrite(body, element, Memory + ".Add(ref first, (nint)(uint)index)", elementExit, "operationState", 0, W,
+            _writeNames, ref _ends, ref _cursors, ref _spans, inlineSpan: true);
+        JsonEmitter.Lines(W, body);
+        W.Close();
+        W.Line("while (++index < items.Length);");
+        W.Close();
+        W.Line("operationState.CheckBuffer();");
+    }
+
     /// <summary>Preserves optional concurrent traversal without changing its capture boundary.</summary>
     /// <param name = "local">The local used by this operation.</param>
     /// <returns>The generated source or selected source-ready name.</returns>
