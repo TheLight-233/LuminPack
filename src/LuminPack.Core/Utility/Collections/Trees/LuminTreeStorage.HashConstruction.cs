@@ -2,7 +2,10 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using LuminPack.Code;
 using static LuminPack.Code.LuminFieldLayout;
 
@@ -10,6 +13,53 @@ namespace LuminPack.Utility;
 
 public static partial class LuminTreeStorage
 {
+    /// <summary>Tries direct binary construction for verified identity-only class elements.</summary>
+    /// <typeparam name="T">The exact deserialized element contract.</typeparam>
+    /// <param name="items">The privately rented decoded staging array.</param>
+    /// <param name="count">The number of decoded items in the input prefix.</param>
+    /// <param name="result">The completed default-comparer set, available only when this method returns true.</param>
+    /// <returns>Whether validated default identity and hash-tree storage were available.</returns>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public static bool TryCreateIdentityImmutableHashSet<T>(T[] items, int count, [NotNullWhen(true)] out ImmutableHashSet<T>? result)
+    {
+        if ((uint)count > (uint)items.Length)
+            LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+        result = null;
+#if NET10_0_OR_GREATER
+        if (count >= 2 && IdentityHashSet<T>.Available)
+        {
+            result = count == 2 ? BuildFrameworkHashPair(items[0], items[1]) : BuildFrameworkHash(items, count);
+            return true;
+        }
+#endif
+        return false;
+    }
+
+#if NET10_0_OR_GREATER
+    private static class IdentityHashSet<T>
+    {
+        internal static readonly bool Available = RuntimeInformation.ProcessArchitecture == Architecture.X64 &&
+            Environment.Version.Major == 10 && Check(Probe);
+
+        private static bool Probe()
+        {
+            Type type = typeof(T);
+            // A generator cannot see declarations from other generators, nor final rewritten IL.
+            if (!type.IsClass || !type.IsSealed || type.IsGenericType || type.BaseType != typeof(object) ||
+                typeof(IEquatable<T>).IsAssignableFrom(type))
+                return false;
+            const BindingFlags declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+            foreach (MethodInfo method in type.GetMethods(declared))
+            {
+                if (method.Name is nameof(object.Equals) or nameof(object.GetHashCode))
+                    return false;
+            }
+            return ReferenceEquals(ImmutableHashSet<T>.Empty.KeyComparer, EqualityComparer<T>.Default) &&
+                ImmutableHashSetLayout<T>.Available && GroupedHashLayout.Available;
+        }
+    }
+#endif
+
     /// <summary>Builds a framework-element hash set including collision buckets from a completed element buffer.</summary>
     /// <typeparam name="T">An element whose default hashing and equality have no user callbacks.</typeparam>
     /// <param name="items">The original element order; its storage is never modified or retained.</param>

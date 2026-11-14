@@ -433,6 +433,15 @@ internal static class ImmutableInterfaceOwnerFile
                 "value = global::System.Collections.Immutable.ImmutableList.CreateRange(new global::System.ArraySegment<" + c.Scalar + ">(pooled, 0, length));");
             return;
         }
+        if (c.Supports("BuildIdentityImmutableHashSet"))
+        {
+            w.Line("if (global::LuminPack.Utility.LuminTreeStorage.TryCreateIdentityImmutableHashSet(pooled, length, out var identitySet))");
+            w.Open();
+            w.Line("value = identitySet;");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+            w.Blank();
+        }
         string family = Concrete(c).Substring(9);
         ImmutableBuilderLifetime.Begin(w, family, c.Scalar, c.Supports("ImmutableBuilder"), "builder");
         w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");

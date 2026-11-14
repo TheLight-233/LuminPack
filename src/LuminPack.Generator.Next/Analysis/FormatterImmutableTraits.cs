@@ -66,6 +66,43 @@ internal static class FormatterImmutableTraits
                 SymbolEqualityComparer.Default.Equals(method.ReturnType, set.Construct(method.TypeParameters[0])));
     }
 
+    /// <summary>Proves the absence of declared user equality on a source-owned closed sealed reference contract.</summary>
+    /// <param name="compilation">The compilation that owns the class and provides the framework symbols.</param>
+    /// <param name="element">The exact collection element type.</param>
+    /// <returns>Whether the runtime may attempt its independent linked-type check.</returns>
+    internal static bool IsIdentityHashElement(Compilation compilation, ITypeSymbol element)
+    {
+        if (element is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsSealed: true, IsGenericType: false } named ||
+            !SymbolEqualityComparer.Default.Equals(named.BaseType, compilation.GetSpecialType(SpecialType.System_Object)) ||
+            !SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly) ||
+            named.DeclaringSyntaxReferences.IsEmpty || named.GetMembers("Equals").Length != 0 ||
+            named.GetMembers("GetHashCode").Length != 0 ||
+            compilation.GetTypeByMetadataName("System.IEquatable`1") is not { } equatable)
+            return false;
+        return !named.AllInterfaces.Any(contract =>
+            SymbolEqualityComparer.Default.Equals(contract.OriginalDefinition, equatable) &&
+            SymbolEqualityComparer.Default.Equals(contract.TypeArguments[0], named));
+    }
+
+    /// <summary>Checks the optional identity-set construction entry and its result type.</summary>
+    /// <param name="compilation">The actual framework and Core references.</param>
+    /// <returns>Whether generated code can call the shared Core helper.</returns>
+    internal static bool HasIdentityHashSetFactory(Compilation compilation)
+    {
+        var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        var set = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableHashSet`1");
+        return storage is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && set != null &&
+            storage.GetMembers("TryCreateIdentityImmutableHashSet").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters.Length == 3 &&
+                Unconstrained(method.TypeParameters[0]) && !method.TypeParameters[0].HasNotNullConstraint &&
+                method.Parameters[0] is { RefKind: RefKind.None, Type: IArrayTypeSymbol { IsSZArray: true } array } &&
+                SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) &&
+                method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+                method.Parameters[2].RefKind == RefKind.Out &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[2].Type, set.Construct(method.TypeParameters[0])));
+    }
+
     // A nullable annotation such as 'notnull' does not change the storage constraints of the tree parameters.
     private static bool Unconstrained(ITypeParameterSymbol parameter) =>
         !parameter.HasValueTypeConstraint && !parameter.HasReferenceTypeConstraint && !parameter.HasUnmanagedTypeConstraint &&

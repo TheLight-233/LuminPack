@@ -143,6 +143,10 @@ internal static class FormatterCapabilities
                     FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateOrderedSetIfSupported"))
                     result.Add("BuildOrderedImmutableSortedSet");
             }
+            if (modern && !unity && definition == "System.Collections.Immutable.ImmutableHashSet" &&
+                FormatterImmutableTraits.IsIdentityHashElement(compilation, element) &&
+                FormatterImmutableTraits.HasIdentityHashSetFactory(compilation))
+                result.Add("BuildIdentityImmutableHashSet");
             if (element.SpecialType == SpecialType.System_String &&
                 FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element))
                 result.Add("ImmutableStringRun");
