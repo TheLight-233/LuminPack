@@ -88,12 +88,28 @@ internal static class StackOwnerFile
                     break;
                 case FormatterSection.Roots:
                 {
+                    bool writeRecord = contract?.Supports("WriteStackRecord") == true;
                     w.Line(preserve);
                     w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWrite(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    " + sequence + " input)");
                     w.Open();
+                    if (writeRecord)
+                    {
+                        w.Line("#if NET8_0_OR_GREATER");
+                        // A bounded copy cannot grow the writer or call portable copy hooks, and only advances the cursor.
+                        w.Line("int count = input?.Count ?? 0;");
+                        w.Line("if (count != 0 && " + access + "TryWriteStackRecord(ref writer, input!, count))");
+                        w.Indented(() => w.Line("return;"));
+                        w.Line("WriteFallback(ref writer, input, count);");
+                        w.Close();
+                        w.Blank();
+                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line("private static void WriteFallback(scoped ref " + writer + " writer, " + sequence + " input, int count)");
+                        w.Open();
+                        w.Line("#endif");
+                    }
                     w.Line(writer + " operationState = default;");
                     w.Line("writer.CopyTo(ref operationState);");
                     w.Line("var value = input;");
@@ -105,12 +121,16 @@ internal static class StackOwnerFile
                     w.Line("goto operationComplete_RootWrite;");
                     w.Close();
                     w.Blank();
-                    w.Line("int count = value.Count;");
-                    if (contract?.Supports("WriteStackRecord") == true)
+                    if (writeRecord)
                     {
+                        w.Line("#if !NET8_0_OR_GREATER");
+                        w.Line("int count = value.Count;");
                         w.Line("if (" + access + "TryWriteStackRecord(ref operationState, value, count))");
                         w.Indented(() => w.Line("goto operationComplete_RootWrite;"));
+                        w.Line("#endif");
                     }
+                    else
+                        w.Line("int count = value.Count;");
                     w.Line("int countPosition = operationState.BeginCollection();");
                     w.Line("if (count != 0" + (contract?.Supports("WriteStackStorage") == true ?
                         " && !" + access + "TryWriteStackStorage(ref operationState, value, count)" : "") + ")");
