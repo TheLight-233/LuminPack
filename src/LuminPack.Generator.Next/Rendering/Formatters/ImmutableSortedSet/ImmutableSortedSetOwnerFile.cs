@@ -169,18 +169,11 @@ internal static class ImmutableSortedSetOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("global::System.Span<" + scalar + "> items = " + marshal + ".CreateSpan<" + scalar + ">(ref " + memory +
-                        ".As<byte, " + scalar + ">(ref reader.Cursor), 0);");
-                    w.Line("items = pooled.AsSpan(0, length);");
-                    w.Line("if (length != 0)");
+                    w.Line("reader.Read(");
                     w.Indented(() =>
                     {
-                        w.Line("reader.Read(");
-                        w.Indented(() =>
-                        {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
-                            w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                        });
+                        w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled)),");
+                        w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     });
                     w.Blank();
                     w.Line("bool fromCache = value is null;");
@@ -197,11 +190,12 @@ internal static class ImmutableSortedSetOwnerFile
                     w.Line("try");
                     w.Open();
                     w.Line(tree + ".CopyTo(candidate, prior);");
-                    w.Line("if (" + marshal + ".AsBytes(prior.AsSpan(");
+                    w.Line("var previousItems = new global::System.ReadOnlySpan<" + scalar + ">(prior, 0, length);");
+                    w.Line("var currentItems = new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length);");
+                    w.Line("if (global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(previousItems).SequenceEqual(");
                     w.Indented(() =>
                     {
-                        w.Line("0,");
-                        w.Line("length)).SequenceEqual(" + marshal + ".AsBytes(pooled.AsSpan(0, length))))");
+                        w.Line("global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(currentItems)))");
                     });
                     w.Open();
                     w.Line(candidate + ".Last.SetTarget(candidate);");

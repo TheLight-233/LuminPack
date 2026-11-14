@@ -54,7 +54,7 @@ internal sealed partial class EnumerableOwnerContext
         W.Open();
         W.Line("var selected = (" + array + ")value;");
         W.Line("if (selected.Length != length) selected = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + Scalar + ">(length);");
-        W.Line("var target = selected.AsSpan();");
+        W.Line("var target = " + PackMarshal + ".CreateSpan(ref " + PackMarshal + ".GetNotNullArrayReference(selected), length);");
         ReadBlock("target");
         W.Line("value = selected;");
         W.Line("goto operationComplete_RootRead;");

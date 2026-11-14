@@ -285,11 +285,9 @@ internal static class ListScalarOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("var items = reader.CreateFreshListArray<" + scalar + ">(length, out value);");
-                    w.Line("global::System.Span<" + scalar + "> payload = " + marshal + ".CreateSpan<" + scalar + ">(ref " + memory + ".As<byte, " + scalar + ">(ref reader.Cursor), 0);");
-                    w.Line("payload = items.AsSpan();");
                     w.Line("if (length != 0)");
                     w.Line("    reader.Read(");
-                    w.Line("        ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(payload)),");
+                    w.Line("        ref " + memory + ".As<" + scalar + ", byte>(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items)),");
                     w.Line("        unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     w.Close();
                     w.Blank();
