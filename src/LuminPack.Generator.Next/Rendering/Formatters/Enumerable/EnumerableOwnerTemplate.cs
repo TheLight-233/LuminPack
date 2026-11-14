@@ -42,7 +42,7 @@ internal sealed partial class EnumerableOwnerContext
     /// <summary>Checks the exact runtime API facts of this sequence.</summary>
     internal bool Supports(string capability) => _set.FindFormatter(Sequence)?.Supports(capability) == true;
     internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
-        (Forwarded ? _element!.RawCollection : !Text && Payload == null);
+        (Forwarded ? _element is { Raw: true, RawStorage: true, Layout: null } : !Text && Payload == null);
     private readonly FormatterModel? _element;
 
     private readonly Dictionary<string, int> _writeNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
@@ -106,26 +106,13 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("int countPosition = operationState.BeginCollection();");
             W.Line("int count = 0;");
         }
-        var body = new List<string>();
-        string elementExit = "end" + _ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _ends++;
-        body.Add("operationState.CheckBuffer();");
-        if (!payloadOnly) body.Add("count++;");
-        body.Add("var v = item;");
-        BinaryEmitter.AddSequenceElementWrite(body, Payload, "v", elementExit, "operationState", 0, W, _writeNames, ref _ends,
-            ref _cursors, ref _spans);
-        void EmitBody()
-        {
-            foreach (string line in body)
-                W.Line(line);
-        }
         if (payloadOnly)
-            ImmutableTreeTraversal.Items(W, EmitBody);
+            ImmutableTreeTraversal.Items(W, () => WriteCountedElement("item"));
         else
         {
             W.Line("foreach (var item in " + local + ")");
             W.Open();
-            EmitBody();
+            WriteCountedElement("item", incrementCount: true);
             W.Close();
         }
         W.Blank();
@@ -134,6 +121,36 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("operationState.EndCollection(countPosition, count);");
             W.Line("operationState.CheckBuffer();");
         }
+    }
+
+    /// <summary>Writes one captured item through the counted sequence's existing element operation.</summary>
+    /// <param name="item">The captured value.</param>
+    /// <param name="incrementCount">Whether this operation counts the item before writing it.</param>
+    internal void WriteCountedElement(string item, bool incrementCount = false)
+    {
+        if (Payload == null)
+        {
+            if (Forwarded)
+                WriteElement(item);
+            else if (Text)
+                W.Line("operationState.Write<TLuminProfile>(" + item + ");");
+            else
+            {
+                W.Line("operationState.CheckBuffer();");
+                W.Line("operationState.Write(in " + item + ");");
+            }
+            return;
+        }
+        var body = new List<string>();
+        string elementExit = "end" + _ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _ends++;
+        body.Add("operationState.CheckBuffer();");
+        if (incrementCount) body.Add("count++;");
+        body.Add("var v = " + item + ";");
+        BinaryEmitter.AddSequenceElementWrite(body, Payload, "v", elementExit, "operationState", 0, W, _writeNames, ref _ends,
+            ref _cursors, ref _spans);
+        foreach (string line in body)
+            W.Line(line);
     }
 
     /// <summary>Emits the bottom-first packable write of a nonnull stack through <c>operationState</c>.</summary>
@@ -726,6 +743,7 @@ internal static class EnumerableOwnerTemplate
                     }
                     if (fact.Family.Kind == CollectionKind.Wrapper)
                         WrapperTraversal.WriteJsonIntegers(context);
+                    ImmutableLinearTraversal.WriteJson(context, set, elementOwner, jsonWriter);
                     if (ImmutableInterfaceOwnerFile.WriteJsonTree(context, set, elementOwner))
                     {
                         w.Close();

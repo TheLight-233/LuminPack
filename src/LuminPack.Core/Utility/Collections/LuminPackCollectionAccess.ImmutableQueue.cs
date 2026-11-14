@@ -58,8 +58,9 @@ public static partial class LuminPackCollectionAccess
         try
         {
             int index = count;
+            ref T first = ref LuminPackMarshal.GetNotNullArrayReference(items);
             foreach (T item in stack)
-                items[--index] = item;
+                Unsafe.Add(ref first, (nint)(uint)--index) = item;
             return items;
         }
         catch (Exception error)

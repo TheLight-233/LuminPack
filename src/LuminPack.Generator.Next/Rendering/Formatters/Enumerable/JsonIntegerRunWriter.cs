@@ -21,9 +21,10 @@ internal static class JsonIntegerRunWriter
     /// <param name="items">The expression that produces the input span.</param>
     /// <param name="readBeforeSeparator">Whether the old traversal copies the item before writing its separator.</param>
     /// <param name="profile">The compiled JSON profile spelling.</param>
+    /// <param name="writer">The active JSON writer local.</param>
     /// <returns>Whether a complete run was emitted.</returns>
     internal static bool TryEmit(CodeWriter w, SharedFormatterSet set, string collection, string scalar, string items,
-        bool readBeforeSeparator, string profile = "TLuminProfile")
+        bool readBeforeSeparator, string profile = "TLuminProfile", string writer = "writer")
     {
         string type = GenericFormatterReuse.Real(scalar);
         if (!Supports(set, collection, scalar))
@@ -31,7 +32,7 @@ internal static class JsonIntegerRunWriter
         if (GenericFormatterReuse.IsUnmanagedPlaceholder(scalar))
             items = "global::System.Runtime.InteropServices.MemoryMarshal.Cast<" + scalar + ", " + type +
                 ">((global::System.ReadOnlySpan<" + scalar + ">)" + items + ")";
-        w.Line("writer.WriteIntegerRun<" + profile + ">(" + items + ", " + (readBeforeSeparator ? "true" : "false") + ");");
+        w.Line(writer + ".WriteIntegerRun<" + profile + ">(" + items + ", " + (readBeforeSeparator ? "true" : "false") + ");");
         return true;
     }
 }

@@ -62,9 +62,11 @@ internal static class DictionaryInterfaceOwnerFile
         string concrete = "global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">";
         string writer = w.A("LuminPackWriter");
         bool rawKernel = c.RawPairs && c.Supports("BinaryRawPairs");
+        bool textKernel = c.UsesRawOrStringEntries && (c.Key == "string") != (c.Value == "string") && c.Supports("BinaryTextPair");
         const string runtimeWriter = "global::LuminPack.Core.LuminPackWriter";
         string keyWidth = c.Memory + ".SizeOf<" + c.Key + ">()";
         string width = keyWidth + " + " + c.Memory + ".SizeOf<" + c.Value + ">()";
+        string rawWidth = c.Memory + ".SizeOf<" + (c.Key == "string" ? c.Value : c.Key) + ">()";
         w.Line("int countPosition = operationState.BeginCollection();");
         w.Line("int count = value.GetType() == typeof(" + concrete + ")");
         w.Indented(() =>
@@ -77,7 +79,7 @@ internal static class DictionaryInterfaceOwnerFile
         w.Blank();
         EmitLoop("WriteKnown", concrete);
         EmitLoop("WriteInterface", c.Dictionary);
-        if (rawKernel)
+        if (rawKernel || textKernel)
         {
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static void WritePairSlow(scoped ref " + writer + " operationState, " + c.Key + " key, " + c.Value + " itemValue)");
@@ -97,7 +99,7 @@ internal static class DictionaryInterfaceOwnerFile
             w.Open();
             w.Line("count++;");
             w.Line("var key = item.Key;");
-            if (!rawKernel)
+            if (!rawKernel && !textKernel)
                 c.WriteMember(c.Key, "key");
             w.Line("var itemValue = item.Value;");
             if (rawKernel)
@@ -112,6 +114,31 @@ internal static class DictionaryInterfaceOwnerFile
                 w.Line("else");
                 w.Indented(() => w.Line("WritePairSlow(ref operationState, key, itemValue);"));
             }
+            else if (textKernel && method == "WriteKnown")
+            {
+                string text = c.Key == "string" ? "key" : "itemValue";
+                w.Line("if ((typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) ||");
+                w.Line("     typeof(TLuminProfile) == typeof(global::LuminPack.Option.LuminPackDefaultOptions)) &&");
+                w.Line("    (long)operationState.RecordRoom() - " + rawWidth + " >= " + runtimeWriter + ".Utf16RecordBound(" + text + "))");
+                w.Open();
+                w.Line("ref byte record = ref operationState.Cursor;");
+                if (c.Key == "string")
+                {
+                    w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref record, key);");
+                    w.Line(runtimeWriter + ".Write(ref " + c.Memory + ".Add(ref record, (nint)(uint)written), in itemValue);");
+                }
+                else
+                {
+                    w.Line(runtimeWriter + ".Write(ref record, in key);");
+                    w.Line("int written = " + runtimeWriter + ".WriteReservedUtf16Record(ref " + c.Memory + ".Add(ref record, " + rawWidth + "), itemValue);");
+                }
+                w.Line("operationState.CompleteRun(written + " + rawWidth + ");");
+                w.Close();
+                w.Line("else");
+                w.Indented(() => w.Line("WritePairSlow(ref operationState, key, itemValue);"));
+            }
+            else if (textKernel)
+                w.Line("WritePairSlow(ref operationState, key, itemValue);");
             else
                 c.WriteMember(c.Value, "itemValue");
             w.Close();

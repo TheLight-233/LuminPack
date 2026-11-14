@@ -81,6 +81,13 @@ internal static class FormatterCapabilities
                 result.Add("ImmutableBuilder");
             if (concrete is "ImmutableQueue" or "ImmutableList" && FormatterRuntimeTraits.CanCreateImmutableSequenceFromSpan(compilation, concrete))
                 result.Add("ImmutableSpan");
+            if (concrete == "ImmutableQueue" && FormatterImmutableTraits.HasQueueTraversal(compilation))
+            {
+                result.Add("ImmutableQueueTraversal");
+                ContiguousCapabilities(compilation, named.TypeArguments[0], result);
+                if (FormatterConcurrentTraits.HasBinaryRawPairWriter(compilation))
+                    result.Add("ImmutableQueueRawWindow");
+            }
             if (definition == "System.Collections.Immutable.ImmutableList" && FormatterImmutableTraits.HasRawListWriter(compilation))
                 result.Add("ImmutableRawListWrite");
             if (concrete == "ImmutableList" && FormatterImmutableTraits.HasTreeCopy(compilation, concrete, 1))
@@ -233,7 +240,8 @@ internal static class FormatterCapabilities
             named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("ConcurrentBinaryTextPair");
-        if (definition == "System.Collections.Generic.Dictionary" && modern && !unity &&
+        if ((definition is "System.Collections.Generic.Dictionary" or "System.Collections.Generic.IDictionary" or
+             "System.Collections.Generic.IReadOnlyDictionary") && modern && !unity &&
             ((named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType) ||
              (named.TypeArguments[1].SpecialType == SpecialType.System_String && named.TypeArguments[0].IsUnmanagedType)) &&
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))

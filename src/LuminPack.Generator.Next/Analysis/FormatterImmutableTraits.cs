@@ -5,6 +5,35 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional immutable storage operations in the consumer's runtime.</summary>
 internal static class FormatterImmutableTraits
 {
+    /// <summary>Checks the two runtime operations used to traverse a queue without populating its reversal cache.</summary>
+    /// <param name="compilation">The consuming compilation and its framework and runtime references.</param>
+    /// <returns>Whether both operations accept the framework's closed queue and stack types.</returns>
+    internal static bool HasQueueTraversal(Compilation compilation)
+    {
+        var access = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        var queue = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableQueue`1");
+        var stack = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableStack`1");
+        if (access is not { IsStatic: true, DeclaredAccessibility: Accessibility.Public } || queue is not { IsSealed: true } || stack == null)
+            return false;
+        return access.GetMembers("TryGetImmutableQueueTraversal").OfType<IMethodSymbol>().Any(method =>
+            Eligible(method, 4) && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+            IsParameter(method, 0, RefKind.None, queue) && IsParameter(method, 1, RefKind.Out, stack) &&
+            IsParameter(method, 2, RefKind.Out, stack) && method.Parameters[3].RefKind == RefKind.Out &&
+            method.Parameters[3].Type.SpecialType == SpecialType.System_Boolean) &&
+            access.GetMembers("RentImmutableQueueReversal").OfType<IMethodSymbol>().Any(method =>
+            Eligible(method, 2) && IsParameter(method, 0, RefKind.None, stack) &&
+            method.Parameters[1].RefKind == RefKind.Out && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+            method.ReturnType is IArrayTypeSymbol { IsSZArray: true } array &&
+            SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]));
+
+        static bool Eligible(IMethodSymbol method, int count) => method is
+            { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+            method.Parameters.Length == count && Unconstrained(method.TypeParameters[0]) && !method.TypeParameters[0].HasNotNullConstraint;
+        static bool IsParameter(IMethodSymbol method, int index, RefKind kind, INamedTypeSymbol type) =>
+            method.Parameters[index].RefKind == kind &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[index].Type, type.Construct(method.TypeParameters[0]));
+    }
+
     internal static bool HasTreeCopy(Compilation compilation, string family, int arity)
     {
         var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");

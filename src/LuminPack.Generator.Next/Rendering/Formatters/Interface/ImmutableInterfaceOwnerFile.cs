@@ -5,10 +5,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owners of the closed immutable list, set, queue and stack interfaces and concrete types whose
 /// element is a string, and of the interfaces whose element is a raw scalar.</summary>
-/// <remarks>The write counts the enumeration of the value. The read returns the empty instance of the concrete immutable type for
-/// an empty payload, otherwise reads one pooled block and builds the list or set through its builder, enqueues each element of the
-/// queue in order and pushes the stack from its last element back. The JSON read stages elements the same way. The concrete
-/// immutable families reuse these owners for their string element, since the string wire is the counted enumeration.</remarks>
+/// <remarks>Known framework instances may select an exact traversal. Interface fallbacks count their enumeration.
+/// Readers publish the completed framework collection and return any temporary element storage.</remarks>
 internal static class ImmutableInterfaceOwnerFile
 {
     private const string Namespace = "global::System.Collections.Immutable.";
@@ -20,7 +18,7 @@ internal static class ImmutableInterfaceOwnerFile
         "staged = staged.Enqueue(item);", c => c.W.Line("var staged = " + Namespace + "ImmutableQueue<" + c.Scalar + ">.Empty;"),
         c => c.W.Line("value = staged;"), jsonCount: false, readInlining: "NoInlining", outlineJson: true);
 
-    private static readonly EnumerableOwnerSpec StackSpec = new EnumerableOwnerSpec(Write, c => Read(c, Stack),
+    private static readonly EnumerableOwnerSpec StackSpec = new EnumerableOwnerSpec(StackWrite, c => Read(c, Stack),
         "staged.Add(item);", c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"), AfterStack,
         jsonCount: false, readInlining: "NoInlining", outlineJson: true);
 
@@ -56,12 +54,22 @@ internal static class ImmutableInterfaceOwnerFile
     internal static string RenderStack(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, StackSpec);
 
-    // The concrete immutable family the declared sequence reads into.
-    private static string Concrete(EnumerableOwnerContext c) =>
-        c.Sequence.Contains("SortedSet") ? "ImmutableSortedSet" :
-        c.Sequence.Contains("Set") ? "ImmutableHashSet" :
-        c.Sequence.Contains("Queue") ? "ImmutableQueue" :
-        c.Sequence.Contains("Stack") ? "ImmutableStack" : "ImmutableList";
+    // Use the outer family, since an element can itself be another immutable collection.
+    private static string Concrete(EnumerableOwnerContext c)
+    {
+        int arguments = c.Sequence.IndexOf('<');
+        if (arguments < 0)
+            return string.Empty;
+        return c.Sequence.Substring(0, arguments) switch
+        {
+            Namespace + "ImmutableSortedSet" => "ImmutableSortedSet",
+            Namespace + "ImmutableHashSet" or Namespace + "IImmutableSet" => "ImmutableHashSet",
+            Namespace + "ImmutableQueue" or Namespace + "IImmutableQueue" => "ImmutableQueue",
+            Namespace + "ImmutableStack" or Namespace + "IImmutableStack" => "ImmutableStack",
+            Namespace + "ImmutableList" or Namespace + "IImmutableList" => "ImmutableList",
+            _ => string.Empty,
+        };
+    }
 
     private static void Write(EnumerableOwnerContext c)
     {
@@ -136,12 +144,13 @@ internal static class ImmutableInterfaceOwnerFile
     internal static bool ReadJsonTree(EnumerableOwnerContext c, string owner, string reader)
     {
         bool sorted = c.Supports("BuildOrderedImmutableSortedSet");
-        bool list = c.Supports("ImmutableSpan") && Concrete(c) == "ImmutableList";
-        if (!sorted && !list && !c.Supports("BuildFrameworkImmutableHashSet"))
+        string family = Concrete(c);
+        bool linear = family == "ImmutableStack" || c.Supports("ImmutableSpan") && family is "ImmutableList" or "ImmutableQueue";
+        if (!sorted && !linear && !c.Supports("BuildFrameworkImmutableHashSet"))
             return false;
 
         var w = c.W;
-        string concrete = Namespace + Concrete(c) + "<" + c.Scalar + ">";
+        string concrete = Namespace + family + "<" + c.Scalar + ">";
         string pool = "global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared";
         string clear = "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Scalar + ">()";
         bool guardedCulture = sorted && c.Text;
@@ -207,8 +216,14 @@ internal static class ImmutableInterfaceOwnerFile
             w.Line("value = sortedBuilder.ToImmutable();");
             ImmutableBuilderLifetime.End(w, "SortedSet", c.Supports("ImmutableBuilder"), "sortedBuilder");
         }
-        else if (list)
-            w.Line("value = global::System.Collections.Immutable.ImmutableList.Create(new global::System.ReadOnlySpan<" + c.Scalar + ">(items!, 0, count));");
+        else if (linear)
+        {
+            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items!);");
+            if (family == "ImmutableStack")
+                BuildStack(c, "count");
+            else
+                w.Line("value = " + Namespace + family + ".Create(" + c.Marshal + ".CreateReadOnlySpan(ref first, count));");
+        }
         else
             w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(items!, count);");
         w.Close();
@@ -224,63 +239,48 @@ internal static class ImmutableInterfaceOwnerFile
         return !guardedCulture;
     }
 
-    /// <summary>Writes a concrete string queue through its two stacks, as the original traversal did, so a queue whose back stack
-    /// is not cached is not materialized by serialization; other queues keep the counted enumeration.</summary>
+    // The exact framework queue exposes its validated stacks. An arbitrary implementation retains its own enumeration.
     private static void QueueWrite(EnumerableOwnerContext c)
     {
-        if (!c.Text || !c.Sequence.StartsWith("global::System.Collections.Immutable.ImmutableQueue<", System.StringComparison.Ordinal))
-        {
-            c.CountedWrite("value");
-            return;
-        }
         var w = c.W;
-        w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(value, out var forwards, out var backwards, out var reverse))");
-        w.Open();
-        w.Line("global::LuminPack.Core.LuminPackWriter operationStateFallback = default;");
-        w.Line("int countPosition = operationState.BeginCollection();");
-        w.Line("int count = 0;");
-        w.Line("foreach (var item in forwards!)");
-        w.Open();
-        w.Line("count++;");
-        w.Line("operationState.Write<TLuminProfile>(item);");
-        w.Close();
-        w.Line("if (reverse)");
-        w.Open();
-        w.Line("operationState.CopyTo(ref operationStateFallback);");
-        w.Line("count += WriteReversed(ref operationStateFallback, backwards!);");
-        w.Line("operationStateFallback.CopyTo(ref operationState);");
-        w.Close();
-        w.Line("else");
-        w.Open();
-        w.Line("foreach (var item2 in backwards!)");
-        w.Open();
-        w.Line("count++;");
-        w.Line("operationState.Write<TLuminProfile>(item2);");
-        w.Close();
-        w.Close();
-        w.Line("operationState.EndCollection(countPosition, count);");
-        w.Line("operationState.CheckBuffer();");
-        w.Close();
-        w.Line("else");
-        w.Open();
+        bool traversal = c.Supports("ImmutableQueueTraversal") || c.Text && c.Sequence.StartsWith(Namespace + "ImmutableQueue<", System.StringComparison.Ordinal);
+        if (traversal)
+        {
+            ImmutableTreeTraversal.Select(w, c.Sequence, c.Scalar, "ImmutableQueue", source =>
+            {
+                w.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetImmutableQueueTraversal(" +
+                    source + ", out var forwards, out var backwards, out var reverse))");
+                w.Open();
+                w.Line("int header = operationState.BeginCollection();");
+                w.Line("int written = WriteStack(ref operationState, forwards!);");
+                w.Line("written += reverse ? WriteReversed(ref operationState, backwards!) : WriteStack(ref operationState, backwards!);");
+                w.Line("operationState.EndCollection(header, written);");
+                w.Line("operationState.CheckBuffer();");
+                w.Line("goto operationComplete_RootWrite;");
+                w.Close();
+            });
+        }
         c.CountedWrite("value");
-        w.Close();
-        w.Blank();
-        w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
-        w.Line("static int WriteReversed(ref global::LuminPack.Core.LuminPackWriter writer2, global::System.Collections.Immutable.ImmutableStack<string> stack)");
-        w.Open();
-        w.Line("var items = global::LuminPack.Code.LuminPackCollectionAccess.RentImmutableQueueReversal(stack, out int count3);");
-        w.Line("try");
-        w.Open();
-        w.Line("foreach (var item4 in new global::System.ReadOnlySpan<string>(items, 0, count3))");
-        w.Indented(() => w.Line("writer2.Write<TLuminProfile>(item4);"));
-        w.Line("return count3;");
-        w.Close();
-        w.Line("finally");
-        w.Open();
-        w.Line("global::System.Buffers.ArrayPool<string>.Shared.Return(items, true);");
-        w.Close();
-        w.Close();
+        if (traversal)
+            ImmutableLinearTraversal.WriteQueueLocals(c);
+    }
+
+    private static void StackWrite(EnumerableOwnerContext c)
+    {
+        bool isInterface = c.Sequence.StartsWith(Namespace + "IImmutableStack<", System.StringComparison.Ordinal);
+        if (isInterface)
+        {
+            ImmutableTreeTraversal.Select(c.W, c.Sequence, c.Scalar, "ImmutableStack", source =>
+            {
+                c.CountedWrite(source);
+                c.W.Line("goto operationComplete_RootWrite;");
+            });
+        }
+        if (isInterface)
+            c.W.Open();
+        c.CountedWrite("value");
+        if (isInterface)
+            c.W.Close();
     }
 
     private static void Read(EnumerableOwnerContext c, System.Action<EnumerableOwnerContext> build)
@@ -312,7 +312,25 @@ internal static class ImmutableInterfaceOwnerFile
                 rawBlock: c.RawTreeElements);
             return;
         }
-        c.PooledRead(() => build(c));
+        string family = Concrete(c);
+        if (family == "ImmutableStack" && c.RawTreeElements)
+        {
+            w.Line("int width = " + c.Memory + ".SizeOf<" + c.Scalar + ">();");
+            w.Line("int offset = checked(length * width);");
+            w.Line("ref byte start = ref operationState.Cursor;");
+            w.Line("operationState.Advance(offset);");
+            w.Line("var stack = " + Namespace + "ImmutableStack<" + c.Scalar + ">.Empty;");
+            w.Line("do");
+            w.Open();
+            w.Line("offset -= width;");
+            w.Line("stack = stack.Push(global::LuminPack.Core.LuminPackReader.Read<" + c.Scalar + ">(ref " +
+                c.Memory + ".Add(ref start, (nint)(uint)offset)));");
+            w.Close();
+            w.Line("while (offset != 0);");
+            w.Line("value = stack;");
+            return;
+        }
+        c.PooledRead(() => build(c), rawBlock: family == "ImmutableQueue" && c.RawTreeElements);
     }
 
     /// <summary>Reads a concrete string set through the weak candidate cache, as the original read did: the destination or the
@@ -437,10 +455,15 @@ internal static class ImmutableInterfaceOwnerFile
     private static void Stack(EnumerableOwnerContext c)
     {
         var w = c.W;
-        w.Blank();
-        w.Line("var stack = " + Namespace + "ImmutableStack<" + c.Scalar + ">.Empty;");
         w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
-        w.Line("int index = length;");
+        BuildStack(c, "length");
+    }
+
+    private static void BuildStack(EnumerableOwnerContext c, string count)
+    {
+        var w = c.W;
+        w.Line("var stack = " + Namespace + "ImmutableStack<" + c.Scalar + ">.Empty;");
+        w.Line("int index = " + count + ";");
         w.Line("do");
         w.Open();
         w.Line("stack = stack.Push(" + c.Memory + ".Add(ref first, (nint)(uint)--index));");

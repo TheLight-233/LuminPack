@@ -334,7 +334,7 @@ internal static class ImmutableStackOwnerFile
                     w.Blank();
                     w.Line(scalar + " item = default !;");
                     w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                    w.Line("buffer[count++] = item;");
+                    w.Line(memory + ".Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(buffer), (nint)(uint)count++) = item;");
                     w.Close();
                     w.Line("while (reader.Read<TLuminProfile>());");
                     w.Line("if (count == 0)");
@@ -344,8 +344,12 @@ internal static class ImmutableStackOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("var stack = " + sequence + ".Empty;");
-                    w.Line("for (int i = count - 1; i >= 0; i--)");
-                    w.Line("    stack = stack.Push(buffer[i]);");
+                    w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(buffer);");
+                    w.Line("do");
+                    w.Open();
+                    w.Line("stack = stack.Push(" + memory + ".Add(ref first, (nint)(uint)--count));");
+                    w.Close();
+                    w.Line("while (count != 0);");
                     w.Line("value = stack;");
                     w.Close();
                     w.Line("finally");

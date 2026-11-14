@@ -158,17 +158,8 @@ internal static class ImmutableQueueOwnerFile
                     w.Line("var pooled = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(length);");
                     w.Line("try");
                     w.Open();
-                    w.Line("global::System.Span<" + scalar + "> items = pooled.AsSpan(0, length);");
-                    w.Line("if (length != 0)");
-                    w.Indented(() =>
-                    {
-                        w.Line("reader.Read(");
-                        w.Indented(() =>
-                        {
-                            w.Line("ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(items)),");
-                            w.Line("unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
-                        });
-                    });
+                    w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+                    w.Line("reader.Read(ref " + memory + ".As<" + scalar + ", byte>(ref first), checked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     w.Line(set.FindFormatter(queue)?.Supports("ImmutableSpan") == true ?
                         "value = " + factory + ".Create(new global::System.ReadOnlySpan<" + scalar + ">(pooled, 0, length));" :
                         "value = " + factory + ".CreateRange(new global::System.ArraySegment<" + scalar + ">(pooled, 0, length));");
