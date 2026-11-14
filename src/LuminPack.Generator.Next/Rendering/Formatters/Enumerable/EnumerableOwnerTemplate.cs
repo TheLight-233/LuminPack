@@ -432,6 +432,9 @@ internal sealed class EnumerableOwnerSpec
     /// <summary>Whether the JSON roots are kept out of their callers.</summary>
     internal bool OutlineJson { get; }
 
+    /// <summary>Whether JSON reads resolve the empty value before acquiring staging storage.</summary>
+    internal bool JsonEmptyBeforeStaging { get; }
+
     /// <summary>Processes the current formatter contract.</summary>
     /// <param name="writeBody">The write body used by this operation.</param>
     /// <param name="readBody">The read body used by this operation.</param>
@@ -444,11 +447,12 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="readInlining">The binary read root's inlining hint.</param>
     /// <param name="outlineJson">Whether to keep the JSON roots out of their callers.</param>
     /// <param name="interfaceSetTraversal">Whether to probe for exact framework sets during JSON writes.</param>
+    /// <param name="jsonEmptyBeforeStaging">Whether an initial empty token or accepted end of input returns the empty value directly.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
         bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false,
         bool concurrentStackStaging = false, bool interfaceListReuse = false, string? readInlining = "AggressiveInlining",
-        bool outlineJson = false, bool interfaceSetTraversal = false)
+        bool outlineJson = false, bool interfaceSetTraversal = false, bool jsonEmptyBeforeStaging = false)
     {
         ReadInlining = readInlining;
         OutlineJson = outlineJson;
@@ -465,6 +469,7 @@ internal sealed class EnumerableOwnerSpec
         JsonAdd = jsonAdd;
         JsonBefore = jsonBefore;
         JsonAfter = jsonAfter;
+        JsonEmptyBeforeStaging = jsonEmptyBeforeStaging;
     }
 }
 
@@ -1002,6 +1007,15 @@ internal static class EnumerableOwnerTemplate
                         break;
                     }
                     w.Blank();
+                    if (spec.JsonEmptyBeforeStaging)
+                    {
+                        w.Line("if (!reader.Read<TLuminProfile>() || reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
+                        w.Open();
+                        w.Line("value = " + sequence + ".Empty;");
+                        w.Line("return;");
+                        w.Close();
+                        w.Blank();
+                    }
                     if (spec.JsonBefore != null)
                         spec.JsonBefore(context);
                     else
@@ -1012,7 +1026,7 @@ internal static class EnumerableOwnerTemplate
                         w.Indented(() => w.Line("value.Clear();"));
                     }
                     w.Blank();
-                    w.Line("while (reader.Read<TLuminProfile>())");
+                    w.Line(spec.JsonEmptyBeforeStaging ? "do" : "while (reader.Read<TLuminProfile>())");
                     w.Open();
                     w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ArrayEnd)");
                     w.Line("    break;");
@@ -1023,6 +1037,8 @@ internal static class EnumerableOwnerTemplate
                     if (spec.JsonAddBody != null) spec.JsonAddBody(context);
                     else w.Line(spec.JsonAdd);
                     w.Close();
+                    if (spec.JsonEmptyBeforeStaging)
+                        w.Line("while (reader.Read<TLuminProfile>());");
                     spec.JsonAfter?.Invoke(context);
                     w.Close();
                     w.Blank();

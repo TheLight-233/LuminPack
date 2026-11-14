@@ -9,7 +9,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class FrozenSetOwnerFile
 {
     private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "staged.Add(item);",
-        BeforeJson, AfterJson, readInlining: "NoInlining", outlineJson: true);
+        BeforeJson, AfterJson, readInlining: "NoInlining", outlineJson: true, jsonEmptyBeforeStaging: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
