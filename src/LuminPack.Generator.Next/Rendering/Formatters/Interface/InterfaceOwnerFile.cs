@@ -152,7 +152,7 @@ internal static class InterfaceOwnerFile
             WriteCounted("WriteFrozen", frozen);
             w.Line("#endif");
         }
-        if (c.Text)
+        if (c.Text && !c.Forwarded)
         {
             w.Line(w.MethodImpl("NoInlining"));
             w.Line("static void WriteStringItem(scoped ref " + writer + " operationState, string item)");
