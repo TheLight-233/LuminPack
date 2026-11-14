@@ -445,7 +445,9 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
 
     /// <summary>Converts UTF-16 characters when necessary and passes the resulting bytes to the JSON document reader.</summary>
     /// <returns>The character read boundary and its local byte reader.</returns>
-    private static string JsonCharacters() => JsonCharacterRead + "\n" + LocalRead("ReadBytes", "ReadOnlySpan<byte>", JsonSpanRead);
+    private static string JsonCharacters() => JsonCharacterRead + "\n" +
+        LocalRead("ReadUtf8", "ReadOnlySpan<char>", JsonTranscodedRead) + "\n" +
+        LocalRead("ReadBytes", "ReadOnlySpan<byte>", JsonSpanRead);
 
     /// <summary>Indents a template when it moves into a local function or try block.</summary>
     /// <param name="body">The original template statements.</param>
@@ -725,6 +727,10 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                         LuminPackInputPolicy.CheckCharacters(buffer, (int)encoding, %LIMIT%);
                         if (encoding is LuminPackStringEncoding.UTF16)
                             return ReadBytes(MemoryMarshal.AsBytes(buffer), ref value);
+                        return ReadUtf8(buffer, ref value);
+        """ + "\n";
+
+    private const string JsonTranscodedRead = """
                         if (buffer.Length <= 1024)
                         {
                             Span<byte> span = stackalloc byte[buffer.Length * 3];
