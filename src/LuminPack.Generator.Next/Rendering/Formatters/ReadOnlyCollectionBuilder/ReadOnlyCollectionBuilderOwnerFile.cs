@@ -11,7 +11,7 @@ internal static class ReadOnlyCollectionBuilderOwnerFile
         jsonBefore: c => WrapperTraversal.PrepareJson(c, () =>
         {
             c.W.Line("value = new " + c.Sequence + "();");
-            string capacity = WrapperTraversal.JsonCapacity(c);
+            string capacity = WrapperTraversal.JsonCapacity(c, 128);
             if (capacity.Length != 0)
             {
                 c.W.Line("int capacity = " + capacity + ";");

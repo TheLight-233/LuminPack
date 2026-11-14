@@ -1,5 +1,6 @@
 #nullable disable
 using System.Collections.Generic;
+using System.Globalization;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
@@ -256,9 +257,11 @@ internal static class WrapperTraversal
 
     /// <summary>Gets the optional capacity expression for a newly owned backing collection.</summary>
     /// <param name="c">The owner context.</param>
+    /// <param name="minimum">The minimum remaining input code units before taking the hint.</param>
     /// <returns>A constructor argument, or the empty string for the original constructor.</returns>
-    internal static string JsonCapacity(EnumerableOwnerContext c) =>
-        c.Supports("WrapperJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(128)" : "";
+    internal static string JsonCapacity(EnumerableOwnerContext c, int minimum = 10) =>
+        c.Supports("WrapperJsonCapacity") ? "reader.GetArrayCapacityHint<TLuminProfile>(" +
+            minimum.ToString(CultureInfo.InvariantCulture) + ")" : "";
 
     /// <summary>Creates a fresh JSON wrapper or clears the original through its public operation.</summary>
     /// <param name="c">The owner context.</param>
