@@ -63,7 +63,160 @@ internal static class ImmutableInterfaceOwnerFile
         c.Sequence.Contains("Queue") ? "ImmutableQueue" :
         c.Sequence.Contains("Stack") ? "ImmutableStack" : "ImmutableList";
 
-    private static void Write(EnumerableOwnerContext c) => c.CountedWrite("value");
+    private static void Write(EnumerableOwnerContext c)
+    {
+        bool hash = WriteTree("ImmutableHashSet", "CopyImmutableHashTree");
+        bool sorted = WriteTree("ImmutableSortedSet", "CopyImmutableSortedTree");
+        if (!hash && !sorted || c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal))
+            c.CountedWrite("value");
+
+        bool WriteTree(string family, string capability)
+        {
+            if (!c.Supports(capability))
+                return false;
+            var w = c.W;
+            ImmutableTreeTraversal.Select(w, c.Sequence, c.Scalar, family, source =>
+            {
+                w.Open();
+                if (c.RawTreeElements && c.Supports("WriteRaw" + family))
+                    w.Line("global::LuminPack.Utility.LuminTreeStorage.WriteRaw(ref operationState, " + source + ");");
+                else
+                {
+                    w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+                    w.Line("operationState.WriteCollectionHeader(" + source + ".Count);");
+                    ImmutableTreeTraversal.Lease(w, source, c.Scalar, () =>
+                    {
+                        if (c.Text && c.Supports("ImmutableStringRun"))
+                            w.Line("operationState.WriteStrings<TLuminProfile>(" + ImmutableTreeTraversal.CapturedSpan + ");");
+                        else
+                            c.CountedWrite(source, payloadOnly: true);
+                    });
+                    w.Line("operationState.CheckBuffer();");
+                }
+                w.Line("goto operationComplete_RootWrite;");
+                w.Close();
+            });
+            return true;
+        }
+    }
+
+    internal static bool WriteJsonTree(EnumerableOwnerContext c, SharedFormatterSet set, string owner)
+    {
+        bool hash = Write("ImmutableHashSet", "CopyImmutableHashTree");
+        bool sorted = Write("ImmutableSortedSet", "CopyImmutableSortedTree");
+        return (hash || sorted) && !c.Sequence.StartsWith(Namespace + "IImmutable", System.StringComparison.Ordinal);
+
+        bool Write(string family, string capability)
+        {
+            if (!c.Supports(capability))
+                return false;
+            var w = c.W;
+            ImmutableTreeTraversal.Select(w, c.Sequence, c.Scalar, family, source =>
+            {
+                w.Open();
+                ImmutableTreeTraversal.Lease(w, source, c.Scalar, () =>
+                {
+                    if (JsonIntegerRunWriter.TryEmit(w, set, c.Sequence, c.Scalar, ImmutableTreeTraversal.CapturedSpan, readBeforeSeparator: true))
+                        return;
+                    w.Line("bool isFirst = true;");
+                    ImmutableTreeTraversal.Items(w, () =>
+                        JsonSequenceElementWriter.Emit(w, set, c.Sequence, c.Scalar, owner, utf8Only: true));
+                });
+                w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                w.Line("return;");
+                w.Close();
+            });
+            return true;
+        }
+    }
+
+    internal static bool ReadJsonTree(EnumerableOwnerContext c, string owner, string reader)
+    {
+        bool sorted = c.Supports("BuildOrderedImmutableSortedSet");
+        if (!sorted && !c.Supports("BuildFrameworkImmutableHashSet"))
+            return false;
+
+        var w = c.W;
+        string concrete = Namespace + (sorted ? "ImmutableSortedSet" : "ImmutableHashSet") + "<" + c.Scalar + ">";
+        string pool = "global::System.Buffers.ArrayPool<" + c.Scalar + ">.Shared";
+        string clear = "global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + c.Scalar + ">()";
+        bool guardedCulture = sorted && c.Text;
+        if (guardedCulture)
+        {
+            // A custom profile or culture can run user code while the builder compares successive strings.
+            const string options = "global::LuminPack.Option.";
+            const string culture = "global::System.Globalization.CultureInfo";
+            w.Line("if ((typeof(TLuminProfile) == typeof(" + options + "LuminPackDefaultOptions) ||");
+            w.Line("     typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf16LengthOptions) ||");
+            w.Line("     typeof(TLuminProfile) == typeof(" + options + "LuminPackUtf8LengthOptions)) &&");
+            w.Line("    " + culture + ".CurrentCulture.GetType() == typeof(" + culture + "))");
+            w.Open();
+        }
+        w.Line(c.Scalar + "[] items = null;");
+        w.Line("int count = 0;");
+        w.Line("try");
+        w.Open();
+        w.Line("if (reader.Read<TLuminProfile>())");
+        w.Open();
+        w.Line("do");
+        w.Open();
+        w.Line("if (reader.CurrentTokenType == " + reader + ".JsonTokenType.ArrayEnd)");
+        w.Line("    break;");
+        w.Line("if (reader.CurrentTokenType == " + reader + ".JsonTokenType.ObjectEnd)");
+        w.Line("    continue;");
+        w.Line(c.Scalar + " item = default!;");
+        w.Line(owner + ".Read<TLuminProfile>(ref reader, ref item);");
+        w.Line("if (items is null)");
+        w.Line("    items = " + pool + ".Rent(16);");
+        w.Line("else if (count == items.Length)");
+        w.Open();
+        w.Line("var larger = " + pool + ".Rent(checked(count * 2));");
+        w.Line("global::System.Array.Copy(items, larger, count);");
+        w.Line(pool + ".Return(items, " + clear + ");");
+        w.Line("items = larger;");
+        w.Close();
+        w.Line(c.Memory + ".Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items), (nint)(uint)count++) = item;");
+        w.Close();
+        w.Line("while (reader.Read<TLuminProfile>());");
+        w.Close();
+        w.Line("if (count == 0)");
+        w.Open();
+        w.Line("value = " + concrete + ".Empty;");
+        w.Line("return;");
+        w.Close();
+        if (sorted)
+        {
+            w.Line("var ordered = global::LuminPack.Utility.LuminTreeStorage.CreateOrderedSetIfSupported<" + c.Scalar + ">(items!, count);");
+            w.Line("if (ordered is not null)");
+            w.Open();
+            w.Line("value = ordered;");
+            w.Line("return;");
+            w.Close();
+            ImmutableBuilderLifetime.Begin(w, "SortedSet", c.Scalar, c.Supports("ImmutableBuilder"), "sortedBuilder");
+            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items!);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("sortedBuilder.Add(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
+            w.Close();
+            w.Line("while (++index < count);");
+            w.Line("value = sortedBuilder.ToImmutable();");
+            ImmutableBuilderLifetime.End(w, "SortedSet", c.Supports("ImmutableBuilder"), "sortedBuilder");
+        }
+        else
+            w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(items!, count);");
+        w.Close();
+        w.Line("finally");
+        w.Open();
+        w.Line("if (items is not null) " + pool + ".Return(items, " + clear + ");");
+        w.Close();
+        if (guardedCulture)
+        {
+            w.Line("return;");
+            w.Close();
+        }
+        return !guardedCulture;
+    }
 
     /// <summary>Writes a concrete string queue through its two stacks, as the original traversal did, so a queue whose back stack
     /// is not cached is not materialized by serialization; other queues keep the counted enumeration.</summary>
@@ -139,6 +292,20 @@ internal static class ImmutableInterfaceOwnerFile
             CandidateTextSetRead(c);
             return;
         }
+        if (c.Sequence.StartsWith(Namespace + "IImmutableSet<", System.StringComparison.Ordinal) &&
+            c.Supports("BuildFrameworkImmutableHashSet"))
+        {
+            w.Line("if (length == 1)");
+            w.Open();
+            w.Line(c.Scalar + " item = default!;");
+            c.ReadElement("item");
+            w.Line("value = global::System.Collections.Immutable.ImmutableHashSet.Create(item);");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+            c.PooledRead(() => w.Line("value = global::LuminPack.Utility.LuminTreeStorage.CreateFrameworkImmutableHashSet(pooled, length);"),
+                rawBlock: c.RawTreeElements);
+            return;
+        }
         c.PooledRead(() => build(c));
     }
 
@@ -155,6 +322,7 @@ internal static class ImmutableInterfaceOwnerFile
         w.Line("var items = global::System.Buffers.ArrayPool<string>.Shared.Rent(length);");
         w.Line("try");
         w.Open();
+        w.Line("ref string first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(items);");
         w.Line("bool fromCache = value is null;");
         w.Line("var candidate = value;");
         w.Line("if (candidate is null)");
@@ -165,9 +333,11 @@ internal static class ImmutableInterfaceOwnerFile
         w.Line("bool hasPrior = same;");
         w.Line("if (hasPrior && !fromCache)");
         w.Line("    " + tree + ".CopyTo(candidate!, items);");
-        w.Line("for (int i = 0; i < length; i++)");
+        w.Line("int i = 0;");
+        w.Line("do");
         w.Open();
-        w.Line("string prior = hasPrior ? fromCache && i == 0 ? CandidateFirst(candidate!) : items[i] : default!;");
+        w.Line("ref string slot = ref " + c.Memory + ".Add(ref first, (nint)(uint)i);");
+        w.Line("string prior = hasPrior ? fromCache && i == 0 ? CandidateFirst(candidate!) : slot : default!;");
         w.Line("string selected = prior;");
         w.Line("operationState.Read<TLuminProfile>(ref selected);");
         w.Line("if (!object.ReferenceEquals(prior, selected))");
@@ -178,20 +348,26 @@ internal static class ImmutableInterfaceOwnerFile
         w.Close();
         w.Line("else if (hasPrior && fromCache && i == 0)");
         w.Line("    " + tree + ".CopyTo(candidate!, items);");
-        w.Line("items[i] = selected;");
+        w.Line("slot = selected;");
         w.Close();
+        w.Line("while (++i < length);");
         w.Blank();
         if (sorted)
         {
-            w.Line("if (same)");
+            w.Line("if (same && length > 1)");
             w.Open();
             w.Line("var comparer = " + comparer + ";");
-            w.Line("for (int i2 = 1; i2 < length; i2++)");
-            w.Line("    if (comparer.Compare(items[i2 - 1], items[i2]) >= 0)");
-            w.Line("    {");
-            w.Line("        same = false;");
-            w.Line("        break;");
-            w.Line("    }");
+            w.Line("int i2 = 1;");
+            w.Line("do");
+            w.Open();
+            w.Line("if (comparer.Compare(" + c.Memory + ".Add(ref first, (nint)(uint)(i2 - 1)),");
+            w.Line("                     " + c.Memory + ".Add(ref first, (nint)(uint)i2)) >= 0)");
+            w.Open();
+            w.Line("same = false;");
+            w.Line("break;");
+            w.Close();
+            w.Close();
+            w.Line("while (++i2 < length);");
             w.Close();
             w.Blank();
         }
@@ -232,8 +408,13 @@ internal static class ImmutableInterfaceOwnerFile
         }
         string family = Concrete(c).Substring(9);
         ImmutableBuilderLifetime.Begin(w, family, c.Scalar, c.Supports("ImmutableBuilder"), "builder");
-        w.Line("for (int index = 0; index < length; index++)");
-        w.Indented(() => w.Line("builder.Add(pooled[index]);"));
+        w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+        w.Line("int index = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("builder.Add(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
+        w.Close();
+        w.Line("while (++index < length);");
         w.Line("value = builder.ToImmutable();");
         ImmutableBuilderLifetime.End(w, family, c.Supports("ImmutableBuilder"), "builder");
     }
@@ -252,8 +433,13 @@ internal static class ImmutableInterfaceOwnerFile
         var w = c.W;
         w.Blank();
         w.Line("var stack = " + Namespace + "ImmutableStack<" + c.Scalar + ">.Empty;");
-        w.Line("for (int index = length - 1; index >= 0; index--)");
-        w.Indented(() => w.Line("stack = stack.Push(pooled[index]);"));
+        w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+        w.Line("int index = length;");
+        w.Line("do");
+        w.Open();
+        w.Line("stack = stack.Push(" + c.Memory + ".Add(ref first, (nint)(uint)--index));");
+        w.Close();
+        w.Line("while (index != 0);");
         w.Line("value = stack;");
     }
 
@@ -272,8 +458,15 @@ internal static class ImmutableInterfaceOwnerFile
     {
         var w = c.W;
         w.Line("var stack = " + Namespace + "ImmutableStack<" + c.Scalar + ">.Empty;");
-        w.Line("for (int index = staged.Count - 1; index >= 0; index--)");
-        w.Indented(() => w.Line("stack = stack.Push(staged[index]);"));
+        w.Line("int index = staged.Count;");
+        w.Line("if (index != 0)");
+        w.Open();
+        w.Line("do");
+        w.Open();
+        w.Line("stack = stack.Push(staged[--index]);");
+        w.Close();
+        w.Line("while (index != 0);");
+        w.Close();
         w.Line("value = stack;");
     }
 }

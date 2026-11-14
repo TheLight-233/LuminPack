@@ -60,7 +60,9 @@ internal static class ContiguousOwnerFile
         string span = shape switch
         {
             ContiguousShape.List => Marshal + ".GetListSpan(value)",
-            ContiguousShape.Array or ContiguousShape.ImmutableArray or ContiguousShape.ArraySegment => "value.AsSpan()",
+            ContiguousShape.Array => "new global::System.ReadOnlySpan<" + element.Type + ">(value)",
+            ContiguousShape.ArraySegment => "new global::System.ReadOnlySpan<" + element.Type + ">(value.Array, value.Offset, value.Count)",
+            ContiguousShape.ImmutableArray => "value.AsSpan()",
             _ => "value.Span",
         };
         return SpecialOwnerFile.Render(set, operations, suffix, model.Type, reference, BinaryWrite, BinaryRead, JsonWrite, JsonRead, w =>
@@ -120,8 +122,13 @@ internal static class ContiguousOwnerFile
             w.Line("global::System.ReadOnlySpan<" + element.Type + "> items = " + span + ";");
             if (raw)
             {
-                w.Line("int bytes = global::LuminPack.Core.LuminPackWriter.Size<" + element.Type + ">(items.Length, true, false);");
-                w.Line("writer.AdvanceSafe(global::LuminPack.Core.LuminPackWriter.Write<" + element.Type + ">(writer.Reserve(writer.Position, bytes), items, items.Length, true, false));");
+                if (element.RawCollection && element.Definition != GenericIdentity.Nullable)
+                    w.Line("writer.Write<" + element.Type + ">(items, items.Length);");
+                else
+                {
+                    w.Line("int bytes = global::LuminPack.Core.LuminPackWriter.Size<" + element.Type + ">(items.Length, true, false);");
+                    w.Line("writer.AdvanceSafe(global::LuminPack.Core.LuminPackWriter.Write<" + element.Type + ">(writer.Reserve(writer.Position, bytes), items, items.Length, true, false));");
+                }
                 return;
             }
 
@@ -257,13 +264,18 @@ internal static class ContiguousOwnerFile
                 w.Line("if (freshLength < 0)");
                 w.Indented(() => w.Line("return;"));
                 w.Line("var freshItems = reader.CreateFreshListArray<" + element.Type + ">(freshLength, out value);");
-                w.Line("ref var first = ref " + MemoryMarshal + ".GetArrayDataReference(freshItems);");
-                w.Line("for (int i = 0; i < freshLength; i++)");
+                w.Line("if (freshLength != 0)");
+                w.Open();
+                w.Line("ref var first = ref " + Marshal + ".GetNotNullArrayReference(freshItems);");
+                w.Line("int i = 0;");
+                w.Line("do");
                 w.Open();
                 w.Line(element.Type + " item = default!;");
                 UnionEmitter.FreshElementRead(freshUnion, w, "item", "freshEnd");
                 w.Line("freshEnd:");
-                w.Line(Unsafe + ".Add(ref first, i) = item;");
+                w.Line(Unsafe + ".Add(ref first, (nint)(uint)i) = item;");
+                w.Close();
+                w.Line("while (++i < freshLength);");
                 w.Close();
                 w.Line("return;");
                 w.Close();
@@ -290,10 +302,7 @@ internal static class ContiguousOwnerFile
                 w.Line("reader.ReadStrings<TLuminProfile>(items);");
             else
             {
-                w.Line("for (int index = 0; index < length; index++)");
-                w.Open();
-                FormatterElementEmitter.Read(w, set, element, "items[index]");
-                w.Close();
+                ReadSlots(w, json: false);
             }
 
             Publish(w);
@@ -305,7 +314,7 @@ internal static class ContiguousOwnerFile
             {
                 case ContiguousShape.Array:
                     w.Line("if (value is null || value.Length != length || value.GetType() != typeof(" + model.Type + ")) value = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
-                    w.Line("var items = value.AsSpan();");
+                    w.Line("var items = new global::System.Span<" + element.Type + ">(value);");
                     break;
                 case ContiguousShape.List:
                     w.Line("value ??= new " + model.Type + "(length);");
@@ -318,24 +327,24 @@ internal static class ContiguousOwnerFile
                     w.Line("array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
                     w.Line("start = 0;");
                     w.Close();
-                    w.Line("var items = array.AsSpan(start, length);");
+                    w.Line("var items = new global::System.Span<" + element.Type + ">(array, start, length);");
                     break;
                 case ContiguousShape.ArraySegment:
                     w.Line("var array = value.Array;");
                     w.Line("bool reused = array is not null && array.GetType() == typeof(" + ArrayType(element.Type) + ") && value.Count == length;");
                     w.Line("int start = reused ? value.Offset : 0;");
                     w.Line("if (!reused) array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
-                    w.Line("var items = array.AsSpan(start, length);");
+                    w.Line("var items = new global::System.Span<" + element.Type + ">(array, start, length);");
                     break;
                 case ContiguousShape.ImmutableArray:
                     w.Line("var array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
                     if (element.Type == "string")
                         w.Line("if (!value.IsDefault) value.AsSpan().Slice(0, global::System.Math.Min(value.Length, length)).CopyTo(array);");
-                    w.Line("var items = array.AsSpan();");
+                    w.Line("var items = new global::System.Span<" + element.Type + ">(array);");
                     break;
                 default:
                     w.Line("var array = " + Marshal + ".AllocateUninitializedArray<" + element.Type + ">(length);");
-                    w.Line("var items = array.AsSpan();");
+                    w.Line("var items = new global::System.Span<" + element.Type + ">(array);");
                     break;
             }
         }
@@ -437,13 +446,30 @@ internal static class ContiguousOwnerFile
             }
             w.Line("int length = reader.CountArrayElements<TLuminProfile>();");
             Prepare(w);
-            w.Line("for (int index = 0; index < length; index++)");
-            w.Open();
-            w.Line("reader.Read<TLuminProfile>();");
-            w.Line(FormatterElementEmitter.Owner(set, element) + ".Read<TLuminProfile>(ref reader, ref items[index]);");
-            w.Close();
+            ReadSlots(w, json: true);
             w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
             Publish(w);
+        }
+
+        void ReadSlots(CodeWriter w, bool json)
+        {
+            w.Line("if (length > 0)");
+            w.Open();
+            w.Line("ref var firstItem = ref " + MemoryMarshal + ".GetReference(items);");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            const string slot = Unsafe + ".Add(ref firstItem, (nint)(uint)index)";
+            if (json)
+            {
+                w.Line("reader.Read<TLuminProfile>();");
+                w.Line(FormatterElementEmitter.Owner(set, element) + ".Read<TLuminProfile>(ref reader, ref " + slot + ");");
+            }
+            else
+                FormatterElementEmitter.Read(w, set, element, slot);
+            w.Close();
+            w.Line("while (++index < length);");
+            w.Close();
         }
     }
 

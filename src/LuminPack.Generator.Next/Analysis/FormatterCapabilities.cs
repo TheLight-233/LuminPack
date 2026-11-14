@@ -18,7 +18,12 @@ internal static class FormatterCapabilities
         var result = new List<string>();
         FormatterBuiltinCapabilities.Capture(compilation, type, result);
         if (type is IArrayTypeSymbol array)
+        {
             ContiguousCapabilities(compilation, array.ElementType, result);
+            if (array.Rank == 1 && array.ElementType.SpecialType == SpecialType.System_String &&
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", array.ElementType))
+                result.Add("WriteArrayStrings");
+        }
         if (type is not INamedTypeSymbol { IsGenericType: true } named)
             return result.ToArray();
         string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.Name;
@@ -78,6 +83,43 @@ internal static class FormatterCapabilities
                 result.Add("ImmutableSpan");
             if (definition == "System.Collections.Immutable.ImmutableList" && FormatterImmutableTraits.HasRawListWriter(compilation))
                 result.Add("ImmutableRawListWrite");
+            if (definition is "System.Collections.Immutable.IImmutableSet" or "System.Collections.Immutable.ImmutableHashSet" or
+                "System.Collections.Immutable.ImmutableSortedSet" or "System.Collections.Immutable.IImmutableDictionary" or
+                "System.Collections.Immutable.ImmutableDictionary" or "System.Collections.Immutable.ImmutableSortedDictionary")
+            {
+                string hash = named.Arity == 1 ? "ImmutableHashSet" : "ImmutableDictionary";
+                string sorted = named.Arity == 1 ? "ImmutableSortedSet" : "ImmutableSortedDictionary";
+                if ((concrete == hash || named.Name.StartsWith("IImmutable", StringComparison.Ordinal)) &&
+                    FormatterImmutableTraits.HasTreeCopy(compilation, hash, named.Arity))
+                    result.Add("CopyImmutableHashTree");
+                if ((concrete == sorted || named.Name.StartsWith("IImmutable", StringComparison.Ordinal)) &&
+                    FormatterImmutableTraits.HasTreeCopy(compilation, sorted, named.Arity))
+                    result.Add("CopyImmutableSortedTree");
+                if (named.Arity == 1)
+                {
+                    ContiguousCapabilities(compilation, named.TypeArguments[0], result);
+                    foreach (string family in new[] { hash, sorted })
+                        if (compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`1") is { } tree &&
+                            FormatterImmutableTraits.HasRawTreeWriter(compilation, tree))
+                            result.Add("WriteRaw" + family);
+                }
+            }
+            var element = named.TypeArguments[0];
+            bool frameworkElement = SymbolEqualityComparer.Default.Equals(element.ContainingAssembly,
+                compilation.GetSpecialType(SpecialType.System_Object).ContainingAssembly) &&
+                (element.SpecialType == SpecialType.System_String || CallbackFree(element));
+            if (frameworkElement && (concrete is "ImmutableHashSet" or "ImmutableSortedSet"))
+            {
+                if (concrete == "ImmutableHashSet" &&
+                    FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateFrameworkImmutableHashSet"))
+                    result.Add("BuildFrameworkImmutableHashSet");
+                if (concrete == "ImmutableSortedSet" &&
+                    FormatterImmutableTraits.HasSetFactory(compilation, concrete, "CreateOrderedSetIfSupported"))
+                    result.Add("BuildOrderedImmutableSortedSet");
+            }
+            if (element.SpecialType == SpecialType.System_String &&
+                FormatterRuntimeTraits.HasReadOnlySpanWriter(compilation, "LuminPackWriter", "WriteStrings", element))
+                result.Add("ImmutableStringRun");
         }
 
         if (definition == "System.Collections.Generic.Dictionary" && named.TypeArguments[0].SpecialType == SpecialType.System_String && FormatterRuntimeTraits.HasEnumeratedStringKeyCheck(compilation))

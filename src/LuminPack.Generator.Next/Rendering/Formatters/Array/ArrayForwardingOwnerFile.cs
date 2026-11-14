@@ -23,6 +23,7 @@ internal static class ArrayForwardingOwnerFile
         string preserve = w.Preserve;
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string marshal = w.A("LuminPackMarshal");
+        string memory = w.A("Unsafe");
         string extension = set.Extension!;
         string itemType = fact.ForwardedType!;
         string collection = fact.DeclaredType;
@@ -91,6 +92,7 @@ internal static class ArrayForwardingOwnerFile
             {
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWriteJson<TLuminProfile>(scoped ref " + jsonWriter + " writer, " + collection + " input)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
@@ -102,16 +104,13 @@ internal static class ArrayForwardingOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("bool isFirst = true;");
-                    w.Line("foreach (ref var item in value.AsSpan())");
+                    StartWriteArrayLoop();
                     w.Open();
-                    w.Line("if (!isFirst)");
+                    w.Line("if (index != 0)");
                     w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                    w.Line("else");
-                    w.Line("    isFirst = false;");
                     w.Line("writer.SetFirstElement(true);");
-                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, item);");
-                    w.Close();
+                    w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, " + memory + ".Add(ref first, (nint)(uint)index));");
+                    EndWriteArrayLoop();
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
@@ -129,6 +128,7 @@ internal static class ArrayForwardingOwnerFile
             {
                 case FormatterSection.Roots:
                     w.Line(preserve);
+                    w.Line(w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootReadJson<TLuminProfile>(scoped ref " + jsonReader + " reader, scoped ref " + collection + " value)");
                     w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
@@ -141,10 +141,15 @@ internal static class ArrayForwardingOwnerFile
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     w.Line("if (value is not null && value.GetType() == typeof(" + collection + ") && reader.CountArrayElements<TLuminProfile>() == value.Length)");
                     w.Open();
-                    w.Line("for (int i = 0; i < value.Length; i++)");
+                    w.Line("if (value.Length != 0)");
+                    w.Open();
+                    w.Line("int index = 0;");
+                    w.Line("do");
                     w.Open();
                     w.Line("reader.Read<TLuminProfile>();");
-                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref value[i]);");
+                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref value[index]);");
+                    w.Close();
+                    w.Line("while (++index < value.Length);");
                     w.Close();
                     w.Blank();
                     w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
@@ -168,7 +173,7 @@ internal static class ArrayForwardingOwnerFile
                     w.Open();
                     w.Line("int newCapacity = capacity * 2;");
                     w.Line("var newBuffer = global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Rent(newCapacity);");
-                    w.Line("buffer.AsSpan(0, count).CopyTo(newBuffer);");
+                    w.Line("global::System.Array.Copy(buffer, newBuffer, count);");
                     w.Line("global::System.Buffers.ArrayPool<" + itemType + ">.Shared.Return(buffer, clearArray: true);");
                     w.Line("buffer = newBuffer;");
                     w.Line("capacity = newBuffer.Length;");
@@ -176,10 +181,10 @@ internal static class ArrayForwardingOwnerFile
                     w.Blank();
                     w.Line(itemType + " item = default !;");
                     w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                    w.Line("buffer[count++] = item;");
+                    w.Line(memory + ".Add(ref " + marshal + ".GetNotNullArrayReference(buffer), (nint)(uint)count++) = item;");
                     w.Close();
                     w.Blank();
-                    w.Line("value = buffer.AsSpan(0, count).ToArray();");
+                    w.Line("value = new global::System.ReadOnlySpan<" + itemType + ">(buffer, 0, count).ToArray();");
                     w.Close();
                     w.Line("finally");
                     w.Open();
@@ -206,6 +211,7 @@ internal static class ArrayForwardingOwnerFile
         void BinaryWrite(string method, bool compressed)
         {
             w.Line(preserve);
+            w.Line(w.MethodImpl("NoInlining"));
             w.Line("internal static void " + method + "<TOptions>(scoped ref " + writer + " writer, scoped in " + collection + " value)");
             w.Line("    where TOptions : struct, " + options);
             w.Open();
@@ -216,11 +222,12 @@ internal static class ArrayForwardingOwnerFile
             w.Line("return;");
             w.Close();
             w.Line("writer.WriteCollectionHeader(value.Length);");
-            w.Line("foreach (ref readonly var item in value.AsSpan())");
+            StartWriteArrayLoop();
             w.Open();
             w.Line("writer.CheckBuffer();");
-            w.Line((compressed ? serializer + ".SerializeWithCompress" : elementOwner + ".Write") + "<TOptions>(ref writer, in item);");
-            w.Close();
+            w.Line((compressed ? serializer + ".SerializeWithCompress" : elementOwner + ".Write") +
+                "<TOptions>(ref writer, in " + memory + ".Add(ref first, (nint)(uint)index));");
+            EndWriteArrayLoop();
             w.Line("writer.CheckBuffer();");
             w.Close();
             w.Blank();
@@ -229,6 +236,7 @@ internal static class ArrayForwardingOwnerFile
         void BinaryRead(string method, bool compressed)
         {
             w.Line(preserve);
+            w.Line(w.MethodImpl("NoInlining"));
             w.Line("internal static void " + method + "<TOptions>(scoped ref " + reader + " reader, scoped ref " + collection + " value)");
             w.Line("    where TOptions : struct, " + options);
             w.Open();
@@ -245,13 +253,32 @@ internal static class ArrayForwardingOwnerFile
             w.Close();
             w.Line("if (value is null || value.Length != length)");
             w.Line("    value = " + marshal + ".AllocateUninitializedArray<" + itemType + ">(length);");
-            w.Line("for (int i = 0; i < length; i++)");
+            w.Line("int index = 0;");
+            w.Line("do");
             w.Open();
             string read = compressed ? serializer + ".DeserializeWithCompress" : elementOwner + ".Read";
-            ForwardedElementRead.Emit(w, itemType, "reader", "value[i]", read + "<TOptions>(ref reader, ref value[i]);", compressed);
+            ForwardedElementRead.Emit(w, itemType, "reader", "value[index]", read + "<TOptions>(ref reader, ref value[index]);", compressed);
             w.Close();
+            w.Line("while (++index < length);");
             w.Close();
             w.Blank();
+        }
+
+        void StartWriteArrayLoop()
+        {
+            w.Line("int length = value.Length;");
+            w.Line("if (length != 0)");
+            w.Open();
+            w.Line("ref var first = ref " + marshal + ".GetNotNullArrayReference(value);");
+            w.Line("int index = 0;");
+            w.Line("do");
+        }
+
+        void EndWriteArrayLoop()
+        {
+            w.Close();
+            w.Line("while (++index < length);");
+            w.Close();
         }
 
         void WriteForwarder(string state, string method)

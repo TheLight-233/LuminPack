@@ -8,7 +8,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// uninitialized array, then fills it element by element. The JSON read stages the elements in a list and publishes its array.</remarks>
 internal static class ArrayTextOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(c => c.CountedWrite("value"), Read, "staged.Add(item);",
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read, "staged.Add(item);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();"),
         c => c.W.Line("value = staged.ToArray();"), jsonCount: false, compressEntries: true, arrayReuse: true, outlineJson: true);
 
@@ -19,6 +19,25 @@ internal static class ArrayTextOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
+
+    private static void Write(EnumerableOwnerContext c)
+    {
+        if (!c.Text || !c.Supports("WriteArrayStrings"))
+        {
+            c.CountedWrite("value");
+            return;
+        }
+        var w = c.W;
+        w.Line("int length = value.Length;");
+        w.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+        w.Line("operationState.WriteCollectionHeader(length);");
+        w.Line("if (length != 0)");
+        w.Open();
+        w.Line("ref string first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(value);");
+        w.Line("operationState.WriteStrings<TLuminProfile>(" + c.Marshal + ".CreateReadOnlySpan(ref first, length));");
+        w.Close();
+        w.Line("operationState.CheckBuffer();");
+    }
 
     private static void Read(EnumerableOwnerContext c)
     {
@@ -37,7 +56,7 @@ internal static class ArrayTextOwnerFile
             c.ReadBlockInPlace("span", array: "value");
             return;
         }
-        w.Line("global::System.Span<" + c.Scalar + "> span = value.AsSpan();");
+        w.Line("var span = new global::System.Span<" + c.Scalar + ">(value);");
         c.ReadBlock("span");
     }
 }

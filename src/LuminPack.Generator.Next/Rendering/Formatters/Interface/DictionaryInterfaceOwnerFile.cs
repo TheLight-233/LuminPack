@@ -13,7 +13,7 @@ internal static class DictionaryInterfaceOwnerFile
         c => c.W.Line("var staged = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">();"),
         c => c.W.Line("value = staged;"), readsHeader: true, outlineJson: true);
 
-    private static readonly PairedDictionarySpec ImmutableSpec = new PairedDictionarySpec(c => c.CountedWrite(), ReadImmutable,
+    private static readonly PairedDictionarySpec ImmutableSpec = new PairedDictionarySpec(WriteImmutable, ReadImmutable,
         "staged[key!] = itemValue;",
         c => c.W.Line("var staged = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<" + c.Key + ", " + c.Value + ">();"),
         c => c.W.Line("value = staged.ToImmutable();"), outlineJson: true);
@@ -33,6 +33,26 @@ internal static class DictionaryInterfaceOwnerFile
     /// <returns>The complete source.</returns>
     internal static string RenderImmutable(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, ImmutableSpec);
+
+    private static void WriteImmutable(PairedDictionaryContext c)
+    {
+        Write("ImmutableDictionary", "CopyImmutableHashTree");
+        Write("ImmutableSortedDictionary", "CopyImmutableSortedTree");
+        c.W.Open();
+        c.CountedWrite();
+        c.W.Close();
+
+        void Write(string family, string capability)
+        {
+            if (!c.Supports(capability))
+                return;
+            ImmutableTreeTraversal.Select(c.W, c.Dictionary, c.Key + ", " + c.Value, family, source =>
+            {
+                c.TreeWrite(batchRaw: true, source: source);
+                c.W.Line("goto operationComplete_RootWrite;");
+            });
+        }
+    }
 
     /// <summary>Writes the captured count and uses the value enumerator of an exact framework dictionary.</summary>
     /// <param name="c">The dictionary owner's write context.</param>
@@ -122,7 +142,8 @@ internal static class DictionaryInterfaceOwnerFile
         w.Close();
         w.Blank();
         w.Line("var builder = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<" + c.Key + ", " + c.Value + ">();");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int index = 0;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -130,6 +151,7 @@ internal static class DictionaryInterfaceOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line("builder.Add(k!, v);");
         w.Close();
+        w.Line("while (++index < length);");
         w.Line("value = builder.ToImmutable();");
     }
 }

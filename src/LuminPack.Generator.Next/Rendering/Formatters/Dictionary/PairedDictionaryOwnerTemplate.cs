@@ -226,25 +226,25 @@ internal sealed partial class PairedDictionaryContext
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(length);");
         W.Line("try");
         W.Open();
-        if (knownNonEmpty)
+        if (!knownNonEmpty)
         {
-            // Rent guarantees at least length slots. Each field is still checked before storing its pair.
-            W.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
-            W.Line("int index = 0;");
-            W.Line("do");
+            W.Line("if (length != 0)");
+            W.Open();
         }
-        else
-            W.Line("for (int index = 0; index < length; index++)");
+        // Rent guarantees at least length slots. Each field is still checked before storing its pair.
+        W.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
+        W.Line("int index = 0;");
+        W.Line("do");
         W.Open();
         W.Line(Key + " k = default !;");
         W.Line(Value + " v = default !;");
         ReadMember(Key, "k");
         ReadMember(Value, "v");
-        string slot = knownNonEmpty ? Memory + ".Add(ref first, unchecked((nint)(uint)index))" : "pairs[index]";
-        W.Line(slot + " = new " + Pair + "(k!, v);");
+        W.Line(Memory + ".Add(ref first, (nint)(uint)index) = new " + Pair + "(k!, v);");
         W.Close();
-        if (knownNonEmpty)
-            W.Line("while (++index < length);");
+        W.Line("while (++index < length);");
+        if (!knownNonEmpty)
+            W.Close();
         consume();
         W.Close();
         W.Line("finally");
@@ -336,24 +336,31 @@ internal sealed partial class PairedDictionaryContext
 
     /// <summary>Emits the write that copies a tree-backed dictionary's pairs once before writing them in order.</summary>
     /// <param name="batchRaw">Whether the family can fuse a complete staged raw payload.</param>
-    internal void TreeWrite(bool batchRaw = false)
+    /// <param name="source">The exact concrete tree expression.</param>
+    internal void TreeWrite(bool batchRaw = false, string source = "value")
     {
-        W.Line("int count = value.Count;");
-        W.Line("int countPosition = operationState.BeginCollection();");
+        W.Line("int count = " + source + ".Count;");
+        W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
+        W.Line("operationState.WriteCollectionHeader(count);");
         W.Line("if (count != 0)");
         W.Open();
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(count);");
         W.Line("try");
         W.Open();
-        W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(value, pairs);");
-        bool fused = batchRaw && BeginRawRun("pairs[index].Key", "pairs[index].Value");
-        W.Line("for (int index = 0; index < count; index++)");
+        W.Line("global::LuminPack.Utility.LuminTreeStorage.CopyTo(" + source + ", new global::System.Span<" + Pair + ">(pairs, 0, count));");
+        W.Line("ref var firstPair = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pairs);");
+        bool fused = batchRaw && BeginRawRun("pair.Key", "pair.Value",
+            "ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
+        W.Line("int index = 0;");
+        W.Line("do");
         W.Open();
-        W.Line(Key + " key = pairs[index].Key;");
+        W.Line("ref var pair = ref " + Memory + ".Add(ref firstPair, (nint)(uint)index);");
+        W.Line(Key + " key = pair.Key;");
         WriteMember(Key, "key");
-        W.Line(Value + " itemValue = pairs[index].Value;");
+        W.Line(Value + " itemValue = pair.Value;");
         WriteMember(Value, "itemValue");
         W.Close();
+        W.Line("while (++index < count);");
         if (fused)
             W.Close();
         W.Close();
@@ -363,7 +370,6 @@ internal sealed partial class PairedDictionaryContext
         W.Indented(() => W.Line("global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + Pair + ">());"));
         W.Close();
         W.Close();
-        W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
     }
 
@@ -371,7 +377,8 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="key">The current key expression.</param>
     /// <param name="value">The current value expression.</param>
     /// <returns>Whether the checked fallback block was opened.</returns>
-    internal bool BeginRawRun(string key, string value)
+    /// <param name="setup">The optional statement selecting the current record.</param>
+    internal bool BeginRawRun(string key, string value, string? setup = null)
     {
         if (!RawPairs || !Supports("BinaryRawPairs"))
             return false;
@@ -385,6 +392,8 @@ internal sealed partial class PairedDictionaryContext
         W.Line("int index = 0;");
         W.Line("do");
         W.Open();
+        if (setup != null)
+            W.Line(setup);
         W.Line(writer + ".Write(ref record, " + key + ");");
         W.Line(writer + ".Write(ref " + Memory + ".Add(ref record, " + keyWidth + "), " + value + ");");
         W.Line("record = ref " + Memory + ".Add(ref record, " + pairWidth + ");");
@@ -684,6 +693,14 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
                     var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value,
                         context.Supports("JsonIntegerPair") && context.RawPairs, utf8Only: context.Supports("PriorityQueueTraversal"));
+                    bool hashTree = EmitTree("ImmutableDictionary", "CopyImmutableHashTree");
+                    bool sortedTree = EmitTree("ImmutableSortedDictionary", "CopyImmutableSortedTree");
+                    if ((hashTree || sortedTree) && !dictionary.StartsWith("global::System.Collections.Immutable.IImmutableDictionary<", StringComparison.Ordinal))
+                    {
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     if (context.Supports("SortedListTraversal"))
                     {
                         w.Line("if (value.GetType() == typeof(" + dictionary + ") &&");
@@ -732,7 +749,13 @@ internal static class PairedDictionaryOwnerTemplate
                         EmitLocalLoop("WriteInterface", dictionary);
                     }
                     else
+                    {
+                        if (hashTree || sortedTree)
+                            w.Open();
                         EmitLoop(context.Source);
+                        if (hashTree || sortedTree)
+                            w.Close();
+                    }
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
@@ -747,6 +770,26 @@ internal static class PairedDictionaryOwnerTemplate
                         w.Open();
                         EmitLoop(source);
                         w.Close();
+                    }
+
+                    bool EmitTree(string family, string capability)
+                    {
+                        if (!context.Supports(capability))
+                            return false;
+                        ImmutableTreeTraversal.Select(w, dictionary, key + ", " + value, family, source =>
+                        {
+                            w.Open();
+                            ImmutableTreeTraversal.Lease(w, source, context.Pair, () =>
+                            {
+                                pairWriter.Begin();
+                                ImmutableTreeTraversal.Items(w, () =>
+                                    pairWriter.Write("item.Key", "item.Value"));
+                            });
+                            w.Line("writer.WriteArrayEnd<TLuminProfile>();");
+                            w.Line("return;");
+                            w.Close();
+                        });
+                        return true;
                     }
 
                     void EmitLoop(string source)

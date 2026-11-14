@@ -109,21 +109,25 @@ internal static class ListForwardingOwnerFile
                     w.Close();
                     w.Line("writer.WriteArrayStart<TOptions>();");
                     w.Line("var span = " + marshal + ".GetListSpan(value);");
+                    w.Line("if (!span.IsEmpty)");
+                    w.Open();
+                    w.Line("ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);");
+                    w.Line("int index = 0;");
+                    w.Line("do");
+                    w.Open();
+                    const string slot = "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)index)";
                     if (stringElement)
-                    {
-                        w.Line("for (int i = 0; i < span.Length; i++)");
-                        w.Line("    writer.WriteElement<TOptions>(span[i], i != 0);");
-                    }
+                        w.Line("writer.WriteElement<TOptions>(" + slot + ", index != 0);");
                     else
                     {
-                        w.Line("for (int i = 0; i < span.Length; i++)");
-                        w.Open();
-                        w.Line("if (i != 0)");
+                        w.Line("if (index != 0)");
                         w.Line("    writer.WriteByteRaw<TOptions>((byte)',');");
                         w.Line("writer.SetFirstElement(true);");
-                        w.Line(element + ".Write<TOptions>(ref writer, in span[i]);");
-                        w.Close();
+                        w.Line(element + ".Write<TOptions>(ref writer, in " + slot + ");");
                     }
+                    w.Close();
+                    w.Line("while (++index < span.Length);");
+                    w.Close();
                     w.Line("writer.WriteArrayEnd<TOptions>();");
                     w.Close();
                     w.Blank();

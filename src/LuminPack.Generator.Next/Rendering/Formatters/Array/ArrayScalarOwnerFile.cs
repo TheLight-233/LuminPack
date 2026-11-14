@@ -24,7 +24,6 @@ internal static class ArrayScalarOwnerFile
         string options = w.A("ILuminPackOptions");
         string utf16 = w.A("LuminPackUtf16LengthOptions");
         string memory = w.A("Unsafe");
-        string marshal = w.A("MemoryMarshal");
         string preserve = w.Preserve;
         string inline = w.MethodImpl("AggressiveInlining");
         string extension = set.Extension!;
@@ -102,13 +101,13 @@ internal static class ArrayScalarOwnerFile
                     w.Blank();
                     if (nullable)
                     {
-                        w.Line("var payload = value.AsSpan();");
+                        w.Line("var payload = new global::System.ReadOnlySpan<" + scalar + ">(value);");
                         w.Line("int bytes = " + writer + ".Size<" + scalar + ">(value.Length, true, false);");
                         w.Line("writer.AdvanceSafe(" + writer + ".Write<" + scalar +
                             ">(writer.Reserve(writer.Position, bytes), payload, value.Length, true, false));");
                     }
                     else
-                        w.Line("writer.Write<" + scalar + ">(value.AsSpan(), value.Length);");
+                        w.Line("writer.Write<" + scalar + ">(new global::System.ReadOnlySpan<" + scalar + ">(value), value.Length);");
                     w.Close();
                     w.Blank();
                     w.Line(preserve);
@@ -121,8 +120,8 @@ internal static class ArrayScalarOwnerFile
                     {
                         w.Line("var value = input;");
                         w.Line(writer + ".Write(");
-                        w.Line("    writer.Reserve(writer.Position, " + writer + ".Size(value.AsSpan(), (value is null ? -1 : value.Length), true, true)),");
-                        w.Line("    value.AsSpan(),");
+                        w.Line("    writer.Reserve(writer.Position, " + writer + ".Size(new global::System.ReadOnlySpan<" + scalar + ">(value), (value is null ? -1 : value.Length), true, true)),");
+                        w.Line("    new global::System.ReadOnlySpan<" + scalar + ">(value),");
                         w.Line("    (value is null ? -1 : value.Length),");
                         w.Line("    true,");
                         w.Line("    true,");
@@ -205,12 +204,8 @@ internal static class ArrayScalarOwnerFile
                     w.Blank();
                     w.Line("if (value is null || value.Length != length)");
                     w.Line("    value = " + w.A("LuminPackMarshal") + ".AllocateUninitializedArray<" + scalar + ">(length);");
-                    w.Line("global::System.Span<" + scalar + "> payload = " + marshal + ".CreateSpan<" + scalar + ">(ref " + memory + ".As<byte, " + scalar + ">(ref reader.Cursor), 0);");
-                    w.Line("payload = value.AsSpan();");
-                    w.Line("if (length != 0)");
-                    w.Line("    reader.Read(");
-                    w.Line("        ref " + memory + ".As<" + scalar + ", byte>(ref " + marshal + ".GetReference(payload)),");
-                    w.Line("        unchecked(length * " + memory + ".SizeOf<" + scalar + ">()));");
+                    w.Line("ref var first = ref " + w.A("LuminPackMarshal") + ".GetNotNullArrayReference(value);");
+                    w.Line("reader.Read(ref " + memory + ".As<" + scalar + ", byte>(ref first), checked(length * " + memory + ".SizeOf<" + scalar + ">()));");
                     w.Close();
                     w.Blank();
                     w.Line(preserve);
@@ -283,17 +278,21 @@ internal static class ArrayScalarOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    if (!JsonIntegerRunWriter.TryEmit(w, set, collection, scalar, "value.AsSpan()", readBeforeSeparator: false))
+                    if (!JsonIntegerRunWriter.TryEmit(w, set, collection, scalar, "new global::System.ReadOnlySpan<" + scalar + ">(value)", readBeforeSeparator: false))
                     {
-                        w.Line("bool isFirst = true;");
-                        w.Line("foreach (ref var item in value.AsSpan())");
+                        w.Line("int length = value.Length;");
+                        w.Line("if (length != 0)");
                         w.Open();
-                        w.Line("if (!isFirst)");
+                        w.Line("ref var first = ref " + w.A("LuminPackMarshal") + ".GetNotNullArrayReference(value);");
+                        w.Line("int index = 0;");
+                        w.Line("do");
+                        w.Open();
+                        w.Line("if (index != 0)");
                         w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
-                        w.Line("else");
-                        w.Line("    isFirst = false;");
                         w.Line("writer.SetFirstElement(true);");
-                        w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, item);");
+                        w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, " + memory + ".Add(ref first, (nint)(uint)index));");
+                        w.Close();
+                        w.Line("while (++index < length);");
                         w.Close();
                     }
                     w.Blank();
@@ -349,10 +348,17 @@ internal static class ArrayScalarOwnerFile
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
                     w.Line("if (value is not null && value.GetType() == typeof(" + collection + ") && reader.CountArrayElements<TLuminProfile>() == value.Length)");
                     w.Open();
-                    w.Line("for (int i = 0; i < value.Length; i++)");
+                    w.Line("int length = value.Length;");
+                    w.Line("if (length != 0)");
+                    w.Open();
+                    w.Line("ref var first = ref " + w.A("LuminPackMarshal") + ".GetNotNullArrayReference(value);");
+                    w.Line("int index = 0;");
+                    w.Line("do");
                     w.Open();
                     w.Line("reader.Read<TLuminProfile>();");
-                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref value[i]);");
+                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref " + memory + ".Add(ref first, (nint)(uint)index));");
+                    w.Close();
+                    w.Line("while (++index < length);");
                     w.Close();
                     w.Blank();
                     w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
@@ -376,7 +382,7 @@ internal static class ArrayScalarOwnerFile
                     w.Open();
                     w.Line("int newCapacity = capacity * 2;");
                     w.Line("var newBuffer = global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Rent(newCapacity);");
-                    w.Line("buffer.AsSpan(0, count).CopyTo(newBuffer);");
+                    w.Line("global::System.Array.Copy(buffer, newBuffer, count);");
                     w.Line("global::System.Buffers.ArrayPool<" + scalar + ">.Shared.Return(buffer, clearArray: false);");
                     w.Line("buffer = newBuffer;");
                     w.Line("capacity = newBuffer.Length;");
@@ -384,10 +390,10 @@ internal static class ArrayScalarOwnerFile
                     w.Blank();
                     w.Line(scalar + " item = default !;");
                     w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                    w.Line("buffer[count++] = item;");
+                    w.Line(memory + ".Add(ref " + w.A("LuminPackMarshal") + ".GetNotNullArrayReference(buffer), (nint)(uint)count++) = item;");
                     w.Close();
                     w.Blank();
-                    w.Line("value = buffer.AsSpan(0, count).ToArray();");
+                    w.Line("value = new global::System.ReadOnlySpan<" + scalar + ">(buffer, 0, count).ToArray();");
                     w.Close();
                     w.Line("finally");
                     w.Open();

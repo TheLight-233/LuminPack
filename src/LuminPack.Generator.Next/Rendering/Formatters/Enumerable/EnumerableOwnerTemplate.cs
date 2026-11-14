@@ -41,6 +41,8 @@ internal sealed partial class EnumerableOwnerContext
     private readonly SharedFormatterSet _set;
     /// <summary>Checks the exact runtime API facts of this sequence.</summary>
     internal bool Supports(string capability) => _set.FindFormatter(Sequence)?.Supports(capability) == true;
+    internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
+        (Forwarded ? _element!.RawCollection : !Text && Payload == null);
     private readonly FormatterModel? _element;
 
     private readonly Dictionary<string, int> _writeNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
@@ -50,47 +52,88 @@ internal sealed partial class EnumerableOwnerContext
     /// <summary>Emits the counted enumeration write of a nonnull sequence expression through <c>operationState</c>.</summary>
     /// <param name="local">The nonnull sequence expression.</param>
     /// <param name="outlineText">Whether an enclosing operation supplies the outlined string write.</param>
-    internal void CountedWrite(string local, bool outlineText = false)
+    /// <param name="payloadOnly">Whether the caller owns the header, count and final capacity check.</param>
+    internal void CountedWrite(string local, bool outlineText = false, bool payloadOnly = false)
     {
         if (Forwarded)
         {
-            W.Line("int countPosition = operationState.BeginCollection();");
-            W.Line("int count = 0;");
-            W.Line("foreach (var item in " + Source(local) + ")");
-            W.Open();
-            W.Line("count++;");
-            WriteElement("item");
-            W.Close();
-            W.Line("operationState.EndCollection(countPosition, count);");
-            W.Line("operationState.CheckBuffer();");
+            if (!payloadOnly)
+            {
+                W.Line("int countPosition = operationState.BeginCollection();");
+                W.Line("int count = 0;");
+            }
+            if (payloadOnly)
+                ImmutableTreeTraversal.Items(W, () => WriteElement("item"));
+            else
+            {
+                W.Line("foreach (var item in " + Source(local) + ")");
+                W.Open();
+                W.Line("count++;");
+                WriteElement("item");
+                W.Close();
+            }
+            if (!payloadOnly)
+            {
+                W.Line("operationState.EndCollection(countPosition, count);");
+                W.Line("operationState.CheckBuffer();");
+            }
             return;
         }
         if (Payload == null)
         {
+            if (payloadOnly)
+            {
+                ImmutableTreeTraversal.Items(W, () =>
+                {
+                    if (Text)
+                        W.Line("operationState.Write<TLuminProfile>(item);");
+                    else
+                    {
+                        W.Line("operationState.CheckBuffer();");
+                        W.Line("operationState.Write(in item);");
+                    }
+                });
+                return;
+            }
             var lines = new List<string>();
             InterfaceTraversal.Counted(lines, Scalar, local, outlineText);
             foreach (string line in lines)
                 W.Line(line);
             return;
         }
-        W.Line("int countPosition = operationState.BeginCollection();");
-        W.Line("int count = 0;");
-        W.Line("foreach (var item in " + local + ")");
-        W.Open();
+        if (!payloadOnly)
+        {
+            W.Line("int countPosition = operationState.BeginCollection();");
+            W.Line("int count = 0;");
+        }
         var body = new List<string>();
         string elementExit = "end" + _ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _ends++;
         body.Add("operationState.CheckBuffer();");
-        body.Add("count++;");
+        if (!payloadOnly) body.Add("count++;");
         body.Add("var v = item;");
         BinaryEmitter.AddSequenceElementWrite(body, Payload, "v", elementExit, "operationState", 0, W, _writeNames, ref _ends,
             ref _cursors, ref _spans);
-        foreach (string line in body)
-            W.Line(line);
-        W.Close();
+        void EmitBody()
+        {
+            foreach (string line in body)
+                W.Line(line);
+        }
+        if (payloadOnly)
+            ImmutableTreeTraversal.Items(W, EmitBody);
+        else
+        {
+            W.Line("foreach (var item in " + local + ")");
+            W.Open();
+            EmitBody();
+            W.Close();
+        }
         W.Blank();
-        W.Line("operationState.EndCollection(countPosition, count);");
-        W.Line("operationState.CheckBuffer();");
+        if (!payloadOnly)
+        {
+            W.Line("operationState.EndCollection(countPosition, count);");
+            W.Line("operationState.CheckBuffer();");
+        }
     }
 
     /// <summary>Emits the bottom-first packable write of a nonnull stack through <c>operationState</c>.</summary>
@@ -178,26 +221,29 @@ internal sealed partial class EnumerableOwnerContext
             ReadBlock(span);
             return;
         }
-        string slot = span + "[blockIndex]";
-        if (array != null)
-        {
-            W.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(" + array + "!);");
-            W.Line("for (nint blockIndex = 0; blockIndex < length; blockIndex++)");
-            slot = "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, blockIndex)";
-        }
-        else
-            W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
+        W.Line("if (length != 0)");
+        W.Open();
+        string first = array == null ? Marshal + ".GetReference(" + span + ")" :
+            "global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(" + array + "!)";
+        W.Line("ref var first = ref " + first + ";");
+        W.Line("int blockIndex = 0;");
+        W.Line("do");
+        W.Open();
+        W.Line("ref var slot = ref " + Memory + ".Add(ref first, (nint)(uint)blockIndex);");
         W.Open();
         W.Line("if (operationState.PeekIsNullObject())");
-        W.Indented(() => W.Line(slot + " = default!;"));
+        W.Indented(() => W.Line("slot = default!;"));
         W.Open();
-        W.Line("ref " + Scalar + " payloadItem = ref " + slot + "!;");
+        W.Line("ref " + Scalar + " payloadItem = ref slot!;");
         var body = new List<string>();
         BinaryEmitter.AddSequenceElementRead(body, Payload, "payloadItem", null, W, _readNames, ref _readCursors, ref _readStrings,
             ref _readEnds);
         foreach (string line in body)
             W.Line(line);
         W.Close();
+        W.Close();
+        W.Close();
+        W.Line("while (++blockIndex < length);");
         W.Close();
     }
 
@@ -210,26 +256,26 @@ internal sealed partial class EnumerableOwnerContext
             ReadContiguous(span);
             return;
         }
-        if (Payload != null || Forwarded)
+        if (Payload != null || Forwarded || Text)
         {
-            W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
+            W.Line("if (length != 0)");
             W.Open();
+            W.Line("ref var firstBlockItem = ref " + Marshal + ".GetReference(" + span + ");");
+            W.Line("int blockIndex = 0;");
+            W.Line("do");
+            W.Open();
+            W.Line("ref var blockSlot = ref " + Memory + ".Add(ref firstBlockItem, (nint)(uint)blockIndex);");
             if (foreign)
             {
                 W.Line(Scalar + " blockItem = default!;");
                 ReadElement("blockItem");
-                W.Line(span + "[blockIndex] = blockItem;");
+                W.Line("blockSlot = blockItem;");
             }
             else
-                ReadElement(span + "[blockIndex]");
+                ReadElement("blockSlot");
             W.Close();
-            return;
-        }
-        if (Text)
-        {
-            if (foreign) W.Line(span + ".Clear();");
-            W.Line("for (int blockIndex = 0; blockIndex < length; blockIndex++)");
-            W.Indented(() => W.Line("operationState.Read<TLuminProfile>(ref " + span + "[blockIndex]);"));
+            W.Line("while (++blockIndex < length);");
+            W.Close();
             return;
         }
         W.Line("operationState.Read(");
@@ -267,24 +313,37 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Emits the pooled block read of <c>length</c> raw elements and hands the pooled array to the family.</summary>
     /// <param name="consume">The statements that consume the pooled array and <c>length</c>.</param>
-    internal void PooledRead(Action consume, Action? onReadFailure = null)
+    internal void PooledRead(Action consume, Action? onReadFailure = null, bool rawBlock = false)
     {
         W.Line("var pooled = global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Rent(length);");
         W.Line("try");
         W.Open();
-        W.Line("global::System.Span<" + Scalar + "> items = pooled.AsSpan(0, length);");
-        if (onReadFailure == null)
+        if (rawBlock)
+        {
+            W.Line("ref var firstItem = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+            W.Line("operationState.Read(ref " + Memory + ".As<" + Scalar + ", byte>(ref firstItem), checked(length * " +
+                Memory + ".SizeOf<" + Scalar + ">()));");
+        }
+        else if (onReadFailure == null)
+        {
+            W.Line("var items = new global::System.Span<" + Scalar + ">(pooled, 0, length);");
             ReadBlock("items", foreign: true);
+        }
         else
         {
             W.Line("int completed = 0;");
             W.Line("try");
             W.Open();
-            W.Line("for (; completed < length; completed++)");
+            W.Line("if (length != 0)");
+            W.Open();
+            W.Line("ref var firstItem = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+            W.Line("do");
             W.Open();
             W.Line(Scalar + " current = default!;");
             ReadElement("current");
-            W.Line("items[completed] = current;");
+            W.Line(Memory + ".Add(ref firstItem, (nint)(uint)completed) = current;");
+            W.Close();
+            W.Line("while (++completed < length);");
             W.Close();
             W.Close();
             W.Line("catch (global::System.Exception error)");
@@ -667,12 +726,21 @@ internal static class EnumerableOwnerTemplate
                     }
                     if (fact.Family.Kind == CollectionKind.Wrapper)
                         WrapperTraversal.WriteJsonIntegers(context);
+                    if (ImmutableInterfaceOwnerFile.WriteJsonTree(context, set, elementOwner))
+                    {
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     bool wroteFrozenRun = fact.Family.Kind == CollectionKind.Frozen &&
                         JsonIntegerRunWriter.TryEmit(w, set, sequence, scalar, "value.Items.AsSpan()", readBeforeSeparator: true);
                     if (spec.InterfaceListReuse || spec.InterfaceSetTraversal)
                         InterfaceJsonTraversal.Write(w, set, sequence, scalar, elementOwner, jsonWriter, spec.InterfaceSetTraversal);
                     else if (!wroteFrozenRun)
                     {
+                        bool scopedFallback = context.Supports("CopyImmutableHashTree") || context.Supports("CopyImmutableSortedTree");
+                        if (scopedFallback)
+                            w.Open();
                         w.Line("bool isFirst = true;");
                         w.Line("foreach (var item in value)");
                         w.Open();
@@ -689,6 +757,8 @@ internal static class EnumerableOwnerTemplate
                             w.Line(elementOwner + ".Write<TLuminProfile>(ref writer, temp);");
                         }
                         w.Close();
+                        if (scopedFallback)
+                            w.Close();
                     }
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
@@ -748,6 +818,12 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
+                    if (ImmutableInterfaceOwnerFile.ReadJsonTree(context, elementOwner, jsonReader))
+                    {
+                        w.Close();
+                        w.Blank();
+                        break;
+                    }
                     if (spec.InterfaceListReuse && (context.Payload != null || context.Forwarded))
                     {
                         // The original interface read refills an existing array of the same exact length in place and otherwise
@@ -756,11 +832,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("if (value is " + scalar + "[] existingArray && existingArray.GetType() == typeof(" + scalar + "[]) &&");
                         w.Line("    reader.CountArrayElements<TLuminProfile>() == existingArray.Length)");
                         w.Open();
-                        w.Line("for (int i = 0; i < existingArray.Length; i++)");
-                        w.Open();
-                        w.Line("reader.Read<TLuminProfile>();");
-                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref existingArray[i]);");
-                        w.Close();
+                        ReadJsonArraySlots("existingArray");
                         w.Blank();
                         w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
                         w.Line("return;");
@@ -807,7 +879,7 @@ internal static class EnumerableOwnerTemplate
                         w.Blank();
                         break;
                     }
-                    if (spec.ArrayReuse && context.Payload != null)
+                    if (spec.ArrayReuse && (context.Payload != null || context.Text))
                     {
                         // The original array read refills an existing array of the same exact length in place and otherwise
                         // stages the elements in a pooled array.
@@ -815,11 +887,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("if (value is not null && value.GetType() == typeof(" + sequence + ") &&");
                         w.Line("    reader.CountArrayElements<TLuminProfile>() == value.Length)");
                         w.Open();
-                        w.Line("for (int i = 0; i < value.Length; i++)");
-                        w.Open();
-                        w.Line("reader.Read<TLuminProfile>();");
-                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref value[i]);");
-                        w.Close();
+                        ReadJsonArraySlots("value");
                         w.Blank();
                         w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
                         w.Line("return;");
@@ -842,7 +910,7 @@ internal static class EnumerableOwnerTemplate
                         w.Open();
                         w.Line("int newCapacity = capacity * 2;");
                         w.Line("var newBuffer = " + pool + ".Rent(newCapacity);");
-                        w.Line("buffer.AsSpan(0, count).CopyTo(newBuffer);");
+                        w.Line("global::System.Array.Copy(buffer, newBuffer, count);");
                         w.Line(pool + ".Return(buffer, clearArray: true);");
                         w.Line("buffer = newBuffer;");
                         w.Line("capacity = newBuffer.Length;");
@@ -850,10 +918,10 @@ internal static class EnumerableOwnerTemplate
                         w.Blank();
                         w.Line(scalar + " item = default!;");
                         w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
-                        w.Line("buffer[count++] = item;");
+                        w.Line(memory + ".Add(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(buffer), (nint)(uint)count++) = item;");
                         w.Close();
                         w.Blank();
-                        w.Line("value = buffer.AsSpan(0, count).ToArray();");
+                        w.Line("value = new global::System.ReadOnlySpan<" + scalar + ">(buffer, 0, count).ToArray();");
                         w.Close();
                         w.Line("finally");
                         w.Open();
@@ -944,6 +1012,23 @@ internal static class EnumerableOwnerTemplate
                     w.Blank();
                     break;
             }
+        }
+
+        void ReadJsonArraySlots(string array)
+        {
+            // Each caller has checked exact array identity and length before borrowing its slots.
+            w.Line("int length = " + array + ".Length;");
+            w.Line("if (length != 0)");
+            w.Open();
+            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(" + array + ");");
+            w.Line("int index = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("reader.Read<TLuminProfile>();");
+            w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref " + memory + ".Add(ref first, (nint)(uint)index));");
+            w.Close();
+            w.Line("while (++index < length);");
+            w.Close();
         }
     }
 }

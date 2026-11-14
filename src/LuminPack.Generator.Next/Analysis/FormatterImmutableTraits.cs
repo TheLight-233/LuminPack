@@ -5,6 +5,56 @@ namespace LuminPack.SourceGenerator.Next.Analysis;
 /// <summary>Checks optional immutable storage operations in the consumer's runtime.</summary>
 internal static class FormatterImmutableTraits
 {
+    internal static bool HasTreeCopy(Compilation compilation, string family, int arity)
+    {
+        var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        var tree = compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`" + arity);
+        var span = compilation.GetTypeByMetadataName("System.Span`1");
+        var pair = compilation.GetTypeByMetadataName("System.Collections.Generic.KeyValuePair`2");
+        return storage is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && tree is { IsSealed: true } && span != null &&
+            (arity == 1 || pair != null) && storage.GetMembers("CopyTo").OfType<IMethodSymbol>().Any(method =>
+            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnsVoid: true } &&
+            method.Arity == arity && method.Parameters.Length == 2 &&
+            method.TypeParameters.All(Unconstrained) &&
+            method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, tree.Construct(method.TypeParameters.Cast<ITypeSymbol>().ToArray())) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(arity == 1 ? method.TypeParameters[0] :
+                pair!.Construct(method.TypeParameters.Cast<ITypeSymbol>().ToArray()))));
+    }
+
+    internal static bool HasSetFactory(Compilation compilation, string family, string name)
+    {
+        var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        var set = compilation.GetTypeByMetadataName("System.Collections.Immutable." + family + "`1");
+        return storage is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && set != null &&
+            storage.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsByRef: false, ReturnsByRefReadonly: false } &&
+                method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                Unconstrained(method.TypeParameters[0]) && !method.TypeParameters[0].HasNotNullConstraint &&
+                method.Parameters[0].Type is IArrayTypeSymbol { IsSZArray: true } array &&
+                SymbolEqualityComparer.Default.Equals(array.ElementType, method.TypeParameters[0]) &&
+                method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, set.Construct(method.TypeParameters[0])));
+    }
+
+    // A nullable annotation such as 'notnull' does not change the storage constraints of the tree parameters.
+    private static bool Unconstrained(ITypeParameterSymbol parameter) =>
+        !parameter.HasValueTypeConstraint && !parameter.HasReferenceTypeConstraint && !parameter.HasUnmanagedTypeConstraint &&
+        !parameter.HasConstructorConstraint && parameter.ConstraintTypes.IsEmpty;
+
+    internal static bool HasRawTreeWriter(Compilation compilation, INamedTypeSymbol tree)
+    {
+        var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
+        var writer = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        return storage is { IsStatic: true, DeclaredAccessibility: Accessibility.Public } && writer != null &&
+            storage.GetMembers("WriteRaw").OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, Arity: 1, ReturnsVoid: true } &&
+                method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.IsEmpty &&
+                method.Parameters.Length == 2 && method.Parameters[0].RefKind == RefKind.Ref &&
+                method.Parameters[1].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, writer) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, tree.Construct(method.TypeParameters[0])));
+    }
+
     /// <summary>Checks the runtime's complete immutable-list raw writer.</summary>
     /// <param name="compilation">The consumer's referenced runtime and framework metadata.</param>
     /// <returns>Whether the generated list root can call the direct output operation.</returns>
