@@ -87,18 +87,24 @@ internal static class ImmutableArrayPayloadOwnerFile
                     w.Line("global::System.ReadOnlySpan<" + elementType + "> items = value.AsSpan();");
                     w.Line("operationState.EnsureAdditionalCapacity(4);");
                     w.Line("operationState.Write(items.Length);");
-                    w.Line("for (int i = 0; i < items.Length; i++)");
+                    w.Line("if (!items.IsEmpty)");
+                    w.Open();
+                    w.Line("ref var firstItem = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(items);");
+                    w.Line("int index = 0;");
+                    w.Line("do");
                     w.Open();
                     w.Line("operationState.CheckBuffer();");
                     var writeBody = new List<string>();
                     int ends = 0, cursors = 0, spans = 0;
-                    var names = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1 };
+                    var names = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1, ["input"] = 1, ["firstItem"] = 1, ["index"] = 1 };
                     string elementExit = "end" + ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     ends++;
-                    BinaryEmitter.AddSequenceElementWrite(writeBody, element, "items[i]!", elementExit, "operationState", 0, w, names,
+                    BinaryEmitter.AddSequenceElementWrite(writeBody, element, memory + ".Add(ref firstItem, (nint)(uint)index)!", elementExit, "operationState", 0, w, names,
                         ref ends, ref cursors, ref spans);
                     foreach (string line in writeBody)
                         w.Line(line);
+                    w.Close();
+                    w.Line("while (++index < items.Length);");
                     w.Close();
                     w.Blank();
                     w.Line("operationState.CheckBuffer();");
@@ -183,7 +189,8 @@ internal static class ImmutableArrayPayloadOwnerFile
                     w.Open();
                     w.Line("array = " + packMarshal + ".AllocateUninitializedArray<" + elementType + ">(length);");
                     w.Line("ref var first = ref " + packMarshal + ".GetNotNullArrayReference(array!);");
-                    w.Line("for (nint i = 0; i < length; i++)");
+                    w.Line("int i = 0;");
+                    w.Line("do");
                     w.Open();
                     var readNames = new Dictionary<string, int>(StringComparer.Ordinal) { ["value"] = 1 };
                     int readCursors = 0, readStrings = 0, readEnds = 0;
@@ -191,11 +198,12 @@ internal static class ImmutableArrayPayloadOwnerFile
                     readNames["value"] = readNames["value"] + 1;
                     var readBody = new List<string>();
                     BinaryEmitter.AddSequenceElementRead(readBody, element, elementLocal,
-                        "ref " + elementType + " " + elementLocal + " = ref " + memory + ".Add(ref first, unchecked(i))!;",
+                        "ref " + elementType + " " + elementLocal + " = ref " + memory + ".Add(ref first, (nint)(uint)i)!;",
                         w, readNames, ref readCursors, ref readStrings, ref readEnds);
                     foreach (string line in readBody)
                         w.Line(line);
                     w.Close();
+                    w.Line("while (++i < length);");
                     w.Close();
                     w.Close();
                     w.Close();
@@ -271,15 +279,19 @@ internal static class ImmutableArrayPayloadOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("if (value.Length == 0)");
+                    w.Line("var items = value.AsSpan();");
+                    w.Line("if (items.IsEmpty)");
                     w.Open();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Line("return;");
                     w.Close();
                     w.Blank();
                     w.Line("bool isFirst = true;");
-                    w.Line("foreach (var item in value)");
+                    w.Line("ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(items);");
+                    w.Line("int i = 0;");
+                    w.Line("do");
                     w.Open();
+                    w.Line("var item = " + memory + ".Add(ref first, (nint)(uint)i);");
                     w.Line("if (!isFirst)");
                     w.Line("    writer.WriteByteRaw<TLuminProfile>((byte)',');");
                     w.Line("else");
@@ -288,6 +300,7 @@ internal static class ImmutableArrayPayloadOwnerFile
                     foreach (string line in JsonEmitter.SequenceElementWrite(element, "item", "end0", w))
                         w.Line(line);
                     w.Close();
+                    w.Line("while (++i < items.Length);");
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
@@ -383,8 +396,7 @@ internal static class ImmutableArrayPayloadOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("var finalArray = new " + elementType + "[count];");
-                    w.Line("global::System.Array.Copy(buffer, finalArray, count);");
+                    w.Line("var finalArray = global::LuminPack.Code.LuminPackMarshal.CreateReadOnlySpan(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(buffer), count).ToArray();");
                     w.Line("value = global::System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsImmutableArray(finalArray);");
                     w.Close();
                     w.Line("finally");

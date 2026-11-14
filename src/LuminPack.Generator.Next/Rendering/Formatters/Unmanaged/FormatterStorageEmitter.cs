@@ -205,10 +205,15 @@ internal static class FormatterStorageEmitter
         string helper = "global::LuminPack.Utility.LuminPortable<" + model.Type + ", " + Layout(model) + ">";
         w.Line("int storageStart = " + (model.Volatile ? "0;" : write ? helper + ".Pack(ref storageFirst, " + count + ", ref storageWire);" : helper + ".Unpack(ref storageWire, " + count + ", ref storageFirst);"));
         w.Line("storageWire = ref " + Unsafe + ".Add(ref storageWire, (nint)storageStart * " + model.WireSize + ");");
-        w.Line("for (int storageIndex = storageStart; storageIndex < " + count + "; storageIndex++)");
+        w.Line("if (storageStart < " + count + ")");
         w.Open();
-        Transfer(w, model, Unsafe + ".Add(ref storageFirst, storageIndex)", "storageWire", write);
+        w.Line("int storageIndex = storageStart;");
+        w.Line("do");
+        w.Open();
+        Transfer(w, model, Unsafe + ".Add(ref storageFirst, (nint)(uint)storageIndex)", "storageWire", write);
         w.Line("storageWire = ref " + Unsafe + ".Add(ref storageWire, " + model.WireSize + ");");
+        w.Close();
+        w.Line("while (++storageIndex < " + count + ");");
         w.Close();
         w.Line(state + ".Advance(checked(" + count + " * " + model.WireSize + "));");
     }

@@ -26,7 +26,7 @@ internal static class ReadOnlyCollectionOwnerFile
         w.Line("var array = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + t + ">(length);");
         w.Line("if (length != 0)");
         w.Open();
-        w.Line("global::System.Span<" + t + "> span = array.AsSpan();");
+        w.Line("var span = global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(array), length);");
         WrapperTraversal.ReadSpan(c, "span");
         w.Close();
         w.Line("value = new " + c.Sequence + "(array);");

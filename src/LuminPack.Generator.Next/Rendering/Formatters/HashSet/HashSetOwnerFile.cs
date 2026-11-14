@@ -49,11 +49,13 @@ internal static class HashSetOwnerFile
         }
         w.Line("var setView = global::LuminPack.Code.LuminPackMarshal.GetHashSetView(value);");
         w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(setView._entries);");
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int index = 0;");
+        w.Line("do");
         w.Open();
         w.Line("ref var entry = ref " + c.Memory + ".Add(ref entryRef, (nint)(uint)index);");
         c.ReadElement("entry.Value");
         w.Close();
+        w.Line("while (++index < length);");
         w.Blank();
         w.Line("global::LuminPack.Code.LuminPackMarshal.RebuildHashSetBuckets(setView, length);");
     }

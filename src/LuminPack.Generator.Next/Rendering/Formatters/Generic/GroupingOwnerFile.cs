@@ -145,12 +145,17 @@ internal static class GroupingOwnerFile
                 w.Close();
                 w.Blank();
                 w.Line("var dict = new global::System.Collections.Generic.Dictionary<" + key + ", " + grouping + ">();");
-                w.Line("for (int index = 0; index < length; index++)");
+                w.Line("if (length != 0)");
+                w.Open();
+                w.Line("int index = 0;");
+                w.Line("do");
                 w.Open();
                 w.Line(grouping + " group = default !;");
                 w.Line(groupingOwner + ".Read<" + c.Profile + ">(ref reader, ref group);");
                 w.Line("if (group != null)");
                 w.Indented(() => w.Line("dict.Add(group.Key, group);"));
+                w.Close();
+                w.Line("while (++index < length);");
                 w.Close();
                 w.Line("value = new " + ownedLookup + "(dict);");
             },

@@ -39,12 +39,14 @@ internal static class CollectionOwnerFile
         // An existing wrapper may hold any list; only an exact List matches the storage view.
         w.Line("if (view.items is null || view.items.GetType() != typeof(global::System.Collections.Generic.List<" + t + ">))");
         w.Open();
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("int index = 0;");
+        w.Line("do");
         w.Open();
         w.Line(t + " item = default;");
         c.ReadElement("item");
         w.Line("value.Add(item);");
         w.Close();
+        w.Line("while (++index < length);");
         w.Line("goto operationComplete_RootRead;");
         w.Close();
         w.Blank();

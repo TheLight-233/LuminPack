@@ -447,10 +447,13 @@ internal static class ImmutableSortedSetOwnerFile
                     w.Line("var builder = global::LuminPack.Utility.LuminImmutableBuilders.RentSortedSet<" + scalar + ">();");
                     w.Line("try");
                     w.Open();
-                    w.Line("for (int i = 0; i < count; i++)");
+                    w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(buffer);");
+                    w.Line("int i = 0;");
+                    w.Line("do");
                     w.Open();
-                    w.Line("builder.Add(buffer[i]);");
+                    w.Line("builder.Add(global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)i));");
                     w.Close();
+                    w.Line("while (++i < count);");
                     w.Blank();
                     w.Line("value = builder.ToImmutable();");
                     w.Close();

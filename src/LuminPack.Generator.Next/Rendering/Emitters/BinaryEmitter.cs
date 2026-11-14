@@ -411,7 +411,7 @@ internal static partial class BinaryEmitter
         string WriteHint(List<string> body, bool union) => model.HasDictionary ? null :
             (model.StreamRecord || model.MixedRecord) &&
             !body.Any(line => line.IndexOf(".SerializeMember_", StringComparison.Ordinal) >= 0) &&
-            !body.Any(line => line.StartsWith("for (", StringComparison.Ordinal) || line.StartsWith("foreach (", StringComparison.Ordinal) ||
+            !body.Any(line => line == "do" || line.StartsWith("for (", StringComparison.Ordinal) || line.StartsWith("foreach (", StringComparison.Ordinal) ||
                 line.StartsWith("static ", StringComparison.Ordinal))
             ? ((model.StreamRecord ? InvocationCounter.Count(body) <= 16 : DirectInlining.MixedWrite(model, union)) ? inline : null)
             : (model.StreamRecord || model.MixedRecord ? null : (DirectInlining.Write(model, union, Sizes(body)) ? inline : null));

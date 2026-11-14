@@ -107,10 +107,19 @@ internal static class ContiguousOwnerFile
                 }
                 else
                 {
-                    w.Line("foreach (var item in memory.Span)");
+                    w.Line("var items = memory.Span;");
+                    w.Line("int length = items.Length;");
+                    w.Line("if (length != 0)");
                     w.Open();
+                    w.Line("ref var firstItem = ref " + MemoryMarshal + ".GetReference(items);");
+                    w.Line("int index = 0;");
+                    w.Line("do");
+                    w.Open();
+                    w.Line("var item = " + Unsafe + ".Add(ref firstItem, (nint)(uint)index);");
                     w.Line("count++;");
                     FormatterElementEmitter.Write(w, set, element, "item");
+                    w.Close();
+                    w.Line("while (++index < length);");
                     w.Close();
                 }
                 w.Close();
@@ -143,9 +152,17 @@ internal static class ContiguousOwnerFile
                 w.Line("writer.WriteStrings<TLuminProfile>(items);");
             else
             {
-                w.Line("foreach (ref readonly var item in items)");
+                w.Line("int length = items.Length;");
+                w.Line("if (length != 0)");
                 w.Open();
+                w.Line("ref var firstItem = ref " + MemoryMarshal + ".GetReference(items);");
+                w.Line("int index = 0;");
+                w.Line("do");
+                w.Open();
+                w.Line("ref readonly var item = ref " + Unsafe + ".Add(ref firstItem, (nint)(uint)index);");
                 FormatterElementEmitter.Write(w, set, element, "item");
+                w.Close();
+                w.Line("while (++index < length);");
                 w.Close();
             }
 
@@ -397,12 +414,22 @@ internal static class ContiguousOwnerFile
 
             void JsonElements(string items)
             {
-                w.Line("foreach (var item in " + items + ")");
+                w.Line("var items = " + items + ";");
+                w.Line("int length = items.Length;");
+                w.Line("if (length != 0)");
                 w.Open();
+                w.Line("ref var firstItem = ref " + MemoryMarshal + ".GetReference(items);");
+                w.Line("int index = 0;");
+                w.Line("do");
+                w.Open();
+                // Capture the item before writing the separator, which can call the output owner.
+                w.Line("var item = " + Unsafe + ".Add(ref firstItem, (nint)(uint)index);");
                 w.Line("if (!first) writer.WriteByteRaw<TLuminProfile>((byte)',');");
                 w.Line("first = false;");
                 w.Line("writer.SetFirstElement(true);");
                 w.Line(FormatterElementEmitter.Owner(set, element) + ".Write<TLuminProfile>(ref writer, in item);");
+                w.Close();
+                w.Line("while (++index < length);");
                 w.Close();
             }
         }

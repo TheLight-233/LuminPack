@@ -46,10 +46,19 @@ internal static class ImmutableArrayMemberWriter
             body.Add("global::System.ReadOnlySpan<" + member.Scalar + "> items = " + local + ".AsSpan();");
             body.Add("writer.EnsureAdditionalCapacity(4);");
             body.Add("writer.Write(items.Length);");
-            body.Add("for (int i = 0; i < items.Length; i++)");
+            body.Add("if (!items.IsEmpty)");
+            body.Add("{");
+            string first = BinaryEmitter.RoleName(names, "firstItem");
+            string index = BinaryEmitter.RoleName(names, "index");
+            body.Add("ref var " + first + " = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(items);");
+            body.Add("int " + index + " = 0;");
+            body.Add("do");
             body.Add("{");
             body.Add("writer.CheckBuffer();");
-            BinaryEmitter.AddSequenceElementWrite(body, member.Nested, "items[i]!", elementExit, "writer", depth, w, names, ref ends, ref cursors, ref spans);
+            BinaryEmitter.AddSequenceElementWrite(body, member.Nested,
+                w.A("Unsafe") + ".Add(ref " + first + ", (nint)(uint)" + index + ")!", elementExit, "writer", depth, w, names, ref ends, ref cursors, ref spans);
+            body.Add("}");
+            body.Add("while (++" + index + " < items.Length);");
             body.Add("}");
             body.Add("");
             body.Add("writer.CheckBuffer();");

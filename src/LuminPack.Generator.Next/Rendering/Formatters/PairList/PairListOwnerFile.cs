@@ -26,7 +26,9 @@ internal static class PairListOwnerFile
         w.Line("else");
         w.Indented(() => w.Line("value.Clear();"));
         w.Blank();
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("if (length == 0) goto operationComplete_RootRead;");
+        w.Line("int index = 0;");
+        w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
@@ -34,5 +36,6 @@ internal static class PairListOwnerFile
         c.ReadMember(c.Value, "v");
         w.Line("value.Add(new " + c.Pair + "(k!, v));");
         w.Close();
+        w.Line("while (++index < length);");
     }
 }

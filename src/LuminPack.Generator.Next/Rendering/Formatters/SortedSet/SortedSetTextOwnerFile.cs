@@ -62,17 +62,32 @@ internal static class SortedSetTextOwnerFile
             w.Close();
             return;
         }
-        w.Line("for (int index = 0; index < length; index++)");
+        w.Line("if (length != 0)");
+        w.Open();
+        w.Line("int index = 0;");
+        w.Line("do");
         w.Open();
         w.Line(c.Scalar + " item = default!;");
         c.ReadElement("item");
         w.Line("value.Add(item);");
         w.Close();
+        w.Line("while (++index < length);");
+        w.Close();
 
         void AddPrefix(string count)
         {
-            w.Line("for (int prefix = 0; prefix < " + count + "; prefix++)");
-            w.Indented(() => w.Line("value.Add(pooled[prefix]);"));
+            w.Open();
+            w.Line("if (" + count + " != 0)");
+            w.Open();
+            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+            w.Line("int prefix = 0;");
+            w.Line("do");
+            w.Open();
+            w.Line("value.Add(" + c.Memory + ".Add(ref first, (nint)(uint)prefix));");
+            w.Close();
+            w.Line("while (++prefix < " + count + ");");
+            w.Close();
+            w.Close();
         }
     }
 }

@@ -192,7 +192,8 @@ internal static class ImmutableArrayOwnerFile
                     w.Open();
                     w.Line("array = " + packMarshal + ".AllocateUninitializedArray<" + scalar + ">(length);");
                     w.Line("ref var first = ref " + packMarshal + ".GetNotNullArrayReference(array!);");
-                    w.Line("for (nint i = 0; i < length; i++)");
+                    w.Line("int i = 0;");
+                    w.Line("do");
                     w.Open();
                     if (ownerRead)
                     {
@@ -200,12 +201,13 @@ internal static class ImmutableArrayOwnerFile
                         w.Indented(() =>
                         {
                             w.Line("ref operationState,");
-                            w.Line("ref " + memory + ".Add(ref first, unchecked(i))!);");
+                            w.Line("ref " + memory + ".Add(ref first, (nint)(uint)i)!);");
                         });
                     }
                     else
-                        w.Line("operationState.Read(ref " + memory + ".Add(ref first, unchecked(i))!);");
+                        w.Line("operationState.Read(ref " + memory + ".Add(ref first, (nint)(uint)i)!);");
                     w.Close();
+                    w.Line("while (++i < length);");
                     w.Close();
                     w.Close();
                     w.Close();
@@ -287,17 +289,22 @@ internal static class ImmutableArrayOwnerFile
                     w.Close();
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
-                    w.Line("if (value.Length == 0)");
+                    w.Line("var items = value.AsSpan();");
+                    w.Line("if (items.IsEmpty)");
                     w.Open();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Line("return;");
                     w.Close();
                     w.Blank();
                     w.Line("bool isFirst = true;");
-                    w.Line("foreach (var item in value)");
+                    w.Line("ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(items);");
+                    w.Line("int i = 0;");
+                    w.Line("do");
                     w.Open();
+                    w.Line("var item = " + memory + ".Add(ref first, (nint)(uint)i);");
                     JsonSequenceElementWriter.Emit(w, set, sequence, scalar, elementOwner);
                     w.Close();
+                    w.Line("while (++i < items.Length);");
                     w.Blank();
                     w.Line("writer.WriteArrayEnd<TLuminProfile>();");
                     w.Close();
@@ -393,8 +400,7 @@ internal static class ImmutableArrayOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("var finalArray = new " + scalar + "[count];");
-                    w.Line("global::System.Array.Copy(buffer, finalArray, count);");
+                    w.Line("var finalArray = global::LuminPack.Code.LuminPackMarshal.CreateReadOnlySpan(ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(buffer), count).ToArray();");
                     w.Line("value = global::System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsImmutableArray(finalArray);");
                     w.Close();
                     w.Line("finally");
