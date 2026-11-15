@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using LuminPack.SourceGenerator.Next.Diagnostics;
 
 namespace LuminPack.SourceGenerator.Next.Rendering;
 
@@ -57,7 +58,7 @@ internal sealed class AliasTable
                 _used |= 1 << index;
                 return alias;
             }
-        throw new ArgumentException("Unknown generated alias: " + alias, nameof(alias));
+        return LuminPackExceptionHelper.ThrowArgument<string>("Unknown generated alias: " + alias, nameof(alias));
     }
 
     /// <summary>Writes the alias directives the renderer used.</summary>

@@ -45,7 +45,11 @@ internal static class RectangularArrayOwnerFile
         return SpecialOwnerFile.Render(set, operations, suffix, type, referenceType: true,
             (w, _) => BinaryWrite(w), (w, _) => BinaryRead(w), (w, _) => JsonWrite(w),
             (w, context) => JsonRead(w, context.JsonReader),
-            w => { if (layout != null) FormatterStorageEmitter.Support(w, layout); },
+            w =>
+            {
+                if (layout != null)
+                    FormatterStorageEmitter.Support(w, layout);
+            },
             outlineJson: true, outlineBinaryWrite: !raw && layout == null);
 
         void BinaryWrite(CodeWriter w)

@@ -53,24 +53,31 @@ internal static class FrozenSetOwnerFile
         bool rented = c.Supports("RentFrozenSet");
         w.Line(rented ? "var hashSet = global::LuminPack.Utility.LuminFrozenConstruction.RentSet<" + c.Scalar + ">(length);" :
             "var hashSet = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">(length);");
-        if (rented) { w.Line("try"); w.Open(); }
+        if (rented)
+        {
+            w.Line("try");
+            w.Open();
+        }
         if (!c.Counted && c.Supports("ReadFrozenRawSetItems"))
         {
             w.Line("global::LuminPack.Utility.LuminFrozenConstruction.AddRawSetItems(ref operationState, hashSet, length);");
             w.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(hashSet);");
         }
-        else c.PooledRead(() =>
+        else
         {
-            w.Blank();
-            w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
-            w.Line("int index = 0;");
-            w.Line("do");
-            w.Open();
-            w.Line("hashSet.Add(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
-            w.Close();
-            w.Line("while (++index < length);");
-            w.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(hashSet);");
-        });
+            c.PooledRead(() =>
+            {
+                w.Blank();
+                w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
+                w.Line("int index = 0;");
+                w.Line("do");
+                w.Open();
+                w.Line("hashSet.Add(" + c.Memory + ".Add(ref first, (nint)(uint)index));");
+                w.Close();
+                w.Line("while (++index < length);");
+                w.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(hashSet);");
+            });
+        }
         if (rented)
         {
             w.Close();
@@ -87,14 +94,19 @@ internal static class FrozenSetOwnerFile
         c.W.Line(c.Supports("RentFrozenSet") ?
             "var staged = global::LuminPack.Utility.LuminFrozenConstruction.RentSet<" + c.Scalar + ">(0);" :
             "var staged = new global::System.Collections.Generic.HashSet<" + c.Scalar + ">();");
-        if (c.Supports("RentFrozenSet")) { c.W.Line("try"); c.W.Open(); }
+        if (c.Supports("RentFrozenSet"))
+        {
+            c.W.Line("try");
+            c.W.Open();
+        }
     }
 
     /// <summary>Freezes the elements and returns a leased builder on every exit.</summary>
     private static void AfterJson(EnumerableOwnerContext c)
     {
         c.W.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(staged);");
-        if (!c.Supports("RentFrozenSet")) return;
+        if (!c.Supports("RentFrozenSet"))
+            return;
         c.W.Close();
         c.W.Line("finally");
         c.W.Open();

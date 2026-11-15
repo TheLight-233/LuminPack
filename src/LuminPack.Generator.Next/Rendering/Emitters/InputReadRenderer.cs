@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
@@ -329,7 +330,7 @@ internal static class InputReadRenderer
             if (source != null && GenericFormatterReuse.ClosedSource(source) is { } closed)
                 source = closed;
             if (source == null)
-                throw new InvalidOperationException("The checked copy of '" + target + "' has no source.");
+                return LuminPackExceptionHelper.ThrowInvalidOperation<string>("The checked copy of '" + target + "' has no source.");
             foreach (string line in source.Split('\n'))
             {
                 string trimmed = line.TrimEnd('\r');
@@ -439,7 +440,7 @@ internal static class InputReadRenderer
             }
         }
         if (method < 0)
-            throw new InvalidOperationException("The checked copy of '" + target + "' has no root read.");
+            return LuminPackExceptionHelper.ThrowInvalidOperation<string>("The checked copy of '" + target + "' has no root read.");
         int parametersOpen = method + signature.Length - 1;
         int parametersClose = Matching(container, parametersOpen, '(', ')');
         string parameters = container.Substring(parametersOpen, parametersClose - parametersOpen + 1);
@@ -508,7 +509,7 @@ internal static class InputReadRenderer
         if (forward)
         {
             if (compressed)
-                throw new InvalidOperationException("The compressed read of '" + target + "' requires a closed root body.");
+                return LuminPackExceptionHelper.ThrowInvalidOperation<string>("The compressed read of '" + target + "' requires a closed root body.");
             helper.Append("                global::LuminPack.").Append(redirect.OwnerPrefix).Append(target)
                 .Append(".Read<").Append(profile).Append(">(ref reader, ref value);\n");
         }

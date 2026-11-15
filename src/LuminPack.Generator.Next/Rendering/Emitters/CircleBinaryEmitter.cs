@@ -427,6 +427,7 @@ internal static partial class CircleBinaryEmitter
         internal readonly HashSet<string> Stack = new HashSet<string>(StringComparer.Ordinal);
     }
 
+    /// <summary>Emits a reference-tracked record read, including its null and back-reference exits.</summary>
     /// <param name="state">The shared read state.</param>
     /// <param name="model">The record read at this position.</param>
     /// <param name="body">The statements receiving the read.</param>

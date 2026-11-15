@@ -21,8 +21,10 @@ internal static class ConcurrentBagTextOwnerFile
 
     private static void Write(EnumerableOwnerContext c)
     {
-        if (c.Forwarded) c.BagSnapshotWrite("value");
-        else c.CountedWrite("value");
+        if (c.Forwarded)
+            c.BagSnapshotWrite("value");
+        else
+            c.CountedWrite("value");
     }
 
     private static void Read(EnumerableOwnerContext c)

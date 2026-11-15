@@ -10,7 +10,7 @@ internal static class ScalarOwnerFile
 {
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>
-    /// <param name="scalar">The scalar keyword, such as <c>long</c>.</param>
+    /// <param name="identity">The scalar type spelling, with its underlying keyword for an enum.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, string identity, GeneratedOperations operations)

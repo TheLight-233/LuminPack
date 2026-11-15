@@ -69,11 +69,6 @@ internal static partial class TypeModelFactory
         return session.Options.Equals(options) ? session.Create(symbol, depth: 0) : new Session(compilation, options).Create(symbol, depth: 0);
     }
 
-    /// <summary>Captures declaration diagnostics through the compilation-owned analysis cache.</summary>
-    /// <param name="symbol">The attributed declaration.</param>
-    /// <param name="compilation">The consuming compilation.</param>
-    /// <param name="options">The immutable project facts.</param>
-    /// <returns>The declaration diagnostics.</returns>
     /// <summary>Models the closed root type of an ordinary serializer call as the member shape that publishes its shared owner.</summary>
     /// <param name="type">The closed call payload type.</param>
     /// <param name="compilation">The consumer compilation.</param>
@@ -93,6 +88,11 @@ internal static partial class TypeModelFactory
         return session.Options.Equals(options) ? session.ClassifyRoot(type) : new Session(compilation, options).ClassifyRoot(type);
     }
 
+    /// <summary>Captures declaration diagnostics through the compilation-owned analysis cache.</summary>
+    /// <param name="symbol">The attributed declaration.</param>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <param name="options">The immutable project facts.</param>
+    /// <returns>The declaration diagnostics.</returns>
     internal static DiagnosticInfo[] Diagnose(INamedTypeSymbol symbol, Compilation compilation, GeneratorOptions options)
     {
         Session session = Sessions.GetValue(compilation, item => new Session(item, options));
@@ -2792,10 +2792,18 @@ internal static partial class TypeModelFactory
                         (type.IsValueType ? "value." : "value?.") + Identifier(method.Name) + "();";
                     switch (name)
                     {
-                        case OnSerializingAttribute: writeBefore.Add(call); break;
-                        case OnSerializedAttribute: writeAfter.Add(call); break;
-                        case OnDeserializingAttribute: readBefore.Add(call); break;
-                        default: readAfter.Add(call); break;
+                        case OnSerializingAttribute:
+                            writeBefore.Add(call);
+                            break;
+                        case OnSerializedAttribute:
+                            writeAfter.Add(call);
+                            break;
+                        case OnDeserializingAttribute:
+                            readBefore.Add(call);
+                            break;
+                        default:
+                            readAfter.Add(call);
+                            break;
                     }
                 }
             if (writeBefore.Count == 0 && writeAfter.Count == 0 && readBefore.Count == 0 && readAfter.Count == 0)

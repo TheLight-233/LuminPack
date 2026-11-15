@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using LuminPack.SourceGenerator.Next.Diagnostics;
 
 namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -73,7 +74,7 @@ internal static class PublicationLayout
         for (int index = 0; index < Aliases.Length; index++)
             if (Aliases[index].Alias == alias)
                 return index;
-        throw new ArgumentException(alias);
+        return LuminPackExceptionHelper.ThrowArgument<int>(alias);
     }
 
     /// <summary>Applies the publication layout to a completed file.</summary>

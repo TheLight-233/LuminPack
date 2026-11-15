@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Binary;
 using LuminPack.SourceGenerator.Next.Rendering.Json;
@@ -93,8 +94,7 @@ internal static class SharedFormatterPublisher
                 continue;
             RenderSequenceOwner? render = fact.ForwardedType != null ? fact.Family.Forwarded :
                 fact.Element != null ? fact.Family.Payload : fact.Scalar == "string" ? fact.Family.Text : fact.Family.Scalar;
-            if (render == null)
-                throw new InvalidOperationException("A formatter requirement has no registered element renderer.");
+            render ??= LuminPackExceptionHelper.ThrowInvalidOperation<RenderSequenceOwner>("A formatter requirement has no registered element renderer.");
             SequenceOwnerFact sequence = fact;
             RenderSequenceOwner chosenRender = render;
             if (shared.TrySequence(fact.DeclaredType, selected, chosen => chosenRender(set, sequence, chosen), fact))
@@ -114,8 +114,10 @@ internal static class SharedFormatterPublisher
                     string name = ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type));
                     string binary = BinaryRenderer.Instance.Render(model.Payload, renderContext);
                     string json = JsonRenderer.Instance.Render(model.Payload, renderContext);
-                    if (binary.Length != 0) yield return new KeyValuePair<string, string>(PayloadBinaryHint(name), binary);
-                    if (json.Length != 0) yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Payload_" + name + ".Json.g.cs", json);
+                    if (binary.Length != 0)
+                        yield return new KeyValuePair<string, string>(PayloadBinaryHint(name), binary);
+                    if (json.Length != 0)
+                        yield return new KeyValuePair<string, string>("LuminPack.SharedFormatters/Payload_" + name + ".Json.g.cs", json);
                 }
                 continue;
             }

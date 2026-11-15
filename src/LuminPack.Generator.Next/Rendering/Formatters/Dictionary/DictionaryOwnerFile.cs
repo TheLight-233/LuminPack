@@ -519,7 +519,8 @@ internal static class DictionaryOwnerFile
                     w.Line("int index = 0;");
                     w.Line("do");
                     w.Open();
-                    if (key == "string") w.Line("var prior = previous.MoveNext() ? previous.Current : default;");
+                    if (key == "string")
+                        w.Line("var prior = previous.MoveNext() ? previous.Current : default;");
                     w.Line(key == "string" ? "string key = prior.Key;" : key + " key = default!;");
                     ReadMember("operationState", key, "key");
                     if (pair)

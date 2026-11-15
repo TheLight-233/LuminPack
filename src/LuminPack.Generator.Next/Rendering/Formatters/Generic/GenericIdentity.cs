@@ -129,8 +129,10 @@ internal static class GenericIdentity
         for (int i = 0; i < text.Length; i++)
         {
             char item = text[i];
-            if (item is '<' or '[' or '(') depth++;
-            if (item is '>' or ']' or ')') depth--;
+            if (item is '<' or '[' or '(')
+                depth++;
+            if (item is '>' or ']' or ')')
+                depth--;
             if (item == ',' && depth == 0)
             {
                 arguments.Add(text.Substring(start, i - start));

@@ -145,7 +145,8 @@ internal sealed partial class EnumerableOwnerContext
         string elementExit = "end" + _ends.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _ends++;
         body.Add("operationState.CheckBuffer();");
-        if (incrementCount) body.Add("count++;");
+        if (incrementCount)
+            body.Add("count++;");
         body.Add("var v = " + item + ";");
         BinaryEmitter.AddSequenceElementWrite(body, Payload, "v", elementExit, "operationState", 0, W, _writeNames, ref _ends,
             ref _cursors, ref _spans);
@@ -536,7 +537,11 @@ internal static class EnumerableOwnerTemplate
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead,
-            () => { if (element?.Layout != null && context.Contiguous) FormatterStorageEmitter.Support(w, element.Layout); });
+            () =>
+            {
+                if (element?.Layout != null && context.Contiguous)
+                    FormatterStorageEmitter.Support(w, element.Layout);
+            });
 
         void EmitBinaryWrite(FormatterSection section)
         {

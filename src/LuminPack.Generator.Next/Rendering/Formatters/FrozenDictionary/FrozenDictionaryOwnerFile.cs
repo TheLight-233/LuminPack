@@ -57,7 +57,11 @@ internal static class FrozenDictionaryOwnerFile
         bool rented = c.Supports("RentFrozenDictionary");
         w.Line(rented ? "var dict = global::LuminPack.Utility.LuminFrozenConstruction.RentDictionary<" + c.Key + ", " + c.Value + ">(length);" :
             "var dict = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">(length);");
-        if (rented) { w.Line("try"); w.Open(); }
+        if (rented)
+        {
+            w.Line("try");
+            w.Open();
+        }
         w.Line("int remaining = length;");
         w.Line("do");
         w.Open();
@@ -85,14 +89,19 @@ internal static class FrozenDictionaryOwnerFile
         c.W.Line(c.Supports("RentFrozenDictionary") ?
             "var staged = global::LuminPack.Utility.LuminFrozenConstruction.RentDictionary<" + c.Key + ", " + c.Value + ">(0);" :
             "var staged = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">();");
-        if (c.Supports("RentFrozenDictionary")) { c.W.Line("try"); c.W.Open(); }
+        if (c.Supports("RentFrozenDictionary"))
+        {
+            c.W.Line("try");
+            c.W.Open();
+        }
     }
 
     /// <summary>Freezes the staged entries and returns the builder on every exit.</summary>
     private static void AfterJson(PairedDictionaryContext c)
     {
         c.W.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(staged);");
-        if (!c.Supports("RentFrozenDictionary")) return;
+        if (!c.Supports("RentFrozenDictionary"))
+            return;
         c.W.Close();
         c.W.Line("finally");
         c.W.Open();

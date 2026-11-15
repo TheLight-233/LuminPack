@@ -124,9 +124,15 @@ internal static class WrapperTraversal
         {
             switch (line)
             {
-                case "{": c.W.Open(); break;
-                case "}": c.W.Close(); break;
-                default: c.W.Line(line); break;
+                case "{":
+                    c.W.Open();
+                    break;
+                case "}":
+                    c.W.Close();
+                    break;
+                default:
+                    c.W.Line(line);
+                    break;
             }
         }
     }

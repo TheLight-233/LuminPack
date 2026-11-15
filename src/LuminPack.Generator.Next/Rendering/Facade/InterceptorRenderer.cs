@@ -359,14 +359,30 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             writer.Append(body, start, marker - start);
             switch (body.AsSpan(marker + 1, end - marker - 1))
             {
-                case "TYPE": writer.Append(type); break;
-                case "PROFILE": writer.Append(profile); break;
-                case "MEASURE": writer.Append(measure); break;
-                case "WRITE": writer.Append(target).Append("(ref writer, in value);"); break;
-                case "WRITEDIRECT": writer.Append("LuminPackSerializer.WriteExact_").Append(rootName).Append("(ref writer, in directValue);"); break;
-                case "FALLBACKWRITE": writer.Append(target).Append("(ref fallbackWriter, in value);"); break;
-                case "READ": writer.Append(target).Append("(ref reader, ref value);"); break;
-                default: writer.Append(body, marker, end - marker + 1); break;
+                case "TYPE":
+                    writer.Append(type);
+                    break;
+                case "PROFILE":
+                    writer.Append(profile);
+                    break;
+                case "MEASURE":
+                    writer.Append(measure);
+                    break;
+                case "WRITE":
+                    writer.Append(target).Append("(ref writer, in value);");
+                    break;
+                case "WRITEDIRECT":
+                    writer.Append("LuminPackSerializer.WriteExact_").Append(rootName).Append("(ref writer, in directValue);");
+                    break;
+                case "FALLBACKWRITE":
+                    writer.Append(target).Append("(ref fallbackWriter, in value);");
+                    break;
+                case "READ":
+                    writer.Append(target).Append("(ref reader, ref value);");
+                    break;
+                default:
+                    writer.Append(body, marker, end - marker + 1);
+                    break;
             }
             start = end + 1;
         }

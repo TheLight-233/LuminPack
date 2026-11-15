@@ -16,17 +16,16 @@ internal static partial class BinaryEmitter
     private const string Profile = "TLuminProfile";
     private const string Constraint = "where TLuminProfile : struct, ILuminPackOptions";
 
-    /// <summary>Emits the complete binary file body.</summary>
-    /// <param name="model">The covered type.</param>
-    /// <param name="w">The file writer.</param>
-    /// <param name="operations">The operations the project calls. The members of the others are left out, as the operation
-    /// filter removes them from a finished file; the declarations that hold them stay.</param>
     /// <summary>Spells the fail-closed body of a rejected payload operation.</summary>
     /// <param name="reason">The first rejected shape.</param>
     /// <returns>The statement.</returns>
     internal static string RejectUnsupported(string reason) => "global::LuminPack.Security.LuminPackInputPolicy.RejectUnsupported(" +
         Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(reason, true) + ");";
 
+    /// <summary>Emits the complete binary file body.</summary>
+    /// <param name="model">The covered type.</param>
+    /// <param name="w">The file writer.</param>
+    /// <param name="operations">The operations selected for emission.</param>
     internal static void Emit(PayloadRenderModel model, CodeWriter w, GeneratedOperations operations)
     {
         bool writes = (operations & GeneratedOperations.BinaryWrite) != 0, reads = (operations & GeneratedOperations.BinaryRead) != 0;
@@ -1937,10 +1936,6 @@ internal static partial class BinaryEmitter
         return found;
     }
 
-    /// <summary>Writes a mirror's field declarations, reproducing an explicit-layout offset where one is declared.</summary>
-    /// <param name="w">The file writer.</param>
-    /// <param name="fields">The mirror field declarations in storage order.</param>
-    /// <param name="offsets">The explicit-layout offset per field, or -1, or null.</param>
     /// <summary>Renders only the root-private layout mirror of a payload whose binary operations another owner renders.</summary>
     /// <param name="model">The payload.</param>
     /// <param name="aliases">The alias mask the consumer leaves available.</param>
@@ -1976,6 +1971,10 @@ internal static partial class BinaryEmitter
         return PublicationLayout.LayOutLines(w.Complete(false));
     }
 
+    /// <summary>Writes a mirror's field declarations and any explicit-layout offsets.</summary>
+    /// <param name="w">The file writer.</param>
+    /// <param name="fields">The mirror field declarations in storage order.</param>
+    /// <param name="offsets">The explicit layout offsets, with -1 for an unspecified offset, or null for sequential layout.</param>
     internal static void MirrorFields(CodeWriter w, string[] fields, int[] offsets)
     {
         for (int index = 0; index < fields.Length; index++)
