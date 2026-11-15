@@ -46,10 +46,10 @@ public class Latin1VectorTranscoderTest
                 fixed (char* input = source)
                 fixed (byte* output = guarded)
                 {
-                    var actual = StringSerializer.TranscodeToUtf8(input, source.Length, output + 16, capacity, out char* remainingInput, out byte* remainingOutput);
+                    var actual = StringSerializer.TranscodeToUtf8(ref *input, source.Length, ref output[16], capacity, out int consumed, out int written);
                     Assert.Equal(status, actual);
-                    Assert.Equal(expectedRead, (int)(remainingInput - input));
-                    Assert.Equal(expectedWritten, (int)(remainingOutput - output - 16));
+                    Assert.Equal(expectedRead, consumed);
+                    Assert.Equal(expectedWritten, written);
                     Assert.True(expected.AsSpan(0, expectedWritten).SequenceEqual(guarded.AsSpan(16, expectedWritten)));
                     Assert.All(guarded.Take(16).Concat(guarded.Skip(capacity + 16)), item => Assert.Equal((byte)0xCC, item));
                 }

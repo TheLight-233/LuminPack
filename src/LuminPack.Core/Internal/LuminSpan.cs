@@ -8,14 +8,24 @@ namespace LuminPack.Internal;
 /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 #nullable disable
-public readonly unsafe ref struct LuminSpan<T>
+public readonly ref struct LuminSpan<T>
 {
 #if NET8_0_OR_GREATER
     internal readonly ref T _reference;
 #else
-    internal readonly IntPtr _reference;
-    private readonly object _dummy;
+    internal readonly Span<T> _reference;
 #endif
+
+    /// <summary>Gets the storage address on every target, including empty views.</summary>
+    private ref T Reference
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET8_0_OR_GREATER
+        get => ref _reference;
+#else
+        get => ref MemoryMarshal.GetReference(_reference);
+#endif
+    }
 
     internal readonly nint _length;
 
@@ -34,11 +44,7 @@ public readonly unsafe ref struct LuminSpan<T>
     public ref T this[int index]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-#if NET8_0_OR_GREATER
-        get => ref Unsafe.Add(ref _reference, (nint)(uint)index);
-#else
-        get => ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), (nint)(uint)index);
-#endif
+        get => ref Unsafe.Add(ref Reference, (nint)(uint)index);
     }
 
     /// <summary>Gets or sets the value associated with the supplied index or key.</summary>
@@ -46,11 +52,7 @@ public readonly unsafe ref struct LuminSpan<T>
     public ref T this[nint index]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-#if NET8_0_OR_GREATER
-        get => ref Unsafe.Add(ref _reference, index);
-#else
-        get => ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), index);
-#endif
+        get => ref Unsafe.Add(ref Reference, index);
     }
 
     /// <summary>Initializes a new instance of <c>LuminSpan</c>.</summary>
@@ -61,8 +63,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #if NET8_0_OR_GREATER
         _reference = ref MemoryMarshal.GetArrayDataReference(array);
 #else
-        _reference = (IntPtr)Unsafe.AsPointer(ref LuminPackMarshal.GetArrayDataReference(array));
-        _dummy = array;
+        _reference = MemoryMarshal.CreateSpan(ref LuminPackMarshal.GetArrayReference(array), 1);
 #endif
         _length = array.Length;
     }
@@ -75,8 +76,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #if NET8_0_OR_GREATER
         _reference = ref MemoryMarshal.GetReference(span);
 #else
-        _reference = (IntPtr)Unsafe.AsPointer(ref MemoryMarshal.GetReference(span));
-        _dummy = null;
+        _reference = MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(span), 1);
 #endif
         _length = span.Length;
     }
@@ -89,8 +89,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #if NET8_0_OR_GREATER
         _reference = ref MemoryMarshal.GetReference(span);
 #else
-        _reference = (IntPtr)Unsafe.AsPointer(ref MemoryMarshal.GetReference(span));
-        _dummy = null;
+        _reference = MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(span), 1);
 #endif
         _length = span.Length;
     }
@@ -104,8 +103,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #if NET8_0_OR_GREATER
         _reference = ref reference;
 #else
-        _reference = (IntPtr)Unsafe.AsPointer(ref reference);
-        _dummy = null;
+        _reference = MemoryMarshal.CreateSpan(ref reference, 1);
 #endif
         _length = length;
     }
@@ -119,38 +117,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #if NET8_0_OR_GREATER
         _reference = ref reference;
 #else
-        _reference = (IntPtr)Unsafe.AsPointer(ref reference);
-        _dummy = null;
-#endif
-        _length = length;
-    }
-
-    /// <summary>Initializes a new instance of <c>LuminSpan</c>.</summary>
-    /// <param name="ptr">The ptr used by this operation.</param>
-    /// <param name="length">The number of bytes or elements to process.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public LuminSpan(void* ptr, int length)
-    {
-#if NET8_0_OR_GREATER
-        _reference = ref Unsafe.AsRef<T>(ptr);
-#else
-        _reference = (IntPtr)ptr;
-        _dummy = null;
-#endif
-        _length = length;
-    }
-
-    /// <summary>Initializes a new instance of <c>LuminSpan</c>.</summary>
-    /// <param name="ptr">The ptr used by this operation.</param>
-    /// <param name="length">The number of bytes or elements to process.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public LuminSpan(void* ptr, nint length)
-    {
-#if NET8_0_OR_GREATER
-        _reference = ref Unsafe.AsRef<T>(ptr);
-#else
-        _reference = (IntPtr)ptr;
-        _dummy = null;
+        _reference = MemoryMarshal.CreateSpan(ref reference, 1);
 #endif
         _length = length;
     }
@@ -158,18 +125,7 @@ public readonly unsafe ref struct LuminSpan<T>
     /// <summary>Obtains the reference for the supplied input.</summary>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ref T GetReference()
-    {
-        ref T local = ref Unsafe.NullRef<T>();
-        if (_length != 0)
-#if NET8_0_OR_GREATER
-            local = _reference;
-#else
-            local = ref Unsafe.AsRef<T>(_reference.ToPointer());
-#endif
-
-        return ref local;
-    }
+    public ref T GetReference() => ref _length == 0 ? ref Unsafe.NullRef<T>() : ref Reference;
 
     /// <summary>Performs the offset step for the current operation.</summary>
     /// <param name="offset">The position at which the operation starts.</param>
@@ -177,11 +133,7 @@ public readonly unsafe ref struct LuminSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T Offset(int offset)
     {
-#if NET8_0_OR_GREATER
-        return ref Unsafe.Add(ref _reference, (nint)(offset));
-#else
-        return ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), (nint)(offset));
-#endif
+        return ref Unsafe.Add(ref Reference, (nint)(offset));
     }
 
     /// <summary>Performs the offset step for the current operation.</summary>
@@ -190,11 +142,7 @@ public readonly unsafe ref struct LuminSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T Offset(nint offset)
     {
-#if NET8_0_OR_GREATER
-        return ref Unsafe.Add(ref _reference, offset);
-#else
-        return ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), offset);
-#endif
+        return ref Unsafe.Add(ref Reference, offset);
     }
 
     /// <summary>Rejects object-based hashing for a stack-only span.</summary>
@@ -243,14 +191,14 @@ public readonly unsafe ref struct LuminSpan<T>
     /// <param name="right">The right used by this operation.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool operator ==(LuminSpan<T> left, LuminSpan<T> right) =>
-        left._reference.Equals(right._reference);
+        Unsafe.AreSame(ref left.Reference, ref right.Reference);
 
     /// <summary>Applies the <c>!=</c> operator to the supplied operands.</summary>
     /// <param name="left">The left used by this operation.</param>
     /// <param name="right">The right used by this operation.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool operator !=(LuminSpan<T> left, LuminSpan<T> right) =>
-        !left._reference.Equals(right._reference);
+        !Unsafe.AreSame(ref left.Reference, ref right.Reference);
 
     /// <summary>Performs the slice step for the current operation.</summary>
     /// <param name="start">The start used by this operation.</param>
@@ -262,11 +210,7 @@ public readonly unsafe ref struct LuminSpan<T>
             LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(start));
 
         nint newLen = _length - start;
-#if NET8_0_OR_GREATER
-        return new LuminSpan<T>(ref Unsafe.Add(ref _reference, unchecked((nint)(uint)(start))), newLen);
-#else
-        return new LuminSpan<T>(ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), unchecked((nint)(uint)(start))), (int)newLen);
-#endif
+        return new LuminSpan<T>(ref Unsafe.Add(ref Reference, unchecked((nint)(uint)(start))), newLen);
     }
 
     /// <summary>Performs the slice step for the current operation.</summary>
@@ -279,11 +223,7 @@ public readonly unsafe ref struct LuminSpan<T>
         if ((uint)start > (uint)_length || (uint)length > (uint)(_length - start))
             LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(start));
 
-#if NET8_0_OR_GREATER
-        return new LuminSpan<T>(ref Unsafe.Add(ref _reference, unchecked((nint)(uint)(start))), length);
-#else
-        return new LuminSpan<T>(ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), unchecked((nint)(uint)(start))), length);
-#endif
+        return new LuminSpan<T>(ref Unsafe.Add(ref Reference, unchecked((nint)(uint)(start))), length);
     }
 
     /// <summary>Performs the as span step for the current operation.</summary>
@@ -291,11 +231,7 @@ public readonly unsafe ref struct LuminSpan<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<T> AsSpan()
     {
-#if NET8_0_OR_GREATER
-        return MemoryMarshal.CreateSpan(ref _reference, (int)_length);
-#else
-        return new Span<T>(_reference.ToPointer(), (int)_length);
-#endif
+        return MemoryMarshal.CreateSpan(ref Reference, (int)_length);
     }
 
     /// <summary>Performs the to array step for the current operation.</summary>
@@ -344,7 +280,7 @@ public readonly unsafe ref struct LuminSpan<T>
         /// <summary>Initializes a new instance of <c>Enumerator</c>.</summary>
         /// <param name="span">The buffer used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Enumerator(in LuminSpan<T> span)
+        internal Enumerator(scoped in LuminSpan<T> span)
         {
             _span = span;
             _index = -1;
@@ -362,11 +298,7 @@ public readonly unsafe ref struct LuminSpan<T>
         public readonly ref T Current
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-#if NET8_0_OR_GREATER
-            get => ref Unsafe.Add(ref _span._reference, _index);
-#else
-            get => ref Unsafe.Add(ref Unsafe.AsRef<T>(_span._reference.ToPointer()), _index);
-#endif
+            get => ref Unsafe.Add(ref _span.Reference, _index);
         }
     }
 }

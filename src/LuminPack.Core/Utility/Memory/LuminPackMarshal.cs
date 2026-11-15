@@ -649,7 +649,7 @@ public static partial class LuminPackMarshal
     }
 
     /// <summary>Gets the numeric address of a reference without an unsafe context.</summary>
-    /// <param name="reference">A reference into stationary storage: the stack, pinned arrays or native memory.</param>
+    /// <param name="reference">The reference whose current address is sampled. Keep the storage stationary when retaining the address.</param>
     /// <typeparam name="T">The referenced type.</typeparam>
     /// <returns>The address, which stays meaningful only while the storage cannot move.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -694,15 +694,11 @@ public static partial class LuminPackMarshal
     /// </summary>
     /// <param name="span">The buffer used by this operation.</param>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    /// <returns>The result of the operation.</returns>
+    /// <returns>The first element reference, including the address of an empty span.</returns>
+    /// <remarks>Validate the accessed range before dereferencing the result.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe T* GetUnderlyingPointer<T>(this Span<T> span) where T : unmanaged
-    {
-        fixed (T* ptr = &span.GetPinnableReference())
-        {
-            return ptr;
-        }
-    }
+    public static ref T GetUnderlyingReference<T>(this Span<T> span) where T : unmanaged
+        => ref MemoryMarshal.GetReference(span);
 
     /// <summary>
     /// Create a span from a reference without additional safety checks.
@@ -1120,16 +1116,16 @@ public static partial class LuminPackMarshal
         public ushort InterfaceCount;
         /// <summary>Stores the parent method table.</summary>
         [FieldOffset(16 /*0x10*/)]
-        public unsafe MethodTable* ParentMethodTable;
+        public nint ParentMethodTable;
         /// <summary>Stores the auxiliary data.</summary>
         [FieldOffset(32 /*0x20*/)]
-        public unsafe IntPtr* AuxiliaryData;
+        public nint AuxiliaryData;
         /// <summary>Stores the element type.</summary>
         [FieldOffset(48 /*0x30*/)]
-        public unsafe void* ElementType;
+        public nint ElementType;
         /// <summary>Stores the interface map.</summary>
         [FieldOffset(56)]
-        public unsafe MethodTable** InterfaceMap;
+        public nint InterfaceMap;
 
         /// <summary>Gets the has component size.</summary>
         public bool HasComponentSize => (this.Flags & 2147483648U /*0x80000000*/) > 0U;
@@ -1150,7 +1146,7 @@ public static partial class LuminPackMarshal
         /// <param name="mt1">The mt1 used by this operation.</param>
         /// <param name="mt2">The mt2 used by this operation.</param>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
-        internal static unsafe bool AreSameType(MethodTable* mt1, MethodTable* mt2) => mt1 == mt2;
+        internal static bool AreSameType(ref MethodTable mt1, ref MethodTable mt2) => Unsafe.AreSame(ref mt1, ref mt2);
 
         /// <summary>Gets the has default constructor.</summary>
         public bool HasDefaultConstructor
@@ -1240,7 +1236,7 @@ public static partial class LuminPackMarshal
         /// <param name="__pMTb_native">The p m tb native used by this operation.</param>
         /// <returns>The result of the operation.</returns>
         [DllImport("QCall", EntryPoint = "MethodTable_AreTypesEquivalent")]
-        public static extern unsafe int __PInvoke(MethodTable* __pMTa_native, MethodTable* __pMTb_native);
+        public static extern int __PInvoke(ref MethodTable __pMTa_native, ref MethodTable __pMTb_native);
 
         /// <summary>Obtains the num instance field bytes for the supplied input.</summary>
         /// <returns>The result of the operation.</returns>

@@ -49,8 +49,8 @@ namespace LuminPackUnitTest
                 fixed (byte* k = key)
                 fixed (byte* n = nonce)
                 {
-                    LuminPack.Cryptography.ChaCha20.Initialize(state, k, key.Length, n, nonce.Length, 1u);
-                    ChaCha20.Block(state, block);
+                    LuminPack.Cryptography.ChaCha20.Initialize(ref *state, ref *k, key.Length, ref *n, nonce.Length, 1u);
+                    ChaCha20.Block(ref *state, ref *block);
                 }
                 var actual = new byte[64];
                 System.Runtime.InteropServices.Marshal.Copy((IntPtr)block, actual, 0, 64);
@@ -234,12 +234,12 @@ namespace LuminPackUnitTest
                     byte* block2 = stackalloc byte[64];
                     byte* pair = stackalloc byte[128];
 
-                    ChaCha20.Initialize(state, k, key.Length, n, nonce.Length, c);
-                    ChaCha20.Block(state, block1);        // counter c
-                    ChaCha20.Block2(state, pair);         // counters c, c+1 (state untouched)
+                    ChaCha20.Initialize(ref *state, ref *k, key.Length, ref *n, nonce.Length, c);
+                    ChaCha20.Block(ref *state, ref *block1);        // counter c
+                    ChaCha20.Block2(ref *state, ref *pair);         // counters c, c+1 (state untouched)
 
                     state[12] = c + 1u;
-                    ChaCha20.Block(state, block2);        // counter c+1
+                    ChaCha20.Block(ref *state, ref *block2);        // counter c+1
 
                     var first = new byte[64];
                     var second = new byte[64];
@@ -274,13 +274,13 @@ namespace LuminPackUnitTest
                     byte* quad = stackalloc byte[256];
                     byte* single = stackalloc byte[64];
 
-                    ChaCha20.Initialize(state, k, key.Length, n, nonce.Length, c);
-                    ChaCha20.Block4(state, quad);         // counters c..c+3 (state untouched)
+                    ChaCha20.Initialize(ref *state, ref *k, key.Length, ref *n, nonce.Length, c);
+                    ChaCha20.Block4(ref *state, ref *quad);         // counters c..c+3 (state untouched)
 
                     for (int b = 0; b < 4; b++)
                     {
                         state[12] = c + (uint)b;
-                        ChaCha20.Block(state, single);    // counter c+b
+                        ChaCha20.Block(ref *state, ref *single);    // counter c+b
 
                         var expected = new byte[64];
                         var actual = new byte[64];
@@ -307,9 +307,9 @@ namespace LuminPackUnitTest
                 byte* simd = stackalloc byte[64];
                 byte* scalar = stackalloc byte[64];
 
-                ChaCha20.Initialize(state, k, key.Length, n, nonce.Length, 1u);
-                ChaCha20.Block(state, simd);          // dispatched to SSE2/AVX2 path
-                ChaCha20.BlockScalar(state, scalar);
+                ChaCha20.Initialize(ref *state, ref *k, key.Length, ref *n, nonce.Length, 1u);
+                ChaCha20.Block(ref *state, ref *simd);          // dispatched to SSE2/AVX2 path
+                ChaCha20.BlockScalar(ref *state, ref *scalar);
 
                 var a = new byte[64];
                 var b = new byte[64];

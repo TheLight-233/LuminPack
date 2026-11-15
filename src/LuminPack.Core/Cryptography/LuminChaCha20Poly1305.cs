@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using LuminPack.Code;
 #if NET8_0_OR_GREATER
@@ -45,7 +46,7 @@ namespace LuminPack.Cryptography
         /// <param name="plaintext">The plaintext used by this operation.</param>
         /// <param name="ciphertext">The ciphertext used by this operation.</param>
         /// <param name="tag">The tag used by this operation.</param>
-        public static unsafe void Encrypt(
+        public static void Encrypt(
             ReadOnlySpan<byte> key,
             ReadOnlySpan<byte> nonce,
             ReadOnlySpan<byte> aad,
@@ -59,77 +60,75 @@ namespace LuminPack.Cryptography
                 "ciphertext must be the same length as plaintext.");
             EnsureLength(tag.Length >= TagSize, "tag buffer must be at least 16 bytes.");
 
-            fixed (byte* keyPtr = &AsRef(key))
-            fixed (byte* noncePtr = &AsRef(nonce))
-            fixed (byte* ptPtr = &AsRef(plaintext))
-            fixed (byte* ctPtr = &AsRef(ciphertext))
-            {
-                uint* state = stackalloc uint[16];
-                byte* block = stackalloc byte[BlockSize * 4];
+            ref byte plaintextStart = ref AsRef(plaintext);
+            ref byte ciphertextStart = ref AsRef(ciphertext);
+            Span<uint> stateStorage = stackalloc uint[16];
+            ref uint state = ref MemoryMarshal.GetReference(stateStorage);
+            Span<byte> blockStorage = stackalloc byte[BlockSize * 4];
+            ref byte block = ref MemoryMarshal.GetReference(blockStorage);
 
-                // Derive the one-time Poly1305 key from keystream block 0.
-                ChaCha20.Initialize(state, keyPtr, key.Length, noncePtr, nonce.Length, 0);
-                ChaCha20.Block(state, block);
+            // Derive the one-time Poly1305 key from keystream block 0.
+            ChaCha20.Initialize(ref state, ref AsRef(key), key.Length, ref AsRef(nonce), nonce.Length, 0);
+            ChaCha20.Block(ref state, ref block);
 
-                Poly1305 poly = default;
-                poly.Initialize(block);
+            Poly1305 poly = default;
+            poly.Initialize(ref block);
 
-                // Authenticate the AAD (padded) first.
-                poly.Update(aad);
-                poly.PadTo16(aad.Length);
+            // Authenticate the AAD (padded) first.
+            poly.Update(aad);
+            poly.PadTo16(aad.Length);
 
-                // Encrypt using keystream counters 1, 2, 3, ...
-                uint counter = 1;
-                int length = plaintext.Length;
-                int pos = 0;
+            // Encrypt using keystream counters 1, 2, 3, ...
+            uint counter = 1;
+            int length = plaintext.Length;
+            int pos = 0;
 #if NET8_0_OR_GREATER
-                if (Avx512F.IsSupported)
+            if (Avx512F.IsSupported)
+            {
+                // Quad-block fast path: four keystream blocks (counters c..c+3) per call.
+                while (pos + (BlockSize * 4) <= length)
                 {
-                    // Quad-block fast path: four keystream blocks (counters c..c+3) per call.
-                    while (pos + (BlockSize * 4) <= length)
-                    {
-                        state[12] = counter;
-                        ChaCha20.Block4(state, block);
-                        XorKeystream(ctPtr + pos, ptPtr + pos, block, BlockSize * 4);
-                        counter += 4;
-                        pos += BlockSize * 4;
-                    }
+                    Unsafe.Add(ref state, 12) = counter;
+                    ChaCha20.Block4(ref state, ref block);
+                    XorKeystream(ref Unsafe.Add(ref ciphertextStart, pos), ref Unsafe.Add(ref plaintextStart, pos), ref block, BlockSize * 4);
+                    counter += 4;
+                    pos += BlockSize * 4;
                 }
-                if (Avx2.IsSupported)
-                {
-                    // Dual-block fast path: two keystream blocks (counters c, c+1) per call.
-                    while (pos + (BlockSize * 2) <= length)
-                    {
-                        state[12] = counter;
-                        ChaCha20.Block2(state, block);
-                        XorKeystream(ctPtr + pos, ptPtr + pos, block, BlockSize * 2);
-                        counter += 2;
-                        pos += BlockSize * 2;
-                    }
-                }
-#endif
-                while (pos < length)
-                {
-                    int take = length - pos;
-                    if (take > BlockSize)
-                        take = BlockSize;
-
-                    state[12] = counter++;
-                    ChaCha20.Block(state, block);
-
-                    XorKeystream(ctPtr + pos, ptPtr + pos, block, take);
-
-                    pos += take;
-                }
-
-                // Authenticate ciphertext, then the little-endian length fields.
-                poly.Update(ciphertext);
-                poly.PadTo16(ciphertext.Length);
-                poly.UpdateLength((ulong)aad.Length);
-                poly.UpdateLength((ulong)ciphertext.Length);
-
-                poly.Finish(tag);
             }
+            if (Avx2.IsSupported)
+            {
+                // Dual-block fast path: two keystream blocks (counters c, c+1) per call.
+                while (pos + (BlockSize * 2) <= length)
+                {
+                    Unsafe.Add(ref state, 12) = counter;
+                    ChaCha20.Block2(ref state, ref block);
+                    XorKeystream(ref Unsafe.Add(ref ciphertextStart, pos), ref Unsafe.Add(ref plaintextStart, pos), ref block, BlockSize * 2);
+                    counter += 2;
+                    pos += BlockSize * 2;
+                }
+            }
+#endif
+            while (pos < length)
+            {
+                int take = length - pos;
+                if (take > BlockSize)
+                    take = BlockSize;
+
+                Unsafe.Add(ref state, 12) = counter++;
+                ChaCha20.Block(ref state, ref block);
+
+                XorKeystream(ref Unsafe.Add(ref ciphertextStart, pos), ref Unsafe.Add(ref plaintextStart, pos), ref block, take);
+
+                pos += take;
+            }
+
+            // Authenticate ciphertext, then the little-endian length fields.
+            poly.Update(ciphertext);
+            poly.PadTo16(ciphertext.Length);
+            poly.UpdateLength((ulong)aad.Length);
+            poly.UpdateLength((ulong)ciphertext.Length);
+
+            poly.Finish(tag);
         }
 
         /// <summary>
@@ -144,7 +143,7 @@ namespace LuminPack.Cryptography
         /// <param name="tag">The tag used by this operation.</param>
         /// <param name="plaintext">The plaintext used by this operation.</param>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
-        public static unsafe bool Decrypt(
+        public static bool Decrypt(
             ReadOnlySpan<byte> key,
             ReadOnlySpan<byte> nonce,
             ReadOnlySpan<byte> aad,
@@ -161,18 +160,17 @@ namespace LuminPack.Cryptography
             // Always compute the MAC before decrypting so no plaintext-dependent branch runs.
             Span<byte> computed = stackalloc byte[TagSize];
 
-            fixed (byte* keyPtr = &AsRef(key))
-            fixed (byte* noncePtr = &AsRef(nonce))
-            fixed (byte* ctPtr = &AsRef(ciphertext))
             {
-                uint* state = stackalloc uint[16];
-                byte* block = stackalloc byte[BlockSize * 4];
+                Span<uint> stateStorage = stackalloc uint[16];
+                ref uint state = ref MemoryMarshal.GetReference(stateStorage);
+                Span<byte> blockStorage = stackalloc byte[BlockSize * 4];
+                ref byte block = ref MemoryMarshal.GetReference(blockStorage);
 
-                ChaCha20.Initialize(state, keyPtr, key.Length, noncePtr, nonce.Length, 0);
-                ChaCha20.Block(state, block);
+                ChaCha20.Initialize(ref state, ref AsRef(key), key.Length, ref AsRef(nonce), nonce.Length, 0);
+                ChaCha20.Block(ref state, ref block);
 
                 Poly1305 poly = default;
-                poly.Initialize(block);
+                poly.Initialize(ref block);
 
                 poly.Update(aad);
                 poly.PadTo16(aad.Length);
@@ -189,15 +187,15 @@ namespace LuminPack.Cryptography
                 return false;
 
             // Tag verified — reveal the plaintext.
-            fixed (byte* keyPtr = &AsRef(key))
-            fixed (byte* noncePtr = &AsRef(nonce))
-            fixed (byte* ctPtr = &AsRef(ciphertext))
-            fixed (byte* ptPtr = &AsRef(plaintext))
+            ref byte ciphertextStart = ref AsRef(ciphertext);
+            ref byte plaintextStart = ref AsRef(plaintext);
             {
-                uint* state = stackalloc uint[16];
-                byte* block = stackalloc byte[BlockSize * 4];
+                Span<uint> stateStorage = stackalloc uint[16];
+                ref uint state = ref MemoryMarshal.GetReference(stateStorage);
+                Span<byte> blockStorage = stackalloc byte[BlockSize * 4];
+                ref byte block = ref MemoryMarshal.GetReference(blockStorage);
 
-                ChaCha20.Initialize(state, keyPtr, key.Length, noncePtr, nonce.Length, 0);
+                ChaCha20.Initialize(ref state, ref AsRef(key), key.Length, ref AsRef(nonce), nonce.Length, 0);
 
                 uint counter = 1;
                 int length = ciphertext.Length;
@@ -208,9 +206,9 @@ namespace LuminPack.Cryptography
                     // Quad-block fast path: four keystream blocks (counters c..c+3) per call.
                     while (pos + (BlockSize * 4) <= length)
                     {
-                        state[12] = counter;
-                        ChaCha20.Block4(state, block);
-                        XorKeystream(ptPtr + pos, ctPtr + pos, block, BlockSize * 4);
+                        Unsafe.Add(ref state, 12) = counter;
+                        ChaCha20.Block4(ref state, ref block);
+                        XorKeystream(ref Unsafe.Add(ref plaintextStart, pos), ref Unsafe.Add(ref ciphertextStart, pos), ref block, BlockSize * 4);
                         counter += 4;
                         pos += BlockSize * 4;
                     }
@@ -220,9 +218,9 @@ namespace LuminPack.Cryptography
                     // Dual-block fast path: two keystream blocks (counters c, c+1) per call.
                     while (pos + (BlockSize * 2) <= length)
                     {
-                        state[12] = counter;
-                        ChaCha20.Block2(state, block);
-                        XorKeystream(ptPtr + pos, ctPtr + pos, block, BlockSize * 2);
+                        Unsafe.Add(ref state, 12) = counter;
+                        ChaCha20.Block2(ref state, ref block);
+                        XorKeystream(ref Unsafe.Add(ref plaintextStart, pos), ref Unsafe.Add(ref ciphertextStart, pos), ref block, BlockSize * 2);
                         counter += 2;
                         pos += BlockSize * 2;
                     }
@@ -234,10 +232,10 @@ namespace LuminPack.Cryptography
                     if (take > BlockSize)
                         take = BlockSize;
 
-                    state[12] = counter++;
-                    ChaCha20.Block(state, block);
+                    Unsafe.Add(ref state, 12) = counter++;
+                    ChaCha20.Block(ref state, ref block);
 
-                    XorKeystream(ptPtr + pos, ctPtr + pos, block, take);
+                    XorKeystream(ref Unsafe.Add(ref plaintextStart, pos), ref Unsafe.Add(ref ciphertextStart, pos), ref block, take);
 
                     pos += take;
                 }
@@ -344,19 +342,27 @@ namespace LuminPack.Cryptography
         /// <param name="key">The key used to identify the entry.</param>
         /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET || NETSTANDARD
+        private static void XorKeystream(ref byte dst, ref byte src, ref byte key, int length)
+        {
+            ref byte d = ref dst;
+            ref byte s = ref src;
+            ref byte k = ref key;
+#else
         private static unsafe void XorKeystream(byte* dst, byte* src, byte* key, int length)
         {
+            ref byte d = ref *dst;
+            ref byte s = ref *src;
+            ref byte k = ref *key;
+#endif
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryXor(dst, src, key, length))
+            if (global::LuminPack.Core.LuminPackBurst.TryXor(ref d, ref s, ref k, length))
                 return;
 #endif
             int i = 0;
 #if NET8_0_OR_GREATER
             if (Avx512F.IsSupported)
             {
-                ref byte d = ref Unsafe.AsRef<byte>(dst);
-                ref byte s = ref Unsafe.AsRef<byte>(src);
-                ref byte k = ref Unsafe.AsRef<byte>(key);
                 for (; i + 64 <= length; i += 64)
                     Vector512.StoreUnsafe(Vector512.LoadUnsafe(ref s, (nuint)i) ^ Vector512.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
                 for (; i + 32 <= length; i += 32)
@@ -373,9 +379,6 @@ namespace LuminPack.Cryptography
             }
             if (Avx2.IsSupported)
             {
-                ref byte d = ref Unsafe.AsRef<byte>(dst);
-                ref byte s = ref Unsafe.AsRef<byte>(src);
-                ref byte k = ref Unsafe.AsRef<byte>(key);
                 for (; i + 32 <= length; i += 32)
                     Vector256.StoreUnsafe(Vector256.LoadUnsafe(ref s, (nuint)i) ^ Vector256.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
                 for (; i + 16 <= length; i += 16)
@@ -390,9 +393,6 @@ namespace LuminPack.Cryptography
             }
             if (Vector128.IsHardwareAccelerated)
             {
-                ref byte d = ref Unsafe.AsRef<byte>(dst);
-                ref byte s = ref Unsafe.AsRef<byte>(src);
-                ref byte k = ref Unsafe.AsRef<byte>(key);
                 for (; i + 16 <= length; i += 16)
                     Vector128.StoreUnsafe(Vector128.LoadUnsafe(ref s, (nuint)i) ^ Vector128.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
                 for (; i + 4 <= length; i += 4)
@@ -405,9 +405,6 @@ namespace LuminPack.Cryptography
             }
 #endif
             {
-                ref byte d = ref Unsafe.AsRef<byte>(dst);
-                ref byte s = ref Unsafe.AsRef<byte>(src);
-                ref byte k = ref Unsafe.AsRef<byte>(key);
                 for (; i + 4 <= length; i += 4)
                     Unsafe.WriteUnaligned(ref Unsafe.Add(ref d, unchecked((nint)(uint)(i))),
                         Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref s, unchecked((nint)(uint)(i)))) ^
@@ -445,7 +442,7 @@ namespace LuminPack.Cryptography
         /// <param name="span">The buffer used by this operation.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe ref byte AsRef(ReadOnlySpan<byte> span)
+        private static ref byte AsRef(ReadOnlySpan<byte> span)
             => ref System.Runtime.InteropServices.MemoryMarshal.GetReference(span);
 
         /// <summary>Constant-time byte comparison (no early exit on mismatch).</summary>

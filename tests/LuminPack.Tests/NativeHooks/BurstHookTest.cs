@@ -245,12 +245,12 @@ public sealed unsafe class BurstHookTest : IDisposable
             var text = new Span<char>(inputBase + inputOffset, length);
             for (int index = 0; index < length; index++) text[index] = (char)('A' + index % 26);
             destination.AsSpan().Fill(0xA5);
-            var status = StringSerializer.TranscodeToUtf8((char*)(inputBase + inputOffset), length,
-                outputBase + outputOffset, capacity, out char* inputEnd, out byte* outputEnd);
+            var status = StringSerializer.TranscodeToUtf8(ref *(char*)(inputBase + inputOffset), length,
+                ref outputBase[outputOffset], capacity, out int consumed, out int produced);
             int written = Math.Min(length, capacity);
             Assert.Equal(capacity < length ? OperationStatus.DestinationTooSmall : OperationStatus.Done, status);
-            Assert.Equal(written, (int)(inputEnd - (char*)(inputBase + inputOffset)));
-            Assert.Equal(written, (int)(outputEnd - (outputBase + outputOffset)));
+            Assert.Equal(written, consumed);
+            Assert.Equal(written, produced);
             for (int index = 0; index < written; index++) Assert.Equal((byte)text[index], destination[outputOffset + index]);
             for (int index = 0; index < outputOffset; index++) Assert.Equal((byte)0xA5, destination[index]);
             for (int index = outputOffset + written; index < destination.Length; index++) Assert.Equal((byte)0xA5, destination[index]);
@@ -272,12 +272,12 @@ public sealed unsafe class BurstHookTest : IDisposable
         {
             for (int index = 0; index < length; index++) source[inputOffset + index] = (byte)('A' + index % 26);
             destination.AsSpan().Fill(0xA5);
-            var status = StringSerializer.TranscodeToUtf16(inputBase + inputOffset, length,
-                (char*)(outputBase + outputOffset), capacity, out byte* inputEnd, out char* outputEnd);
+            var status = StringSerializer.TranscodeToUtf16(ref inputBase[inputOffset], length,
+                ref *(char*)(outputBase + outputOffset), capacity, out int consumed, out int produced);
             int written = Math.Min(length, capacity);
             Assert.Equal(capacity < length ? OperationStatus.DestinationTooSmall : OperationStatus.Done, status);
-            Assert.Equal(written, (int)(inputEnd - (inputBase + inputOffset)));
-            Assert.Equal(written, (int)(outputEnd - (char*)(outputBase + outputOffset)));
+            Assert.Equal(written, consumed);
+            Assert.Equal(written, produced);
             for (int index = 0; index < written; index++)
             {
                 Assert.Equal(source[inputOffset + index], destination[outputOffset + index * 2 + (BitConverter.IsLittleEndian ? 0 : 1)]);
@@ -407,11 +407,11 @@ public sealed unsafe class BurstHookTest : IDisposable
     public void ClearDoesNotInvalidateCapturedCall()
     {
         LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, Copy = &ClearAndCopy });
-        byte[] input = Enumerable.Range(0, 64).Select(i => (byte)i).ToArray(), output = new byte[64];
+        byte[] input = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray(), output = new byte[32];
         if (IntPtr.Size == 8)
-            LuminPackMarshal.CopyBlockUnaligned(ref output[0], ref input[0], 64);
+            LuminPackMarshal.CopyBlockUnaligned(ref output[0], ref input[0], 32);
         else
-            Assert.True(LuminPackBurst.TryCopy(ref output[0], ref input[0], 64));
+            Assert.True(LuminPackBurst.TryCopy(ref output[0], ref input[0], 32));
         Assert.Equal(input, output);
         Assert.False(LuminPackBurst.IsRegistered);
     }
@@ -674,7 +674,7 @@ public sealed unsafe class BurstHookTest : IDisposable
     {
         uint* copy = stackalloc uint[16];
         for (int i = 0; i < 16; i++) copy[i] = state[i];
-        for (int i = 0; i < blocks; i++) { copy[12] = state[12] + (uint)i; ChaCha20.BlockScalar(copy, output + i * 64); }
+        for (int i = 0; i < blocks; i++) { copy[12] = state[12] + (uint)i; ChaCha20.BlockScalar(ref *copy, ref output[i * 64]); }
     }
 
     /// <summary>Supports exact in-place input/output aliasing.</summary>

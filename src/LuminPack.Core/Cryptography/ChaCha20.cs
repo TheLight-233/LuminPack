@@ -55,76 +55,76 @@ namespace LuminPack.Cryptography
         /// </summary>
         /// <param name="state">The reusable state associated with the operation.</param>
         /// <param name="output">The destination receiving the result.</param>
-        public static unsafe void Block(uint* state, byte* output)
+        public static void Block(ref uint state, ref byte output)
         {
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 1))
+            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(ref state, ref output, 1))
                 return;
 #endif
 #if NET8_0_OR_GREATER
             if (UseSse2)
             {
-                BlockSse2(state, output);
+                BlockSse2(ref state, ref output);
                 return;
             }
 #endif
-            BlockScalar(state, output);
+            BlockScalar(ref state, ref output);
         }
 
         /// <summary>
-        /// Computes two consecutive 64-byte keystream blocks (counters <c>state[12]</c> and
-        /// <c>state[12]+1</c>) in one call, writing 128 output bytes to <paramref name="output"/>.
+        /// Computes two consecutive 64-byte keystream blocks (counters <c>Unsafe.Add(ref state, 12)</c> and
+        /// <c>Unsafe.Add(ref state, 12)+1</c>) in one call, writing 128 output bytes to <paramref name="output"/>.
         /// The input <paramref name="state"/> is never modified.
         /// </summary>
         /// <param name="state">The reusable state associated with the operation.</param>
         /// <param name="output">The destination receiving the result.</param>
-        public static unsafe void Block2(uint* state, byte* output)
+        public static void Block2(ref uint state, ref byte output)
         {
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 2))
+            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(ref state, ref output, 2))
                 return;
 #endif
 #if NET8_0_OR_GREATER
             if (UseAvx2)
             {
-                BlockAvx2x2(state, output);
+                BlockAvx2x2(ref state, ref output);
                 return;
             }
 #endif
             // Safe fallback (the AEAD fast path never calls Block2 without AVX2; kept for correctness).
-            uint counter = state[12];
-            Block(state, output);
-            state[12] = counter + 1u;
-            Block(state, output + 64);
-            state[12] = counter;
+            uint counter = Unsafe.Add(ref state, 12);
+            Block(ref state, ref output);
+            Unsafe.Add(ref state, 12) = counter + 1u;
+            Block(ref state, ref Unsafe.Add(ref output, 64));
+            Unsafe.Add(ref state, 12) = counter;
         }
 
         /// <summary>
-        /// Computes four consecutive 64-byte keystream blocks (counters <c>state[12]</c> through
-        /// <c>state[12]+3</c>) in one call, writing 256 output bytes to <paramref name="output"/>.
+        /// Computes four consecutive 64-byte keystream blocks (counters <c>Unsafe.Add(ref state, 12)</c> through
+        /// <c>Unsafe.Add(ref state, 12)+3</c>) in one call, writing 256 output bytes to <paramref name="output"/>.
         /// The input <paramref name="state"/> is never modified.
         /// </summary>
         /// <param name="state">The reusable state associated with the operation.</param>
         /// <param name="output">The destination receiving the result.</param>
-        public static unsafe void Block4(uint* state, byte* output)
+        public static void Block4(ref uint state, ref byte output)
         {
 #if NETSTANDARD2_1
-            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(state, output, 4))
+            if (global::LuminPack.Core.LuminPackBurst.TryChaCha20(ref state, ref output, 4))
                 return;
 #endif
 #if NET8_0_OR_GREATER
             if (UseAvx512)
             {
-                BlockAvx512x4(state, output);
+                BlockAvx512x4(ref state, ref output);
                 return;
             }
 #endif
             // Safe fallback (the AEAD fast path never calls Block4 without AVX-512; kept for correctness).
-            uint counter = state[12];
-            Block2(state, output);
-            state[12] = counter + 2u;
-            Block2(state, output + 128);
-            state[12] = counter;
+            uint counter = Unsafe.Add(ref state, 12);
+            Block2(ref state, ref output);
+            Unsafe.Add(ref state, 12) = counter + 2u;
+            Block2(ref state, ref Unsafe.Add(ref output, 128));
+            Unsafe.Add(ref state, 12) = counter;
         }
 
         /// <summary>
@@ -134,12 +134,12 @@ namespace LuminPack.Cryptography
         /// </summary>
         /// <param name="state">The reusable state associated with the operation.</param>
         /// <param name="output">The destination receiving the result.</param>
-        public static unsafe void BlockScalar(uint* state, byte* output)
+        public static void BlockScalar(ref uint state, ref byte output)
         {
-            uint x0 = state[0], x1 = state[1], x2 = state[2], x3 = state[3];
-            uint x4 = state[4], x5 = state[5], x6 = state[6], x7 = state[7];
-            uint x8 = state[8], x9 = state[9], x10 = state[10], x11 = state[11];
-            uint x12 = state[12], x13 = state[13], x14 = state[14], x15 = state[15];
+            uint x0 = state, x1 = Unsafe.Add(ref state, 1), x2 = Unsafe.Add(ref state, 2), x3 = Unsafe.Add(ref state, 3);
+            uint x4 = Unsafe.Add(ref state, 4), x5 = Unsafe.Add(ref state, 5), x6 = Unsafe.Add(ref state, 6), x7 = Unsafe.Add(ref state, 7);
+            uint x8 = Unsafe.Add(ref state, 8), x9 = Unsafe.Add(ref state, 9), x10 = Unsafe.Add(ref state, 10), x11 = Unsafe.Add(ref state, 11);
+            uint x12 = Unsafe.Add(ref state, 12), x13 = Unsafe.Add(ref state, 13), x14 = Unsafe.Add(ref state, 14), x15 = Unsafe.Add(ref state, 15);
 
             for (int i = 0; i < 10; i++)
             {
@@ -153,39 +153,39 @@ namespace LuminPack.Cryptography
                 QuarterRound(ref x3, ref x4, ref x9, ref x14);
             }
 
-            x0 += state[0];
-            x1 += state[1];
-            x2 += state[2];
-            x3 += state[3];
-            x4 += state[4];
-            x5 += state[5];
-            x6 += state[6];
-            x7 += state[7];
-            x8 += state[8];
-            x9 += state[9];
-            x10 += state[10];
-            x11 += state[11];
-            x12 += state[12];
-            x13 += state[13];
-            x14 += state[14];
-            x15 += state[15];
+            x0 += state;
+            x1 += Unsafe.Add(ref state, 1);
+            x2 += Unsafe.Add(ref state, 2);
+            x3 += Unsafe.Add(ref state, 3);
+            x4 += Unsafe.Add(ref state, 4);
+            x5 += Unsafe.Add(ref state, 5);
+            x6 += Unsafe.Add(ref state, 6);
+            x7 += Unsafe.Add(ref state, 7);
+            x8 += Unsafe.Add(ref state, 8);
+            x9 += Unsafe.Add(ref state, 9);
+            x10 += Unsafe.Add(ref state, 10);
+            x11 += Unsafe.Add(ref state, 11);
+            x12 += Unsafe.Add(ref state, 12);
+            x13 += Unsafe.Add(ref state, 13);
+            x14 += Unsafe.Add(ref state, 14);
+            x15 += Unsafe.Add(ref state, 15);
 
-            WriteUnaligned(ref output[0], x0);
-            WriteUnaligned(ref output[4], x1);
-            WriteUnaligned(ref output[8], x2);
-            WriteUnaligned(ref output[12], x3);
-            WriteUnaligned(ref output[16], x4);
-            WriteUnaligned(ref output[20], x5);
-            WriteUnaligned(ref output[24], x6);
-            WriteUnaligned(ref output[28], x7);
-            WriteUnaligned(ref output[32], x8);
-            WriteUnaligned(ref output[36], x9);
-            WriteUnaligned(ref output[40], x10);
-            WriteUnaligned(ref output[44], x11);
-            WriteUnaligned(ref output[48], x12);
-            WriteUnaligned(ref output[52], x13);
-            WriteUnaligned(ref output[56], x14);
-            WriteUnaligned(ref output[60], x15);
+            WriteUnaligned(ref output, x0);
+            WriteUnaligned(ref Unsafe.Add(ref output, 4), x1);
+            WriteUnaligned(ref Unsafe.Add(ref output, 8), x2);
+            WriteUnaligned(ref Unsafe.Add(ref output, 12), x3);
+            WriteUnaligned(ref Unsafe.Add(ref output, 16), x4);
+            WriteUnaligned(ref Unsafe.Add(ref output, 20), x5);
+            WriteUnaligned(ref Unsafe.Add(ref output, 24), x6);
+            WriteUnaligned(ref Unsafe.Add(ref output, 28), x7);
+            WriteUnaligned(ref Unsafe.Add(ref output, 32), x8);
+            WriteUnaligned(ref Unsafe.Add(ref output, 36), x9);
+            WriteUnaligned(ref Unsafe.Add(ref output, 40), x10);
+            WriteUnaligned(ref Unsafe.Add(ref output, 44), x11);
+            WriteUnaligned(ref Unsafe.Add(ref output, 48), x12);
+            WriteUnaligned(ref Unsafe.Add(ref output, 52), x13);
+            WriteUnaligned(ref Unsafe.Add(ref output, 56), x14);
+            WriteUnaligned(ref Unsafe.Add(ref output, 60), x15);
         }
 
 #if NET8_0_OR_GREATER
@@ -245,12 +245,12 @@ namespace LuminPack.Cryptography
         /// </summary>
         /// <param name="state">The reusable state associated with the operation.</param>
         /// <param name="output">The destination receiving the result.</param>
-        private static unsafe void BlockSse2(uint* state, byte* output)
+        private static void BlockSse2(ref uint state, ref byte output)
         {
-            Vector128<uint> va = Sse2.LoadVector128(state);        // x0..x3
-            Vector128<uint> vb = Sse2.LoadVector128(state + 4);    // x4..x7
-            Vector128<uint> vc = Sse2.LoadVector128(state + 8);    // x8..x11
-            Vector128<uint> vd = Sse2.LoadVector128(state + 12);   // x12..x15
+            Vector128<uint> va = Vector128.LoadUnsafe(ref state);        // x0..x3
+            Vector128<uint> vb = Vector128.LoadUnsafe(ref state, 4);    // x4..x7
+            Vector128<uint> vc = Vector128.LoadUnsafe(ref state, 8);    // x8..x11
+            Vector128<uint> vd = Vector128.LoadUnsafe(ref state, 12);   // x12..x15
             Vector128<uint> ova = va, ovb = vb, ovc = vc, ovd = vd;
 
             for (int i = 0; i < 10; i++)
@@ -275,31 +275,31 @@ namespace LuminPack.Cryptography
             vc = Sse2.Add(vc, ovc);
             vd = Sse2.Add(vd, ovd);
 
-            Sse2.Store((uint*)output, va);
-            Sse2.Store((uint*)(output + 16), vb);
-            Sse2.Store((uint*)(output + 32), vc);
-            Sse2.Store((uint*)(output + 48), vd);
+            va.AsByte().StoreUnsafe(ref output);
+            vb.AsByte().StoreUnsafe(ref output, 16);
+            vc.AsByte().StoreUnsafe(ref output, 32);
+            vd.AsByte().StoreUnsafe(ref output, 48);
         }
 
         /// <summary>
         /// Two-block 2x4-lane AVX2 implementation: the lower 128-bit half carries block A
-        /// (counter <c>state[12]</c>), the upper half block B (counter <c>state[12]+1</c>),
+        /// (counter <c>Unsafe.Add(ref state, 12)</c>), the upper half block B (counter <c>Unsafe.Add(ref state, 12)+1</c>),
         /// producing 128 output bytes. All <see cref="Avx2"/> operations are lane-wise or
         /// per-128-bit-half independent — the two halves never mix, so <c>state</c> is only
         /// read and never modified.
         /// </summary>
         /// <param name="state">The reusable state associated with the operation.</param>
         /// <param name="output">The destination receiving the result.</param>
-        private static unsafe void BlockAvx2x2(uint* state, byte* output)
+        private static void BlockAvx2x2(ref uint state, ref byte output)
         {
-            Vector256<uint> va = Vector256.Create(state[0], state[1], state[2], state[3],
-                                                  state[0], state[1], state[2], state[3]);
-            Vector256<uint> vb = Vector256.Create(state[4], state[5], state[6], state[7],
-                                                  state[4], state[5], state[6], state[7]);
-            Vector256<uint> vc = Vector256.Create(state[8], state[9], state[10], state[11],
-                                                  state[8], state[9], state[10], state[11]);
-            Vector128<uint> vdLow = Vector128.Create(state[12], state[13], state[14], state[15]);
-            Vector128<uint> vdHigh = Vector128.Create(state[12] + 1u, state[13], state[14], state[15]);
+            Vector256<uint> va = Vector256.Create(state, Unsafe.Add(ref state, 1), Unsafe.Add(ref state, 2), Unsafe.Add(ref state, 3),
+                                                  state, Unsafe.Add(ref state, 1), Unsafe.Add(ref state, 2), Unsafe.Add(ref state, 3));
+            Vector256<uint> vb = Vector256.Create(Unsafe.Add(ref state, 4), Unsafe.Add(ref state, 5), Unsafe.Add(ref state, 6), Unsafe.Add(ref state, 7),
+                                                  Unsafe.Add(ref state, 4), Unsafe.Add(ref state, 5), Unsafe.Add(ref state, 6), Unsafe.Add(ref state, 7));
+            Vector256<uint> vc = Vector256.Create(Unsafe.Add(ref state, 8), Unsafe.Add(ref state, 9), Unsafe.Add(ref state, 10), Unsafe.Add(ref state, 11),
+                                                  Unsafe.Add(ref state, 8), Unsafe.Add(ref state, 9), Unsafe.Add(ref state, 10), Unsafe.Add(ref state, 11));
+            Vector128<uint> vdLow = Vector128.Create(Unsafe.Add(ref state, 12), Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
+            Vector128<uint> vdHigh = Vector128.Create(Unsafe.Add(ref state, 12) + 1u, Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
             Vector256<uint> vd = Vector256.Create(vdLow, vdHigh);
             Vector256<uint> ova = va, ovb = vb, ovc = vc, ovd = vd;
 
@@ -324,14 +324,14 @@ namespace LuminPack.Cryptography
             vc = Avx2.Add(vc, ovc);
             vd = Avx2.Add(vd, ovd);
 
-            Sse2.Store((uint*)output, va.GetLower());              // block A (counter c) -> [0..63]
-            Sse2.Store((uint*)(output + 16), vb.GetLower());
-            Sse2.Store((uint*)(output + 32), vc.GetLower());
-            Sse2.Store((uint*)(output + 48), vd.GetLower());
-            Sse2.Store((uint*)(output + 64), va.GetUpper());       // block B (counter c+1) -> [64..127]
-            Sse2.Store((uint*)(output + 80), vb.GetUpper());
-            Sse2.Store((uint*)(output + 96), vc.GetUpper());
-            Sse2.Store((uint*)(output + 112), vd.GetUpper());
+            va.GetLower().AsByte().StoreUnsafe(ref output);              // block A (counter c) -> [0..63]
+            vb.GetLower().AsByte().StoreUnsafe(ref output, 16);
+            vc.GetLower().AsByte().StoreUnsafe(ref output, 32);
+            vd.GetLower().AsByte().StoreUnsafe(ref output, 48);
+            va.GetUpper().AsByte().StoreUnsafe(ref output, 64);       // block B (counter c+1) -> [64..127]
+            vb.GetUpper().AsByte().StoreUnsafe(ref output, 80);
+            vc.GetUpper().AsByte().StoreUnsafe(ref output, 96);
+            vd.GetUpper().AsByte().StoreUnsafe(ref output, 112);
         }
 
         /// <summary>Performs the rotl step for the current operation.</summary>
@@ -358,7 +358,7 @@ namespace LuminPack.Cryptography
 
         /// <summary>
         /// Four-block 4x4-lane AVX-512 implementation: each of the four 512-bit lanes carries
-        /// one block (counters <c>state[12]</c> .. <c>state[12]+3</c>), producing 256 output
+        /// one block (counters <c>Unsafe.Add(ref state, 12)</c> .. <c>Unsafe.Add(ref state, 12)+3</c>), producing 256 output
         /// bytes. Rotations use the single-instruction <c>vprold</c>. <c>Avx512F.Shuffle</c>
         /// (vpshufd) applies independently to each 128-bit quarter, so the lane rotation
         /// transposes work per block exactly like the SSE2/AVX2 versions. All operations are
@@ -366,15 +366,15 @@ namespace LuminPack.Cryptography
         /// </summary>
         /// <param name="state">The reusable state associated with the operation.</param>
         /// <param name="output">The destination receiving the result.</param>
-        private static unsafe void BlockAvx512x4(uint* state, byte* output)
+        private static void BlockAvx512x4(ref uint state, ref byte output)
         {
-            Vector128<uint> v0 = Vector128.Create(state[0], state[1], state[2], state[3]);
-            Vector128<uint> v4 = Vector128.Create(state[4], state[5], state[6], state[7]);
-            Vector128<uint> v8 = Vector128.Create(state[8], state[9], state[10], state[11]);
-            Vector128<uint> vd0 = Vector128.Create(state[12], state[13], state[14], state[15]);
-            Vector128<uint> vd1 = Vector128.Create(state[12] + 1u, state[13], state[14], state[15]);
-            Vector128<uint> vd2 = Vector128.Create(state[12] + 2u, state[13], state[14], state[15]);
-            Vector128<uint> vd3 = Vector128.Create(state[12] + 3u, state[13], state[14], state[15]);
+            Vector128<uint> v0 = Vector128.Create(state, Unsafe.Add(ref state, 1), Unsafe.Add(ref state, 2), Unsafe.Add(ref state, 3));
+            Vector128<uint> v4 = Vector128.Create(Unsafe.Add(ref state, 4), Unsafe.Add(ref state, 5), Unsafe.Add(ref state, 6), Unsafe.Add(ref state, 7));
+            Vector128<uint> v8 = Vector128.Create(Unsafe.Add(ref state, 8), Unsafe.Add(ref state, 9), Unsafe.Add(ref state, 10), Unsafe.Add(ref state, 11));
+            Vector128<uint> vd0 = Vector128.Create(Unsafe.Add(ref state, 12), Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
+            Vector128<uint> vd1 = Vector128.Create(Unsafe.Add(ref state, 12) + 1u, Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
+            Vector128<uint> vd2 = Vector128.Create(Unsafe.Add(ref state, 12) + 2u, Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
+            Vector128<uint> vd3 = Vector128.Create(Unsafe.Add(ref state, 12) + 3u, Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
 
             Vector512<uint> va = Vector512.Create(Vector256.Create(v0, v0), Vector256.Create(v0, v0));
             Vector512<uint> vb = Vector512.Create(Vector256.Create(v4, v4), Vector256.Create(v4, v4));
@@ -413,26 +413,44 @@ namespace LuminPack.Cryptography
                             vd2r = vd.GetUpper().GetLower(), vd3r = vd.GetUpper().GetUpper();
 
             // block 0 (counter c) -> [0..63]
-            Sse2.Store((uint*)output, va0);
-            Sse2.Store((uint*)(output + 16), vb0);
-            Sse2.Store((uint*)(output + 32), vc0);
-            Sse2.Store((uint*)(output + 48), vd0r);
+            va0.AsByte().StoreUnsafe(ref output);
+            vb0.AsByte().StoreUnsafe(ref output, 16);
+            vc0.AsByte().StoreUnsafe(ref output, 32);
+            vd0r.AsByte().StoreUnsafe(ref output, 48);
             // block 1 (counter c+1) -> [64..127]
-            Sse2.Store((uint*)(output + 64), va1);
-            Sse2.Store((uint*)(output + 80), vb1);
-            Sse2.Store((uint*)(output + 96), vc1);
-            Sse2.Store((uint*)(output + 112), vd1r);
+            va1.AsByte().StoreUnsafe(ref output, 64);
+            vb1.AsByte().StoreUnsafe(ref output, 80);
+            vc1.AsByte().StoreUnsafe(ref output, 96);
+            vd1r.AsByte().StoreUnsafe(ref output, 112);
             // block 2 (counter c+2) -> [128..191]
-            Sse2.Store((uint*)(output + 128), va2);
-            Sse2.Store((uint*)(output + 144), vb2);
-            Sse2.Store((uint*)(output + 160), vc2);
-            Sse2.Store((uint*)(output + 176), vd2r);
+            va2.AsByte().StoreUnsafe(ref output, 128);
+            vb2.AsByte().StoreUnsafe(ref output, 144);
+            vc2.AsByte().StoreUnsafe(ref output, 160);
+            vd2r.AsByte().StoreUnsafe(ref output, 176);
             // block 3 (counter c+3) -> [192..255]
-            Sse2.Store((uint*)(output + 192), va3);
-            Sse2.Store((uint*)(output + 208), vb3);
-            Sse2.Store((uint*)(output + 224), vc3);
-            Sse2.Store((uint*)(output + 240), vd3r);
+            va3.AsByte().StoreUnsafe(ref output, 192);
+            vb3.AsByte().StoreUnsafe(ref output, 208);
+            vc3.AsByte().StoreUnsafe(ref output, 224);
+            vd3r.AsByte().StoreUnsafe(ref output, 240);
         }
+#endif
+
+#if !NET && !NETSTANDARD
+        // The Burst source projector parses with its own symbols and retains the native entry ABI.
+        /// <summary>Writes one block for the Burst pointer entry.</summary>
+        /// <param name="state">Sixteen input words.</param>
+        /// <param name="output">The complete output block.</param>
+        public static unsafe void Block(uint* state, byte* output) => Block(ref *state, ref *output);
+
+        /// <summary>Writes two blocks for the Burst pointer entry.</summary>
+        /// <param name="state">Sixteen input words.</param>
+        /// <param name="output">The complete output blocks.</param>
+        public static unsafe void Block2(uint* state, byte* output) => Block2(ref *state, ref *output);
+
+        /// <summary>Writes four blocks for the Burst pointer entry.</summary>
+        /// <param name="state">Sixteen input words.</param>
+        /// <param name="output">The complete output blocks.</param>
+        public static unsafe void Block4(uint* state, byte* output) => Block4(ref *state, ref *output);
 #endif
 
         /// <summary>
@@ -444,24 +462,24 @@ namespace LuminPack.Cryptography
         /// <param name="nonce">8 or 12 byte nonce.</param>
         /// <param name="nonceBytes">Nonce length in bytes (8 or 12).</param>
         /// <param name="blockCounter">Initial block counter.</param>
-        public static unsafe void Initialize(uint* state, byte* key, int keyBytes, byte* nonce, int nonceBytes, uint blockCounter)
+        public static void Initialize(ref uint state, ref byte key, int keyBytes, ref byte nonce, int nonceBytes, uint blockCounter)
         {
-            state[0] = C0;
-            state[1] = C1;
-            state[2] = C2;
-            state[3] = C3;
+            state = C0;
+            Unsafe.Add(ref state, 1) = C1;
+            Unsafe.Add(ref state, 2) = C2;
+            Unsafe.Add(ref state, 3) = C3;
 
             if (keyBytes == KeyBytes256)
             {
                 // 256-bit key: words 4..11 = all 32 key bytes (two 16-byte halves).
-                LoadKeyStore(words: state + 4, key: key, offsetBytes: 0);
-                LoadKeyStore(words: state + 8, key: key, offsetBytes: 16);
+                LoadKeyStore(words: ref Unsafe.Add(ref state, 4), key: ref key, offsetBytes: 0);
+                LoadKeyStore(words: ref Unsafe.Add(ref state, 8), key: ref key, offsetBytes: 16);
             }
             else if (keyBytes == KeyBytes128)
             {
                 // 128-bit key: words 4..7 = key, words 8..11 = key again.
-                LoadKeyStore(words: state + 4, key: key, offsetBytes: 0);
-                LoadKeyStore(words: state + 8, key: key, offsetBytes: 0);
+                LoadKeyStore(words: ref Unsafe.Add(ref state, 4), key: ref key, offsetBytes: 0);
+                LoadKeyStore(words: ref Unsafe.Add(ref state, 8), key: ref key, offsetBytes: 0);
             }
             else
             {
@@ -470,10 +488,10 @@ namespace LuminPack.Cryptography
 
             if (nonceBytes == 12)
             {
-                state[12] = blockCounter;
-                state[13] = ReadUnaligned(ref nonce[0]);
-                state[14] = ReadUnaligned(ref nonce[4]);
-                state[15] = ReadUnaligned(ref nonce[8]);
+                Unsafe.Add(ref state, 12) = blockCounter;
+                Unsafe.Add(ref state, 13) = ReadUnaligned(ref nonce);
+                Unsafe.Add(ref state, 14) = ReadUnaligned(ref Unsafe.Add(ref nonce, 4));
+                Unsafe.Add(ref state, 15) = ReadUnaligned(ref Unsafe.Add(ref nonce, 8));
             }
             else
             {
@@ -486,12 +504,12 @@ namespace LuminPack.Cryptography
         /// <param name="key">The key used to identify the entry.</param>
         /// <param name="offsetBytes">The offset bytes used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static unsafe void LoadKeyStore(uint* words, byte* key, int offsetBytes)
+        private static void LoadKeyStore(ref uint words, ref byte key, int offsetBytes)
         {
-            words[0] = ReadUnaligned(ref key[offsetBytes + 0]);
-            words[1] = ReadUnaligned(ref key[offsetBytes + 4]);
-            words[2] = ReadUnaligned(ref key[offsetBytes + 8]);
-            words[3] = ReadUnaligned(ref key[offsetBytes + 12]);
+            words = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 0));
+            Unsafe.Add(ref words, 1) = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 4));
+            Unsafe.Add(ref words, 2) = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 8));
+            Unsafe.Add(ref words, 3) = ReadUnaligned(ref Unsafe.Add(ref key, offsetBytes + 12));
         }
 
         /// <summary>Reads unaligned from the current input.</summary>

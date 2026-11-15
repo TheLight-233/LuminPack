@@ -134,8 +134,7 @@ public unsafe class MarshalCopyBlockTest
             for (int sourceOffset = 0; sourceOffset < 64; sourceOffset++)
             for (int destinationOffset = 0; destinationOffset < 64; destinationOffset++)
             {
-                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length, false);
-                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length, true);
+                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length);
             }
         }
         finally
@@ -191,8 +190,7 @@ public unsafe class MarshalCopyBlockTest
             foreach (int sourceOffset in new[] { 0, 1, 15, 31, 63 })
             foreach (int destinationOffset in new[] { 0, 1, 15, 31, 63 })
             {
-                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length, false);
-                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length, true);
+                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length);
             }
         }
         finally
@@ -202,11 +200,10 @@ public unsafe class MarshalCopyBlockTest
         }
     }
 
-    /// <summary>Checks zero count accepts null native and managed references without access.</summary>
+    /// <summary>Checks zero count accepts null references without access.</summary>
     [Fact]
     public void EmptyCopiesDoNotAccessNullStorage()
     {
-        LuminPackMarshal.CopyBlockUnaligned(null, null, 0);
         LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.NullRef<byte>(), ref Unsafe.NullRef<byte>(), 0);
     }
 
@@ -223,8 +220,7 @@ public unsafe class MarshalCopyBlockTest
             foreach (int sourceOffset in new[] { 0, 1, 31, 63 })
             foreach (int destinationOffset in new[] { 0, 1, 31, 63 })
             {
-                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length, false);
-                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length, true);
+                CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length);
             }
         }
         finally
@@ -234,7 +230,7 @@ public unsafe class MarshalCopyBlockTest
         }
     }
 
-    /// <summary>Checks protected endpoints of the public managed and pointer paths.</summary>
+    /// <summary>Checks protected endpoints of the public reference-based copy.</summary>
     [Fact]
     public void CopiesDoNotCrossProtectedPageBoundaries()
     {
@@ -253,8 +249,6 @@ public unsafe class MarshalCopyBlockTest
             new Span<byte>(sourcePages + page, capacity).Fill(0x73);
             Assert.True(ProtectPages(sourcePages + page, capacity, 0x02, out _));
             RangeCopy publicReference = LuminPackMarshal.CopyBlockUnaligned;
-            RangeCopy publicPointer = static (ref byte destination, ref byte source, uint count) =>
-                LuminPackMarshal.CopyBlockUnaligned(Unsafe.AsPointer(ref destination), Unsafe.AsPointer(ref source), count);
 
             foreach (int length in new[] { 64, 65, 95, 96, 97, 127, 128, 129, 159, 160, 161, 191, 192, 193, 223, 224, 225, 255, 256, 257, 511, 512, 513, 767, 768, 769, 1023, 1024, 1025, 4095, 4096, 4097, 8191, 8192, 8193, 16383, 16384, 16385, 32767, 32768, 32769, 1048575, 1048576, 1048577 })
             foreach (bool sourceEnd in new[] { false, true })
@@ -263,7 +257,6 @@ public unsafe class MarshalCopyBlockTest
                 byte* source = sourceEnd ? sourcePages + page + capacity - length : sourcePages + page;
                 byte* destination = destinationEnd ? destinationPages + page + capacity - length : destinationPages + page;
                 CheckGuardedKernel(publicReference, destination, source, length);
-                CheckGuardedKernel(publicPointer, destination, source, length);
             }
         }
         finally
@@ -418,14 +411,10 @@ public unsafe class MarshalCopyBlockTest
     /// <param name="destination">The writable range with canary headroom.</param>
     /// <param name="source">The readable non-overlapping range.</param>
     /// <param name="length">The exact byte count.</param>
-    /// <param name="useReferences">Whether to invoke the managed-reference overload.</param>
-    private static void CheckCopy(byte* destination, byte* source, int length, bool useReferences)
+    private static void CheckCopy(byte* destination, byte* source, int length)
     {
         new Span<byte>(destination - 16, length + 32).Fill(0xA5);
-        if (useReferences)
-            LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.AsRef<byte>(destination), ref Unsafe.AsRef<byte>(source), (uint)length);
-        else
-            LuminPackMarshal.CopyBlockUnaligned(destination, source, (uint)length);
+        LuminPackMarshal.CopyBlockUnaligned(ref *destination, ref *source, (uint)length);
         Assert.True(new ReadOnlySpan<byte>(source, length).SequenceEqual(new ReadOnlySpan<byte>(destination, length)));
         bool canariesIntact = true;
         for (int index = 1; index <= 16; index++)

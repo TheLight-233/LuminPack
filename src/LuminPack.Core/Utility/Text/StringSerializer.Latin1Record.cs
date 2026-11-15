@@ -19,7 +19,7 @@ namespace LuminPack.Utility;
 /// written before the compact form remains readable, and an older reader rejects a compact record as malformed
 /// instead of misreading it.
 /// </remarks>
-public static unsafe partial class StringSerializer
+public static partial class StringSerializer
 {
     /// <summary>Encodes the compact record header of a Latin-1 payload.</summary>
     /// <param name="length">The character count.</param>
@@ -692,15 +692,12 @@ public static unsafe partial class StringSerializer
         return result;
 #else
         string result = new string('\0', length);
-        fixed (char* destination = result)
-        {
+        ref char destination = ref MemoryMarshal.GetReference(result.AsSpan());
 #if NETSTANDARD2_1
-            if (LuminPackBurst.TryWidenLatin1(ref payload, ref *destination, length))
-                return result;
+        if (LuminPackBurst.TryWidenLatin1(ref payload, ref destination, length))
+            return result;
 #endif
-            WidenLatin1(ref payload, ref Unsafe.As<char, ushort>(ref *destination), length);
-        }
-
+        WidenLatin1(ref payload, ref Unsafe.As<char, ushort>(ref destination), length);
         return result;
 #endif
     }

@@ -13,7 +13,7 @@ namespace LuminPack.Cryptography
     /// </para>
     /// <para>This is an internal primitive used by <see cref="LuminChaCha20Poly1305"/>.</para>
     /// </summary>
-    internal unsafe struct Poly1305
+    internal struct Poly1305
     {
         private uint _h0, _h1, _h2, _h3, _h4;
         private uint _r0, _r1, _r2, _r3, _r4;
@@ -22,7 +22,14 @@ namespace LuminPack.Cryptography
         // Second half of the 32-byte poly1305 key, added once at finalize.
         private ulong _keyLo, _keyHi;
 
-        private fixed byte _leftover[16];
+        [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 16)]
+        private struct PartialBlock
+        {
+            /// <summary>The first byte of the sixteen-byte partial block.</summary>
+            internal byte First;
+        }
+
+        private PartialBlock _leftover;
         private int _leftoverLength;
 
         /// <summary>Performs the load32 step for the current operation.</summary>
@@ -36,21 +43,21 @@ namespace LuminPack.Cryptography
         /// (<c>r</c> = first 16 bytes, <c>s</c> = last 16 bytes).
         /// </summary>
         /// <param name="key">The key used to identify the entry.</param>
-        public void Initialize(byte* key)
+        public void Initialize(ref byte key)
         {
-            _r0 = Load32(ref key[0]) & 0x3ffffff;
-            _r1 = (Load32(ref key[3]) >> 2) & 0x3ffff03;
-            _r2 = (Load32(ref key[6]) >> 4) & 0x3ffc0ff;
-            _r3 = (Load32(ref key[9]) >> 6) & 0x3f03fff;
-            _r4 = (Load32(ref key[12]) >> 8) & 0x00fffff;
+            _r0 = Load32(ref key) & 0x3ffffff;
+            _r1 = (Load32(ref Unsafe.Add(ref key, 3)) >> 2) & 0x3ffff03;
+            _r2 = (Load32(ref Unsafe.Add(ref key, 6)) >> 4) & 0x3ffc0ff;
+            _r3 = (Load32(ref Unsafe.Add(ref key, 9)) >> 6) & 0x3f03fff;
+            _r4 = (Load32(ref Unsafe.Add(ref key, 12)) >> 8) & 0x00fffff;
 
             _s1 = _r1 * 5;
             _s2 = _r2 * 5;
             _s3 = _r3 * 5;
             _s4 = _r4 * 5;
 
-            _keyLo = Unsafe.ReadUnaligned<ulong>(ref key[16]);
-            _keyHi = Unsafe.ReadUnaligned<ulong>(ref key[24]);
+            _keyLo = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref Unsafe.Add(ref key, 16));
+            _keyHi = global::LuminPack.Core.LuminPackReader.Read<ulong>(ref Unsafe.Add(ref key, 24));
 
             _h0 = _h1 = _h2 = _h3 = _h4 = 0;
             _leftoverLength = 0;
@@ -60,10 +67,7 @@ namespace LuminPack.Cryptography
         /// <param name="data">The metadata describing the serializable type.</param>
         public void Update(ReadOnlySpan<byte> data)
         {
-            fixed (byte* m = &MemoryMarshal.GetReference(data))
-            {
-                Update(m, data.Length);
-            }
+            Update(ref MemoryMarshal.GetReference(data), data.Length);
         }
 
         /// <summary>Appends zero padding so the total length processed is a multiple of 16 (AEAD block padding).</summary>
@@ -88,7 +92,7 @@ namespace LuminPack.Cryptography
         public void UpdateLength(ulong length)
         {
             Span<byte> tmp = stackalloc byte[8];
-            Unsafe.WriteUnaligned(ref tmp[0], length);
+            global::LuminPack.Core.LuminPackWriter.Write(ref tmp[0], length);
             Update(tmp);
         }
 
@@ -100,17 +104,10 @@ namespace LuminPack.Cryptography
             // process WITHOUT the extra 2^128 term (the padding bit lives inside the block).
             if (_leftoverLength > 0)
             {
-                fixed (byte* buf = _leftover)
-                {
-                    buf[_leftoverLength++] = 1;
-                    // zero the remaining bytes
-                    byte* end = buf + _leftoverLength;
-                    byte* stop = buf + 16;
-                    while (end < stop)
-                        *end++ = 0;
-
-                    Block(buf, 0);
-                }
+                ref byte buffer = ref _leftover.First;
+                Unsafe.Add(ref buffer, _leftoverLength++) = 1;
+                MemoryMarshal.CreateSpan(ref Unsafe.Add(ref buffer, _leftoverLength), 16 - _leftoverLength).Clear();
+                Block(ref buffer, 0);
                 _leftoverLength = 0;
             }
             else
@@ -178,14 +175,14 @@ namespace LuminPack.Cryptography
             low += _keyLo;
             high += _keyHi + (ulong)(low < _keyLo ? 1 : 0);
 
-            Unsafe.WriteUnaligned(ref tag[0], low);
-            Unsafe.WriteUnaligned(ref tag[8], high);
+            global::LuminPack.Core.LuminPackWriter.Write(ref tag[0], low);
+            global::LuminPack.Core.LuminPackWriter.Write(ref tag[8], high);
         }
 
         /// <summary>Performs the update step for the current operation.</summary>
         /// <param name="m">The m used by this operation.</param>
         /// <param name="length">The number of bytes or elements to process.</param>
-        private void Update(byte* m, int length)
+        private void Update(ref byte m, int length)
         {
             // Drain any buffered partial block first.
             if (_leftoverLength > 0)
@@ -194,23 +191,15 @@ namespace LuminPack.Cryptography
                 if (length < take)
                     take = length;
 
-                fixed (byte* buf = _leftover)
-                {
-                    for (int i = 0; i < take; i++)
-                        buf[_leftoverLength + i] = m[i];
-
-                    _leftoverLength += take;
-                }
-
+                for (int i = 0; i < take; i++)
+                    Unsafe.Add(ref _leftover.First, _leftoverLength + i) = Unsafe.Add(ref m, i);
+                _leftoverLength += take;
                 length -= take;
-                m += take;
+                m = ref Unsafe.Add(ref m, take);
 
                 if (_leftoverLength == 16)
                 {
-                    fixed (byte* buf = _leftover)
-                    {
-                        Block(buf, 1u << 24);
-                    }
+                    Block(ref _leftover.First, 1u << 24);
                     _leftoverLength = 0;
                 }
                 else
@@ -222,19 +211,16 @@ namespace LuminPack.Cryptography
             // Process full 16-byte blocks.
             while (length >= 16)
             {
-                Block(m, 1u << 24);
-                m += 16;
+                Block(ref m, 1u << 24);
+                m = ref Unsafe.Add(ref m, 16);
                 length -= 16;
             }
 
             // Buffer the remaining 1..15 bytes.
             if (length > 0)
             {
-                fixed (byte* buf = _leftover)
-                {
-                    for (int i = 0; i < length; i++)
-                        buf[i] = m[i];
-                }
+                for (int i = 0; i < length; i++)
+                    Unsafe.Add(ref _leftover.First, i) = Unsafe.Add(ref m, i);
                 _leftoverLength = length;
             }
         }
@@ -246,13 +232,13 @@ namespace LuminPack.Cryptography
         /// <param name="hibit">Extra high bit: <c>1&lt;&lt;24</c> for blocks carrying the 2^128 term,
         /// <c>0</c> when the 0x01 padding already lives inside the block buffer.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Block(byte* m, uint hibit)
+        private void Block(ref byte m, uint hibit)
         {
-            uint t0 = Load32(ref m[0]) & 0x3ffffff;
-            uint t1 = (Load32(ref m[3]) >> 2) & 0x3ffffff;
-            uint t2 = (Load32(ref m[6]) >> 4) & 0x3ffffff;
-            uint t3 = (Load32(ref m[9]) >> 6) & 0x3ffffff;
-            uint t4 = (Load32(ref m[12]) >> 8) & 0x3ffffff;
+            uint t0 = Load32(ref m) & 0x3ffffff;
+            uint t1 = (Load32(ref Unsafe.Add(ref m, 3)) >> 2) & 0x3ffffff;
+            uint t2 = (Load32(ref Unsafe.Add(ref m, 6)) >> 4) & 0x3ffffff;
+            uint t3 = (Load32(ref Unsafe.Add(ref m, 9)) >> 6) & 0x3ffffff;
+            uint t4 = (Load32(ref Unsafe.Add(ref m, 12)) >> 8) & 0x3ffffff;
 
             _h0 += t0;
             _h1 += t1;

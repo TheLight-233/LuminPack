@@ -66,20 +66,6 @@ public static partial class LuminPackMarshal
         Unsafe.CopyBlockUnaligned(ref destination, ref src, byteCount);
     }
 
-    /// <summary>Copies the exact bytes of two non-overlapping native or pinned storage ranges.</summary>
-    /// <param name="destination">The complete writable native or pinned destination range.</param>
-    /// <param name="source">The complete readable native or pinned source range.</param>
-    /// <param name="byteCount">The exact byte count; zero permits null pointers.</param>
-    /// <remarks>
-    /// Both ranges must remain valid and stationary for the complete operation. This unchecked
-    /// operation copies reference-free bytes and has the same non-overlap requirement as cpblk.
-    /// </remarks>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe void CopyBlockUnaligned(void* destination, void* source, uint byteCount)
-    {
-        CopyBlockUnaligned(ref Unsafe.AsRef<byte>(destination), ref Unsafe.AsRef<byte>(source), byteCount);
-    }
-
 #if NET8_0_OR_GREATER
     /// <summary>Copies 257 bytes through 32 KiB with 256-bit loads and destination-aligned stores.</summary>
     /// <param name="destination">The valid writable byte range.</param>
@@ -166,22 +152,21 @@ public static partial class LuminPackMarshal
 
     /// <summary>Copies a large block with aligned full-line NT stores and a fence before unpinning.</summary>
     /// <param name="destination">The writable range pinned within this helper.</param>
-    /// <param name="source">The readable non-overlapping range pinned within this helper.</param>
+    /// <param name="source">The complete readable non-overlapping range.</param>
     /// <param name="count">The exact byte count, at least one MiB, on x64 AVX2 or preferred AVX-512.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static unsafe void CopyStreamingBlock(ref byte destination, ref byte source, uint count)
     {
         fixed (byte* destinationPointer = &destination)
-        fixed (byte* sourcePointer = &source)
         {
             byte* target = destinationPointer;
-            byte* input = sourcePointer;
+            ref byte input = ref source;
             uint prefix = (uint)(unchecked((nuint)0 - (nuint)target) & 63);
             if (prefix != 0)
             {
-                Unsafe.CopyBlockUnaligned(target, input, prefix);
+                CopyBlockUnaligned(ref *target, ref input, prefix);
                 target += prefix;
-                input += prefix;
+                input = ref Unsafe.Add(ref input, (nint)prefix);
                 count -= prefix;
             }
 
@@ -189,24 +174,24 @@ public static partial class LuminPackMarshal
             {
                 while (count >= 256)
                 {
-                    Vector512<byte> a = Avx512F.LoadVector512(input);
-                    Vector512<byte> b = Avx512F.LoadVector512(input + 64);
-                    Vector512<byte> c = Avx512F.LoadVector512(input + 128);
-                    Vector512<byte> d = Avx512F.LoadVector512(input + 192);
+                    Vector512<byte> a = Vector512.LoadUnsafe(ref input);
+                    Vector512<byte> b = Vector512.LoadUnsafe(ref input, 64);
+                    Vector512<byte> c = Vector512.LoadUnsafe(ref input, 128);
+                    Vector512<byte> d = Vector512.LoadUnsafe(ref input, 192);
                     Avx512F.StoreAlignedNonTemporal(target, a);
                     Avx512F.StoreAlignedNonTemporal(target + 64, b);
                     Avx512F.StoreAlignedNonTemporal(target + 128, c);
                     Avx512F.StoreAlignedNonTemporal(target + 192, d);
                     target += 256;
-                    input += 256;
+                    input = ref Unsafe.Add(ref input, (nint)256);
                     count -= 256;
                 }
 
                 while (count >= 64)
                 {
-                    Avx512F.StoreAlignedNonTemporal(target, Avx512F.LoadVector512(input));
+                    Avx512F.StoreAlignedNonTemporal(target, Vector512.LoadUnsafe(ref input));
                     target += 64;
-                    input += 64;
+                    input = ref Unsafe.Add(ref input, (nint)64);
                     count -= 64;
                 }
             }
@@ -214,14 +199,14 @@ public static partial class LuminPackMarshal
             {
                 while (count >= 256)
                 {
-                    Vector256<byte> a = Avx.LoadVector256(input);
-                    Vector256<byte> b = Avx.LoadVector256(input + 32);
-                    Vector256<byte> c = Avx.LoadVector256(input + 64);
-                    Vector256<byte> d = Avx.LoadVector256(input + 96);
-                    Vector256<byte> e = Avx.LoadVector256(input + 128);
-                    Vector256<byte> f = Avx.LoadVector256(input + 160);
-                    Vector256<byte> g = Avx.LoadVector256(input + 192);
-                    Vector256<byte> h = Avx.LoadVector256(input + 224);
+                    Vector256<byte> a = Vector256.LoadUnsafe(ref input);
+                    Vector256<byte> b = Vector256.LoadUnsafe(ref input, 32);
+                    Vector256<byte> c = Vector256.LoadUnsafe(ref input, 64);
+                    Vector256<byte> d = Vector256.LoadUnsafe(ref input, 96);
+                    Vector256<byte> e = Vector256.LoadUnsafe(ref input, 128);
+                    Vector256<byte> f = Vector256.LoadUnsafe(ref input, 160);
+                    Vector256<byte> g = Vector256.LoadUnsafe(ref input, 192);
+                    Vector256<byte> h = Vector256.LoadUnsafe(ref input, 224);
                     Avx.StoreAlignedNonTemporal(target, a);
                     Avx.StoreAlignedNonTemporal(target + 32, b);
                     Avx.StoreAlignedNonTemporal(target + 64, c);
@@ -231,23 +216,23 @@ public static partial class LuminPackMarshal
                     Avx.StoreAlignedNonTemporal(target + 192, g);
                     Avx.StoreAlignedNonTemporal(target + 224, h);
                     target += 256;
-                    input += 256;
+                    input = ref Unsafe.Add(ref input, (nint)256);
                     count -= 256;
                 }
 
                 while (count >= 64)
                 {
-                    Avx.StoreAlignedNonTemporal(target, Avx.LoadVector256(input));
-                    Avx.StoreAlignedNonTemporal(target + 32, Avx.LoadVector256(input + 32));
+                    Avx.StoreAlignedNonTemporal(target, Vector256.LoadUnsafe(ref input));
+                    Avx.StoreAlignedNonTemporal(target + 32, Vector256.LoadUnsafe(ref input, 32));
                     target += 64;
-                    input += 64;
+                    input = ref Unsafe.Add(ref input, (nint)64);
                     count -= 64;
                 }
 
             }
 
             if (count != 0)
-                Unsafe.CopyBlockUnaligned(target, input, count);
+                CopyBlockUnaligned(ref *target, ref input, count);
             Sse.StoreFence();
         }
     }

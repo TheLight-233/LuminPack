@@ -150,7 +150,7 @@ The generator validates the methods (LuminPack100–108) and registers them auto
 - `LuminPackJsonWriter` / `LuminPackJsonReader`: tokens, property names, values.
 - `LuminPackMarshal` (`LuminPack.Code`): `As<TFrom,TTo>`, collection storage access, `CopyBlockUnaligned`.
 
-Readers and writers advance a cursor (`ref byte`, or `byte*` on netstandard2.1). On netstandard2.1, memory you wrap in a reader/writer yourself must stay pinned.
+Readers and writers advance a managed cursor (`ref byte` on modern .NET and a one-element `Span<byte>` on netstandard2.1). Use `MemoryMarshal.GetReference(state.Cursor)` to access the netstandard2.1 cursor after checking the complete range. `LuminBufferWriter` pins its own pooled array for the rental to preserve alignment. For raw span storage use `LuminPackMarshal.GetUnderlyingReference` and pass it by reference to block operations.
 
 ## Helpers
 

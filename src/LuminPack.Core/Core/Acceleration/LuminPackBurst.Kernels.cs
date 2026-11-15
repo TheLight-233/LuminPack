@@ -92,12 +92,14 @@ public static unsafe partial class LuminPackBurst
     /// <param name="output">The complete output for the requested blocks.</param>
     /// <param name="blocks">One, two or four blocks.</param>
     /// <returns>Whether the backend wrote all requested blocks.</returns>
-    internal static bool TryChaCha20(uint* state, byte* output, int blocks)
+    internal static bool TryChaCha20(ref uint state, ref byte output, int blocks)
     {
         var registration = Volatile.Read(ref _registration);
         if (registration is null || registration.Table.ChaCha20 == null)
             return false;
-        registration.Table.ChaCha20(state, output, blocks);
+        fixed (uint* statePointer = &state)
+        fixed (byte* outputPointer = &output)
+            registration.Table.ChaCha20(statePointer, outputPointer, blocks);
         return true;
     }
 
@@ -107,12 +109,15 @@ public static unsafe partial class LuminPackBurst
     /// <param name="keyStream">The complete keystream range.</param>
     /// <param name="count">The byte count.</param>
     /// <returns>Whether the backend completed the operation.</returns>
-    internal static bool TryXor(byte* output, byte* input, byte* keyStream, int count)
+    internal static bool TryXor(ref byte output, ref byte input, ref byte keyStream, int count)
     {
         var registration = Volatile.Read(ref _registration);
         if (registration is null || registration.Table.Xor == null || count <= 0)
             return false;
-        registration.Table.Xor(output, input, keyStream, (uint)count);
+        fixed (byte* outputPointer = &output)
+        fixed (byte* inputPointer = &input)
+        fixed (byte* keyPointer = &keyStream)
+            registration.Table.Xor(outputPointer, inputPointer, keyPointer, (uint)count);
         return true;
     }
 

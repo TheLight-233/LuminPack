@@ -25,7 +25,7 @@ public static unsafe class KernelContract
             fixed (byte* k = key)
             {
                 if (copy(b + alignment + 3, a + alignment, (uint)length) == 0)
-                    LuminPackMarshal.CopyBlockUnaligned(b + alignment + 3, a + alignment, (uint)length);
+                    LuminPackMarshal.CopyBlockUnaligned(ref b[alignment + 3], ref a[alignment], (uint)length);
                 Require(new ReadOnlySpan<byte>(a + alignment, length).SequenceEqual(new ReadOnlySpan<byte>(b + alignment + 3, length)), "Copy bytes differ.");
                 for (int mismatch = 0; mismatch < length; mismatch++)
                 {

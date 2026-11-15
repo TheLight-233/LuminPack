@@ -16,7 +16,7 @@ using System.Numerics;
 /// <typeparam name="TKey">The type represented by <c>TKey</c>.</typeparam>
 /// <typeparam name="TValue">The type represented by <c>TValue</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
-public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
+public sealed class LuminF14Map<TKey, TValue> : IDisposable
     where TKey : unmanaged, IEquatable<TKey>
     where TValue : unmanaged
 {
@@ -31,29 +31,17 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
     private struct Chunk
     {
         /// <summary>Stores the tags buffer.</summary>
-        public fixed byte TagsBuffer[16];
+        private Vector128<byte> _tags;
 
         /// <summary>Obtains the tags for the supplied input.</summary>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Vector128<byte> GetTags()
-        {
-            fixed (byte* ptr = TagsBuffer)
-            {
-                return Vector128.Load(ptr);
-            }
-        }
+        public readonly Vector128<byte> GetTags() => _tags;
 
         /// <summary>Updates the tags used by the current operation.</summary>
         /// <param name="vec">The vec used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetTags(Vector128<byte> vec)
-        {
-            fixed (byte* ptr = TagsBuffer)
-            {
-                Vector128.Store(vec, ptr);
-            }
-        }
+        public void SetTags(Vector128<byte> vec) => _tags = vec;
 
         /// <summary>Obtains the tag for the supplied input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -61,10 +49,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public byte GetTag(int index)
         {
-            fixed (byte* ptr = TagsBuffer)
-            {
-                return ptr[index];
-            }
+            return Unsafe.Add(ref Unsafe.As<Vector128<byte>, byte>(ref _tags), index);
         }
 
         /// <summary>Updates the tag used by the current operation.</summary>
@@ -73,16 +58,13 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetTag(int index, byte value)
         {
-            fixed (byte* ptr = TagsBuffer)
-            {
-                ptr[index] = value;
-            }
+            Unsafe.Add(ref Unsafe.As<Vector128<byte>, byte>(ref _tags), index) = value;
         }
     }
 
-    private Chunk* _chunks;
-    private TKey* _keys;
-    private TValue* _values;
+    private nint _chunks;
+    private nint _keys;
+    private nint _values;
     private int _chunkCount;
     private int _chunkMask;
     private int _count;
@@ -105,7 +87,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
     public bool IsCreated
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => _chunks != null;
+        get => _chunks != 0;
     }
 
     /// <summary>Initializes a new instance of <c>LuminF14Map</c>.</summary>
@@ -139,21 +121,55 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void AllocateStorage(int chunkCount)
     {
-        nuint chunkBytes = (nuint)(sizeof(Chunk) * chunkCount);
-        nuint keyBytes = (nuint)(sizeof(TKey) * CHUNK_SIZE * chunkCount);
-        nuint valueBytes = (nuint)(sizeof(TValue) * CHUNK_SIZE * chunkCount);
+        nuint chunkBytes = (nuint)(Unsafe.SizeOf<Chunk>() * chunkCount);
+        nuint keyBytes = (nuint)(Unsafe.SizeOf<TKey>() * CHUNK_SIZE * chunkCount);
+        nuint valueBytes = (nuint)(Unsafe.SizeOf<TValue>() * CHUNK_SIZE * chunkCount);
 
-        _chunks = (Chunk*)NativeMemory.AlignedAlloc(chunkBytes, 16);
-        _keys = (TKey*)NativeMemory.AlignedAlloc(keyBytes, LuminPackMarshal.AlignOf<TKey>());
-        _values = (TValue*)NativeMemory.AlignedAlloc(valueBytes, LuminPackMarshal.AlignOf<TValue>());
-
-        Vector128<byte> emptyVec = Vector128.Create(EMPTY);
-        for (int i = 0; i < chunkCount; i++)
+        nint chunks = 0;
+        nint keys = 0;
+        nint values = 0;
+        try
         {
-            _chunks[i].SetTags(emptyVec);
+            chunks = AllocateAligned(chunkBytes, 16);
+            keys = AllocateAligned(keyBytes, LuminPackMarshal.AlignOf<TKey>());
+            values = AllocateAligned(valueBytes, LuminPackMarshal.AlignOf<TValue>());
+
+            Vector128<byte> emptyVec = Vector128.Create(EMPTY);
+            for (int i = 0; i < chunkCount; i++)
+                ElementAt<Chunk>(chunks, i).SetTags(emptyVec);
+        }
+        catch (Exception exception)
+        {
+            FreeAligned(chunks);
+            FreeAligned(keys);
+            FreeAligned(values);
+            LuminPackExceptionHelper.Rethrow(exception);
         }
 
+        _chunks = chunks;
+        _keys = keys;
+        _values = values;
     }
+
+    /// <summary>Allocates a stationary range with the original native alignment.</summary>
+    /// <param name="byteCount">The number of bytes to allocate.</param>
+    /// <param name="alignment">The alignment in bytes.</param>
+    /// <returns>The address of the native allocation.</returns>
+    private static unsafe nint AllocateAligned(nuint byteCount, nuint alignment)
+        => (nint)NativeMemory.AlignedAlloc(byteCount, alignment);
+
+    /// <summary>Releases storage created by the aligned allocator.</summary>
+    /// <param name="address">The native allocation address, or zero.</param>
+    private static unsafe void FreeAligned(nint address) => NativeMemory.AlignedFree((void*)address);
+
+    /// <summary>Gets an element within a live native range.</summary>
+    /// <typeparam name="T">The element type.</typeparam>
+    /// <param name="address">The native base address.</param>
+    /// <param name="index">The element index in the range.</param>
+    /// <returns>A reference to the element.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ref T ElementAt<T>(nint address, int index)
+        => ref Unsafe.Add(ref LuminPackMarshal.RefAt<T>(address), (nint)(uint)index);
 
     /// <summary>Determines whether h key are present.</summary>
     /// <param name="key">The key used to identify the entry.</param>
@@ -213,7 +229,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
 
         for (int probe = 0; probe < MAX_PROBE; probe++)
         {
-            Vector128<byte> tags = _chunks[chunk].GetTags();
+            Vector128<byte> tags = ElementAt<Chunk>(_chunks, chunk).GetTags();
             Vector128<byte> matches = Vector128.Equals(tags, tagVec);
             uint mask = matches.ExtractMostSignificantBits() & VALID_SLOTS_MASK;
 
@@ -223,9 +239,9 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
                 mask &= mask - 1;
 
                 int globalIdx = chunk * CHUNK_SIZE + idx;
-                if (_keys[globalIdx].Equals(key))
+                if (ElementAt<TKey>(_keys, globalIdx).Equals(key))
                 {
-                    value = _values[globalIdx];
+                    value = ElementAt<TValue>(_values, globalIdx);
                     return true;
                 }
             }
@@ -266,7 +282,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
 
         for (int probe = 0; probe < MAX_PROBE; probe++)
         {
-            Vector128<byte> tags = _chunks[chunk].GetTags();
+            Vector128<byte> tags = ElementAt<Chunk>(_chunks, chunk).GetTags();
             Vector128<byte> matches = Vector128.Equals(tags, tagVec);
             uint mask = matches.ExtractMostSignificantBits() & VALID_SLOTS_MASK;
 
@@ -276,9 +292,9 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
                 mask &= mask - 1;
 
                 int globalIdx = chunk * CHUNK_SIZE + idx;
-                if (_keys[globalIdx].Equals(key))
+                if (ElementAt<TKey>(_keys, globalIdx).Equals(key))
                 {
-                    return ref _values[globalIdx];
+                    return ref ElementAt<TValue>(_values, globalIdx);
                 }
             }
 
@@ -332,7 +348,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
 
         for (int probe = 0; probe < MAX_PROBE; probe++)
         {
-            Vector128<byte> tags = _chunks[chunk].GetTags();
+            Vector128<byte> tags = ElementAt<Chunk>(_chunks, chunk).GetTags();
 
             Vector128<byte> matches = Vector128.Equals(tags, tagVec);
             Vector128<byte> empties = Vector128.Equals(tags, emptyVec);
@@ -346,7 +362,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
                 matchMask &= matchMask - 1;
 
                 int globalIdx = chunk * CHUNK_SIZE + idx;
-                if (_keys[globalIdx].Equals(key))
+                if (ElementAt<TKey>(_keys, globalIdx).Equals(key))
                     return false;
             }
 
@@ -355,9 +371,9 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
                 int idx = BitOperations.TrailingZeroCount(emptyMask);
                 int globalIdx = chunk * CHUNK_SIZE + idx;
 
-                _keys[globalIdx] = key;
-                _values[globalIdx] = value;
-                _chunks[chunk].SetTag(idx, tag);
+                ElementAt<TKey>(_keys, globalIdx) = key;
+                ElementAt<TValue>(_values, globalIdx) = value;
+                ElementAt<Chunk>(_chunks, chunk).SetTag(idx, tag);
                 _count++;
                 return true;
             }
@@ -377,29 +393,27 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
     {
         int newChunkCount = _chunkCount * 2;
         int oldChunkCount = _chunkCount;
-        int oldCount = _count;
 
-        Chunk* oldChunks = _chunks;
-        TKey* oldKeys = _keys;
-        TValue* oldValues = _values;
+        nint oldChunks = _chunks;
+        nint oldKeys = _keys;
+        nint oldValues = _values;
 
+        AllocateStorage(newChunkCount);
         _chunkCount = newChunkCount;
         _chunkMask = newChunkCount - 1;
         _count = 0;
-
-        AllocateStorage(newChunkCount);
 
         for (int ci = 0; ci < oldChunkCount; ci++)
         {
             for (int si = 0; si < CHUNK_SIZE; si++)
             {
-                byte tag = oldChunks[ci].GetTag(si);
+                byte tag = ElementAt<Chunk>(oldChunks, ci).GetTag(si);
 
                 if (tag != EMPTY)
                 {
                     int globalIdx = ci * CHUNK_SIZE + si;
-                    TKey key = oldKeys[globalIdx];
-                    TValue value = oldValues[globalIdx];
+                    TKey key = ElementAt<TKey>(oldKeys, globalIdx);
+                    TValue value = ElementAt<TValue>(oldValues, globalIdx);
 
                     uint hash = HashKey(key);
                     byte newTag = HashToTag(hash);
@@ -410,9 +424,9 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
             }
         }
 
-        NativeMemory.AlignedFree(oldChunks);
-        NativeMemory.AlignedFree(oldKeys);
-        NativeMemory.AlignedFree(oldValues);
+        FreeAligned(oldChunks);
+        FreeAligned(oldKeys);
+        FreeAligned(oldValues);
     }
 
     /// <summary>Removes the entry matching the supplied key or value.</summary>
@@ -433,7 +447,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
 
         for (int probe = 0; probe < MAX_PROBE; probe++)
         {
-            Vector128<byte> tags = _chunks[chunk].GetTags();
+            Vector128<byte> tags = ElementAt<Chunk>(_chunks, chunk).GetTags();
             Vector128<byte> matches = Vector128.Equals(tags, tagVec);
             uint mask = matches.ExtractMostSignificantBits() & VALID_SLOTS_MASK;
 
@@ -443,9 +457,9 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
                 mask &= mask - 1;
 
                 int globalIdx = chunk * CHUNK_SIZE + idx;
-                if (_keys[globalIdx].Equals(key))
+                if (ElementAt<TKey>(_keys, globalIdx).Equals(key))
                 {
-                    _chunks[chunk].SetTag(idx, EMPTY);
+                    ElementAt<Chunk>(_chunks, chunk).SetTag(idx, EMPTY);
                     _count--;
                     return true;
                 }
@@ -467,7 +481,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
         {
             Vector128<byte> emptyVec = Vector128.Create(EMPTY);
             for (int i = 0; i < _chunkCount; i++)
-                _chunks[i].SetTags(emptyVec);
+                ElementAt<Chunk>(_chunks, i).SetTags(emptyVec);
 
             _count = 0;
         }
@@ -477,17 +491,17 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Dispose()
     {
-        if (_chunks != null)
+        if (_chunks != 0)
         {
 
 
-            NativeMemory.AlignedFree(_chunks);
-            NativeMemory.AlignedFree(_keys);
-            NativeMemory.AlignedFree(_values);
+            FreeAligned(_chunks);
+            FreeAligned(_keys);
+            FreeAligned(_values);
 
-            _chunks = null;
-            _keys = null;
-            _values = null;
+            _chunks = 0;
+            _keys = 0;
+            _values = 0;
             _count = 0;
             _chunkCount = 0;
         }
@@ -501,9 +515,9 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
     /// <summary>Provides enumerator functionality.</summary>
     public struct Enumerator
     {
-        private readonly Chunk* _chunks;
-        private readonly TKey* _keys;
-        private readonly TValue* _values;
+        private readonly nint _chunks;
+        private readonly nint _keys;
+        private readonly nint _values;
         private readonly int _chunkCount;
         private int _chunkIndex;
         private int _slotIndex;
@@ -536,13 +550,13 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
 
                 while (_slotIndex < CHUNK_SIZE)
                 {
-                    byte tag = _chunks[_chunkIndex].GetTag(_slotIndex);
+                    byte tag = ElementAt<Chunk>(_chunks, _chunkIndex).GetTag(_slotIndex);
 
                     if (tag != EMPTY)
                     {
                         int globalIdx = _chunkIndex * CHUNK_SIZE + _slotIndex;
-                        _currentKey = _keys[globalIdx];
-                        _currentValue = _values[globalIdx];
+                        _currentKey = ElementAt<TKey>(_keys, globalIdx);
+                        _currentValue = ElementAt<TValue>(_values, globalIdx);
                         return true;
                     }
 
