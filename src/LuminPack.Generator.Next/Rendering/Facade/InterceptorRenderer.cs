@@ -305,6 +305,11 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             return;
         }
 
+        // A document read selects the first token itself and discards the reader after the end check.
+        // The shared state extension's token selection and completion are for caller-owned readers.
+        if (root.Owner != null && bound.Json && !bound.Writes)
+            target = "LuminPackSerializer.DeserializeJson_" + root.RootName + "<" + profile + ">";
+
         bool binaryShape = api is SerializerApi.SerializeArray or SerializerApi.DeserializeSpan or SerializerApi.DeserializeSpanRef or
             SerializerApi.DeserializeStream or SerializerApi.DeserializeStreamValue;
         var bodyKey = (Api: api, Shape: binaryShape ? bound.Shape : EntryShape.Pooled, Measured: binaryShape && measured);
