@@ -1,0 +1,616 @@
+{
+  "environment": {
+    "Kind": "Environment",
+    "ConcreteCalls": 1232,
+    "Format": "binary",
+    "Scene": "changing",
+    "Runtime": ".NET 10.0.15",
+    "Architecture": "X64",
+    "OS": "Ubuntu 26.04.1 LTS",
+    "ServerGC": true,
+    "ProcessorCount": 4,
+    "Rounds": 9,
+    "TieredCompilation": "0",
+    "References": {
+      "MemoryPack": "1.21.4+0f2fe0827907940768293b7bb81b9605a7d8cba8",
+      "Nino": "4.0.0-rc.7+ffc21b0805bf81af185423c162aa3a784a386df0"
+    }
+  },
+  "cpu": "AMD EPYC 9V74 80-Core Processor",
+  "groups": [
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "MemoryPack",
+      "operation": "write",
+      "pairs": 150,
+      "arithmetic_mean_ratio": 0.4565,
+      "faster_pairs": 149
+    },
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "MemoryPack",
+      "operation": "fresh",
+      "pairs": 150,
+      "arithmetic_mean_ratio": 0.5499,
+      "faster_pairs": 148
+    },
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "MemoryPack",
+      "operation": "reuse",
+      "pairs": 150,
+      "arithmetic_mean_ratio": 0.4477,
+      "faster_pairs": 149
+    },
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "MemoryPack",
+      "operation": "all",
+      "pairs": 450,
+      "arithmetic_mean_ratio": 0.4847,
+      "faster_pairs": 446
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "MemoryPack",
+      "operation": "write",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.3107,
+      "faster_pairs": 147
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "MemoryPack",
+      "operation": "fresh",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.5713,
+      "faster_pairs": 143
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "MemoryPack",
+      "operation": "reuse",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.496,
+      "faster_pairs": 144
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "MemoryPack",
+      "operation": "all",
+      "pairs": 441,
+      "arithmetic_mean_ratio": 0.4593,
+      "faster_pairs": 434
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "MemoryPack",
+      "operation": "write",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.2869,
+      "faster_pairs": 147
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "MemoryPack",
+      "operation": "fresh",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.5157,
+      "faster_pairs": 145
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "MemoryPack",
+      "operation": "reuse",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.4307,
+      "faster_pairs": 144
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "MemoryPack",
+      "operation": "all",
+      "pairs": 441,
+      "arithmetic_mean_ratio": 0.4111,
+      "faster_pairs": 436
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "MemoryPack",
+      "operation": "write",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.4417,
+      "faster_pairs": 147
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "MemoryPack",
+      "operation": "fresh",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.5426,
+      "faster_pairs": 143
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "MemoryPack",
+      "operation": "reuse",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.4424,
+      "faster_pairs": 144
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "MemoryPack",
+      "operation": "all",
+      "pairs": 441,
+      "arithmetic_mean_ratio": 0.4756,
+      "faster_pairs": 434
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "MemoryPack",
+      "operation": "write",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.2935,
+      "faster_pairs": 147
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "MemoryPack",
+      "operation": "fresh",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.5311,
+      "faster_pairs": 143
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "MemoryPack",
+      "operation": "reuse",
+      "pairs": 147,
+      "arithmetic_mean_ratio": 0.4709,
+      "faster_pairs": 145
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "MemoryPack",
+      "operation": "all",
+      "pairs": 441,
+      "arithmetic_mean_ratio": 0.4318,
+      "faster_pairs": 435
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "MemoryPack",
+      "operation": "write",
+      "pairs": 738,
+      "arithmetic_mean_ratio": 0.3583,
+      "faster_pairs": 737
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "MemoryPack",
+      "operation": "fresh",
+      "pairs": 738,
+      "arithmetic_mean_ratio": 0.5422,
+      "faster_pairs": 722
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "MemoryPack",
+      "operation": "reuse",
+      "pairs": 738,
+      "arithmetic_mean_ratio": 0.4575,
+      "faster_pairs": 726
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "MemoryPack",
+      "operation": "all",
+      "pairs": 2214,
+      "arithmetic_mean_ratio": 0.4526,
+      "faster_pairs": 2185
+    },
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "Nino",
+      "operation": "write",
+      "pairs": 146,
+      "arithmetic_mean_ratio": 0.8442,
+      "faster_pairs": 118
+    },
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "Nino",
+      "operation": "fresh",
+      "pairs": 146,
+      "arithmetic_mean_ratio": 0.8942,
+      "faster_pairs": 97
+    },
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "Nino",
+      "operation": "reuse",
+      "pairs": 146,
+      "arithmetic_mean_ratio": 0.7985,
+      "faster_pairs": 116
+    },
+    {
+      "format": "binary",
+      "scenario": "main",
+      "reference": "Nino",
+      "operation": "all",
+      "pairs": 438,
+      "arithmetic_mean_ratio": 0.8457,
+      "faster_pairs": 331
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "Nino",
+      "operation": "write",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.8176,
+      "faster_pairs": 98
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "Nino",
+      "operation": "fresh",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.9287,
+      "faster_pairs": 82
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "Nino",
+      "operation": "reuse",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.8875,
+      "faster_pairs": 88
+    },
+    {
+      "format": "binary",
+      "scenario": "small",
+      "reference": "Nino",
+      "operation": "all",
+      "pairs": 396,
+      "arithmetic_mean_ratio": 0.8779,
+      "faster_pairs": 268
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "Nino",
+      "operation": "write",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.7771,
+      "faster_pairs": 102
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "Nino",
+      "operation": "fresh",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.8986,
+      "faster_pairs": 82
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "Nino",
+      "operation": "reuse",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.8148,
+      "faster_pairs": 103
+    },
+    {
+      "format": "binary",
+      "scenario": "regular",
+      "reference": "Nino",
+      "operation": "all",
+      "pairs": 396,
+      "arithmetic_mean_ratio": 0.8301,
+      "faster_pairs": 287
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "Nino",
+      "operation": "write",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.9059,
+      "faster_pairs": 85
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "Nino",
+      "operation": "fresh",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.9013,
+      "faster_pairs": 85
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "Nino",
+      "operation": "reuse",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.8111,
+      "faster_pairs": 101
+    },
+    {
+      "format": "binary",
+      "scenario": "large",
+      "reference": "Nino",
+      "operation": "all",
+      "pairs": 396,
+      "arithmetic_mean_ratio": 0.8728,
+      "faster_pairs": 271
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "Nino",
+      "operation": "write",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.7955,
+      "faster_pairs": 99
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "Nino",
+      "operation": "fresh",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.9195,
+      "faster_pairs": 91
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "Nino",
+      "operation": "reuse",
+      "pairs": 132,
+      "arithmetic_mean_ratio": 0.883,
+      "faster_pairs": 92
+    },
+    {
+      "format": "binary",
+      "scenario": "changing",
+      "reference": "Nino",
+      "operation": "all",
+      "pairs": 396,
+      "arithmetic_mean_ratio": 0.866,
+      "faster_pairs": 282
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "Nino",
+      "operation": "write",
+      "pairs": 674,
+      "arithmetic_mean_ratio": 0.8284,
+      "faster_pairs": 502
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "Nino",
+      "operation": "fresh",
+      "pairs": 674,
+      "arithmetic_mean_ratio": 0.9082,
+      "faster_pairs": 437
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "Nino",
+      "operation": "reuse",
+      "pairs": 674,
+      "arithmetic_mean_ratio": 0.8381,
+      "faster_pairs": 500
+    },
+    {
+      "format": "binary",
+      "scenario": "all",
+      "reference": "Nino",
+      "operation": "all",
+      "pairs": 2022,
+      "arithmetic_mean_ratio": 0.8582,
+      "faster_pairs": 1439
+    },
+    {
+      "format": "json",
+      "scenario": "main",
+      "reference": "System.Text.Json",
+      "operation": "write",
+      "pairs": 121,
+      "arithmetic_mean_ratio": 0.367,
+      "faster_pairs": 121
+    },
+    {
+      "format": "json",
+      "scenario": "main",
+      "reference": "System.Text.Json",
+      "operation": "fresh",
+      "pairs": 121,
+      "arithmetic_mean_ratio": 0.463,
+      "faster_pairs": 116
+    },
+    {
+      "format": "json",
+      "scenario": "main",
+      "reference": "System.Text.Json",
+      "operation": "all",
+      "pairs": 242,
+      "arithmetic_mean_ratio": 0.415,
+      "faster_pairs": 237
+    },
+    {
+      "format": "json",
+      "scenario": "small",
+      "reference": "System.Text.Json",
+      "operation": "write",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.341,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "small",
+      "reference": "System.Text.Json",
+      "operation": "fresh",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.3329,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "small",
+      "reference": "System.Text.Json",
+      "operation": "all",
+      "pairs": 210,
+      "arithmetic_mean_ratio": 0.337,
+      "faster_pairs": 210
+    },
+    {
+      "format": "json",
+      "scenario": "regular",
+      "reference": "System.Text.Json",
+      "operation": "write",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.401,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "regular",
+      "reference": "System.Text.Json",
+      "operation": "fresh",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.3771,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "regular",
+      "reference": "System.Text.Json",
+      "operation": "all",
+      "pairs": 210,
+      "arithmetic_mean_ratio": 0.389,
+      "faster_pairs": 210
+    },
+    {
+      "format": "json",
+      "scenario": "large",
+      "reference": "System.Text.Json",
+      "operation": "write",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.5161,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "large",
+      "reference": "System.Text.Json",
+      "operation": "fresh",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.4195,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "large",
+      "reference": "System.Text.Json",
+      "operation": "all",
+      "pairs": 210,
+      "arithmetic_mean_ratio": 0.4678,
+      "faster_pairs": 210
+    },
+    {
+      "format": "json",
+      "scenario": "changing",
+      "reference": "System.Text.Json",
+      "operation": "write",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.4167,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "changing",
+      "reference": "System.Text.Json",
+      "operation": "fresh",
+      "pairs": 105,
+      "arithmetic_mean_ratio": 0.3864,
+      "faster_pairs": 105
+    },
+    {
+      "format": "json",
+      "scenario": "changing",
+      "reference": "System.Text.Json",
+      "operation": "all",
+      "pairs": 210,
+      "arithmetic_mean_ratio": 0.4016,
+      "faster_pairs": 210
+    },
+    {
+      "format": "json",
+      "scenario": "all",
+      "reference": "System.Text.Json",
+      "operation": "write",
+      "pairs": 541,
+      "arithmetic_mean_ratio": 0.4072,
+      "faster_pairs": 541
+    },
+    {
+      "format": "json",
+      "scenario": "all",
+      "reference": "System.Text.Json",
+      "operation": "fresh",
+      "pairs": 541,
+      "arithmetic_mean_ratio": 0.3978,
+      "faster_pairs": 536
+    },
+    {
+      "format": "json",
+      "scenario": "all",
+      "reference": "System.Text.Json",
+      "operation": "all",
+      "pairs": 1082,
+      "arithmetic_mean_ratio": 0.4025,
+      "faster_pairs": 1077
+    }
+  ]
+}

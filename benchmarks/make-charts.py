@@ -2,7 +2,7 @@
 
 Usage: python benchmarks/make-charts.py <artifacts directory> <output directory> [report-github.md files...] [--job TieredPGO]
 Reads JSON or '*-report-github.md' reports and writes <suite>-light.svg, <suite>-dark.svg and summary.json.
-Only LuminPack, MemoryPack, MessagePack and the JSON libraries listed in SUITES are drawn.
+Only LuminPack, Nino, MemoryPack, MessagePack and the JSON libraries listed in SUITES are drawn.
 """
 import glob
 import argparse
@@ -12,16 +12,22 @@ from xml.sax.saxutils import escape
 
 SUITES = {
     "SimpleBenchmark": ("Simple class", [
-        ("Serialize", [("LuminPack", "LuminPackSerialize"), ("MemoryPack", "MemoryPackSerialize"), ("MessagePack", "MessagePackSerialize")]),
-        ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("MemoryPack", "MemoryPackDeserialize"), ("MessagePack", "MessagePackDeserialize")]),
+        ("Serialize", [("LuminPack", "LuminPackSerialize"), ("Nino", "NinoSerialize"), ("MemoryPack", "MemoryPackSerialize"),
+                       ("MessagePack", "MessagePackSerialize")]),
+        ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("Nino", "NinoDeserialize"), ("MemoryPack", "MemoryPackDeserialize"),
+                         ("MessagePack", "MessagePackDeserialize")]),
     ]),
     "SerializeBenchmark": ("Game save (nested collections)", [
-        ("Serialize", [("LuminPack", "LuminPackSerialize"), ("MemoryPack", "MemoryPackSerialize"), ("MessagePack", "MessagePackSerialize")]),
-        ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("MemoryPack", "MemoryPackDeserialize"), ("MessagePack", "MessagePackDeserialize")]),
+        ("Serialize", [("LuminPack", "LuminPackSerialize"), ("Nino", "NinoSerialize"), ("MemoryPack", "MemoryPackSerialize"),
+                       ("MessagePack", "MessagePackSerialize")]),
+        ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("Nino", "NinoDeserialize"), ("MemoryPack", "MemoryPackDeserialize"),
+                         ("MessagePack", "MessagePackDeserialize")]),
     ]),
     "PolymorphismBenchmark": ("Polymorphism (interfaces and abstract classes)", [
-        ("Serialize", [("LuminPack", "LuminPackSerialize"), ("MemoryPack", "MemoryPackSerialize"), ("MessagePack", "MessagePackSerialize")]),
-        ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("MemoryPack", "MemoryPackDeserialize"), ("MessagePack", "MessagePackDeserialize")]),
+        ("Serialize", [("LuminPack", "LuminPackSerialize"), ("Nino", "NinoSerialize"), ("MemoryPack", "MemoryPackSerialize"),
+                       ("MessagePack", "MessagePackSerialize")]),
+        ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("Nino", "NinoDeserialize"), ("MemoryPack", "MemoryPackDeserialize"),
+                         ("MessagePack", "MessagePackDeserialize")]),
     ]),
     "JsonBenchmark": ("JSON (game save)", [
         ("Serialize", [("LuminPack", "LuminPackSerializeToJson"), ("System.Text.Json", "SystemTextJsonSerialize"),
@@ -31,7 +37,7 @@ SUITES = {
     ]),
 }
 
-COLORS = {"LuminPack": "#8B5CF6", "MemoryPack": "#3B82F6", "MessagePack": "#F59E0B",
+COLORS = {"LuminPack": "#8B5CF6", "Nino": "#EC4899", "MemoryPack": "#3B82F6", "MessagePack": "#F59E0B",
           "System.Text.Json": "#10B981", "Newtonsoft.Json": "#EF4444", "RE:Dox": "#64748B"}
 
 THEMES = {

@@ -6,35 +6,35 @@
 <text x="20" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
 <rect x="148" y="78" width="216" height="26" rx="5" fill="#21262D"/>
 <rect x="148" y="78" width="39.8" height="26" rx="5" fill="#8B5CF6"/>
-<text x="372" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">48.86 μs</text>
+<text x="372" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">24.71 μs</text>
 <text x="20" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">System.Text.Json</text>
 <rect x="148" y="116" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="116" width="89.9" height="26" rx="5" fill="#10B981"/>
-<text x="372" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">110.45 μs  (2.26x)</text>
+<rect x="148" y="116" width="80.1" height="26" rx="5" fill="#10B981"/>
+<text x="372" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">49.80 μs  (2.02x)</text>
 <text x="20" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">Newtonsoft.Json</text>
 <rect x="148" y="154" width="216" height="26" rx="5" fill="#21262D"/>
 <rect x="148" y="154" width="216.0" height="26" rx="5" fill="#EF4444"/>
-<text x="372" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">265.46 μs  (5.43x)</text>
+<text x="372" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">134.24 μs  (5.43x)</text>
 <text x="20" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">RE:Dox</text>
 <rect x="148" y="192" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="192" width="79.8" height="26" rx="5" fill="#64748B"/>
-<text x="372" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">98.08 μs  (2.01x)</text>
+<rect x="148" y="192" width="74.8" height="26" rx="5" fill="#64748B"/>
+<text x="372" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">46.52 μs  (1.88x)</text>
 <text x="490" y="66" font-size="14" font-weight="600" fill="#E6EDF3">Deserialize</text>
 <text x="490" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
 <rect x="618" y="78" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="78" width="27.8" height="26" rx="5" fill="#8B5CF6"/>
-<text x="842" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">72.28 μs</text>
+<rect x="618" y="78" width="39.9" height="26" rx="5" fill="#8B5CF6"/>
+<text x="842" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">50.04 μs</text>
 <text x="490" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">System.Text.Json</text>
 <rect x="618" y="116" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="116" width="71.9" height="26" rx="5" fill="#10B981"/>
-<text x="842" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">186.76 μs  (2.58x)</text>
+<rect x="618" y="116" width="67.2" height="26" rx="5" fill="#10B981"/>
+<text x="842" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">84.25 μs  (1.68x)</text>
 <text x="490" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">Newtonsoft.Json</text>
 <rect x="618" y="154" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="154" width="157.2" height="26" rx="5" fill="#EF4444"/>
-<text x="842" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">408.21 μs  (5.65x)</text>
+<rect x="618" y="154" width="169.5" height="26" rx="5" fill="#EF4444"/>
+<text x="842" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">212.62 μs  (4.25x)</text>
 <text x="490" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">RE:Dox</text>
 <rect x="618" y="192" width="216" height="26" rx="5" fill="#21262D"/>
 <rect x="618" y="192" width="216.0" height="26" rx="5" fill="#64748B"/>
-<text x="842" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">561.00 μs  (7.76x)</text>
+<text x="842" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">270.88 μs  (5.41x)</text>
 <text x="20" y="260" font-size="11" fill="#9198A1">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>
 </svg>

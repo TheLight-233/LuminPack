@@ -1,32 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="950" height="238" viewBox="0 0 950 238" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
-<rect x="0.5" y="0.5" width="949" height="237" rx="10" fill="#0D1117" stroke="#30363D"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="950" height="276" viewBox="0 0 950 276" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+<rect x="0.5" y="0.5" width="949" height="275" rx="10" fill="#0D1117" stroke="#30363D"/>
 <text x="20" y="34" font-size="18" font-weight="600" fill="#E6EDF3">Simple class</text>
 <text x="930" y="34" font-size="12" text-anchor="end" fill="#9198A1">mean time per operation · lower is better</text>
 <text x="20" y="66" font-size="14" font-weight="600" fill="#E6EDF3">Serialize</text>
 <text x="20" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
 <rect x="148" y="78" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="78" width="6.7" height="26" rx="5" fill="#8B5CF6"/>
-<text x="372" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">95.2 ns</text>
-<text x="20" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">MemoryPack</text>
+<rect x="148" y="78" width="6.4" height="26" rx="5" fill="#8B5CF6"/>
+<text x="372" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">42.7 ns</text>
+<text x="20" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">Nino</text>
 <rect x="148" y="116" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="116" width="49.9" height="26" rx="5" fill="#3B82F6"/>
-<text x="372" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">713.8 ns  (7.50x)</text>
-<text x="20" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">MessagePack</text>
+<rect x="148" y="116" width="12.3" height="26" rx="5" fill="#EC4899"/>
+<text x="372" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">81.8 ns  (1.92x)</text>
+<text x="20" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">MemoryPack</text>
 <rect x="148" y="154" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="154" width="216.0" height="26" rx="5" fill="#F59E0B"/>
-<text x="372" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">3.09 μs  (32.47x)</text>
+<rect x="148" y="154" width="46.1" height="26" rx="5" fill="#3B82F6"/>
+<text x="372" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">305.3 ns  (7.16x)</text>
+<text x="20" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">MessagePack</text>
+<rect x="148" y="192" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="148" y="192" width="216.0" height="26" rx="5" fill="#F59E0B"/>
+<text x="372" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">1.43 μs  (33.56x)</text>
 <text x="490" y="66" font-size="14" font-weight="600" fill="#E6EDF3">Deserialize</text>
 <text x="490" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
 <rect x="618" y="78" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="78" width="13.6" height="26" rx="5" fill="#8B5CF6"/>
-<text x="842" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">411.7 ns</text>
-<text x="490" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">MemoryPack</text>
+<rect x="618" y="78" width="14.1" height="26" rx="5" fill="#8B5CF6"/>
+<text x="842" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">230.4 ns</text>
+<text x="490" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">Nino</text>
 <rect x="618" y="116" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="116" width="25.0" height="26" rx="5" fill="#3B82F6"/>
-<text x="842" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">756.0 ns  (1.84x)</text>
-<text x="490" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">MessagePack</text>
+<rect x="618" y="116" width="17.7" height="26" rx="5" fill="#EC4899"/>
+<text x="842" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">288.3 ns  (1.25x)</text>
+<text x="490" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">MemoryPack</text>
 <rect x="618" y="154" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="154" width="216.0" height="26" rx="5" fill="#F59E0B"/>
-<text x="842" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">6.54 μs  (15.88x)</text>
-<text x="20" y="222" font-size="11" fill="#9198A1">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>
+<rect x="618" y="154" width="24.7" height="26" rx="5" fill="#3B82F6"/>
+<text x="842" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">403.4 ns  (1.75x)</text>
+<text x="490" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">MessagePack</text>
+<rect x="618" y="192" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="618" y="192" width="216.0" height="26" rx="5" fill="#F59E0B"/>
+<text x="842" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">3.53 μs  (15.30x)</text>
+<text x="20" y="260" font-size="11" fill="#9198A1">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>
 </svg>
