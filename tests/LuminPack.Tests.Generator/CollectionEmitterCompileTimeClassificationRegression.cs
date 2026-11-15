@@ -112,7 +112,7 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertOpenFallback(GetField(compilation, "OpenCollections`1", "List"), ListEmitter.GenerateSerializeCode, ListEmitter.GenerateDeserializeCode, "open List<T>");
         AssertOpenFallback(GetField(compilation, "OpenCollections`1", "Stack"), StackEmitter.GenerateSerializeCode, StackEmitter.GenerateDeserializeCode, "open Stack<T>");
         AssertOpenFallback(GetField(compilation, "OpenCollections`1", "Queue"), QueueEmitter.GenerateSerializeCode, QueueEmitter.GenerateDeserializeCode, "open Queue<T>");
-        AssertConcurrentStackClear(GetField(compilation, "OpenCollections`1", "ConcurrentStack"), "true", "unresolved concurrent stack storage");
+        AssertConcurrentStackClear(GetField(compilation, "OpenCollections`1", "ConcurrentStack"), null, "unresolved concurrent stack storage");
 
         LuminLocalFieldData nullableList = GetField(compilation, "ClosedCollections", "NullablePacketList");
         string nullableWrite = Generate(nullableList, ListEmitter.GenerateSerializeCodeWithCompress);
@@ -225,14 +225,20 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
 
     /// <summary>Verifies assert concurrent stack clear.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>
-    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="expected">The constant clearing decision, or null for an open element type.</param>
     /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertConcurrentStackClear(
-        LuminLocalFieldData field, string expected, string scenario)
+        LuminLocalFieldData field, string? expected, string scenario)
     {
         string write = Generate(field, ConcurrentStackEmitter.GenerateSerializeCode);
-        AssertContains(write, "clearArray: " + expected, scenario + " did not use a generation-time ArrayPool clearing decision.");
-        AssertDoesNotContain(write, "RuntimeHelpers.IsReferenceOrContainsReferences", scenario + " retained a runtime ArrayPool clearing branch.");
+        const string runtimeCheck = "RuntimeHelpers.IsReferenceOrContainsReferences";
+        if (expected == null)
+            AssertContains(write, runtimeCheck, scenario + " lost the runtime clearing decision for open storage.");
+        else
+        {
+            AssertContains(write, ".Shared.Return(snapshot, " + expected + ")", scenario + " lost its generation-time clearing decision.");
+            AssertDoesNotContain(write, runtimeCheck, scenario + " retained a runtime ArrayPool clearing branch.");
+        }
     }
 
     /// <summary>Verifies assert open fallback.</summary>

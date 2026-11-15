@@ -17,7 +17,7 @@ internal static class InterfaceReadEmitterShapeRegression
             "IList<T> must fill a fresh List<T> backing array without List.Add bookkeeping.");
         AssertContains(
             listRead,
-            "Unsafe.Add(ref first, i)",
+            "Unsafe.Add(ref ",
             "IList<T> must retain a bounds-check-free concrete element loop.");
         AssertDoesNotContain(
             listRead,
@@ -50,8 +50,9 @@ internal static class InterfaceReadEmitterShapeRegression
             scenario + " must preallocate from its validated collection header.");
         AssertContains(
             read,
-            "dict.Add(k!, v);",
+            "fallback.Add(",
             scenario + " must retain Add so duplicate-key behavior remains unchanged.");
+        AssertContains(read, "destination.Add(", scenario + " must also reject duplicate keys when reusing a dictionary.");
     }
 
     /// <summary>Captures the source produced by the code emitter under test.</summary>

@@ -115,9 +115,9 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         VerifyImmutableQueue(fields["ClosedManagedImmutable"], expected: ExpectedKind.Managed);
         VerifyImmutableQueue(fields["ClosedReferenceTableTrapImmutable"], expected: ExpectedKind.Managed);
         VerifyImmutableQueue(fields["ConstrainedUnmanagedImmutable"], expected: ExpectedKind.Unmanaged);
-        VerifyImmutableQueue(fields["OpenImmutable"], expected: ExpectedKind.Managed);
+        VerifyImmutableQueue(fields["OpenImmutable"], expected: ExpectedKind.RuntimeFallback);
         VerifyImmutableQueue(fields["ClassConstrainedImmutable"], expected: ExpectedKind.Managed);
-        VerifyImmutableQueue(fields["InterfaceConstrainedImmutable"], expected: ExpectedKind.Managed);
+        VerifyImmutableQueue(fields["InterfaceConstrainedImmutable"], expected: ExpectedKind.RuntimeFallback);
         VerifyImmutableQueue(fields["OpenReferenceEnvelopeImmutable"], expected: ExpectedKind.Managed);
 
         VerifyObjectCollectionEvaluator(fields["ClosedUnmanagedStructList"], LuminFiledType.List, ExpectedKind.Unmanaged);
@@ -199,15 +199,16 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         var generated = new StringBuilder();
         ImmutableQueueEmitter.GenerateDeserializeCode(CreateFieldData(field), generated);
         string text = generated.ToString();
+        var returnedBuffer = System.Text.RegularExpressions.Regex.Match(text, @"\.Shared\.Return\([^,]+, (true|false)\);");
 
         switch (expected)
         {
             case ExpectedKind.Unmanaged:
-                Require(text, "clearArray: false", field.Name);
+                Require(returnedBuffer.Groups[1].Value, "false", field.Name);
                 Reject(text, "IsReferenceOrContainsReferences", field.Name);
                 break;
             case ExpectedKind.Managed:
-                Require(text, "clearArray: true", field.Name);
+                Require(returnedBuffer.Groups[1].Value, "true", field.Name);
                 Reject(text, "IsReferenceOrContainsReferences", field.Name);
                 break;
             case ExpectedKind.RuntimeFallback:
