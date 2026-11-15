@@ -59,7 +59,7 @@ public static partial class LuminPackCollectionAccess
     /// <param name="collection">The existing observable result.</param>
     /// <param name="item">The element after its formatter has completed.</param>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    [MethodImpl(MethodImplOptions.NoInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void AppendObservable<T>(ObservableCollection<T> collection, T item)
     {
         if (collection.GetType() == typeof(ObservableCollection<T>) && ObservableListeners.Available &&
@@ -74,8 +74,15 @@ public static partial class LuminPackCollectionAccess
                 return;
             }
         }
-        collection.Add(item);
+        AppendObservablePublic(collection, item);
     }
+
+    /// <summary>Appends through the public operation when listeners or custom storage may be present.</summary>
+    /// <typeparam name="T">The collection element type.</typeparam>
+    /// <param name="collection">The existing observable result.</param>
+    /// <param name="item">The element after its formatter has completed.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void AppendObservablePublic<T>(ObservableCollection<T> collection, T item) => collection.Add(item);
 
     /// <summary>Checks observable listener fields across value and reference element instantiations before using them.</summary>
     private static class ObservableListeners
