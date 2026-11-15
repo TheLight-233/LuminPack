@@ -158,19 +158,21 @@ internal static class SerializerSharedFacadeRegression
             Require(adapters.All(method => method.ParameterList.Parameters.All(parameter => parameter.Modifiers.Any(SyntaxKind.ScopedKeyword) == modern)),
                 "Adapter ref-safety annotations differ from the target state APIs.");
         }
-        // A primitive-only object has a constant width: modern targets write it directly; pointer-cursor targets keep the pooled entry.
+        // Both compiler profiles reference the same managed-cursor Core asset.
         var fixedWrite = methods.Single(method => method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText.StartsWith("LuminEntry_", StringComparison.Ordinal) &&
             method.Identifier.ValueText == "Serialize" && method.TypeParameterList?.Parameters.Count == 1 &&
             method.ReturnType.ToString() == "byte[]" && method.ParameterList.Parameters.Count == 1 && method.ParameterList.Parameters[0].Type?.ToString() == "global::C");
         string fixedBody = fixedWrite.Body!.ToString();
-        Require(modern
-                ? fixedBody.Contains("new byte[", StringComparison.Ordinal) && !fixedBody.Contains("LuminBufferWriterPool", StringComparison.Ordinal)
-                : fixedBody.Contains("LuminFacade_", StringComparison.Ordinal) || fixedBody.Contains("LuminBufferWriterPool", StringComparison.Ordinal),
-            "A fixed record changed its allocating entry selection.");
+        Require(fixedBody.Contains("new byte[", StringComparison.Ordinal) && !fixedBody.Contains("LuminBufferWriterPool", StringComparison.Ordinal),
+            "A fixed record lost direct allocation on the managed-cursor runtime.");
         Require(facade.Any(method => method.Identifier.ValueText.StartsWith("LuminFacade_", StringComparison.Ordinal) && method.TypeParameterList?.Parameters.Count == 3),
             "No generic shared body was emitted.");
-        Require(methods.Any(method => method.Identifier.ValueText == "Deserialize" && method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "int") &&
-            method.Body!.ToString().Contains("sequenceValue", StringComparison.Ordinal)), "Sharing replaced architecture-specific raw sequence staging.");
+        Require(methods.Any(method => method.Identifier.ValueText == "Deserialize" &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "int") &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().EndsWith("ReadOnlySequence<byte>", StringComparison.Ordinal) == true) &&
+            method.Body is { } body && body.DescendantNodes().OfType<StackAllocArrayCreationExpressionSyntax>().Any() &&
+            body.ToString().Contains("LuminPackReader.Read<int>", StringComparison.Ordinal)),
+            "Sharing replaced architecture-specific raw sequence staging.");
         using var image = new MemoryStream();
         var emitted = output.Emit(image);
         Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
