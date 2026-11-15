@@ -124,13 +124,13 @@ internal static class SerializerTimeZoneCacheRegression
         var parse = new CSharpParseOptions(LanguageVersion.CSharp13).WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
         var root = CSharpSyntaxTree.ParseText(source, parse).GetRoot();
         var projection = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.Code.Core.PinnedReaderProjection", throwOnError: true)!;
-        var rewriter = (CSharpSyntaxRewriter)Activator.CreateInstance(projection,
-            BindingFlags.Instance | BindingFlags.NonPublic, binder: null, [true], culture: null)!;
+        var rewriter = (CSharpSyntaxRewriter)Activator.CreateInstance(projection, nonPublic: true)!;
         var rewritten = rewriter.Visit(root)!;
         Require(rewritten.DescendantNodes().OfType<MethodDeclarationSyntax>().All(method => !method.Modifiers.Any(SyntaxKind.UnsafeKeyword)) &&
-            rewritten.DescendantNodes().OfType<UnsafeStatementSyntax>().Count() == 1 &&
-            rewritten.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Single().Modifiers.Any(SyntaxKind.UnsafeKeyword),
-            "An input pin made an enclosing async method unsafe or lost its synchronous local scope.");
+            rewritten.DescendantNodes().OfType<LocalFunctionStatementSyntax>().All(method => !method.Modifiers.Any(SyntaxKind.UnsafeKeyword)) &&
+            rewritten.DescendantNodes().OfType<TryStatementSyntax>().Count(scope => scope.Finally?.ToString()
+                .Contains("LuminBufferWriterPool.Return", StringComparison.Ordinal) == true) == 2,
+            "The portable input lifetime escaped its synchronous scope or lost pooled cleanup.");
         var compilation = CSharpCompilation.Create("AsyncPinScopes", [CSharpSyntaxTree.Create((CSharpSyntaxNode)rewritten, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         using var image = new MemoryStream();

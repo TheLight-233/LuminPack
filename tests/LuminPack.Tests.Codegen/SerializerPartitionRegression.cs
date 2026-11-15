@@ -161,7 +161,8 @@ internal static class SerializerPartitionRegression
                 !child.Contains("RootWriteJson", StringComparison.Ordinal),
                 "The binary write and its child must be kept independently of binary read and JSON.");
             Require(json.Contains("RootWriteJson", StringComparison.Ordinal) && !json.Contains("RootRead", StringComparison.Ordinal) &&
-                !json.Contains("GetJsonPropertyIndex", StringComparison.Ordinal) && !Regex.IsMatch(json, @"\bRootWrite[<(]"),
+                !json.Contains("GetJsonPropertyIndex", StringComparison.Ordinal) &&
+                !json.Contains("TryReadOrderedJsonProperty", StringComparison.Ordinal) && !Regex.IsMatch(json, @"\bRootWrite[<(]"),
                 "A JSON method group must keep only the JSON write for its payload.");
             string read = Model("ReadModel");
             Require(read.Contains("RootRead", StringComparison.Ordinal) && !read.Contains("RootWrite", StringComparison.Ordinal) &&
@@ -180,6 +181,7 @@ internal static class SerializerPartitionRegression
             CheckErrors(forcedOutput);
             files = AllFiles(forcedRun);
             Require(Model("BinaryModel").Contains("RootReadJson", StringComparison.Ordinal) &&
+                Model("BinaryModel").Contains("TryReadOrderedJsonProperty", StringComparison.Ordinal) &&
                 !Model("BinaryModel").Contains("RootWriteJson", StringComparison.Ordinal) &&
                 !Model("UnusedModel").Contains("RootRead(", StringComparison.Ordinal),
                 "Forcing JSON read retained the wrong operations.");
