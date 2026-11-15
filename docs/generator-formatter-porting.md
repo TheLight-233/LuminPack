@@ -1,6 +1,6 @@
 # Porting generator formatters
 
-[жпнд](generator-formatter-porting.cn.md)
+[Chinese](generator-formatter-porting.cn.md)
 
 Read the [mechanism contract](mechanism-contract.md) before changing operation bodies.
 
