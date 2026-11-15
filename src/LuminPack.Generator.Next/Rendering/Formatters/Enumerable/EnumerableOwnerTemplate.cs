@@ -939,7 +939,9 @@ internal static class EnumerableOwnerTemplate
                     w.Close();
                     w.Blank();
                     w.Line("reader.TryConsumeArrayStart<TLuminProfile>();");
-                    if (ImmutableInterfaceOwnerFile.ReadJsonTree(context, elementOwner, jsonReader))
+                    string? immutableIntegerRead = integerRead != null &&
+                        set.FindFormatter(scalar) is { Definition: FormatterDefinitions.Scalar, Underlying: null } ? integerRead : null;
+                    if (ImmutableInterfaceOwnerFile.ReadJsonTree(context, elementOwner, jsonReader, immutableIntegerRead))
                     {
                         w.Close();
                         w.Blank();

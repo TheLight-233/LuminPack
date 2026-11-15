@@ -141,7 +141,7 @@ internal static class ImmutableInterfaceOwnerFile
         }
     }
 
-    internal static bool ReadJsonTree(EnumerableOwnerContext c, string owner, string reader)
+    internal static bool ReadJsonTree(EnumerableOwnerContext c, string owner, string reader, string? integerRead)
     {
         bool sorted = c.Supports("BuildOrderedImmutableSortedSet");
         string family = Concrete(c);
@@ -179,8 +179,13 @@ internal static class ImmutableInterfaceOwnerFile
         w.Line("    break;");
         w.Line("if (reader.CurrentTokenType == " + reader + ".JsonTokenType.ObjectEnd)");
         w.Line("    continue;");
-        w.Line(c.Scalar + " item = default!;");
-        w.Line(owner + ".Read<TLuminProfile>(ref reader, ref item);");
+        if (family == "ImmutableList" && integerRead != null)
+            w.Line(c.Scalar + " item = " + integerRead + ";");
+        else
+        {
+            w.Line(c.Scalar + " item = default!;");
+            w.Line(owner + ".Read<TLuminProfile>(ref reader, ref item);");
+        }
         w.Line("if (count == capacity)");
         w.Open();
         w.Line("var larger = " + pool + ".Rent(count == 0 ? 16 : checked(count * 2));");
