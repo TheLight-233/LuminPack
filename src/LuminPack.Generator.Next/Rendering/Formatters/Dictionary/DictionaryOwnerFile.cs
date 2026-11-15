@@ -530,7 +530,7 @@ internal static class DictionaryOwnerFile
                     }
                     else
                         w.Line(value + " item = " + (key == "string" && set.FindFormatter(dictionary)?.Supports("EnumeratedStringKey") == true ?
-                            "useEnumeratedValue && key is not null && global::System.Object.ReferenceEquals(key, prior.Key) ? prior.Value : " : "") +
+                            "useEnumeratedValue && global::System.Object.ReferenceEquals(key, prior.Key) ? prior.Value : " : "") +
                             // A non-nullable value key needs no null check before the lookup.
                             (key == "string" || key == "object" || key.EndsWith("?", System.StringComparison.Ordinal) ? "key is not null && " : "") +
                             "destination.TryGetValue(key, out var existing) ? existing : default!;");
