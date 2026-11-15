@@ -21,19 +21,23 @@ internal abstract class Fixture(string name)
     /// <param name="create">Creates an input value from a deterministic seed.</param>
     /// <param name="write">Serializes a value to binary.</param>
     /// <param name="read">Deserializes binary into an existing destination.</param>
+    /// <param name="writeNino">Serializes a value using Nino.</param>
+    /// <param name="readNino">Deserializes using Nino's by-reference API.</param>
     /// <param name="writeJson">Serializes a value to JSON.</param>
     /// <param name="readJson">Deserializes JSON into an existing destination.</param>
     /// <param name="snapshot">Optionally normalizes values for round-trip comparison.</param>
     /// <returns>The fixture used to prepare each library's operations.</returns>
     internal static Fixture Create<T>(string name, Func<int, T> create,
         Func<T, byte[]> write, ReadValue<T, byte[]> read,
+        Func<T, byte[]> writeNino, ReadValue<T, byte[]> readNino,
         Func<T, string> writeJson, ReadValue<T, string> readJson,
         Func<T, string>? snapshot = null)
-        => new TypedFixture<T>(name, create, write, read, writeJson, readJson,
+        => new TypedFixture<T>(name, create, write, read, writeNino, readNino, writeJson, readJson,
             snapshot ?? (value => Canonical.Of(value)));
 
     private sealed class TypedFixture<T>(string name, Func<int, T> create,
         Func<T, byte[]> write, ReadValue<T, byte[]> read,
+        Func<T, byte[]> writeNino, ReadValue<T, byte[]> readNino,
         Func<T, string> writeJson, ReadValue<T, string> readJson,
         Func<T, string> snapshot) : Fixture(name)
     {
@@ -65,6 +69,8 @@ internal abstract class Fixture(string name)
             {
                 yield return new TypedCodec<T, byte[]>("LuminPack", first, second, expected, changed,
                     snapshot, write, read, static payload => payload.Length);
+                yield return new TypedCodec<T, byte[]>("Nino", first, second, expected, changed,
+                    snapshot, writeNino, readNino, static payload => payload.Length);
                 // Repeated reads can terminate the process before managed exception handling runs.
                 if (typeof(T) == typeof(BitArray))
                 {

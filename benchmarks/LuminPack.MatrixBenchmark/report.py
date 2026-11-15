@@ -29,12 +29,22 @@ def load_process(path):
     primary = {case for case, library in validated if library == "LuminPack"}
     if len(primary) != expected_fixtures:
         raise ValueError(f"{path}: LuminPack validated {len(primary)} of {expected_fixtures} fixtures")
+    if environment["Format"] == "binary":
+        nino = {case for case, library in validated if library == "Nino"}
+        nino_failures = {row["Case"] for row in issues
+                         if row["Library"] == "Nino" and row["Kind"] == "ValidationFailure"}
+        if not nino or nino & nino_failures or (nino | nino_failures) != primary:
+            raise ValueError(f"{path}: incomplete Nino validation results")
     rounds = environment["Rounds"]
     if rounds:
         for case in primary:
             for operation in ("write", "fresh", "reuse"):
                 if (case, operation, "LuminPack") not in timing:
                     raise ValueError(f"{path}: missing {case}/{operation}")
+        for case, library in validated:
+            for operation in ("write", "fresh"):
+                if (case, operation, library) not in timing:
+                    raise ValueError(f"{path}: missing {case}/{library}/{operation}")
     for key, samples in timing.items():
         if len(samples) != rounds or {r["Round"] for r in samples} != set(range(rounds)):
             raise ValueError(f"{path}: incomplete samples for {key}")
@@ -54,8 +64,8 @@ def main(directory):
     report = ["# Serialization benchmark matrix", "",
               "Ratios are LuminPack time divided by reference time. Lower is faster.",
               "Counts include only operations with valid results from both libraries in every process.", "",
-              "| Format | Scenario | Operation | Paired operations | Geometric mean | Arithmetic mean |",
-              "|---|---|---|---:|---:|---:|"]
+              "| Format | Scenario | Reference | Operation | Paired operations | Geometric mean | Arithmetic mean |",
+              "|---|---|---|---|---:|---:|---:|"]
     coverage = []
     operations = []
     pairs = []
@@ -67,9 +77,11 @@ def main(directory):
         if any((env, set(timing), set(checks)) != (environment, set(first), set(validated))
                for env, timing, checks, _ in runs):
             raise ValueError(f"{fmt}/{scene}: inconsistent process results")
-        reference = "MemoryPack" if fmt == "binary" else "System.Text.Json"
-        coverage.append((fmt, scene, len(validated) - sum(lib == reference for _, lib in validated),
-                         sum(lib == reference for _, lib in validated)))
+        references = environment["References"]
+        primary_count = sum(lib == "LuminPack" for _, lib in validated)
+        for reference in references:
+            coverage.append((fmt, scene, reference, primary_count,
+                             sum(lib == reference for _, lib in validated)))
         for issue in issues:
             unsupported.append((fmt, scene, issue["Case"], issue["Library"],
                                 issue.get("Operation", "all"), issue["Reason"]))
@@ -84,26 +96,28 @@ def main(directory):
             operations.append((fmt, scene, case, operation, library, statistics.median(times),
                                min(times), max(times), statistics.median(allocations), validated[case, library]))
 
-        for operation in ("write", "fresh", "reuse", "all"):
-            values = []
-            for case, action, lib in sorted(first):
-                if lib != "LuminPack" or operation not in (action, "all") or (case, action, reference) not in first:
-                    continue
-                ratios = [a / b for a, b in zip(medians((case, action, lib), "Nanoseconds"),
-                                               medians((case, action, reference), "Nanoseconds"))]
-                values.append(statistics.median(ratios))
-                if operation != "all":
-                    pairs.append((fmt, scene, case, action, reference, values[-1], min(ratios), max(ratios)))
-            if first:
-                means = f"{statistics.geometric_mean(values):.3f} | {statistics.mean(values):.3f}" if values else "— | —"
-                report.append(f"| {fmt} | {scene} | {operation} | {len(values)} | {means} |")
+        for reference in references:
+            for operation in ("write", "fresh", "reuse", "all"):
+                values = []
+                for case, action, lib in sorted(first):
+                    if lib != "LuminPack" or operation not in (action, "all") or (case, action, reference) not in first:
+                        continue
+                    ratios = [a / b for a, b in zip(medians((case, action, lib), "Nanoseconds"),
+                                                   medians((case, action, reference), "Nanoseconds"))]
+                    values.append(statistics.median(ratios))
+                    if operation != "all":
+                        pairs.append((fmt, scene, case, action, reference, values[-1], min(ratios), max(ratios)))
+                if first:
+                    means = f"{statistics.geometric_mean(values):.3f} | {statistics.mean(values):.3f}" if values else "— | —"
+                    report.append(f"| {fmt} | {scene} | {reference} | {operation} | {len(values)} | {means} |")
 
     if not operations:
         report = ["# Serialization benchmark matrix validation", "",
                   "This run validated fixtures without collecting timing samples."]
-    report += ["", "| Format | Scenario | Validated LuminPack fixtures | Validated reference fixtures |",
-               "|---|---|---:|---:|"]
-    report += [f"| {fmt} | {scene} | {primary} | {reference} |" for fmt, scene, primary, reference in coverage]
+    report += ["", "| Format | Scenario | Reference | Validated LuminPack fixtures | Validated reference fixtures |",
+               "|---|---|---|---:|---:|"]
+    report += [f"| {fmt} | {scene} | {library} | {primary} | {reference} |"
+               for fmt, scene, library, primary, reference in coverage]
     report += ["", "See the uploaded JSONL for raw samples and environment metadata.",
                "The CSV files contain operation medians, process ranges, allocations, and unavailable operations."]
 

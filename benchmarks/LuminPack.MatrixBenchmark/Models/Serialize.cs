@@ -4,6 +4,7 @@ using LuminPack.Attribute;
 using LuminPack.Option;
 using LuminPack.Utility;
 using MemoryPack;
+using Nino.Core;
 
 namespace LuminPackBenchmark;
 
@@ -112,6 +113,7 @@ public enum EventCategory : int
 [System.Text.Json.Serialization.JsonDerivedType(typeof(QuestItem), "QuestItem")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(PetItem), "PetItem")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(RelicItem), "RelicItem")]
+[NinoType]
 public abstract partial class ItemBase
 {
     /// <summary>Stores the item id.</summary>
@@ -131,6 +133,7 @@ public abstract partial class ItemBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class WeaponItem : ItemBase
 {
     /// <summary>Stores the attack power.</summary>
@@ -171,6 +174,7 @@ public sealed partial class WeaponItem : ItemBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class ArmorItem : ItemBase
 {
     /// <summary>Stores the defense.</summary>
@@ -208,6 +212,7 @@ public sealed partial class ArmorItem : ItemBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class ConsumableItem : ItemBase
 {
     /// <summary>Stores the count.</summary>
@@ -245,6 +250,7 @@ public sealed partial class ConsumableItem : ItemBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class MountItem : ItemBase
 {
     /// <summary>Stores the speed bonus.</summary>
@@ -279,6 +285,7 @@ public sealed partial class MountItem : ItemBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class QuestItem : ItemBase
 {
     /// <summary>Stores the quest id.</summary>
@@ -313,6 +320,7 @@ public sealed partial class QuestItem : ItemBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class PetItem : ItemBase
 {
     /// <summary>Stores the pet name.</summary>
@@ -350,6 +358,7 @@ public sealed partial class PetItem : ItemBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class RelicItem : ItemBase
 {
     /// <summary>Stores the set id.</summary>
@@ -406,6 +415,7 @@ public sealed partial class RelicItem : ItemBase
 [System.Text.Json.Serialization.JsonDerivedType(typeof(PassiveSkill), "PassiveSkill")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(UltimateSkill), "UltimateSkill")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(SupportSkill), "SupportSkill")]
+[NinoType]
 public abstract partial class SkillBase
 {
     /// <summary>Stores the skill id.</summary>
@@ -425,6 +435,7 @@ public abstract partial class SkillBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class ActiveSkill : SkillBase
 {
     /// <summary>Stores the cast time.</summary>
@@ -462,6 +473,7 @@ public sealed partial class ActiveSkill : SkillBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class PassiveSkill : SkillBase
 {
     /// <summary>Stores the trigger chance.</summary>
@@ -496,6 +508,7 @@ public sealed partial class PassiveSkill : SkillBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class UltimateSkill : SkillBase
 {
     /// <summary>Stores the charge rate.</summary>
@@ -533,6 +546,7 @@ public sealed partial class UltimateSkill : SkillBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class SupportSkill : SkillBase
 {
     /// <summary>Stores the heal power.</summary>
@@ -583,6 +597,7 @@ public sealed partial class SupportSkill : SkillBase
 [System.Text.Json.Serialization.JsonDerivedType(typeof(CraftingEventLog), "CraftingEventLog")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(TradeEventLog), "TradeEventLog")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(AchievementEventLog), "AchievementEventLog")]
+[NinoType]
 public abstract partial class EventLogBase
 {
     /// <summary>Stores the timestamp.</summary>
@@ -598,6 +613,7 @@ public abstract partial class EventLogBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class CombatEventLog : EventLogBase
 {
     /// <summary>Stores the target id.</summary>
@@ -633,6 +649,7 @@ public sealed partial class CombatEventLog : EventLogBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class CraftingEventLog : EventLogBase
 {
     /// <summary>Stores the recipe id.</summary>
@@ -665,6 +682,7 @@ public sealed partial class CraftingEventLog : EventLogBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class TradeEventLog : EventLogBase
 {
     /// <summary>Stores the partner id.</summary>
@@ -697,6 +715,7 @@ public sealed partial class TradeEventLog : EventLogBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class AchievementEventLog : EventLogBase
 {
     /// <summary>Stores the achievement id.</summary>
@@ -734,6 +753,7 @@ public sealed partial class AchievementEventLog : EventLogBase
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class Envelope<T>
 {
     /// <summary>Stores the timestamp.</summary>
@@ -755,6 +775,7 @@ public sealed partial class Envelope<T>
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class ActiveBuff
 {
     /// <summary>Stores the type.</summary>
@@ -787,6 +808,7 @@ public sealed partial class ActiveBuff
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class CharacterStats
 {
     /// <summary>Stores the hp.</summary>
@@ -833,6 +855,7 @@ public sealed partial class CharacterStats
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class GuildInfo
 {
     /// <summary>Stores the guild id.</summary>
@@ -883,6 +906,7 @@ public sealed partial class GuildInfo
 [MemoryPackable]
 
 
+[NinoType]
 public sealed partial class CharacterSaveData
 {
     // Scalar fields.

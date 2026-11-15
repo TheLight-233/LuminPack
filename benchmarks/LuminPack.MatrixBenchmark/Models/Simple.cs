@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using LuminPack.Attribute;
 using MemoryPack;
+using Nino.Core;
 
 
 #nullable disable
@@ -22,6 +23,7 @@ using MemoryPack;
 
 
 [System.Text.Json.Serialization.JsonDerivedType(typeof(SimpleClass), "SimpleClass")]
+[NinoType]
 public abstract partial class SimpleClassBase
 {
     /// <summary>Stores the base id.</summary>
@@ -37,6 +39,7 @@ public abstract partial class SimpleClassBase
 
 [LuminPackable]
 
+[NinoType]
 public sealed partial class SimpleClass : SimpleClassBase, Ifoo
 {
     /// <summary>Stores the id.</summary>
@@ -140,6 +143,7 @@ public sealed partial class SimpleClass : SimpleClassBase, Ifoo
 [LuminPackable]
 
 [LuminPackOption(StructLayout = global::LuminPack.Attribute.LuminPackStructLayout.Packed)]
+[NinoType]
 public partial struct Transform
 {
     /// <summary>Stores the x.</summary>
@@ -159,6 +163,7 @@ public partial struct Transform
     /// <param name="y">The y used by this operation.</param>
     /// <param name="z">The z used by this operation.</param>
     [LuminPackConstructor]
+    [NinoConstructor]
     //[MemoryPackConstructor]
 
     public Transform(float x, float y, float z)

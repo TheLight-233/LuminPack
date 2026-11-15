@@ -2,8 +2,9 @@ using System.Buffers;
 using LuminPack.Attribute;
 using LuminPackBenchmark;
 using MemoryPack;
+using Nino.Core;
 
-[LuminPackable, MemoryPackable]
+[LuminPackable, MemoryPackable, NinoType]
 public sealed partial class Element : IComparable<Element>
 {
     public int Id;
@@ -16,7 +17,7 @@ public sealed partial class Element : IComparable<Element>
     public int CompareTo(Element? other) => other is null ? 1 : Id.CompareTo(other.Id);
 }
 
-[LuminPackable, MemoryPackable]
+[LuminPackable, MemoryPackable, NinoType]
 public sealed partial class Record : IComparable<Record>
 {
     public int Id;

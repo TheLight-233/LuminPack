@@ -88,7 +88,7 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 dotnet run --project benchmarks/LuminPack.MatrixBenchmark -c Release -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false -- binary small 0 matrix.jsonl
 ```
 
-二进制对照 MemoryPack，JSON 对照使用源生成元数据的 System.Text.Json。Write 返回新字节数组或字符串。Fresh 从空目标读入，Reuse 从已有目标读入。System.Text.Json 没有对等的根对象 Reuse 操作。报告列出不支持和未通过往返校验的操作，比值只使用同一进程中通过校验的配对。
+二进制对照 MemoryPack 和 Nino，并使用 Nino 官方的不可变集合格式化器。JSON 对照使用源生成元数据的 System.Text.Json。Write 返回新字节数组或字符串。Fresh 从空目标读入，Reuse 从已有目标读入。System.Text.Json 没有对等的根对象 Reuse 操作。报告列出不支持和未通过往返校验的操作，并按参考库分别计算同一进程中通过校验的配对比值。
 
 ```text
 dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SimpleBenchmark*

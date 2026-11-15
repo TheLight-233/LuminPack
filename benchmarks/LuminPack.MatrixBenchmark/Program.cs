@@ -47,9 +47,13 @@ internal static class Program
             ProcessorCount = Environment.ProcessorCount,
             Rounds = rounds,
             TieredCompilation = Environment.GetEnvironmentVariable("DOTNET_TieredCompilation"),
-            Reference = json ? "System.Text.Json" : "MemoryPack",
-            ReferenceVersion = (json ? typeof(JsonSerializer) : typeof(MemoryPack.MemoryPackSerializer))
-                .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            References = json
+                ? new Dictionary<string, string?> { ["System.Text.Json"] = VersionOf(typeof(JsonSerializer)) }
+                : new Dictionary<string, string?>
+                {
+                    ["MemoryPack"] = VersionOf(typeof(MemoryPack.MemoryPackSerializer)),
+                    ["Nino"] = VersionOf(typeof(Nino.Core.NinoSerializer))
+                }
         });
 
         bool failed = false;
@@ -108,6 +112,12 @@ internal static class Program
 
         return failed ? 1 : 0;
     }
+
+    /// <summary>Reads the library's informational version for the benchmark environment.</summary>
+    /// <param name="type">A type from the measured library.</param>
+    /// <returns>The recorded version, if available.</returns>
+    private static string? VersionOf(Type type)
+        => type.Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
     /// <summary>Chooses a repetition count for an approximately five-millisecond sample.</summary>
     /// <param name="action">The benchmark operation to calibrate.</param>

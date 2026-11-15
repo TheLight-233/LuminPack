@@ -88,7 +88,7 @@ To validate a matrix scenario locally, build its Release executable and pass the
 dotnet run --project benchmarks/LuminPack.MatrixBenchmark -c Release -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false -- binary small 0 matrix.jsonl
 ```
 
-Binary uses MemoryPack and JSON uses source-generated System.Text.Json metadata. Write returns a new byte array or string. Fresh reads into an empty target and Reuse reads into an existing target. System.Text.Json has no equivalent root Reuse operation. The report lists unsupported operations and operations that fail round-trip validation. Ratios only use valid pairs from the same process.
+Binary compares with MemoryPack and Nino, including Nino's official immutable collection formatters. JSON compares with System.Text.Json using source-generated metadata. Write returns a new byte array or string. Fresh reads into an empty target and Reuse reads into an existing target. System.Text.Json has no equivalent root Reuse operation. The report lists unsupported operations and operations that fail round-trip validation. Each reference has its own ratios, computed from valid pairs in the same process.
 
 ```text
 dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SimpleBenchmark*

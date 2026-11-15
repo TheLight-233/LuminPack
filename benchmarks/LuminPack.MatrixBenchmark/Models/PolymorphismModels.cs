@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using LuminPack.Attribute;
 using MemoryPack;
+using Nino.Core;
 
 
 #nullable disable
@@ -24,6 +25,7 @@ using MemoryPack;
 
 
 [System.Text.Json.Serialization.JsonDerivedType(typeof(PolymorphismClass), "PolymorphismClass")]
+[NinoType]
 public abstract partial class PolymorphismClassBase
 {
     /// <summary>Stores the base id.</summary>
@@ -39,6 +41,7 @@ public abstract partial class PolymorphismClassBase
 
 [LuminPackable]
 
+[NinoType]
 public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
 {
     /// <summary>Stores the id.</summary>
@@ -171,6 +174,7 @@ public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
 [System.Text.Json.Serialization.JsonDerivedType(typeof(FooR), "FooR")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(FooS), "FooS")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(FooZ), "FooZ")]
+[NinoType]
 public abstract partial class IFoo
 {
     /// <summary>Stores the id.</summary>
@@ -188,6 +192,7 @@ public abstract partial class IFoo
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooA : IFoo
 {
     /// <summary>Stores the card.</summary>
@@ -210,6 +215,7 @@ public partial class FooA : IFoo
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooB : FooA
 {
     /// <summary>Stores the card b.</summary>
@@ -233,6 +239,7 @@ public partial class FooB : FooA
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooC : FooB
 {
     /// <summary>Stores the card c.</summary>
@@ -256,6 +263,7 @@ public partial class FooC : FooB
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooD : FooC
 {
     /// <summary>Stores the card d.</summary>
@@ -281,6 +289,7 @@ public partial class FooD : FooC
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooE : FooD
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -303,6 +312,7 @@ public partial class FooE : FooD
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooF : FooE
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -325,6 +335,7 @@ public partial class FooF : FooE
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooH : FooF
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -347,6 +358,7 @@ public partial class FooH : FooF
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooG : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -369,6 +381,7 @@ public partial class FooG : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooI : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -391,6 +404,7 @@ public partial class FooI : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooJ : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -413,6 +427,7 @@ public partial class FooJ : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooK : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -435,6 +450,7 @@ public partial class FooK : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooL : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -457,6 +473,7 @@ public partial class FooL : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooM : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -479,6 +496,7 @@ public partial class FooM : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooN : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -501,6 +519,7 @@ public partial class FooN : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooO : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -523,6 +542,7 @@ public partial class FooO : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooP : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -545,6 +565,7 @@ public partial class FooP : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooQ : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -567,6 +588,7 @@ public partial class FooQ : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooR : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -589,6 +611,7 @@ public partial class FooR : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooS : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
@@ -611,6 +634,7 @@ public partial class FooS : FooH
 [MemoryPackable]
 [LuminPackable]
 
+[NinoType]
 public partial class FooZ : FooH
 {
     /// <summary>Creates a sample instance for the benchmark.</summary>
