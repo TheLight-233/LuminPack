@@ -23,7 +23,7 @@ internal static class SerializerRootApiRegression
         [LuminPackable] public sealed class Unused { public long Other; }
         """;
 
-    /// <summary>Exercises every concrete overload and the distinct Light and Minimal root rules.</summary>
+    /// <summary>Exercises concrete overload selection and automatic library and application retention.</summary>
     /// <param name="references">The platform and unchanged runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
@@ -53,8 +53,9 @@ internal static class SerializerRootApiRegression
             var driver = Run(input, out var output);
             var concrete = Concrete(driver, "Payload");
             Require(concrete.Length == 1, "Expected exactly one selected concrete overload for case " + index + "; got " + concrete.Length);
-            Require(Concrete(driver, "Unused").Length == 0, "Unused concrete APIs survived Minimal pruning.");
-            Require(!driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(file => file.HintName.Contains("Unused", StringComparison.Ordinal)), "Unused formatter survived Minimal first-build pruning.");
+            Require(Concrete(driver, "Unused").Length == 0, "An uncalled concrete API was generated.");
+            Require(driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(file => file.HintName.Contains("Unused", StringComparison.Ordinal)),
+                "A library lost an annotated formatter that external callers can use.");
             Require(concrete[0].GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)), "Selected overload lost its XML documentation.");
             var callTree = input.SyntaxTrees.Single(tree => tree.GetRoot().ToString().Contains("public static class Entry", StringComparison.Ordinal));
             var call = callTree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().Last();
@@ -63,13 +64,22 @@ internal static class SerializerRootApiRegression
             Require(selected is { IsGenericMethod: false }, "Selected call unexpectedly fell back to a generic API for case " + index);
         }
 
-        var light = Run(Create(references, "Light", ""), out _);
-        Require(Concrete(light, "Payload").Length == 0 && Concrete(light, "Unused").Length == 0, "Light property roots retained unused concrete APIs.");
-        Require(light.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(file => file.HintName.Contains("Unused", StringComparison.Ordinal)), "Light must retain annotated formatters for generic fallback.");
-        var empty = Run(Create(references, "Minimal", ""), out _);
-        Require(!empty.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(file => file.HintName.Contains("Unused", StringComparison.Ordinal)), "Empty Minimal roots must not fall back to Light.");
-        var full = Run(Create(references, "Full", ""), out _);
-        Require(Concrete(full, "Payload").Length == 15 && Concrete(full, "Unused").Length == 15, "Full concrete API compatibility changed.");
+        var library = Run(Create(references, "Minimal", ""), out _);
+        Require(Concrete(library, "Payload").Length == 0 && Concrete(library, "Unused").Length == 0,
+            "A library with no facade calls acquired concrete convenience APIs.");
+        foreach (string mode in new[] { "Full", "Medium", "Light" })
+        {
+            var alternate = Run(Create(references, mode, ""), out _);
+            Require(Sources(library).SequenceEqual(Sources(alternate), StringComparer.Ordinal),
+                "An obsolete generation mode changed the automatic library output: " + mode);
+        }
+
+        var closedInput = Create(references, "Minimal", "public static class Entry { public static void Main() => _ = S.Serialize(new Payload()); }");
+        var closed = Run(closedInput.WithOptions(closedInput.Options.WithOutputKind(OutputKind.ConsoleApplication)), out _);
+        var closedMethods = closed.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        Require(!closedMethods.Any(method => method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::Unused")),
+            "A closed application acquired an operation for an uncalled payload.");
 
         const string forwarding = """
             public static class Entry
@@ -95,7 +105,7 @@ internal static class SerializerRootApiRegression
         VerifyUnmarkedConsumer(references);
         VerifyBclProfiles(references);
         VerifyConcreteScalarPaths(references);
-        Console.WriteLine("Passed 15 first-build overload selections, Full/Light/Minimal roots, generic forwarding, method groups, API edits, and missing external registrations.");
+        Console.WriteLine("Passed 15 first-build overload selections, automatic retention, generic forwarding, method groups, API edits, and missing external registrations.");
     }
 
     /// <summary>Requires statically typed scalar facades to use the same stateless raw core as the generic fast path.</summary>
@@ -286,8 +296,8 @@ internal static class SerializerRootApiRegression
         {
             var input = Create(references, mode, entry);
             var profileParse = Parse.WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "LuminPack")]);
-            foreach (var tree in input.SyntaxTrees.ToArray())
-                input = input.ReplaceSyntaxTree(tree, tree.WithRootAndOptions(tree.GetRoot(), profileParse));
+            input = input.RemoveAllSyntaxTrees().AddSyntaxTrees(
+                input.SyntaxTrees.Select(tree => tree.WithRootAndOptions(tree.GetRoot(), profileParse)));
             Run(input, out var output);
             using var image = new MemoryStream();
             var result = output.Emit(image);
