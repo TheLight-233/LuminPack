@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
 using LuminPack.SourceGenerator.Next.Diagnostics;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -19,7 +18,7 @@ internal static partial class Program
         var tree = CSharpSyntaxTree.ParseText(InputLimitFixture, parse, "InputLimits.cs");
         var input = CSharpCompilation.Create("NextInputLimitContracts", new[] { tree }, references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: parse)
             .RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         foreach (GeneratorRunResult result in driver.GetRunResult().Results)
             if (result.Exception != null)
@@ -34,13 +33,13 @@ internal static partial class Program
         foreach (string type in new[] { "CircleAdjacent", "CircleGapped" })
         {
             string source = driver.GetRunResult().Results.Single().GeneratedSources.Single(file =>
-                file.HintName == "Binary/LuminPackGen." + type + ".g.cs").SourceText.ToString();
+                file.HintName == BinaryFolder + "LuminPackGen." + type + ".g.cs").SourceText.ToString();
             RequireIncremental(source.Contains(".ByteOffset(", StringComparison.Ordinal) &&
                 source.Contains(".SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
                 source.Contains(".Advance(", StringComparison.Ordinal), type + " must retain its guarded fixed group and checked fallback.");
         }
         string versionWrite = driver.GetRunResult().Results.Single().GeneratedSources.Single(file =>
-            file.HintName == "Binary/LuminPackGen.VersionedRuns.g.cs").SourceText.ToString();
+            file.HintName == BinaryFolder + "LuminPackGen.VersionedRuns.g.cs").SourceText.ToString();
         RequireIncremental(versionWrite.Contains(".ByteOffset(", StringComparison.Ordinal) &&
             versionWrite.Contains(".SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
             versionWrite.Contains(".WriteReservedBlock(", StringComparison.Ordinal) &&
@@ -65,7 +64,7 @@ internal static partial class Program
         {
             var changed = input.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(edited, parse, "InputLimits.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(changed, out var retainedOutput, out var retainedDiagnostics);
-            GeneratorDriver fresh = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
+            GeneratorDriver fresh = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: parse)
                 .RunGeneratorsAndUpdateCompilation(changed, out var freshOutput, out var freshDiagnostics);
             var actual = Sources(driver);
             var expected = Sources(fresh);

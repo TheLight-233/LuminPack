@@ -9,8 +9,12 @@
     <Compile Include="../LuminPack.Tests.Codegen/SerializerInterceptorRegression*.cs" Link="%(Filename)%(Extension)" />
     <ProjectReference Include="../../src/LuminPack.ILPostProcessor/LuminPack.ILPostProcessor.csproj" />
     <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" />
-    <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj" />
+    <ProjectReference Include="../../src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj"
+                      ReferenceOutputAssembly="false" OutputItemType="_NextAnalyzer" />
     <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" />
   </ItemGroup>
+  <Target Name="CopyNextAnalyzerForTests" AfterTargets="CopyFilesToOutputDirectory">
+    <Copy SourceFiles="@(_NextAnalyzer)" DestinationFolder="$(OutDir)next" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

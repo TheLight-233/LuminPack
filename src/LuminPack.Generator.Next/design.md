@@ -366,7 +366,7 @@ generic slots is a real mechanism advantage for polymorphic workloads. Compiled 
 types and the Unity/32-bit correctness constraints are also differentiators.
 
 The largest architectural gaps are not in the model: they are incremental granularity and generated
-code size. `NextGenerator` combines every symbol with `CompilationProvider`, so a change anywhere
+code size. `LuminPackSourceGenerator` combines every symbol with `CompilationProvider`, so a change anywhere
 invalidates every model. Nino regenerates only the edited type. Fixing that, and publishing one file
 per type instead of shared facades, would close most of the build-time gap.
 
@@ -437,7 +437,7 @@ dotnet build src/LuminPack.Generator.Next/LuminPack.Generator.Next.csproj -c Rel
 dotnet run -c Release --project src/LuminPack.Generator.Next/benchmarks/GeneratorBenchmarks/GeneratorBenchmarks.csproj -- --corpus <dir> --runs 3
 ```
 
-The corpus probe loads `LuminPack.Generator.Next.dll`, runs the generator on 220 payloads and compiles
+The corpus probe loads the model-based `LuminPack.Generator.dll`, runs the generator on 220 payloads and compiles
 the generated trees. It reports:
 
 ```text

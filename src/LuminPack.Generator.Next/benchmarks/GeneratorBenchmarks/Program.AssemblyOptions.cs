@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.Loader;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -97,7 +96,7 @@ internal static partial class Program
             var tree = CSharpSyntaxTree.ParseText(source, parse, "PendingArgument.cs");
             var input = CSharpCompilation.Create("PendingArgument", new[] { tree }, references,
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true));
-            CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
+            CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: parse)
                 .RunGeneratorsAndUpdateCompilation(input, out var output, out _);
             var root = output.GetTypeByMetadataName("LuminPack.LuminPackSerializer+PendingPayloadFormatter");
             RequireIncremental(root?.GetMembers("Write").Length > 0 && root.GetMembers("Read").IsEmpty &&
@@ -192,7 +191,7 @@ internal static partial class Program
             var tree = CSharpSyntaxTree.ParseText(source, syntax, "AssemblyOptions.cs");
             var input = CSharpCompilation.Create("AssemblyOptions" + checks++, new[] { tree }, references,
                 new CSharpCompilationOptions(kind, allowUnsafe: allowUnsafe, optimizationLevel: OptimizationLevel.Release));
-            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: syntax)
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: syntax)
                 .RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             foreach (var result in driver.GetRunResult().Results)
                 RequireIncremental(result.Exception == null, result.Exception?.ToString() ?? string.Empty);
@@ -213,7 +212,7 @@ internal static partial class Program
     {
         var assembly = new AssemblyLoadContext("AliasDiagnosticReference").LoadFromAssemblyPath(Path.GetFullPath(legacyDll));
         ISourceGenerator[] legacy = CreateLegacyGenerators(assembly);
-        ISourceGenerator[] next = { new NextGenerator().AsSourceGenerator() };
+        ISourceGenerator[] next = { new LuminPackSourceGenerator().AsSourceGenerator() };
         var cases = new (string Mode, string Fields)[]
         {
             ("VersionTolerant", """[LuminPackOldName("")] public int A;"""),

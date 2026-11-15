@@ -5,7 +5,6 @@ using System.Text;
 using LuminPack.Build;
 using LuminPack.Code.Core;
 using LuminPack.SourceGenerator;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -18,7 +17,7 @@ internal static class JsonNameHashRegression
     internal static void Run()
     {
         Type legacy = typeof(LuminPackJsonCodeGenerator);
-        Type next = typeof(NextGenerator).Assembly.GetType("LuminPack.SourceGenerator.Next.Rendering.Emitters.JsonNames", true)!;
+        Type next = NextAnalyzer.EntryType.Assembly.GetType("LuminPack.SourceGenerator.Next.Rendering.Emitters.JsonNames", true)!;
         var byteHashes = new[] { Bind<byte[]>(legacy, "ComputeUtf8BytesHash"), Bind<byte[]>(next, "ComputeUtf8BytesHash") };
         var charHashes = new[] { Bind<string>(legacy, "ComputeUtf16Hash"), Bind<string>(next, "ComputeUtf16Hash") };
         byte[] storage = new byte[8192];
@@ -108,7 +107,7 @@ internal static class JsonNameHashRegression
             string assemblyName = "HashLookup" + shape + (next ? "Next" : "Legacy");
             var input = CSharpCompilation.Create(assemblyName, new[] { CSharpSyntaxTree.ParseText(source.ToString(), parse, assemblyName + ".cs", Encoding.UTF8) }, references,
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-            ISourceGenerator[] generators = next ? new[] { new NextGenerator().AsSourceGenerator() } :
+            ISourceGenerator[] generators = next ? new[] { NextAnalyzer.Create() } :
                 new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() };
             var driver = CSharpGeneratorDriver.Create(generators, parseOptions: parse).RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
             var lookups = driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources)

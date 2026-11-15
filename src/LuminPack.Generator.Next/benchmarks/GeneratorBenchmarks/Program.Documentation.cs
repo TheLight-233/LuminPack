@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using LuminPack.SourceGenerator.Next.Rendering;
 using LuminPack.SourceGenerator.Next.Rendering.Facade;
 using Microsoft.CodeAnalysis;
@@ -26,7 +25,7 @@ internal static partial class Program
             var calls = CSharpSyntaxTree.ParseText("using LuminPack; " + DocumentationFixture.Substring(callStart), language, "Calls.cs");
             var input = CSharpCompilation.Create("NextDocumentation", new[] { tree, calls }, references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
-            GeneratorDriver CreateDriver() => CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: language);
+            GeneratorDriver CreateDriver() => CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: language);
             GeneratorDriver driver = CreateDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             CheckDiagnostics(output, diagnostics);
             if (mode == DocumentationMode.Diagnose)

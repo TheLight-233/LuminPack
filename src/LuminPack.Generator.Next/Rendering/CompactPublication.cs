@@ -565,7 +565,7 @@ internal static class CompactPublication
             return "LuminPackGen.Array.g.cs";
         if (type is "bool" or "byte" or "sbyte" or "char" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" or "float" or "double" or "decimal" or "string" or "object")
             return "LuminPackGen.System.g.cs";
-        return "LuminPackGen." + PublicationNames.Mangle(type) + ".g.cs";
+        return GeneratedFileNames.Type(type);
     }
 
     /// <summary>Joins formatter contributions while retaining one set of imports.</summary>

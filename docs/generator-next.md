@@ -8,15 +8,15 @@ To test NuGet installation, pack `src/LuminPack.Generator` with `-p:LuminPackPac
 
 ## Output layout
 
-One incremental generator shares analysis across three output directories on Roslyn 4.6 and later:
+The analyzer uses the established assembly name `LuminPack.Generator` and entry type `LuminPack.SourceGenerator.LuminPackSourceGenerator`. One incremental generator shares analysis across three output directories on Roslyn 4.6 and later:
 
 | Directory | Contents |
 | --- | --- |
-| `Binary` | Binary facade, payload algorithms, Union dispatch and intercepted entries. |
-| `Json` | JSON facade, payload algorithms and JSON Union dispatch. |
-| `Formatters` | Shared framework formatters, compiled profiles and registration support. |
+| `LuminPack.SourceGenerator.LuminPackSourceGenerator` | Binary facade, payload algorithms, Union dispatch and intercepted entries. |
+| `LuminPack.SourceGenerator.LuminPackJsonGenerator` | JSON facade, payload algorithms and JSON Union dispatch. |
+| `LuminPack.SourceGenerator.LuminPackFormatterGenerator` | Shared framework formatters, compiled profiles and registration support. |
 
-Older Roslyn hosts use flat names with the same category prefixes, such as `Binary.LuminPackGen.Model.g.cs`. To inspect the layout on disk, build the consuming project with `dotnet build -p:EmitCompilerGeneratedFiles=true` and open the Next generator's output under `obj/<configuration>/<targetframework>/generated`. The IDE decides how to display the generated files in its project tree.
+Older Roslyn hosts use flat names with the same category prefixes, such as `LuminPack.SourceGenerator.LuminPackJsonGenerator.LuminPackGen.Model.g.cs`. To inspect the layout on disk, build the consuming project with `dotnet build -p:EmitCompilerGeneratedFiles=true` and open the Next generator's output under `obj/<configuration>/<targetframework>/generated`. The IDE decides how to display the generated files in its project tree.
 
 Filenames follow the established generator's `LuminPackGen.<Namespace>.<Name>.g.cs` convention. Generic arguments become their declaration's arity. Built-in scalars share `LuminPackGen.System.g.cs`, arrays share `LuminPackGen.Array.g.cs`, and closed constructions of a framework generic definition share one file.
 

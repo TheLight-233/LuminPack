@@ -1,6 +1,5 @@
 using System.Reflection;
 using LuminPack.Build;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
@@ -35,7 +34,7 @@ internal static partial class Program
             SyntaxTree tree = CSharpSyntaxTree.ParseText(source, syntax, name + ".cs", System.Text.Encoding.UTF8);
             CSharpCompilation input = CSharpCompilation.Create(name, new[] { tree }, references,
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication, optimizationLevel: OptimizationLevel.Release));
-            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: syntax)
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: syntax)
                 .RunGeneratorsAndUpdateCompilation(input, out Compilation output, out var diagnostics);
             var generation = driver.GetRunResult().Results.Single();
             RequireIncremental(generation.Exception == null, generation.Exception?.ToString() ?? string.Empty);

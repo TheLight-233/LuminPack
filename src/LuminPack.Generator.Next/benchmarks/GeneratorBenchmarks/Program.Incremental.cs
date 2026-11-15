@@ -45,7 +45,7 @@ internal static partial class Program
             optimizationLevel: OptimizationLevel.Release, nullableContextOptions: NullableContextOptions.Enable);
         var original = CSharpCompilation.Create("NextIncrementalContracts", new[] { modelTree, callTree, noiseTree }, references, options);
         var tracking = new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true);
-        GeneratorDriver CreateDriver() => CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() },
+        GeneratorDriver CreateDriver() => CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
             parseOptions: parse, driverOptions: tracking);
         GeneratorDriver retained = CreateDriver();
         CheckRun(original, "initial");

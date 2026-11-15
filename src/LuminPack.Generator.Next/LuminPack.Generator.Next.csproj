@@ -7,7 +7,7 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <IsAnalyzer>true</IsAnalyzer>
     <RootNamespace>LuminPack.SourceGenerator.Next</RootNamespace>
-    <AssemblyName>LuminPack.Generator.Next</AssemblyName>
+    <AssemblyName>LuminPack.Generator</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
@@ -15,6 +15,7 @@
   <ItemGroup>
     <Compile Include="../LuminPack.Core/Internal/XxHash3Algorithm.cs" Link="Internal/XxHash3Algorithm.cs" />
     <Compile Include="../LuminPack.Generator/Core/Json/JsonNameDispatch.cs" Link="Rendering/Emitters/JsonNameDispatch.cs" />
+    <Compile Include="../LuminPack.Generator/Incremental/GeneratedFileNames.cs" Link="Rendering/GeneratedFileNames.cs" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>

@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
 using LuminPack.Build;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -32,7 +31,7 @@ internal static class NextCompatibilityRegression
                 var tree = CSharpSyntaxTree.ParseText(source, parse, name + ".cs", Encoding.UTF8);
                 var input = CSharpCompilation.Create(name, new[] { tree }, references,
                     new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-                GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
+                GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { NextAnalyzer.Create() }, parseOptions: parse)
                     .RunGeneratorsAndUpdateCompilation(input, out Compilation output, out var diagnostics);
                 foreach (Diagnostic diagnostic in diagnostics)
                     if (diagnostic.Severity == DiagnosticSeverity.Error)
@@ -44,6 +43,12 @@ internal static class NextCompatibilityRegression
                     foreach (GeneratedSourceResult file in result.GeneratedSources)
                         if (file.HintName.IndexOf('/') >= 0)
                             throw new InvalidOperationException(name + ": a portable source hint retained a directory separator.");
+
+                    var hints = result.GeneratedSources.Select(file => file.HintName).ToHashSet(StringComparer.Ordinal);
+                    if (!hints.Contains("LuminPack.SourceGenerator.LuminPackSourceGenerator.LuminPackGen.LuminPackSerializer.g.cs") ||
+                        !hints.Contains("LuminPack.SourceGenerator.LuminPackJsonGenerator.LuminPackGen.LuminPackSerializer.g.cs") ||
+                        !hints.Contains("LuminPack.SourceGenerator.LuminPackFormatterGenerator.LuminPackGen.FormatterDispatch.g.cs"))
+                        throw new InvalidOperationException(name + ": a portable source hint is missing its legacy category prefix.");
                 }
                 VerifyScalarArrayReservation(driver, name);
                 using var pe = new MemoryStream();

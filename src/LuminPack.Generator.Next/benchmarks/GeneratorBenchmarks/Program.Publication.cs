@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.RegularExpressions;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using LuminPack.SourceGenerator.Next.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -12,6 +11,10 @@ namespace LuminPack.SourceGenerator.Next.Benchmarks;
 
 internal static partial class Program
 {
+    private const string BinaryFolder = "LuminPack.SourceGenerator.LuminPackSourceGenerator/";
+    private const string JsonFolder = "LuminPack.SourceGenerator.LuminPackJsonGenerator/";
+    private const string FormatterFolder = "LuminPack.SourceGenerator.LuminPackFormatterGenerator/";
+
     /// <summary>Compiles and executes publication contracts, including retained-driver invalidation.</summary>
     /// <param name="references">The common compiler metadata references.</param>
     /// <param name="parse">The consumer parse options.</param>
@@ -25,7 +28,7 @@ internal static partial class Program
         var tree = CSharpSyntaxTree.ParseText(source, parse, "PublicationFixture.cs");
         var compilation = CSharpCompilation.Create("NextPublicationContracts", new[] { tree }, references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-        ISourceGenerator[] Generators() => new[] { new NextGenerator().AsSourceGenerator() };
+        ISourceGenerator[] Generators() => new[] { new LuminPackSourceGenerator().AsSourceGenerator() };
         GeneratorDriver driver = CSharpGeneratorDriver.Create(Generators(), parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         var run = driver.GetRunResult();
@@ -34,9 +37,13 @@ internal static partial class Program
             .Select(diagnostic => diagnostic.ToString()).ToArray();
         if (errors.Length != 0)
             return LuminPackExceptionHelper.ThrowInvalidOperation(string.Join(Environment.NewLine, errors.Take(18)));
-        var formatter = run.Results.Single(result => result.GeneratedSources.Any(file => file.HintName == "Formatters/LuminPackGen.System.g.cs"));
-        Check(formatter.GeneratedSources.Count(file => file.HintName == "Formatters/LuminPackGen.Array.g.cs") == 1, "Array formatter grouping");
-        Check(formatter.GeneratedSources.Count(file => file.HintName == "Formatters/LuminPackGen.System.Collections.Generic.List" + (char)96 + "1.g.cs") == 1, "Open formatter file identity");
+        var formatter = run.Results.Single();
+        var hints = formatter.GeneratedSources.Select(file => file.HintName).ToHashSet(StringComparer.Ordinal);
+        Check(hints.Contains(BinaryFolder + "LuminPackGen.LuminPackSerializer.g.cs"), "Binary facade folder");
+        Check(hints.Contains(JsonFolder + "LuminPackGen.LuminPackSerializer.g.cs"), "JSON facade folder");
+        Check(hints.Contains(FormatterFolder + "LuminPackGen.System.g.cs"), "Scalar formatter grouping");
+        Check(hints.Contains(FormatterFolder + "LuminPackGen.Array.g.cs"), "Array formatter grouping");
+        Check(hints.Contains(FormatterFolder + "LuminPackGen.System.Collections.Generic.List`1.g.cs"), "Open formatter file identity");
         string all = string.Join("\n", run.Results.SelectMany(result => result.GeneratedSources).Select(file => file.SourceText.ToString()));
         Check(!Regex.IsMatch(all, @"\b(?:RootWrite|RootRead|DeserializeUnion|WritePolymorphismValue)\w*\s*[<(]"), "Direct operation publication");
         Check(!all.Contains("struct LuminPackObjectFraming"), "Core-owned framing markers");
@@ -135,7 +142,7 @@ internal static partial class Program
     /// <param name="compilation">The unchanged consumer.</param>
     private static void VerifyOutputReport(GeneratorDriver driver, Compilation compilation)
     {
-        const string hint = "Formatters/LuminPackGen.OutputReport.g.cs";
+        const string hint = FormatterFolder + "LuminPackGen.OutputReport.g.cs";
         var ordinary = Sources(driver);
         RequireIncremental(!ordinary.ContainsKey(hint), "Output accounting must be opt-in.");
         var enabled = driver.WithUpdatedAnalyzerConfigOptions(new ReportOptions(true)).RunGenerators(compilation);
@@ -144,9 +151,9 @@ internal static partial class Program
         RequireIncremental(reported.Count == ordinary.Count + 1, "Output accounting changed the publication.");
         foreach (var file in ordinary)
             RequireIncremental(reported[file.Key] == file.Value, "Output accounting changed generated source.");
-        foreach (string family in new[] { "Binary", "Json", "Formatters" })
+        foreach (var (family, folder) in new[] { ("Binary", BinaryFolder), ("Json", JsonFolder), ("Formatters", FormatterFolder) })
         {
-            var files = ordinary.Where(file => file.Key.StartsWith(family + "/", StringComparison.Ordinal)).ToArray();
+            var files = ordinary.Where(file => file.Key.StartsWith(folder, StringComparison.Ordinal)).ToArray();
             string row = FormattableString.Invariant($"// {family} {files.Length} {files.Sum(file => file.Value.Length)} {files.Sum(file => System.Text.Encoding.UTF8.GetByteCount(file.Value))}\n");
             RequireIncremental(report!.Contains(row, StringComparison.Ordinal), "The output report did not match final source for " + family);
         }
@@ -183,7 +190,7 @@ internal static partial class Program
         int orderedApis = 0;
         foreach (var file in files)
         {
-            if (file.HintName == "Formatters/LuminPackGen.Generated.g.cs" ||
+            if (file.HintName == FormatterFolder + "LuminPackGen.Generated.g.cs" ||
                 file.HintName.EndsWith("/LuminPackGen.LuminPackSerializer.g.cs", StringComparison.Ordinal))
                 continue;
             var syntax = file.SyntaxTree.GetRoot();

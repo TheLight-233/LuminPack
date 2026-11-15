@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Runtime.Loader;
-using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
@@ -56,7 +55,7 @@ internal static partial class Program
                 new CSharpCompilationOptions(name == "ExternalLibrary" ? OutputKind.DynamicallyLinkedLibrary : OutputKind.ConsoleApplication,
                     allowUnsafe: true, optimizationLevel: OptimizationLevel.Release,
                     nullableContextOptions: NullableContextOptions.Enable));
-            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new NextGenerator().AsSourceGenerator() }, parseOptions: parse)
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator() }, parseOptions: parse)
                 .RunGeneratorsAndUpdateCompilation(input, out var output, out var generated);
             foreach (var result in driver.GetRunResult().Results)
                 RequireIncremental(result.Exception == null, result.Exception?.ToString() ?? string.Empty);

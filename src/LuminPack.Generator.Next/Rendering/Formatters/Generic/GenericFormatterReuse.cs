@@ -313,7 +313,7 @@ internal static class GenericFormatterReuse
             if (definition.IndexOf('>') >= 0)
                 return null;
             return new Family(definition, definition.Substring(definition.LastIndexOf('.') + 1),
-                "LuminPackGen." + PublicationNames.Mangle(key) + ".g.cs", parameters, notNull);
+                GeneratedFileNames.Type(key), parameters, notNull);
         }
 
         /// <summary>Models an entry spelling of a fact without a general contract.</summary>

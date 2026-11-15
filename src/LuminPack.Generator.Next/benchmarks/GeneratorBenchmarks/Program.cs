@@ -66,14 +66,14 @@ internal static partial class Program
             $"({corpus.Count.ToString(CultureInfo.InvariantCulture)} files)");
         Console.WriteLine($"  runs: {options.Runs.ToString(CultureInfo.InvariantCulture)}");
         Console.WriteLine($"  core: {coreDll}");
-        Console.WriteLine($"  next: {typeof(NextGenerator).Assembly.GetName().Version}");
+        Console.WriteLine($"  next: {typeof(LuminPackSourceGenerator).Assembly.GetName().Version}");
         Console.WriteLine($"  old:  {(File.Exists(oldDll) ? oldDll + " (" + options.OldMode + ")" : "not found")}");
         Console.WriteLine();
         if (options.References != null)
             Console.WriteLine($"  refs: {options.References}");
         Console.WriteLine($"{"scenario",-26} {"generator",-8} {"median s",10} {"spread s",10} {"alloc MB",10} {"files",6} {"source MB",10}");
 
-        Func<ISourceGenerator[]> next = static () => new ISourceGenerator[] { new NextGenerator().AsSourceGenerator() };
+        Func<ISourceGenerator[]> next = static () => new ISourceGenerator[] { new LuminPackSourceGenerator().AsSourceGenerator() };
         Func<ISourceGenerator[]>? legacy = null;
         if (!options.SkipOld && File.Exists(oldDll))
         {
