@@ -853,6 +853,21 @@ internal static class EnumerableOwnerTemplate
 
         void EmitJsonRead(FormatterSection section)
         {
+            // The built-in integer formatter starts by replacing the destination from the canonical scalar reader.
+            string? integerRead = GenericFormatterReuse.Real(scalar) is "int" or "long"
+                ? "reader.Read<" + scalar + ", TLuminProfile>()" : null;
+
+            void ReadItem(string seed)
+            {
+                if (integerRead != null)
+                {
+                    w.Line(scalar + " item = " + integerRead + ";");
+                    return;
+                }
+                w.Line(scalar + " item = " + seed + ";");
+                w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+            }
+
             void AppendJsonItem()
             {
                 if (spec.JsonAddBody != null)
@@ -869,8 +884,7 @@ internal static class EnumerableOwnerTemplate
                 w.Line("    break;");
                 w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
                 w.Line("    continue;");
-                w.Line(scalar + " item = default !;");
-                w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                ReadItem("default !");
                 append();
                 w.Close();
                 if (hasFirstToken)
@@ -927,7 +941,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("if (value is " + array + " existingArray && existingArray.GetType() == typeof(" + array + ") &&");
                         w.Line("    reader.CountArrayElements<TLuminProfile>() == existingArray.Length)");
                         w.Open();
-                        ReadJsonArraySlots("existingArray");
+                        ReadJsonArraySlots("existingArray", integerRead);
                         w.Blank();
                         w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
                         w.Line("return;");
@@ -944,8 +958,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("    break;");
                         w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
                         w.Line("    continue;");
-                        w.Line(scalar + " item = count < list.Count ? list[count] : default!;");
-                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                        ReadItem("count < list.Count ? list[count] : default!");
                         w.Line("if (count < list.Count)");
                         w.Line("    list[count] = item;");
                         w.Line("else");
@@ -982,7 +995,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("if (value is not null && value.GetType() == typeof(" + sequence + ") &&");
                         w.Line("    reader.CountArrayElements<TLuminProfile>() == value.Length)");
                         w.Open();
-                        ReadJsonArraySlots("value");
+                        ReadJsonArraySlots("value", null);
                         w.Blank();
                         w.Line("reader.ConsumeArrayEnd<TLuminProfile>();");
                         w.Line("return;");
@@ -1041,8 +1054,7 @@ internal static class EnumerableOwnerTemplate
                         w.Line("    break;");
                         w.Line("if (reader.CurrentTokenType == " + jsonReader + ".JsonTokenType.ObjectEnd)");
                         w.Line("    continue;");
-                        w.Line(scalar + " item = count < value.Count ? value[count] : default!;");
-                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                        ReadItem("count < value.Count ? value[count] : default!");
                         w.Line("if (count < value.Count)");
                         w.Line("    value[count] = item;");
                         w.Line("else");
@@ -1132,7 +1144,7 @@ internal static class EnumerableOwnerTemplate
             }
         }
 
-        void ReadJsonArraySlots(string array)
+        void ReadJsonArraySlots(string array, string? directRead)
         {
             // Each caller has checked exact array identity and length before borrowing its slots.
             w.Line("int length = " + array + ".Length;");
@@ -1143,7 +1155,8 @@ internal static class EnumerableOwnerTemplate
             w.Line("do");
             w.Open();
             w.Line("reader.Read<TLuminProfile>();");
-            w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref " + memory + ".Add(ref first, (nint)(uint)index));");
+            string slot = memory + ".Add(ref first, (nint)(uint)index)";
+            w.Line(directRead == null ? elementOwner + ".Read<TLuminProfile>(ref reader, ref " + slot + ");" : slot + " = " + directRead + ";");
             w.Close();
             w.Line("while (++index < length);");
             w.Close();
