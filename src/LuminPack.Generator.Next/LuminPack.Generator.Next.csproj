@@ -7,7 +7,7 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <IsAnalyzer>true</IsAnalyzer>
     <RootNamespace>LuminPack.SourceGenerator.Next</RootNamespace>
-    <AssemblyName>LuminPack.Generator</AssemblyName>
+    <AssemblyName>LuminPack.SourceGenerator</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>

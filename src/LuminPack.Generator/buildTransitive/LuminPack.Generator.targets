@@ -2,7 +2,7 @@
   <UsingTask TaskName="LuminPack.Build.RewriteTask" AssemblyFile="$(MSBuildThisFileDirectory)../tools/LuminPack.ILPostProcessor.dll" />
   <Target Name="LuminPackSelectNextAnalyzer" AfterTargets="ResolveLockFileAnalyzers" Condition="'$(LuminPackGenerator)' == 'Next'">
     <PropertyGroup>
-      <_LuminPackNextAnalyzer>$(MSBuildThisFileDirectory)../tools/next/LuminPack.Generator.dll</_LuminPackNextAnalyzer>
+      <_LuminPackNextAnalyzer>$(MSBuildThisFileDirectory)../tools/next/LuminPack.SourceGenerator.dll</_LuminPackNextAnalyzer>
     </PropertyGroup>
     <Error Condition="!Exists('$(_LuminPackNextAnalyzer)')"
            Text="This LuminPack generator package does not include Next. Use a package built with LuminPackPackNext=true." />

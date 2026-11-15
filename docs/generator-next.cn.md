@@ -8,7 +8,7 @@
 
 ## 输出结构
 
-分析器沿用旧版的程序集名称 `LuminPack.Generator` 和入口类型 `LuminPack.SourceGenerator.LuminPackSourceGenerator`。一个增量生成器共用分析流程，并在 Roslyn 4.6 及以上输出三个目录：
+分析器使用 `LuminPack.SourceGenerator.dll`，以便 IDE 在同一个解决方案中同时加载新版和旧版的 `LuminPack.Generator.dll`。入口类型为 `LuminPack.SourceGenerator.LuminPackSourceGenerator`。一个增量生成器共用分析流程，并在 Roslyn 4.6 及以上输出三个目录：
 
 | 目录 | 内容 |
 | --- | --- |
@@ -16,7 +16,7 @@
 | `LuminPack.SourceGenerator.LuminPackJsonGenerator` | JSON 入口、类型算法和 JSON Union 分派。 |
 | `LuminPack.SourceGenerator.LuminPackFormatterGenerator` | 共享框架 Formatter、编译期配置和注册支持。 |
 
-较旧的 Roslyn 宿主使用带分类前缀的平铺文件名，例如 `LuminPack.SourceGenerator.LuminPackJsonGenerator.LuminPackGen.Model.g.cs`。要查看磁盘上的目录结构，在消费项目运行 `dotnet build -p:EmitCompilerGeneratedFiles=true`，然后打开 `obj/<配置>/<目标框架>/generated` 下 Next 生成器的输出。项目树如何展示生成文件由 IDE 决定。
+较旧的 Roslyn 宿主使用带分类前缀的平铺文件名，例如 `LuminPack.SourceGenerator.LuminPackJsonGenerator.LuminPackGen.Model.g.cs`。Rider 可以把三类文件直接平铺在同一个生成器节点下。要查看磁盘上的目录结构，在消费项目运行 `dotnet build -p:EmitCompilerGeneratedFiles=true`，然后打开 `obj/<配置>/<目标框架>/generated` 下 Next 生成器的输出。
 
 文件名沿用旧生成器的 `LuminPackGen.<命名空间>.<类型名>.g.cs` 规则，以声明的泛型参数个数替代具体类型参数。基础标量合并至 `LuminPackGen.System.g.cs`，数组合并至 `LuminPackGen.Array.g.cs`，同一框架泛型定义的不同构造合并到一个文件。
 

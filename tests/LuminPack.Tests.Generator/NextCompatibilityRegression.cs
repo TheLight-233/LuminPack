@@ -1,3 +1,5 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
@@ -6,6 +8,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Emit;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Verifies Next against the span-cursor runtime with the Roslyn 4.3 compiler.</summary>
 internal static class NextCompatibilityRegression
@@ -13,6 +16,10 @@ internal static class NextCompatibilityRegression
     /// <summary>Compiles C# 9 and 10 fixtures and executes their IL-rewritten and registered entries.</summary>
     internal static void Run()
     {
+        if (typeof(ModelBasedGenerator).Assembly.GetName().Name ==
+            typeof(LuminPack.SourceGenerator.LuminPackSourceGenerator).Assembly.GetName().Name)
+            throw new InvalidOperationException("The model-based and legacy analyzers must have distinct assembly names.");
+
         MetadataReference[] references = CompatibilityCompilationReferences.Create();
         string[] paths = Array.ConvertAll(references, reference => ((PortableExecutableReference)reference).FilePath!);
         string runtime = Array.Find(paths, path => Path.GetFileName(path) == "LuminPack.Core.dll")!;
@@ -31,7 +38,7 @@ internal static class NextCompatibilityRegression
                 var tree = CSharpSyntaxTree.ParseText(source, parse, name + ".cs", Encoding.UTF8);
                 var input = CSharpCompilation.Create(name, new[] { tree }, references,
                     new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: false, optimizationLevel: OptimizationLevel.Release));
-                GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { NextAnalyzer.Create() }, parseOptions: parse)
+                GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new ModelBasedGenerator().AsSourceGenerator() }, parseOptions: parse)
                     .RunGeneratorsAndUpdateCompilation(input, out Compilation output, out var diagnostics);
                 foreach (Diagnostic diagnostic in diagnostics)
                     if (diagnostic.Severity == DiagnosticSeverity.Error)

@@ -1,3 +1,5 @@
+extern alias ModelBasedAnalyzer;
+
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
@@ -9,6 +11,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Emit;
+using ModelBasedGenerator = ModelBasedAnalyzer::LuminPack.SourceGenerator.LuminPackSourceGenerator;
 
 /// <summary>Checks compile-time name constants against the runtime's shared XXH3 implementation.</summary>
 internal static class JsonNameHashRegression
@@ -17,7 +20,7 @@ internal static class JsonNameHashRegression
     internal static void Run()
     {
         Type legacy = typeof(LuminPackJsonCodeGenerator);
-        Type next = NextAnalyzer.EntryType.Assembly.GetType("LuminPack.SourceGenerator.Next.Rendering.Emitters.JsonNames", true)!;
+        Type next = typeof(ModelBasedGenerator).Assembly.GetType("LuminPack.SourceGenerator.Next.Rendering.Emitters.JsonNames", true)!;
         var byteHashes = new[] { Bind<byte[]>(legacy, "ComputeUtf8BytesHash"), Bind<byte[]>(next, "ComputeUtf8BytesHash") };
         var charHashes = new[] { Bind<string>(legacy, "ComputeUtf16Hash"), Bind<string>(next, "ComputeUtf16Hash") };
         byte[] storage = new byte[8192];
@@ -107,7 +110,7 @@ internal static class JsonNameHashRegression
             string assemblyName = "HashLookup" + shape + (next ? "Next" : "Legacy");
             var input = CSharpCompilation.Create(assemblyName, new[] { CSharpSyntaxTree.ParseText(source.ToString(), parse, assemblyName + ".cs", Encoding.UTF8) }, references,
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-            ISourceGenerator[] generators = next ? new[] { NextAnalyzer.Create() } :
+            ISourceGenerator[] generators = next ? new[] { new ModelBasedGenerator().AsSourceGenerator() } :
                 new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() };
             var driver = CSharpGeneratorDriver.Create(generators, parseOptions: parse).RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
             var lookups = driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources)
