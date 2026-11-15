@@ -27,6 +27,32 @@ public class JsonNumberSyntaxTest
     private static readonly TestSerializationProfile s_strictUtf16 =
         TestSerializationProfile.Utf16 with { ValidateJsonSyntax = true };
 
+    /// <summary>Reads a double through a closed JSON entry for the selected validation profile.</summary>
+    /// <param name="literal">The JSON number token.</param>
+    /// <param name="profile">The selected encoding and validation policy.</param>
+    /// <returns>The decoded double.</returns>
+    private static double ReadDouble(string literal, TestSerializationProfile profile) =>
+        (profile.StringEncoding, profile.ValidateJsonSyntax) switch
+        {
+            (LuminPackStringEncoding.UTF16, true) => LuminPackSerializer.DeserializeJson<double, TestStrictUtf16Length>(literal),
+            (LuminPackStringEncoding.UTF16, false) => LuminPackSerializer.DeserializeJson<double, TestUtf16Length>(literal),
+            (_, true) => LuminPackSerializer.DeserializeJson<double, TestStrictUtf8Length>(literal),
+            _ => LuminPackSerializer.DeserializeJson<double, TestUtf8Length>(literal),
+        };
+
+    /// <summary>Reads a single through a closed JSON entry for the selected validation profile.</summary>
+    /// <param name="literal">The JSON number token.</param>
+    /// <param name="profile">The selected encoding and validation policy.</param>
+    /// <returns>The decoded single.</returns>
+    private static float ReadSingle(string literal, TestSerializationProfile profile) =>
+        (profile.StringEncoding, profile.ValidateJsonSyntax) switch
+        {
+            (LuminPackStringEncoding.UTF16, true) => LuminPackSerializer.DeserializeJson<float, TestStrictUtf16Length>(literal),
+            (LuminPackStringEncoding.UTF16, false) => LuminPackSerializer.DeserializeJson<float, TestUtf16Length>(literal),
+            (_, true) => LuminPackSerializer.DeserializeJson<float, TestStrictUtf8Length>(literal),
+            _ => LuminPackSerializer.DeserializeJson<float, TestUtf8Length>(literal),
+        };
+
     /// <summary>Verifies eight-digit blocks never accept invalid ASCII, Unicode or token boundaries.</summary>
     [Fact]
     public void IntegerBlocksRetainGrammarAndRangeChecks()
@@ -160,8 +186,8 @@ public class JsonNumberSyntaxTest
     [InlineData("-2.5", -2.5)]
     public void ValidDoubleTokensParse(string literal, double expected)
     {
-        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8));
-        Assert.Equal(expected, TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf16));
+        Assert.Equal(expected, ReadDouble(literal, s_strictUtf8));
+        Assert.Equal(expected, ReadDouble(literal, s_strictUtf16));
     }
 
     /// <summary>Verifies valid integer tokens parse.</summary>
@@ -185,10 +211,10 @@ public class JsonNumberSyntaxTest
     {
         foreach (var option in new[] { s_strictUtf8, s_strictUtf16 })
         {
-            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(TestProfileSerializer.DeserializeJson<double>("-0.0", option)));
-            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(TestProfileSerializer.DeserializeJson<double>("-0", option)));
-            Assert.Equal(0x8000_0000u, System.BitConverter.SingleToUInt32Bits(TestProfileSerializer.DeserializeJson<float>("-0.0", option)));
-            Assert.Equal(0UL, System.BitConverter.DoubleToUInt64Bits(TestProfileSerializer.DeserializeJson<double>("0.0", option)));
+            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(ReadDouble("-0.0", option)));
+            Assert.Equal(0x8000_0000_0000_0000UL, System.BitConverter.DoubleToUInt64Bits(ReadDouble("-0", option)));
+            Assert.Equal(0x8000_0000u, System.BitConverter.SingleToUInt32Bits(ReadSingle("-0.0", option)));
+            Assert.Equal(0UL, System.BitConverter.DoubleToUInt64Bits(ReadDouble("0.0", option)));
         }
     }
 
@@ -203,13 +229,13 @@ public class JsonNumberSyntaxTest
             if (double.IsInfinity(expected))
             {
                 // Overflow keeps LuminPack's documented policy: reject instead of producing Infinity.
-                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8));
-                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf16));
+                Assert.ThrowsAny<System.Exception>(() => ReadDouble(literal, s_strictUtf8));
+                Assert.ThrowsAny<System.Exception>(() => ReadDouble(literal, s_strictUtf16));
                 continue;
             }
 
-            double utf8 = TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8);
-            double utf16 = TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf16);
+            double utf8 = ReadDouble(literal, s_strictUtf8);
+            double utf16 = ReadDouble(literal, s_strictUtf16);
 
             Assert.Equal(System.BitConverter.DoubleToUInt64Bits(expected), System.BitConverter.DoubleToUInt64Bits(utf8));
             Assert.Equal(System.BitConverter.DoubleToUInt64Bits(expected), System.BitConverter.DoubleToUInt64Bits(utf16));
@@ -226,13 +252,13 @@ public class JsonNumberSyntaxTest
 
             if (float.IsInfinity(expected))
             {
-                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8));
-                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf16));
+                Assert.ThrowsAny<System.Exception>(() => ReadSingle(literal, s_strictUtf8));
+                Assert.ThrowsAny<System.Exception>(() => ReadSingle(literal, s_strictUtf16));
                 continue;
             }
 
-            float utf8 = TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8);
-            float utf16 = TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf16);
+            float utf8 = ReadSingle(literal, s_strictUtf8);
+            float utf16 = ReadSingle(literal, s_strictUtf16);
 
             Assert.Equal(System.BitConverter.SingleToUInt32Bits(expected), System.BitConverter.SingleToUInt32Bits(utf8));
             Assert.Equal(System.BitConverter.SingleToUInt32Bits(expected), System.BitConverter.SingleToUInt32Bits(utf16));
@@ -267,8 +293,8 @@ public class JsonNumberSyntaxTest
             float expectedSingle = float.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
             foreach (var profile in new[] { TestSerializationProfile.Utf8, TestSerializationProfile.Utf16, s_strictUtf8, s_strictUtf16 })
             {
-                double actualDouble = TestProfileSerializer.DeserializeJson<double>(literal, profile);
-                float actualSingle = TestProfileSerializer.DeserializeJson<float>(literal, profile);
+                double actualDouble = ReadDouble(literal, profile);
+                float actualSingle = ReadSingle(literal, profile);
                 Assert.True(System.BitConverter.DoubleToUInt64Bits(expectedDouble) == System.BitConverter.DoubleToUInt64Bits(actualDouble),
                     $"Double rounding differs for {literal} under {profile}.");
                 Assert.True(System.BitConverter.SingleToUInt32Bits(expectedSingle) == System.BitConverter.SingleToUInt32Bits(actualSingle),
@@ -287,7 +313,7 @@ public class JsonNumberSyntaxTest
         {
             string literal = RandomLiteral(rng, 17);
             double expected = double.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
-            double actual = TestProfileSerializer.DeserializeJson<double>(literal, s_strictUtf8);
+            double actual = ReadDouble(literal, s_strictUtf8);
 
             Assert.Equal(System.BitConverter.DoubleToUInt64Bits(expected), System.BitConverter.DoubleToUInt64Bits(actual));
         }
@@ -306,11 +332,11 @@ public class JsonNumberSyntaxTest
 
             if (float.IsInfinity(expected))
             {
-                Assert.ThrowsAny<System.Exception>(() => TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8));
+                Assert.ThrowsAny<System.Exception>(() => ReadSingle(literal, s_strictUtf8));
                 continue;
             }
 
-            float actual = TestProfileSerializer.DeserializeJson<float>(literal, s_strictUtf8);
+            float actual = ReadSingle(literal, s_strictUtf8);
 
             Assert.Equal(System.BitConverter.SingleToUInt32Bits(expected), System.BitConverter.SingleToUInt32Bits(actual));
         }

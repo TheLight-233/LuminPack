@@ -377,7 +377,7 @@ public class JsonReaderDifferentialTest
     {
         try
         {
-            values = TestProfileSerializer.DeserializeJson<double[]>(json, s_strictUtf8)!;
+            values = LuminPackSerializer.DeserializeJson<double[], TestStrictUtf8Length>(json);
             return true;
         }
         catch (Exception)
@@ -395,7 +395,7 @@ public class JsonReaderDifferentialTest
     {
         try
         {
-            values = TestProfileSerializer.DeserializeJson<long[]>(json, s_strictUtf8)!;
+            values = LuminPackSerializer.DeserializeJson<long[], TestStrictUtf8Length>(json);
             return true;
         }
         catch (Exception)

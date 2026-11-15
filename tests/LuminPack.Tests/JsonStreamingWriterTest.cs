@@ -154,13 +154,21 @@ public class JsonStreamingWriterTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void RawFragmentsAndEscapedPropertyNamesCrossChunks(LuminPackStringEncoding encoding)
     {
-        var option = new TestSerializationProfile { StringEncoding = encoding };
         string name = new string('\u4e2d', 4000) + "\"\\\n😀";
         var value = new Dictionary<string, string> { [name] = new string('x', 9000) + "😀" };
         var output = new ChunkWriter();
-        TestProfileSerializer.SerializeJson(value, output, option);
-        string expected = TestProfileSerializer.SerializeJson(value, option);
-        Assert.Equal(encoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8.GetBytes(expected) : Encoding.Unicode.GetBytes(expected), output.ToArray());
+        byte[] expected;
+        if (encoding == LuminPackStringEncoding.UTF8)
+        {
+            LuminPackSerializer.SerializeJson<Dictionary<string, string>, TestUtf8Length>(value, output);
+            expected = Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson<Dictionary<string, string>, TestUtf8Length>(value));
+        }
+        else
+        {
+            LuminPackSerializer.SerializeJson<Dictionary<string, string>, TestUtf16Length>(value, output);
+            expected = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson<Dictionary<string, string>, TestUtf16Length>(value));
+        }
+        Assert.Equal(expected, output.ToArray());
         Assert.InRange(output.MaxSizeHint, 1, 4096);
     }
 
