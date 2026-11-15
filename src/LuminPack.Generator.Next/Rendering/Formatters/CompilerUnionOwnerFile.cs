@@ -54,10 +54,10 @@ internal static class CompilerUnionOwnerFile
         void Write(CodeWriter writer, string profile, bool json)
         {
             writer.Line("object? caseValue = value.Value;");
-            if (!json)
-                writer.Line("writer.EnsureAdditionalCapacity(" + (wide ? "3" : "1") + ");");
             writer.Line("if (caseValue is null)");
             writer.Open();
+            if (!json)
+                writer.Line("writer.EnsureAdditionalCapacity(1);");
             writer.Line(json ? "writer.WriteNull<" + profile + ">();" : "writer.WriteNullUnionHeader();");
             writer.Line("return;");
             writer.Close();
@@ -70,7 +70,10 @@ internal static class CompilerUnionOwnerFile
                 JsonProperty(writer, profile, "Value");
             }
             else
+            {
+                writer.Line("writer.EnsureAdditionalCapacity(" + (wide ? "tag < " + writer.A("LuminPackCode") + ".WideTag ? 1 : 3" : "1") + ");");
                 writer.Line("writer." + (wide ? "WriteWideUnionHeader" : "WriteUnionHeader") + "((ushort)tag);");
+            }
             writer.Line("switch (tag)");
             writer.Open();
             for (int index = 0; index < model.Arguments.Length; index++)
