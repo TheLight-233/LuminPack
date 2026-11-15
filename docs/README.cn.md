@@ -121,15 +121,19 @@ string json = LuminPackSerializer.SerializeJson(player);     // 📜 同一个�
 
 ## 📦 安装
 
-```shell
-dotnet add package LuminPack
-```
+> [!IMPORTANT]
+> 本仓库介绍的 LuminPack 2.0 还没有发布到 NuGet。NuGet 上现有的 [`LuminPack`](https://www.nuget.org/packages/LuminPack) 包是 1.x 版本，API 与本仓库不同。在 2.0 发布之前，请直接引用源码项目。
 
 ```xml
-<PackageReference Include="LuminPack" Version="2.0.0" />
+<ItemGroup>
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Core/LuminPack.Core.csproj" />
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator/LuminPack.Generator.csproj"
+                    OutputItemType="Analyzer"
+                    ReferenceOutputAssembly="false" />
+</ItemGroup>
 ```
 
-[`LuminPack`](https://www.nuget.org/packages/LuminPack) 会自动带上匹配版本的源代码生成器。支持 `netstandard2.1` 以及 `net8.0` – `net11.0`。
+2.0 发布后，`dotnet add package LuminPack` 会安装运行时，并自动带上匹配版本的源代码生成器。支持 `netstandard2.1` 以及 `net8.0` – `net11.0`。如果想在本地试用 NuGet 包，可以按[发布文档](releasing.cn.md#本地构建候选包)构建候选包。
 
 > 🎮 **使用 Unity？** 把 API 兼容级别设为 .NET Standard 2.1，然后参阅 [Unity 指南](unity.cn.md)。
 
@@ -256,16 +260,17 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 
 ## 📊 基准测试
 
-在仓库的 CI 机器上使用 [BenchmarkDotNet](https://benchmarkdotnet.org) 测量——**越低越好**。每张图都在同一台机器、同一份数据、同一次运行中对比各个库；倍数表示该库耗时是 LuminPack 的多少倍，误差线表示最小值到最大值的范围。
+数据来自 GitHub Actions 的 [CI 运行 43699899116](https://github.com/TheLight-233/LuminPack/actions/runs/43699899116)（提交 `ff599dc`）——**越低越好**。每张图都在同一台机器、同一份数据、同一次运行中对比各个库；倍数表示该库耗时是 LuminPack 的多少倍。
 
 | 🖥️ 测试环境 | |
 | --- | --- |
-| 运行环境 | GitHub Actions `ubuntu-latest`（[CI 工作流](../.github/workflows/ci.yml)的 `Benchmark (linux-x64)` 任务） |
-| CPU | AMD EPYC 7763 2.61 GHz · 2 核 / 4 线程 |
-| 系统 | Ubuntu 24.04.5 LTS |
-| 运行时 | .NET 10.0.14 · X64 RyuJIT（x86-64-v3 / AVX2） |
-| 工具 | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-rc.3 |
-| 参数 | 四类基准均为 3 次启动 × 15 次迭代、8–30 次预热，TieredPGO 任务（启用分层编译与动态 PGO），使用 Server GC |
+| 运行环境 | GitHub Actions `ubuntu-latest`，[CI 工作流](../.github/workflows/ci.yml)的 `Benchmark (linux-x64)` 任务 |
+| CPU | AMD EPYC 9V45 · 2 核 / 4 线程 |
+| 系统 | Ubuntu 26.04.1 LTS |
+| 运行时 | .NET 11.0.0 + Satori GC（Server GC）· X64 RyuJIT x86-64-v4（AVX-512） |
+| 工具 | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100 |
+| 参数 | `TieredPGO-Satori` 任务（启用分层编译与动态 PGO）· 3 个进程 × 15 次迭代，8–30 次预热，保留离群值 |
+| 对照库 | Nino 4.0.0-rc.7 · MemoryPack 1.21.4 · MessagePack 3.1.12 · System.Text.Json（运行时自带）· Newtonsoft.Json 13.0.4 · RE:Dox（CAPCOM.REDox 1.0.0） |
 
 ### 🎮 游戏存档
 
@@ -278,7 +283,7 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 
 ### 🧱 简单类
 
-包含数字、数组、List 和字典的小型类——经典的微基准形态。
+包含整数、100 个 Transform、字典和多态成员的类——经典的微基准形态。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/SimpleBenchmark-dark.svg">
@@ -287,7 +292,7 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 
 ### 🎭 多态
 
-带有多个具体实现的接口与抽象类。
+包含 1,000 个元素的多态对象列表，循环使用 20 种具体类型。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/PolymorphismBenchmark-dark.svg">
@@ -296,17 +301,40 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 
 ### 📜 JSON
 
-同一份游戏存档的 JSON 文本，与最流行的 .NET JSON 库对比。
+同一份游戏存档的 JSON 文本，与最流行的 .NET JSON 库对比（System.Text.Json 使用源生成上下文）。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/JsonBenchmark-dark.svg">
   <img alt="JSON 基准" src="assets/benchmarks/JsonBenchmark-light.svg" width="100%">
 </picture>
 
-想在自己的硬件上验证？可以在本地运行同样的四个基准类，也可以手动触发 CI 工作流并启用 `run_benchmarks`，从按主机分别保存的 `benchmark-artifacts-*` 中获取新结果：
+### 🌍 其他主机
+
+同一次运行还测量了一台 Arm64 主机和一台 Intel 主机。下表为 LuminPack 耗时 ÷ 对照库耗时，按各套件的操作取平均（`TieredPGO-Satori`）；**小于 1 表示 LuminPack 更快**。
+
+| 主机 | Nino | MemoryPack | MessagePack | System.Text.Json | Newtonsoft.Json | RE:Dox |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Linux x64 · AMD EPYC 9V45 | 0.78 | 0.42 | 0.11 | 0.55 | 0.21 | 0.36 |
+| Linux Arm64 · Neoverse-N2 | 0.79 | 0.37 | 0.10 | 0.57 | 0.22 | 0.35 |
+| macOS x64 · Intel Core i7-8700B | 1.08 | 0.49 | 0.12 | 0.58 | 0.24 | 0.35 |
+
+在 Intel macOS 主机上，多态套件是 Nino 更快：LuminPack 的写入耗时是 Nino 的 1.53 倍，读取是 1.37 倍。这台主机的进程间波动也最大。
+
+### 🧮 序列化矩阵
+
+除了四个精选模型，矩阵还把 LuminPack 支持的每个 fixture 与 MemoryPack、Nino 和 System.Text.Json 逐一计时：154 个 fixture 覆盖标量、框架类型、集合和模型图，另有 51 类集合 × 值、字符串、对象元素，分三种规模（8、256、4,096）以及值不断变化的场景。每个格子是全部有效配对中 LuminPack ÷ 对照库的均值，下方直方图展示全部 5,318 个配对。
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/matrix-dark.svg">
+  <img alt="序列化矩阵" src="assets/benchmarks/matrix-light.svg" width="100%">
+</picture>
+
+矩阵在同一次 CI 运行中、另一台 `ubuntu-latest` 机器上执行（AMD EPYC 9V74，.NET 10.0.15，Server GC，关闭分层编译），3 个进程 × 9 轮，每轮打乱各库的执行顺序。对照库自身往返校验失败的 fixture 不参与配对（各场景合计 MemoryPack 28 项、Nino 92 项、System.Text.Json 225 项）；System.Text.Json 没有根对象复用操作。
+
+想在自己的硬件上验证？可以在本地运行同样的四个基准类，也可以手动触发 CI 工作流并启用 `run_benchmarks`，从按主机分别上传的 `benchmark-artifacts-*` 和 `benchmark-matrix` 中获取新结果：
 
 ```shell
-dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
 ```
 
 ## 📚 文档
@@ -324,11 +352,12 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 | 💡 | [IDE 代码修复](code-fixes.cn.md) | 随包提供的生成器诊断快速修复与 Fix All |
 | 🎮 | [Unity、IL2CPP 与 NativeAOT](unity.cn.md) | Unity 配置、Burst、裁剪 |
 | 📐 | [数据格式](formats.cn.md) | 二进制布局与 JSON 表示 |
+| 🗜️ | [压缩](compression.cn.md) | `LuminCompressor`、`[LuminPackCompress]` 与 `LUM2` 帧格式 |
 | 🛡️ | [安全](security.cn.md) | 可移植性、不可信输入、加密 |
 
 ## 🧩 平台扩展包
 
-为引擎和 UI 类型提供开箱即用支持的可选扩展。核心库不依赖其中任何一个。
+为引擎和 UI 类型提供开箱即用支持的可选扩展。核心库不依赖其中任何一个；目前以源码项目的形式引用。
 
 | 包 | 新增支持 |
 | --- | --- |
@@ -348,7 +377,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 
 ## 🤝 参与贡献
 
-欢迎提交 Issue 和 Pull Request！请先阅读[贡献指南](CONTRIBUTING.cn.md)；[架构概览](architecture.cn.md)和[设计约束](mechanism-contract.cn.md)介绍了库的整体结构。
+欢迎提交 Issue 和 Pull Request！请先阅读[贡献指南](CONTRIBUTING.cn.md)，其中介绍了构建、检查、基准测试以及贡献者参考文档，包括[架构概览](architecture.cn.md)和[设计约束](mechanism-contract.cn.md)。AI 编程助手请阅读 [AGENTS.md](../AGENTS.md)。
 
 ## 💖 致谢
 

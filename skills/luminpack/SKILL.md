@@ -46,7 +46,7 @@ Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 LuminPackSerializer.DeserializeJson(json, ref fromJson);  // reuses the existing JSON graph
 ```
 
-`LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). Install with `dotnet add package LuminPack`; the generator package comes with it.
+`LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). LuminPack 2.0 is not on NuGet yet (NuGet's `LuminPack` 1.x has a different API): reference `src/LuminPack.Core` and `src/LuminPack.Generator` (as an analyzer) from source, as in [Getting started](../../docs/getting-started.md#from-source). Once 2.0 ships, `dotnet add package LuminPack` brings the generator package with it.
 
 IDE quick actions are bundled in `LuminPack.Generator`, which comes automatically with `LuminPack`; no additional package is needed. They fix supported generator diagnostics such as missing packable markers, Union partial declarations, invalid attributes and accessibility. Constructor diagnostics offer an explicit choice; other mechanical fixes support Fix All. Review edits that change modifiers. See [IDE code fixes](../../docs/code-fixes.md) for supported IDs and loading requirements.
 

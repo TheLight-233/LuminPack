@@ -121,15 +121,19 @@ Automatic generation retains declared model graphs and the concrete entries requ
 
 ## 📦 Installation
 
-```shell
-dotnet add package LuminPack
-```
+> [!IMPORTANT]
+> LuminPack 2.0, the version this repository documents, is not on NuGet yet. The [`LuminPack`](https://www.nuget.org/packages/LuminPack) package on NuGet today is the 1.x line, which has a different API. Until 2.0 is published, reference the projects from source.
 
 ```xml
-<PackageReference Include="LuminPack" Version="2.0.0" />
+<ItemGroup>
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Core/LuminPack.Core.csproj" />
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack.Generator/LuminPack.Generator.csproj"
+                    OutputItemType="Analyzer"
+                    ReferenceOutputAssembly="false" />
+</ItemGroup>
 ```
 
-[`LuminPack`](https://www.nuget.org/packages/LuminPack) brings the matching source generator with it. Targets `netstandard2.1` and `net8.0` – `net11.0`.
+Once 2.0 is released, `dotnet add package LuminPack` installs the runtime and brings the matching source generator with it. Targets `netstandard2.1` and `net8.0` – `net11.0`. To try the packages locally, build release candidates as described in [Releasing](docs/releasing.md#build-a-candidate-locally).
 
 > 🎮 **Unity?** Set the API compatibility level to .NET Standard 2.1 and follow the [Unity guide](docs/unity.md).
 
@@ -256,16 +260,17 @@ public partial struct Packet            // identical bytes on 32-bit and 64-bit
 
 ## 📊 Benchmarks
 
-Measured with [BenchmarkDotNet](https://benchmarkdotnet.org) on the repository's CI runner — **lower is better**. Every chart compares libraries on the same machine, data and run; the multiplier shows how long each library takes relative to LuminPack, and the whiskers show the min–max spread.
+Measured on GitHub Actions in [CI run 43699899116](https://github.com/TheLight-233/LuminPack/actions/runs/43699899116) (commit `ff599dc`) — **lower is better**. Each chart compares libraries on the same machine, data and run; the multiplier is each library's time relative to LuminPack.
 
 | 🖥️ Test machine | |
 | --- | --- |
-| Runner | GitHub Actions `ubuntu-latest` (`Benchmark (linux-x64)` job of the [CI workflow](.github/workflows/ci.yml)) |
-| CPU | AMD EPYC 7763 2.61 GHz · 2 cores / 4 threads |
-| OS | Ubuntu 24.04.5 LTS |
-| Runtime | .NET 10.0.14 · X64 RyuJIT (x86-64-v3 / AVX2) |
-| Tooling | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-rc.3 |
-| Settings | 3 launches × 15 iterations, 8–30 warmups, TieredPGO job (tiered compilation and dynamic PGO), Server GC for all four benchmark classes |
+| Runner | GitHub Actions `ubuntu-latest`, `Benchmark (linux-x64)` job of the [CI workflow](.github/workflows/ci.yml) |
+| CPU | AMD EPYC 9V45 · 2 cores / 4 threads |
+| OS | Ubuntu 26.04.1 LTS |
+| Runtime | .NET 11.0.0 with Satori GC (Server GC) · X64 RyuJIT x86-64-v4 (AVX-512) |
+| Tooling | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100 |
+| Settings | `TieredPGO-Satori` job (tiered compilation and dynamic PGO) · 3 processes × 15 iterations, 8–30 warmups, outliers kept |
+| Libraries | Nino 4.0.0-rc.7 · MemoryPack 1.21.4 · MessagePack 3.1.12 · System.Text.Json (in-box) · Newtonsoft.Json 13.0.4 · RE:Dox (CAPCOM.REDox 1.0.0) |
 
 ### 🎮 Game save
 
@@ -278,7 +283,7 @@ A realistic save file with nested objects, lists, dictionaries and strings.
 
 ### 🧱 Simple class
 
-A small class with numbers, an array, a list and a dictionary — the classic micro-benchmark shape.
+A small class with integers, 100 transforms, a dictionary and polymorphic members — the classic micro-benchmark shape.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/SimpleBenchmark-dark.svg">
@@ -287,7 +292,7 @@ A small class with numbers, an array, a list and a dictionary — the classic mi
 
 ### 🎭 Polymorphism
 
-Interfaces and abstract classes with several concrete cases.
+A list of 1,000 polymorphic objects cycling through 20 concrete types.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/PolymorphismBenchmark-dark.svg">
@@ -296,17 +301,40 @@ Interfaces and abstract classes with several concrete cases.
 
 ### 📜 JSON
 
-The same game save as JSON text, against the most popular .NET JSON libraries.
+The same game save as JSON text, against the most popular .NET JSON libraries (System.Text.Json with a source-generated context).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/JsonBenchmark-dark.svg">
   <img alt="JSON benchmark" src="docs/assets/benchmarks/JsonBenchmark-light.svg" width="100%">
 </picture>
 
-Want to see it on your own hardware? Run the same four benchmark classes locally, or dispatch the CI workflow with `run_benchmarks` enabled to get fresh results in the per-host `benchmark-artifacts-*` uploads:
+### 🌍 Other hosts
+
+The same run also measured an Arm64 and an Intel host. LuminPack time ÷ reference time, averaged over each suite's operations (`TieredPGO-Satori`); **below 1 means LuminPack is faster**.
+
+| Host | Nino | MemoryPack | MessagePack | System.Text.Json | Newtonsoft.Json | RE:Dox |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Linux x64 · AMD EPYC 9V45 | 0.78 | 0.42 | 0.11 | 0.55 | 0.21 | 0.36 |
+| Linux Arm64 · Neoverse-N2 | 0.79 | 0.37 | 0.10 | 0.57 | 0.22 | 0.35 |
+| macOS x64 · Intel Core i7-8700B | 1.08 | 0.49 | 0.12 | 0.58 | 0.24 | 0.35 |
+
+On the Intel macOS host, Nino is faster on the polymorphism suite: LuminPack takes 1.53× Nino's time to write and 1.37× to read. That host also showed the widest spread between processes.
+
+### 🧮 Serialization matrix
+
+Beyond four hand-picked models, the matrix times every fixture LuminPack supports against MemoryPack, Nino and System.Text.Json: 154 fixtures covering scalars, framework types, collections and model graphs, plus 51 collection families × value, string and object elements at three sizes (8, 256 and 4,096) and with changing values. Each cell is the mean of LuminPack ÷ reference over every valid pair; the histograms show all 5,318 pairs.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/matrix-dark.svg">
+  <img alt="Serialization matrix" src="docs/assets/benchmarks/matrix-light.svg" width="100%">
+</picture>
+
+The matrix ran in the same CI run on a separate `ubuntu-latest` runner (AMD EPYC 9V74, .NET 10.0.15, Server GC, tiered compilation off), 3 processes × 9 rounds with the library order shuffled every round. Pairs leave out fixtures where the reference fails its own round-trip validation (MemoryPack 28, Nino 92 and System.Text.Json 225 across the scenarios); System.Text.Json has no root reuse operation.
+
+Want to see it on your own hardware? Run the same four benchmark classes locally, or dispatch the CI workflow with `run_benchmarks` enabled to get fresh results in the per-host `benchmark-artifacts-*` and `benchmark-matrix` uploads:
 
 ```shell
-dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
 ```
 
 ## 📚 Documentation
@@ -324,11 +352,12 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 | 💡 | [IDE Code Fixes](docs/code-fixes.md) | Included quick actions for generator diagnostics and Fix All |
 | 🎮 | [Unity, IL2CPP & NativeAOT](docs/unity.md) | Unity setup, Burst, trimming |
 | 📐 | [Wire Formats](docs/formats.md) | The binary layout and the JSON representation |
+| 🗜️ | [Compression](docs/compression.md) | `LuminCompressor`, `[LuminPackCompress]` and the `LUM2` frame |
 | 🛡️ | [Security](docs/security.md) | Portability, untrusted input, encryption |
 
 ## 🧩 Platform Packages
 
-Optional add-ons with ready-made support for engine and UI types. The core library depends on none of them.
+Optional add-ons with ready-made support for engine and UI types. The core library depends on none of them; for now they are referenced as source projects.
 
 | Package | Adds support for |
 | --- | --- |
@@ -348,7 +377,7 @@ Using an AI coding assistant? [`skills/luminpack`](skills/luminpack/SKILL.md) te
 
 ## 🤝 Contributing
 
-Issues and pull requests are welcome! Please read the [contributing guide](CONTRIBUTING.md) first; the [architecture overview](docs/architecture.md) and the [design rules](docs/mechanism-contract.md) explain how the library fits together.
+Issues and pull requests are welcome! Please read the [contributing guide](CONTRIBUTING.md) first; it covers building, checks, benchmarks and the contributor references, including the [architecture overview](docs/architecture.md) and the [design rules](docs/mechanism-contract.md). Coding agents read [AGENTS.md](AGENTS.md).
 
 ## 💖 Acknowledgements
 

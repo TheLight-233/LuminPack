@@ -6,7 +6,12 @@
 
 ### .NET
 
-LuminPack supports `netstandard2.1`, `net8.0`, `net9.0`, `net10.0` and `net11.0`. Install the [`LuminPack`](https://www.nuget.org/packages/LuminPack) package; NuGet adds the matching `LuminPack.Generator` automatically.
+LuminPack supports `netstandard2.1`, `net8.0`, `net9.0`, `net10.0` and `net11.0`.
+
+> [!IMPORTANT]
+> LuminPack 2.0 is not on NuGet yet; the [`LuminPack`](https://www.nuget.org/packages/LuminPack) package there is the 1.x line with a different API. Until 2.0 is published, use the [source references](#from-source) below, or build local candidate packages as described in [Releasing](releasing.md#build-a-candidate-locally).
+
+Once 2.0 is published, install the `LuminPack` package; NuGet adds the matching `LuminPack.Generator` automatically.
 
 ```shell
 dotnet add package LuminPack
