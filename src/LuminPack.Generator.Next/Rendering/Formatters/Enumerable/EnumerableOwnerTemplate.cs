@@ -492,9 +492,10 @@ internal static class EnumerableOwnerTemplate
     /// <param name="operations">The operations requested for this owner.</param>
     /// <param name="spec">The family algorithms.</param>
     /// <param name="nonEmptyRawHeaderBytes">The complete header width of a measurable nonempty raw collection, or zero.</param>
+    /// <param name="inlineRawRead">Whether to inline binary reads of direct raw elements.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations, EnumerableOwnerSpec spec,
-        int nonEmptyRawHeaderBytes = 0)
+        int nonEmptyRawHeaderBytes = 0, bool inlineRawRead = false)
     {
         using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
@@ -673,7 +674,9 @@ internal static class EnumerableOwnerTemplate
                 case FormatterSection.Roots:
                     w.Line(preserve);
                     // The original scalar sequence interfaces leave the allocating read to the JIT's default budget.
-                    if (spec.ReadInlining != null && (text || !spec.InterfaceListReuse))
+                    if (inlineRawRead && !text)
+                        w.Line(inline);
+                    else if (spec.ReadInlining != null && (text || !spec.InterfaceListReuse))
                         w.Line(w.MethodImpl(spec.ReadInlining));
                     w.Line("internal static void RootRead" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + reader + " reader,");

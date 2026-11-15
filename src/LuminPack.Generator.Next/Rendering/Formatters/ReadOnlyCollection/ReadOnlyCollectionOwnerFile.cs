@@ -17,7 +17,7 @@ internal static class ReadOnlyCollectionOwnerFile
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
-        EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
+        EnumerableOwnerTemplate.Render(set, fact, operations, Spec, inlineRawRead: true);
 
     private static void Read(EnumerableOwnerContext c)
     {
