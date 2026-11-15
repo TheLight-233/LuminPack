@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using LuminPack.Option;
 using LuminPack;
 using LuminPack.Core;
@@ -12,6 +13,33 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Retains the aligned span through collection and preserves data when moving to larger pooled storage.</summary>
+    [Fact]
+    public void BufferWriterKeepsEachRentalAlignedAcrossCompaction()
+    {
+        using var owner = new LuminBufferWriter(useFirstBuffer: true);
+        int initialCapacity = owner.TotalLength;
+        for (int run = 0; run < 2; run++)
+        {
+            ref byte first = ref MemoryMarshal.GetReference(owner.DangerousGetBuffer());
+            nint address = Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref first);
+            Assert.Equal((nint)0, address & 63);
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            Assert.Equal(address, Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref first));
+
+            if (run == 0)
+            {
+                first = 0x5A;
+                owner.Advance(1);
+                owner.EnsureCapacity(initialCapacity * 4);
+            }
+        }
+
+        Assert.Equal(new byte[] { 0x5A }, owner.GetSpan().ToArray());
+        Assert.True(owner.TotalLength >= initialCapacity * 4);
+    }
+
     /// <summary>Rejects incomplete dynamic payload destinations before copying or resetting the source.</summary>
     /// <param name="capacity">The destination's logical capacity.</param>
     [Theory]
