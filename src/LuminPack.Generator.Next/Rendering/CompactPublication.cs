@@ -33,12 +33,72 @@ internal sealed class GeneratedSource : IEquatable<GeneratedSource>
     public override int GetHashCode() => Hint.GetHashCode() ^ (int)Kind;
 }
 
+/// <summary>One publication edit, carrying literal replacement text or a resolved invocation.</summary>
+internal readonly struct TextEdit
+{
+    internal readonly int Start, End;
+
+    /// <summary>The literal replacement text, or null for a structured invocation.</summary>
+    internal readonly string? Text;
+
+    /// <summary>The resolved invocation written directly during the output pass.</summary>
+    internal readonly CallEdit? Call;
+
+    /// <summary>Captures a literal replacement or removal.</summary>
+    /// <param name="start">The inclusive source start.</param>
+    /// <param name="end">The exclusive source end.</param>
+    /// <param name="text">The replacement text, empty for a removal.</param>
+    internal TextEdit(int start, int end, string text)
+    {
+        Start = start;
+        End = end;
+        Text = text;
+        Call = null;
+    }
+
+    /// <summary>Captures a structured invocation that the output pass spells directly.</summary>
+    /// <param name="start">The inclusive source start.</param>
+    /// <param name="end">The exclusive source end.</param>
+    /// <param name="call">The resolved invocation.</param>
+    internal TextEdit(int start, int end, CallEdit call)
+    {
+        Start = start;
+        End = end;
+        Text = null;
+        Call = call;
+    }
+
+    /// <summary>Whether the edit only removes its source range.</summary>
+    internal bool Removes => Text is { Length: 0 };
+
+    /// <summary>Accepts the tuple form used by the declaration edits.</summary>
+    /// <param name="edit">The start, end and replacement text.</param>
+    public static implicit operator TextEdit((int Start, int End, string Text) edit) => new(edit.Start, edit.End, edit.Text);
+}
+
+/// <summary>A resolved invocation that avoids joining its own final string.</summary>
+internal sealed class CallEdit
+{
+    internal readonly string Target;
+    internal readonly string[] Generics, Arguments;
+
+    /// <summary>Captures the resolved target and its type and value arguments.</summary>
+    /// <param name="target">The qualified operation target.</param>
+    /// <param name="generics">The explicit type arguments.</param>
+    /// <param name="arguments">The argument expressions in call order.</param>
+    internal CallEdit(string target, string[] generics, string[] arguments)
+    {
+        Target = target;
+        Generics = generics;
+        Arguments = arguments;
+    }
+}
+
 /// <summary>Publishes the source writers' explicit static operations without a second compiler pipeline.</summary>
-internal static class CompactPublication
+internal static partial class CompactPublication
 {
     private static readonly Regex Imports = new(@"(?m)^using (?:(\w+) = )?([^\r\n;]+);\s*", RegexOptions.Compiled);
     // Formatter owners are field-free readonly structs, so shared generic owners can take them as strategy type arguments.
-    private static readonly Regex OwnerDeclarations = new(@"(?m)^(?<indent>[ \t]*)internal static partial class (?<name>\w+Formatter)\b", RegexOptions.Compiled);
     private static readonly Regex OwnerNames = new(@"\b(?:LuminRoots_|Binary_)\w+\b", RegexOptions.Compiled);
     private static readonly Regex DirectCalls = new(@"(?<![\w.:@])(?<target>(?:global::)?(?:LuminPack\.)?(?:LuminPackSerializer\.)?(?:LuminPackSerializer|LuminRoots_\w+|Binary_\w+)\.\w+|(?:Root|Serialize|Deserialize)\w*)\s*(?=<|\()", RegexOptions.Compiled);
     private static readonly Regex MethodGroups = new(@"(?<target>(?:(?:global::)?LuminPack\.)?(?:LuminPackSerializer|LuminRoots_\w+|Binary_\w+)\.\w+)\s*", RegexOptions.Compiled);
@@ -150,7 +210,7 @@ internal static class CompactPublication
             }
             var aliases = new SortedDictionary<string, string>(StringComparer.Ordinal);
             var bindings = new Dictionary<OperationKey, Operation>();
-            var edits = new List<(int Start, int End, string Text)>();
+            var edits = new List<TextEdit>();
             var removed = new HashSet<GeneratedText.Method>();
             foreach (GeneratedText.Method method in document.Methods)
             {
@@ -213,9 +273,10 @@ internal static class CompactPublication
                 if (close < 0 || match.Index < lastCallEnd || Intersects(edits, declarationCount, ref declarationEdit, match.Index, close + 1))
                     continue;
                 var call = new GeneratedText.Call(target, types, GeneratedText.Split(document.Text.Substring(position + 1, close - position - 1)));
-                edits.Add((match.Index, close + 1, Resolve(call, owner, json, aliases, catalog, names, bindings, 0)));
+                edits.Add(new TextEdit(match.Index, close + 1, Resolve(call, owner, json, aliases, catalog, names, bindings, 0)));
                 lastCallEnd = close + 1;
             }
+            AddOwnerDeclarationEdits(document, names, edits);
             SortEdits(edits);
             int operationEdit = 0;
             int operationCount = edits.Count;
@@ -279,8 +340,7 @@ internal static class CompactPublication
                 edits.Add((firstNamespace, firstNamespace, imports.ToString()));
             }
             SortEdits(edits);
-            string output = OwnerDeclarations.Replace(PublicationOrder.Render(document.Text, document.Methods, removed, edits),
-                "${indent}internal readonly partial struct ${name}");
+            string output = PublicationOrder.Render(document.Text, document.Methods, removed, edits);
             string hint = document.Source.Hint.StartsWith("LuminPack.SharedFormatters/", StringComparison.Ordinal) ? FormatterHint(document) : document.Source.Hint;
             cache.Outputs[cacheKey] = new CachedOutput(document.Source.Text, hint, output, bindings);
             Add(hint, output, document.Source.Kind);
@@ -340,7 +400,7 @@ internal static class CompactPublication
     /// <param name="start">The proposed start.</param>
     /// <param name="end">The proposed exclusive end.</param>
     /// <returns>Whether the proposed range intersects an existing edit.</returns>
-    private static bool Intersects(List<(int Start, int End, string Text)> edits, int count, ref int index, int start, int end)
+    private static bool Intersects(List<TextEdit> edits, int count, ref int index, int start, int end)
     {
         while (index < count && edits[index].End <= start)
             index++;
@@ -349,7 +409,7 @@ internal static class CompactPublication
 
     /// <summary>Sorts edits by source position, with insertions before longer edits at the same offset.</summary>
     /// <param name="edits">The edits to order.</param>
-    private static void SortEdits(List<(int Start, int End, string Text)> edits) =>
+    private static void SortEdits(List<TextEdit> edits) =>
         edits.Sort(static (left, right) => left.Start != right.Start ? left.Start.CompareTo(right.Start) : left.End.CompareTo(right.End));
 
     /// <summary>Searches only source ranges whose declarations survive publication.</summary>
@@ -381,7 +441,7 @@ internal static class CompactPublication
     /// <param name="names">The final static-container names.</param>
     /// <param name="scope">The enclosing static container.</param>
     /// <returns>The invocation after eliminating safe forwarding operations.</returns>
-    private static string Resolve(GeneratedText.Call call, string scope, bool json, SortedDictionary<string, string> aliases,
+    private static CallEdit Resolve(GeneratedText.Call call, string scope, bool json, SortedDictionary<string, string> aliases,
         Dictionary<OperationKey, Operation> catalog, Dictionary<string, string> names, Dictionary<OperationKey, Operation> bindings, int depth)
     {
         string target = call.Target;
@@ -394,9 +454,8 @@ internal static class CompactPublication
         for (int candidate = 1; operation == null && call.Generics.Length == 0 && candidate <= 4; candidate++)
             if (catalog.TryGetValue(Key(owner, name, candidate, json), out operation))
                 arity = candidate;
-        string generic = call.Generics.Length == 0 ? string.Empty : "<" + string.Join(", ", call.Generics) + ">";
         if (operation == null || depth > 32)
-            return target + generic + "(" + string.Join(", ", call.Arguments) + ")";
+            return new CallEdit(target, call.Generics, call.Arguments);
         bindings[Key(operation.Method.Owner, name, arity, json)] = operation;
         GeneratedText.Method method = operation.Method;
         if (arity == call.Generics.Length && operation.Forward is { } forward)
@@ -421,8 +480,7 @@ internal static class CompactPublication
                 string operationName = forward.Target.Substring(member + 1);
                 string alias = closedOwner.Replace("Formatter", string.Empty) + (operationName.Contains("Read") ? "Reader" : "Writer");
                 aliases[alias] = forward.Target.Substring(0, member);
-                return alias + "." + operationName + (generics.Length == 0 ? string.Empty : "<" + string.Join(", ", generics) + ">") +
-                    "(" + string.Join(", ", arguments) + ")";
+                return new CallEdit(alias + "." + operationName, generics, arguments);
             }
             return Resolve(new GeneratedText.Call(Substitute(forward.Target), generics, arguments),
                 method.Owner, method.Json, aliases, catalog, names, bindings, depth + 1);
@@ -434,7 +492,7 @@ internal static class CompactPublication
         }
         else
             target = "global::LuminPack.LuminPackSerializer";
-        return target + "." + MethodName(owner, name, method.Json, Extension(method)) + generic + "(" + string.Join(", ", call.Arguments) + ")";
+        return new CallEdit(target + "." + MethodName(owner, name, method.Json, Extension(method)), call.Generics, call.Arguments);
     }
 
     /// <summary>Whether a call without type arguments names a generic operation whose arguments are inferred.</summary>
@@ -541,6 +599,52 @@ internal static class CompactPublication
     /// <param name="target">The qualified static target.</param>
     /// <returns>The unqualified static-container name.</returns>
     private static string Owner(string target) => target.Substring(Math.Max(target.LastIndexOf('.'), target.LastIndexOf(':')) + 1);
+
+    /// <summary>Adds the formatter owner declaration rewrite as a source edit.</summary>
+    /// <param name="document">The indexed contribution.</param>
+    /// <param name="names">The final owner names applied by the same publication pass.</param>
+    /// <param name="edits">The publication edits receiving the rewrite.</param>
+    /// <remarks>Replaces <c>(?m)^(?&lt;indent&gt;[ \t]*)internal static partial class (?&lt;name&gt;\w+Formatter)\b</c> with
+    /// <c>${indent}internal readonly partial struct ${name}</c> without a second pass over the final file. The suffix test
+    /// uses the name after the owner rename, which is what the final file declares.</remarks>
+    private static void AddOwnerDeclarationEdits(Document document, Dictionary<string, string> names,
+        List<TextEdit> edits)
+    {
+        const string marker = "internal static partial class ";
+        const string keywords = "internal static partial class";
+        const string replacement = "internal readonly partial struct";
+        string text = document.Text;
+        int index = 0;
+        while ((index = text.IndexOf(marker, index, StringComparison.Ordinal)) >= 0)
+        {
+            int lineStart = text.LastIndexOf('\n', index) + 1;
+            bool indented = true;
+            for (int position = lineStart; position < index; position++)
+                if (text[position] is not (' ' or '\t'))
+                {
+                    indented = false;
+                    break;
+                }
+            if (indented)
+            {
+                int nameStart = index + marker.Length;
+                int nameEnd = nameStart;
+                while (nameEnd < text.Length && IsWordChar(text[nameEnd]))
+                    nameEnd++;
+                string raw = text.Substring(nameStart, nameEnd - nameStart);
+                string name = names.TryGetValue(raw, out string? renamed) ? renamed : raw;
+                // \w+Formatter requires at least one character before the suffix.
+                if (name.Length >= 10 && name.EndsWith("Formatter", StringComparison.Ordinal))
+                    edits.Add((index, index + keywords.Length, replacement));
+            }
+            index += marker.Length;
+        }
+    }
+
+    /// <summary>Reads the word character class used by the declaration scan.</summary>
+    /// <param name="value">The candidate character.</param>
+    /// <returns>Whether the character is a letter, digit or underscore.</returns>
+    private static bool IsWordChar(char value) => char.IsLetterOrDigit(value) || value == '_';
 
     /// <summary>Preserves the old generator's open-definition file identities.</summary>
     /// <param name="document">The indexed source contribution.</param>

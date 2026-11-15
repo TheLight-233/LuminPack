@@ -34,6 +34,32 @@ internal static class SourcePresentation
         /// <param name="text">The source fragment.</param>
         internal void Append(string text) => Append(text, 0, text.Length);
 
+        /// <summary>Appends a resolved invocation without building a combined string.</summary>
+        /// <param name="call">The resolved target and its explicit arguments.</param>
+        internal void Append(CallEdit call)
+        {
+            Append(call.Target);
+            if (call.Generics.Length != 0)
+            {
+                Append("<");
+                for (int index = 0; index < call.Generics.Length; index++)
+                {
+                    if (index != 0)
+                        Append(", ");
+                    Append(call.Generics[index]);
+                }
+                Append(">");
+            }
+            Append("(");
+            for (int index = 0; index < call.Arguments.Length; index++)
+            {
+                if (index != 0)
+                    Append(", ");
+                Append(call.Arguments[index]);
+            }
+            Append(")");
+        }
+
         /// <summary>Appends a source slice without creating an intermediate substring.</summary>
         /// <param name="length">The selected character count.</param>
         /// <param name="start">The inclusive character offset.</param>

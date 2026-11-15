@@ -13,13 +13,13 @@ internal static class PublicationOrder
     /// <param name="edits">The ordered operation and declaration edits.</param>
     /// <returns>The final source, reconstructed once in its publication order.</returns>
     internal static string Render(string source, List<GeneratedText.Method> methods, HashSet<GeneratedText.Method> removed,
-        List<(int Start, int End, string Text)> edits)
+        List<TextEdit> edits)
     {
         var excluded = new List<(int Start, int End)>();
         List<(int Start, int End)>? apis = null;
         bool conditional = source.IndexOf("#if", StringComparison.Ordinal) >= 0;
         foreach (var edit in edits)
-            if (edit.Text.Length == 0 && edit.End > edit.Start)
+            if (edit.Removes && edit.End > edit.Start)
                 excluded.Add((edit.Start, edit.End));
         foreach (GeneratedText.Method method in methods)
             if (!conditional && !removed.Contains(method) && method.Owner == "LuminPackSerializer" && IsApi(method.Name))
@@ -39,7 +39,7 @@ internal static class PublicationOrder
         return Render(source, apis == null ? new() : new(apis), apis, NoEdits);
     }
 
-    private static readonly List<(int Start, int End, string Text)> NoEdits = new();
+    private static readonly List<TextEdit> NoEdits = new();
 
     /// <summary>Reconstructs the file from sorted source ranges and moves facade entries to its end.</summary>
     /// <param name="source">The unmodified contribution.</param>
@@ -48,7 +48,7 @@ internal static class PublicationOrder
     /// <param name="edits">The ordered publication edits.</param>
     /// <returns>The final source.</returns>
     private static string Render(string source, List<(int Start, int End)> excluded, List<(int Start, int End)>? apis,
-        List<(int Start, int End, string Text)> edits)
+        List<TextEdit> edits)
     {
         Sort(excluded);
         RemoveEmpty(source, "internal static partial class LuminPackExtensions_", excluded);
@@ -180,7 +180,7 @@ internal static class PublicationOrder
     /// <param name="edits">The ordered publication edits.</param>
     /// <param name="editIndex">The next edit to consume.</param>
     private static void Append(SourcePresentation.Builder output, string source, int start, int end,
-        List<(int Start, int End, string Text)> edits, ref int editIndex)
+        List<TextEdit> edits, ref int editIndex)
     {
         int copied = start;
         while (editIndex < edits.Count)
@@ -192,7 +192,10 @@ internal static class PublicationOrder
             if (edit.Start < copied || edit.End > end)
                 continue;
             output.Append(source, copied, edit.Start - copied);
-            output.Append(edit.Text);
+            if (edit.Text != null)
+                output.Append(edit.Text);
+            else
+                output.Append(edit.Call!);
             copied = edit.End;
         }
         output.Append(source, copied, end - copied);
