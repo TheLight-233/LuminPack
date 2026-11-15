@@ -165,8 +165,24 @@ internal static partial class BinaryEmitter
         w.Blank();
         if (model.FixedUnionCase)
         {
-            Method(FixedUnionBody(w, WriteBody(model, w, union: true)), "SerializeUnionAt_" + readable, false,
-                "(scoped ref " + writer + " writer, " + type + "? input, int initialIndex, byte? unionTag)", inline, "int");
+            string parameters = "(scoped ref " + writer + " writer, " + type + "? input, ";
+            var fixedBody = FixedUnionBody(w, WriteBody(model, w, union: true), model.ManagedFixedUnionCase);
+            if (model.ManagedFixedUnionCase)
+            {
+                Method(fixedBody, "SerializeUnionAtCursor_" + readable, false,
+                    parameters + "ref byte initialCursor, byte? unionTag)", inline, "ref byte");
+                w.Blank();
+                string buffer = w.A("MemoryMarshal") + ".GetReference(writer.Buffer)";
+                string unsafeType = w.A("Unsafe");
+                Method(new List<string>
+                {
+                    "ref byte start = ref " + unsafeType + ".Add(ref " + buffer + ", unchecked((nint)(uint)initialIndex));",
+                    "ref byte end = ref SerializeUnionAtCursor_" + readable + "(ref writer, input, ref start, unionTag);",
+                    "return (int)" + unsafeType + ".ByteOffset(ref " + buffer + ", ref end);",
+                }, "SerializeUnionAt_" + readable, false, parameters + "int initialIndex, byte? unionTag)", inline, "int");
+            }
+            else
+                Method(fixedBody, "SerializeUnionAt_" + readable, false, parameters + "int initialIndex, byte? unionTag)", inline, "int");
             w.Blank();
         }
         w.Suppressed = !reads;
@@ -448,7 +464,9 @@ internal static partial class BinaryEmitter
                 w.Line(w.Preserve);
                 w.Line(inline);
                 w.Line("internal static void RootWriteUnion(scoped ref " + writer + " writer, " + type +
-                    "? input) => writer.Position = SerializeUnionAt_" + readable + "(ref writer, input, writer.Position, null);");
+                    (model.ManagedFixedUnionCase
+                        ? "? input) => writer.CommitRecords(ref SerializeUnionAtCursor_" + readable + "(ref writer, input, ref writer.Cursor, null));"
+                        : "? input) => writer.Position = SerializeUnionAt_" + readable + "(ref writer, input, writer.Position, null);"));
             }
             else
             {
@@ -1841,30 +1859,38 @@ internal static partial class BinaryEmitter
             body[index] = pattern.Replace(body[index], match => replacements[match.Value]);
     }
 
-    /// <summary>Turns an all-fixed Union write into the returning cursor kernel of a fixed Union case, as the fixed Union cursor
-    /// projection does: the cursor is a local byte index into the buffer, advancing adds to it, a block write copies into the
-    /// buffer, a lone store returns its width, and the index is published only before a capacity reservation.</summary>
-    private static List<string> FixedUnionBody(CodeWriter w, List<string> original)
+    /// <summary>Projects an all-fixed Union write onto its returning cursor. A capacity reservation publishes the
+    /// position before the check and the managed path reacquires the cursor afterwards.</summary>
+    private static List<string> FixedUnionBody(CodeWriter w, List<string> original, bool managedCursor)
     {
-        string destination = w.A("Unsafe") + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(writer.Buffer), unchecked((nint)(uint)(fixedUnionIndex)))";
+        string unsafeType = w.A("Unsafe");
+        string destination = managedCursor ? "fixedUnionCursor" :
+            unsafeType + ".Add(ref " + w.A("MemoryMarshal") + ".GetReference(writer.Buffer), unchecked((nint)(uint)(fixedUnionIndex)))";
+        string Advance(string width) => managedCursor
+            ? "fixedUnionCursor = ref " + unsafeType + ".Add(ref fixedUnionCursor, " + width + ");"
+            : "fixedUnionIndex += " + width + ";";
         var body = new List<string>
         {
-            "int fixedUnionIndex = initialIndex;",
+            managedCursor ? "ref byte fixedUnionCursor = ref initialCursor;" : "int fixedUnionIndex = initialIndex;",
             "if (unionTag.HasValue)",
             "{",
             destination + " = unionTag.GetValueOrDefault();",
-            "fixedUnionIndex++;",
+            Advance("1"),
             "}",
             "",
         };
         const string block = "\twriter.Write(ref ";
+        const string advance = "writer.Advance(";
+        const string write = "writer.Write(";
         foreach (string line in original)
         {
             if (line.StartsWith("\twriter.EnsureAdditionalCapacity(", StringComparison.Ordinal))
             {
                 body.Add("{");
-                body.Add("writer.Position = fixedUnionIndex;");
+                body.Add(managedCursor ? "writer.CommitRecords(ref fixedUnionCursor);" : "writer.Position = fixedUnionIndex;");
                 body.Add(line.Substring(1));
+                if (managedCursor)
+                    body.Add("fixedUnionCursor = ref writer.Cursor;");
                 body.Add("}");
                 body.Add("");
             }
@@ -1876,21 +1902,21 @@ internal static partial class BinaryEmitter
                 string source = arguments.Substring(0, comma), width = arguments.Substring(comma + 2);
                 body.Add("{");
                 body.Add(w.A("LuminPackMarshal") + ".CopyBlockUnaligned(ref " + destination + ", ref " + source + ", (uint)(" + width + "));");
-                body.Add("fixedUnionIndex += " + width + ";");
+                body.Add(Advance(width));
                 body.Add("}");
             }
             else if (line == "ref byte cursor = ref writer.Cursor;")
                 body.Add("ref byte cursor = ref " + destination + ";");
-            else if (line.StartsWith("writer.Advance(", StringComparison.Ordinal))
-                body.Add("fixedUnionIndex += " + line.Substring("writer.Advance(".Length, line.Length - "writer.Advance(".Length - 2) + ";");
-            else if (line.StartsWith("writer.Write(", StringComparison.Ordinal))
-                body.Add("fixedUnionIndex += " + w.A("LuminPackWriter") + ".Write(ref " + destination + ", " + line.Substring("writer.Write(".Length));
+            else if (line.StartsWith(advance, StringComparison.Ordinal))
+                body.Add(Advance(line.Substring(advance.Length, line.Length - advance.Length - 2)));
+            else if (line.StartsWith(write, StringComparison.Ordinal))
+                body.Add(Advance(w.A("LuminPackWriter") + ".Write(ref " + destination + ", " + line.Substring(write.Length, line.Length - write.Length - 1)));
             else
                 body.Add(line);
         }
         if (body[body.Count - 1] == "}")
             body.Add("");
-        body.Add("return fixedUnionIndex;");
+        body.Add(managedCursor ? "return ref fixedUnionCursor;" : "return fixedUnionIndex;");
         return body;
     }
 

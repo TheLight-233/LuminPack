@@ -781,8 +781,11 @@ internal static class UnionEmitter
                 w.Line(w.MethodImpl("AggressiveInlining"));
                 w.Line(Hidden(w));
                 w.Line(prefix + operation + model.UnionSuffix + slot.Suffix + SlotArguments(slot) + "(ref " + w.A("LuminPackWriter") + " writer)");
-                w.Indented(() => w.Line("=> writer.CurrentIndex = " + w.A("LuminPackSerializer") + ".SerializeUnionAt_" + item.Readable + "(ref writer, this, writer.CurrentIndex, (byte)" +
-                    item.Id.ToString(CultureInfo.InvariantCulture) + ");"));
+                string tag = item.Id.ToString(CultureInfo.InvariantCulture);
+                string serializer = w.A("LuminPackSerializer");
+                w.Indented(() => w.Line(item.Model?.ManagedFixedUnionCase == true
+                    ? "=> writer.CommitRecords(ref " + serializer + ".SerializeUnionAtCursor_" + item.Readable + "(ref writer, this, ref writer.Cursor, (byte)" + tag + "));"
+                    : "=> writer.CurrentIndex = " + serializer + ".SerializeUnionAt_" + item.Readable + "(ref writer, this, writer.CurrentIndex, (byte)" + tag + ");"));
             }
         else if (!json)
             foreach (var slot in Slots(model, false))

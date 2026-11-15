@@ -392,6 +392,9 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly int[] MirrorOffsets;
     /// <summary>Whether the Union write is the shared returning cursor kernel <c>SerializeUnionAt</c> of a fixed Union case.</summary>
     internal readonly bool FixedUnionCase;
+
+    /// <summary>Whether the fixed case can carry a managed output cursor.</summary>
+    internal bool ManagedFixedUnionCase => FixedUnionCase && Net8 && Bounded == null;
     /// <summary>Whether the type has the record measurement entry <c>MeasureRecord</c>, which the original selection gives only to
     /// supported fixed records.</summary>
     internal readonly bool MeasureRecord;
