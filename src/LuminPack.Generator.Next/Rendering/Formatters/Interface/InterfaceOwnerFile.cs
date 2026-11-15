@@ -202,6 +202,8 @@ internal static class InterfaceOwnerFile
 
     private static void ReadList(EnumerableOwnerContext c)
     {
+        if (c.ReadObjectInterfaceItems(freshList: true))
+            return;
         var w = c.W;
         c.ReadInterfaceTargets();
         w.Line("var list = new global::System.Collections.Generic.List<" + c.Scalar + ">(length);");

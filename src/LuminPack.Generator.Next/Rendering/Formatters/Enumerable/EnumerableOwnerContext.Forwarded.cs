@@ -73,8 +73,9 @@ internal sealed partial class EnumerableOwnerContext
         element.Arguments.Length == 1 && element.Arguments[0].RawCollection;
 
     /// <summary>Shares one object element loop across exact list, exact array and fresh interface destinations.</summary>
+    /// <param name="freshList">Whether the fallback is a new list rather than an array.</param>
     /// <returns>Whether the object interface read was emitted.</returns>
-    internal bool ReadObjectInterfaceItems()
+    internal bool ReadObjectInterfaceItems(bool freshList = false)
     {
         if (_element?.OrdinaryObject != true || !Supports("InterfaceTargetReuse"))
             return false;
@@ -99,10 +100,19 @@ internal sealed partial class EnumerableOwnerContext
         W.Close();
         W.Line("else");
         W.Open();
-        W.Line("var array = length == 0 ? global::System.Array.Empty<" + Scalar + ">() : " +
-            PackMarshal + ".AllocateUninitializedArray<" + Scalar + ">(length);");
-        W.Line("target = " + ArraySpan("array") + ";");
-        W.Line("selected = array;");
+        if (freshList)
+        {
+            W.Line("var list = new " + list + "(length);");
+            W.Line("target = length == 0 ? default : " + PackMarshal + ".GetListSpan(list, length);");
+            W.Line("selected = list;");
+        }
+        else
+        {
+            W.Line("var array = length == 0 ? global::System.Array.Empty<" + Scalar + ">() : " +
+                PackMarshal + ".AllocateUninitializedArray<" + Scalar + ">(length);");
+            W.Line("target = " + ArraySpan("array") + ";");
+            W.Line("selected = array;");
+        }
         W.Close();
         ReadBlock("target");
         W.Line("value = selected;");
