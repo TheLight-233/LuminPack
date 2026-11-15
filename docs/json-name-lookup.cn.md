@@ -1,6 +1,6 @@
 # JSON 属性名查找
 
-[English](json-name-lookup.md)
+[English edition](json-name-lookup.md)
 
 LuminPack 为每个模型生成属性名查找表。顺序属性先走既有的序号匹配；乱序名称、转义解码后的名称和旧名称则使用文档编码对应的生成查找方法。
 

@@ -1,6 +1,6 @@
 # JSON property-name lookup
 
-[中文](json-name-lookup.cn.md)
+[Chinese](json-name-lookup.cn.md)
 
 LuminPack generates property-name lookup tables for each model. Ordered properties first use the existing ordinal matcher. Unordered names, escaped names after decoding, and former names use the generated lookup for the document's encoding.
 
