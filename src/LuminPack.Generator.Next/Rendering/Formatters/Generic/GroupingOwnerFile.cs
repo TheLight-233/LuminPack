@@ -114,6 +114,17 @@ internal static class GroupingOwnerFile
         return LookupOwner(set, operations, shortName, declared, grouping, groupingOwner, ownedLookup, key, element);
     }
 
+    /// <summary>Handles lookup owner for <c>GroupingOwnerFile</c>.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <param name="shortName">The name of the short.</param>
+    /// <param name="declared">The declared supplied to <c>LookupOwner</c>.</param>
+    /// <param name="grouping">The grouping supplied to <c>LookupOwner</c>.</param>
+    /// <param name="groupingOwner">The grouping owner supplied to <c>LookupOwner</c>.</param>
+    /// <param name="ownedLookup">The owned lookup supplied to <c>LookupOwner</c>.</param>
+    /// <param name="key">The key identifying the entry.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <returns>The resulting text.</returns>
     private static string LookupOwner(SharedFormatterSet set, GeneratedOperations operations, string shortName, string declared,
         string grouping, string groupingOwner, string ownedLookup, string key, string element) =>
         SpecialOwnerFile.Render(set, operations, shortName, declared, true,

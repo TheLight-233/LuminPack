@@ -64,6 +64,9 @@ internal static class GenericFormatterReuse
         internal readonly HashSet<string> Compressed = new(StringComparer.Ordinal);
         internal readonly HashSet<string> PackedWidth = new(StringComparer.Ordinal);
 
+        /// <summary>Initializes a <c>Context</c> from the supplied data.</summary>
+        /// <param name="genericKey">The generic key supplied to <c>Context</c>.</param>
+        /// <param name="contract">The contract supplied to <c>Context</c>.</param>
         internal Context(string genericKey, FormatterModel contract)
         {
             GenericKey = genericKey;
@@ -125,6 +128,13 @@ internal static class GenericFormatterReuse
         internal readonly bool[] NotNull;
         internal readonly int Rank;
 
+        /// <summary>Initializes a <c>Family</c> from the supplied data.</summary>
+        /// <param name="definition">The definition supplied to <c>Family</c>.</param>
+        /// <param name="name">The name to look up or emit.</param>
+        /// <param name="file">The file supplied to <c>Family</c>.</param>
+        /// <param name="parameters">The parameters supplied to <c>Family</c>.</param>
+        /// <param name="notNull">The not null supplied to <c>Family</c>.</param>
+        /// <param name="rank">The rank supplied to <c>Family</c>.</param>
         internal Family(string definition, string name, string file, string[] parameters, bool[] notNull, int rank = 0)
         {
             Definition = definition;
@@ -135,6 +145,9 @@ internal static class GenericFormatterReuse
             Rank = rank;
         }
 
+        /// <summary>Handles spell for <c>Family</c>.</summary>
+        /// <param name="arguments">The arguments supplied to <c>Spell</c>.</param>
+        /// <returns>The resulting text.</returns>
         internal string Spell(string[] arguments) => Rank != 0 ? arguments[0] + "[" + new string(',', Rank - 1) + "]" :
             "global::" + Definition + "<" + string.Join(", ", arguments) + ">";
     }
@@ -142,6 +155,8 @@ internal static class GenericFormatterReuse
     private static readonly Family ArrayFamily = new(FormatterDefinitions.Array, "Array", "LuminPackGen.Array.g.cs", new[] { "T" }, new[] { false }, 1);
 
     /// <summary>The family of rectangular arrays of one rank, which share the row-major template of that rank.</summary>
+    /// <param name="rank">The rank supplied to <c>RectangularFamily</c>.</param>
+    /// <returns>The resulting <c>Family</c>.</returns>
     private static Family RectangularFamily(int rank) => new(FormatterDefinitions.Array, "Array" + rank.ToString(System.Globalization.CultureInfo.InvariantCulture) + "D",
         "LuminPackGen.Array" + rank.ToString(System.Globalization.CultureInfo.InvariantCulture) + "D.g.cs", new[] { "T" }, new[] { false }, rank);
 
@@ -186,6 +201,7 @@ internal static class GenericFormatterReuse
         /// <param name="renderClosed">Renders the closed owner with the given operations.</param>
         /// <param name="family">The dictionary family descriptor.</param>
         /// <returns>Whether the owner is shared and must not be rendered closed.</returns>
+        /// <param name="fact">The fact supplied to <c>TryDictionary</c>.</param>
         internal bool TryDictionary(string declaredType, GeneratedOperations operations, Func<GeneratedOperations, string> renderClosed,
             DictionaryFormatter family, DictionaryOwnerFact? fact = null)
         {
@@ -317,6 +333,9 @@ internal static class GenericFormatterReuse
         }
 
         /// <summary>Models an entry spelling of a fact without a general contract.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <param name="forwarded">Whether to enable forwarded for this operation.</param>
+        /// <returns>The resulting <c>FormatterModel</c>, or null when unavailable.</returns>
         private FormatterModel? Argument(string type, bool forwarded = false)
         {
             if (type == "string")
@@ -434,6 +453,8 @@ internal static class GenericFormatterReuse
         }
 
         /// <summary>Renders the generic owner with placeholders, or returns null when the render still names a closed type.</summary>
+        /// <param name="plan">The plan supplied to <c>RenderPlaceholder</c>.</param>
+        /// <returns>The placeholder, or null when unavailable.</returns>
         private string? RenderPlaceholder(Plan plan)
         {
             Family family = plan.Family;
@@ -582,6 +603,9 @@ internal static class GenericFormatterReuse
         }
 
         /// <summary>Spells the generic instantiation of a plan and records the strategies it needs.</summary>
+        /// <param name="plan">The plan supplied to <c>Instantiation</c>.</param>
+        /// <param name="strategies">The strategies supplied to <c>Instantiation</c>.</param>
+        /// <returns>The resulting text.</returns>
         private string Instantiation(Plan plan, SortedDictionary<string, (string Type, GeneratedOperations Operations, GeneratedOperations Blocks)> strategies)
         {
             var arguments = new List<string>();
@@ -619,6 +643,9 @@ internal static class GenericFormatterReuse
         }
 
         /// <summary>Renders the closed owner's state extensions with roots that forward to the generic instantiation.</summary>
+        /// <param name="plan">The plan supplied to <c>RenderBinding</c>.</param>
+        /// <param name="instantiation">The instantiation supplied to <c>RenderBinding</c>.</param>
+        /// <returns>The binding, or null when unavailable.</returns>
         private string? RenderBinding(Plan plan, string instantiation)
         {
             var substitutions = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -690,6 +717,9 @@ internal static class GenericFormatterReuse
         /// <remarks>Each member makes the element call the closed collection owner makes, which publication resolves to the
         /// element's final operation exactly as for the closed owner. JSON members are published in a JSON document so their
         /// state calls resolve to the JSON operations.</remarks>
+        /// <param name="strategies">The strategies supplied to <c>RenderStrategies</c>.</param>
+        /// <param name="json">Whether to use the JSON operation.</param>
+        /// <returns>The generated C# source.</returns>
         private string RenderStrategies(SortedDictionary<string, (string Type, GeneratedOperations Operations, GeneratedOperations Blocks)> strategies, bool json)
         {
             var text = new StringBuilder(4096);
@@ -762,6 +792,11 @@ internal static class GenericFormatterReuse
         /// <summary>Implements the block interfaces of a laid-out element with the closed contiguous transfer.</summary>
         /// <remarks>The descriptors live in a nested container, so they cannot collide with the descriptors the element's own
         /// standalone operations emit in the same owner.</remarks>
+        /// <param name="text">The text supplied to <c>AppendBlock</c>.</param>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <param name="layout">The layout supplied to <c>AppendBlock</c>.</param>
+        /// <param name="blocks">The blocks supplied to <c>AppendBlock</c>.</param>
+        /// <param name="scoped">The scoped supplied to <c>AppendBlock</c>.</param>
         private void AppendBlock(StringBuilder text, string type, FormatterStorageModel layout, GeneratedOperations blocks, string scoped)
         {
             const string inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
@@ -817,6 +852,8 @@ internal static class GenericFormatterReuse
         }
 
         /// <summary>The element owner name the state extensions and formatter owner share.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>The able.</returns>
         private string Readable(string type)
         {
             string owner = GeneratedNames.Owner(_set.Extension!, type);
@@ -825,6 +862,10 @@ internal static class GenericFormatterReuse
     }
 
     /// <summary>Rejects a placeholder render; the reason documents the closed spelling that keeps the owner closed.</summary>
+    /// <param name="plan">The plan supplied to <c>Reject</c>.</param>
+    /// <param name="reason">The reason supplied to <c>Reject</c>.</param>
+    /// <param name="text">The text supplied to <c>Reject</c>.</param>
+    /// <returns>The resulting <c>string</c>, or null when unavailable.</returns>
     private static string? Reject(Plan plan, string reason, string text) => null;
 
     /// <summary>Keeps shared collection roots with substantial bodies out of their callers.</summary>
@@ -882,6 +923,9 @@ internal static class GenericFormatterReuse
     private static readonly Regex Words = new(@"(?<![\w@.:])[A-Za-z_@][\w@]*", RegexOptions.Compiled);
 
     /// <summary>Lists the runtime interfaces of the requested operations.</summary>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <returns>The resulting <c>IEnumerable&lt;string&gt;</c>.</returns>
     private static IEnumerable<string> Interfaces(string type, GeneratedOperations operations)
     {
         if ((operations & GeneratedOperations.BinaryWrite) != 0)
@@ -895,6 +939,9 @@ internal static class GenericFormatterReuse
     }
 
     /// <summary>Lists the block interfaces of the transferred directions.</summary>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="blocks">The blocks supplied to <c>BlockInterfaces</c>.</param>
+    /// <returns>The resulting <c>IEnumerable&lt;string&gt;</c>.</returns>
     private static IEnumerable<string> BlockInterfaces(string type, GeneratedOperations blocks)
     {
         if ((blocks & GeneratedOperations.BinaryWrite) != 0)
@@ -903,6 +950,9 @@ internal static class GenericFormatterReuse
             yield return "global::LuminPack.Code.ILuminPackBlockReader<" + type + ">";
     }
 
+    /// <summary>Handles spell for <c>GenericFormatterReuse</c>.</summary>
+    /// <param name="category">The category supplied to <c>Spell</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string Spell(Category category) => category switch
     {
         Category.Unmanaged => "Unmanaged",
@@ -915,6 +965,8 @@ internal static class GenericFormatterReuse
     /// <summary>Classifies a contiguous element: unmanaged storage keeps the closed raw block, a laid-out element keeps the
     /// closed block transfer through its own formatter owner, and any other element, an array included, keeps the closed
     /// element-wise traversal through its formatter owner.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The sequence.</returns>
     private static Category ClassifySequence(FormatterModel model)
     {
         // The closed sequence routes copy any raw-collection element as one block, whatever its own formatter.
@@ -932,6 +984,8 @@ internal static class GenericFormatterReuse
     }
 
     /// <summary>Classifies one closed argument; the unmanaged rule is the closed owners' native-entry rule.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>Category</c>.</returns>
     private static Category Classify(FormatterModel model)
     {
         if (model.Type == "string")

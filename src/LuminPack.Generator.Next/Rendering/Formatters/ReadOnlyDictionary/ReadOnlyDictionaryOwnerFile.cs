@@ -26,6 +26,8 @@ internal static class ReadOnlyDictionaryOwnerFile
     internal static string Concrete(DictionaryOwnerFact fact) =>
         "global::System.Collections.Generic.Dictionary<" + fact.Key + ", " + fact.Value + ">";
 
+    /// <summary>Handles read for <c>ReadOnlyDictionaryOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;

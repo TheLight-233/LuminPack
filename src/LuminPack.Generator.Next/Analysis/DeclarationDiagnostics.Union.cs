@@ -79,6 +79,9 @@ internal static partial class TypeModelFactory
 
         /// <summary>Applies the original derived-case rule: a case of a closed base is fully closed, and a case of a base over type
         /// parameters is generic over exactly those parameters, in order, with the same constraints.</summary>
+        /// <param name="candidate">The candidate supplied to <c>ValidDerivedCase</c>.</param>
+        /// <param name="root">The root supplied to <c>ValidDerivedCase</c>.</param>
+        /// <returns>Whether the input satisfies the valid derived case check.</returns>
         private static bool ValidDerivedCase(INamedTypeSymbol candidate, INamedTypeSymbol root)
         {
             INamedTypeSymbol? matched = UnionRootMatch(candidate, root);

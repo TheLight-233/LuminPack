@@ -524,6 +524,8 @@ public class CollectionFastPathTest
 
     private sealed class ReverseEnumerableList : List<string>, IList<string>
     {
+        /// <summary>Enumerates the wrapped collection in its configured order.</summary>
+        /// <returns>The enumerator.</returns>
         IEnumerator<string> IEnumerable<string>.GetEnumerator() => Enumerable.Reverse(ToArray()).GetEnumerator();
     }
 

@@ -21,6 +21,8 @@ internal static partial class SortedListOwnerFile
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles write for <c>SortedListOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -71,6 +73,8 @@ internal static partial class SortedListOwnerFile
         w.Line("operationState.CheckBuffer();");
     }
 
+    /// <summary>Handles read for <c>SortedListOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;

@@ -40,6 +40,9 @@ internal static partial class TypeModelFactory
 
     private sealed partial class Session
     {
+        /// <summary>Handles entry shape of for <c>Session</c>.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>The resulting <c>EntryShape</c>.</returns>
         internal EntryShape EntryShapeOf(ITypeSymbol type)
         {
             // Entries stage their input when the reader cannot hold a managed span: before .NET 8 or against a netstandard Core.
@@ -107,6 +110,9 @@ internal static partial class TypeModelFactory
         }
 
         /// <summary>Recognizes the actual framework definition rather than a source or reference with the same type name.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <param name="metadataName">The name of the metadata.</param>
+        /// <returns>Whether the input is framework collection.</returns>
         private bool IsFrameworkCollection(INamedTypeSymbol type, string metadataName)
         {
             IAssemblySymbol assembly = type.ContainingAssembly;
@@ -117,22 +123,34 @@ internal static partial class TypeModelFactory
                     new byte[] { 0xb0, 0x3f, 0x5f, 0x7f, 0x11, 0xd5, 0x0a, 0x3a });
         }
 
+        /// <summary>Returns the reader targets net standard for <c>Session</c>.</summary>
+        /// <returns>Whether the input satisfies the reader targets net standard check.</returns>
         private bool ReaderTargetsNetStandard() => _compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader")?.ContainingAssembly
             .GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.Versioning.TargetFrameworkAttribute" &&
                 attribute.ConstructorArguments.Length == 1 && attribute.ConstructorArguments[0].Value is string framework &&
                 framework.StartsWith(".NETStandard", StringComparison.Ordinal)) == true;
 
         /// <summary>The original formatter spelling: a keyword for special types, otherwise fully qualified.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>The ter name.</returns>
         private static string FormatterName(ITypeSymbol type) => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat
             .WithMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.ExpandNullable));
 
         /// <summary>Whether a reference-free value is serialized as its complete storage: no portable plan and no Custom contract.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>Whether the operation can use unmanaged serialization.</returns>
         private bool CanUseUnmanagedSerialization(ITypeSymbol type) => type.IsUnmanagedType && !ContainsOpenParameter(type) &&
             (type is not INamedTypeSymbol named || TryPortableLayout(named) == null) &&
             !ContainsCustomContract(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
 
+        /// <summary>Checks whether known scalar.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>Whether the input is known scalar.</returns>
         private bool IsKnownScalar(ITypeSymbol type) => KnownValueTypes.Contains(FormatterName(type)) && CanUseUnmanagedSerialization(type);
 
+        /// <summary>Checks for open parameter.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>Whether the input satisfies the contains open parameter check.</returns>
         private static bool ContainsOpenParameter(ITypeSymbol type) => type switch
         {
             ITypeParameterSymbol => true,
@@ -142,6 +160,8 @@ internal static partial class TypeModelFactory
         };
 
         /// <summary>The original direct-record rule: strings, scalar sequences and a few framework records size their output exactly.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>Whether the input is direct record.</returns>
         private bool IsDirectRecord(ITypeSymbol type)
         {
             if (type is IArrayTypeSymbol { Rank: 1 } array)
@@ -170,6 +190,8 @@ internal static partial class TypeModelFactory
         }
 
         /// <summary>The original fixed-record rule: an object or named-version record of fixed-width primitive members only.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>Whether the input is fixed record.</returns>
         private static bool IsFixedRecord(ITypeSymbol type)
         {
             if (type is not INamedTypeSymbol named || named.TypeKind is not (TypeKind.Class or TypeKind.Struct) || named.IsAbstract ||

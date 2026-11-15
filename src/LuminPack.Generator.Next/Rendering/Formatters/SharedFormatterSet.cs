@@ -31,6 +31,14 @@ internal readonly struct SequenceOwnerFact : IEquatable<SequenceOwnerFact>
     /// <summary>Whether the binary reader can fill an existing array.</summary>
     internal readonly bool ReuseArraySlots;
 
+    /// <summary>Initializes a <c>SequenceOwnerFact</c> from the supplied data.</summary>
+    /// <param name="family">The family supplied to <c>SequenceOwnerFact</c>.</param>
+    /// <param name="declaredType">The type of the declared.</param>
+    /// <param name="scalar">The scalar supplied to <c>SequenceOwnerFact</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="forwardedType">The type of the forwarded.</param>
+    /// <param name="arrayRank">The array rank supplied to <c>SequenceOwnerFact</c>.</param>
+    /// <param name="reuseArraySlots">Whether to enable reuse array slots for this operation.</param>
     private SequenceOwnerFact(SequenceFormatter family, string declaredType, string? scalar, PayloadRenderModel? element,
         string? forwardedType = null, int arrayRank = 0, bool reuseArraySlots = false)
     {
@@ -169,6 +177,7 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     /// <param name="options">The project facts.</param>
     /// <param name="seed">Existing requirements when one owner adds a dependency.</param>
     /// <returns>The value-equal complete publication set.</returns>
+    /// <param name="roots">The roots supplied to <c>Collect</c>.</param>
     internal static SharedFormatterSet Collect(IEnumerable<TypeModel> models, GeneratorOptions options, SharedFormatterSet seed = default,
         IEnumerable<MemberModel>? roots = null)
     {
@@ -278,12 +287,19 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         return hash;
     }
 
+    /// <summary>Adds scalar.</summary>
+    /// <param name="scalars">The scalars supplied to <c>AddScalar</c>.</param>
+    /// <param name="scalar">The scalar supplied to <c>AddScalar</c>.</param>
     private static void AddScalar(List<string> scalars, string scalar)
     {
         if (!scalars.Contains(scalar))
             scalars.Add(scalar);
     }
 
+    /// <summary>Handles same facts for <c>SharedFormatterSet</c>.</summary>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same facts check.</returns>
     private static bool SameFacts(SequenceOwnerFact[] left, SequenceOwnerFact[] right)
     {
         if (left == null || left.Length == 0)
@@ -296,6 +312,10 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         return true;
     }
 
+    /// <summary>Handles same dictionaries for <c>SharedFormatterSet</c>.</summary>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same dictionaries check.</returns>
     private static bool SameDictionaries(DictionaryOwnerFact[] left, DictionaryOwnerFact[] right)
     {
         if (left == null || left.Length == 0)
@@ -308,6 +328,10 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         return true;
     }
 
+    /// <summary>Handles same strings for <c>SharedFormatterSet</c>.</summary>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same strings check.</returns>
     private static bool SameStrings(string[] left, string[] right)
     {
         if (left == null || left.Length == 0)
@@ -320,6 +344,15 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
         return true;
     }
 
+    /// <summary>Handles walk for <c>SharedFormatterSet</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="options">The options governing the operation.</param>
+    /// <param name="facts">The facts supplied to <c>Walk</c>.</param>
+    /// <param name="scalars">The scalars supplied to <c>Walk</c>.</param>
+    /// <param name="owners">The owners supplied to <c>Walk</c>.</param>
+    /// <param name="dictionaries">The dictionaries supplied to <c>Walk</c>.</param>
+    /// <param name="cultureInfoReuse">Whether to enable culture info reuse for this operation.</param>
+    /// <param name="visited">The visited supplied to <c>Walk</c>.</param>
     private static void Walk(TypeModel model, GeneratorOptions options, List<SequenceOwnerFact> facts,
         List<string> scalars, List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse,
         HashSet<string> visited)
@@ -340,6 +373,15 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     }
 
     /// <summary>Records the owners one member requires.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="options">The options governing the operation.</param>
+    /// <param name="facts">The facts supplied to <c>WalkMember</c>.</param>
+    /// <param name="scalars">The scalars supplied to <c>WalkMember</c>.</param>
+    /// <param name="owners">The owners supplied to <c>WalkMember</c>.</param>
+    /// <param name="dictionaries">The dictionaries supplied to <c>WalkMember</c>.</param>
+    /// <param name="cultureInfoReuse">Whether to enable culture info reuse for this operation.</param>
+    /// <param name="visited">The visited supplied to <c>WalkMember</c>.</param>
+    /// <param name="text">Whether to enable text for this operation.</param>
     private static void WalkMember(MemberModel member, GeneratorOptions options, List<SequenceOwnerFact> facts, List<string> scalars,
         List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited, ref bool text)
     {
@@ -395,6 +437,14 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     }
 
     /// <summary>Records the owner a closed serializer call root requires: its own standalone, scalar, sequence or dictionary owner.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="options">The options governing the operation.</param>
+    /// <param name="facts">The facts supplied to <c>WalkRoot</c>.</param>
+    /// <param name="scalars">The scalars supplied to <c>WalkRoot</c>.</param>
+    /// <param name="owners">The owners supplied to <c>WalkRoot</c>.</param>
+    /// <param name="dictionaries">The dictionaries supplied to <c>WalkRoot</c>.</param>
+    /// <param name="cultureInfoReuse">Whether to enable culture info reuse for this operation.</param>
+    /// <param name="visited">The visited supplied to <c>WalkRoot</c>.</param>
     private static void WalkRoot(MemberModel member, GeneratorOptions options, List<SequenceOwnerFact> facts, List<string> scalars,
         List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited)
     {
@@ -423,6 +473,10 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     /// <param name="scalars">The raw scalar owners collected so far.</param>
     /// <param name="owners">The standalone owners collected so far.</param>
     /// <param name="dictionaries">The dictionary owners collected so far.</param>
+    /// <param name="options">The options governing the operation.</param>
+    /// <param name="facts">The facts supplied to <c>CollectDictionary</c>.</param>
+    /// <param name="cultureInfoReuse">Whether to enable culture info reuse for this operation.</param>
+    /// <param name="visited">The visited supplied to <c>CollectDictionary</c>.</param>
     private static void CollectDictionary(DictionaryMember member, GeneratorOptions options, List<string> scalars, List<string> owners,
         List<DictionaryOwnerFact> dictionaries, List<SequenceOwnerFact> facts, ref bool cultureInfoReuse, HashSet<string> visited)
     {
@@ -492,6 +546,15 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
             AddScalar(scalars, member.ValueOwned ?? value);
     }
 
+    /// <summary>Handles collect for <c>SharedFormatterSet</c>.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="options">The options governing the operation.</param>
+    /// <param name="facts">The facts supplied to <c>Collect</c>.</param>
+    /// <param name="scalars">The scalars supplied to <c>Collect</c>.</param>
+    /// <param name="owners">The owners supplied to <c>Collect</c>.</param>
+    /// <param name="dictionaries">The dictionaries supplied to <c>Collect</c>.</param>
+    /// <param name="cultureInfoReuse">Whether to enable culture info reuse for this operation.</param>
+    /// <param name="visited">The visited supplied to <c>Collect</c>.</param>
     private static void Collect(CollectionMember member, GeneratorOptions options,
         List<SequenceOwnerFact> facts, List<string> scalars,
         List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited)
@@ -556,6 +619,14 @@ internal readonly partial struct SharedFormatterSet : IEquatable<SharedFormatter
     }
 
     /// <summary>Publishes the static owner of a collection nested within another collection.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="options">The options governing the operation.</param>
+    /// <param name="facts">The facts supplied to <c>CollectForwarded</c>.</param>
+    /// <param name="scalars">The scalars supplied to <c>CollectForwarded</c>.</param>
+    /// <param name="owners">The owners supplied to <c>CollectForwarded</c>.</param>
+    /// <param name="dictionaries">The dictionaries supplied to <c>CollectForwarded</c>.</param>
+    /// <param name="cultureInfoReuse">Whether to enable culture info reuse for this operation.</param>
+    /// <param name="visited">The visited supplied to <c>CollectForwarded</c>.</param>
     private static void CollectForwarded(MemberModel member, GeneratorOptions options, List<SequenceOwnerFact> facts,
         List<string> scalars, List<string> owners, List<DictionaryOwnerFact> dictionaries, ref bool cultureInfoReuse, HashSet<string> visited)
     {

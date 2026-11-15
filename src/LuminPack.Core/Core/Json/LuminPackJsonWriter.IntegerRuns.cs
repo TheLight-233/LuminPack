@@ -139,6 +139,13 @@ public ref partial struct LuminPackJsonWriter
     }
 
     // The caller has reserved enough room for the number, including any overstore in its scalar kernel.
+    /// <summary>Writes bounded integer.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="output">The output supplied to <c>WriteBoundedInteger</c>.</param>
+    /// <param name="item">The current item.</param>
+    /// <param name="digits">The digits supplied to <c>WriteBoundedInteger</c>.</param>
+    /// <param name="utf8">Whether to enable utf8 for this operation.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteBoundedInteger<T>(ref byte output, T item, int digits, bool utf8) where T : unmanaged
     {

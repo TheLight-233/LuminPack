@@ -40,6 +40,8 @@ internal sealed partial class EnumerableOwnerContext
     internal bool ContiguousLayout => Contiguous && _element?.Layout != null;
     private readonly SharedFormatterSet _set;
     /// <summary>Checks the exact runtime API facts of this sequence.</summary>
+    /// <param name="capability">The capability supplied to <c>Supports</c>.</param>
+    /// <returns>Whether the input satisfies the supports check.</returns>
     internal bool Supports(string capability) => _set.FindFormatter(Sequence)?.Supports(capability) == true;
     internal bool RawTreeElements => GenericFormatterReuse.Real(Scalar) != "bool" &&
         (Forwarded ? _element is { Raw: true, RawStorage: true, Layout: null } : !Text && Payload == null);
@@ -268,6 +270,7 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Emits the read of <c>length</c> elements into a span.</summary>
     /// <param name="span">The destination span expression.</param>
+    /// <param name="foreign">Whether to enable foreign for this operation.</param>
     internal void ReadBlock(string span, bool foreign = false)
     {
         if (!foreign && Text && Supports("ReadInterfaceStrings"))
@@ -339,6 +342,8 @@ internal sealed partial class EnumerableOwnerContext
 
     /// <summary>Emits the pooled block read of <c>length</c> raw elements and hands the pooled array to the family.</summary>
     /// <param name="consume">The statements that consume the pooled array and <c>length</c>.</param>
+    /// <param name="onReadFailure">The action used to process on read failure.</param>
+    /// <param name="rawBlock">Whether to enable raw block for this operation.</param>
     internal void PooledRead(Action consume, Action? onReadFailure = null, bool rawBlock = false)
     {
         W.Line("var pooled = global::System.Buffers.ArrayPool<" + Scalar + ">.Shared.Rent(length);");
@@ -455,6 +460,10 @@ internal sealed class EnumerableOwnerSpec
     /// <param name="interfaceSetTraversal">Whether to probe for exact framework sets during JSON writes.</param>
     /// <param name="jsonEmptyBeforeStaging">Whether an initial empty token or accepted end of input returns the empty value directly.</param>
     /// <param name="jsonObservableBacking">Whether to select a private observable list before reading the elements.</param>
+    /// <param name="listReuse">Whether to enable list reuse for this operation.</param>
+    /// <param name="arrayReuse">Whether to enable array reuse for this operation.</param>
+    /// <param name="concurrentStackStaging">Whether to enable concurrent stack staging for this operation.</param>
+    /// <param name="interfaceListReuse">Whether to enable interface list reuse for this operation.</param>
     internal EnumerableOwnerSpec(Action<EnumerableOwnerContext> writeBody, Action<EnumerableOwnerContext> readBody, string jsonAdd,
         Action<EnumerableOwnerContext>? jsonBefore = null, Action<EnumerableOwnerContext>? jsonAfter = null, bool jsonCount = true,
         bool compressEntries = false, Action<EnumerableOwnerContext>? jsonAddBody = null, bool listReuse = false, bool arrayReuse = false,

@@ -34,6 +34,11 @@ internal static class FormatterImmutableTraits
             SymbolEqualityComparer.Default.Equals(method.Parameters[index].Type, type.Construct(method.TypeParameters[0]));
     }
 
+    /// <summary>Checks for tree copy.</summary>
+    /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+    /// <param name="family">The family supplied to <c>HasTreeCopy</c>.</param>
+    /// <param name="arity">The arity supplied to <c>HasTreeCopy</c>.</param>
+    /// <returns>Whether the input has tree copy.</returns>
     internal static bool HasTreeCopy(Compilation compilation, string family, int arity)
     {
         var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
@@ -51,6 +56,11 @@ internal static class FormatterImmutableTraits
                 pair!.Construct(method.TypeParameters.Cast<ITypeSymbol>().ToArray()))));
     }
 
+    /// <summary>Checks for set factory.</summary>
+    /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+    /// <param name="family">The family supplied to <c>HasSetFactory</c>.</param>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>Whether the input has set factory.</returns>
     internal static bool HasSetFactory(Compilation compilation, string family, string name)
     {
         var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");
@@ -104,10 +114,17 @@ internal static class FormatterImmutableTraits
     }
 
     // A nullable annotation such as 'notnull' does not change the storage constraints of the tree parameters.
+    /// <summary>Handles unconstrained for <c>FormatterImmutableTraits</c>.</summary>
+    /// <param name="parameter">The parameter supplied to <c>Unconstrained</c>.</param>
+    /// <returns>Whether the input satisfies the unconstrained check.</returns>
     private static bool Unconstrained(ITypeParameterSymbol parameter) =>
         !parameter.HasValueTypeConstraint && !parameter.HasReferenceTypeConstraint && !parameter.HasUnmanagedTypeConstraint &&
         !parameter.HasConstructorConstraint && parameter.ConstraintTypes.IsEmpty;
 
+    /// <summary>Checks for raw tree writer.</summary>
+    /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+    /// <param name="tree">The syntax tree being inspected.</param>
+    /// <returns>Whether the input has raw tree writer.</returns>
     internal static bool HasRawTreeWriter(Compilation compilation, INamedTypeSymbol tree)
     {
         var storage = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminTreeStorage");

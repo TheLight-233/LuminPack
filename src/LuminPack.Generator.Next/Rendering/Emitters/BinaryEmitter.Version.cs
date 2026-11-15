@@ -64,11 +64,21 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Whether the complete slot can be written inside a fixed reservation.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="width">The width of the storage or input range.</param>
+    /// <returns>Whether the input satisfies the version reservable check.</returns>
     private static bool VersionReservable(RenderMember member, int width) => width != 255 ||
         member.Kind == RenderMemberKind.Text ||
         member.Kind == RenderMemberKind.List && member.Nested == null && member.Scalar != "string";
 
     /// <summary>Reserves one run of fixed or measured slots and optionally stores the schema prefix.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="first">The first supplied to <c>AppendVersionReservation</c>.</param>
+    /// <param name="end">The end supplied to <c>AppendVersionReservation</c>.</param>
+    /// <param name="prefix">The prefix to use for the generated name.</param>
+    /// <param name="lengths">The lengths supplied to <c>AppendVersionReservation</c>.</param>
     private static void AppendVersionReservation(PayloadRenderModel model, CodeWriter w, List<string> body,
         int first, int end, bool prefix, ref int lengths)
     {

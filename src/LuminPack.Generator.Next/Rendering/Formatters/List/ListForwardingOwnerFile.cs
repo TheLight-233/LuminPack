@@ -8,6 +8,10 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class ListForwardingOwnerFile
 {
     /// <summary>Selects the retained list specializations or the default static element traversal.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="fact">The fact supplied to <c>RenderDefault</c>.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <returns>The generated C# source.</returns>
     internal static string RenderDefault(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations)
     {
         FormatterModel model = set.FindFormatter(fact.DeclaredType)!;

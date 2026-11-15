@@ -384,7 +384,7 @@ internal static partial class Program
                     Shapes = new() { Library.Square("ok") } };
                 var copy = LuminPackSerializer.Deserialize<LimitedImportedUnions>(LuminPackSerializer.Serialize(limited));
                 if (Library.Label((Square)copy.Shape!) != "ok" || Library.Label((Square)copy.Shapes![0]) != "ok" ||
-                    copy.Token is not Token<string> copiedToken || copiedToken.Value != "中" || Library.Number(copiedToken) != 43)
+                    copy.Token is not Token<string> copiedToken || copiedToken.Value != "\u4e2d" || Library.Number(copiedToken) != 43)
                     throw new InvalidOperationException("A checked imported Union changed the case or its fields.");
                 var existingShape = copy.Shape;
                 var existingList = copy.Shapes;

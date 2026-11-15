@@ -169,11 +169,21 @@ internal static partial class Program
     private sealed class ReportOptions(bool enabled) : AnalyzerConfigOptionsProvider
     {
         public override AnalyzerConfigOptions GlobalOptions { get; } = new Values(enabled);
+        /// <summary>Gets options.</summary>
+        /// <param name="tree">The syntax tree being inspected.</param>
+        /// <returns>The options.</returns>
         public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => GlobalOptions;
+        /// <summary>Gets options.</summary>
+        /// <param name="textFile">The text file supplied to <c>GetOptions</c>.</param>
+        /// <returns>The options.</returns>
         public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => GlobalOptions;
 
         private sealed class Values(bool enabled) : AnalyzerConfigOptions
         {
+            /// <summary>Attempts to get value.</summary>
+            /// <param name="key">The key identifying the entry.</param>
+            /// <param name="value">Receives the value when the operation succeeds.</param>
+            /// <returns>Whether the operation succeeded.</returns>
             public override bool TryGetValue(string key, out string value)
             {
                 value = enabled ? "true" : "false";

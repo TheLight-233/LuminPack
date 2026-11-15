@@ -324,6 +324,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Reads one member in place for a managed struct's existing-instance path.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="hasNext">Whether to enable has next for this operation.</param>
+    /// <param name="w">The generated source writer.</param>
     private static void AddStructExistingRead(List<string> body, PayloadRenderModel model, RenderMember member, bool hasNext, CodeWriter w)
     {
         string owner = member.Mirrored ? "reuseLocal" : "value2!";
@@ -352,6 +357,10 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Assigns the mirrored members of a fresh struct through its layout mirror.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="members">The members supplied to <c>AddStructMirrorAssignments</c>.</param>
     private static void AddStructMirrorAssignments(List<string> body, PayloadRenderModel model, CodeWriter w, RenderMember[] members)
     {
         if (model.Mirror == null || members.Length == 0)
@@ -362,6 +371,10 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Reaches a mirrored struct's storage through its layout mirror.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> MirroredStruct(PayloadRenderModel model, CodeWriter w, List<string> body)
     {
         if (model.Mirror == null || !model.Members.Any(member => member.Mirrored))
@@ -376,6 +389,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Whether a managed struct's write root keeps its aggressive inlining hint.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <param name="inline">The inline supplied to <c>WriteHint</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string WriteHint(PayloadRenderModel model, List<string> body, bool union, string inline)
         => model.StreamRecord || model.MixedRecord
             ? (DirectInlining.MixedWrite(model, union) ? inline : null)
@@ -383,6 +401,9 @@ internal static partial class BinaryEmitter
 
     /// <summary>Whether a managed struct's read root keeps its aggressive inlining hint; an inline object or collection
     /// member keeps its larger expanded body out of line.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="inline">The inline supplied to <c>ReadHint</c>.</param>
+    /// <returns>The hint.</returns>
     private static string ReadHint(PayloadRenderModel model, string inline)
         => model.Members.Any(member => member.Kind is RenderMemberKind.Object or RenderMemberKind.Array or RenderMemberKind.List)
             ? null
@@ -432,6 +453,12 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Emits an isolated reader-state extension read.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="signature">The signature supplied to <c>IsolatedRead</c>.</param>
+    /// <param name="constraint">The constraint supplied to <c>IsolatedRead</c>.</param>
+    /// <param name="root">The root supplied to <c>IsolatedRead</c>.</param>
+    /// <param name="inline">The inline supplied to <c>IsolatedRead</c>.</param>
+    /// <param name="serializer">The serializer supplied to <c>IsolatedRead</c>.</param>
     private static void IsolatedRead(CodeWriter w, string signature, string constraint, string root, string inline, string serializer)
     {
         w.Line(inline);

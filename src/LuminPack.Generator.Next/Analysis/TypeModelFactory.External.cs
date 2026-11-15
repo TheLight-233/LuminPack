@@ -33,6 +33,7 @@ internal static partial class TypeModelFactory
     /// <param name="type">A type of the consuming compilation.</param>
     /// <param name="view">The analysis view.</param>
     /// <returns>The equivalent type, or the original type when it cannot be resolved.</returns>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
     internal static T InView<T>(T type, Compilation view) where T : class, ITypeSymbol
     {
         if (type is IErrorTypeSymbol || type is ITypeParameterSymbol)

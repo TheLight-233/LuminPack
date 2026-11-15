@@ -14,6 +14,9 @@ internal static class UriOwnerFile
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations) =>
         SpecialOwnerFile.Render(set, operations, "Uri", "global::System.Uri", true, BinaryWrite, BinaryRead, JsonWrite, JsonRead);
 
+    /// <summary>Handles binary write for <c>UriOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value == null)");
@@ -26,6 +29,9 @@ internal static class UriOwnerFile
         w.Line("writer.Write<" + context.Profile + ">(value.OriginalString);");
     }
 
+    /// <summary>Handles binary read for <c>UriOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (!reader.TryReadObjectHead())");
@@ -38,6 +44,9 @@ internal static class UriOwnerFile
         w.Line("value = str == null ? null : new global::System.Uri(str, global::System.UriKind.RelativeOrAbsolute);");
     }
 
+    /// <summary>Handles JSON write for <c>UriOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value == null)");
@@ -49,6 +58,9 @@ internal static class UriOwnerFile
         w.Line("writer.Write<" + context.Profile + ">(value.OriginalString);");
     }
 
+    /// <summary>Handles JSON read for <c>UriOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (reader.IsNull())");

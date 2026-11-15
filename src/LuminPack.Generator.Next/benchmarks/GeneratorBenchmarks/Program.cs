@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
 using LuminPack.SourceGenerator.Next.Analysis;
+using LuminPack.SourceGenerator.Next.Diagnostics;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Pipeline;
 using Microsoft.CodeAnalysis;
@@ -89,7 +90,7 @@ internal static partial class Program
         if (options.VerifyEquivalence)
         {
             if (legacy == null)
-                throw new InvalidOperationException("Source equivalence requires --old-dll.");
+                return LuminPackExceptionHelper.ThrowInvalidOperation("Source equivalence requires --old-dll.");
             return VerifyEquivalence(next, legacy, corpus, references, parse, compilationOptions);
         }
         if (!options.SkipNext && legacy != null)
@@ -165,6 +166,15 @@ internal static partial class Program
         Report("member edit", "old", members[1], files[1], characters[1]);
     }
 
+    /// <summary>Runs full.</summary>
+    /// <param name="scenario">The scenario supplied to <c>RunFull</c>.</param>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="factory">The callback that supplies factory.</param>
+    /// <param name="corpus">The corpus supplied to <c>RunFull</c>.</param>
+    /// <param name="references">The platform and library metadata references.</param>
+    /// <param name="parse">The language version and target symbols for parsing.</param>
+    /// <param name="compilationOptions">The compilation options supplied to <c>RunFull</c>.</param>
+    /// <param name="runs">The runs supplied to <c>RunFull</c>.</param>
     private static void RunFull(string scenario, string name, Func<ISourceGenerator[]> factory, IReadOnlyList<CorpusFile> corpus,
         MetadataReference[] references, CSharpParseOptions parse, CSharpCompilationOptions compilationOptions, int runs)
     {
@@ -180,6 +190,16 @@ internal static partial class Program
         Report(scenario, name, samples, files);
     }
 
+    /// <summary>Runs incremental.</summary>
+    /// <param name="scenario">The scenario supplied to <c>RunIncremental</c>.</param>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="factory">The callback that supplies factory.</param>
+    /// <param name="corpus">The corpus supplied to <c>RunIncremental</c>.</param>
+    /// <param name="references">The platform and library metadata references.</param>
+    /// <param name="parse">The language version and target symbols for parsing.</param>
+    /// <param name="compilationOptions">The compilation options supplied to <c>RunIncremental</c>.</param>
+    /// <param name="runs">The runs supplied to <c>RunIncremental</c>.</param>
+    /// <param name="track">Whether to enable track for this operation.</param>
     private static void RunIncremental(string scenario, string name, Func<ISourceGenerator[]> factory, IReadOnlyList<CorpusFile> corpus,
         MetadataReference[] references, CSharpParseOptions parse, CSharpCompilationOptions compilationOptions, int runs, bool track)
     {
@@ -225,6 +245,13 @@ internal static partial class Program
         return (comment, member, CountFiles(driver));
     }
 
+    /// <summary>Runs analysis.</summary>
+    /// <param name="scenario">The scenario supplied to <c>RunAnalysis</c>.</param>
+    /// <param name="corpus">The corpus supplied to <c>RunAnalysis</c>.</param>
+    /// <param name="references">The platform and library metadata references.</param>
+    /// <param name="parse">The language version and target symbols for parsing.</param>
+    /// <param name="compilationOptions">The compilation options supplied to <c>RunAnalysis</c>.</param>
+    /// <param name="runs">The runs supplied to <c>RunAnalysis</c>.</param>
     private static void RunAnalysis(string scenario, IReadOnlyList<CorpusFile> corpus, MetadataReference[] references,
         CSharpParseOptions parse, CSharpCompilationOptions compilationOptions, int runs)
     {
@@ -264,10 +291,27 @@ internal static partial class Program
             Console.WriteLine($"  {coverage}");
     }
 
+    /// <summary>Handles generate for <c>Program</c>.</summary>
+    /// <param name="generators">The generators supplied to <c>Generate</c>.</param>
+    /// <param name="corpus">The corpus supplied to <c>Generate</c>.</param>
+    /// <param name="references">The platform and library metadata references.</param>
+    /// <param name="parse">The language version and target symbols for parsing.</param>
+    /// <param name="compilationOptions">The compilation options supplied to <c>Generate</c>.</param>
+    /// <param name="track">Whether to enable track for this operation.</param>
+    /// <returns>The resulting <c>Measurement</c>.</returns>
     private static Measurement Generate(ISourceGenerator[] generators, IReadOnlyList<CorpusFile> corpus,
         MetadataReference[] references, CSharpParseOptions parse, CSharpCompilationOptions compilationOptions, bool track)
         => Generate(generators, corpus, references, parse, compilationOptions, track, out _);
 
+    /// <summary>Handles generate for <c>Program</c>.</summary>
+    /// <param name="generators">The generators supplied to <c>Generate</c>.</param>
+    /// <param name="corpus">The corpus supplied to <c>Generate</c>.</param>
+    /// <param name="references">The platform and library metadata references.</param>
+    /// <param name="parse">The language version and target symbols for parsing.</param>
+    /// <param name="compilationOptions">The compilation options supplied to <c>Generate</c>.</param>
+    /// <param name="track">Whether to enable track for this operation.</param>
+    /// <param name="files">Receives the files when the operation succeeds.</param>
+    /// <returns>The resulting <c>Measurement</c>.</returns>
     private static Measurement Generate(ISourceGenerator[] generators, IReadOnlyList<CorpusFile> corpus,
         MetadataReference[] references, CSharpParseOptions parse, CSharpCompilationOptions compilationOptions, bool track, out int files)
     {
@@ -280,6 +324,9 @@ internal static partial class Program
         return measurement;
     }
 
+    /// <summary>Handles measure for <c>Program</c>.</summary>
+    /// <param name="action">The action used to process action.</param>
+    /// <returns>The resulting <c>Measurement</c>.</returns>
     private static Measurement Measure(Action action)
     {
         GC.Collect();
@@ -293,6 +340,12 @@ internal static partial class Program
         return new Measurement(stopwatch.Elapsed.TotalSeconds, (after - before) / 1_000_000d);
     }
 
+    /// <summary>Handles report for <c>Program</c>.</summary>
+    /// <param name="scenario">The scenario supplied to <c>Report</c>.</param>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="samples">The samples supplied to <c>Report</c>.</param>
+    /// <param name="files">The files supplied to <c>Report</c>.</param>
+    /// <param name="characters">The characters supplied to <c>Report</c>.</param>
     private static void Report(string scenario, string name, List<Measurement> samples, int files, long? characters = null)
     {
         double[] seconds = samples.Select(sample => sample.Seconds).ToArray();
@@ -302,6 +355,9 @@ internal static partial class Program
         Console.WriteLine("  samples ms: " + string.Join(", ", samples.Select(sample => (sample.Seconds * 1000).ToString("F2", CultureInfo.InvariantCulture))));
     }
 
+    /// <summary>Handles median for <c>Program</c>.</summary>
+    /// <param name="values">The values supplied to <c>Median</c>.</param>
+    /// <returns>The resulting <c>double</c>.</returns>
     private static double Median(double[] values)
     {
         Array.Sort(values);
@@ -309,6 +365,8 @@ internal static partial class Program
         return values.Length % 2 == 0 ? (values[middle - 1] + values[middle]) / 2 : values[middle];
     }
 
+    /// <summary>Prints model steps.</summary>
+    /// <param name="driver">The generator driver used for this run.</param>
     private static void PrintModelSteps(GeneratorDriver driver)
     {
         var steps = driver.GetRunResult().Results[0].TrackedSteps;
@@ -328,6 +386,9 @@ internal static partial class Program
             (changed.Count == 0 ? string.Empty : "; changed: " + string.Join(", ", changed)));
     }
 
+    /// <summary>Handles describe for <c>Program</c>.</summary>
+    /// <param name="value">The value to process.</param>
+    /// <returns>The resulting text.</returns>
     private static string Describe(object value)
     {
         object? result = value.GetType().GetProperty("Result", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
@@ -342,6 +403,9 @@ internal static partial class Program
             ?.GetValue(identity)?.ToString() ?? "?";
     }
 
+    /// <summary>Handles count files for <c>Program</c>.</summary>
+    /// <param name="driver">The generator driver used for this run.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int CountFiles(GeneratorDriver driver)
     {
         var results = driver.GetRunResult().Results;
@@ -351,11 +415,18 @@ internal static partial class Program
 
     private static long _lastSourceCharacters;
 
+    /// <summary>Handles payloads for <c>Program</c>.</summary>
+    /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+    /// <returns>The resulting <c>INamedTypeSymbol[]</c>.</returns>
     private static INamedTypeSymbol[] Payloads(Compilation compilation)
         => compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type).OfType<INamedTypeSymbol>()
             .Where(type => type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == PackableAttribute))
             .ToArray();
 
+    /// <summary>Creates trees.</summary>
+    /// <param name="corpus">The corpus supplied to <c>CreateTrees</c>.</param>
+    /// <param name="parse">The language version and target symbols for parsing.</param>
+    /// <returns>The trees.</returns>
     private static SyntaxTree[] CreateTrees(IReadOnlyList<CorpusFile> corpus, CSharpParseOptions parse)
         => corpus.Select(file => CSharpSyntaxTree.ParseText(file.Text, parse, file.Path)).ToArray();
 
@@ -375,10 +446,16 @@ internal static partial class Program
         return root.ReplaceNode(declaration, declaration.AddMembers(field)).ToFullString();
     }
 
+    /// <summary>Checks whether packable.</summary>
+    /// <param name="declaration">The declaration supplied to <c>IsPackable</c>.</param>
+    /// <returns>Whether the input is packable.</returns>
     private static bool IsPackable(TypeDeclarationSyntax declaration)
         => declaration.AttributeLists.SelectMany(list => list.Attributes).Any(attribute => attribute.Name.ToString() is "LuminPackable" or
             "LuminPackableAttribute" or "LuminPack.Attribute.LuminPackable");
 
+    /// <summary>Handles payload file for <c>Program</c>.</summary>
+    /// <param name="corpus">The corpus supplied to <c>PayloadFile</c>.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int PayloadFile(IReadOnlyList<CorpusFile> corpus)
     {
         for (int index = 0; index < corpus.Count; index++)
@@ -387,6 +464,8 @@ internal static partial class Program
         return 0;
     }
 
+    /// <summary>Creates parse options.</summary>
+    /// <returns>The parse options.</returns>
     private static CSharpParseOptions CreateParseOptions()
         => new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse, preprocessorSymbols: new[]
         {
@@ -398,6 +477,10 @@ internal static partial class Program
             new KeyValuePair<string, string>("InterceptorsPreviewNamespaces", "LuminPack"),
         });
 
+    /// <summary>Loads references.</summary>
+    /// <param name="coreDll">The core dll supplied to <c>LoadReferences</c>.</param>
+    /// <param name="extra">The extra supplied to <c>LoadReferences</c>.</param>
+    /// <returns>The resulting <c>MetadataReference[]</c>.</returns>
     private static MetadataReference[] LoadReferences(string coreDll, string? extra)
     {
         var references = new List<MetadataReference>();
@@ -425,6 +508,9 @@ internal static partial class Program
         return references.ToArray();
     }
 
+    /// <summary>Reads corpus.</summary>
+    /// <param name="directory">The directory supplied to <c>ReadCorpus</c>.</param>
+    /// <returns>The corpus.</returns>
     private static IReadOnlyList<CorpusFile> ReadCorpus(string directory)
         => Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories)
             .Where(file => !file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) &&
@@ -433,6 +519,9 @@ internal static partial class Program
             .Select(file => new CorpusFile(file, File.ReadAllText(file)))
             .ToArray();
 
+    /// <summary>Handles synthetic corpus for <c>Program</c>.</summary>
+    /// <param name="types">The types supplied to <c>SyntheticCorpus</c>.</param>
+    /// <returns>The resulting <c>IReadOnlyList&lt;CorpusFile&gt;</c>.</returns>
     private static IReadOnlyList<CorpusFile> SyntheticCorpus(int types)
     {
         var files = new CorpusFile[types];
@@ -455,14 +544,19 @@ internal static partial class Program
         return files;
     }
 
+    /// <summary>Finds repository root.</summary>
+    /// <returns>The repository root.</returns>
     private static string FindRepositoryRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
             if (File.Exists(Path.Combine(directory.FullName, "LuminPack.sln")))
                 return directory.FullName;
-        throw new InvalidOperationException("LuminPack.sln was not found above the harness output directory.");
+        return LuminPackExceptionHelper.ThrowInvalidOperation<string>("LuminPack.sln was not found above the harness output directory.");
     }
 
+    /// <summary>Finds core.</summary>
+    /// <param name="repository">The repository supplied to <c>FindCore</c>.</param>
+    /// <returns>The core.</returns>
     private static string FindCore(string repository)
     {
         string preferred = Path.Combine(repository, "src", "LuminPack.Core", "bin", "Release", "net10.0", "LuminPack.Core.dll");
@@ -473,9 +567,12 @@ internal static partial class Program
             ? Directory.GetFiles(release, "LuminPack.Core.dll", SearchOption.AllDirectories)
                 .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault()
             : null;
-        return candidate ?? throw new FileNotFoundException("LuminPack.Core.dll was not found under src/LuminPack.Core/bin/Release.");
+        return candidate ?? LuminPackExceptionHelper.ThrowFileNotFound<string>("LuminPack.Core.dll was not found under src/LuminPack.Core/bin/Release.");
     }
 
+    /// <summary>Creates legacy generators.</summary>
+    /// <param name="assembly">The assembly supplied to <c>CreateLegacyGenerators</c>.</param>
+    /// <returns>The legacy generators.</returns>
     private static ISourceGenerator[] CreateLegacyGenerators(Assembly assembly)
         => assembly.GetTypes()
             .Where(type => !type.IsAbstract && type.GetConstructor(Type.EmptyTypes) != null &&
@@ -484,6 +581,9 @@ internal static partial class Program
             .Select(type => ((IIncrementalGenerator)Activator.CreateInstance(type)!).AsSourceGenerator())
             .ToArray();
 
+    /// <summary>Sets legacy mode.</summary>
+    /// <param name="assembly">The assembly supplied to <c>SetLegacyMode</c>.</param>
+    /// <param name="mode">The mode supplied to <c>SetLegacyMode</c>.</param>
     private static void SetLegacyMode(Assembly assembly, string mode)
     {
         Type? emission = assembly.GetType("LuminPack.SourceGenerator.Direct.DirectEmission");
@@ -492,6 +592,11 @@ internal static partial class Program
             field.SetValue(null, Enum.Parse(field.FieldType, mode, ignoreCase: true));
     }
 
+    /// <summary>Attempts to parse the operation.</summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="options">Receives the options when the operation succeeds.</param>
+    /// <param name="error">Receives the error when the operation succeeds.</param>
+    /// <returns>Whether the operation succeeded.</returns>
     private static bool TryParse(string[] args, out Options options, out string? error)
     {
         options = new Options();

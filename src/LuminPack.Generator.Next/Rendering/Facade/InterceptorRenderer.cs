@@ -510,6 +510,8 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
     }
 
     /// <summary>Writes the proven exact interface implementation and keeps the existing pooled entry for other values.</summary>
+    /// <param name="shape">The collection or payload shape to use.</param>
+    /// <returns>The resulting text.</returns>
     private static string ExactInterfaceWrite(EntryShape shape)
     {
         bool list = shape.Kind == EntryKind.ExactList;

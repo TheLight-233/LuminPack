@@ -10,6 +10,10 @@ internal static partial class BinaryEmitter
 {
     /// <summary>Builds a record write whose dictionary members take the cursor path, reproducing the original member
     /// grouping: a reserved prefix, each dictionary kernel in place and every inline block between them.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
     private static void DictionaryWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
         var members = model.Members;
@@ -97,6 +101,14 @@ internal static partial class BinaryEmitter
 
     /// <summary>Writes one fused-entry dictionary member at the cursor: the kernel under a UTF-16 record profile and the
     /// original operation as its fallback.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddDictionaryEntries</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddDictionaryEntries</c>.</param>
     private static void AddDictionaryEntries(List<string> body, PayloadRenderModel model, RenderMember member, int index, string owner,
         CodeWriter w, Dictionary<string, int> names, ref int ends)
     {
@@ -195,6 +207,13 @@ internal static partial class BinaryEmitter
 
     /// <summary>Writes a dictionary member's original operation inside an inline object, which writes through the writer
     /// without a cursor local.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddDictionaryInline</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddDictionaryInline</c>.</param>
     private static void AddDictionaryInline(List<string> body, PayloadRenderModel model, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
@@ -293,6 +312,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes one key and value of a sparse dictionary enumeration, which copies raw values from a local.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="shape">The collection or payload shape to use.</param>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="item">The current item.</param>
+    /// <param name="textFormatter">The text formatter supplied to <c>AddSparseEntryWrite</c>.</param>
     private static void AddSparseEntryWrite(List<string> body, RenderDictionary shape, string writer, string item, string textFormatter)
     {
         if (shape.KeyText)
@@ -318,6 +342,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Copies one raw entry key or value at the writer's cursor.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="source">The source value or text being processed.</param>
+    /// <param name="unsafeAlias">The unsafe alias supplied to <c>AddRawStore</c>.</param>
     private static void AddRawStore(List<string> body, string type, string writer, string source, string unsafeAlias)
     {
         body.Add("LuminPackMarshal.CopyBlockUnaligned(");
@@ -328,6 +357,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes the dense-entry kernel of a fused dictionary member.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="title">The title supplied to <c>AddEntryKernel</c>.</param>
+    /// <param name="w">The generated source writer.</param>
     private static void AddEntryKernel(List<string> body, PayloadRenderModel model, RenderMember member, string title, CodeWriter w)
     {
         var shape = member.Dictionary;
@@ -383,6 +417,14 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Stores one kernel key or value at the running destination offset.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="text">Whether to enable text for this operation.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="source">The source value or text being processed.</param>
+    /// <param name="local">The local supplied to <c>AddKernelStore</c>.</param>
+    /// <param name="unsafeAlias">The unsafe alias supplied to <c>AddKernelStore</c>.</param>
+    /// <param name="writerAlias">The writer alias supplied to <c>AddKernelStore</c>.</param>
     private static void AddKernelStore(List<string> body, bool text, string type, string destination, string source,
         string local, string unsafeAlias, string writerAlias)
     {
@@ -403,11 +445,15 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>The generated string formatter owner of the containing extension container.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting text.</returns>
     private static string TextFormatter(PayloadRenderModel model) => "global::LuminPack." +
         GeneratedNames.Owner(model.Extension, "global::System.String");
 
     /// <summary>Registers the runtime helper aliases the dictionary text spells by name. A mirrored record reaches its
     /// storage through the qualified marshal type, so only an unmirrored file declares that alias.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
     private static void TouchDictionaryAliases(PayloadRenderModel model, CodeWriter w)
     {
         if (model.Mirror == null)

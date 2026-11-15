@@ -86,6 +86,11 @@ internal static class SharedTypeEmissions
         internal readonly GeneratorOutput Owners;
         internal readonly Lazy<FrozenTypeEmission> Value;
 
+        /// <summary>Initializes a <c>Shared</c> from the supplied data.</summary>
+        /// <param name="metadata">The metadata supplied to <c>Shared</c>.</param>
+        /// <param name="tier">The tier supplied to <c>Shared</c>.</param>
+        /// <param name="owners">The owners supplied to <c>Shared</c>.</param>
+        /// <param name="value">The value to process.</param>
         internal Shared(MetaInfo metadata, LuminPackGenerationTier tier, GeneratorOutput owners, Lazy<FrozenTypeEmission> value)
         {
             Metadata = metadata;

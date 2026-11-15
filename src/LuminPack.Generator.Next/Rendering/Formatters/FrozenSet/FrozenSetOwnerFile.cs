@@ -19,6 +19,8 @@ internal static class FrozenSetOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles write for <c>FrozenSetOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         if (c.Text && c.Supports("WriteFrozenStrings"))
@@ -41,6 +43,8 @@ internal static class FrozenSetOwnerFile
             c.W.Line(line);
     }
 
+    /// <summary>Handles read for <c>FrozenSetOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -89,6 +93,7 @@ internal static class FrozenSetOwnerFile
     }
 
     /// <summary>Rents the JSON set builder when the ownership API is available.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void BeforeJson(EnumerableOwnerContext c)
     {
         c.W.Line(c.Supports("RentFrozenSet") ?
@@ -102,6 +107,7 @@ internal static class FrozenSetOwnerFile
     }
 
     /// <summary>Freezes the elements and returns a leased builder on every exit.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void AfterJson(EnumerableOwnerContext c)
     {
         c.W.Line("value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(staged);");

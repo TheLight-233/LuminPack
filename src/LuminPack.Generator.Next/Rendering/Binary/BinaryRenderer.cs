@@ -22,14 +22,30 @@ internal sealed class BinaryRenderer : IRenderer
         _ => string.Empty,
     };
 
+    /// <summary>Handles record for <c>BinaryRenderer</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <returns>The resulting text.</returns>
     private static string Record(RecordModel model, RenderContext context) => Emit(model, context);
 
+    /// <summary>Handles struct for <c>BinaryRenderer</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <returns>The resulting text.</returns>
     private static string Struct(StructModel model, RenderContext context) => model.StoragePlan != null ?
         UnmanagedOwnerFile.Render(SharedFormatterSet.Empty.Include(model, context.Options), model, context.Operations &
             (GeneratedOperations.BinaryWrite | GeneratedOperations.BinaryRead)) : Emit(model, context);
 
+    /// <summary>Handles circle for <c>BinaryRenderer</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <returns>The resulting text.</returns>
     private static string Circle(CircleReferenceModel model, RenderContext context) => Emit(model, context);
 
+    /// <summary>Handles emit for <c>BinaryRenderer</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <returns>The generated C# source.</returns>
     private static string Emit(TypeModel model, RenderContext context)
     {
         PayloadRenderModel? direct = RenderModelFactory.Create(model, context.Options);

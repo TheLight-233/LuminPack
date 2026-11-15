@@ -129,6 +129,8 @@ internal static class Program
         return failures == 0 ? 0 : 1;
     }
 
+    /// <summary>Checks that the benchmark fixtures satisfy their round-trip contracts.</summary>
+    /// <returns>Zero on success, or a nonzero exit code on failure.</returns>
     private static int VerifyFixtures()
     {
         Type[] types = [typeof(LuminPackBenchmark.SimpleBenchmark), typeof(LuminPackBenchmark.SerializeBenchmark),

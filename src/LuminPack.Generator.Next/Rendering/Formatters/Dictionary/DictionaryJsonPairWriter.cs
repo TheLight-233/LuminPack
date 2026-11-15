@@ -38,6 +38,9 @@ internal sealed class DictionaryJsonPairWriter
     }
 
     // These concrete owners write exactly one value and always handle its leading comma, including null strings.
+    /// <summary>Handles uses scalar separator for <c>DictionaryJsonPairWriter</c>.</summary>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <returns>Whether the input satisfies the uses scalar separator check.</returns>
     private static bool UsesScalarSeparator(string type) => type is "string" or "int" or "uint" or "long" or "ulong";
 
     /// <summary>Initializes the separator state used by the individual formatter calls.</summary>

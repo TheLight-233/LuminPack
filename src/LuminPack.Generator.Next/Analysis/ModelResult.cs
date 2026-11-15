@@ -15,6 +15,10 @@ internal sealed class ModelResult : IEquatable<ModelResult>
     /// <summary>The reason a shape is unsupported or still incomplete, or null when the model is complete.</summary>
     internal readonly string? Reason;
 
+    /// <summary>Initializes a <c>ModelResult</c> from the supplied data.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="complete">Whether to enable complete for this operation.</param>
+    /// <param name="reason">The reason supplied to <c>ModelResult</c>.</param>
     private ModelResult(TypeModel? model, bool complete, string? reason)
     {
         Reason = reason;
@@ -23,12 +27,19 @@ internal sealed class ModelResult : IEquatable<ModelResult>
     }
 
     /// <summary>A complete model.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The y.</returns>
     internal static ModelResult Ready(TypeModel model) => new ModelResult(model, complete: true, reason: null);
 
     /// <summary>A model whose analysis is scaffolded but not yet complete, which emits nothing.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="reason">The reason supplied to <c>Incomplete</c>.</param>
+    /// <returns>The resulting <c>ModelResult</c>.</returns>
     internal static ModelResult Incomplete(TypeModel model, string reason) => new ModelResult(model, complete: false, reason: reason);
 
     /// <summary>No model, because the declaration is outside the supported surface.</summary>
+    /// <param name="reason">The reason supplied to <c>Unsupported</c>.</param>
+    /// <returns>The resulting <c>ModelResult</c>.</returns>
     internal static ModelResult Unsupported(string reason) => new ModelResult(null, complete: false, reason: reason);
 
     /// <inheritdoc/>

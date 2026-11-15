@@ -276,6 +276,8 @@ public static partial class LuminPackCollectionAccess
     {
         internal static readonly bool Available = Check();
 
+        /// <summary>Returns the check for <c>StackStorage</c>.</summary>
+        /// <returns>Whether the input satisfies the check check.</returns>
         private static bool Check()
         {
             if ((LuminCollectionLayouts.StackArray | LuminCollectionLayouts.StackSize | LuminCollectionLayouts.StackVersion) < 0)
@@ -290,6 +292,11 @@ public static partial class LuminPackCollectionAccess
             }
         }
 
+        /// <summary>Handles check for <c>StackStorage</c>.</summary>
+        /// <typeparam name="T">The value type processed by the operation.</typeparam>
+        /// <param name="bottom">The bottom supplied to <c>Check</c>.</param>
+        /// <param name="top">The top supplied to <c>Check</c>.</param>
+        /// <returns>Whether the input satisfies the check check.</returns>
         private static bool Check<T>(T bottom, T top)
         {
             var stack = new Stack<T>(4);

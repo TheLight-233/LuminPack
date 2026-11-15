@@ -12,10 +12,17 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class DictionaryOwnerFile
 {
     // The original pipeline stores a nullable of a payload of at most four bytes as its raw struct.
+    /// <summary>Handles raw nullable for <c>DictionaryOwnerFile</c>.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input satisfies the raw nullable check.</returns>
     private static bool RawNullable(string member) => member.EndsWith("?", System.StringComparison.Ordinal) &&
         member.Substring(0, member.Length - 1) is "bool" or "byte" or "sbyte" or "short" or "ushort" or "char" or "int" or "uint" or "float";
 
     /// <summary>Selects sparse nullable entries, retained raw/string kernels or recursive value-owner operations.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="fact">The fact supplied to <c>RenderDefault</c>.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <returns>The generated C# source.</returns>
     internal static string RenderDefault(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations)
     {
         var model = fact.Contract!;

@@ -19,6 +19,8 @@ internal static class ConcurrentBagTextOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles write for <c>ConcurrentBagTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         if (c.Forwarded)
@@ -27,6 +29,8 @@ internal static class ConcurrentBagTextOwnerFile
             c.CountedWrite("value");
     }
 
+    /// <summary>Handles read for <c>ConcurrentBagTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

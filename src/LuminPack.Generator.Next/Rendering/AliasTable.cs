@@ -31,13 +31,17 @@ internal sealed class AliasTable
     private readonly int _available;
     private int _used;
 
+    /// <summary>Initializes a <c>AliasTable</c> from the supplied data.</summary>
+    /// <param name="available">The available supplied to <c>AliasTable</c>.</param>
     private AliasTable(int available) => _available = available < 0 ? int.MaxValue : available;
 
     /// <summary>Creates a table for an alias mask.</summary>
     /// <param name="availableAliases">The mask of aliases the consumer leaves available, or a negative value for all.</param>
+    /// <returns>The resulting <c>AliasTable</c>.</returns>
     internal static AliasTable For(int availableAliases) => new AliasTable(availableAliases);
 
     /// <summary>The aliases the renderer actually used, in table order, for the file header.</summary>
+    /// <returns>The resulting <c>IEnumerable&lt;(string Alias, string Target)&gt;</c>.</returns>
     internal IEnumerable<(string Alias, string Target)> Used()
     {
         for (int index = 0; index < Entries.Length; index++)

@@ -183,6 +183,16 @@ internal static class OrderedPayloadMemberWriter
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans) =>
         Emit(body, member, owner, w, names, ref ends, ref cursors, ref spans, 2);
 
+    /// <summary>Handles emit for <c>OrderedPayloadMemberWriter</c>.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>Emit</c>.</param>
+    /// <param name="ends">The ends supplied to <c>Emit</c>.</param>
+    /// <param name="cursors">The cursors supplied to <c>Emit</c>.</param>
+    /// <param name="spans">The spans supplied to <c>Emit</c>.</param>
+    /// <param name="mode">The mode supplied to <c>Emit</c>.</param>
     private static void Emit(List<string> body, RenderMember member, string owner, CodeWriter w, Dictionary<string, int> names,
         ref int ends, ref int cursors, ref int spans, int mode)
     {

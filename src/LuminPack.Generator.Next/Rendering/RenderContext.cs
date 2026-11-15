@@ -16,6 +16,9 @@ internal sealed class RenderContext
     internal readonly GeneratedOperations Operations;
 
     /// <summary>Captures a render context.</summary>
+    /// <param name="options">The options governing the operation.</param>
+    /// <param name="aliases">The aliases supplied to <c>RenderContext</c>.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
     internal RenderContext(GeneratorOptions options, AliasTable aliases, GeneratedOperations operations = GeneratedOperations.All)
     {
         Operations = operations;

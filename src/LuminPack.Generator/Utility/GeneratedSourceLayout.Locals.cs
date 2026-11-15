@@ -60,6 +60,8 @@ internal static partial class GeneratedSourceLayout
     }
 
     /// <summary>Lists the names a method declares for locals, parameters of nested functions and pattern variables.</summary>
+    /// <param name="method">The method being inspected.</param>
+    /// <returns>The resulting <c>IEnumerable&lt;string&gt;</c>.</returns>
     private static IEnumerable<string> DeclaredLocals(BaseMethodDeclarationSyntax method)
     {
         foreach (var node in method.DescendantNodes())

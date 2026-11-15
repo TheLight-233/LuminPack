@@ -50,6 +50,10 @@ internal static class SharedFormatterPublisher
                 yield return source;
     }
 
+    /// <summary>Renders all.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <returns>The all.</returns>
     private static IEnumerable<KeyValuePair<string, string>> RenderAll(SharedFormatterSet set, OwnerOperations operations)
     {
         var general = new HashSet<string>(StringComparer.Ordinal);

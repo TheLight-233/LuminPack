@@ -119,6 +119,8 @@ public static partial class LuminPackCollectionAccess
     {
         internal static readonly bool Available = Check();
 
+        /// <summary>Returns the check for <c>PriorityQueueParents</c>.</summary>
+        /// <returns>Whether the input satisfies the check check.</returns>
         private static bool Check()
         {
             try

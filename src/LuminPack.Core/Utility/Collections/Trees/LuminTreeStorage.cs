@@ -69,6 +69,14 @@ public static partial class LuminTreeStorage
         return true;
     }
 
+    /// <summary>Writes integer tree.</summary>
+    /// <typeparam name="TOptions">The compiled serialization options.</typeparam>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="node">The syntax node being inspected.</param>
+    /// <param name="offsets">The offsets supplied to <c>WriteIntegerTree</c>.</param>
+    /// <param name="version">The version supplied to <c>WriteIntegerTree</c>.</param>
+    /// <param name="captured">The captured supplied to <c>WriteIntegerTree</c>.</param>
     private static void WriteIntegerTree<TOptions, T>(scoped ref LuminPackJsonWriter writer, object? node,
         in NodeOffsets offsets, scoped ref int version, int captured)
         where TOptions : struct, ILuminPackOptions where T : unmanaged
@@ -108,6 +116,12 @@ public static partial class LuminTreeStorage
         return ReadIntegerSortedSetJson<TOptions, T>(ref reader, set);
     }
 
+    /// <summary>Reads integer sorted set JSON.</summary>
+    /// <typeparam name="TOptions">The compiled serialization options.</typeparam>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="reader">The reader positioned at the input value.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <returns>Whether the input satisfies the read integer sorted set JSON check.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool ReadIntegerSortedSetJson<TOptions, T>(scoped ref LuminPackJsonReader reader, SortedSet<T> set)
         where TOptions : struct, ILuminPackOptions where T : unmanaged
@@ -506,6 +520,11 @@ public static partial class LuminTreeStorage
         return true;
     }
 
+    /// <summary>Publishes ordered sorted set.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="items">The items supplied to <c>PublishOrderedSortedSet</c>.</param>
+    /// <param name="count">The number of items to process.</param>
     private static void PublishOrderedSortedSet<T>(SortedSet<T> set, T[] items, int count)
     {
         var offsets = SortedSetLayout<T>.Nodes;

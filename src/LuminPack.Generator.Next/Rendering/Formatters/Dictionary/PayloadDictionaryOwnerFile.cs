@@ -19,9 +19,16 @@ internal static class PayloadDictionaryOwnerFile
         Render(set, fact, operations, null);
 
     /// <summary>Renders the same dictionary traversal with checked fresh Union elements when requested.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="fact">The fact supplied to <c>Render</c>.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <param name="checkedUnion">The checked union supplied to <c>Render</c>.</param>
+    /// <returns>The generated C# source.</returns>
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations,
         PayloadRenderModel? checkedUnion) => PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec, checkedUnion);
 
+    /// <summary>Handles read for <c>PayloadDictionaryOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -66,6 +73,8 @@ internal static class PayloadDictionaryOwnerFile
 
     /// <summary>The original fresh dictionary of Union values: entries are written into the new dictionary's storage with the
     /// Union dispatch expanded per value, the buckets are rebuilt once, and a 32-bit process keeps ordinary insertion.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="union">The union supplied to <c>FreshUnionDictionary</c>.</param>
     private static void FreshUnionDictionary(PairedDictionaryContext c, PayloadRenderModel union)
     {
         var w = c.W;

@@ -15,12 +15,18 @@ internal static class TimeZoneInfoOwnerFile
         SpecialOwnerFile.Render(set, operations, "TimeZoneInfo", "global::System.TimeZoneInfo", true, BinaryWrite,
             BinaryRead, JsonWrite, JsonRead);
 
+    /// <summary>Handles binary write for <c>TimeZoneInfoOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("string? text = value is null ? null : global::LuminPack.Code.LuminPackTimeZoneInfoCache.GetText(value);");
         w.Line("writer.WriteTimeZoneText<" + context.Profile + ">(text);");
     }
 
+    /// <summary>Handles binary read for <c>TimeZoneInfoOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (!reader.TryReadObjectHead())");
@@ -46,6 +52,9 @@ internal static class TimeZoneInfoOwnerFile
         w.Line("value = global::LuminPack.Code.LuminPackTimeZoneInfoCache.Parse(source, candidate);");
     }
 
+    /// <summary>Handles JSON write for <c>TimeZoneInfoOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value == null)");
@@ -57,6 +66,9 @@ internal static class TimeZoneInfoOwnerFile
         w.Line("writer.Write<" + context.Profile + ">(global::LuminPack.Code.LuminPackTimeZoneInfoCache.GetText(value));");
     }
 
+    /// <summary>Handles JSON read for <c>TimeZoneInfoOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
         // The original read returns a JSON null before either path.

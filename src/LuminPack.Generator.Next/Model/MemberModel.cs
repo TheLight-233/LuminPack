@@ -28,6 +28,9 @@ internal abstract class MemberModel : IEquatable<MemberModel>
     internal readonly WirePolicy Policy;
 
     /// <summary>Captures the facts shared by every member kind.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>MemberModel</c>.</param>
+    /// <param name="policy">The policy supplied to <c>MemberModel</c>.</param>
     protected MemberModel(string name, MemberStorage storage, WirePolicy policy)
     {
         Policy = policy;
@@ -61,6 +64,8 @@ internal abstract class MemberModel : IEquatable<MemberModel>
     public override int GetHashCode() => Name.GetHashCode();
 
     /// <summary>Compares the kind-specific facts.</summary>
+    /// <param name="other">The value to compare with this instance.</param>
+    /// <returns>Whether the input satisfies the equals core check.</returns>
     protected abstract bool EqualsCore(MemberModel other);
 }
 
@@ -89,6 +94,16 @@ internal sealed class ScalarMember : MemberModel
     internal readonly string? Underlying;
 
     /// <summary>Captures a scalar member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>ScalarMember</c>.</param>
+    /// <param name="policy">The policy supplied to <c>ScalarMember</c>.</param>
+    /// <param name="scalar">The scalar supplied to <c>ScalarMember</c>.</param>
+    /// <param name="size">The requested size.</param>
+    /// <param name="raw">Whether to enable raw for this operation.</param>
+    /// <param name="builtin">Whether to enable builtin for this operation.</param>
+    /// <param name="enumType">The type of the enum.</param>
+    /// <param name="underlying">The underlying supplied to <c>ScalarMember</c>.</param>
+    /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
     internal ScalarMember(string name, MemberStorage storage, WirePolicy policy, string scalar, int size, bool raw, bool builtin,
         string? enumType = null, string? underlying = null, bool isVolatile = false)
         : base(name, storage, policy)
@@ -115,6 +130,9 @@ internal sealed class ScalarMember : MemberModel
 internal sealed class TextMember : MemberModel
 {
     /// <summary>Captures a string member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>TextMember</c>.</param>
+    /// <param name="policy">The policy supplied to <c>TextMember</c>.</param>
     internal TextMember(string name, MemberStorage storage, WirePolicy policy)
         : base(name, storage, policy)
     {
@@ -140,6 +158,13 @@ internal sealed class CultureInfoMember : MemberModel
     internal readonly bool CanReuse;
 
     /// <summary>Captures a culture-info member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>CultureInfoMember</c>.</param>
+    /// <param name="policy">The policy supplied to <c>CultureInfoMember</c>.</param>
+    /// <param name="declared">The declared supplied to <c>CultureInfoMember</c>.</param>
+    /// <param name="nullable">Whether the type can hold a null value.</param>
+    /// <param name="property">Whether to enable property for this operation.</param>
+    /// <param name="canReuse">Whether to enable can reuse for this operation.</param>
     internal CultureInfoMember(string name, MemberStorage storage, WirePolicy policy, string declared, bool nullable, bool property,
         bool canReuse)
         : base(name, storage, policy)
@@ -231,6 +256,12 @@ internal sealed class PayloadMember : MemberModel
     internal readonly TypeModel? Nested;
 
     /// <summary>Captures a payload member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>PayloadMember</c>.</param>
+    /// <param name="policy">The policy supplied to <c>PayloadMember</c>.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="shape">The collection or payload shape to use.</param>
+    /// <param name="nested">The nested supplied to <c>PayloadMember</c>.</param>
     internal PayloadMember(string name, MemberStorage storage, WirePolicy policy, TypeRef type, PayloadShape shape, TypeModel? nested)
         : base(name, storage, policy)
     {
@@ -312,6 +343,11 @@ internal sealed class CollectionShape : IEquatable<CollectionShape?>
     internal readonly string? EntryType;
 
     /// <summary>Captures a collection's entry shape.</summary>
+    /// <param name="key">The key identifying the entry.</param>
+    /// <param name="value">The value to process.</param>
+    /// <param name="valueText">Whether to enable value text for this operation.</param>
+    /// <param name="itemType">The type of the item.</param>
+    /// <param name="entryType">The type of the entry.</param>
     internal CollectionShape(string? key, string? value, bool valueText, string? itemType = null, string? entryType = null)
     {
         EntryType = entryType;
@@ -377,6 +413,22 @@ internal sealed class CollectionMember : MemberModel
     internal readonly bool ReuseArraySlots;
 
     /// <summary>Captures a sequence member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>CollectionMember</c>.</param>
+    /// <param name="policy">The policy supplied to <c>CollectionMember</c>.</param>
+    /// <param name="declaredType">The type of the declared.</param>
+    /// <param name="kind">The kind supplied to <c>CollectionMember</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="scalar">The scalar supplied to <c>CollectionMember</c>.</param>
+    /// <param name="raw">Whether to enable raw for this operation.</param>
+    /// <param name="formatterCall">Whether to enable formatter call for this operation.</param>
+    /// <param name="elementText">Whether to enable element text for this operation.</param>
+    /// <param name="nested">The nested supplied to <c>CollectionMember</c>.</param>
+    /// <param name="shape">The collection or payload shape to use.</param>
+    /// <param name="forwardedElement">The forwarded element supplied to <c>CollectionMember</c>.</param>
+    /// <param name="ownedScalar">The owned scalar supplied to <c>CollectionMember</c>.</param>
+    /// <param name="arrayRank">The array rank supplied to <c>CollectionMember</c>.</param>
+    /// <param name="reuseArraySlots">Whether to enable reuse array slots for this operation.</param>
     internal CollectionMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, CollectionKind kind, TypeRef element,
         string? scalar = null, bool raw = false, bool formatterCall = false, bool elementText = false, TypeModel? nested = null,
         CollectionShape? shape = null, MemberModel? forwardedElement = null, string? ownedScalar = null,
@@ -487,6 +539,23 @@ internal sealed class DictionaryMember : MemberModel
     internal readonly string? ValueOwned;
 
     /// <summary>Captures a dictionary member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>DictionaryMember</c>.</param>
+    /// <param name="policy">The policy supplied to <c>DictionaryMember</c>.</param>
+    /// <param name="declaredType">The type of the declared.</param>
+    /// <param name="kind">The kind supplied to <c>DictionaryMember</c>.</param>
+    /// <param name="key">The key identifying the entry.</param>
+    /// <param name="value">The value to process.</param>
+    /// <param name="pair">Whether to enable pair for this operation.</param>
+    /// <param name="keyText">Whether to enable key text for this operation.</param>
+    /// <param name="valueText">Whether to enable value text for this operation.</param>
+    /// <param name="sparse">Whether to enable sparse for this operation.</param>
+    /// <param name="keyType">The type of the key.</param>
+    /// <param name="valueType">The type of the value.</param>
+    /// <param name="nested">The nested supplied to <c>DictionaryMember</c>.</param>
+    /// <param name="keyOwned">The key owned supplied to <c>DictionaryMember</c>.</param>
+    /// <param name="valueOwned">The value owned supplied to <c>DictionaryMember</c>.</param>
+    /// <param name="forwardedValue">The forwarded value supplied to <c>DictionaryMember</c>.</param>
     internal DictionaryMember(string name, MemberStorage storage, WirePolicy policy, string declaredType, DictionaryKind kind, TypeRef key,
         TypeRef value, bool pair = false, bool keyText = false, bool valueText = false, bool sparse = false, string? keyType = null,
         string? valueType = null, TypeModel? nested = null, string? keyOwned = null, string? valueOwned = null,
@@ -533,6 +602,12 @@ internal sealed class TypeParameterMember : MemberModel
     internal readonly bool ReferenceType;
 
     /// <summary>Captures a type-parameter member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="storage">The storage supplied to <c>TypeParameterMember</c>.</param>
+    /// <param name="policy">The policy supplied to <c>TypeParameterMember</c>.</param>
+    /// <param name="parameterName">The name of the parameter.</param>
+    /// <param name="valueType">Whether to enable value type for this operation.</param>
+    /// <param name="referenceType">Whether to enable reference type for this operation.</param>
     internal TypeParameterMember(string name, MemberStorage storage, WirePolicy policy, string parameterName, bool valueType, bool referenceType)
         : base(name, storage, policy)
     {
@@ -565,6 +640,10 @@ internal sealed class TypeRef : IEquatable<TypeRef>
     internal readonly bool TypeParameter;
 
     /// <summary>Captures a type reference.</summary>
+    /// <param name="globalName">The name of the global.</param>
+    /// <param name="displayName">The name of the display.</param>
+    /// <param name="nullable">Whether the type can hold a null value.</param>
+    /// <param name="typeParameter">Whether to enable type parameter for this operation.</param>
     internal TypeRef(string globalName, string displayName, bool nullable, bool typeParameter)
     {
         TypeParameter = typeParameter;

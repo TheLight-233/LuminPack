@@ -51,6 +51,12 @@ internal abstract class TypeModel : IEquatable<TypeModel>
     internal readonly string[] Constraints;
 
     /// <summary>Captures the facts shared by every payload kind.</summary>
+    /// <param name="identity">The identity supplied to <c>TypeModel</c>.</param>
+    /// <param name="accessibility">The accessibility supplied to <c>TypeModel</c>.</param>
+    /// <param name="kind">The kind supplied to <c>TypeModel</c>.</param>
+    /// <param name="members">The members supplied to <c>TypeModel</c>.</param>
+    /// <param name="policy">The policy supplied to <c>TypeModel</c>.</param>
+    /// <param name="constraints">The constraints supplied to <c>TypeModel</c>.</param>
     protected TypeModel(TypeIdentity identity, TypeAccessibility accessibility, PayloadKind kind, MemberModel[] members, WirePolicy policy,
         string[] constraints)
     {
@@ -73,6 +79,11 @@ internal abstract class TypeModel : IEquatable<TypeModel>
     /// <inheritdoc/>
     public override int GetHashCode() => Identity.GetHashCode();
 
+    /// <summary>Handles same for <c>TypeModel</c>.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T>
         => ReferenceEquals(left, right) || left.Length == right.Length && System.Linq.Enumerable.SequenceEqual(left, right);
 }
@@ -117,6 +128,18 @@ internal sealed class VersionSchemaModel : IEquatable<VersionSchemaModel>
     internal readonly int[] Widths;
 
     /// <summary>Captures a version schema.</summary>
+    /// <param name="schema">The schema supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="metadata">The metadata supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="prefix">The prefix to use for the generated name.</param>
+    /// <param name="fieldEntries">The field entries supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="tempTypes">The temp types supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="typeNames">The type names supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="qualifiedTypes">The qualified types supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="layout">The layout supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="layoutFields">The layout fields supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="oldNames">The old names supplied to <c>VersionSchemaModel</c>.</param>
+    /// <param name="dynamic">Whether to enable dynamic for this operation.</param>
+    /// <param name="widths">The widths supplied to <c>VersionSchemaModel</c>.</param>
     internal VersionSchemaModel(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes,
         string[] typeNames, string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames,
         bool dynamic = false, int[]? widths = null)
@@ -165,6 +188,9 @@ internal sealed class ConstructorModel : IEquatable<ConstructorModel>
     internal readonly string[] DeclaredOrder;
 
     /// <summary>Captures a selected constructor.</summary>
+    /// <param name="arguments">The arguments supplied to <c>ConstructorModel</c>.</param>
+    /// <param name="members">The members supplied to <c>ConstructorModel</c>.</param>
+    /// <param name="declaredOrder">The declared order supplied to <c>ConstructorModel</c>.</param>
     internal ConstructorModel(string?[]? arguments, string[]? members, string[] declaredOrder)
     {
         DeclaredOrder = declaredOrder;
@@ -184,6 +210,10 @@ internal sealed class ConstructorModel : IEquatable<ConstructorModel>
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as ConstructorModel);
 
+    /// <summary>Handles same arguments for <c>ConstructorModel</c>.</summary>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same arguments check.</returns>
     private static bool SameArguments(string?[]? left, string?[]? right)
     {
         if (ReferenceEquals(left, right))
@@ -196,6 +226,11 @@ internal sealed class ConstructorModel : IEquatable<ConstructorModel>
         return true;
     }
 
+    /// <summary>Handles same for <c>ConstructorModel</c>.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same<T>(T[]? left, T[]? right) where T : IEquatable<T>
         => ReferenceEquals(left, right) || left != null && right != null && left.Length == right.Length &&
             Enumerable.SequenceEqual(left, right);
@@ -220,6 +255,10 @@ internal sealed class CallbackModel : IEquatable<CallbackModel>
     internal readonly string[] ReadAfter;
 
     /// <summary>Captures the callback statements in declaration order.</summary>
+    /// <param name="writeBefore">The write before supplied to <c>CallbackModel</c>.</param>
+    /// <param name="writeAfter">The write after supplied to <c>CallbackModel</c>.</param>
+    /// <param name="readBefore">The read before supplied to <c>CallbackModel</c>.</param>
+    /// <param name="readAfter">The read after supplied to <c>CallbackModel</c>.</param>
     internal CallbackModel(string[] writeBefore, string[] writeAfter, string[] readBefore, string[] readAfter)
     {
         ReadAfter = readAfter;
@@ -236,6 +275,10 @@ internal sealed class CallbackModel : IEquatable<CallbackModel>
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as CallbackModel);
 
+    /// <summary>Handles same for <c>CallbackModel</c>.</summary>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same(string[] left, string[] right)
         => ReferenceEquals(left, right) || left.Length == right.Length && Enumerable.SequenceEqual(left, right);
 
@@ -303,6 +346,29 @@ internal sealed class RecordModel : TypeModel
     internal readonly string? Rent;
 
     /// <summary>Captures a record.</summary>
+    /// <param name="identity">The identity supplied to <c>RecordModel</c>.</param>
+    /// <param name="accessibility">The accessibility supplied to <c>RecordModel</c>.</param>
+    /// <param name="members">The members supplied to <c>RecordModel</c>.</param>
+    /// <param name="policy">The policy supplied to <c>RecordModel</c>.</param>
+    /// <param name="constraints">The constraints supplied to <c>RecordModel</c>.</param>
+    /// <param name="versioned">Whether to enable versioned for this operation.</param>
+    /// <param name="fixedUnionCase">Whether to enable fixed union case for this operation.</param>
+    /// <param name="derived">Whether to enable derived for this operation.</param>
+    /// <param name="proven">Whether to enable proven for this operation.</param>
+    /// <param name="recordWidth">Whether to enable record width for this operation.</param>
+    /// <param name="freshResult">Whether to enable fresh result for this operation.</param>
+    /// <param name="mirror">The mirror supplied to <c>RecordModel</c>.</param>
+    /// <param name="mirrorFields">The mirror fields supplied to <c>RecordModel</c>.</param>
+    /// <param name="mirrorOffsets">The mirror offsets supplied to <c>RecordModel</c>.</param>
+    /// <param name="mirrorLayout">The mirror layout supplied to <c>RecordModel</c>.</param>
+    /// <param name="version">The version supplied to <c>RecordModel</c>.</param>
+    /// <param name="constructor">The constructor supplied to <c>RecordModel</c>.</param>
+    /// <param name="callbacks">The callbacks supplied to <c>RecordModel</c>.</param>
+    /// <param name="rent">The rent supplied to <c>RecordModel</c>.</param>
+    /// <param name="mirrors">The mirrors supplied to <c>RecordModel</c>.</param>
+    /// <param name="rejection">The rejection supplied to <c>RecordModel</c>.</param>
+    /// <param name="recursive">Whether to enable recursive for this operation.</param>
+    /// <param name="implicitPayload">Whether to enable implicit payload for this operation.</param>
     internal RecordModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         bool versioned, bool fixedUnionCase, bool derived, bool proven, bool recordWidth, bool freshResult, string? mirror,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, VersionSchemaModel? version,
@@ -436,6 +502,12 @@ internal sealed class StructModel : TypeModel
     /// <param name="mirrorFields">The mirror fields used by this operation.</param>
     /// <param name="mirrorOffsets">The mirror offsets used by this operation.</param>
     /// <param name="mirrorLayout">The mirror layout used by this operation.</param>
+    /// <param name="construction">The construction supplied to <c>StructModel</c>.</param>
+    /// <param name="serializationCallbacks">The serialization callbacks supplied to <c>StructModel</c>.</param>
+    /// <param name="version">The version supplied to <c>StructModel</c>.</param>
+    /// <param name="rentCall">The rent call supplied to <c>StructModel</c>.</param>
+    /// <param name="rentByRef">Whether to enable rent by ref for this operation.</param>
+    /// <param name="rejection">The rejection supplied to <c>StructModel</c>.</param>
     internal StructModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy, string[] constraints,
         StructStorage storage, PortableLayout? layout, bool recordWidth, bool versioned, bool rent, bool constructors, bool callbacks, FormatterStorageModel? storagePlan = null, string? mirror = null, string[]? mirrorFields = null, int[]? mirrorOffsets = null, string? mirrorLayout = null, ConstructorModel? construction = null, CallbackModel? serializationCallbacks = null,
         VersionSchemaModel? version = null, string? rentCall = null, bool rentByRef = false, string? rejection = null)
@@ -493,6 +565,10 @@ internal sealed class PortableLeafModel : IEquatable<PortableLeafModel>
     internal readonly bool Volatile;
 
     /// <summary>Captures one scalar transfer.</summary>
+    /// <param name="access">The access supplied to <c>PortableLeafModel</c>.</param>
+    /// <param name="scalar">The scalar supplied to <c>PortableLeafModel</c>.</param>
+    /// <param name="size">The requested size.</param>
+    /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
     internal PortableLeafModel(string access, string scalar, int size, bool isVolatile)
     {
         Access = access;
@@ -531,6 +607,11 @@ internal sealed class PortableFieldModel : IEquatable<PortableFieldModel>
     internal readonly PortableLeafModel[] Leaves;
 
     /// <summary>Captures one view field.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
+    /// <param name="offset">The offset into the current buffer or input.</param>
+    /// <param name="leaves">The leaves supplied to <c>PortableFieldModel</c>.</param>
     internal PortableFieldModel(string name, string type, bool isVolatile, int offset, PortableLeafModel[] leaves)
     {
         Leaves = leaves;
@@ -589,6 +670,16 @@ internal sealed class PortableLayout : IEquatable<PortableLayout>
     internal readonly string? LayoutAttribute;
 
     /// <summary>Captures a portable layout.</summary>
+    /// <param name="viewName">The name of the view.</param>
+    /// <param name="fields">The fields supplied to <c>PortableLayout</c>.</param>
+    /// <param name="wireSize">The wire size supplied to <c>PortableLayout</c>.</param>
+    /// <param name="size64">The size64 supplied to <c>PortableLayout</c>.</param>
+    /// <param name="size32">The size32 supplied to <c>PortableLayout</c>.</param>
+    /// <param name="alignment64">The alignment64 supplied to <c>PortableLayout</c>.</param>
+    /// <param name="alignment32">The alignment32 supplied to <c>PortableLayout</c>.</param>
+    /// <param name="tagged">Whether to enable tagged for this operation.</param>
+    /// <param name="complete">Whether to enable complete for this operation.</param>
+    /// <param name="layoutAttribute">The layout attribute supplied to <c>PortableLayout</c>.</param>
     internal PortableLayout(string viewName, PortableFieldModel[] fields, int wireSize, int size64, int size32, int alignment64,
         int alignment32, bool tagged, bool complete, string? layoutAttribute)
     {
@@ -608,6 +699,9 @@ internal sealed class PortableLayout : IEquatable<PortableLayout>
     /// <summary>The field count, which is also the number of wire slots.</summary>
     internal int FieldCount => Fields.Length;
 
+    /// <summary>Handles flatten for <c>PortableLayout</c>.</summary>
+    /// <param name="fields">The fields supplied to <c>Flatten</c>.</param>
+    /// <returns>The resulting <c>PortableLeafModel[]</c>.</returns>
     private static PortableLeafModel[] Flatten(PortableFieldModel[] fields)
     {
         int count = 0;
@@ -706,6 +800,21 @@ internal sealed class UnionCaseModel : IEquatable<UnionCaseModel>
     internal readonly string? InterfaceContract;
 
     /// <summary>Captures a Union case.</summary>
+    /// <param name="tag">The numeric Union case tag.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="read">Whether to emit the read operation.</param>
+    /// <param name="ownEntry">Whether to enable own entry for this operation.</param>
+    /// <param name="readGeneric">Whether to enable read generic for this operation.</param>
+    /// <param name="sealedCase">Whether to enable sealed case for this operation.</param>
+    /// <param name="fixedCursor">Whether to enable fixed cursor for this operation.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="readable">The readable supplied to <c>UnionCaseModel</c>.</param>
+    /// <param name="chain">The chain supplied to <c>UnionCaseModel</c>.</param>
+    /// <param name="namespace">The namespace supplied to <c>UnionCaseModel</c>.</param>
+    /// <param name="arguments">The arguments supplied to <c>UnionCaseModel</c>.</param>
+    /// <param name="definition">The definition supplied to <c>UnionCaseModel</c>.</param>
+    /// <param name="closed">The closed supplied to <c>UnionCaseModel</c>.</param>
+    /// <param name="interfaceContract">The interface contract supplied to <c>UnionCaseModel</c>.</param>
     internal UnionCaseModel(int tag, TypeIdentity type, UnionCaseRead read, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor,
         TypeModel? model, string readable, string[] chain, string? @namespace, string arguments = "", string? definition = null,
         FormatterModel? closed = null, string? interfaceContract = null)
@@ -760,6 +869,11 @@ internal sealed class UnionSlotModel : IEquatable<UnionSlotModel>
     internal readonly int Recording;
 
     /// <summary>Captures one slot.</summary>
+    /// <param name="suffix">The suffix supplied to <c>UnionSlotModel</c>.</param>
+    /// <param name="profile">The compiled serialization profile or its generated type name.</param>
+    /// <param name="identity">The identity supplied to <c>UnionSlotModel</c>.</param>
+    /// <param name="encoding">The encoding supplied to <c>UnionSlotModel</c>.</param>
+    /// <param name="recording">The recording supplied to <c>UnionSlotModel</c>.</param>
     internal UnionSlotModel(string suffix, string profile, string identity, int encoding, int recording)
     {
         Recording = recording;
@@ -835,6 +949,28 @@ internal sealed class UnionModel : TypeModel
     internal readonly string StandardJson;
 
     /// <summary>Captures a Union root.</summary>
+    /// <param name="identity">The identity supplied to <c>UnionModel</c>.</param>
+    /// <param name="accessibility">The accessibility supplied to <c>UnionModel</c>.</param>
+    /// <param name="policy">The policy supplied to <c>UnionModel</c>.</param>
+    /// <param name="constraints">The constraints supplied to <c>UnionModel</c>.</param>
+    /// <param name="cases">The cases supplied to <c>UnionModel</c>.</param>
+    /// <param name="isInterface">Whether to enable is interface for this operation.</param>
+    /// <param name="wideTags">Whether to enable wide tags for this operation.</param>
+    /// <param name="unionSuffix">The union suffix supplied to <c>UnionModel</c>.</param>
+    /// <param name="tier">The tier supplied to <c>UnionModel</c>.</param>
+    /// <param name="tierCases">The tier cases supplied to <c>UnionModel</c>.</param>
+    /// <param name="tierSealed">The tier sealed supplied to <c>UnionModel</c>.</param>
+    /// <param name="cursor">Whether to enable cursor for this operation.</param>
+    /// <param name="readGeneric">Whether to enable read generic for this operation.</param>
+    /// <param name="chain">The chain supplied to <c>UnionModel</c>.</param>
+    /// <param name="namespace">The namespace supplied to <c>UnionModel</c>.</param>
+    /// <param name="binarySlots">The binary slots supplied to <c>UnionModel</c>.</param>
+    /// <param name="jsonSlots">The JSON slots supplied to <c>UnionModel</c>.</param>
+    /// <param name="canonical">Whether to enable canonical for this operation.</param>
+    /// <param name="standardBinary">The standard binary supplied to <c>UnionModel</c>.</param>
+    /// <param name="standardJson">The standard JSON supplied to <c>UnionModel</c>.</param>
+    /// <param name="referenced">Whether to enable referenced for this operation.</param>
+    /// <param name="rejection">The rejection supplied to <c>UnionModel</c>.</param>
     internal UnionModel(TypeIdentity identity, TypeAccessibility accessibility, WirePolicy policy, string[] constraints, UnionCaseModel[] cases,
         bool isInterface, bool wideTags, string unionSuffix, UnionDispatchTier tier, string[] tierCases, bool[] tierSealed, bool cursor,
         bool readGeneric, string[] chain, string? @namespace, UnionSlotModel[] binarySlots, UnionSlotModel[] jsonSlots, bool canonical,
@@ -880,6 +1016,11 @@ internal sealed class UnionModel : TypeModel
     /// <inheritdoc/>
     public override int GetHashCode() => Identity.GetHashCode();
 
+    /// <summary>Handles same for <c>UnionModel</c>.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T>
         => ReferenceEquals(left, right) || left.Length == right.Length && Enumerable.SequenceEqual(left, right);
 }
@@ -936,6 +1077,27 @@ internal sealed class CircleReferenceModel : TypeModel
     internal readonly bool RentByRef;
 
     /// <summary>Captures a reference-tracked node.</summary>
+    /// <param name="identity">The identity supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="accessibility">The accessibility supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="members">The members supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="policy">The policy supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="constraints">The constraints supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="guarded">Whether to enable guarded for this operation.</param>
+    /// <param name="derived">Whether to enable derived for this operation.</param>
+    /// <param name="rent">Whether to enable rent for this operation.</param>
+    /// <param name="selectedConstructor">Whether to enable selected constructor for this operation.</param>
+    /// <param name="callbacks">Whether to enable callbacks for this operation.</param>
+    /// <param name="fieldsInOrder">Whether to enable fields in order for this operation.</param>
+    /// <param name="mirrorFields">The mirror fields supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="mirrorOffsets">The mirror offsets supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="mirrorLayout">The mirror layout supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="slots">The slots supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="widths">The widths supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="construction">The construction supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="serializationCallbacks">The serialization callbacks supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="rentCall">The rent call supplied to <c>CircleReferenceModel</c>.</param>
+    /// <param name="rentByRef">Whether to enable rent by ref for this operation.</param>
+    /// <param name="mirrors">The mirrors supplied to <c>CircleReferenceModel</c>.</param>
     internal CircleReferenceModel(TypeIdentity identity, TypeAccessibility accessibility, MemberModel[] members, WirePolicy policy,
         string[] constraints, bool guarded, bool derived, bool rent, bool selectedConstructor, bool callbacks, bool fieldsInOrder,
         string[]? mirrorFields, int[]? mirrorOffsets, string? mirrorLayout, int[] slots, int[] widths,

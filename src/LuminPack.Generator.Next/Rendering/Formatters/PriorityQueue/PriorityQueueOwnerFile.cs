@@ -37,6 +37,7 @@ internal static class PriorityQueueOwnerFile
     }
 
     /// <summary>Writes mixed heap nodes with one room check per pair on recognized framework storage.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void WriteMixed(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -99,6 +100,8 @@ internal static class PriorityQueueOwnerFile
         w.Close();
     }
 
+    /// <summary>Handles read for <c>PriorityQueueOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;

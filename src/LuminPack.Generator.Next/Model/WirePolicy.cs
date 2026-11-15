@@ -57,6 +57,12 @@ internal sealed class StringProfile : IEquatable<StringProfile>
     internal readonly StringRecording Recording;
 
     /// <summary>Captures a wire profile.</summary>
+    /// <param name="format">The format supplied to <c>StringProfile</c>.</param>
+    /// <param name="precision">The precision supplied to <c>StringProfile</c>.</param>
+    /// <param name="depth">The current nesting depth.</param>
+    /// <param name="strict">Whether to enable strict for this operation.</param>
+    /// <param name="encoding">The encoding supplied to <c>StringProfile</c>.</param>
+    /// <param name="recording">The recording supplied to <c>StringProfile</c>.</param>
     internal StringProfile(char format, byte precision, int depth, bool strict, StringEncoding encoding, StringRecording recording)
     {
         Recording = recording;
@@ -107,6 +113,12 @@ internal sealed class WirePolicy : IEquatable<WirePolicy>
     internal readonly InputLimits Limits;
 
     /// <summary>Captures a wire policy.</summary>
+    /// <param name="input">The input to process.</param>
+    /// <param name="strings">The strings supplied to <c>WirePolicy</c>.</param>
+    /// <param name="bound">The bound supplied to <c>WirePolicy</c>.</param>
+    /// <param name="trackReferences">Whether to enable track references for this operation.</param>
+    /// <param name="declared">Whether to enable declared for this operation.</param>
+    /// <param name="limits">The limits supplied to <c>WirePolicy</c>.</param>
     internal WirePolicy(InputPolicy input, StringProfile strings, int? bound, bool trackReferences, bool declared = false,
         InputLimits? limits = null)
     {

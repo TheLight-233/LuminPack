@@ -118,6 +118,9 @@ internal static class CircleJsonEmitter
         }
     }
 
+    /// <summary>Handles helper for <c>CircleJsonEmitter</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting text.</returns>
     private static string Helper(PayloadRenderModel model) => "global::LuminPack.Generated." + model.Extension + "." + model.JsonHelper;
 
     /// <summary>Names the locals and exit labels of one JSON write method.</summary>
@@ -128,6 +131,8 @@ internal static class CircleJsonEmitter
         private int _labels;
 
         /// <summary>The next occurrence of a role local, dropping a trailing zero when its stem is still free.</summary>
+        /// <param name="canonical">The canonical supplied to <c>Next</c>.</param>
+        /// <returns>The resulting text.</returns>
         internal string Next(string canonical)
         {
             bool first = !_counts.ContainsKey(canonical);
@@ -148,9 +153,11 @@ internal static class CircleJsonEmitter
         }
 
         /// <summary>Reserves the placeholder of one inline object's exit label.</summary>
+        /// <returns>The resulting text.</returns>
         internal string Token() => "\u0004" + (_labels++).ToString(CultureInfo.InvariantCulture) + "\u0004";
 
         /// <summary>Numbers the exit labels in the order the finished body closes them.</summary>
+        /// <param name="body">The statements in the generated operation body.</param>
         internal static void Resolve(List<string> body)
         {
             var labels = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -184,6 +191,7 @@ internal static class CircleJsonEmitter
     /// <param name="expand">Whether a small reference member copies the child's write body.</param>
     /// <param name="exit">The placeholder an inline copy jumps to instead of returning, or null for a root.</param>
     /// <param name="stack">The record types whose write bodies are already copied into this method.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper, CircleJsonNames names, List<string> body,
         string inputName, bool expand, string exit = null, HashSet<string> stack = null)
     {
@@ -287,6 +295,8 @@ internal static class CircleJsonEmitter
     }
 
     /// <summary>Counts the calls of a record's JSON write body, which decide whether a parent copies it inline.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int WriteCalls(PayloadRenderModel model)
     {
         using var writer = new CodeWriter(-1);
@@ -295,6 +305,10 @@ internal static class CircleJsonEmitter
     }
 
     /// <summary>Builds the JSON read body of one record.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="helper">The helper supplied to <c>ReadBody</c>.</param>
+    /// <returns>The body.</returns>
     private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, string helper)
     {
         var members = model.Members;
@@ -434,11 +448,20 @@ internal static class CircleJsonEmitter
         string Reuse(RenderMember member) => (member.Mirrored ? "reuseLocal" : "value!") + "." + member.Name;
     }
 
+    /// <summary>Handles member for <c>CircleJsonEmitter</c>.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     private static string Member(RenderMember member) => JsonNames.MemberSuffix(member.Name);
 
+    /// <summary>Handles camel for <c>CircleJsonEmitter</c>.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>The resulting text.</returns>
     private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
 
     /// <summary>Writes the reference name tables, the lookups and the ordered-property reader.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="reads">Whether to enable reads for this operation.</param>
     private static void NameTables(PayloadRenderModel model, CodeWriter w, bool reads)
     {
         var members = model.Members;
@@ -498,6 +521,9 @@ internal static class CircleJsonEmitter
     }
 
     /// <summary>Writes a length switch for small tables or sparse length buckets, otherwise a hash switch.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="utf8">Whether to enable utf8 for this operation.</param>
     private static void Lookup(PayloadRenderModel model, CodeWriter w, bool utf8)
     {
         var candidates = model.Members.Select((member, index) => (Name: member.Name, Index: index, Table: (utf8 ? "Utf8." : "Utf16.") + Member(member)))

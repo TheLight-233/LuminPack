@@ -48,6 +48,8 @@ internal static class ConcurrentStackTextOwnerFile
         body.Add("}");
     }
 
+    /// <summary>Handles write for <c>ConcurrentStackTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         if (c.Payload != null || c.Forwarded)
@@ -61,6 +63,8 @@ internal static class ConcurrentStackTextOwnerFile
             c.W.Line(line);
     }
 
+    /// <summary>Handles read for <c>ConcurrentStackTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -75,6 +79,8 @@ internal static class ConcurrentStackTextOwnerFile
         c.PooledRead(() => w.Line("value.PushRange(pooled, 0, length);"));
     }
 
+    /// <summary>Handles before for <c>ConcurrentStackTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Before(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -86,6 +92,8 @@ internal static class ConcurrentStackTextOwnerFile
             w.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();");
     }
 
+    /// <summary>Handles after for <c>ConcurrentStackTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void After(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -107,5 +115,6 @@ internal static class ConcurrentStackTextOwnerFile
     }
 
     /// <summary>Publishes callback-bearing elements immediately and stages only certified framework values.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void JsonAdd(EnumerableOwnerContext c) => c.W.Line(c.Supports("StageConcurrentStack") ? "staged.Add(item);" : "value.Push(item);");
 }

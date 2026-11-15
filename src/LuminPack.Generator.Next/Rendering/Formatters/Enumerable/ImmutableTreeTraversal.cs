@@ -55,6 +55,9 @@ internal static class ImmutableTreeTraversal
     }
 
     // Lease emits this body only for a positive count on a pool rental of at least that length.
+    /// <summary>Handles items for <c>ImmutableTreeTraversal</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="consume">The action used to process consume.</param>
     internal static void Items(CodeWriter w, Action consume)
     {
         w.Line("int capturedIndex = 0;");

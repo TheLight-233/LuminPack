@@ -58,6 +58,8 @@ internal sealed class VersionSchema : IEquatable<VersionSchema>
     /// <param name="layout">The layout mirror name.</param>
     /// <param name="layoutFields">The layout mirror fields.</param>
     /// <param name="oldNames">The former names of each member.</param>
+    /// <param name="dynamic">Whether to enable dynamic for this operation.</param>
+    /// <param name="widths">The widths supplied to <c>VersionSchema</c>.</param>
     internal VersionSchema(string schema, byte[] metadata, byte[] prefix, string[] fieldEntries, string[] tempTypes, string[] typeNames,
         string[] qualifiedTypes, string layout, string[] layoutFields, string[][] oldNames, bool dynamic, int[] widths)
     {

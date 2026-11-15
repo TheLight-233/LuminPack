@@ -28,6 +28,8 @@ internal static partial class GeneratedSourceLayout
     }
 
     /// <summary>Names a helper class after its type without the <c>global</c> spelling and separators.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>The resulting text.</returns>
     private static string HelperName(string name)
     {
         string type = name.Substring("Json_".Length);
@@ -37,6 +39,10 @@ internal static partial class GeneratedSourceLayout
     }
 
     /// <summary>Splits one table field name into its nested class and member.</summary>
+    /// <param name="identifier">The identifier supplied to <c>TryJsonField</c>.</param>
+    /// <param name="table">Receives the table when the operation succeeds.</param>
+    /// <param name="member">Receives the member when the operation succeeds.</param>
+    /// <returns>Whether the operation succeeded.</returns>
     private static bool TryJsonField(string identifier, out string table, out string member)
     {
         var match = JsonField.Match(identifier);
@@ -59,6 +65,9 @@ internal static partial class GeneratedSourceLayout
     /// <summary>Renames the helpers and moves their table fields into nested classes.</summary>
     private sealed class JsonNameRewriter : CSharpSyntaxRewriter
     {
+        /// <summary>Visits class declaration.</summary>
+        /// <param name="node">The syntax node being inspected.</param>
+        /// <returns>The resulting <c>SyntaxNode</c>.</returns>
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
         {
             var visited = (ClassDeclarationSyntax)base.VisitClassDeclaration(node)!;
@@ -71,6 +80,9 @@ internal static partial class GeneratedSourceLayout
             return Group(visited);
         }
 
+        /// <summary>Visits member access expression.</summary>
+        /// <param name="node">The syntax node being inspected.</param>
+        /// <returns>The resulting <c>SyntaxNode</c>.</returns>
         public override SyntaxNode VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
         {
             var visited = (MemberAccessExpressionSyntax)base.VisitMemberAccessExpression(node)!;
@@ -81,6 +93,9 @@ internal static partial class GeneratedSourceLayout
             return visited;
         }
 
+        /// <summary>Visits generic name.</summary>
+        /// <param name="node">The syntax node being inspected.</param>
+        /// <returns>The resulting <c>SyntaxNode</c>.</returns>
         public override SyntaxNode VisitGenericName(GenericNameSyntax node)
         {
             var visited = (GenericNameSyntax)base.VisitGenericName(node)!;
@@ -89,6 +104,9 @@ internal static partial class GeneratedSourceLayout
                 : visited;
         }
 
+        /// <summary>Visits identifier name.</summary>
+        /// <param name="node">The syntax node being inspected.</param>
+        /// <returns>The resulting <c>SyntaxNode</c>.</returns>
         public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
         {
             if (IsHelper(node.Identifier.ValueText))
@@ -103,9 +121,13 @@ internal static partial class GeneratedSourceLayout
         }
 
         /// <summary>Recognizes a helper class name.</summary>
+        /// <param name="name">The name to look up or emit.</param>
+        /// <returns>Whether the input is helper.</returns>
         private static bool IsHelper(string name) => name.StartsWith(JsonHelper, StringComparison.Ordinal);
 
         /// <summary>Gets the rightmost name of a qualifier.</summary>
+        /// <param name="expression">The expression supplied to <c>Qualifier</c>.</param>
+        /// <returns>The resulting text.</returns>
         private static string Qualifier(ExpressionSyntax expression) => expression switch
         {
             MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
@@ -114,6 +136,8 @@ internal static partial class GeneratedSourceLayout
         };
 
         /// <summary>Moves table fields and properties into one nested class per table, placed where the first table field was.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>The resulting <c>ClassDeclarationSyntax</c>.</returns>
         private static ClassDeclarationSyntax Group(ClassDeclarationSyntax type)
         {
             var tables = new Dictionary<string, List<MemberDeclarationSyntax>>(StringComparer.Ordinal);

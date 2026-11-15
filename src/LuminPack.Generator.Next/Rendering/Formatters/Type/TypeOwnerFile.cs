@@ -15,6 +15,9 @@ internal static class TypeOwnerFile
         SpecialOwnerFile.Render(set, operations, "Type", "global::System.Type", true, BinaryWrite, BinaryRead, JsonWrite,
             JsonRead);
 
+    /// <summary>Handles binary write for <c>TypeOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value == null)");
@@ -34,6 +37,9 @@ internal static class TypeOwnerFile
         w.Line("writer.WriteTypeName<" + context.Profile + ">(full);");
     }
 
+    /// <summary>Handles binary read for <c>TypeOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (!reader.TryReadObjectHead())");
@@ -59,6 +65,9 @@ internal static class TypeOwnerFile
         w.Line("value = global::System.Type.GetType(typeName, throwOnError: true);");
     }
 
+    /// <summary>Handles JSON write for <c>TypeOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value == null)");
@@ -77,6 +86,9 @@ internal static class TypeOwnerFile
         w.Line("writer.WriteTypeName<" + context.Profile + ">(full);");
     }
 
+    /// <summary>Handles JSON read for <c>TypeOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (reader.IsNull())");

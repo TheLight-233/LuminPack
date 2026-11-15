@@ -100,6 +100,9 @@ internal sealed class InputRedirect
     }
 
     /// <summary>Registers a checked read and returns its generated method name.</summary>
+    /// <param name="target">The target of the operation.</param>
+    /// <param name="kind">The kind supplied to <c>Request</c>.</param>
+    /// <returns>The resulting text.</returns>
     internal string Request(string target, InputReadKind kind)
     {
         if (_requested.Add((target, kind)))
@@ -113,6 +116,8 @@ internal sealed class InputRedirect
     }
 
     /// <summary>Requests the exact case model with its Union payload framing.</summary>
+    /// <param name="payload">The payload supplied to <c>RequestUnionCase</c>.</param>
+    /// <returns>The resulting text.</returns>
     internal string RequestUnionCase(PayloadRenderModel payload)
     {
         (_unionCases ??= new Dictionary<string, PayloadRenderModel>(StringComparer.Ordinal))[payload.Readable] = payload;
@@ -120,9 +125,15 @@ internal sealed class InputRedirect
     }
 
     /// <summary>Returns the case model recorded when the Union switch requested the helper.</summary>
+    /// <param name="target">The target of the operation.</param>
+    /// <returns>The resulting <c>PayloadRenderModel</c>.</returns>
     internal PayloadRenderModel UnionCase(string target) => _unionCases[target];
 
     /// <summary>Applies the collection limit at the compressed child before its read can allocate.</summary>
+    /// <param name="line">The line supplied to <c>ApplyCompressedChild</c>.</param>
+    /// <param name="target">The target of the operation.</param>
+    /// <param name="policy">The policy supplied to <c>ApplyCompressedChild</c>.</param>
+    /// <returns>The resulting text.</returns>
     internal string ApplyCompressedChild(string line, string target, string policy)
     {
         const string operation = ".DeserializeWithCompress<";
@@ -376,6 +387,7 @@ internal static class InputReadRenderer
 
         /// <summary>Appends the checked read of a modeled payload.</summary>
         /// <param name="model">The payload with the root's input policy.</param>
+        /// <param name="kind">The kind supplied to <c>Emit</c>.</param>
         internal void Emit(PayloadRenderModel model, InputReadKind kind)
         {
             if (_writer == null)
@@ -568,6 +580,10 @@ internal static class InputReadRenderer
     /// <summary>One member declared directly in a root container.</summary>
     private sealed class Declaration
     {
+        /// <summary>Initializes a <c>Declaration</c> from the supplied data.</summary>
+        /// <param name="name">The name to look up or emit.</param>
+        /// <param name="isPrivate">Whether to enable is private for this operation.</param>
+        /// <param name="text">The text supplied to <c>Declaration</c>.</param>
         internal Declaration(string name, bool isPrivate, string text)
         {
             Name = name;

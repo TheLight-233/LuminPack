@@ -32,6 +32,8 @@ internal static class QueueOwnerFile
         c.W.Indented(() => c.W.Line("value.Clear();"));
     }
 
+    /// <summary>Handles write for <c>QueueOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         if (c.Text && c.Supports("WriteStringQueueStorage"))
@@ -51,6 +53,8 @@ internal static class QueueOwnerFile
             c.W.Line(line);
     }
 
+    /// <summary>Handles read for <c>QueueOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

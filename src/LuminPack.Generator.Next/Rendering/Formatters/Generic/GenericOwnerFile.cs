@@ -58,9 +58,18 @@ internal static class GenericOwnerFile
         }
     }
 
+    /// <summary>Handles owner for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="extension">The generated extension container name.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     internal static string Owner(string extension, string type) => "global::LuminPack." + GeneratedNames.Owner(extension, type);
 
     // Writes one item through the raw scalar store or the profile's string store.
+    /// <summary>Writes item.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="local">The local supplied to <c>WriteItem</c>.</param>
     internal static void WriteItem(CodeWriter w, SpecialOwnerContext c, string type, string local)
     {
         if (type == "string")
@@ -73,6 +82,11 @@ internal static class GenericOwnerFile
     }
 
     // Reads one item into an assignable local.
+    /// <summary>Reads item.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="local">The local supplied to <c>ReadItem</c>.</param>
     internal static void ReadItem(CodeWriter w, SpecialOwnerContext c, string type, string local)
     {
         if (type == "string")
@@ -81,9 +95,17 @@ internal static class GenericOwnerFile
             w.Line("reader.Read(ref global::System.Runtime.CompilerServices.Unsafe.As<" + type + ", byte>(ref " + local + "), global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + type + ">());");
     }
 
+    /// <summary>Handles declare for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="local">The local supplied to <c>Declare</c>.</param>
+    /// <returns>The resulting text.</returns>
     internal static string Declare(string type, string local) =>
         type == "string" ? "string? " + local + " = null;" : type + " " + local + " = default;";
 
+    /// <summary>Handles pair write for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
     private static void PairWrite(CodeWriter w, SpecialOwnerContext c, string[] args)
     {
         w.Line(args[0] + " key = value.Key;");
@@ -92,6 +114,11 @@ internal static class GenericOwnerFile
         WriteItem(w, c, args[1], "itemValue");
     }
 
+    /// <summary>Handles pair read for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="declared">The declared supplied to <c>PairRead</c>.</param>
     private static void PairRead(CodeWriter w, SpecialOwnerContext c, string[] args, string declared)
     {
         w.Line(Declare(args[0], "key"));
@@ -101,6 +128,11 @@ internal static class GenericOwnerFile
         w.Line("value = new " + declared + "(key" + (args[0] == "string" ? "!" : "") + ", itemValue" + (args[1] == "string" ? "!" : "") + ");");
     }
 
+    /// <summary>Handles pair JSON write for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="extension">The generated extension container name.</param>
     private static void PairJsonWrite(CodeWriter w, SpecialOwnerContext c, string[] args, string extension)
     {
         w.Line("writer.WriteArrayStart<" + c.Profile + ">();");
@@ -114,6 +146,12 @@ internal static class GenericOwnerFile
         w.Line("writer.WriteArrayEnd<" + c.Profile + ">();");
     }
 
+    /// <summary>Handles pair JSON read for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="declared">The declared supplied to <c>PairJsonRead</c>.</param>
+    /// <param name="extension">The generated extension container name.</param>
     private static void PairJsonRead(CodeWriter w, SpecialOwnerContext c, string[] args, string declared, string extension)
     {
         w.Line("reader.TryConsumeArrayStart<" + c.Profile + ">();");
@@ -130,6 +168,12 @@ internal static class GenericOwnerFile
     }
 
     // A nullable or lazy value: the null object header, or a memberless object header and the value.
+    /// <summary>Handles value write for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="present">The present supplied to <c>ValueWrite</c>.</param>
+    /// <param name="access">The access supplied to <c>ValueWrite</c>.</param>
     private static void ValueWrite(CodeWriter w, SpecialOwnerContext c, string type, string present, string access)
     {
         w.Line("if (!(" + present + "))");
@@ -143,6 +187,13 @@ internal static class GenericOwnerFile
         WriteItem(w, c, type, "item");
     }
 
+    /// <summary>Handles value read for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="assign">The assign supplied to <c>ValueRead</c>.</param>
+    /// <param name="none">The none supplied to <c>ValueRead</c>.</param>
+    /// <param name="unused">The unused supplied to <c>ValueRead</c>.</param>
     private static void ValueRead(CodeWriter w, SpecialOwnerContext c, string type, string assign, string none, string? unused)
     {
         w.Line("if (!reader.TryReadObjectHead())");
@@ -156,6 +207,14 @@ internal static class GenericOwnerFile
         w.Line(type == "string" ? assign.Replace("(item)", "(item!)").Replace("= item;", "= item!;") : assign);
     }
 
+    /// <summary>Handles value JSON write for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="absent">The absent supplied to <c>ValueJsonWrite</c>.</param>
+    /// <param name="access">The access supplied to <c>ValueJsonWrite</c>.</param>
+    /// <param name="extension">The generated extension container name.</param>
+    /// <param name="lazy">Whether to enable lazy for this operation.</param>
     private static void ValueJsonWrite(CodeWriter w, SpecialOwnerContext c, string type, string absent, string access, string extension,
         bool lazy)
     {
@@ -176,6 +235,14 @@ internal static class GenericOwnerFile
             w.Line("writer.WriteObjectEnd<" + c.Profile + ">();");
     }
 
+    /// <summary>Handles value JSON read for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="none">The none supplied to <c>ValueJsonRead</c>.</param>
+    /// <param name="assign">The assign supplied to <c>ValueJsonRead</c>.</param>
+    /// <param name="seed">The deterministic seed for constructing the fixture data.</param>
+    /// <param name="extension">The generated extension container name.</param>
     private static void ValueJsonRead(CodeWriter w, SpecialOwnerContext c, string type, string none, string assign, string seed,
         string extension)
     {
@@ -190,6 +257,12 @@ internal static class GenericOwnerFile
         w.Line(assign);
     }
 
+    /// <summary>Handles lazy JSON read for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="declared">The declared supplied to <c>LazyJsonRead</c>.</param>
+    /// <param name="extension">The generated extension container name.</param>
     private static void LazyJsonRead(CodeWriter w, SpecialOwnerContext c, string type, string declared, string extension)
     {
         w.Line("if (reader.IsNull())");
@@ -247,8 +320,16 @@ internal static class GenericOwnerFile
         w.Close();
     }
 
+    /// <summary>Handles item name for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="index">The zero-based item index.</param>
+    /// <returns>The resulting text.</returns>
     private static string ItemName(int index) => "Item" + (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>Handles tuple write for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="reference">Whether to enable reference for this operation.</param>
     private static void TupleWrite(CodeWriter w, SpecialOwnerContext c, string[] args, bool reference)
     {
         if (reference)
@@ -268,6 +349,12 @@ internal static class GenericOwnerFile
         }
     }
 
+    /// <summary>Handles tuple read for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="declared">The declared supplied to <c>TupleRead</c>.</param>
+    /// <param name="reference">Whether to enable reference for this operation.</param>
     private static void TupleRead(CodeWriter w, SpecialOwnerContext c, string[] args, string declared, bool reference)
     {
         if (reference)
@@ -287,6 +374,9 @@ internal static class GenericOwnerFile
         w.Line("value = new " + declared + "(" + Items(args) + ");");
     }
 
+    /// <summary>Handles items for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The resulting text.</returns>
     private static string Items(string[] args)
     {
         var items = new string[args.Length];
@@ -295,6 +385,12 @@ internal static class GenericOwnerFile
         return string.Join(", ", items);
     }
 
+    /// <summary>Handles tuple JSON write for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="reference">Whether to enable reference for this operation.</param>
+    /// <param name="extension">The generated extension container name.</param>
     private static void TupleJsonWrite(CodeWriter w, SpecialOwnerContext c, string[] args, bool reference, string extension)
     {
         if (reference)
@@ -318,6 +414,13 @@ internal static class GenericOwnerFile
         w.Line("writer.WriteArrayEnd<" + c.Profile + ">();");
     }
 
+    /// <summary>Handles tuple JSON read for <c>GenericOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="declared">The declared supplied to <c>TupleJsonRead</c>.</param>
+    /// <param name="reference">Whether to enable reference for this operation.</param>
+    /// <param name="extension">The generated extension container name.</param>
     private static void TupleJsonRead(CodeWriter w, SpecialOwnerContext c, string[] args, string declared, bool reference, string extension)
     {
         if (reference)

@@ -54,12 +54,18 @@ internal static class PublicationLayout
     internal static int AllAliases => (1 << Aliases.Length) - 1;
 
     /// <summary>Gets an alias name.</summary>
+    /// <param name="index">The zero-based item index.</param>
+    /// <returns>The resulting text.</returns>
     internal static string AliasName(int index) => Aliases[index].Alias;
 
     /// <summary>Gets an alias's fully qualified target.</summary>
+    /// <param name="index">The zero-based item index.</param>
+    /// <returns>The resulting text.</returns>
     internal static string AliasTarget(int index) => Aliases[index].Target;
 
     /// <summary>Whether a name is a known alias.</summary>
+    /// <param name="alias">The alias supplied to <c>IsAlias</c>.</param>
+    /// <returns>Whether the input is alias.</returns>
     internal static bool IsAlias(string alias)
     {
         foreach (var entry in Aliases)
@@ -69,6 +75,8 @@ internal static class PublicationLayout
     }
 
     /// <summary>Finds an alias by its name.</summary>
+    /// <param name="alias">The alias supplied to <c>AliasIndex</c>.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     internal static int AliasIndex(string alias)
     {
         for (int index = 0; index < Aliases.Length; index++)

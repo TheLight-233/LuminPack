@@ -15,6 +15,9 @@ internal static class BigIntegerOwnerFile
         SpecialOwnerFile.Render(set, operations, "BigInteger", "global::System.Numerics.BigInteger", false, BinaryWrite,
             (w, c) => BinaryRead(w, c, set), (w, c) => JsonWrite(w, c, set), (w, c) => JsonRead(w, c, set));
 
+    /// <summary>Handles binary write for <c>BigIntegerOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("#if !UNITY_2021_2_OR_NEWER");
@@ -30,6 +33,10 @@ internal static class BigIntegerOwnerFile
         w.Line("#endif");
     }
 
+    /// <summary>Handles binary read for <c>BigIntegerOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
         w.Line("if (!reader.TryReadCollectionHead(out int length))");
@@ -46,6 +53,10 @@ internal static class BigIntegerOwnerFile
         w.Line("reader.Advance(length);");
     }
 
+    /// <summary>Handles JSON write for <c>BigIntegerOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
         w.Line(set.FindFormatter("global::System.Numerics.BigInteger")?.Supports("CanWriteJsonBigInteger") == true ?
@@ -53,6 +64,10 @@ internal static class BigIntegerOwnerFile
             "writer.Write<" + context.Profile + ">(value.ToString(global::System.Globalization.CultureInfo.InvariantCulture));");
     }
 
+    /// <summary>Handles JSON read for <c>BigIntegerOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
         if (set.FindFormatter("global::System.Numerics.BigInteger")?.Supports("CanReadJsonBigInteger") == true)

@@ -19,6 +19,8 @@ internal static class LinkedListOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec, nonEmptyRawHeaderBytes: sizeof(int));
 
+    /// <summary>Handles write for <c>LinkedListOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -80,6 +82,8 @@ internal static class LinkedListOwnerFile
         w.Line("operationState.CheckBuffer();");
     }
 
+    /// <summary>Handles read for <c>LinkedListOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

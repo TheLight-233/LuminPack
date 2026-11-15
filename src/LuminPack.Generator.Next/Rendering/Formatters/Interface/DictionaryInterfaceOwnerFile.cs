@@ -42,6 +42,8 @@ internal static class DictionaryInterfaceOwnerFile
         ImmutableBuilderLifetime.End(c.W, "Dictionary", c.Supports("ImmutableBuilder"), "staged");
     }
 
+    /// <summary>Writes immutable.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void WriteImmutable(PairedDictionaryContext c)
     {
         Write("ImmutableDictionary", "CopyImmutableHashTree");
@@ -249,6 +251,8 @@ internal static class DictionaryInterfaceOwnerFile
         }
     }
 
+    /// <summary>Reads mutable.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void ReadMutable(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -260,6 +264,8 @@ internal static class DictionaryInterfaceOwnerFile
         w.Line("value = dictionary;");
     }
 
+    /// <summary>Reads immutable.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void ReadImmutable(PairedDictionaryContext c)
     {
         var w = c.W;

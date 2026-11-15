@@ -56,6 +56,11 @@ internal sealed class RenderCollection : IEquatable<RenderCollection>
     internal readonly string EntryType;
 
     /// <summary>Captures a collection's entry shape.</summary>
+    /// <param name="keyType">The type of the key.</param>
+    /// <param name="valueType">The type of the value.</param>
+    /// <param name="valueText">Whether to enable value text for this operation.</param>
+    /// <param name="itemType">The type of the item.</param>
+    /// <param name="entryType">The type of the entry.</param>
     internal RenderCollection(string keyType, string valueType, bool valueText, string itemType = null, string entryType = null)
     {
         EntryType = entryType;
@@ -95,6 +100,13 @@ internal sealed class RenderDictionary : IEquatable<RenderDictionary>
     internal readonly string Formatter;
 
     /// <summary>Captures a dictionary's entry shape.</summary>
+    /// <param name="pair">Whether to enable pair for this operation.</param>
+    /// <param name="keyText">Whether to enable key text for this operation.</param>
+    /// <param name="valueText">Whether to enable value text for this operation.</param>
+    /// <param name="keyType">The type of the key.</param>
+    /// <param name="valueType">The type of the value.</param>
+    /// <param name="typeName">The source-ready name of the type.</param>
+    /// <param name="formatter">The formatter supplied to <c>RenderDictionary</c>.</param>
     internal RenderDictionary(bool pair, bool keyText, bool valueText, string keyType, string valueType, string typeName, string formatter)
     {
         Pair = pair;
@@ -180,6 +192,31 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     internal readonly SequenceFormatter Sequence;
 
     /// <summary>Captures one member.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="kind">The kind supplied to <c>RenderMember</c>.</param>
+    /// <param name="scalar">The scalar supplied to <c>RenderMember</c>.</param>
+    /// <param name="typeName">The source-ready name of the type.</param>
+    /// <param name="size">The requested size.</param>
+    /// <param name="formatter">The formatter supplied to <c>RenderMember</c>.</param>
+    /// <param name="fieldType">The type of the field.</param>
+    /// <param name="mirrored">Whether to enable mirrored for this operation.</param>
+    /// <param name="underlying">The underlying supplied to <c>RenderMember</c>.</param>
+    /// <param name="raw">Whether to enable raw for this operation.</param>
+    /// <param name="builtin">Whether to enable builtin for this operation.</param>
+    /// <param name="nested">The nested supplied to <c>RenderMember</c>.</param>
+    /// <param name="formatterCall">Whether to enable formatter call for this operation.</param>
+    /// <param name="property">Whether to enable property for this operation.</param>
+    /// <param name="dictionary">The dictionary supplied to <c>RenderMember</c>.</param>
+    /// <param name="collection">The collection supplied to <c>RenderMember</c>.</param>
+    /// <param name="valueTypeParameter">Whether to enable value type parameter for this operation.</param>
+    /// <param name="bareParameter">Whether to enable bare parameter for this operation.</param>
+    /// <param name="nullObjectGuard">Whether to enable null object guard for this operation.</param>
+    /// <param name="referencePayload">Whether to enable reference payload for this operation.</param>
+    /// <param name="scopeProfile">The scope profile supplied to <c>RenderMember</c>.</param>
+    /// <param name="sequence">The sequence supplied to <c>RenderMember</c>.</param>
+    /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
+    /// <param name="seedExisting">Whether to enable seed existing for this operation.</param>
+    /// <param name="reservableArray">Whether to enable reservable array for this operation.</param>
     internal RenderMember(string name, RenderMemberKind kind, string scalar, string typeName, int size, string formatter, ScalarKind fieldType,
         bool mirrored, string underlying = null, bool raw = false, bool builtin = false, PayloadRenderModel nested = null, bool formatterCall = false,
         bool property = false, RenderDictionary dictionary = null, RenderCollection collection = null, bool valueTypeParameter = false,
@@ -216,11 +253,6 @@ internal sealed class RenderMember : IEquatable<RenderMember>
     /// <summary>Marks the owner spelling of a compressed member, which the source writer resolves per file.</summary>
     internal const char CompressedOwner = '\u0002';
 
-    /// <summary>Projects a compressed collection member onto an opaque owner call.</summary>
-    /// <param name="owner">The collection's generated owner.</param>
-    /// <returns>A member the emitters treat as a framework member: never merged into fixed runs or inline collection bodies.</returns>
-    /// <remarks>Its binary calls become the owner's <c>WriteValueWithCompress</c> and <c>ReadValueWithCompress</c> extensions, as
-    /// the original record writes them; its JSON calls keep the ordinary owner.</remarks>
     /// <summary>The owner a binary member write or read calls.</summary>
     internal string BinaryFormatter => Formatter;
 
@@ -237,6 +269,10 @@ internal sealed class RenderMember : IEquatable<RenderMember>
         return copy;
     }
 
+    /// <summary>Projects a compressed collection member onto an opaque owner call.</summary>
+    /// <param name="owner">The collection's generated owner.</param>
+    /// <returns>A member kept outside fixed runs and inline collection bodies.</returns>
+    /// <remarks>Binary uses the owner's compression extensions. JSON keeps the ordinary owner.</remarks>
     internal RenderMember Compressed(string owner) => new RenderMember(Name, RenderMemberKind.Special, Scalar, TypeName, Size,
         owner + CompressedOwner, FieldType, Mirrored, Underlying, raw: false, builtin: false, nested: null, formatterCall: false, Property,
         dictionary: null, collection: null, ValueTypeParameter, BareParameter, NullObjectGuard, referencePayload: true, ScopeProfile,
@@ -324,10 +360,14 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly PortableView PortableView;
     /// <summary>Whether a member is written in place instead of entering a reservation: an inline object, a string list or a
     /// list whose elements expand their record body in the loop.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input satisfies the inline block check.</returns>
     private static bool InlineBlock(RenderMember member) => member.Kind == RenderMemberKind.Object && !member.Nested.MemberWrite ||
         member.Kind == RenderMemberKind.List && (member.Scalar == "string" || member.Nested != null);
     /// <summary>Whether a member is a write segment of its own: an inline object, a string list, a formatter-call array or a
     /// collection that writes through the writer in place.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input satisfies the segment check.</returns>
     private static bool Segment(RenderMember member) => member.Kind == RenderMemberKind.Object || InlineBlock(member) ||
         member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.SortedList or
@@ -548,6 +588,74 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         return copy;
     }
 
+    /// <summary>Initializes a <c>PayloadRenderModel</c> from the supplied data.</summary>
+    /// <param name="globalName">The name of the global.</param>
+    /// <param name="readable">The readable supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="extension">The generated extension container name.</param>
+    /// <param name="jsonHelper">The JSON helper supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="freshResult">Whether to enable fresh result for this operation.</param>
+    /// <param name="uniqueEntries">Whether to enable unique entries for this operation.</param>
+    /// <param name="members">The members supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="proven">Whether to enable proven for this operation.</param>
+    /// <param name="mirror">The mirror supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="mirrorFields">The mirror fields supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="derived">Whether to enable derived for this operation.</param>
+    /// <param name="isStruct">Whether to enable is struct for this operation.</param>
+    /// <param name="view">The view supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="viewElided">Whether to enable view elided for this operation.</param>
+    /// <param name="fixedUnionCase">Whether to enable fixed union case for this operation.</param>
+    /// <param name="measureRecord">Whether to enable measure record for this operation.</param>
+    /// <param name="constructorArguments">The constructor arguments supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="constructorMembers">The constructor members supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="memberWrite">Whether to enable member write for this operation.</param>
+    /// <param name="net8">Whether to enable net8 for this operation.</param>
+    /// <param name="utf8Literals">Whether to enable utf8 literals for this operation.</param>
+    /// <param name="version">The version supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="referencePayload">Whether to enable reference payload for this operation.</param>
+    /// <param name="layoutAttribute">The layout attribute supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="rent">The rent supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="writeBefore">The write before supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="writeAfter">The write after supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="readBefore">The read before supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="readAfter">The read after supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="declaredOrder">The declared order supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="bounded">The bounded supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionRoot">Whether to enable union root for this operation.</param>
+    /// <param name="unionInterface">Whether to enable union interface for this operation.</param>
+    /// <param name="unionSuffix">The union suffix supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionCases">The union cases supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionCursor">Whether to enable union cursor for this operation.</param>
+    /// <param name="unionReadGeneric">Whether to enable union read generic for this operation.</param>
+    /// <param name="unionChain">The union chain supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionNamespace">The union namespace supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionReferenced">Whether to enable union referenced for this operation.</param>
+    /// <param name="unionBinarySlots">The union binary slots supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionJsonSlots">The union JSON slots supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionCanonical">Whether to enable union canonical for this operation.</param>
+    /// <param name="unionStandardBinary">The union standard binary supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionStandardJson">The union standard JSON supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionTier">The union tier supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionTierCases">The union tier cases supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionTierSealed">The union tier sealed supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="circle">Whether to enable circle for this operation.</param>
+    /// <param name="circleGuarded">Whether to enable circle guarded for this operation.</param>
+    /// <param name="managedStruct">Whether to enable managed struct for this operation.</param>
+    /// <param name="portableView">The portable view supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="unionWide">Whether to enable union wide for this operation.</param>
+    /// <param name="mirrorOffsets">The mirror offsets supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="typeParameters">The type parameters supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="typeConstraints">The type constraints supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="trusted">Whether to enable trusted for this operation.</param>
+    /// <param name="declaredProfile">The declared profile supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="rentByRef">Whether to enable rent by ref for this operation.</param>
+    /// <param name="constantSpans">Whether to enable constant spans for this operation.</param>
+    /// <param name="circleSlots">The circle slots supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="circleWidths">The circle widths supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="mirrors">The mirrors supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="rejection">The rejection supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="limits">The limits supplied to <c>PayloadRenderModel</c>.</param>
+    /// <param name="recursive">Whether to enable recursive for this operation.</param>
+    /// <param name="registration">Whether to enable registration for this operation.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -667,6 +775,11 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <inheritdoc/>
     public override bool Equals(object obj) => Equals(obj as PayloadRenderModel);
 
+    /// <summary>Handles same for <c>PayloadRenderModel</c>.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same<T>(T[] left, T[] right) where T : IEquatable<T> => left == null ? right == null : right != null && left.SequenceEqual(right);
 
     /// <inheritdoc/>

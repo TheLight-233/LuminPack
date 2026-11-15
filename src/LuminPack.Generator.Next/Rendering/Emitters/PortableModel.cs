@@ -17,6 +17,10 @@ internal sealed class PortableLeaf : IEquatable<PortableLeaf>
     internal readonly bool Volatile;
 
     /// <summary>Captures one scalar transfer.</summary>
+    /// <param name="access">The access supplied to <c>PortableLeaf</c>.</param>
+    /// <param name="scalar">The scalar supplied to <c>PortableLeaf</c>.</param>
+    /// <param name="size">The requested size.</param>
+    /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
     internal PortableLeaf(string access, string scalar, int size, bool isVolatile)
     {
         Volatile = isVolatile;
@@ -51,6 +55,11 @@ internal sealed class PortableViewField : IEquatable<PortableViewField>
     internal readonly PortableLeaf[] Leaves;
 
     /// <summary>Captures one view field.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="isVolatile">Whether to enable is volatile for this operation.</param>
+    /// <param name="offset">The offset into the current buffer or input.</param>
+    /// <param name="leaves">The leaves supplied to <c>PortableViewField</c>.</param>
     internal PortableViewField(string name, string type, bool isVolatile, int offset, PortableLeaf[] leaves)
     {
         Offset = offset;
@@ -84,6 +93,8 @@ internal sealed class PortableView : IEquatable<PortableView>
     internal readonly int WireSize;
 
     /// <summary>Captures one view.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="fields">The fields supplied to <c>PortableView</c>.</param>
     internal PortableView(string name, PortableViewField[] fields)
     {
         Name = name;

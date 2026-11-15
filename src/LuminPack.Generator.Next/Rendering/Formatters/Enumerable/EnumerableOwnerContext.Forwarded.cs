@@ -8,9 +8,12 @@ internal sealed partial class EnumerableOwnerContext
     private const string PackMarshal = "global::LuminPack.Code.LuminPackMarshal";
 
     /// <summary>Finds a concrete record that the legacy exact List writer can reserve and write together.</summary>
+    /// <returns>The resulting <c>PayloadRenderModel</c>, or null when unavailable.</returns>
     internal PayloadRenderModel? ReservableListElement() => FormatterElementEmitter.ReservableCollectionElement(_set, _element);
 
     /// <summary>Writes an exact framework List with the legacy counted span and record reservation.</summary>
+    /// <param name="list">The list supplied to <c>WriteReservedList</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
     internal void WriteReservedList(string list, PayloadRenderModel element)
     {
         W.Line("var items = " + PackMarshal + ".GetListSpan(" + list + ");");

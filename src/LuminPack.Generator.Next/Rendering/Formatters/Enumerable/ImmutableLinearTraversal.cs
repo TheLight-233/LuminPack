@@ -126,6 +126,9 @@ internal static class ImmutableLinearTraversal
         void EmitElement() => JsonSequenceElementWriter.Emit(w, set, c.Sequence, c.Scalar, owner, "output", "firstElement", utf8Only: true);
     }
 
+    /// <summary>Emits lease.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="consume">The action used to process consume.</param>
     private static void EmitLease(EnumerableOwnerContext c, Action consume)
     {
         var w = c.W;
@@ -143,6 +146,9 @@ internal static class ImmutableLinearTraversal
     }
 
     // The reversal helper is called only for an uncached back stack with at least two elements.
+    /// <summary>Emits items.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="consume">The action used to process consume.</param>
     private static void EmitItems(EnumerableOwnerContext c, Action consume)
     {
         var w = c.W;

@@ -54,6 +54,9 @@ internal static class ParallelDictionaryWrite
     }
 
     /// <summary>Writes a nonempty range, preserving the key-before-value load on writer growth.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="count">The number of items to process.</param>
+    /// <param name="allowMixed">Whether to enable allow mixed for this operation.</param>
     internal static void Emit(PairedDictionaryContext c, string count, bool allowMixed = true)
     {
         var w = c.W;

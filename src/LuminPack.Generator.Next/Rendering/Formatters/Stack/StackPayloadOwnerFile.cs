@@ -39,6 +39,8 @@ internal static class StackPayloadOwnerFile
         c.StackPayloadWrite("value", false);
     }
 
+    /// <summary>Handles read for <c>StackPayloadOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -69,9 +71,13 @@ internal static class StackPayloadOwnerFile
         });
     }
 
+    /// <summary>Handles before for <c>StackPayloadOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Before(EnumerableOwnerContext c)
         => c.W.Line("var staged = new global::System.Collections.Generic.List<" + c.Scalar + ">();");
 
+    /// <summary>Handles after for <c>StackPayloadOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void After(EnumerableOwnerContext c)
     {
         var w = c.W;

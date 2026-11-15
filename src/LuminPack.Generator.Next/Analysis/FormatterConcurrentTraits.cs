@@ -23,6 +23,9 @@ internal static class FormatterConcurrentTraits
     }
 
     /// <summary>Checks the closed dictionary's nonthrowing layout probe.</summary>
+    /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+    /// <param name="dictionary">The dictionary supplied to <c>HasDictionaryView</c>.</param>
+    /// <returns>Whether the input has dictionary view.</returns>
     internal static bool HasDictionaryView(Compilation compilation, INamedTypeSymbol dictionary)
     {
         var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal");

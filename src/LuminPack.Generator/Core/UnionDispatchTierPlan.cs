@@ -194,9 +194,15 @@ internal sealed class UnionDispatchTierPlan
     internal static string ClosureGuard(Compilation compilation, MetaInfo metadata = null) =>
         CanCallDirect(metadata ?? CreateMetadata(compilation)) ? GetClosure(compilation).Guard : string.Empty;
 
+    /// <summary>Handles can call direct for <c>UnionDispatchTierPlan</c>.</summary>
+    /// <param name="metadata">The metadata supplied to <c>CanCallDirect</c>.</param>
+    /// <returns>Whether the operation can call direct.</returns>
     private static bool CanCallDirect(MetaInfo metadata) =>
         metadata.IsNet8 && metadata.RegisterMode == LuminPackRegisterMode.Disabled;
 
+    /// <summary>Gets closure.</summary>
+    /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+    /// <returns>The closure.</returns>
     private static SourceClosure GetClosure(Compilation compilation) =>
         Closures.GetValue(compilation, static current => new SourceClosure(current));
 
@@ -206,6 +212,8 @@ internal sealed class UnionDispatchTierPlan
         internal readonly HashSet<INamedTypeSymbol> MultipleDescendants = new(SymbolEqualityComparer.Default);
         internal readonly string Guard;
 
+        /// <summary>Initializes a <c>SourceClosure</c> from the supplied data.</summary>
+        /// <param name="compilation">The compilation that supplies source symbols and references.</param>
         internal SourceClosure(Compilation compilation)
         {
             var analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);

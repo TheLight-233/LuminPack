@@ -23,6 +23,8 @@ internal static class ObservableCollectionOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles read for <c>ObservableCollectionOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

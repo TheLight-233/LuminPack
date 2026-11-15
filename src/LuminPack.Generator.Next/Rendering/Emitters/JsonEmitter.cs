@@ -175,9 +175,13 @@ internal static class JsonEmitter
     }
 
     /// <summary>Spells a member's table entry, as the JSON name layout does.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     private static string Member(RenderMember member) => JsonNames.MemberSuffix(member.Name);
 
     /// <summary>Encodes a little-endian 64-bit word of a literal's first or last eight bytes.</summary>
+    /// <param name="bytes">The bytes supplied to <c>Words</c>.</param>
+    /// <returns>The resulting <c>(string First, string Last)</c>.</returns>
     private static (string First, string Last) Words(byte[] bytes)
     {
         ulong first = 0, last = 0;
@@ -190,6 +194,9 @@ internal static class JsonEmitter
     }
 
     /// <summary>The complete property head of a member, including its leading brace or separator.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <returns>The resulting text.</returns>
     private static string Head(PayloadRenderModel model, int index) => (index == 0 ? "{" : ",") + "\"" + model.Members[index].Name + "\":";
 
     /// <summary>Names the locals and exit labels of one JSON write method.</summary>
@@ -201,6 +208,8 @@ internal static class JsonEmitter
         private int _tokens;
 
         /// <summary>The next occurrence of a role-named local.</summary>
+        /// <param name="role">The role supplied to <c>Next</c>.</param>
+        /// <returns>The resulting text.</returns>
         internal string Next(string role)
         {
             int count = _counts.TryGetValue(role, out int seen) ? seen + 1 : 1;
@@ -209,10 +218,12 @@ internal static class JsonEmitter
         }
 
         /// <summary>Reserves the placeholder of one inline object's exit label.</summary>
+        /// <returns>The resulting text.</returns>
         internal string Token() => "\u0004" + (_tokens++).ToString(CultureInfo.InvariantCulture) + "\u0004";
 
         /// <summary>Numbers the exit labels in the order the finished body closes them, which is the post-order the original
         /// inline expansion numbers them in, and replaces their placeholders.</summary>
+        /// <param name="body">The statements in the generated operation body.</param>
         internal static void Resolve(List<string> body)
         {
             var labels = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -245,6 +256,7 @@ internal static class JsonEmitter
     /// formatter; the inline budget of the original pipeline is measured on the copy that keeps the call.</param>
     /// <param name="inputName">The already named input parameter of an inline object copy, or null.</param>
     /// <param name="exit">The placeholder an inline object copy jumps to instead of returning, or null for a root.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper, JsonTable names = null, bool expand = true,
         string inputName = null, string exit = null)
     {
@@ -402,6 +414,11 @@ internal static class JsonEmitter
 
     /// <summary>Copies a declared struct member's write body in place: a struct value is read-only, has no null branch and
     /// needs no exit label.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>ExpandStruct</c>.</param>
     private static void ExpandStruct(List<string> body, RenderMember member, string owner, CodeWriter w, JsonTable names)
     {
         string temp = names.Next("temp");
@@ -414,6 +431,11 @@ internal static class JsonEmitter
 
     /// <summary>Copies an inline object's write body into its parent's method, renaming its locals and turning its return into a
     /// jump to a label placed where the copy closes.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>Expand</c>.</param>
     private static void Expand(List<string> body, RenderMember member, string owner, CodeWriter w, JsonTable names)
     {
         string temp = names.Next("temp"), input = names.Next("input"), token = names.Token();
@@ -428,6 +450,8 @@ internal static class JsonEmitter
     }
 
     /// <summary>Lists the former names of the members, in member order, as the original name tables number them.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>IEnumerable&lt;(string Name, int Index, string Suffix)&gt;</c>.</returns>
     private static IEnumerable<(string Name, int Index, string Suffix)> OldNames(PayloadRenderModel model)
     {
         if (model.Version == null)
@@ -439,10 +463,14 @@ internal static class JsonEmitter
 
     /// <summary>The reused value's member access: a struct read through its selected constructor reaches it without the
     /// null-forgiving operator.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting text.</returns>
     private static string Value(PayloadRenderModel model) => model.IsStruct ? "value." : "value!.";
 
     /// <summary>Counts the calls of a type's JSON write body, which decide whether a containing operation copies it inline: a body
     /// of more than sixteen calls stays behind its formatter's call.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     internal static int WriteCalls(PayloadRenderModel model)
     {
         using var writer = new CodeWriter(-1);
@@ -452,6 +480,11 @@ internal static class JsonEmitter
     /// <summary>Writes a property head as a generated literal when it spans eight to sixteen bytes on .NET 8 or later, otherwise as
     /// its raw span.</summary>
     /// <returns>Whether the head was written as a braced block.</returns>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="head">The head supplied to <c>Literal</c>.</param>
+    /// <param name="raw">The raw supplied to <c>Literal</c>.</param>
+    /// <param name="utf8">Whether to enable utf8 for this operation.</param>
     private static bool Literal(PayloadRenderModel model, List<string> body, string head, string raw, bool utf8)
     {
         byte[] bytes = (utf8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(head);
@@ -471,6 +504,9 @@ internal static class JsonEmitter
     }
 
     /// <summary>Builds the JSON read body.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="helper">The helper supplied to <c>ReadBody</c>.</param>
     private static void ReadBody(PayloadRenderModel model, CodeWriter w, string helper)
     {
         var members = model.Members;
@@ -745,9 +781,13 @@ internal static class JsonEmitter
     }
 
     /// <summary>Lower-cases the first character, as role-named generated locals are spelled.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>The resulting text.</returns>
     private static string Camel(string name) => PayloadEmitter.LocalName(name);
 
     /// <summary>Writes body lines: an empty string is a blank line, braces open and close blocks, and a tab indents one line.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
     internal static void Lines(CodeWriter w, List<string> body)
     {
         foreach (string line in body)
@@ -891,6 +931,9 @@ internal static class JsonEmitter
     }
 
     /// <summary>Writes a length switch for small tables or sparse length buckets, otherwise a hash switch.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="utf8">Whether to enable utf8 for this operation.</param>
     private static void Lookup(PayloadRenderModel model, CodeWriter w, bool utf8)
     {
         var members = model.Members;

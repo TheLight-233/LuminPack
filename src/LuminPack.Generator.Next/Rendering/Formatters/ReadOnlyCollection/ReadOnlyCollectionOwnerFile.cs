@@ -19,6 +19,8 @@ internal static class ReadOnlyCollectionOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec, inlineRawRead: true);
 
+    /// <summary>Handles read for <c>ReadOnlyCollectionOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

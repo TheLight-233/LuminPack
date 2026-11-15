@@ -607,11 +607,19 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells an unaligned cursor position; a plain spelling was already short in the template and registers no alias.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="cursor">The cursor supplied to <c>At</c>.</param>
+    /// <param name="offset">The offset into the current buffer or input.</param>
+    /// <param name="plain">Whether to enable plain for this operation.</param>
+    /// <returns>The resulting text.</returns>
     private static string At(CodeWriter w, string cursor, string offset, bool plain = false)
         => offset == "0" ? cursor : (plain ? "Unsafe" : w.A("Unsafe")) + ".Add(ref " + cursor + ", " + offset + ")";
 
     /// <summary>Adds a member's width to an offset as the original template does: constants fold until the first runtime size, after
     /// which every term is appended in order.</summary>
+    /// <param name="offset">The offset into the current buffer or input.</param>
+    /// <param name="size">The requested size.</param>
+    /// <returns>The resulting text.</returns>
     private static string Add(string offset, string size)
     {
         if (offset == "0")
@@ -623,6 +631,10 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>The packed width of a run of fixed members.</summary>
+    /// <param name="members">The members supplied to <c>Width</c>.</param>
+    /// <param name="first">The first supplied to <c>Width</c>.</param>
+    /// <param name="last">The last supplied to <c>Width</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string Width(RenderMember[] members, int first, int last)
     {
         string width = "0";
@@ -632,6 +644,8 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Counts the runtime-size calls of raw struct widths in a root body, which the inlining budget counts as calls.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int Sizes(List<string> body)
     {
         int count = 0;
@@ -643,10 +657,23 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells a member's storage reinterpreted as bytes for a block copy or proof; see <see cref="At"/> for plain spellings.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="readOnly">Whether to enable read only for this operation.</param>
+    /// <param name="plain">Whether to enable plain for this operation.</param>
+    /// <returns>The resulting text.</returns>
     internal static string Bytes(CodeWriter w, RenderMember member, string owner, bool readOnly, bool plain = false)
         => (plain ? "Unsafe" : w.A("Unsafe")) + ".As<" + member.Scalar + ", byte>(ref " + (readOnly ? (plain ? "Unsafe" : w.A("Unsafe")) + ".AsRef(in " + owner + "." + member.Name + ")" : owner + "." + member.Name) + ")";
 
     /// <summary>Spells the proof that a run of fixed fields is laid out contiguously on a 64-bit target.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="members">The members supplied to <c>Proof</c>.</param>
+    /// <param name="first">The first supplied to <c>Proof</c>.</param>
+    /// <param name="last">The last supplied to <c>Proof</c>.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="readOnly">Whether to enable read only for this operation.</param>
+    /// <returns>The resulting text.</returns>
     internal static string Proof(CodeWriter w, RenderMember[] members, int first, int last, string owner, bool readOnly)
     {
         for (int index = first; index <= last; index++)
@@ -666,6 +693,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Ends a run of consecutive fixed members.</summary>
+    /// <param name="members">The members supplied to <c>RunEnd</c>.</param>
+    /// <param name="first">The first supplied to <c>RunEnd</c>.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int RunEnd(RenderMember[] members, int first)
     {
         int last = first;
@@ -675,12 +705,15 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Whether a name consists of ASCII letters only, which the presentation's expansion-number removal requires.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>Whether the input satisfies the ascii letters check.</returns>
     private static bool AsciiLetters(string name) => name.All(letter => letter is >= 'A' and <= 'Z' or >= 'a' and <= 'z');
 
     /// <summary>Spells the snapshot local of a variable member as the projected emitter names it.</summary>
     /// <param name="model">The record that owns the member.</param>
     /// <param name="index">The member's index.</param>
     /// <param name="camel">Whether the mixed record body camel-cases every snapshot local, as its inline object members do.</param>
+    /// <returns>The resulting text.</returns>
     private static string Snapshot(PayloadRenderModel model, int index, bool camel = false)
     {
         string trimmed = model.Members[index].Name.TrimStart('_');
@@ -692,6 +725,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Builds a root write body, with lines prefixed by a tab for one extra indentation level.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <param name="structValue">Whether to enable struct value for this operation.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, bool union, bool structValue = false)
     {
         var members = model.Members;
@@ -884,6 +922,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Closes a bounded write root: the null exit label, the completed-length assertion and the commit.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
     private static void AddBoundExit(List<string> body, PayloadRenderModel model, bool union)
     {
         if (model.Bounded == null)
@@ -902,30 +943,51 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells instance creation for a read: the pool rent call of a pooled type, or its parameterless constructor.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting text.</returns>
     private static string NewInstance(PayloadRenderModel model) => model.Rent ?? "new " + model.GlobalName + "()";
 
     /// <summary>Spells a fixed profile wrapper around an imported string options type.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="alias">The alias supplied to <c>ScopedProfile</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string ScopedProfile(CodeWriter w, string alias) =>
         "global::LuminPack.Option.LuminPackFixedOptions<" + w.A(alias) + ">";
 
     /// <summary>The profile a member's write kernels consume: its own declaration, the containing type's declaration, or the
     /// operation's profile.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     internal static string WriteProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? ScopedProfile(w, member.ScopeProfile) :
         model.DeclaredProfile != null ? ScopedProfile(w, model.DeclaredProfile) : Profile;
 
     /// <summary>The profile a plain string read consumes: a declared profile is passed without the fixed wrapper, as the
     /// member and type projections do.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The profile.</returns>
     internal static string ReadProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? w.A(member.ScopeProfile) :
         model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : Profile;
 
     /// <summary>The declared profile a named member write passes to its plain string stores, or the operation's profile.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     private static string DeclarationProfile(PayloadRenderModel model, CodeWriter w, RenderMember member) =>
         member.ScopeProfile != null ? w.A(member.ScopeProfile) :
         model.DeclaredProfile != null ? w.A(model.DeclaredProfile) : Profile;
 
     /// <summary>Adds the serialization callbacks around a write body: after the value local is bound, and at the end.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="before">The before supplied to <c>AddCallbacks</c>.</param>
+    /// <param name="after">The after supplied to <c>AddCallbacks</c>.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> AddCallbacks(List<string> body, string[] before, string[] after)
     {
         if (before.Length == 0 && after.Length == 0)
@@ -950,6 +1012,9 @@ internal static partial class BinaryEmitter
 
     /// <summary>Adds the deserialization callbacks around a read body; a constructed read places the completion callback inside
     /// its branches itself.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> AddReadCallbacks(PayloadRenderModel model, List<string> body)
     {
         if (!model.HasCallbacks || model.Version == null && !model.IsStruct && model.ConstructorArguments != null)
@@ -1001,6 +1066,11 @@ internal static partial class BinaryEmitter
 
     /// <summary>Builds a mixed record's write body: the leading members reserved with the header, each inline object in
     /// place, and every following run of reserving members written through its own reservation.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> MixedWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
         var members = model.Members;
@@ -1113,6 +1183,15 @@ internal static partial class BinaryEmitter
 
     /// <summary>Writes one inline object member: a named member operation when the child publishes one, otherwise its marker
     /// and its members in place.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="depth">The current nesting depth.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddInlineObjectWrite</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddInlineObjectWrite</c>.</param>
+    /// <param name="cursors">The cursors supplied to <c>AddInlineObjectWrite</c>.</param>
+    /// <param name="spans">The spans supplied to <c>AddInlineObjectWrite</c>.</param>
     private static void AddInlineObjectWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
@@ -1183,6 +1262,13 @@ internal static partial class BinaryEmitter
 
     /// <summary>Writes one list member in place: a null count marker, otherwise the element count and payload. A string list
     /// writes its strings through one profiled span call; a scalar list stores the span directly.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddInlineListWrite</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddInlineListWrite</c>.</param>
+    /// <param name="spans">The spans supplied to <c>AddInlineListWrite</c>.</param>
     private static void AddInlineListWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int spans)
     {
@@ -1288,6 +1374,7 @@ internal static partial class BinaryEmitter
     /// <param name="spans">The span counter shared by the whole method.</param>
     /// <param name="state">The writer state the expanded body advances: the record's <c>writer</c>, or the isolated
     /// <c>operationState</c> a sequence owner writes through.</param>
+    /// <param name="inlineSpan">Whether to enable inline span for this operation.</param>
     private static void AddElementWrite(List<string> body, PayloadRenderModel element, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans, string state = "writer", bool inlineSpan = false)
     {
@@ -1472,10 +1559,16 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells the method-wide cursor local: the first is <c>cursor</c>, the following ones carry their ordinal.</summary>
+    /// <param name="cursors">The cursors supplied to <c>CursorName</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string CursorName(ref int cursors)
         => "cursor" + (cursors++ == 0 ? string.Empty : cursors.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>Writes a lone member through the cursor without reserving first, as a one-member record does.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
     private static void AddLoneRecord(PayloadRenderModel model, CodeWriter w, List<string> body, RenderMember member)
     {
         // The template keeps no member comment on a lone group whose member owns a profile boundary.
@@ -1493,6 +1586,12 @@ internal static partial class BinaryEmitter
 
     /// <summary>Writes a leading or following run of reserving members, splitting it at each member-level profile boundary.
     /// A group that is alone and carries no header stores through its one-member record kernel, as the template does.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="first">The first supplied to <c>AddProfileSegments</c>.</param>
+    /// <param name="last">The last supplied to <c>AddProfileSegments</c>.</param>
+    /// <param name="header">Whether to enable header for this operation.</param>
     private static void AddProfileSegments(PayloadRenderModel model, CodeWriter w, List<string> body, int first, int last, bool header)
     {
         var members = model.Members;
@@ -1514,6 +1613,13 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes a span of a mixed record through one reservation, optionally including the record header byte.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="first">The first supplied to <c>AddReservedSegment</c>.</param>
+    /// <param name="last">The last supplied to <c>AddReservedSegment</c>.</param>
+    /// <param name="header">Whether to enable header for this operation.</param>
+    /// <param name="camel">The camel supplied to <c>AddReservedSegment</c>.</param>
     private static void AddReservedSegment(PayloadRenderModel model, CodeWriter w, List<string> body, int first, int last, bool header,
         bool? camel = null)
     {
@@ -1613,6 +1719,11 @@ internal static partial class BinaryEmitter
 
     /// <summary>Builds a stream record's write body: the member count, then every member, with inline objects writing their own
     /// count and members in place.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> StreamWriteBody(PayloadRenderModel model, CodeWriter w, bool union, List<string> body)
     {
         if (!union)
@@ -1768,6 +1879,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells a type-parameter member's payload call: its own parameter, then the operation's profile.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="profile">The compiled serialization profile or its generated type name.</param>
+    /// <returns>The resulting text.</returns>
     private static string MemberArguments(RenderMember member, string profile) => "<" + member.Scalar + ", " + profile + ">";
 
     /// <summary>Adds the reset guard of a generic payload member, which depends on what its declared type is.</summary>
@@ -1796,6 +1910,10 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells an inline object's local the way the template numbers its depth-suffixed role local.</summary>
+    /// <param name="names">The names supplied to <c>InlineName</c>.</param>
+    /// <param name="role">The role supplied to <c>InlineName</c>.</param>
+    /// <param name="depth">The current nesting depth.</param>
+    /// <returns>The resulting text.</returns>
     private static string InlineName(Dictionary<string, int> names, string role, int depth)
     {
         string raw = role + depth.ToString(CultureInfo.InvariantCulture);
@@ -1805,6 +1923,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells a role local without a depth suffix, as the expanded list write names the field alias it holds.</summary>
+    /// <param name="names">The names supplied to <c>RoleName</c>.</param>
+    /// <param name="role">The role supplied to <c>RoleName</c>.</param>
+    /// <returns>The resulting text.</returns>
     internal static string RoleName(Dictionary<string, int> names, string role)
     {
         int count = names.TryGetValue(role, out int seen) ? seen + 1 : 1;
@@ -1814,25 +1935,36 @@ internal static partial class BinaryEmitter
 
     /// <summary>Whether a member's write opens with a local declaration, which the presentation keeps directly under the
     /// preceding block instead of separating it with a blank line.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input satisfies the starts inline object check.</returns>
     private static bool StartsInlineObject(RenderMember member) => member.Kind == RenderMemberKind.Object && !member.Nested.MemberWrite;
 
     /// <summary>Whether a member is a list of strings, which writes its payload in place instead of entering a reservation.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input is text list.</returns>
     private static bool IsTextList(RenderMember member) => member.Kind == RenderMemberKind.List && member.Scalar == "string";
 
     /// <summary>Whether a member is a list whose elements expand their record body in place.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input is element list.</returns>
     private static bool IsElementList(RenderMember member) => member.Kind == RenderMemberKind.List && member.Nested != null;
 
     /// <summary>Whether a member is written in its own block rather than inside the surrounding reservation.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input is inline segment.</returns>
     private static bool IsInlineSegment(RenderMember member) => !member.ReservableArray && (member.Kind == RenderMemberKind.Object || IsTextList(member) ||
         IsElementList(member) || IsCollectionBlock(member) || member.Kind == RenderMemberKind.Array && member.FormatterCall ||
         member.Kind is RenderMemberKind.Parameter or RenderMemberKind.ForwardedCollection or RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.Sequence);
 
     /// <summary>Whether a member opens a block in place, whose following member starts without a separating blank line.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input is inline block.</returns>
     private static bool IsInlineBlock(RenderMember member) =>
         member.Kind == RenderMemberKind.Object && !member.Nested.MemberWrite || IsTextList(member) || IsElementList(member);
 
     /// <summary>Drops the depth suffix of an inline local whose purely alphabetic stem is otherwise unused, as the presentation
     /// does.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
     private static void ReduceInlineNames(List<string> body)
     {
         var pattern = new System.Text.RegularExpressions.Regex(@"\b(inlineValue|inlineRead)\d+\b");
@@ -1860,6 +1992,10 @@ internal static partial class BinaryEmitter
 
     /// <summary>Projects an all-fixed Union write onto its returning cursor. A capacity reservation publishes the
     /// position before the check and the managed path reacquires the cursor afterwards.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="original">The original supplied to <c>FixedUnionBody</c>.</param>
+    /// <param name="managedCursor">Whether to enable managed cursor for this operation.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> FixedUnionBody(CodeWriter w, List<string> original, bool managedCursor)
     {
         string unsafeType = w.A("Unsafe");
@@ -1920,6 +2056,8 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Finds the last comma outside parentheses and angle brackets.</summary>
+    /// <param name="text">The text supplied to <c>TopLevelComma</c>.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int TopLevelComma(string text)
     {
         int depth = 0, found = -1;
@@ -1987,6 +2125,12 @@ internal static partial class BinaryEmitter
 
     /// <summary>Reaches a mirrored type's storage through its layout mirror: the mirror view is declared after the null handling
     /// or the instance, and every member access goes through it.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="writes">Whether to enable writes for this operation.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> Mirrored(PayloadRenderModel model, CodeWriter w, List<string> body, bool writes, bool union)
     {
         // A pool mirror only declares the layout for reuse; public fields keep their direct access.
@@ -2032,6 +2176,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Builds the named member write: the original stream writes of an object nested in another record.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> MemberWriteBody(PayloadRenderModel model, CodeWriter w)
     {
         var members = model.Members;
@@ -2172,10 +2319,23 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Stores a run of fixed fields at their packed offsets from a cursor.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="members">The members supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="first">The first supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="last">The last supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="cursor">The cursor supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
     private static void AddFixedStores(CodeWriter w, RenderMember[] members, int first, int last, string cursor, List<string> body)
         => AddFixedStores(w, members, first, last, cursor, body, "value");
 
     /// <summary>Stores a run of fixed fields of one record, which may be an inline object, at their packed offsets from a cursor.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="members">The members supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="first">The first supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="last">The last supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="cursor">The cursor supplied to <c>AddFixedStores</c>.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
     private static void AddFixedStores(CodeWriter w, RenderMember[] members, int first, int last, string cursor, List<string> body, string owner)
     {
         string offset = "0";
@@ -2191,6 +2351,10 @@ internal static partial class BinaryEmitter
 
     /// <summary>Builds the read body of a type whose selected constructor takes parameters: temporary locals hold the decoded
     /// values, an existing instance reads in place, and a fresh one is constructed with its arguments and remaining fields.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> ConstructedReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         var members = model.Members;
@@ -2261,6 +2425,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Reads one member in place for the constructed read's existing-instance path.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="hasNext">Whether to enable has next for this operation.</param>
     private static void AddConstructedReadExisting(List<string> body, PayloadRenderModel model, CodeWriter w, RenderMember member, bool hasNext)
     {
         string owner = member.Mirrored ? "reuseLocal" : "value2!";
@@ -2289,19 +2458,30 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Spells a fixed or string member's read from the given reader expression.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="reader">The reader positioned at the input value.</param>
+    /// <returns>The resulting text.</returns>
     private static string FixedOrTextRead(RenderMember member, string reader) =>
         member.Kind == RenderMemberKind.Text ? reader + ".Read<" + Profile + ">((string? )null)!" :
         member.IsBoolean ? "LuminPackInputPolicy.ReadBoolean(ref " + reader + ")" :
         reader + ".Read<" + member.Scalar + ">()";
 
     /// <summary>Spells the temporary local type of one member, as the constructed read declares it.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     private static string TempType(RenderMember member) => member.Kind == RenderMemberKind.Text ? "string?" :
         member.Kind == RenderMemberKind.Parameter && member.ReferencePayload ? member.TypeName + "?" : member.TypeName;
 
     /// <summary>Spells a member's temporary local with the leading letter in lower case.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>The resulting text.</returns>
     private static string Camel(string name) => PayloadEmitter.LocalName(name);
 
     /// <summary>Builds a root read body.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <returns>The body.</returns>
     private static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         // A selected constructor builds the instance from temporary locals; a raw struct's arguments only reach its JSON
@@ -2438,6 +2618,9 @@ internal static partial class BinaryEmitter
     /// <summary>Renames the instance local of a read root whose Boolean collection takes the checked completion. The
     /// untrusted-read projection inlines that root under its entry prefix, which the published file keeps as the role
     /// name.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
     private static void RenameCheckedReadInstance(List<string> body, PayloadRenderModel model, bool union)
     {
         if (!model.BooleanCollection || model.Trusted)
@@ -2450,6 +2633,10 @@ internal static partial class BinaryEmitter
 
     /// <summary>Builds a stream record's read body: the null marker, then every member, with inline objects reading their own
     /// marker and members in place.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="union">Whether to enable union for this operation.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> StreamReadBody(PayloadRenderModel model, CodeWriter w, bool union)
     {
         var members = model.Members;
@@ -2723,6 +2910,9 @@ internal static partial class BinaryEmitter
 
     /// <summary>Spells a cursor local with a shifted ordinal: the first is <c>cursor</c>, the following ones carry their
     /// ordinal.</summary>
+    /// <param name="suffix">The suffix supplied to <c>CursorSpelling</c>.</param>
+    /// <param name="offset">The offset into the current buffer or input.</param>
+    /// <returns>The resulting text.</returns>
     private static string CursorSpelling(string suffix, int offset)
     {
         int ordinal = (suffix.Length == 0 ? 0 : int.Parse(suffix, CultureInfo.InvariantCulture) - 1) + offset;
@@ -2730,6 +2920,10 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Whether the Booleans of a fixed run, if any, fit one batch mask.</summary>
+    /// <param name="members">The members supplied to <c>HasBatchMask</c>.</param>
+    /// <param name="first">The first supplied to <c>HasBatchMask</c>.</param>
+    /// <param name="last">The last supplied to <c>HasBatchMask</c>.</param>
+    /// <returns>Whether the input has batch mask.</returns>
     internal static bool HasBatchMask(RenderMember[] members, int first, int last)
     {
         var offsets = new List<int>();
@@ -2744,6 +2938,9 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Selects one four- or eight-byte window holding every Boolean of a batch and its rejection mask.</summary>
+    /// <param name="offsets">The offsets supplied to <c>BatchMask</c>.</param>
+    /// <param name="length">The length of the requested range.</param>
+    /// <returns>The resulting text.</returns>
     private static string BatchMask(List<int> offsets, int length)
     {
         int low = offsets.Min(), high = offsets.Max();

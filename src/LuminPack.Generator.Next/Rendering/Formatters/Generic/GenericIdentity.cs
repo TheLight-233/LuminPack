@@ -122,6 +122,8 @@ internal static class GenericIdentity
     }
 
     /// <summary>Splits only at the current generic level, retaining nested generic and array commas.</summary>
+    /// <param name="text">The text supplied to <c>SplitArguments</c>.</param>
+    /// <returns>The resulting <c>string[]</c>.</returns>
     private static string[] SplitArguments(string text)
     {
         var arguments = new List<string>();

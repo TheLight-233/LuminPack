@@ -257,6 +257,9 @@ internal static class SerializerUnionCursorRegression
         }
     }
 
+    /// <summary>Handles cursor switches for <c>SerializerUnionCursorRegression</c>.</summary>
+    /// <param name="driver">The generator driver used for this run.</param>
+    /// <returns>The resulting <c>IEnumerable&lt;SwitchStatementSyntax&gt;</c>.</returns>
     private static IEnumerable<SwitchStatementSyntax> CursorSwitches(GeneratorDriver driver)
         => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<SwitchStatementSyntax>())
@@ -289,6 +292,9 @@ internal static class SerializerUnionCursorRegression
         new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()
     }, parseOptions: ParseOptions(modern));
 
+    /// <summary>Selects the parse options and target symbols for the test fixture.</summary>
+    /// <param name="modern">Whether to select the modern .NET target symbols.</param>
+    /// <returns>The options.</returns>
     private static CSharpParseOptions ParseOptions(bool modern)
         => new(LanguageVersion.CSharp13, preprocessorSymbols: modern ? new[] { "NET8_0_OR_GREATER" } : null);
 

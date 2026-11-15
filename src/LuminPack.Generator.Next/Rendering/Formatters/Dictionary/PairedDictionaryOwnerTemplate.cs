@@ -49,6 +49,8 @@ internal sealed partial class PairedDictionaryContext
     private readonly bool _nativeEntries;
     private readonly SharedFormatterSet _set;
     /// <summary>Checks the exact runtime API facts of this keyed family.</summary>
+    /// <param name="capability">The capability supplied to <c>Supports</c>.</param>
+    /// <returns>Whether the input satisfies the supports check.</returns>
     internal bool Supports(string capability) => _set.FindFormatter(Dictionary)?.Supports(capability) == true;
     /// <summary>Whether both entry operations are raw unmanaged scalar stores.</summary>
     /// <summary>The Union root render model of the value, from the payload element or the closed contract, or null.</summary>
@@ -171,6 +173,8 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Whether an entry contract is a nullable reference-free scalar without a storage layout.</summary>
     /// <remarks>Only the families the original wrote as raw pairs (Dictionary and its interfaces) store it natively; a sorted
     /// list frames each entry.</remarks>
+    /// <param name="contract">The contract supplied to <c>NativeNullable</c>.</param>
+    /// <returns>Whether the input satisfies the native nullable check.</returns>
     private bool NativeNullable(FormatterModel contract) => contract.Definition == GenericIdentity.Nullable &&
         contract.Arguments.Length == 1 && contract.Arguments[0].RawCollection && contract.Layout == null &&
         (Dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||

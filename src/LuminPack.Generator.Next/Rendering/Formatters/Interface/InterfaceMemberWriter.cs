@@ -52,6 +52,14 @@ internal static class InterfaceMemberWriter
     internal static void WriteFrozen(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends) => Emit(body, member, owner, w, names, ref ends, frozen: true);
 
+    /// <summary>Handles emit for <c>InterfaceMemberWriter</c>.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>Emit</c>.</param>
+    /// <param name="ends">The ends supplied to <c>Emit</c>.</param>
+    /// <param name="frozen">Whether to enable frozen for this operation.</param>
     private static void Emit(List<string> body, RenderMember member, string owner, CodeWriter w, Dictionary<string, int> names,
         ref int ends, bool frozen)
     {

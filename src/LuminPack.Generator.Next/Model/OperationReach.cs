@@ -34,6 +34,10 @@ internal sealed class OperationReach : IEquatable<OperationReach>
         return other != null && Same(Keys, other.Keys) && Same(Bases, other.Bases);
     }
 
+    /// <summary>Handles same for <c>OperationReach</c>.</summary>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same(string[] left, string[] right)
     {
         if (left.Length != right.Length)

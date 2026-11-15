@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace LuminPack.SourceGenerator.Next.Diagnostics;
 
@@ -32,4 +33,10 @@ internal static class LuminPackExceptionHelper
     /// <param name="message">The unavailable operation and its context.</param>
     /// <returns>Never returns a value.</returns>
     internal static T ThrowInvalidOperation<T>(string message) => throw new InvalidOperationException(message);
+
+    /// <summary>Reports that verification could not find a required build artifact.</summary>
+    /// <typeparam name="T">The artifact result type expected by the caller.</typeparam>
+    /// <param name="message">The artifact and searched location.</param>
+    /// <returns>Never returns a value.</returns>
+    internal static T ThrowFileNotFound<T>(string message) => throw new FileNotFoundException(message);
 }

@@ -36,6 +36,19 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
     internal readonly string InterfaceContract;
 
     /// <summary>Captures one case.</summary>
+    /// <param name="id">The id supplied to <c>UnionRenderCase</c>.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="ownEntry">Whether to enable own entry for this operation.</param>
+    /// <param name="readGeneric">Whether to enable read generic for this operation.</param>
+    /// <param name="sealedCase">Whether to enable sealed case for this operation.</param>
+    /// <param name="fixedCursor">Whether to enable fixed cursor for this operation.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="readable">The readable supplied to <c>UnionRenderCase</c>.</param>
+    /// <param name="chain">The chain supplied to <c>UnionRenderCase</c>.</param>
+    /// <param name="namespace">The namespace supplied to <c>UnionRenderCase</c>.</param>
+    /// <param name="arguments">The arguments supplied to <c>UnionRenderCase</c>.</param>
+    /// <param name="definition">The definition supplied to <c>UnionRenderCase</c>.</param>
+    /// <param name="interfaceContract">The interface contract supplied to <c>UnionRenderCase</c>.</param>
     internal UnionRenderCase(int id, string type, bool ownEntry, bool readGeneric, bool sealedCase, bool fixedCursor, PayloadRenderModel model,
         string readable, string[] chain, string @namespace, string arguments = "", string definition = null, string interfaceContract = null)
     {
@@ -61,6 +74,10 @@ internal sealed class UnionRenderCase : IEquatable<UnionRenderCase>
         InterfaceContract == other.InterfaceContract && Same(Chain, other.Chain) &&
         Equals(Model, other.Model);
 
+    /// <summary>Handles same for <c>UnionRenderCase</c>.</summary>
+    /// <param name="left">The first input or comparison operand.</param>
+    /// <param name="right">The second input or comparison operand.</param>
+    /// <returns>Whether the input satisfies the same check.</returns>
     private static bool Same(string[] left, string[] right) => left == null ? right == null : right != null && System.Linq.Enumerable.SequenceEqual(left, right);
 
     /// <inheritdoc/>
@@ -85,6 +102,11 @@ internal sealed class UnionRenderSlot : IEquatable<UnionRenderSlot>
     internal readonly int Recording;
 
     /// <summary>Captures one slot.</summary>
+    /// <param name="suffix">The suffix supplied to <c>UnionRenderSlot</c>.</param>
+    /// <param name="profile">The compiled serialization profile or its generated type name.</param>
+    /// <param name="identity">The identity supplied to <c>UnionRenderSlot</c>.</param>
+    /// <param name="encoding">The encoding supplied to <c>UnionRenderSlot</c>.</param>
+    /// <param name="recording">The recording supplied to <c>UnionRenderSlot</c>.</param>
     internal UnionRenderSlot(string suffix, string profile, string identity, int encoding, int recording)
     {
         Recording = recording;

@@ -32,12 +32,21 @@ internal static class MemoryOwnerFile
             jsonWriteRun: definition != GenericIdentity.ReadOnlySequence && JsonIntegerRunWriter.Supports(set, declared, element));
     }
 
+    /// <summary>Handles span for <c>MemoryOwnerFile</c>.</summary>
+    /// <param name="definition">The definition supplied to <c>Span</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <returns>The resulting text.</returns>
     private static string Span(string definition, string element) => definition switch
     {
         GenericIdentity.ArraySegment => "new global::System.ReadOnlySpan<" + element + ">(value.Array, value.Offset, value.Count)",
         _ => "value.Span",
     };
 
+    /// <summary>Writes element.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="local">The local supplied to <c>WriteElement</c>.</param>
     private static void WriteElement(CodeWriter w, SpecialOwnerContext c, string element, string local)
     {
         if (element == "string")
@@ -49,6 +58,11 @@ internal static class MemoryOwnerFile
         }
     }
 
+    /// <summary>Handles write for <c>MemoryOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="definition">The definition supplied to <c>Write</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
     private static void Write(CodeWriter w, SpecialOwnerContext c, string definition, string element)
     {
         if (definition == GenericIdentity.ArraySegment)
@@ -106,6 +120,12 @@ internal static class MemoryOwnerFile
         w.Line("writer.CheckBuffer();");
     }
 
+    /// <summary>Handles read for <c>MemoryOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="definition">The definition supplied to <c>Read</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="declared">The declared supplied to <c>Read</c>.</param>
     private static void Read(CodeWriter w, SpecialOwnerContext c, string definition, string element, string declared)
     {
         string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
@@ -140,6 +160,14 @@ internal static class MemoryOwnerFile
         w.Line("value = new " + declared + "(array);");
     }
 
+    /// <summary>Handles JSON write for <c>MemoryOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="definition">The definition supplied to <c>JsonWrite</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="declared">The declared supplied to <c>JsonWrite</c>.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext c, string definition, string element, string owner,
         SharedFormatterSet set, string declared)
     {
@@ -182,6 +210,11 @@ internal static class MemoryOwnerFile
         }
     }
 
+    /// <summary>Handles JSON element for <c>MemoryOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
     private static void JsonElement(CodeWriter w, SpecialOwnerContext c, string element, string owner)
     {
         w.Open();
@@ -195,6 +228,12 @@ internal static class MemoryOwnerFile
         w.Close();
     }
 
+    /// <summary>Handles JSON read for <c>MemoryOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <param name="declared">The declared supplied to <c>JsonRead</c>.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext c, string element, string declared, string owner)
     {
         w.Line("if (reader.IsNull())");

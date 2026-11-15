@@ -145,6 +145,9 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
 
     internal readonly string? Element;
 
+    /// <summary>Initializes a <c>EntryShape</c> from the supplied data.</summary>
+    /// <param name="kind">The kind supplied to <c>EntryShape</c>.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
     internal EntryShape(EntryKind kind, string? element = null)
     {
         Kind = kind;
@@ -155,10 +158,18 @@ internal readonly struct EntryShape : IEquatable<EntryShape>
     internal bool StatelessRead => Kind is EntryKind.FixedRecord or EntryKind.DirectRecord or EntryKind.CompoundDirect or
         EntryKind.FixedEnum or EntryKind.NullableDirect or EntryKind.BigInteger or EntryKind.StatelessRead;
 
+    /// <summary>Compares this value with the supplied value.</summary>
+    /// <param name="other">The value to compare with this instance.</param>
+    /// <returns>Whether the values compare equal.</returns>
     public bool Equals(EntryShape other) => Kind == other.Kind && Element == other.Element;
 
+    /// <summary>Compares this value with the supplied value.</summary>
+    /// <param name="obj">The obj supplied to <c>Equals</c>.</param>
+    /// <returns>Whether the values compare equal.</returns>
     public override bool Equals(object? obj) => obj is EntryShape other && Equals(other);
 
+    /// <summary>Computes a hash code from this value's comparison fields.</summary>
+    /// <returns>The hash code.</returns>
     public override int GetHashCode() => (int)Kind;
 }
 

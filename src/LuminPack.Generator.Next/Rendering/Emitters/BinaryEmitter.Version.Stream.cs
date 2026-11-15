@@ -84,6 +84,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes one unbounded variable slot on the published writer and patches its length.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="target">The target of the operation.</param>
     private static void AppendVersionVariable(List<string> body, PayloadRenderModel model, RenderMember member, CodeWriter w, string target)
     {
         body.Add("{");
@@ -94,6 +99,12 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes a reserved fixed run through proven field addresses or individual scalar stores.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="members">The members supplied to <c>AddVersionFixedStores</c>.</param>
+    /// <param name="first">The first supplied to <c>AddVersionFixedStores</c>.</param>
+    /// <param name="last">The last supplied to <c>AddVersionFixedStores</c>.</param>
+    /// <param name="width">The width of the storage or input range.</param>
     private static void AddVersionFixedStores(List<string> body, CodeWriter w, RenderMember[] members, int first, int last, string width)
     {
         body.Add("if (" + Proof(w, members, first, last, "value", readOnly: true) + ")");

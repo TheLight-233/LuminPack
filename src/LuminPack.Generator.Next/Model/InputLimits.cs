@@ -28,6 +28,11 @@ internal sealed class InputLimits : IEquatable<InputLimits>
     internal readonly bool Explicit;
 
     /// <summary>Captures one immutable limit set.</summary>
+    /// <param name="input">The input to process.</param>
+    /// <param name="collection">The collection supplied to <c>InputLimits</c>.</param>
+    /// <param name="string">The string supplied to <c>InputLimits</c>.</param>
+    /// <param name="depth">The current nesting depth.</param>
+    /// <param name="explicitInput">Whether to enable explicit input for this operation.</param>
     internal InputLimits(int input, int collection, int @string, int depth, bool explicitInput)
     {
         Input = input;
@@ -45,6 +50,12 @@ internal sealed class InputLimits : IEquatable<InputLimits>
         String.ToString(CultureInfo.InvariantCulture) + "_" + Depth.ToString(CultureInfo.InvariantCulture) + (Explicit ? "_x" : string.Empty);
 
     /// <summary>Copies the set with one changed constant.</summary>
+    /// <param name="input">The input to process.</param>
+    /// <param name="collection">The collection supplied to <c>With</c>.</param>
+    /// <param name="string">The string supplied to <c>With</c>.</param>
+    /// <param name="depth">The current nesting depth.</param>
+    /// <param name="explicitInput">The explicit input supplied to <c>With</c>.</param>
+    /// <returns>The resulting <c>InputLimits</c>.</returns>
     internal InputLimits With(int? input = null, int? collection = null, int? @string = null, int? depth = null, bool? explicitInput = null)
         => new InputLimits(input ?? Input, collection ?? Collection, @string ?? String, depth ?? Depth, explicitInput ?? Explicit);
 

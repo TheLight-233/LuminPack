@@ -74,6 +74,9 @@ internal static class GeneratorOptionsFactory
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>
+    /// <param name="parse">The language version and target symbols for parsing.</param>
+    /// <param name="feature">The feature supplied to <c>HasNamespace</c>.</param>
+    /// <returns>Whether the input has namespace.</returns>
     private static bool HasNamespace(CSharpParseOptions parse, string feature)
     {
         if (!parse.Features.TryGetValue(feature, out string? namespaces))

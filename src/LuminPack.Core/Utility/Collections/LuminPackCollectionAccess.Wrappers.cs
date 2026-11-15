@@ -37,6 +37,9 @@ public static partial class LuminPackCollectionAccess
         private readonly int _version;
         private int _index;
 
+        /// <summary>Initializes a <c>BuilderTraversal</c> from the supplied data.</summary>
+        /// <param name="builder">The builder receiving the result.</param>
+        /// <param name="versionOffset">The version offset supplied to <c>BuilderTraversal</c>.</param>
         internal BuilderTraversal(ReadOnlyCollectionBuilder<T> builder, int versionOffset)
         {
             _builder = builder;
@@ -184,6 +187,14 @@ public static partial class LuminPackCollectionAccess
         return true;
     }
 
+    /// <summary>Writes wrapped integer storage.</summary>
+    /// <typeparam name="TOptions">The compiled serialization options.</typeparam>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="arrayField">The array field supplied to <c>WriteWrappedIntegerStorage</c>.</param>
+    /// <param name="count">The number of items to process.</param>
+    /// <param name="version">The version supplied to <c>WriteWrappedIntegerStorage</c>.</param>
+    /// <param name="captured">The captured supplied to <c>WriteWrappedIntegerStorage</c>.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void WriteWrappedIntegerStorage<TOptions, T>(scoped ref LuminPackJsonWriter writer,
         scoped ref T[] arrayField, int count, scoped ref int version, int captured)
@@ -208,13 +219,27 @@ public static partial class LuminPackCollectionAccess
         } while (index < count);
     }
 
+    /// <summary>Gets versioned wrapper count.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="storage">The storage supplied to <c>GetVersionedWrapperCount</c>.</param>
+    /// <returns>The versioned wrapper count.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetVersionedWrapperCount<T>(object storage) =>
         storage is List<T> list ? list.Count : ((ReadOnlyCollectionBuilder<T>)storage).Count;
 
+    /// <summary>Gets wrapper storage.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="wrapper">The wrapper supplied to <c>GetWrapperStorage</c>.</param>
+    /// <returns>The wrapper storage, or null when unavailable.</returns>
     private static object? GetWrapperStorage<T>(IEnumerable<T> wrapper) =>
         wrapper is ReadOnlyCollectionBuilder<T> ? wrapper : GetSequenceStorage(wrapper);
 
+    /// <summary>Attempts to get versioned wrapper storage.</summary>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
+    /// <param name="storage">The storage supplied to <c>TryGetVersionedWrapperStorage</c>.</param>
+    /// <param name="itemsOffset">Receives the items offset when the operation succeeds.</param>
+    /// <param name="versionOffset">Receives the version offset when the operation succeeds.</param>
+    /// <returns>Whether the operation succeeded.</returns>
     private static bool TryGetVersionedWrapperStorage<T>(object? storage, out int itemsOffset, out int versionOffset)
     {
         if (storage is List<T>)
@@ -239,6 +264,8 @@ public static partial class LuminPackCollectionAccess
     {
         internal static readonly int Offset = Probe();
 
+        /// <summary>Returns the probe for <c>BuilderVersion</c>.</summary>
+        /// <returns>The resulting <c>int</c>.</returns>
         private static int Probe()
         {
             try

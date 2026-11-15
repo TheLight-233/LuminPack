@@ -14,6 +14,8 @@ internal static class BitArrayOwnerFile
         SpecialOwnerFile.Render(set, operations, "BitArray", "global::System.Collections.BitArray", true, BinaryWrite,
             BinaryRead, JsonWrite, JsonRead, outlineJson: true, binaryWriteEntries: MeasureRecord);
 
+    /// <summary>Measures record.</summary>
+    /// <param name="w">The generated source writer.</param>
     private static void MeasureRecord(CodeWriter w)
     {
         w.Line(w.Preserve);
@@ -28,6 +30,9 @@ internal static class BitArrayOwnerFile
         w.Blank();
     }
 
+    /// <summary>Handles binary write for <c>BitArrayOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value is null) { writer.EnsureAdditionalCapacity(sizeof(int)); writer.WriteNullCollectionHeader(); return; }");
@@ -49,6 +54,9 @@ internal static class BitArrayOwnerFile
         w.Line("#endif");
     }
 
+    /// <summary>Handles binary read for <c>BitArrayOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("int length = reader.ReadLength(0);");
@@ -93,6 +101,9 @@ internal static class BitArrayOwnerFile
         w.Line("#endif");
     }
 
+    /// <summary>Handles JSON write for <c>BitArrayOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value == null)");
@@ -114,6 +125,9 @@ internal static class BitArrayOwnerFile
         w.Line("writer.WriteArrayEnd<" + context.Profile + ">();");
     }
 
+    /// <summary>Handles JSON read for <c>BitArrayOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (reader.IsNull())");

@@ -21,12 +21,15 @@ internal static class ImmutableDictionaryOwnerFile
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
     /// <summary>Publishes JSON entries and returns an optional immutable builder lease.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void AfterJson(PairedDictionaryContext c)
     {
         c.W.Line("value = staged.ToImmutable();");
         ImmutableBuilderLifetime.End(c.W, "Dictionary", c.Supports("ImmutableBuilder"), "staged");
     }
 
+    /// <summary>Handles read for <c>ImmutableDictionaryOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;

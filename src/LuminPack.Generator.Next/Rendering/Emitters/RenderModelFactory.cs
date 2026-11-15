@@ -20,6 +20,7 @@ internal static class RenderModelFactory
     /// <param name="options">The project facts.</param>
     /// <param name="checkedUnionCopy">Whether to model the Union's closed cases for an enclosing input scope.</param>
     /// <returns>The render model, or null when this adapter does not cover the payload yet.</returns>
+    /// <param name="json">Whether to use the JSON operation.</param>
     internal static PayloadRenderModel? Create(TypeModel model, GeneratorOptions options, bool json = false, bool checkedUnionCopy = false)
     {
         if (model is UnionModel union)
@@ -465,6 +466,7 @@ internal static class RenderModelFactory
     /// <param name="member">The keyed member.</param>
     /// <param name="extension">The assembly's extension container.</param>
     /// <returns>The render member, or null when the family is outside the direct emitters.</returns>
+    /// <param name="options">The options governing the operation.</param>
     private static RenderMember? Dictionary(DictionaryMember member, string extension, GeneratorOptions options)
     {
         bool mirrored = member.Mirrored, property = member.Storage == MemberStorage.AutoProperty;
@@ -508,6 +510,9 @@ internal static class RenderModelFactory
     }
 
     /// <summary>Checks that each recursively referenced collection can publish its static owner.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="options">The options governing the operation.</param>
+    /// <returns>Whether the operation can forward.</returns>
     internal static bool CanForward(MemberModel member, GeneratorOptions options) => member switch
     {
         CollectionMember { ForwardedElement: { } child } => CanForward(child, options),
@@ -592,6 +597,9 @@ internal static class RenderModelFactory
         return element;
     }
 
+    /// <summary>Handles field type for <c>RenderModelFactory</c>.</summary>
+    /// <param name="keyword">The keyword supplied to <c>FieldType</c>.</param>
+    /// <returns>The resulting <c>ScalarKind</c>.</returns>
     private static ScalarKind FieldType(string keyword) => keyword switch
     {
         "bool" => ScalarKind.Bool,

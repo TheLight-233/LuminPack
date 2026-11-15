@@ -18,6 +18,8 @@ internal static class FrozenDictionaryOwnerFile
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles write for <c>FrozenDictionaryOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -45,6 +47,8 @@ internal static class FrozenDictionaryOwnerFile
         w.Indented(() => w.Line("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();"));
     }
 
+    /// <summary>Handles read for <c>FrozenDictionaryOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;
@@ -84,6 +88,7 @@ internal static class FrozenDictionaryOwnerFile
     }
 
     /// <summary>Rents the JSON builder when the matching ownership API is available.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void BeforeJson(PairedDictionaryContext c)
     {
         c.W.Line(c.Supports("RentFrozenDictionary") ?
@@ -97,6 +102,7 @@ internal static class FrozenDictionaryOwnerFile
     }
 
     /// <summary>Freezes the staged entries and returns the builder on every exit.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void AfterJson(PairedDictionaryContext c)
     {
         c.W.Line("value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(staged);");

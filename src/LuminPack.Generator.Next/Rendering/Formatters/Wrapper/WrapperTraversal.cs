@@ -240,6 +240,9 @@ internal static class WrapperTraversal
             c.W.Line(line);
     }
 
+    /// <summary>Writes string storage.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <returns>Whether the input satisfies the write string storage check.</returns>
     private static bool WriteStringStorage(EnumerableOwnerContext c)
     {
         if (!c.Text || !c.Supports("WriteWrappedStrings"))

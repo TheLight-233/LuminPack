@@ -55,6 +55,9 @@ internal static class ImmutableInterfaceOwnerFile
         EnumerableOwnerTemplate.Render(set, fact, operations, StackSpec);
 
     // Use the outer family, since an element can itself be another immutable collection.
+    /// <summary>Handles concrete for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <returns>The resulting text.</returns>
     private static string Concrete(EnumerableOwnerContext c)
     {
         int arguments = c.Sequence.IndexOf('<');
@@ -71,6 +74,8 @@ internal static class ImmutableInterfaceOwnerFile
         };
     }
 
+    /// <summary>Handles write for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         bool hash = WriteTree("ImmutableHashSet", "CopyImmutableHashTree");
@@ -110,6 +115,11 @@ internal static class ImmutableInterfaceOwnerFile
         }
     }
 
+    /// <summary>Writes JSON tree.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <returns>Whether the input satisfies the write JSON tree check.</returns>
     internal static bool WriteJsonTree(EnumerableOwnerContext c, SharedFormatterSet set, string owner)
     {
         bool hash = Write("ImmutableHashSet", "CopyImmutableHashTree");
@@ -141,6 +151,12 @@ internal static class ImmutableInterfaceOwnerFile
         }
     }
 
+    /// <summary>Reads JSON tree.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="reader">The reader positioned at the input value.</param>
+    /// <param name="integerRead">The integer read supplied to <c>ReadJsonTree</c>.</param>
+    /// <returns>Whether the input satisfies the read JSON tree check.</returns>
     internal static bool ReadJsonTree(EnumerableOwnerContext c, string owner, string reader, string? integerRead)
     {
         bool sorted = c.Supports("BuildOrderedImmutableSortedSet");
@@ -248,6 +264,8 @@ internal static class ImmutableInterfaceOwnerFile
     }
 
     // The exact framework queue exposes its validated stacks. An arbitrary implementation retains its own enumeration.
+    /// <summary>Handles queue write for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void QueueWrite(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -273,6 +291,8 @@ internal static class ImmutableInterfaceOwnerFile
             ImmutableLinearTraversal.WriteQueueLocals(c);
     }
 
+    /// <summary>Handles stack write for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void StackWrite(EnumerableOwnerContext c)
     {
         bool isInterface = c.Sequence.StartsWith(Namespace + "IImmutableStack<", System.StringComparison.Ordinal);
@@ -291,6 +311,9 @@ internal static class ImmutableInterfaceOwnerFile
             c.W.Close();
     }
 
+    /// <summary>Handles read for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="build">The action used to process build.</param>
     private static void Read(EnumerableOwnerContext c, System.Action<EnumerableOwnerContext> build)
     {
         var w = c.W;
@@ -354,6 +377,7 @@ internal static class ImmutableInterfaceOwnerFile
     /// <summary>Reads a concrete string set through the weak candidate cache, as the original read did: the destination or the
     /// last completed set is kept when every decoded string is the same instance it already holds (and a sorted set is still in
     /// its comparer's order); otherwise the decoded strings build a new set, which becomes the next candidate.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void CandidateTextSetRead(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -437,6 +461,8 @@ internal static class ImmutableInterfaceOwnerFile
         w.Close();
     }
 
+    /// <summary>Handles builder for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Builder(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -475,6 +501,8 @@ internal static class ImmutableInterfaceOwnerFile
         ImmutableBuilderLifetime.End(w, family, c.Supports("ImmutableBuilder"), "builder");
     }
 
+    /// <summary>Handles queue for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Queue(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -484,6 +512,8 @@ internal static class ImmutableInterfaceOwnerFile
             "value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(new global::System.ArraySegment<" + c.Scalar + ">(pooled, 0, length));");
     }
 
+    /// <summary>Handles stack for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Stack(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -491,6 +521,9 @@ internal static class ImmutableInterfaceOwnerFile
         BuildStack(c, "length");
     }
 
+    /// <summary>Builds stack.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="count">The number of items to process.</param>
     private static void BuildStack(EnumerableOwnerContext c, string count)
     {
         var w = c.W;
@@ -505,16 +538,20 @@ internal static class ImmutableInterfaceOwnerFile
     }
 
     /// <summary>Starts the selected immutable builder's JSON lifetime.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void BeforeBuilder(EnumerableOwnerContext c) =>
         ImmutableBuilderLifetime.Begin(c.W, Concrete(c).Substring(9), c.Scalar, c.Supports("ImmutableBuilder"), "staged");
 
     /// <summary>Publishes the immutable JSON value and returns an optional rental.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void AfterBuilder(EnumerableOwnerContext c)
     {
         c.W.Line("value = staged.ToImmutable();");
         ImmutableBuilderLifetime.End(c.W, Concrete(c).Substring(9), c.Supports("ImmutableBuilder"), "staged");
     }
 
+    /// <summary>Handles after stack for <c>ImmutableInterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void AfterStack(EnumerableOwnerContext c)
     {
         var w = c.W;

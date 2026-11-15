@@ -212,6 +212,8 @@ public static partial class LuminPackCollectionAccess
     {
         internal static readonly bool Available = Check();
 
+        /// <summary>Returns the check for <c>QueueStorage</c>.</summary>
+        /// <returns>Whether the input satisfies the check check.</returns>
         private static bool Check()
         {
             if ((LuminCollectionLayouts.QueueArray | LuminCollectionLayouts.QueueHead | LuminCollectionLayouts.QueueVersion) < 0)
@@ -226,6 +228,11 @@ public static partial class LuminPackCollectionAccess
             }
         }
 
+        /// <summary>Handles check for <c>QueueStorage</c>.</summary>
+        /// <typeparam name="T">The value type processed by the operation.</typeparam>
+        /// <param name="first">The first supplied to <c>Check</c>.</param>
+        /// <param name="second">The second supplied to <c>Check</c>.</param>
+        /// <returns>Whether the input satisfies the check check.</returns>
         private static bool Check<T>(T first, T second)
         {
             var queue = new Queue<T>(2);

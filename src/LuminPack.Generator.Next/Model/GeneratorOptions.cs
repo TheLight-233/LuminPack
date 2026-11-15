@@ -64,6 +64,21 @@ internal sealed class GeneratorOptions : IEquatable<GeneratorOptions>
     internal readonly bool QuotedScalarReader;
 
     /// <summary>Captures the project facts.</summary>
+    /// <param name="net8">Whether to enable net8 for this operation.</param>
+    /// <param name="csharpVersion">The csharp version supplied to <c>GeneratorOptions</c>.</param>
+    /// <param name="unsafe">Whether to enable unsafe for this operation.</param>
+    /// <param name="unity">Whether to enable unity for this operation.</param>
+    /// <param name="registerMode">The register mode supplied to <c>GeneratorOptions</c>.</param>
+    /// <param name="availableAliases">The available aliases supplied to <c>GeneratorOptions</c>.</param>
+    /// <param name="assemblyName">The name of the assembly.</param>
+    /// <param name="interceptors">Whether to enable interceptors for this operation.</param>
+    /// <param name="ilRewrite">Whether to enable IL rewrite for this operation.</param>
+    /// <param name="pointerCursor">Whether to enable pointer cursor for this operation.</param>
+    /// <param name="ambiguousNames">The ambiguous names supplied to <c>GeneratorOptions</c>.</param>
+    /// <param name="formatterInterfaces">The formatter interfaces supplied to <c>GeneratorOptions</c>.</param>
+    /// <param name="knownFormatters">Whether to enable known formatters for this operation.</param>
+    /// <param name="quotedScalarReader">Whether to enable quoted scalar reader for this operation.</param>
+    /// <param name="spanCursor">Whether to enable span cursor for this operation.</param>
     internal GeneratorOptions(bool net8, int csharpVersion, bool @unsafe, bool unity, RegisterMode registerMode, int availableAliases,
         string assemblyName, bool interceptors, bool ilRewrite = false, bool pointerCursor = false, string[]? ambiguousNames = null,
         int formatterInterfaces = 0, bool knownFormatters = false, bool quotedScalarReader = false, bool spanCursor = false)

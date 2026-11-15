@@ -24,10 +24,22 @@ internal static class RectangularArrayOwnerFile
         => Render(set, fact.DeclaredType, fact.Scalar!, fact.ArrayRank, fact.ReuseArraySlots, operations);
 
     /// <summary>Renders a rectangular array using its general element and contiguous storage contracts.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <returns>The generated C# source.</returns>
     internal static string Render(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations) =>
         Render(set, model.Type, model.Arguments[0].Type, model.Rank, model.ReuseArraySlots, operations, model.Arguments[0]);
 
     /// <summary>Renders the shared shape envelope with the analyzed element operations.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <param name="item">The current item.</param>
+    /// <param name="rank">The rank supplied to <c>Render</c>.</param>
+    /// <param name="reuseArraySlots">Whether to enable reuse array slots for this operation.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <returns>The generated C# source.</returns>
     private static string Render(SharedFormatterSet set, string type, string item, int rank, bool reuseArraySlots,
         GeneratedOperations operations, FormatterModel? element = null)
     {

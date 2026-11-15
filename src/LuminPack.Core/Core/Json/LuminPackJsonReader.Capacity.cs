@@ -33,6 +33,10 @@ namespace LuminPack.Core
             where TOptions : struct, ILuminPackOptions
             => HasArrayCapacityInput<TOptions>(minimum) ? Math.Max(0, GetArrayLengthHint<TOptions>()) : 0;
 
+        /// <summary>Checks for array capacity input.</summary>
+        /// <typeparam name="TOptions">The compiled serialization options.</typeparam>
+        /// <param name="minimum">The minimum supplied to <c>HasArrayCapacityInput</c>.</param>
+        /// <returns>Whether the input has array capacity input.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal readonly bool HasArrayCapacityInput<TOptions>(int minimum)
             where TOptions : struct, ILuminPackOptions

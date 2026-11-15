@@ -15,6 +15,8 @@ internal static class StringBuilderOwnerFile
         SpecialOwnerFile.Render(set, operations, "StringBuilder", "global::System.Text.StringBuilder", true, (w, c) => BinaryWrite(w, c, set),
             BinaryRead, (w, c) => JsonWrite(w, c, set), (w, c) => JsonRead(w, c, set), binaryWriteEntries: MeasureRecord);
 
+    /// <summary>Measures record.</summary>
+    /// <param name="w">The generated source writer.</param>
     private static void MeasureRecord(CodeWriter w)
     {
         w.Line(w.Preserve);
@@ -28,6 +30,10 @@ internal static class StringBuilderOwnerFile
         w.Blank();
     }
 
+    /// <summary>Handles binary write for <c>StringBuilderOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
         w.Line("if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
@@ -61,6 +67,9 @@ internal static class StringBuilderOwnerFile
         w.Line("writer.CheckBuffer();");
     }
 
+    /// <summary>Handles binary read for <c>StringBuilderOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (!reader.TryReadCollectionHead(out int length))");
@@ -90,6 +99,10 @@ internal static class StringBuilderOwnerFile
         w.Line("reader.Advance(bytes);");
     }
 
+    /// <summary>Handles JSON write for <c>StringBuilderOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
         if (set.FindFormatter("global::System.Text.StringBuilder")?.Supports("CanWriteJsonStringBuilder") == true)
@@ -106,6 +119,10 @@ internal static class StringBuilderOwnerFile
         w.Line("writer.Write<" + context.Profile + ">(value.ToString());");
     }
 
+    /// <summary>Handles JSON read for <c>StringBuilderOwnerFile</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <param name="set">The shared formatter owners and publication options.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context, SharedFormatterSet set)
     {
         if (set.FindFormatter("global::System.Text.StringBuilder")?.Supports("CanReadJsonStringBuilder") == true)

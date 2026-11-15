@@ -84,6 +84,11 @@ internal static class GeneratedNames
         return key.ToString();
     }
 
+    /// <summary>Handles canonical for <c>GeneratedNames</c>.</summary>
+    /// <param name="text">The text supplied to <c>Canonical</c>.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <param name="key">The key identifying the entry.</param>
+    /// <param name="stop">The stop supplied to <c>Canonical</c>.</param>
     private static void Canonical(string text, ref int index, StringBuilder key, char stop)
     {
         var token = new StringBuilder();
@@ -143,6 +148,12 @@ internal static class GeneratedNames
         Flush();
     }
 
+    /// <summary>Handles canonical for <c>GeneratedNames</c>.</summary>
+    /// <param name="text">The text supplied to <c>Canonical</c>.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <param name="key">The key identifying the entry.</param>
+    /// <param name="stop">The stop supplied to <c>Canonical</c>.</param>
+    /// <param name="tupleElement">Whether to enable tuple element for this operation.</param>
     private static void Canonical(string text, ref int index, StringBuilder key, char stop, bool tupleElement)
     {
         // A tuple element ends at a top-level comma or at the closing parenthesis; a trailing name follows the last space.
@@ -166,6 +177,9 @@ internal static class GeneratedNames
         Canonical(element, ref inner, key, stop: '\0');
     }
 
+    /// <summary>Handles last top level space for <c>GeneratedNames</c>.</summary>
+    /// <param name="element">The collection element or its formatter contract.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int LastTopLevelSpace(string element)
     {
         int depth = 0, found = -1;
@@ -211,6 +225,8 @@ internal static class ReadableTypeName
     {
         private readonly HashSet<string>? _previous;
 
+        /// <summary>Initializes a <c>Scope</c> from the supplied data.</summary>
+        /// <param name="previous">The previous supplied to <c>Scope</c>.</param>
         internal Scope(HashSet<string>? previous) => _previous = previous;
 
         /// <inheritdoc/>
@@ -229,6 +245,10 @@ internal static class ReadableTypeName
         return name.Length == 0 || !char.IsLetter(name[0]) ? "Type" + name : name.ToString();
     }
 
+    /// <summary>Handles type for <c>ReadableTypeName</c>.</summary>
+    /// <param name="text">The text supplied to <c>Type</c>.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <param name="name">The name to look up or emit.</param>
     private static void Type(string text, ref int index, StringBuilder name)
     {
         var part = new StringBuilder();
@@ -316,6 +336,11 @@ internal static class ReadableTypeName
         name.Append(part);
     }
 
+    /// <summary>Handles arguments for <c>ReadableTypeName</c>.</summary>
+    /// <param name="text">The text supplied to <c>Arguments</c>.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <param name="close">The close supplied to <c>Arguments</c>.</param>
+    /// <param name="name">The name to look up or emit.</param>
     private static void Arguments(string text, ref int index, char close, StringBuilder name)
     {
         bool first = true;
@@ -339,6 +364,9 @@ internal static class ReadableTypeName
         index++;
     }
 
+    /// <summary>Handles keyword for <c>ReadableTypeName</c>.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>The resulting text.</returns>
     private static string Keyword(string name) => name switch
     {
         "int" => "Int",

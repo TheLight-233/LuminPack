@@ -26,6 +26,11 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
     internal readonly string[] TypeParameters;
 
     /// <summary>Captures a type identity.</summary>
+    /// <param name="namespace">The namespace supplied to <c>TypeIdentity</c>.</param>
+    /// <param name="containingTypes">The containing types supplied to <c>TypeIdentity</c>.</param>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="typeParameters">The type parameters supplied to <c>TypeIdentity</c>.</param>
+    /// <param name="containingArities">The containing arities supplied to <c>TypeIdentity</c>.</param>
     internal TypeIdentity(string? @namespace, string[] containingTypes, string name, string[] typeParameters, int[]? containingArities = null)
     {
         Namespace = @namespace;
@@ -95,6 +100,9 @@ internal sealed class TypeIdentity : IEquatable<TypeIdentity>
     }
 
     /// <summary>Appends the next <paramref name="count"/> parameter names as a type argument list.</summary>
+    /// <param name="text">The text supplied to <c>AppendParameters</c>.</param>
+    /// <param name="parameter">The parameter supplied to <c>AppendParameters</c>.</param>
+    /// <param name="count">The number of items to process.</param>
     private void AppendParameters(StringBuilder text, ref int parameter, int count)
     {
         if (count == 0)

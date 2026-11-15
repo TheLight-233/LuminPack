@@ -41,6 +41,7 @@ internal static class PayloadEmitter
     /// <summary>Records why a type keeps the original pipeline.</summary>
     /// <param name="check">The name of the failed check.</param>
     /// <returns>Null, for the caller to return.</returns>
+    /// <typeparam name="T">The value type processed by the operation.</typeparam>
     internal static T? Reject<T>(string check) where T : class => null;
 
     /// <summary>Spells a member's read or snapshot local: leading underscores are dropped and the first letter is lower-cased.</summary>
@@ -133,6 +134,8 @@ internal sealed class CodeWriter : IDisposable
     private static readonly Regex InitializerAssignment = new(@"^(\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*=[^=>])");
 
     /// <summary>Whether a name is a reserved C# keyword.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>Whether the input satisfies the keyword check.</returns>
     private static bool Keyword(string name) => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.IsReservedKeyword(
         Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name));
 

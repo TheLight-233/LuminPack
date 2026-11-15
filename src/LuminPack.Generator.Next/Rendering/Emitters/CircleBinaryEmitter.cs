@@ -238,9 +238,13 @@ internal static partial class CircleBinaryEmitter
     }
 
     /// <summary>Whether a generated body needs the operation's profile.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <returns>Whether the input has profile.</returns>
     private static bool HasProfile(List<string> body) => body.Any(line => line.IndexOf(Profile, StringComparison.Ordinal) >= 0);
 
     /// <summary>The record's slot table: the slot count, then each slot width or 255 for a framed payload.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>byte[]</c>.</returns>
     internal static byte[] Table(PayloadRenderModel model)
     {
         if (model.CircleWidths.Any(width => width == 0))
@@ -253,6 +257,9 @@ internal static partial class CircleBinaryEmitter
     }
 
     /// <summary>Builds the write body, which is the same for the payload and Union entries.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w)
     {
         var members = model.Members;
@@ -364,6 +371,9 @@ internal static partial class CircleBinaryEmitter
     }
 
     /// <summary>Stores the constant slot table at the cursor, as eight-byte or four-byte words.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="table">The table supplied to <c>AppendTableStores</c>.</param>
     private static void AppendTableStores(CodeWriter w, List<string> body, byte[] table)
     {
         if (table.Length < 8)
@@ -385,6 +395,12 @@ internal static partial class CircleBinaryEmitter
         body.Add("}");
     }
 
+    /// <summary>Handles store lines for <c>CircleBinaryEmitter</c>.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="bytes">The bytes supplied to <c>StoreLines</c>.</param>
+    /// <param name="target">The target of the operation.</param>
+    /// <param name="widest">The widest supplied to <c>StoreLines</c>.</param>
+    /// <returns>The resulting <c>IEnumerable&lt;string&gt;</c>.</returns>
     private static IEnumerable<string> StoreLines(CodeWriter w, byte[] bytes, string target, int widest)
     {
         string memory = w.A("Unsafe");
@@ -401,6 +417,7 @@ internal static partial class CircleBinaryEmitter
     /// <param name="w">The file writer.</param>
     /// <param name="union">Whether the Union read is built, which expands the root's own type once.</param>
     /// <param name="expanded">Collects the member operations whose bodies were expanded, in expansion order.</param>
+    /// <returns>The body.</returns>
     internal static List<string> ReadBody(PayloadRenderModel model, CodeWriter w, bool union, List<PayloadRenderModel> expanded)
     {
         var state = new ReadState
@@ -720,6 +737,10 @@ internal static partial class CircleBinaryEmitter
     }
 
     /// <summary>Rewrites a callback that the model spelled for the root payload.</summary>
+    /// <param name="callback">The callback supplied to <c>Rewrite</c>.</param>
+    /// <param name="access">The access supplied to <c>Rewrite</c>.</param>
+    /// <param name="instance">The instance supplied to <c>Rewrite</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string Rewrite(string callback, string access, string instance)
     {
         const string rooted = "value?.";
@@ -730,6 +751,11 @@ internal static partial class CircleBinaryEmitter
     }
 
     /// <summary>Builds a constant-bytes difference expression through the file aliases.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="bytes">The bytes supplied to <c>Difference</c>.</param>
+    /// <param name="source">The source value or text being processed.</param>
+    /// <param name="widest">The widest supplied to <c>Difference</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string Difference(CodeWriter w, byte[] bytes, string source, int widest)
     {
         string memory = w.A("Unsafe");
@@ -765,6 +791,8 @@ internal static partial class CircleBinaryEmitter
     private static string WordType(int width) => width == 8 ? "ulong" : width == 4 ? "uint" : width == 2 ? "ushort" : "byte";
 
     /// <summary>The member storage expression of the write root's local view.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     private static string Access(RenderMember member) => (member.Mirrored ? "local" : "value") + "." + member.Name;
 
     /// <summary>Finds the fixed slots that share one storage view and whose wire widths equal their storage widths.</summary>
@@ -793,8 +821,13 @@ internal static partial class CircleBinaryEmitter
     }
 
     /// <summary>Formats a constant field width or offset.</summary>
+    /// <param name="width">The width of the storage or input range.</param>
+    /// <returns>The resulting text.</returns>
     private static string WidthText(int width) => width.ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>Handles camel for <c>CircleBinaryEmitter</c>.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>The resulting text.</returns>
     private static string Camel(string name) => char.ToLowerInvariant(name[0]) + name.Substring(1);
 
     /// <summary>Names the locals of one method the way the original inline expansion numbers repeated roles.</summary>
@@ -805,6 +838,7 @@ internal static partial class CircleBinaryEmitter
         private int _labels;
 
         /// <summary>Creates a pool that already holds the method's own parameter names.</summary>
+        /// <param name="reserved">The reserved supplied to <c>NamePool</c>.</param>
         internal NamePool(params string[] reserved)
         {
             foreach (string name in reserved)
@@ -815,6 +849,8 @@ internal static partial class CircleBinaryEmitter
         }
 
         /// <summary>The next occurrence of a role local, dropping a trailing zero when its stem is still free.</summary>
+        /// <param name="canonical">The canonical supplied to <c>Next</c>.</param>
+        /// <returns>The resulting text.</returns>
         internal string Next(string canonical)
         {
             bool first = !_counts.ContainsKey(canonical);
@@ -836,6 +872,7 @@ internal static partial class CircleBinaryEmitter
         }
 
         /// <summary>Reserves one inline exit label, numbered from zero in the order the exits close.</summary>
+        /// <returns>The resulting text.</returns>
         internal string Label()
         {
             string name;

@@ -23,6 +23,9 @@ internal static class ReadableTypeName
     }
 
     /// <summary>Spells one type and its suffixes.</summary>
+    /// <param name="text">The text supplied to <c>Type</c>.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <param name="name">The name to look up or emit.</param>
     private static void Type(string text, ref int index, StringBuilder name)
     {
         var part = new StringBuilder();
@@ -89,6 +92,10 @@ internal static class ReadableTypeName
     }
 
     /// <summary>Spells a comma-separated argument list up to its closing character.</summary>
+    /// <param name="text">The text supplied to <c>Arguments</c>.</param>
+    /// <param name="index">The zero-based item index.</param>
+    /// <param name="close">The close supplied to <c>Arguments</c>.</param>
+    /// <param name="name">The name to look up or emit.</param>
     private static void Arguments(string text, ref int index, char close, StringBuilder name)
     {
         bool first = true;
@@ -114,6 +121,8 @@ internal static class ReadableTypeName
     }
 
     /// <summary>Capitalizes a C# keyword type.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>The resulting text.</returns>
     private static string Keyword(string name) => name switch
     {
         "int" => "Int",

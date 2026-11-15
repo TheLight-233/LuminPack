@@ -26,6 +26,11 @@ internal sealed class UnionRenderer : IRenderer
     /// <returns>The complete file text, or an empty string when the root is not covered.</returns>
     internal string RenderJson(TypeModel model, RenderContext context) => Render(model, context, json: true);
 
+    /// <summary>Handles render for <c>UnionRenderer</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="context">The context in scope for the operation.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
+    /// <returns>The generated C# source.</returns>
     private static string Render(TypeModel model, RenderContext context, bool json)
     {
         if (model is not UnionModel ||

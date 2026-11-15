@@ -16,6 +16,7 @@ internal static class DirectInlining
     /// <param name="model">The covered type.</param>
     /// <param name="union">Whether the root is the Union payload write.</param>
     /// <param name="sizes">The runtime-size calls of raw struct widths in the body.</param>
+    /// <returns>Whether the input satisfies the write check.</returns>
     internal static bool Write(PayloadRenderModel model, bool union, int sizes)
     {
         var members = model.Members;
@@ -38,11 +39,14 @@ internal static class DirectInlining
     /// in place, so their member runs are counted as part of its own body.</summary>
     /// <param name="model">The covered type.</param>
     /// <param name="union">Whether the root is the Union payload write, whose leading header is not reserved.</param>
+    /// <returns>Whether the input satisfies the mixed write check.</returns>
     internal static bool MixedWrite(PayloadRenderModel model, bool union) => MixedCost(model) - (union ? 1 : 0) <= Limit;
 
     /// <summary>Counts a mixed record's expanded write: the reservation and commit, the mirror view of a mirrored type, each
     /// variable member's snapshot and store, each fixed run, each inline object's marker and expanded body, and each string
     /// list's expanded null header and profiled span store.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int MixedCost(PayloadRenderModel model)
     {
         var members = model.Members;
@@ -88,25 +92,34 @@ internal static class DirectInlining
     }
 
     /// <summary>Whether a portable struct's write root keeps its aggressive inlining hint.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>Whether the input satisfies the portable write check.</returns>
     internal static bool PortableWrite(PayloadRenderModel model) => PortableCount(model, write: true) <= Limit;
 
     /// <summary>Whether a portable struct's read root keeps its aggressive inlining hint.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>Whether the input satisfies the portable read check.</returns>
     internal static bool PortableRead(PayloadRenderModel model) => PortableCount(model, write: false) <= Limit;
 
     /// <summary>Counts a portable struct operation's template calls: the span index and reference, the advance, the view
     /// (marshal and address) per branch, and per field its offset and transfer in each branch; a read also checks the span and the advance.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="write">Whether to emit the write operation.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int PortableCount(PayloadRenderModel model, bool write)
         => write ? 7 + 4 * model.PortableView.Leaves.Length : 7 + 2 * model.PortableView.Leaves.Length;
 
     /// <summary>Whether a constructed read keeps its aggressive inlining hint: the null marker, the existing-instance call,
     /// one decode per member and the mirror views of both construction branches.</summary>
     /// <param name="model">The covered type.</param>
+    /// <returns>Whether the input satisfies the constructed read check.</returns>
     internal static bool ConstructedRead(PayloadRenderModel model)
         => 2 + model.Members.Length + (model.Mirror == null ? 0 : 2) <= Limit;
 
     /// <summary>Whether a root read keeps its aggressive inlining hint.</summary>
     /// <param name="model">The covered type.</param>
     /// <param name="sizes">The runtime-size calls of raw struct widths in the body.</param>
+    /// <returns>Whether the input satisfies the read check.</returns>
     internal static bool Read(PayloadRenderModel model, int sizes)
     {
         int count = 1 + sizes + model.Members.Count(member => !member.IsFixed);
@@ -127,12 +140,19 @@ internal static class DirectInlining
     }
 
     /// <summary>Whether an all-fixed Union read keeps its aggressive inlining hint.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="sizes">The sizes supplied to <c>FixedUnionRead</c>.</param>
+    /// <returns>Whether the input satisfies the fixed union read check.</returns>
     internal static bool FixedUnionRead(PayloadRenderModel model, int sizes) => 2 * model.Members.Length + 1 + sizes <= Limit;
 
     /// <summary>Counts a fixed-run write: its proof, block copy, field-wise stores and cursor advance.</summary>
+    /// <param name="fields">The fields supplied to <c>Group</c>.</param>
+    /// <returns>The resulting <c>int</c>.</returns>
     private static int Group(int fields) => 7 * fields - 1;
 
     /// <summary>Lists the lengths of consecutive fixed member runs.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>System.Collections.Generic.IEnumerable&lt;int&gt;</c>.</returns>
     private static System.Collections.Generic.IEnumerable<int> Runs(PayloadRenderModel model)
     {
         var members = model.Members;

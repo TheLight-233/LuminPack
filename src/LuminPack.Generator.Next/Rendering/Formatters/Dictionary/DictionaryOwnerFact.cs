@@ -19,6 +19,11 @@ internal sealed class DictionaryFormatter
 
     /// <summary>Registers a dictionary definition.</summary>
     /// <param name="entries">The owner renderer for raw scalar and string entries.</param>
+    /// <param name="forwardsToDictionary">Whether to enable forwards to dictionary for this operation.</param>
+    /// <param name="payload">The payload supplied to <c>DictionaryFormatter</c>.</param>
+    /// <param name="jsonReuseStore">The JSON reuse store supplied to <c>DictionaryFormatter</c>.</param>
+    /// <param name="nativeEntries">Whether to enable native entries for this operation.</param>
+    /// <param name="general">The general supplied to <c>DictionaryFormatter</c>.</param>
     internal DictionaryFormatter(RenderDictionaryOwner entries, bool forwardsToDictionary = false, RenderDictionaryOwner? payload = null,
         string? jsonReuseStore = null, bool nativeEntries = false, RenderDictionaryOwner? general = null)
     {
@@ -40,6 +45,10 @@ internal sealed class DictionaryFormatter
     internal RenderDictionaryOwner? General { get; }
 
     /// <summary>Selects retained entry specializations or the default element-owner traversal.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="fact">The fact supplied to <c>RenderDefault</c>.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <returns>The generated C# source.</returns>
     internal string RenderDefault(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations)
     {
         if (General != null)

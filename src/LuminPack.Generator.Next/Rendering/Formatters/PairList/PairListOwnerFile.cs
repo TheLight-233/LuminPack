@@ -18,6 +18,8 @@ internal static class PairListOwnerFile
     internal static string Render(SharedFormatterSet set, DictionaryOwnerFact fact, GeneratedOperations operations) =>
         PairedDictionaryOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles read for <c>PairListOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(PairedDictionaryContext c)
     {
         var w = c.W;

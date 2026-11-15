@@ -20,6 +20,8 @@ internal static class ArrayTextOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles write for <c>ArrayTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         if (!c.Text || !c.Supports("WriteArrayStrings"))
@@ -39,6 +41,8 @@ internal static class ArrayTextOwnerFile
         w.Line("operationState.CheckBuffer();");
     }
 
+    /// <summary>Handles read for <c>ArrayTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

@@ -41,6 +41,17 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     /// <summary>Related source declarations used by the existing code-fix contracts.</summary>
     internal readonly DiagnosticInfo[] AdditionalLocations;
 
+    /// <summary>Initializes a <c>DiagnosticInfo</c> from the supplied data.</summary>
+    /// <param name="id">The id supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="arguments">The arguments supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="filePath">The file path supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="spanStart">The span start supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="spanLength">The span length supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="startLine">The start line supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="startCharacter">The start character supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="endLine">The end line supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="endCharacter">The end character supplied to <c>DiagnosticInfo</c>.</param>
+    /// <param name="additionalLocations">The additional locations supplied to <c>DiagnosticInfo</c>.</param>
     private DiagnosticInfo(string id, string[] arguments, string? filePath, int spanStart, int spanLength, int startLine,
         int startCharacter, int endLine, int endCharacter, DiagnosticInfo[]? additionalLocations = null)
     {

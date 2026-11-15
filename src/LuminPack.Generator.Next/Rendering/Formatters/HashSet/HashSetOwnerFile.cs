@@ -20,6 +20,7 @@ internal static class HashSetOwnerFile
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec, nonEmptyRawHeaderBytes: sizeof(int), directRawWrite: WriteDirect);
 
     /// <summary>Writes a nonempty or empty raw set to its fixed destination without copying writer state.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void WriteDirect(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -30,6 +31,8 @@ internal static class HashSetOwnerFile
         w.Close();
     }
 
+    /// <summary>Handles write for <c>HashSetOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         // The raw kernel needs unmanaged elements; strings are counted while the set is enumerated.
@@ -41,10 +44,16 @@ internal static class HashSetOwnerFile
         WriteRaw(c, "operationState", "value");
     }
 
+    /// <summary>Writes raw.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
+    /// <param name="state">The current operation state.</param>
+    /// <param name="value">The value to process.</param>
     private static void WriteRaw(EnumerableOwnerContext c, string state, string value) =>
         c.W.Line("global::LuminPack.Code.LuminPackMarshal." + (c.Supports("SmallHashSetWrite") ? "WriteSmallHashSetRaw" : "WriteHashSetRaw") +
             "(ref " + state + ", " + value + ");");
 
+    /// <summary>Handles read for <c>HashSetOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

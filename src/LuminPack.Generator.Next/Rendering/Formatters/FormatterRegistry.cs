@@ -292,6 +292,7 @@ internal static class FormatterRegistry
     /// <param name="inner">The family's member writer for raw scalars and strings.</param>
     /// <param name="payload">The family's member writer for packable elements.</param>
     /// <returns>The member writer used by records.</returns>
+    /// <param name="text">The text supplied to <c>Orderable</c>.</param>
     internal static WriteFormatterMember Orderable(WriteFormatterMember inner, WriteFormatterMember payload,
         WriteFormatterMember? text = null) =>
         (List<string> body, RenderMember member, string owner, int depth, CodeWriter writer, Dictionary<string, int> names,

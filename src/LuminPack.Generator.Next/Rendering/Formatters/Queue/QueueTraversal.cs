@@ -82,6 +82,9 @@ internal static class QueueTraversal
     }
 
     // A string element has no raw storage: after the storage words the strings are written in dequeue order.
+    /// <summary>Writes text.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="local">The local supplied to <c>WriteText</c>.</param>
     private static void WriteText(List<string> body, string local)
     {
         body.Add("int queueSize = " + local + ".Count;");
@@ -99,6 +102,8 @@ internal static class QueueTraversal
     }
 
     /// <summary>Stores the three already-reserved wire words using the architecture-aware scalar writer.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="memory">The memory supplied to <c>WriteStorageWords</c>.</param>
     private static void WriteStorageWords(List<string> body, string memory)
     {
         const string writer = "global::LuminPack.Core.LuminPackWriter";

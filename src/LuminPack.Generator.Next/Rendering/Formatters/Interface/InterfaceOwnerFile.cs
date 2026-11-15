@@ -181,6 +181,8 @@ internal static class InterfaceOwnerFile
         }
     }
 
+    /// <summary>Reads array.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void ReadArray(EnumerableOwnerContext c)
     {
         if (c.ReadObjectInterfaceItems())
@@ -200,6 +202,8 @@ internal static class InterfaceOwnerFile
         w.Line("value = array;");
     }
 
+    /// <summary>Reads list.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void ReadList(EnumerableOwnerContext c)
     {
         if (c.ReadObjectInterfaceItems(freshList: true))
@@ -215,6 +219,8 @@ internal static class InterfaceOwnerFile
         w.Line("value = list;");
     }
 
+    /// <summary>Reads set.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void ReadSet(EnumerableOwnerContext c)
     {
         var w = c.W;
@@ -249,5 +255,7 @@ internal static class InterfaceOwnerFile
         w.Line("value = hashSet;");
     }
 
+    /// <summary>Handles block for <c>InterfaceOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Block(EnumerableOwnerContext c) => c.ReadBlock("span");
 }

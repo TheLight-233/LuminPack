@@ -9,6 +9,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Emitters;
 internal static partial class BinaryEmitter
 {
     /// <summary>Whether a member writes its own block in place instead of entering the surrounding reservation.</summary>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>Whether the input is collection block.</returns>
     private static bool IsCollectionBlock(RenderMember member) => member.Kind is RenderMemberKind.SortedList or RenderMemberKind.PairList or RenderMemberKind.NestedList or RenderMemberKind.SparseDictionary;
 
     /// <summary>Writes one collection member in place: its null header, its payload and its exit label.</summary>
@@ -51,6 +53,13 @@ internal static partial class BinaryEmitter
 
 
     /// <summary>Writes a sorted list's stored key and value arrays as paired entries, with an array-pool fallback.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddSortedListWrite</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddSortedListWrite</c>.</param>
     private static void AddSortedListWrite(List<string> body, PayloadRenderModel model, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
@@ -118,6 +127,13 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes a list of key/value pairs, storing each pair's key and value in one checkable loop.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddPairListWrite</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddPairListWrite</c>.</param>
     private static void AddPairListWrite(List<string> body, PayloadRenderModel model, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
@@ -149,6 +165,15 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes a list of lists: the outer span, then each inner span with its elements' expanded record bodies.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="depth">The current nesting depth.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddNestedListWrite</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddNestedListWrite</c>.</param>
+    /// <param name="cursors">The cursors supplied to <c>AddNestedListWrite</c>.</param>
+    /// <param name="spans">The spans supplied to <c>AddNestedListWrite</c>.</param>
     private static void AddNestedListWrite(List<string> body, RenderMember member, string owner, int depth, CodeWriter w,
         Dictionary<string, int> names, ref int ends, ref int cursors, ref int spans)
     {
@@ -217,6 +242,12 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes a dictionary with a nullable raw value as sparse raw entries whose keys use their varint record.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="owner">The type or declaration that owns the operation.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="names">The names supplied to <c>AddSparseDictionaryWrite</c>.</param>
+    /// <param name="ends">The ends supplied to <c>AddSparseDictionaryWrite</c>.</param>
     private static void AddSparseDictionaryWrite(List<string> body, RenderMember member, string owner, CodeWriter w,
         Dictionary<string, int> names, ref int ends)
     {
@@ -253,6 +284,11 @@ internal static partial class BinaryEmitter
     }
 
     /// <summary>Writes one sorted or paired value: a text record through the string formatter, or a raw scalar store.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="shape">The collection or payload shape to use.</param>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="source">The source value or text being processed.</param>
+    /// <param name="model">The normalized model for this contract.</param>
     private static void AddCollectionValueWrite(List<string> body, RenderCollection shape, string writer, string source, PayloadRenderModel model)
     {
         if (shape.ValueText)

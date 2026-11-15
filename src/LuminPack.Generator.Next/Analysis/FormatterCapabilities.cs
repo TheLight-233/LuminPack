@@ -352,6 +352,9 @@ internal static class FormatterCapabilities
 
     // These element moves preserve every wire byte and the default hash cannot invoke application code.
     // Boolean retains canonical validation. The caller separately selects the raw wire representation.
+    /// <summary>Handles raw callback free set element for <c>FormatterCapabilities</c>.</summary>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <returns>Whether the input satisfies the raw callback free set element check.</returns>
     private static bool RawCallbackFreeSetElement(ITypeSymbol type) =>
         type.TypeKind == TypeKind.Enum || type.SpecialType is SpecialType.System_Byte or SpecialType.System_SByte or
         SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or

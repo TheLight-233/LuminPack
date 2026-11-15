@@ -41,6 +41,8 @@ public static partial class LuminTreeStorage
         internal static readonly bool Available = RuntimeInformation.ProcessArchitecture == Architecture.X64 &&
             Environment.Version.Major == 10 && Check(Probe);
 
+        /// <summary>Returns the probe for <c>IdentityHashSet</c>.</summary>
+        /// <returns>Whether the input satisfies the probe check.</returns>
         private static bool Probe()
         {
             Type type = typeof(T);

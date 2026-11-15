@@ -19,6 +19,8 @@ internal static class SortedSetTextOwnerFile
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
 
+    /// <summary>Handles write for <c>SortedSetTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     private static void Write(EnumerableOwnerContext c)
     {
         if (!c.Counted)
@@ -29,6 +31,8 @@ internal static class SortedSetTextOwnerFile
             c.CountedWrite("value");
     }
 
+    /// <summary>Handles read for <c>SortedSetTextOwnerFile</c>.</summary>
+    /// <param name="c">The case or formatter context in scope.</param>
     internal static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;

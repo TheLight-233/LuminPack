@@ -450,6 +450,11 @@ namespace LuminPack.Core
             return true;
         }
 
+        /// <summary>Attempts to read adjacent container.</summary>
+        /// <typeparam name="TOptions">The compiled serialization options.</typeparam>
+        /// <param name="head">The head supplied to <c>TryReadAdjacentContainer</c>.</param>
+        /// <param name="skip">The skip supplied to <c>TryReadAdjacentContainer</c>.</param>
+        /// <returns>Whether the operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryReadAdjacentContainer<TOptions>(char head, int skip) where TOptions : struct, ILuminPackOptions
         {

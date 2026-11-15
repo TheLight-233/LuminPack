@@ -9,6 +9,8 @@ internal readonly struct SpecialOwnerContext
 {
     private readonly FormatterModel? _contract;
     /// <summary>Checks a runtime capability captured during analysis.</summary>
+    /// <param name="capability">The capability supplied to <c>Supports</c>.</param>
+    /// <returns>Whether the input satisfies the supports check.</returns>
     internal bool Supports(string capability) => _contract?.Supports(capability) == true;
 
     /// <summary>The profile type parameter in scope.</summary>
@@ -21,6 +23,10 @@ internal readonly struct SpecialOwnerContext
     internal readonly string JsonReader;
 
     /// <summary>Captures the current aliases.</summary>
+    /// <param name="profile">The compiled serialization profile or its generated type name.</param>
+    /// <param name="jsonWriter">The JSON writer supplied to <c>SpecialOwnerContext</c>.</param>
+    /// <param name="jsonReader">The JSON reader supplied to <c>SpecialOwnerContext</c>.</param>
+    /// <param name="contract">The contract supplied to <c>SpecialOwnerContext</c>.</param>
     internal SpecialOwnerContext(string profile, string jsonWriter, string jsonReader, FormatterModel? contract = null)
     {
         _contract = contract;

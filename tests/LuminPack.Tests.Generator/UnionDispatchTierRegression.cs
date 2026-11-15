@@ -112,13 +112,22 @@ internal static class UnionDispatchTierRegression
             "Opening the root in another file must replace its retained direct calls with exact patterns.", Compiled(retained, "Root"));
     }
 
+    /// <summary>Handles disable registration for <c>UnionDispatchTierRegression</c>.</summary>
+    /// <param name="source">The source value or text being processed.</param>
+    /// <returns>The resulting text.</returns>
     private static string DisableRegistration(string source) => source.Replace("using LuminPack.Attribute;",
         "using LuminPack.Attribute;\n[assembly: LuminPackGeneratorOptions(LuminPackRegisterMode.Disabled)]");
 
+    /// <summary>Creates the generator driver for the requested parse options.</summary>
+    /// <param name="options">The options governing the operation.</param>
+    /// <returns>The resulting <c>GeneratorDriver</c>.</returns>
     private static GeneratorDriver Driver(CSharpParseOptions options) => CSharpGeneratorDriver.Create(
         new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() },
         parseOptions: options);
 
+    /// <summary>Extracts generated source from the completed driver run.</summary>
+    /// <param name="driver">The generator driver used for this run.</param>
+    /// <returns>The generated C# source.</returns>
     private static string GeneratedText(GeneratorDriver driver)
     {
         var result = driver.GetRunResult();
