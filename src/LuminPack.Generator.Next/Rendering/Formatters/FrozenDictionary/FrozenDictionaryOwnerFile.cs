@@ -8,7 +8,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static class FrozenDictionaryOwnerFile
 {
     private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "staged.Add(key!, itemValue);",
-        BeforeJson, AfterJson);
+        BeforeJson, AfterJson, capturesJsonPairs: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

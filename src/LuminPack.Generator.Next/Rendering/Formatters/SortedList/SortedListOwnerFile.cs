@@ -10,7 +10,8 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 internal static partial class SortedListOwnerFile
 {
     private const string ArrayReference = "global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference";
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Add(key!, itemValue);", outlineJson: true);
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(Write, Read, "value.Add(key!, itemValue);",
+        outlineJson: true, capturesJsonPairs: true);
 
     /// <summary>Renders the file.</summary>
     /// <param name="set">The required owners and the extension container.</param>

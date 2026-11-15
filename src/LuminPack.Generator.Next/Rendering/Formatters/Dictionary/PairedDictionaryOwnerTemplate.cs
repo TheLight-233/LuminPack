@@ -481,6 +481,9 @@ internal sealed class PairedDictionarySpec
     /// <summary>Whether the JSON roots are kept out of their callers.</summary>
     internal bool OutlineJson { get; }
 
+    /// <summary>Whether the JSON traversal captures both entry members before output.</summary>
+    internal bool CapturesJsonPairs { get; }
+
     /// <summary>The expression that enumerates the entries of <c>value</c>.</summary>
     internal string Source { get; }
 
@@ -501,9 +504,10 @@ internal sealed class PairedDictionarySpec
     /// <param name="keyMember">The member exposing each key.</param>
     /// <param name="valueMember">The member exposing each value.</param>
     /// <param name="outlineJson">Whether to keep the JSON roots out of their callers.</param>
+    /// <param name="capturesJsonPairs">Whether all JSON traversals capture an entry before output.</param>
     internal PairedDictionarySpec(Action<PairedDictionaryContext> writeBody, Action<PairedDictionaryContext> readBody, string jsonAdd,
         Action<PairedDictionaryContext>? jsonBefore = null, Action<PairedDictionaryContext>? jsonAfter = null, bool readsHeader = false,
-        string source = "value", string keyMember = "Key", string valueMember = "Value", bool outlineJson = false)
+        string source = "value", string keyMember = "Key", string valueMember = "Value", bool outlineJson = false, bool capturesJsonPairs = false)
     {
         Source = source;
         KeyMember = keyMember;
@@ -515,6 +519,7 @@ internal sealed class PairedDictionarySpec
         JsonAfter = jsonAfter;
         ReadsHeader = readsHeader;
         OutlineJson = outlineJson;
+        CapturesJsonPairs = capturesJsonPairs;
     }
 }
 
@@ -742,7 +747,8 @@ internal static class PairedDictionaryOwnerTemplate
                     w.Blank();
                     w.Line("writer.WriteArrayStart<TLuminProfile>();");
                     var pairWriter = new DictionaryJsonPairWriter(w, keyOwner, valueOwner, key, value,
-                        context.Supports("JsonIntegerPair") && context.RawPairs, utf8Only: context.Supports("PriorityQueueTraversal"));
+                        context.Supports("JsonIntegerPair") && context.RawPairs, utf8Only: context.Supports("PriorityQueueTraversal"),
+                        capturedPair: spec.CapturesJsonPairs);
                     bool hashTree = EmitTree("ImmutableDictionary", "CopyImmutableHashTree");
                     bool sortedTree = EmitTree("ImmutableSortedDictionary", "CopyImmutableSortedTree");
                     if ((hashTree || sortedTree) && !dictionary.StartsWith("global::System.Collections.Immutable.IImmutableDictionary<", StringComparison.Ordinal))
