@@ -1,11 +1,38 @@
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Option;
+using Xunit;
 
 namespace LuminPackUnitTest;
 
 /// <summary>Provides circle reference serialization test functionality.</summary>
 public class CircleReferenceSerializationTest
 {
+    /// <summary>Verifies generated reference metadata and Unicode heads through both document encodings.</summary>
+    [Fact]
+    public void GeneratedJsonHeadsKeepReferenceIdentity()
+    {
+        var root = new JsonHeadNode { \u540d\u79f0 = 17 };
+        root.Self = root;
+        const string expected = "{\"$id\":0,\"\u540d\u79f0\":17,\"Self\":{\"$ref\":0}}";
+        Assert.Equal(expected, LuminPackSerializer.SerializeJson<JsonHeadNode, LuminPackUtf8LengthOptions>(root));
+        Assert.Equal(expected, LuminPackSerializer.SerializeJson<JsonHeadNode, LuminPackUtf16LengthOptions>(root));
+        var value = LuminPackSerializer.DeserializeJson<JsonHeadNode, LuminPackUtf8LengthOptions>(expected);
+        Assert.Equal(17, value.\u540d\u79f0);
+        Assert.Same(value, value.Self);
+    }
+
+    /// <summary>A reference-tracked node with a non-ASCII property name.</summary>
+    [LuminPackable(GeneratorType.CircleReference)]
+    public sealed partial class JsonHeadNode
+    {
+        /// <summary>The scalar field in the reference-tracked payload.</summary>
+        [LuminPackOrder(0)] public int \u540d\u79f0;
+
+        /// <summary>A back reference to the owning instance.</summary>
+        [LuminPackOrder(1)] public JsonHeadNode? Self;
+    }
+
     /// <summary>Provides simple node functionality.</summary>
     [LuminPackable(GeneratorType.CircleReference)]
     public class SimpleNode

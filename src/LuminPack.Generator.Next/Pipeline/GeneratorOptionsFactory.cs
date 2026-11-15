@@ -70,7 +70,8 @@ internal static class GeneratorOptionsFactory
             cursor is IPointerTypeSymbol || cursor == null && !net8, AmbiguousNames(compilation), FormatterInterfaces(compilation),
             compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackKnownFormatters") != null,
             FormatterBuiltinCapabilities.HasQuotedScalarReader(compilation),
-            cursor is INamedTypeSymbol { Name: "Span", Arity: 1 });
+            cursor is INamedTypeSymbol { Name: "Span", Arity: 1 },
+            generatedJsonPropertyWriter: net8 && !unity && GeneratedJsonProperty.Available(compilation));
     }
 
     /// <summary>Checks that the compiler feature enables the generated interception namespace.</summary>

@@ -113,6 +113,86 @@ public class GeneratedJsonLiteralTest
         }
     }
 
+    /// <summary>Compares generated property heads with the stepped writer, including changeover and failed acquisition.</summary>
+    [Fact]
+    public void GeneratedPropertyHeadsPreserveShortAndSegmentedWrites()
+    {
+        Check<LuminPackUtf8LengthOptions>();
+        Check<LuminPackUtf16LengthOptions>();
+        Check<LuminPackOptions<LuminPackUtf8LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>>();
+
+        static void Check<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            foreach (bool first in new[] { true, false })
+            for (int room = 0; room < 28; room++)
+            {
+                var expected = Fixed(room, first, generated: false);
+                var actual = Fixed(room, first, generated: true);
+                Assert.Equal(expected, actual);
+                foreach (bool fail in new[] { false, true })
+                    Assert.Equal(Stream(room, first, fail, generated: false), Stream(room, first, fail, generated: true));
+            }
+
+            static (string Bytes, int Position, bool First, Type? Error) Fixed(int room, bool first, bool generated)
+            {
+                byte[] buffer = Enumerable.Repeat((byte)0xCC, room + 2).ToArray();
+                Span<byte> window = buffer.AsSpan(1, room);
+                var writer = new LuminPackJsonWriter(ref window, new LuminPackWriterOptionalState()) { IsFirstElement = first };
+                Type? failure = null;
+                try { Write(ref writer, generated); }
+                catch (Exception error) { failure = error.GetType(); }
+                return (Convert.ToHexString(buffer), writer.Position, writer.IsFirstElement, failure);
+            }
+
+            static (string Bytes, string Calls, long Written, bool First, Type? Error) Stream(int room, bool first, bool fail, bool generated)
+            {
+                var output = new TokenOutput(fail);
+                var writer = new LuminPackJsonWriter(output, new LuminPackWriterOptionalState(), 4096) { IsFirstElement = first };
+                writer.Advance(writer.Buffer.Length - room);
+                Type? failure = null;
+                try
+                {
+                    Write(ref writer, generated);
+                    writer.FlushToBufferWriter();
+                }
+                catch (Exception error)
+                {
+                    Assert.Same(output.Failure, error);
+                    failure = error.GetType();
+                }
+                finally { writer.Dispose(); }
+                return (Convert.ToHexString(output.Bytes.ToArray()), string.Join(",", output.Calls), writer.BytesWritten, writer.IsFirstElement, failure);
+            }
+
+            static void Write(ref LuminPackJsonWriter writer, bool generated)
+            {
+                const string property = ",\"\u540D\u79F0\":";
+                ReadOnlySpan<byte> utf8Head = ",\"\u540D\u79F0\":"u8;
+                bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+                bool first = writer.IsFirstElement;
+                int position = writer.Position;
+                if (generated)
+                {
+                    int width = utf8 ? utf8Head.Length - (first ? 1 : 0) : 2 * (property.Length - (first ? 1 : 0));
+                    bool expected = IntPtr.Size == 8 && writer.Buffer.Length - position >= width;
+                    bool written = writer.TryWriteGeneratedPropertyName<TOptions>(utf8Head, property.AsSpan());
+                    Assert.Equal(expected, written);
+                    if (written)
+                    {
+                        Assert.True(writer.IsFirstElement);
+                        return;
+                    }
+                }
+                Assert.Equal(position, writer.Position);
+                Assert.Equal(first, writer.IsFirstElement);
+                if (utf8)
+                    writer.WritePropertyName<TOptions>("\u540D\u79F0"u8);
+                else
+                    writer.WritePropertyName<TOptions>("\u540D\u79F0".AsSpan());
+            }
+        }
+    }
+
     /// <summary>Executes either the retained character operation or the complete public token writer over a pinned window.</summary>
     /// <param name="token">The fixed literal being written.</param>
     /// <param name="first">The initial first-element state.</param>

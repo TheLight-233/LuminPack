@@ -39,7 +39,7 @@ public static partial class LuminPackExtensionGenerator
                 LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, body);
             GenerateRootBinaryExtensions(body, data, name, metadata, SupportsFixedVersionPrefix(data, compilation),
                 guardNestedReads || CompiledOptions.Resolve(type, compilation).Input.Enabled);
-            GenerateRootJsonExtensions(body, data, name, metadata);
+            GenerateRootJsonExtensions(body, data, name, metadata, compilation);
             var registry = new LuminPackLocalLayoutGenerator.LocalLayoutRegistry();
             LuminPackLocalLayoutGenerator.AppendRootLocalClass(body, registry, data);
             LuminPackLocalLayoutGenerator.AppendNestedLocalClasses(body, registry, data.fields);

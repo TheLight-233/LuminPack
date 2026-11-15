@@ -31,7 +31,7 @@ public static partial class LuminPackExtensionGenerator
         // once by the assembly invocation pipeline, so multiple roots can reuse one state API.
         GenerateRootBinaryExtensions(sb, data, typeName, metaInfo, SupportsFixedVersionPrefix(data, compilation),
             CompiledOptions.Resolve(data.TypeSymbol, compilation).Input.Enabled);
-        GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
+        GenerateRootJsonExtensions(sb, data, typeName, metaInfo, compilation);
         // Local layout mirrors and accessors are partitioned into shared assembly files.
 
         return GenerateExtension(sb, GetExtensionClassName(compilation));

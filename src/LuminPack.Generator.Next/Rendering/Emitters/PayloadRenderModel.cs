@@ -450,6 +450,9 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     internal readonly bool Net8;
     /// <summary>Whether JSON property heads are UTF-8 string literal properties (.NET 8 and C# 11 or later) rather than arrays.</summary>
     internal readonly bool Utf8Literals;
+
+    /// <summary>Whether the reference-tracked JSON writer can copy complete generated property heads.</summary>
+    internal readonly bool GeneratedPropertyHeads;
     /// <summary>The version-tolerant schema, or null for an ordinary record.</summary>
     internal readonly VersionSchema Version;
     /// <summary>Whether a declared instance member is not unmanaged storage, which gives the Union read its outlined entry.</summary>
@@ -656,6 +659,7 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
     /// <param name="limits">The limits supplied to <c>PayloadRenderModel</c>.</param>
     /// <param name="recursive">Whether to enable recursive for this operation.</param>
     /// <param name="registration">Whether to enable registration for this operation.</param>
+    /// <param name="generatedPropertyHeads">Whether to write bounded static heads for reference-tracked JSON.</param>
     internal PayloadRenderModel(string globalName, string readable, string extension, string jsonHelper, bool freshResult, bool uniqueEntries,
         RenderMember[] members, bool proven, string mirror, string[] mirrorFields, bool derived, bool isStruct, string view, bool viewElided,
         bool fixedUnionCase, bool measureRecord, string[] constructorArguments, string[] constructorMembers, bool memberWrite, bool net8, bool utf8Literals,
@@ -668,8 +672,10 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         bool[] unionTierSealed = null, bool circle = false, bool circleGuarded = false, bool managedStruct = false,
         PortableView portableView = null, bool unionWide = false, int[] mirrorOffsets = null, string[] typeParameters = null,
         string[] typeConstraints = null, bool trusted = false, string declaredProfile = null, bool rentByRef = false, bool constantSpans = false, int[] circleSlots = null, int[] circleWidths = null, StorageMirrorModel[] mirrors = null,
-        string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true)
+        string rejection = null, InputLimits limits = null, bool recursive = false, bool registration = true,
+        bool generatedPropertyHeads = false)
     {
+        GeneratedPropertyHeads = generatedPropertyHeads;
         Registration = registration;
         Limits = limits;
         Recursive = recursive;
@@ -758,7 +764,8 @@ internal sealed class PayloadRenderModel : IEquatable<PayloadRenderModel>
         DeclaredProfile == other.DeclaredProfile &&
         Same(ConstructorArguments, other.ConstructorArguments) && Same(ConstructorMembers, other.ConstructorMembers) &&
         Same(DeclaredOrder, other.DeclaredOrder) && Bounded == other.Bounded &&
-        Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && Equals(Version, other.Version) &&
+        Net8 == other.Net8 && Utf8Literals == other.Utf8Literals && GeneratedPropertyHeads == other.GeneratedPropertyHeads &&
+        Equals(Version, other.Version) &&
         ReferencePayload == other.ReferencePayload && LayoutAttribute == other.LayoutAttribute &&
         UnionRoot == other.UnionRoot && UnionInterface == other.UnionInterface && UnionSuffix == other.UnionSuffix &&
         UnionCursor == other.UnionCursor && UnionReadGeneric == other.UnionReadGeneric && UnionNamespace == other.UnionNamespace &&

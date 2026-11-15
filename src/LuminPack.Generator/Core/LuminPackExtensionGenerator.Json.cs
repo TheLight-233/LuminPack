@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using LuminPack.SourceGenerator;
+using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
 
@@ -42,7 +43,8 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="typeName">The C# type name to use in generated source.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    private static void GenerateRootJsonExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo)
+    /// <param name="compilation">The consumer compilation and selected runtime.</param>
+    private static void GenerateRootJsonExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo, Compilation compilation)
     {
         if (data.isUnion)
         {
@@ -98,7 +100,9 @@ public static partial class LuminPackExtensionGenerator
             LuminPackJsonCodeGenerator.GenerateStaticUtf8Fields(sb, data);
             LuminPackJsonCircleReferenceCodeGenerator.GenerateStaticUtf8FieldsForCircleReference(sb);
             var circleMethods = new StringBuilder();
-            LuminPackJsonCircleReferenceCodeGenerator.GenerateJsonSerializeWithCircleReference(circleMethods, data, typeName, metaInfo);
+            bool staticHeads = metaInfo.IsNet8 && !metaInfo.IsForUnity && (int)metaInfo.CSharpVersion >= 1100 &&
+                GeneratedJsonProperty.Available(compilation);
+            LuminPackJsonCircleReferenceCodeGenerator.GenerateJsonSerializeWithCircleReference(circleMethods, data, typeName, metaInfo, staticHeads);
             circleMethods.AppendLine();
             LuminPackJsonCircleReferenceCodeGenerator.GenerateJsonDeserializeWithCircleReference(circleMethods, data, typeName, metaInfo);
             string nullableSuffix = data.isValueType ? string.Empty : "?";

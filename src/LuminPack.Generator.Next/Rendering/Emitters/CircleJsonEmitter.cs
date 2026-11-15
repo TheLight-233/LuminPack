@@ -191,9 +191,10 @@ internal static class CircleJsonEmitter
     /// <param name="expand">Whether a small reference member copies the child's write body.</param>
     /// <param name="exit">The placeholder an inline copy jumps to instead of returning, or null for a root.</param>
     /// <param name="stack">The record types whose write bodies are already copied into this method.</param>
+    /// <param name="includeStaticHeads">Whether to emit the bounded property-head path outside the expansion cost calculation.</param>
     /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> WriteBody(PayloadRenderModel model, CodeWriter w, string helper, CircleJsonNames names, List<string> body,
-        string inputName, bool expand, string exit = null, HashSet<string> stack = null)
+        string inputName, bool expand, string exit = null, HashSet<string> stack = null, bool includeStaticHeads = true)
     {
         body ??= new List<string>();
         stack ??= new HashSet<string>(StringComparer.Ordinal) { model.GlobalName };
@@ -216,10 +217,8 @@ internal static class CircleJsonEmitter
         body.Add("if (" + exists + ")");
         body.Add("{");
         body.Add("writer.WriteObjectStart<" + Profile + ">();");
-        body.Add("if (" + isUtf8 + ")");
-        body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf8.@ref);");
-        body.Add("else");
-        body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf16.@ref);");
+        bool staticHeads = includeStaticHeads && model.GeneratedPropertyHeads;
+        AppendProperty(body, helper, isUtf8, "@ref", "$ref", staticHeads);
         body.Add("writer.Write<" + Profile + ">(" + id + ");");
         body.Add("writer.WriteObjectEnd<" + Profile + ">();");
         body.Add(exit == null ? "return;" : "goto " + exit + ";");
@@ -229,19 +228,13 @@ internal static class CircleJsonEmitter
             body.Add("ref var " + names.Next("local") + " = ref " + w.A("LuminPackMarshal") + ".As<" + model.GlobalName + ", " + model.Mirror + ">(ref " + value + "!);");
         body.Add("writer.WriteObjectStart<" + Profile + ">();");
         body.Add("// Write the object reference identifier.");
-        body.Add("if (" + isUtf8 + ")");
-        body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf8.id);");
-        body.Add("else");
-        body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf16.id);");
+        AppendProperty(body, helper, isUtf8, "id", "$id", staticHeads);
         body.Add("writer.Write<" + Profile + ">(" + id + ");");
         foreach (var member in model.Members)
         {
             string access = (member.Mirrored ? "local" : value) + "." + member.Name;
             body.Add("// Field: " + member.Name);
-            body.Add("if (" + isUtf8 + ")");
-            body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf8." + Member(member) + ");");
-            body.Add("else");
-            body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf16." + Member(member) + ");");
+            AppendProperty(body, helper, isUtf8, Member(member), member.Name, staticHeads);
             if (member.Raw)
             {
                 body.Add(member.Formatter + ".Write<" + Profile + ">(ref writer, in " + access + ");");
@@ -294,13 +287,35 @@ internal static class CircleJsonEmitter
         return body;
     }
 
+    /// <summary>Emits the static property head and retains the original writer on a short window.</summary>
+    /// <param name="body">The generated operation body.</param>
+    /// <param name="helper">The owner of the existing name buffers.</param>
+    /// <param name="isUtf8">The name of the document encoding local.</param>
+    /// <param name="member">The emitted name-buffer identifier.</param>
+    /// <param name="name">The name that goes into JSON.</param>
+    /// <param name="staticHead">Whether the bounded static head is available.</param>
+    private static void AppendProperty(List<string> body, string helper, string isUtf8, string member, string name, bool staticHead)
+    {
+        if (staticHead)
+        {
+            body.Add("if (!writer.TryWriteGeneratedPropertyName<" + Profile + ">(" + GeneratedJsonProperty.Arguments(name) + "))");
+            body.Add("{");
+        }
+        body.Add("if (" + isUtf8 + ")");
+        body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf8." + member + ");");
+        body.Add("else");
+        body.Add("\twriter.WritePropertyName<" + Profile + ">(" + helper + ".Utf16." + member + ");");
+        if (staticHead)
+            body.Add("}");
+    }
+
     /// <summary>Counts the calls of a record's JSON write body, which decide whether a parent copies it inline.</summary>
     /// <param name="model">The normalized model for this contract.</param>
     /// <returns>The resulting <c>int</c>.</returns>
     private static int WriteCalls(PayloadRenderModel model)
     {
         using var writer = new CodeWriter(-1);
-        var body = WriteBody(model, writer, Helper(model), new CircleJsonNames(), null, null, expand: false);
+        var body = WriteBody(model, writer, Helper(model), new CircleJsonNames(), null, null, expand: false, includeStaticHeads: false);
         return InvocationCounter.Count(body);
     }
 

@@ -1023,6 +1023,15 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
     /// <param name="classGlobalName">The class global name used by this operation.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
     public static void GenerateJsonSerializeWithCircleReference(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
+        => GenerateJsonSerializeWithCircleReference(sb, data, classGlobalName, metaInfo, staticHeads: false);
+
+    /// <summary>Appends reference-tracked JSON writes using the selected property-head operations.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="classGlobalName">The generated payload type spelling.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <param name="staticHeads">Whether the bounded static head is available.</param>
+    internal static void GenerateJsonSerializeWithCircleReference(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo, bool staticHeads)
     {
         sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         if (data.isValueType)
@@ -1048,10 +1057,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
             sb.AppendLine("            if (existsReference)");
             sb.AppendLine("            {");
             sb.AppendLine("                writer.WriteObjectStart();");
-            sb.AppendLine("                if (isUtf8)");
-            sb.AppendLine("                    writer.WritePropertyName(_utf8_ref);");
-            sb.AppendLine("                else");
-            sb.AppendLine("                    writer.WritePropertyName(_utf16_ref);");
+            AppendProperty(sb, "                ", "ref", "$ref", staticHeads);
             sb.AppendLine("                writer.WriteUInt(id);");
             sb.AppendLine("                writer.WriteObjectEnd();");
             sb.AppendLine("                return;");
@@ -1081,10 +1087,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
         {
             sb.AppendLine();
             sb.AppendLine("            // Write the object reference identifier.");
-            sb.AppendLine("            if (isUtf8)");
-            sb.AppendLine("                writer.WritePropertyName(_utf8_id);");
-            sb.AppendLine("            else");
-            sb.AppendLine("                writer.WritePropertyName(_utf16_id);");
+            AppendProperty(sb, "            ", "id", "$id", staticHeads);
             sb.AppendLine("             writer.WriteUInt(id);");
         }
         sb.AppendLine();
@@ -1092,15 +1095,35 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
         {
             string accessor = ((field.IsPrivate || field.isProperty) ? "local" : "value");
             sb.AppendLine("            // Field: " + field.Name);
-            sb.AppendLine("            if (isUtf8)");
-            sb.AppendLine("                writer.WritePropertyName(_utf8_" + LuminPackJsonCodeGenerator.MemberSuffix(field.Name) + ");");
-            sb.AppendLine("            else");
-            sb.AppendLine("                writer.WritePropertyName(_utf16_" + LuminPackJsonCodeGenerator.MemberSuffix(field.Name) + ");");
+            AppendProperty(sb, "            ", LuminPackJsonCodeGenerator.MemberSuffix(field.Name), field.Name, staticHeads);
             GenerateJsonSerializeFieldWithCircleReference(sb, field, accessor, "            ");
             sb.AppendLine();
         }
         sb.AppendLine("            writer.WriteObjectEnd();");
         sb.AppendLine("        }");
+    }
+
+    /// <summary>Emits the bounded property-head write and its original segmented fallback.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="indent">The indentation at the property site.</param>
+    /// <param name="suffix">The name-buffer identifier suffix.</param>
+    /// <param name="name">The name that goes into JSON.</param>
+    /// <param name="staticHead">Whether the bounded static head is available.</param>
+    private static void AppendProperty(StringBuilder sb, string indent, string suffix, string name, bool staticHead)
+    {
+        string fallback = indent;
+        if (staticHead)
+        {
+            sb.Append(indent).Append("if (!writer.TryWriteGeneratedPropertyName(").Append(GeneratedJsonProperty.Arguments(name)).AppendLine("))");
+            sb.Append(indent).AppendLine("{");
+            fallback += "    ";
+        }
+        sb.Append(fallback).AppendLine("if (isUtf8)");
+        sb.Append(fallback).Append("    writer.WritePropertyName(_utf8_").Append(suffix).AppendLine(");");
+        sb.Append(fallback).AppendLine("else");
+        sb.Append(fallback).Append("    writer.WritePropertyName(_utf16_").Append(suffix).AppendLine(");");
+        if (staticHead)
+            sb.Append(indent).AppendLine("}");
     }
 
     /// <summary>Appends JSON serialization statements for the analyzed type.</summary>
