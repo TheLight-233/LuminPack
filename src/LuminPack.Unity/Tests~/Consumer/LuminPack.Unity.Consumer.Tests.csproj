@@ -5,6 +5,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <DefineConstants>$(DefineConstants);LUMINPACK_IL_REWRITE</DefineConstants>
     <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == '' and '$(LuminPackGenerator)' == 'Next'">$(MSBuildThisFileDirectory)../../../LuminPack.Generator.Next/bin/Release/netstandard2.0/LuminPack.SourceGenerator.dll</LuminPackGeneratorPath>
     <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == ''">$(MSBuildThisFileDirectory)../../../LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll</LuminPackGeneratorPath>
   </PropertyGroup>
@@ -13,9 +14,14 @@
     <Reference Include="LuminPack.Unity"><HintPath>../../bin/Release/netstandard2.1/LuminPack.Unity.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(UnityManagedPath)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Analyzer Include="$(LuminPackGeneratorPath)" />
+    <ProjectReference Include="../../../LuminPack.ILPostProcessor/LuminPack.ILPostProcessor.csproj" ReferenceOutputAssembly="false" />
     <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
   </ItemGroup>
   <Target Name="ValidateConsumerGenerator" BeforeTargets="PrepareForBuild">
     <Error Condition="!Exists('$(LuminPackGeneratorPath)')" Text="Build the selected generator or supply LuminPackGeneratorPath before compiling the Unity consumer." />
+  </Target>
+  <UsingTask TaskName="LuminPack.Build.RewriteTask" AssemblyFile="$(MSBuildThisFileDirectory)../../../LuminPack.ILPostProcessor/bin/$(Configuration)/netstandard2.0/LuminPack.ILPostProcessor.dll" />
+  <Target Name="RewriteConsumerCalls" AfterTargets="CoreCompile" Condition="'$(DesignTimeBuild)' != 'true' and Exists('@(IntermediateAssembly)')">
+    <LuminPack.Build.RewriteTask AssemblyPath="@(IntermediateAssembly)" References="@(ReferencePath)" />
   </Target>
 </Project>
