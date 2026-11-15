@@ -531,10 +531,39 @@ namespace LuminPack.Core
         public void WriteArrayStart<TOptions>()
             where TOptions : struct, ILuminPackOptions
         {
-            WriteCommaIfNeeded<TOptions>();
-            WriteByteRaw<TOptions>(OpenBracket);
+            if (IsFirstElement || !LuminPackMarshal.ConstantStringProfile<TOptions>() || !TryWriteSeparatedArrayStart<TOptions>())
+            {
+                WriteCommaIfNeeded<TOptions>();
+                WriteByteRaw<TOptions>(OpenBracket);
+            }
             Depth++;
             IsFirstElement = true;
+        }
+
+        /// <summary>Writes the separator and array opener together when both fit without growing or committing output.</summary>
+        /// <typeparam name="TOptions">The already certified fixed document profile.</typeparam>
+        /// <returns>Whether both punctuation characters were written.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryWriteSeparatedArrayStart<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            int length = utf8 ? 2 : 4;
+            if (!HasEnumerationCapacity(length))
+                return false;
+
+            ref byte output = ref Current;
+            if (utf8)
+            {
+                output = Comma;
+                Unsafe.Add(ref output, 1) = OpenBracket;
+            }
+            else
+            {
+                LuminPackWriter.Write(ref output, (char)Comma);
+                LuminPackWriter.Write(ref Unsafe.Add(ref output, 2), (char)OpenBracket);
+            }
+            Advance(length);
+            return true;
         }
 
         /// <summary>Writes array end to the current output.</summary>
