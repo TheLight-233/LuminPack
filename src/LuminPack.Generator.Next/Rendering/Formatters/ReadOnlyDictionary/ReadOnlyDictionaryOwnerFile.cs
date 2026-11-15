@@ -8,7 +8,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// the entries in a dictionary the wrapper then holds.</remarks>
 internal static class ReadOnlyDictionaryOwnerFile
 {
-    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.CountedWrite(), Read, "staged.Add(key!, itemValue);",
+    private static readonly PairedDictionarySpec Spec = new PairedDictionarySpec(c => c.CountedWrite(allowMixedPairs: true), Read, "staged.Add(key!, itemValue);",
         c => c.W.Line("var staged = new global::System.Collections.Generic.Dictionary<" + c.Key + ", " + c.Value + ">();"),
         c => c.W.Line("value = new " + c.Dictionary + "(staged);"), readsHeader: true);
 

@@ -285,7 +285,10 @@ internal static class FormatterCapabilities
              "System.Collections.Generic.IReadOnlyDictionary" or "System.Collections.Generic.SortedList" or
              "System.Collections.Generic.SortedDictionary" or "System.Collections.Immutable.ImmutableDictionary" or
              "System.Collections.Immutable.ImmutableSortedDictionary" or "System.Collections.Immutable.IImmutableDictionary" or
-             "System.Collections.Frozen.FrozenDictionary" or "System.Collections.Generic.PriorityQueue") && modern && !unity &&
+             "System.Collections.Frozen.FrozenDictionary" or "System.Collections.Generic.PriorityQueue" or
+             "System.Collections.ObjectModel.ReadOnlyDictionary") && modern && !unity &&
+            (definition != "System.Collections.ObjectModel.ReadOnlyDictionary" ||
+                named.TypeArguments.All(argument => argument.SpecialType != SpecialType.System_Boolean)) &&
             ((named.TypeArguments[0].SpecialType == SpecialType.System_String && named.TypeArguments[1].IsUnmanagedType) ||
              (named.TypeArguments[1].SpecialType == SpecialType.System_String && named.TypeArguments[0].IsUnmanagedType) ||
              ((definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary") &&

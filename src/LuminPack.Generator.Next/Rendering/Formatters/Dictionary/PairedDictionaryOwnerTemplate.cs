@@ -260,14 +260,20 @@ internal sealed partial class PairedDictionaryContext
     }
 
     /// <summary>Emits the counted enumeration write of a nonnull dictionary named <c>value</c>.</summary>
-    internal void CountedWrite()
+    /// <param name="allowMixedPairs">Whether the exact wrapper can write a captured native and string pair in one reservation.</param>
+    internal void CountedWrite(bool allowMixedPairs = false)
     {
+        bool mixed = allowMixedPairs && ParallelDictionaryWrite.SupportsMixed(this) && Key != "bool" && Value != "bool";
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
+        if (mixed)
+            W.Line("bool utf16Length = " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " && value.GetType() == typeof(" + Dictionary + ");");
         W.Line("foreach (var item in " + Source + ")");
         W.Open();
         W.Line("count++;");
         W.Line(Key + " key = item." + KeyMember + ";");
+        if (mixed)
+            ParallelDictionaryWrite.WriteMixedIfFits(this, "key", "item." + ValueMember, byRef: false);
         WriteMember(Key, "key");
         W.Line(Value + " itemValue = item." + ValueMember + ";");
         WriteMember(Value, "itemValue");
