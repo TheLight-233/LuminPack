@@ -110,12 +110,15 @@ internal static class FormatterOrderedCollectionTraits
             return;
         }
         var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
-        if (span != null && access.GetMembers("RestoreStackFromTop").OfType<IMethodSymbol>().Any(method =>
-            method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnsVoid: true, Arity: 1 } &&
-            method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
-            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, collection.OriginalDefinition.Construct(method.TypeParameters[0])) &&
-            SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(method.TypeParameters[0]))))
+        if (HasStackSpanKernel("RestoreStackFromTop", RefKind.None, SpecialType.System_Void))
             result.Add("RestoreStackFromTop");
+        if (element.IsReferenceType)
+        {
+            if (HasStackSpanKernel("TryGetBottomFirstStackItems", RefKind.Out, SpecialType.System_Boolean))
+                result.Add("GetBottomFirstStackItems");
+            if (HasStackSpanKernel("RestoreStackFromBottom", RefKind.None, SpecialType.System_Void))
+                result.Add("RestoreStackFromBottom");
+        }
         if (element.SpecialType == SpecialType.System_String)
         {
             if (HasKernel("TryWriteStringStackStorage", "LuminPackWriter", 1, true, true, SpecialType.System_Boolean))
@@ -132,6 +135,14 @@ internal static class FormatterOrderedCollectionTraits
             if (HasKernel("TryReadStackStorage", "LuminPackReader", 1, true, false))
                 result.Add("ReadStackStorage");
         }
+
+        bool HasStackSpanKernel(string name, RefKind spanKind, SpecialType resultType) =>
+            span != null && access.GetMembers(name).OfType<IMethodSymbol>().Any(method =>
+                method is { IsStatic: true, DeclaredAccessibility: Accessibility.Public, ReturnsByRef: false, ReturnsByRefReadonly: false, Arity: 1 } &&
+                method.ReturnType.SpecialType == resultType && method.Parameters.Length == 2 &&
+                method.Parameters[0].RefKind == RefKind.None && method.Parameters[1].RefKind == spanKind &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, collection.OriginalDefinition.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, span.Construct(method.TypeParameters[0])));
 
         bool HasKernel(string name, string state, int arity, bool hasCount, bool text, SpecialType final = SpecialType.System_Int32)
         {

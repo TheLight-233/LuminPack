@@ -16,6 +16,14 @@ internal sealed partial class EnumerableOwnerContext
         W.Line("var items = " + PackMarshal + ".GetListSpan(" + list + ");");
         W.Line("operationState.EnsureAdditionalCapacity(sizeof(int));");
         W.Line("operationState.WriteCollectionHeader(items.Length);");
+        WriteReservedElements(element);
+        W.Line("operationState.CheckBuffer();");
+    }
+
+    /// <summary>Reserves and writes each callback-free positional record in the captured span.</summary>
+    /// <param name="element">The positional element whose fields share a checked record bound.</param>
+    internal void WriteReservedElements(PayloadRenderModel element)
+    {
         W.Line("if (!items.IsEmpty)");
         W.Open();
         W.Line("ref var first = ref " + Marshal + ".GetReference(items);");
@@ -31,7 +39,6 @@ internal sealed partial class EnumerableOwnerContext
         W.Close();
         W.Line("while (++index < items.Length);");
         W.Close();
-        W.Line("operationState.CheckBuffer();");
     }
 
     /// <summary>Preserves optional concurrent traversal without changing its capture boundary.</summary>

@@ -138,6 +138,52 @@ public static partial class LuminPackCollectionAccess
         return true;
     }
 
+    /// <summary>Exposes exact, validated stack storage in bottom-first order for a callback-free binary writer.</summary>
+    /// <typeparam name="T">The stack element.</typeparam>
+    /// <param name="stack">The stack to inspect.</param>
+    /// <param name="items">The active read-only storage on success.</param>
+    /// <returns>Whether the nonempty stack has recognized storage.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryGetBottomFirstStackItems<T>(Stack<T> stack, out ReadOnlySpan<T> items)
+    {
+        int count = stack.Count;
+        if (TryGetStackArray(stack, count, out var array))
+        {
+            items = LuminPackMarshal.CreateReadOnlySpan(ref LuminPackMarshal.GetNotNullArrayReference(array), count);
+            return true;
+        }
+
+        items = default;
+        return false;
+    }
+
+    /// <summary>Publishes a completely decoded bottom-first binary range into the selected stack.</summary>
+    /// <typeparam name="T">The stack element.</typeparam>
+    /// <param name="stack">The selected target after all element callbacks have completed.</param>
+    /// <param name="items">The completed elements in wire order.</param>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static void RestoreStackFromBottom<T>(Stack<T> stack, scoped ReadOnlySpan<T> items)
+    {
+        if (items.IsEmpty)
+            return;
+
+        if (StackStorage.Available && stack.GetType() == typeof(Stack<T>) && stack.Count == 0)
+        {
+            var array = LuminFieldLayout.Field<T[]>(stack, LuminCollectionLayouts.StackArray);
+            if (items.Length <= array.Length)
+            {
+                items.CopyTo(array);
+                PublishStackSize(stack, items.Length);
+                return;
+            }
+        }
+
+        foreach (T item in items)
+            stack.Push(item);
+    }
+
     /// <summary>Restores a fresh stack from a completely decoded top-first JSON range.</summary>
     /// <typeparam name="T">The stack element.</typeparam>
     /// <param name="stack">The fresh empty result with storage reserved for the range.</param>

@@ -3,12 +3,11 @@ using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 
 /// <summary>Renders the shared owner of one closed <c>Stack&lt;T&gt;</c> whose element is a packable class.</summary>
-/// <remarks>The write copies the stack once and expands each element's record body from the last slot, which is the stored
-/// bottom-first order. The read fills a pooled block and pushes it in stored order; the JSON read stages the top-first order and
-/// pushes it back reversed.</remarks>
+/// <remarks>Binary writes use validated bottom-first storage for callback-free records and a snapshot for other elements.
+/// Binary reads stage every element before restoring the stack. JSON stages in top-first order and restores in reverse.</remarks>
 internal static class StackPayloadOwnerFile
 {
-    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(c => c.StackPayloadWrite("value", false), Read,
+    private static readonly EnumerableOwnerSpec Spec = new EnumerableOwnerSpec(Write, Read,
         "staged.Add(item);", Before, After, readInlining: "NoInlining", outlineJson: true);
 
     /// <summary>Renders the file.</summary>
@@ -18,6 +17,27 @@ internal static class StackPayloadOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
         EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
+
+    /// <summary>Writes proven records from exact stack storage before selecting the original snapshot fallback.</summary>
+    /// <param name="c">The generated stack writer context.</param>
+    private static void Write(EnumerableOwnerContext c)
+    {
+        if (c.Supports("GetBottomFirstStackItems") && c.ReservableListElement() is { } element)
+        {
+            var w = c.W;
+            w.Line("if (operationState.Owner is not null && " + ParallelDictionaryWrite.FixedUtf16LengthProfile + " &&");
+            w.Line("    global::LuminPack.Code.LuminPackCollectionAccess.TryGetBottomFirstStackItems(value, out var items))");
+            w.Open();
+            w.Line("int header = operationState.BeginCollection();");
+            c.WriteReservedElements(element);
+            w.Line("operationState.EndCollection(header, items.Length);");
+            w.Line("operationState.CheckBuffer();");
+            w.Line("goto operationComplete_RootWrite;");
+            w.Close();
+            w.Blank();
+        }
+        c.StackPayloadWrite("value", false);
+    }
 
     private static void Read(EnumerableOwnerContext c)
     {
@@ -31,6 +51,12 @@ internal static class StackPayloadOwnerFile
             " || global::LuminPack.Code.LuminPackCollectionAccess.TryReadStringStackStorage<TLuminProfile>(ref operationState, value, length)" : "") + ")");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
+        if (c.Supports("RestoreStackFromBottom"))
+        {
+            c.PooledRead(() => w.Line("global::LuminPack.Code.LuminPackCollectionAccess.RestoreStackFromBottom(value, " +
+                "new global::System.ReadOnlySpan<" + c.Scalar + ">(pooled, 0, length));"));
+            return;
+        }
         c.PooledRead(() =>
         {
             w.Line("ref var first = ref global::LuminPack.Code.LuminPackMarshal.GetNotNullArrayReference(pooled);");
