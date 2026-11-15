@@ -139,7 +139,10 @@ namespace LuminPackUnitTest
                 byte[] bytes = LuminPackSerializer.Serialize(m);
                 Net11Maybe back = default!;
                 LuminPackSerializer.Deserialize(bytes, ref back);
-                results.Add(back.Value is int i && i == 42
+                string json = LuminPackSerializer.SerializeJson(m);
+                results.Add(back.Value is int i && i == 42 &&
+                    bytes.AsSpan().SequenceEqual(new byte[] { 0, 42, 0, 0, 0 }) &&
+                    json == "{\"$type\":0,\"$value\":42}"
                     ? "✓ Net11Union value-type case - PASSED"
                     : "✗ Net11Union value-type case - FAILED");
             }
@@ -147,6 +150,48 @@ namespace LuminPackUnitTest
             {
                 results.Add($"✗ Net11Union value-type case - ERROR: {ex.Message}");
             }
+
+            try
+            {
+                Net11Maybe empty = default;
+                byte[] bytes = LuminPackSerializer.Serialize(empty);
+                string json = LuminPackSerializer.SerializeJson(empty);
+                var binaryReuse = new Net11Maybe(42);
+                var jsonReuse = new Net11Maybe("previous value");
+                LuminPackSerializer.Deserialize(bytes, ref binaryReuse);
+                LuminPackSerializer.DeserializeJson(json, ref jsonReuse);
+                results.Add(bytes.AsSpan().SequenceEqual(new byte[] { 255 }) && json == "null" &&
+                    binaryReuse.Value is null && jsonReuse.Value is null
+                    ? "✓ Net11Union empty wire and reuse - PASSED"
+                    : "✗ Net11Union empty wire and reuse - FAILED");
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ Net11Union empty wire and reuse - ERROR: {ex.Message}");
+            }
+
+#if LUMINPACK_NEXT_GENERATOR
+            try
+            {
+                Net11Maybe[] values = [new Net11Maybe(42), new Net11Maybe("text"), default];
+                byte[] bytes = LuminPackSerializer.Serialize(values);
+                string json = LuminPackSerializer.SerializeJson(values);
+                Net11Maybe[] binaryCopy = null!;
+                Net11Maybe[] jsonCopy = null!;
+                LuminPackSerializer.Deserialize(bytes, ref binaryCopy);
+                LuminPackSerializer.DeserializeJson(json, ref jsonCopy);
+                results.Add(binaryCopy.Length == 3 && jsonCopy.Length == 3 &&
+                    binaryCopy[0].Value is 42 && jsonCopy[0].Value is 42 &&
+                    binaryCopy[1].Value is "text" && jsonCopy[1].Value is "text" &&
+                    binaryCopy[2].Value is null && jsonCopy[2].Value is null
+                    ? "✓ Net11Union array cases - PASSED"
+                    : "✗ Net11Union array cases - FAILED");
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ Net11Union array cases - ERROR: {ex.Message}");
+            }
+#endif
 
             // Abstract-class polymorphism (existing mechanism) still works on .NET 11
             try

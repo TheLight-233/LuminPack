@@ -143,6 +143,9 @@ internal static partial class TypeModelFactory
         private readonly object _gate = new object();
         private bool? _canReuseCultureInfo;
 
+        /// <summary>Initializes a <c>Session</c> from the supplied data.</summary>
+        /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+        /// <param name="options">The options governing the operation.</param>
         internal Session(Compilation compilation, GeneratorOptions options)
         {
             Options = options;
@@ -180,8 +183,9 @@ internal static partial class TypeModelFactory
         /// <returns>The complete root member, or null.</returns>
         private MemberModel? ClassifyUncachedRoot(ITypeSymbol type)
         {
-            if (type is INamedTypeSymbol named && (!named.IsGenericType && (IsPackable(named) || Marked(named)) ||
-                named.IsGenericType && !IsLocal(named) && ExplicitMarker(named)))
+            if (type is INamedTypeSymbol named && !CompilerUnion.IsUnion(named, _compilation) &&
+                (!named.IsGenericType && (IsPackable(named) || Marked(named)) ||
+                 named.IsGenericType && !IsLocal(named) && ExplicitMarker(named)))
                 return null;
             var issues = new List<string>();
             MemberModel? model = Classify(new MemberSite("Root", type, isVolatile: false, containing: null), MemberStorage.Field, _assemblyPolicy,
@@ -649,6 +653,9 @@ internal static partial class TypeModelFactory
         /// <returns>The sequence member.</returns>
         /// <remarks>A one-dimensional array of raw scalars stores its span directly; every other array writes through its
         /// generated formatter, and a multi-dimensional array keeps its runtime-sized raw path.</remarks>
+        /// <param name="depth">The current nesting depth.</param>
+        /// <param name="issues">Receives unsupported contract details.</param>
+        /// <param name="path">The path to the input, output, or active dependency.</param>
         private MemberModel ArrayMember(string name, MemberStorage storage, WirePolicy policy, IArrayTypeSymbol array, int depth,
             List<string> issues, Path path)
         {
@@ -810,6 +817,10 @@ internal static partial class TypeModelFactory
         /// <summary>Describes a collection that can be reached through a static element owner.</summary>
         /// <param name="type">The closed element type of the enclosing collection.</param>
         /// <returns>The child owner requirements, or null if the family or element is not yet supported.</returns>
+        /// <param name="depth">The current nesting depth.</param>
+        /// <param name="issues">Receives unsupported contract details.</param>
+        /// <param name="path">The path to the input, output, or active dependency.</param>
+        /// <param name="memberName">The name of the member.</param>
         private MemberModel? TryForwardedCollection(ITypeSymbol type, int depth, List<string> issues, Path path, string memberName)
         {
             if (type is IArrayTypeSymbol array && (array.IsSZArray || array.Rank > 1))
@@ -863,6 +874,9 @@ internal static partial class TypeModelFactory
         /// <param name="type">The declared keyed type.</param>
         /// <param name="kind">The declared family.</param>
         /// <returns>The keyed member.</returns>
+        /// <param name="depth">The current nesting depth.</param>
+        /// <param name="issues">Receives unsupported contract details.</param>
+        /// <param name="path">The path to the input, output, or active dependency.</param>
         private MemberModel DictionaryMember(string name, MemberStorage storage, WirePolicy policy, INamedTypeSymbol type, DictionaryKind kind,
             int depth, List<string> issues, Path path)
         {
@@ -2130,6 +2144,9 @@ internal static partial class TypeModelFactory
             return ContainsTuple(type) ? BuildTypeName(type) : type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         }
 
+        /// <summary>Builds type name.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>The type name.</returns>
         private static string BuildTypeName(ITypeSymbol type)
         {
             switch (type)
@@ -2156,6 +2173,9 @@ internal static partial class TypeModelFactory
             }
         }
 
+        /// <summary>Builds named type name.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>The named type name.</returns>
         private static string BuildNamedTypeName(INamedTypeSymbol type)
         {
             if (type.IsTupleType)
@@ -2171,11 +2191,17 @@ internal static partial class TypeModelFactory
                 : name + "<" + string.Join(", ", type.TypeArguments.Select(BuildTypeName)) + ">";
         }
 
+        /// <summary>Builds type namespace.</summary>
+        /// <param name="typeNamespace">The type namespace supplied to <c>BuildTypeNamespace</c>.</param>
+        /// <returns>The type namespace.</returns>
         private static string BuildTypeNamespace(INamespaceSymbol typeNamespace)
             => typeNamespace == null || typeNamespace.IsGlobalNamespace
                 ? "global::"
                 : BuildTypeNamespace(typeNamespace.ContainingNamespace) + EscapeIdentifier(typeNamespace.Name) + ".";
 
+        /// <summary>Checks for tuple.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
+        /// <returns>Whether the input satisfies the contains tuple check.</returns>
         private static bool ContainsTuple(ITypeSymbol type)
         {
             switch (type)
@@ -2192,6 +2218,9 @@ internal static partial class TypeModelFactory
             }
         }
 
+        /// <summary>Handles escape identifier for <c>Session</c>.</summary>
+        /// <param name="name">The name to look up or emit.</param>
+        /// <returns>The resulting text.</returns>
         private static string EscapeIdentifier(string name)
             => SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None
                 ? "@" + name
@@ -3573,6 +3602,9 @@ internal static partial class TypeModelFactory
         private readonly INamedTypeSymbol _symbol;
         private readonly int _depth;
 
+        /// <summary>Initializes a <c>AnalysisKey</c> from the supplied data.</summary>
+        /// <param name="symbol">The symbol being analyzed.</param>
+        /// <param name="depth">The current nesting depth.</param>
         internal AnalysisKey(INamedTypeSymbol symbol, int depth)
         {
             _symbol = symbol;
@@ -3592,6 +3624,8 @@ internal static partial class TypeModelFactory
     /// <summary>Builds the identity of a declared type, including its containing chain and parameters.</summary>
     /// <remarks>A definition nested in a generic type, such as <c>Outer&lt;T&gt;.Inner</c>, is generic over the containing
     /// parameters, which precede its own. A closed construction spells every level's type arguments in its names.</remarks>
+    /// <param name="symbol">The symbol being analyzed.</param>
+    /// <returns>The resulting <c>TypeIdentity</c>.</returns>
     private static TypeIdentity Identity(INamedTypeSymbol symbol)
     {
         int depth = 0;

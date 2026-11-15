@@ -157,6 +157,9 @@ internal static partial class NextPipeline
                 foreach (SerializerCallModel call in _calls)
                     if (call.Root != null && seenRoots.Add(call.Root))
                         roots.Add(call.Root);
+                foreach (ModeledPayload payload in _payloads)
+                    if (payload.FormatterRoot is { } root && plan.For(payload.FormatterKey) != GeneratedOperations.None && seenRoots.Add(root))
+                        roots.Add(root);
                 if (snapshot.SharedInputs == null || !snapshot.SharedInputs.Matches(retained, roots, _options))
                     snapshot.SharedInputs = new SharedFormatterInputs(retained, roots, _options);
                 SharedFormatterSet formatters = snapshot.SharedInputs.Set;

@@ -68,7 +68,7 @@ internal static partial class TypeModelFactory
         /// <param name = "model">The normalized formatter or storage contract.</param>
         /// <returns>Whether the requested contract or capability is available.</returns>
         private static bool RequiresDefault(FormatterModel model) => model.Layout != null || model.Capabilities.Length != 0 ||
-            model.PublishPayload || model.Definition == FormatterDefinitions.GenericUnion || FormatterDefinitions.HasGeneric(model.Definition) ||
+            model.PublishPayload || model.Definition is FormatterDefinitions.GenericUnion or FormatterDefinitions.CompilerUnion || FormatterDefinitions.HasGeneric(model.Definition) ||
             model.Arguments.Any(RequiresDefault);
         /// <summary>Analyzes one closed formatter graph independently of its containing collection.</summary>
         /// <param name = "type">The declared type or its source-ready spelling.</param>
@@ -131,6 +131,8 @@ internal static partial class TypeModelFactory
                 return null;
             if (GenerationMode(named)is "Custom" or "NonGenerator")
                 return new FormatterModel(spelling, FormatterDefinitions.Registered);
+            if (Owned(named) && CompilerUnion.IsUnion(named, _compilation))
+                return CompilerUnionFormatter(named, spelling, depth, path);
             string definition = named.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + named.OriginalDefinition.Name;
             if (FormatterRegistry.HasStandalone(definition))
                 return new FormatterModel(spelling, definition);
@@ -192,6 +194,39 @@ internal static partial class TypeModelFactory
             }
 
             return null;
+        }
+
+        /// <summary>Builds the closed case owners in compiler Union declaration order.</summary>
+        /// <param name="type">The closed Union struct.</param>
+        /// <param name="spelling">The fully qualified Union type name.</param>
+        /// <param name="depth">The current formatter expansion depth.</param>
+        /// <param name="path">The active formatter expansion path.</param>
+        /// <returns>The case graph or a reference when a case leads back to the Union.</returns>
+        private FormatterModel? CompilerUnionFormatter(INamedTypeSymbol type, string spelling, int depth, Path path)
+        {
+            if (ContainsTypeParameter(type) || depth > MaxDepth)
+                return null;
+            if (!path.Active.Add(type))
+                return new FormatterModel(spelling, FormatterDefinitions.CompilerUnion);
+            try
+            {
+                ITypeSymbol[] cases = CompilerUnion.Cases(type, _compilation);
+                if (cases.Length == 0 || cases.Length > ushort.MaxValue)
+                    return null;
+                var arguments = new FormatterModel[cases.Length];
+                for (int index = 0; index < cases.Length; index++)
+                {
+                    FormatterModel? argument = Formatter(cases[index], depth + 1, path);
+                    if (argument == null)
+                        return null;
+                    arguments[index] = argument;
+                }
+                return new FormatterModel(spelling, FormatterDefinitions.CompilerUnion, arguments);
+            }
+            finally
+            {
+                path.Active.Remove(type);
+            }
         }
 
         /// <summary>Requires a real payload implementation before a container calls its owner.</summary>

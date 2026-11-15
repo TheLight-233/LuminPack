@@ -5,6 +5,7 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Names the intrinsic formatter contracts and registers closed generic framework families.</summary>
 internal static class FormatterDefinitions
 {
+    internal const string CompilerUnion = "CompilerUnion";
     internal const string Scalar = "$scalar";
     internal const string FrameworkScalar = "$framework-scalar";
     internal const string Array = "$array";

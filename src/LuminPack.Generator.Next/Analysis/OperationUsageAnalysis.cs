@@ -29,6 +29,9 @@ internal static class OperationUsageAnalysis
     internal static GeneratedOperations Fixed(Compilation compilation) =>
         FixedCache.GetValue(compilation, static item => new StrongBox<GeneratedOperations>(CreateFixed(item))).Value;
 
+    /// <summary>Creates fixed.</summary>
+    /// <param name="compilation">The compilation that supplies source symbols and references.</param>
+    /// <returns>The fixed.</returns>
     private static GeneratedOperations CreateFixed(Compilation compilation)
     {
         bool application = compilation.Options.OutputKind is OutputKind.ConsoleApplication or OutputKind.WindowsApplication or
@@ -164,7 +167,7 @@ internal static class OperationUsageAnalysis
     {
         if (Fixed(compilation) == GeneratedOperations.All)
             return OperationReach.Empty;
-        var walk = new ReachWalk(TypeModelFactory.MarkedTypes(compilation));
+        var walk = new ReachWalk(compilation);
         walk.Members(symbol);
         foreach (INamedTypeSymbol contract in symbol.AllInterfaces)
             walk.Visit(contract);
@@ -193,11 +196,14 @@ internal static class OperationUsageAnalysis
     {
         if (Fixed(compilation) == GeneratedOperations.All)
             return OperationReach.Empty;
-        var walk = new ReachWalk(TypeModelFactory.MarkedTypes(compilation));
+        var walk = new ReachWalk(compilation);
         walk.Visit(payload);
         return walk.Result();
     }
 
+    /// <summary>Adds base.</summary>
+    /// <param name="bases">The bases supplied to <c>AddBase</c>.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
     private static void AddBase(List<string> bases, INamedTypeSymbol type)
     {
         if (TypeModelFactory.ReachKey(type) is { } key)
@@ -206,6 +212,9 @@ internal static class OperationUsageAnalysis
             bases.Add(definition);
     }
 
+    /// <summary>Handles of state for <c>OperationUsageAnalysis</c>.</summary>
+    /// <param name="receiver">The receiver supplied to <c>OfState</c>.</param>
+    /// <returns>The resulting <c>GeneratedOperations</c>.</returns>
     private static GeneratedOperations OfState(ITypeSymbol? receiver) => receiver?.ToDisplayString() switch
     {
         "LuminPack.Core.LuminPackWriter" => GeneratedOperations.BinaryWrite,
@@ -215,18 +224,33 @@ internal static class OperationUsageAnalysis
         _ => GeneratedOperations.None,
     };
 
+    /// <summary>Checks whether extension name.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <returns>Whether the input is extension name.</returns>
     private static bool IsExtensionName(string name) => name is "WriteValue" or "ReadValue" or "WriteMemberValue" or
         "WritePolymorphismValue" or "ReadPolymorphismValue" or "ReadFreshValue" or "WriteValueWithCompress" or "ReadValueWithCompress" or
         "WriteValueJson" or "ReadValueJson" or "MeasureRecordWidth";
 
+    /// <summary>Handles invoked for <c>OperationUsageAnalysis</c>.</summary>
+    /// <param name="name">The name to look up or emit.</param>
+    /// <param name="expression">Receives the expression when the operation succeeds.</param>
+    /// <returns>Whether the input satisfies the invoked check.</returns>
     private static bool Invoked(SimpleNameSyntax name, out ExpressionSyntax expression)
     {
         expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name ? access : name;
         return expression.Parent is InvocationExpressionSyntax invocation && invocation.Expression == expression;
     }
 
+    /// <summary>Checks whether facade.</summary>
+    /// <param name="method">The method being inspected.</param>
+    /// <returns>Whether the input is facade.</returns>
     private static bool IsFacade(IMethodSymbol method) => method.ContainingType?.ToDisplayString() == SerializerName;
 
+    /// <summary>Checks whether facade expression.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="expression">The expression supplied to <c>IsFacadeExpression</c>.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <returns>Whether the input is facade expression.</returns>
     private static bool IsFacadeExpression(SemanticModel model, ExpressionSyntax expression, CancellationToken cancellationToken)
     {
         SymbolInfo info = model.GetSymbolInfo(expression, cancellationToken);
@@ -243,6 +267,9 @@ internal static class OperationUsageAnalysis
         return receiver?.ToDisplayString() == SerializerName;
     }
 
+    /// <summary>Checks whether packable.</summary>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <returns>Whether the input is packable.</returns>
     private static bool IsPackable(INamedTypeSymbol type)
     {
         foreach (AttributeData attribute in type.GetAttributes())
@@ -251,6 +278,9 @@ internal static class OperationUsageAnalysis
         return false;
     }
 
+    /// <summary>Handles in source for <c>OperationUsageAnalysis</c>.</summary>
+    /// <param name="type">The type being analyzed or emitted.</param>
+    /// <returns>Whether the input satisfies the in source check.</returns>
     private static bool InSource(INamedTypeSymbol type)
     {
         foreach (Location location in type.Locations)
@@ -266,15 +296,25 @@ internal static class OperationUsageAnalysis
         private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
         private readonly HashSet<ITypeSymbol> _walked = new(SymbolEqualityComparer.Default);
         private readonly IReadOnlyList<INamedTypeSymbol> _external;
+        private readonly Compilation _compilation;
 
         /// <summary>Creates a reach walk with the consumer's assembly-marked metadata roots.</summary>
-        /// <param name="external">The exact closed markers and open definitions.</param>
-        internal ReachWalk(IReadOnlyList<INamedTypeSymbol> external) => _external = external;
+        /// <param name="compilation">The consumer compilation and assembly markers.</param>
+        internal ReachWalk(Compilation compilation)
+        {
+            _compilation = compilation;
+            _external = TypeModelFactory.MarkedTypes(compilation);
+        }
 
+        /// <summary>Handles result for <c>ReachWalk</c>.</summary>
+        /// <param name="bases">The bases supplied to <c>Result</c>.</param>
+        /// <returns>The resulting <c>OperationReach</c>.</returns>
         internal OperationReach Result(List<string>? bases = null) => _keys.Count == 0 && (bases == null || bases.Count == 0)
             ? OperationReach.Empty
             : new OperationReach(_keys.ToArray(), bases == null || bases.Count == 0 ? Array.Empty<string>() : bases.ToArray());
 
+        /// <summary>Handles constant for <c>ReachWalk</c>.</summary>
+        /// <param name="constant">The constant supplied to <c>Constant</c>.</param>
         internal void Constant(TypedConstant constant)
         {
             if (constant.Kind == TypedConstantKind.Type && constant.Value is ITypeSymbol type)
@@ -284,6 +324,8 @@ internal static class OperationUsageAnalysis
                     Constant(item);
         }
 
+        /// <summary>Handles visit for <c>ReachWalk</c>.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
         internal void Visit(ITypeSymbol type)
         {
             while (type is IArrayTypeSymbol array)
@@ -317,14 +359,22 @@ internal static class OperationUsageAnalysis
             Add(TypeModelFactory.ReachKey(named));
             if (!named.IsDefinition)
                 Add(TypeModelFactory.ReachKey(definition));
-            if (!IsPackable(definition))
+            if (!IsPackable(definition) || CompilerUnion.IsUnion(definition, _compilation))
                 Members(named);
         }
 
+        /// <summary>Handles members for <c>ReachWalk</c>.</summary>
+        /// <param name="type">The type being analyzed or emitted.</param>
         internal void Members(INamedTypeSymbol type)
         {
             if (!_walked.Add(type))
                 return;
+            if (CompilerUnion.IsUnion(type, _compilation))
+            {
+                foreach (ITypeSymbol item in CompilerUnion.Cases(type, _compilation))
+                    Visit(item);
+                return;
+            }
             foreach (ISymbol member in type.GetMembers())
             {
                 if (member.IsStatic)
@@ -338,6 +388,8 @@ internal static class OperationUsageAnalysis
                 Visit(baseType);
         }
 
+        /// <summary>Handles add for <c>ReachWalk</c>.</summary>
+        /// <param name="key">The key identifying the entry.</param>
         private void Add(string? key)
         {
             if (key != null && _seen.Add(key))

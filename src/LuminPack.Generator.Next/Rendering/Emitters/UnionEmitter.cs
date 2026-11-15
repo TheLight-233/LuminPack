@@ -331,6 +331,8 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the isolated Union member read under its enclosing record's input policy.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
     internal static void EmitCheckedMemberRead(PayloadRenderModel model, CodeWriter w)
     {
         string reader = w.A("LuminPackReader");
@@ -354,6 +356,8 @@ internal static class UnionEmitter
     }
 
     /// <summary>Reads the Union marker and dispatches the same case switch in either input scope.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
     private static void ReadSwitch(PayloadRenderModel model, CodeWriter w)
     {
         Reject(model, w);
@@ -370,6 +374,13 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the marked case switch of a read root, fresh or seeded from an existing instance.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="reuse">Whether to reuse the existing destination.</param>
+    /// <param name="reader">The reader positioned at the input value.</param>
+    /// <param name="counters">The counters supplied to <c>ReadArms</c>.</param>
+    /// <param name="freshTarget">The fresh target supplied to <c>ReadArms</c>.</param>
+    /// <param name="freshExit">The fresh exit supplied to <c>ReadArms</c>.</param>
     private static void ReadArms(PayloadRenderModel model, CodeWriter w, bool reuse, string reader, SwitchCounters counters,
         string? freshTarget = null, string? freshExit = null)
     {
@@ -474,6 +485,15 @@ internal static class UnionEmitter
             w.Line(BinaryEmitter.RejectUnsupported(model.Rejection));
     }
 
+    /// <summary>Handles rename for <c>UnionEmitter</c>.</summary>
+    /// <param name="body">The statements in the generated operation body.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <param name="instance">The instance supplied to <c>Rename</c>.</param>
+    /// <param name="cursors">The cursors supplied to <c>Rename</c>.</param>
+    /// <param name="cursorCount">The cursor count supplied to <c>Rename</c>.</param>
+    /// <param name="reader">The reader positioned at the input value.</param>
+    /// <param name="reuse">Whether to reuse the existing destination.</param>
+    /// <returns>The resulting <c>List&lt;string&gt;</c>.</returns>
     private static List<string> Rename(List<string> body, int member, int instance, int cursors, ref int cursorCount, string reader, bool reuse)
     {
         string memberName = "member" + Number(member);
@@ -508,9 +528,14 @@ internal static class UnionEmitter
     }
 
     /// <summary>Spells a local's occurrence number, which the first occurrence leaves off.</summary>
+    /// <param name="index">The zero-based item index.</param>
+    /// <returns>The resulting text.</returns>
     private static string Number(int index) => index == 0 ? string.Empty : (index + 1).ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Whether the read root stays inside the runtime's sixteen-call inlining budget.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <returns>Whether the input satisfies the read keeps inline check.</returns>
     private static bool ReadKeepsInline(PayloadRenderModel model, CodeWriter w)
     {
         // The two switches share the peek and the existing-instance call, and each repeats the three registered-member calls.
@@ -544,7 +569,51 @@ internal static class UnionEmitter
         (!model.IsStruct || model.ManagedStruct) && (root.Redirect != null || model.Trusted || limits.Explicit && !limits.Equals(model.Limits));
 
     /// <summary>Emits the JSON read body of the root.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="reader">The reader positioned at the input value.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
     private static void JsonReadBody(PayloadRenderModel model, CodeWriter w, string reader, string type)
+    {
+        OpenJsonCases(w, reader);
+        foreach (var item in model.UnionCases)
+        {
+            w.Line("case " + item.Id.ToString(CultureInfo.InvariantCulture) + ":");
+            w.Open();
+            string member = "member" + Number(Array.IndexOf(model.UnionCases, item));
+            w.Line(item.Type + " " + member + " = " + (StructCase(item)
+                ? "(value is " + item.Type + " existing" + member + " ? existing" + member + " : default);"
+                : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(value)!;"));
+            w.Line("global::LuminPack.Binary_" + model.Extension + "_" + item.Readable + ".Read<" + Prefix(item) + Profile + ">(ref reader, ref " + member + ");");
+            w.Line("value = " + Assign(model, item, member) + ";");
+            w.Line("break;");
+            w.Close();
+            w.Blank();
+        }
+        w.Line("default:");
+        w.Open();
+        if (model.Registration)
+        {
+            w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
+            w.Open();
+            w.Line(model.GlobalName + " registeredValue = default !;");
+            w.Line("((global::LuminPack.Code.LuminPackJsonReadDelegate<" + model.GlobalName + ">)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue);");
+            w.Line("value = registeredValue;");
+            w.Line("break;");
+            w.Close();
+            w.Blank();
+        }
+        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(tag, typeof(" + model.GlobalName + "));");
+        w.Line("break;");
+        w.Close();
+        w.Close();
+        w.Close();
+    }
+
+    /// <summary>Emits JSON Union framing and opens the case switch inside the property loop.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="reader">The JSON reader type name used to qualify token kinds.</param>
+    internal static void OpenJsonCases(CodeWriter w, string reader)
     {
         w.Line("if (reader.IsNull())");
         w.Open();
@@ -590,41 +659,11 @@ internal static class UnionEmitter
         w.Line("// Union cases");
         w.Line("switch (tag)");
         w.Open();
-        foreach (var item in model.UnionCases)
-        {
-            w.Line("case " + item.Id.ToString(CultureInfo.InvariantCulture) + ":");
-            w.Open();
-            string member = "member" + Number(Array.IndexOf(model.UnionCases, item));
-            w.Line(item.Type + " " + member + " = " + (StructCase(item)
-                ? "(value is " + item.Type + " existing" + member + " ? existing" + member + " : default);"
-                : w.A("LuminPackMarshal") + ".AsExact<" + item.Type + ">(value)!;"));
-            w.Line("global::LuminPack.Binary_" + model.Extension + "_" + item.Readable + ".Read<" + Prefix(item) + Profile + ">(ref reader, ref " + member + ");");
-            w.Line("value = " + Assign(model, item, member) + ";");
-            w.Line("break;");
-            w.Close();
-            w.Blank();
-        }
-        w.Line("default:");
-        w.Open();
-        if (model.Registration)
-        {
-            w.Line("if (" + "global::LuminPack.Code.LuminPackUnionFormatter<" + model.GlobalName + ">.TryGetFormatter(tag, out var registeredFormatter) && registeredFormatter.ReadValueJson != null)");
-            w.Open();
-            w.Line(model.GlobalName + " registeredValue = default !;");
-            w.Line("((global::LuminPack.Code.LuminPackJsonReadDelegate<" + model.GlobalName + ">)registeredFormatter.ReadValueJson)(ref reader, ref registeredValue);");
-            w.Line("value = registeredValue;");
-            w.Line("break;");
-            w.Close();
-            w.Blank();
-        }
-        w.Line(w.A("LuminPackExceptionHelper") + ".ThrowNotFoundInUnionType(tag, typeof(" + model.GlobalName + "));");
-        w.Line("break;");
-        w.Close();
-        w.Close();
-        w.Close();
     }
 
     /// <summary>Emits the union property index comparison of a JSON property name local.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="name">The name to look up or emit.</param>
     private static void PropertyMatch(CodeWriter w, string name)
     {
         w.Line("local = " + name + ".Length == 5 &&");
@@ -646,6 +685,9 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the cursor root methods of a fixed-cursor Union.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="writer">The writer receiving the output.</param>
     private static void CursorRoot(PayloadRenderModel model, CodeWriter w, string writer)
     {
         string suffix = model.UnionSuffix;
@@ -668,6 +710,9 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the runtime registration members of the binary root.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="type">The type being analyzed or emitted.</param>
     private static void Registration(PayloadRenderModel model, CodeWriter w, string type)
     {
         if (model.Registration && model.TypeParameters.Length != 0)
@@ -680,6 +725,10 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the root's virtual write slots in profile order.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
     private static void RootSlots(PayloadRenderModel model, CodeWriter w, string writer, bool json)
     {
         string operation = json ? "WriteJson_" : "Write_";
@@ -698,6 +747,10 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the generic dispatch path, retaining exact-type dispatch for its existing tier.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
     private static void CompiledSlot(PayloadRenderModel model, CodeWriter w, string writer, bool json)
     {
         string operation = json ? "WriteJson_" : "Write_";
@@ -749,6 +802,10 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits the registered-member fallback of the matching format.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="writer">The writer receiving the output.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
     private static void RegisteredWriter(PayloadRenderModel model, CodeWriter w, string writer, bool json)
     {
         string delegateName = json ? "LuminPackUnionJsonWriteDelegate" : "LuminPackUnionWriteDelegate";
@@ -770,6 +827,10 @@ internal static class UnionEmitter
     }
 
     /// <summary>Emits one case's slot overrides of one format.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="item">The current item.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
     private static void CaseSlots(PayloadRenderModel model, UnionRenderCase item, CodeWriter w, bool json)
     {
         string prefix = model.UnionInterface ? "void " + (item.InterfaceContract ?? model.GlobalName) + "." :
@@ -854,6 +915,8 @@ internal static class UnionEmitter
     }
 
     /// <summary>Groups the cases by the declaration that holds their slots: one group per generic definition.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <returns>The resulting <c>List&lt;UnionRenderCase[]&gt;</c>.</returns>
     private static List<UnionRenderCase[]> CaseGroups(PayloadRenderModel model)
     {
         var groups = new List<UnionRenderCase[]>();
@@ -869,9 +932,15 @@ internal static class UnionEmitter
     }
 
     /// <summary>Spells a generic case's type arguments ahead of the operation profile.</summary>
+    /// <param name="item">The current item.</param>
+    /// <returns>The resulting text.</returns>
     private static string Prefix(UnionRenderCase item) => item.Arguments.Length == 0 ? string.Empty : item.Arguments + ", ";
 
     /// <summary>Converts a read case to the root, through object when either side is generic.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="item">The current item.</param>
+    /// <param name="member">The member being analyzed or emitted.</param>
+    /// <returns>The resulting text.</returns>
     private static string Assign(PayloadRenderModel model, UnionRenderCase item, string member) =>
         item.Definition != null || model.TypeParameters.Length != 0 ? "(" + model.GlobalName + ")(object)" + member : member;
 
@@ -880,6 +949,9 @@ internal static class UnionEmitter
     /// dispatch slot resolved once per closed definition, then reinterpret the instance as the closed case, as the original
     /// pipeline does.</remarks>
     /// <summary>Emits the runtime slot that selects a generic definition's closed case, which both formats' slots read.</summary>
+    /// <param name="group">The group supplied to <c>GenericSlotField</c>.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="slotField">The slot field supplied to <c>GenericSlotField</c>.</param>
     private static void GenericSlotField(UnionRenderCase[] group, CodeWriter w, string slotField)
     {
         string open = OpenSpelling(group[0].Definition);
@@ -903,6 +975,11 @@ internal static class UnionEmitter
         w.Blank();
     }
 
+    /// <summary>Handles generic case slots for <c>UnionEmitter</c>.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="group">The group supplied to <c>GenericCaseSlots</c>.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
     private static void GenericCaseSlots(PayloadRenderModel model, UnionRenderCase[] group, CodeWriter w, bool json)
     {
         string definition = group[0].Definition;
@@ -962,6 +1039,12 @@ internal static class UnionEmitter
     }
 
     /// <summary>Writes one generic case's header and payload through its definition's generic entries.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="item">The current item.</param>
+    /// <param name="w">The generated source writer.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
+    /// <param name="profile">The compiled serialization profile or its generated type name.</param>
+    /// <param name="value">The value to process.</param>
     private static void GenericCaseWrite(PayloadRenderModel model, UnionRenderCase item, CodeWriter w, bool json, string profile, string value)
     {
         string id = item.Id.ToString(CultureInfo.InvariantCulture);
@@ -986,17 +1069,27 @@ internal static class UnionEmitter
     }
 
     /// <summary>Spells a generic definition with its own parameter names, as the case's partial declaration sees itself.</summary>
+    /// <param name="definition">The definition supplied to <c>OpenSpelling</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string OpenSpelling(string definition) => definition;
 
     /// <summary>Whether a case is a struct implementing an interface root.</summary>
+    /// <param name="item">The current item.</param>
+    /// <returns>Whether the input satisfies the struct case check.</returns>
     private static bool StructCase(UnionRenderCase item) => item.Chain.Length != 0 &&
         item.Chain[item.Chain.Length - 1].IndexOf(" struct ", StringComparison.Ordinal) >= 0;
 
     /// <summary>Spells a case's payload owner, which publishes its binary and JSON operations.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="item">The current item.</param>
+    /// <returns>The resulting text.</returns>
     private static string CaseOwner(PayloadRenderModel model, UnionRenderCase item) =>
         "global::LuminPack.Binary_" + model.Extension + "_" + item.Readable;
 
     /// <summary>Lists one format's profile slots.</summary>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="json">Whether to use the JSON operation.</param>
+    /// <returns>The resulting <c>UnionRenderSlot[]</c>.</returns>
     private static UnionRenderSlot[] Slots(PayloadRenderModel model, bool json) => json ? new[]
     {
         new UnionRenderSlot(string.Empty, Profile, string.Empty, 0, 0),
@@ -1007,9 +1100,14 @@ internal static class UnionEmitter
     };
 
     /// <summary>Spells the arbitrary-profile slot's generic parameter list.</summary>
+    /// <param name="slot">The slot supplied to <c>SlotArguments</c>.</param>
+    /// <returns>The resulting text.</returns>
     private static string SlotArguments(UnionRenderSlot slot) => slot.Profile == Profile ? "<" + Profile + ">" : string.Empty;
 
     /// <summary>Opens a namespace and the root's partial type chain.</summary>
+    /// <param name="namespace">The namespace supplied to <c>OpenType</c>.</param>
+    /// <param name="chain">The chain supplied to <c>OpenType</c>.</param>
+    /// <param name="w">The generated source writer.</param>
     private static void OpenType(string @namespace, string[] chain, CodeWriter w)
     {
         if (@namespace != null)
@@ -1025,6 +1123,9 @@ internal static class UnionEmitter
     }
 
     /// <summary>Closes a partial type chain and its namespace.</summary>
+    /// <param name="depth">The current nesting depth.</param>
+    /// <param name="namespace">The namespace supplied to <c>CloseChain</c>.</param>
+    /// <param name="w">The generated source writer.</param>
     private static void CloseChain(int depth, string @namespace, CodeWriter w)
     {
         for (int index = 0; index < depth; index++)
@@ -1034,5 +1135,7 @@ internal static class UnionEmitter
     }
 
     /// <summary>The hidden-editor attribute line.</summary>
+    /// <param name="w">The generated source writer.</param>
+    /// <returns>The resulting text.</returns>
     private static string Hidden(CodeWriter w) => "[" + w.Attribute("EditorBrowsable") + "(" + w.A("EditorBrowsableState") + ".Never)]";
 }

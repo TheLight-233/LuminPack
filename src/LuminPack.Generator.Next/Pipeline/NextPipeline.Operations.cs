@@ -28,6 +28,10 @@ internal static partial class NextPipeline
         /// <summary>The operations each shared owner keeps.</summary>
         internal readonly OwnerOperations Owners;
 
+        /// <summary>Initializes a <c>OperationPlan</c> from the supplied data.</summary>
+        /// <param name="whole">The whole supplied to <c>OperationPlan</c>.</param>
+        /// <param name="reached">The reached supplied to <c>OperationPlan</c>.</param>
+        /// <param name="owners">The owners supplied to <c>OperationPlan</c>.</param>
         private OperationPlan(GeneratedOperations whole, Dictionary<string, GeneratedOperations>? reached, OwnerOperations owners)
         {
             _whole = whole;
@@ -38,9 +42,13 @@ internal static partial class NextPipeline
         /// <summary>Selects the operations of one payload.</summary>
         /// <param name="model">The normalized payload model.</param>
         /// <returns>The operations its files implement.</returns>
-        internal GeneratedOperations For(TypeModel model) =>
-            _reached == null ? _whole :
-            _reached.TryGetValue(model.Identity.MetadataName, out GeneratedOperations reached) ? _whole | reached : _whole;
+        internal GeneratedOperations For(TypeModel model) => For(model.Identity.MetadataName);
+
+        /// <summary>Selects the operations of a declaration by its reachability identity.</summary>
+        /// <param name="key">The declaration identity.</param>
+        /// <returns>The operations retained by the declaration.</returns>
+        internal GeneratedOperations For(string? key) =>
+            key != null && _reached != null && _reached.TryGetValue(key, out GeneratedOperations reached) ? _whole | reached : _whole;
 
         /// <summary>Closes the called operations over the reached payload identities and shared owners.</summary>
         /// <param name="payloads">The normalized declaration results.</param>
@@ -112,8 +120,12 @@ internal static partial class NextPipeline
                 roots.Clear();
                 keys.Clear();
                 foreach (ModeledPayload payload in payloads)
+                {
                     if (payload.Result.IsComplete && payload.Result.Model is { } model && (plan.For(model) & operation) != 0)
                         models.Add(model);
+                    if (payload.FormatterRoot is { } root && (plan.For(payload.FormatterKey) & operation) != 0)
+                        roots.Add(root);
+                }
                 foreach (var call in byPayload)
                     if (call.Key.Root != null && (call.Value & operation) != 0)
                         roots.Add(call.Key.Root);

@@ -52,7 +52,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 
 ## Rules that matter
 
-- Declare models `partial`. Union roots, their cases and every containing type **must** be `partial` (LuminPack035).
+- Declare class and interface Union roots, their packable cases and every containing type `partial` (LuminPack035). On .NET 11, mark a C# `union` declaration `[LuminPackable]` for either generator. Both formats assign tags in declaration order starting at zero and use a null marker for the empty Union.
 - The default `Object` mode is positional: members in declaration order (or `[LuminPackOrder]`), parents first, 0 to 249 members. Both ends need the same members in the same order. Removing, reordering or retyping members breaks old data; use `VersionTolerant` for evolving schemas.
 - `VersionTolerant` matches members by name; `[LuminPackOrder]` is optional there. `[LuminPackOldName("Old")]` keeps renamed members readable.
 - `CircleReference` (reference tracking) requires `[LuminPackOrder]` on **every** serialized member.

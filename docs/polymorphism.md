@@ -26,7 +26,7 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy is Circle
 - Tags range from 0 to 65535. Tags 0 to 249 take one byte; larger tags take three. Prefer small tags, and keep them stable: the tag is what identifies a case on the wire.
 - `[LuminPackWideTag]` on the root selects the wide tag form for all of its cases.
 - Generic cases are supported: an open case (`typeof(Case<>)`) covers the closed types actually used, and a closed case (`typeof(Case<int>)`) has priority over it.
-- On .NET 11, a C# `union` declaration marked `[LuminPackable]` is recognized as a Union root and uses the same wire format.
+- On .NET 11, both generators support C# `union` declarations marked `[LuminPackable]`. Binary and JSON assign tags in case declaration order beginning at zero. A default Union with no case uses the null marker.
 
 For eligible local, non-generic abstract class roots, the generator selects the write tier once from the target framework and the root's declared cases. Every tier uses the same wire format.
 

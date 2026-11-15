@@ -106,7 +106,8 @@ internal readonly partial struct SharedFormatterSet
     /// <param name = "payloads">The payloads used by this operation.</param>
     private static void CollectFormatter(FormatterModel model, Dictionary<string, FormatterModel> formatters, HashSet<string> payloads)
     {
-        if (formatters.TryGetValue(model.Type, out FormatterModel? prior) && (prior.Payload != null || model.Payload == null))
+        if (formatters.TryGetValue(model.Type, out FormatterModel? prior) && (prior.Payload != null || model.Payload == null) &&
+            !(prior.Definition == FormatterDefinitions.CompilerUnion && prior.Arguments.Length == 0 && model.Arguments.Length != 0))
             return;
         formatters[model.Type] = model;
         foreach (FormatterModel argument in model.Arguments)

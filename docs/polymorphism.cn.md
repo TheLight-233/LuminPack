@@ -26,7 +26,7 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 - 标签范围 0 到 65535。0 到 249 占 1 字节，更大的占 3 字节。尽量用小标签，并保持稳定：数据中靠标签识别 case。
 - 在根类型上标 `[LuminPackWideTag]`，所有 case 都使用宽标签格式。
 - 支持泛型 case：开放泛型 case（`typeof(Case<>)`）覆盖实际用到的闭合类型，闭合 case（`typeof(Case<int>)`）优先于它。
-- 在 .NET 11 上，标了 `[LuminPackable]` 的 C# `union` 声明会被识别为 Union 根，使用相同的数据格式。
+- 在 .NET 11 上，两种生成器都支持标了 `[LuminPackable]` 的 C# `union` 声明。二进制和 JSON 都按 case 的声明顺序从零分配标签。未持有 case 的默认值使用空值标记。
 
 对符合条件的本地非泛型抽象类根，生成器根据目标框架和根上声明的 case 统一选择写入档位。各档位使用相同的线上格式。
 

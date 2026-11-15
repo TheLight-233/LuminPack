@@ -42,14 +42,18 @@ internal static partial class NextPipeline
                     bool errors = declarationErrors ||
                         DiagnosticDescriptors.HasErrors(TypeModelFactory.DiagnoseAssembly(compilation, options));
                     cancellationToken.ThrowIfCancellationRequested();
+                    bool compilerUnion = CompilerUnion.IsUnion(symbol, compilation);
+                    MemberModel? formatterRoot = !errors && compilerUnion ? TypeModelFactory.TryCreateRoot(symbol, compilation, options) : null;
                     ModelResult result = errors ? ModelResult.Unsupported("invalid serialization declaration") :
+                        compilerUnion ? ModelResult.Unsupported("compiler Union uses a shared formatter owner") :
                         TypeModelFactory.TryCreate(symbol, compilation, options);
                     // A valid Custom declaration registers its own static operations.
                     string? custom = declarationErrors ? null :
                         TypeModelFactory.CustomRegistration(symbol, options, out bool customJson) is { } customType
                             ? CustomRegistrationSource.Block(customType, customJson) : null;
                     return new ModeledPayload(result, options, diagnostics, custom,
-                        result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty);
+                        result.IsComplete ? OperationUsageAnalysis.Declaration(symbol, compilation) : OperationReach.Empty,
+                        formatterRoot, formatterRoot != null ? TypeModelFactory.ReachKey(symbol) : null);
                 }
                 catch (Exception error) when (error is not OperationCanceledException)
                 {
@@ -236,14 +240,18 @@ internal static partial class NextPipeline
         /// <param name="diagnostics">The normalized declaration and assembly diagnostics.</param>
         /// <param name="customRegistration">The optional typed custom registration block.</param>
         /// <param name="reach">The payload identities the declaration reaches.</param>
+        /// <param name="formatterRoot">The optional shared formatter for the declaration.</param>
+        /// <param name="formatterKey">The declaration identity used by operation reachability.</param>
         internal ModeledPayload(ModelResult result, GeneratorOptions options, DiagnosticInfo[] diagnostics, string? customRegistration = null,
-            OperationReach? reach = null)
+            OperationReach? reach = null, MemberModel? formatterRoot = null, string? formatterKey = null)
         {
             Reach = reach ?? OperationReach.Empty;
             CustomRegistration = customRegistration;
             Diagnostics = diagnostics;
             Result = result;
             Options = options;
+            FormatterRoot = formatterRoot;
+            FormatterKey = formatterKey;
         }
 
         internal ModelResult Result
@@ -273,9 +281,16 @@ internal static partial class NextPipeline
             get;
         }
 
+        /// <summary>The shared formatter root published by a compiler Union declaration.</summary>
+        internal MemberModel? FormatterRoot { get; }
+
+        /// <summary>The formatter declaration identity used to retain its operations.</summary>
+        internal string? FormatterKey { get; }
+
         /// <inheritdoc/>
         public bool Equals(ModeledPayload other) => Result.Equals(other.Result) && Options.Equals(other.Options) &&
             CustomRegistration == other.CustomRegistration && Reach.Equals(other.Reach) &&
+            Equals(FormatterRoot, other.FormatterRoot) && FormatterKey == other.FormatterKey &&
             SameDiagnostics(Diagnostics, other.Diagnostics);
 
         /// <inheritdoc/>

@@ -23,6 +23,8 @@ internal static class DefaultFormatterOwnerFile
             return Registered(set, model, operations);
         if (model.Definition == FormatterDefinitions.GenericUnion)
             return GenericUnion(set, model, operations);
+        if (model.Definition == FormatterDefinitions.CompilerUnion)
+            return CompilerUnionOwnerFile.Render(set, model, operations);
         if (model.Definition == FormatterDefinitions.Array)
         {
             if (model.Rank > 1)
@@ -120,6 +122,10 @@ internal static class DefaultFormatterOwnerFile
     /// <returns>The generated source or selected source-ready name.</returns>
     private static string Registered(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations) => SpecialOwnerFile.Render(set, operations, ReadableTypeName.Of(GeneratedNames.PayloadKey(model.Type)), model.Type, false, (w, _) => Body(w, false, true, set.Options.RegisterMode != RegisterMode.Disabled, model.Type), (w, _) => Body(w, false, false, set.Options.RegisterMode != RegisterMode.Disabled, model.Type), (w, _) => Body(w, true, true, set.Options.RegisterMode != RegisterMode.Disabled, model.Type), (w, _) => Body(w, true, false, set.Options.RegisterMode != RegisterMode.Disabled, model.Type));
     /// <summary>Renders a closed generic Union owner whose operations call the definition's generic Union roots.</summary>
+    /// <param name="set">The shared formatter owners and publication options.</param>
+    /// <param name="model">The normalized model for this contract.</param>
+    /// <param name="operations">The serialization operations selected for emission.</param>
+    /// <returns>The resulting text.</returns>
     private static string GenericUnion(SharedFormatterSet set, FormatterModel model, GeneratedOperations operations)
     {
         string[] parts = model.Underlying!.Split('|');
