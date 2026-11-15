@@ -181,8 +181,15 @@ internal sealed partial class PairedDictionaryContext
     /// <param name="type">The member keyword or <c>string</c>.</param>
     /// <param name="destination">The assignable destination.</param>
     /// <param name="fresh">Whether the destination was initialized to its default value.</param>
-    internal void ReadMember(string type, string destination, bool fresh = false)
+    /// <param name="readInt32">Whether a proven intrinsic <c>int</c> should use the checked scalar reader.</param>
+    internal void ReadMember(string type, string destination, bool fresh = false, bool readInt32 = false)
     {
+        if (readInt32 && type == "int" && (UsesRawOrStringEntries || _nativeEntries ||
+            _contract?.Arguments[type == Key ? 0 : 1] is { Raw: true, Layout: null, Payload: null }))
+        {
+            W.Line(destination + " = operationState.Read<int>();");
+            return;
+        }
         if (_nativeEntries)
         {
             if (type == "bool")
@@ -226,7 +233,8 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Emits the staged read of <c>length</c> entries into a pooled pair array.</summary>
     /// <param name="consume">The statements that consume the pooled <c>pairs</c> and <c>length</c>.</param>
     /// <param name="knownNonEmpty">Whether the caller has proved the count is positive.</param>
-    internal void ReadPairs(Action consume, bool knownNonEmpty = false)
+    /// <param name="readInt32Value">Whether to use the checked scalar reader for an intrinsic <c>int</c> value.</param>
+    internal void ReadPairs(Action consume, bool knownNonEmpty = false, bool readInt32Value = false)
     {
         W.Line("var pairs = global::System.Buffers.ArrayPool<" + Pair + ">.Shared.Rent(length);");
         W.Line("try");
@@ -244,7 +252,7 @@ internal sealed partial class PairedDictionaryContext
         W.Line(Key + " k = default !;");
         W.Line(Value + " v = default !;");
         ReadMember(Key, "k", fresh: true);
-        ReadMember(Value, "v", fresh: true);
+        ReadMember(Value, "v", fresh: true, readInt32: readInt32Value);
         W.Line(Memory + ".Add(ref first, (nint)(uint)index) = new " + Pair + "(k!, v);");
         W.Close();
         W.Line("while (++index < length);");

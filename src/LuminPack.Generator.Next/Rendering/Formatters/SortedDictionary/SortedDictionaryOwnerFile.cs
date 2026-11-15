@@ -29,6 +29,7 @@ internal static class SortedDictionaryOwnerFile
         w.Line("if (length == 0)");
         w.Indented(() => w.Line("goto operationComplete_RootRead;"));
         w.Blank();
-        c.ReadPairs(() => w.Line("global::LuminPack.Utility.LuminTreeStorage.FillSortedDictionary(value, pairs, length);"));
+        c.ReadPairs(() => w.Line("global::LuminPack.Utility.LuminTreeStorage.FillSortedDictionary(value, pairs, length);"),
+            knownNonEmpty: true, readInt32Value: c.Key == "string");
     }
 }
