@@ -389,8 +389,15 @@ internal static class ImmutableArrayOwnerFile
                     w.Line("buffer = newBuffer;");
                     w.Close();
                     w.Blank();
-                    w.Line(scalar + " item = default !;");
-                    w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                    // Framework integer formatters only replace the item through the same scalar read.
+                    if (set.FindFormatter(scalar) is { Definition: FormatterDefinitions.Scalar, Underlying: null } &&
+                        GenericFormatterReuse.Real(scalar) is "int" or "long")
+                        w.Line(scalar + " item = reader.Read<" + scalar + ", TLuminProfile>();");
+                    else
+                    {
+                        w.Line(scalar + " item = default !;");
+                        w.Line(elementOwner + ".Read<TLuminProfile>(ref reader, ref item);");
+                    }
                     w.Line("buffer[count++] = item;");
                     w.Close();
                     w.Line("while (reader.Read<TLuminProfile>());");
