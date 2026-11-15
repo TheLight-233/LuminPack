@@ -105,7 +105,8 @@ internal static class SerializerScalarInterfaceWriteRegression
             if (mode == "Minimal")
             {
                 var compatibilityParse = new CSharpParseOptions(LanguageVersion.CSharp13);
-                var compatibility = Compile(source.Replace("MODE", mode, StringComparison.Ordinal), "ScalarWritesCompatibility", compatibilityParse, references);
+                var compatibility = Compile(source.Replace("MODE", mode, StringComparison.Ordinal), "ScalarWritesCompatibility", compatibilityParse,
+                    FrameworkRuntimeMetadata.WithPointerCursor(CompatibilityCompilationReferences.Create()));
                 var (compatibilityDriver, _) = Generate(compatibility, compatibilityParse);
                 Require(!Methods(compatibilityDriver).Any(method => method.Identifier.ValueText is "RootWriteExactInterface" or "SerializeInterfaceSlow"),
                     "The pointer compatibility target acquired the managed exact write entry.");

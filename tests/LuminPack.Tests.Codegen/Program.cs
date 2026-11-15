@@ -339,6 +339,11 @@ try
         SerializerUnionInliningRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-proven-object-writes"])
+    {
+        SerializerCodegenPerformanceRegression.VerifyProvenObjectWrites(references);
+        return 0;
+    }
     if (args is ["--verify-codegen-performance"])
     {
         SerializerCodegenPerformanceRegression.Run(references);

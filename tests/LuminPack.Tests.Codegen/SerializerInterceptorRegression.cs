@@ -195,7 +195,7 @@ internal static partial class SerializerInterceptorRegression
         {
             const string friend = "[assembly: InternalsVisibleTo(\"InterceptorFriend\")]";
             Require(baseline == Execute(references, source.Replace("[LuminPackable] public partial class Payload", friend + "\n[LuminPackable] public partial class Payload"),
-                true, application: true, friend: true), "Friend access changed the wire representation.");
+                true, application: true), "Friend access changed the wire representation.");
         }
         VerifyIncremental(references, il);
         Console.WriteLine("Passed " + (il ? "C# 9 IL rewriting" : "compiler interception and incremental edits") + ": binary/JSON, wrappers, profiles, unions, async, registered fallback, direct-call IL and legacy wire equality.");
@@ -208,10 +208,9 @@ internal static partial class SerializerInterceptorRegression
     /// <param name="register">Whether this fixture exercises opaque registered calls.</param>
     /// <param name="il">Whether to use the installed IL backend.</param>
     /// <param name="application">Whether to compile a console application.</param>
-    /// <param name="friend">Whether the application exposes internals to another assembly.</param>
     /// <returns>The fixture's wire digest.</returns>
     private static string Execute(MetadataReference[] references, string source, bool intercept, bool register = true, bool il = false,
-        bool application = false, bool friend = false)
+        bool application = false)
     {
         var symbols = il ? new List<string> { "NETSTANDARD2_1" } : new List<string> { "NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER" };
         if (intercept)
@@ -254,13 +253,14 @@ internal static partial class SerializerInterceptorRegression
         if (intercept)
         {
             Require(generatedFiles.Any(file => file.HintName == "LuminPackGen.Interceptors.g.cs"), "The enabled compiler did not receive interceptors.");
-            bool prune = application && !il && !friend;
             string interceptors = generatedFiles.Single(file => file.HintName == "LuminPackGen.Interceptors.g.cs").SourceText.ToString();
-            foreach (string root in new[] { "RootWrite", "RootRead", "RootWriteJson", "RootReadJson" })
-                Require(interceptors.Contains("LuminRoots_StatePayload." + root + "<", StringComparison.Ordinal) == prune,
-                    "The state interceptor took the wrong path for " + root + ".");
-            Require(outerMethods.Any(method => method.Identifier.ValueText == "SerializeJson_StatePayload" && method.TypeParameterList != null) != prune,
-                "The unused profiled JSON state forwarder was emitted in the wrong compilation kind.");
+            foreach (string operation in new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson" })
+            {
+                string forwarder = operation + "_StatePayload";
+                Require(interceptors.Contains("LuminPackSerializer." + forwarder + "<", StringComparison.Ordinal) &&
+                    outerMethods.Any(method => method.Identifier.ValueText == forwarder && method.TypeParameterList != null),
+                    "The state interceptor did not route " + operation + " to a concrete entry.");
+            }
             if (application)
                 Require(outerMethods.Any(method => method.Identifier.ValueText == "Serialize_RetainedPayload" && method.TypeParameterList == null),
                     "The source-referenced state entry was omitted.");

@@ -108,7 +108,8 @@ internal static class SerializerScalarInterfaceReadRegression
             if (mode == "Minimal")
             {
                 var compatibilityParse = new CSharpParseOptions(LanguageVersion.CSharp13);
-                var compatibility = compilation.RemoveAllSyntaxTrees().AddSyntaxTrees(CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), compatibilityParse));
+                var compatibility = compilation.WithReferences(FrameworkRuntimeMetadata.WithPointerCursor(CompatibilityCompilationReferences.Create())).RemoveAllSyntaxTrees()
+                    .AddSyntaxTrees(CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), compatibilityParse));
                 var (compatibilityDriver, _) = Generate(compatibility, compatibilityParse);
                 Require(ReadBody(Methods(compatibilityDriver), "global::System.Collections.Generic.IEnumerable<int>").ToString().Contains("Lease", StringComparison.Ordinal),
                     "The pointer compatibility metadata acquired the managed stateless entry.");

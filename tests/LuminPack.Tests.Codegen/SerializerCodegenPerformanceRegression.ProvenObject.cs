@@ -8,7 +8,7 @@ internal static partial class SerializerCodegenPerformanceRegression
 {
     /// <summary>Protects complete ordinary-object and virtual Union payload proofs and their original fallback observations.</summary>
     /// <param name="references">The actual platform and runtime references.</param>
-    private static void VerifyProvenObjectWrites(MetadataReference[] references)
+    internal static void VerifyProvenObjectWrites(MetadataReference[] references)
     {
         string[] modern = ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"];
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
@@ -52,12 +52,13 @@ internal static partial class SerializerCodegenPerformanceRegression
     {
         var errors = diagnostics.Concat(output.GetDiagnostics()).Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();
         RequireProven(errors.Length == 0, string.Join("\n", errors.Select(item => item.ToString())));
-        var selected = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
-            .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
-            .Where(method => method.Body?.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(helper => helper.Identifier.ValueText.StartsWith("WriteOriginalObject", StringComparison.Ordinal)) == true).ToArray();
-        string[] owners = selected.Select(method => method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?')).Distinct().Order().ToArray();
-        RequireProven(expected ? selected.Length == 5 && owners.SequenceEqual(new[] { "global::Child", "global::Leaf", "global::Unsealed" }) : selected.Length == 0,
-            "An excluded contract gained an object proof or an eligible complete operation was lost.");
+        var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        var selected = methods.Where(method => method.Body?.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+            .Any(helper => helper.Identifier.ValueText.StartsWith("WriteOriginalObject", StringComparison.Ordinal)) == true).ToArray();
+        string[] owners = selected.Select(method => method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?')).Order().ToArray();
+        RequireProven(expected ? owners.SequenceEqual(new[] { "global::Child", "global::Child", "global::Leaf", "global::Leaf", "global::Unsealed" }) : selected.Length == 0,
+            "An excluded contract gained an object proof or an eligible complete operation was lost: " + string.Join(", ", owners));
     }
 
     private const string ProvenObjectFixture = """

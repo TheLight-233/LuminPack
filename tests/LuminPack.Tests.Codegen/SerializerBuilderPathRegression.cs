@@ -115,9 +115,12 @@ internal static class SerializerBuilderPathRegression
         Require(writes.Length != 0 && writes.All(method => method.ToString().Contains(".CopyTo(", StringComparison.Ordinal) && !method.ToString().Contains("GetChunks", StringComparison.Ordinal)), "Builder binary copies lost their direct reserved destination.");
         var json = methods.Where(method => method.Identifier.ValueText == "RootWriteJson").ToArray();
         Require(json.Length != 0 && json.All(method => method.ToString().Contains("WriteStringBuilder", StringComparison.Ordinal) == snapshot), "Builder JSON writes selected an unavailable runtime API.");
-        var reads = methods.Where(method => method.Identifier.ValueText is "RootReadJson" or "DeserializeJson").ToArray();
-        Require(reads.Length != 0 && reads.Any(method => method.ToString().Contains("ReadStringBuilder", StringComparison.Ordinal)) == snapshot, "Builder JSON reads selected an unavailable runtime API.");
-        Require(snapshot || reads.Any(method => method.Identifier.ValueText == "RootReadJson" && method.ToString().Contains("new global::System.Text.StringBuilder", StringComparison.Ordinal)), "Builder JSON reads lost their compatibility implementation.");
+        var jsonReads = methods.Where(method => method.ParameterList.Parameters[0].Type!.ToString().Contains("JsonReader", StringComparison.Ordinal)).ToArray();
+        var reads = jsonReads.SelectMany(method => method.DescendantNodes().OfType<InvocationExpressionSyntax>()).ToArray();
+        Require(reads.Length != 0 && reads.Any(call => call.Expression.ToString().Contains("ReadStringBuilder", StringComparison.Ordinal)) == snapshot,
+            "Builder JSON reads selected the wrong runtime API: " + string.Join(", ", reads.Select(call => call.Expression.ToString()).Distinct()));
+        Require(snapshot || jsonReads.SelectMany(method => method.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+            .Any(creation => creation.Type.ToString() == "global::System.Text.StringBuilder"), "Builder JSON reads lost their compatibility implementation.");
     }
 
     /// <summary>Creates an independent incremental driver.</summary>

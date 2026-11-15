@@ -148,7 +148,7 @@ if (args.Contains("--verify-union-auto-discovery", StringComparer.Ordinal))
 
 if (args.Contains("--verify-direct-static-dispatch", StringComparer.Ordinal))
 {
-    VerifyDirectStaticDispatch(references);
+    VerifyDirectStaticDispatch();
     Console.WriteLine("Passed Roslyn concrete-overload binding and generic fallback verification.");
     return;
 }
@@ -523,11 +523,10 @@ static void VerifyUnionAutoDiscovery(MetadataReference[] references)
         throw new InvalidOperationException("A local [LuminPackable] derived type was not auto-registered.");
     }
 
-    string genericRootSource = run.Results.SelectMany(static item => item.GeneratedSources)
+    string genericRootSource = string.Join("\n", run.Results.SelectMany(static item => item.GeneratedSources)
         .Where(static generated => generated.HintName.Contains("IGenericMessage", StringComparison.Ordinal))
-        .Select(static generated => generated.SourceText.ToString())
-        .First(static generated => generated.Contains("ReadPolymorphismValue", StringComparison.Ordinal));
-    if (!genericRootSource.Contains("global::GenericMessage<int> member", StringComparison.Ordinal))
+        .Select(static generated => generated.SourceText.ToString()));
+    if (!genericRootSource.Contains("global::GenericMessage<int>", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
             "The closed GenericMessage<int> observed by the semantic syntax walk was not auto-registered.");
@@ -589,7 +588,7 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
 
     var generated = result.GeneratedSources
         .Select(static item => item.SourceText.ToString())
-        .FirstOrDefault(static text => text.Contains("LuminPackUnionDispatchSlot_", StringComparison.Ordinal));
+        .FirstOrDefault(static text => text.Contains("private static readonly int LuminPackUnionDispatchSlot_", StringComparison.Ordinal));
     if (string.IsNullOrEmpty(generated))
     {
         throw new InvalidOperationException("The generic union dispatch source was not generated.");
@@ -599,14 +598,17 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
     {
         throw new InvalidOperationException("The generic union hot path still contains a linear typeof(T) chain.");
     }
-    if (!generated.Contains("LuminUnionMap<int>", StringComparison.Ordinal) ||
+    if (!generated.Contains("private static readonly int LuminPackUnionDispatchSlot_", StringComparison.Ordinal) ||
         !generated.Contains("switch (LuminPackUnionDispatchSlot_", StringComparison.Ordinal) ||
-        !generated.Contains("LuminPack.Code.LuminPackMarshal.GetMethodTable", StringComparison.Ordinal) ||
-        !generated.Contains("LuminPack.Code.LuminPackMarshal.As<", StringComparison.Ordinal) ||
-        !generated.Contains("typeof(global::ClosedGenericMember<TMember>)", StringComparison.Ordinal))
+        !generated.Contains("switch (typeof(global::ClosedGenericMember<TMember>))", StringComparison.Ordinal) ||
+        !generated.Contains("LuminPackMarshal.As<", StringComparison.Ordinal) ||
+        !generated.Contains("typeof(global::ClosedGenericMember<double>)", StringComparison.Ordinal) ||
+        !generated.Contains("typeof(global::ClosedGenericMember<int>)", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
-            "The generic union dispatch did not emit its MethodTable cache and exact closed-type static call path.");
+            "The generic Union dispatch did not emit its cached slot and exact closed-type static call path: " +
+            string.Join(" | ", generated.Split('\n').Where(line => line.Contains("typeof(", StringComparison.Ordinal) ||
+                line.Contains("switch", StringComparison.Ordinal) || line.Contains(".As<", StringComparison.Ordinal)).Take(18)));
     }
 }
 
@@ -685,26 +687,23 @@ static void VerifySealedUnionDispatch(MetadataReference[] references)
         result.GeneratedSources
             .Select(static item => item.SourceText?.ToString() ?? string.Empty)
             .Where(static text => text.Contains("override void LuminPackUnionSerialize_", StringComparison.Ordinal)));
-    if (!dispatch.Contains("internal sealed override void LuminPackUnionSerialize_", StringComparison.Ordinal))
+    if (!dispatch.Contains("public sealed override void LuminPackUnionSerialize_", StringComparison.Ordinal))
     {
         throw new InvalidOperationException("A leaf class-union member did not emit a sealed dispatch override.");
     }
-    if (!dispatch.Contains("internal override void LuminPackUnionSerialize_", StringComparison.Ordinal))
+    if (!dispatch.Contains("public override void LuminPackUnionSerialize_", StringComparison.Ordinal))
     {
         throw new InvalidOperationException("A class-union member with a LuminPackable subclass was incorrectly sealed.");
     }
 }
 
 // <summary>Verifies verify direct static dispatch.</summary>
-// <param name="platformReferences">The platform references used by this operation.</param>
-static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
+static void VerifyDirectStaticDispatch()
 {
     var parseOptions = CSharpParseOptions.Default
         .WithLanguageVersion(LanguageVersion.Preview)
-        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
-    var runtimeReference = MetadataReference.CreateFromFile(
-        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
-    var references = platformReferences.Append(runtimeReference).ToArray();
+        .WithPreprocessorSymbols("NETSTANDARD2_1");
+    var references = CompatibilityCompilationReferences.Create();
 
     const string directSource = """
         using System.Collections.Generic;
@@ -729,50 +728,46 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
         new[] { CSharpSyntaxTree.ParseText(directSource, parseOptions) },
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
-    var (directOutput, directGenerated) = RunFormatterGenerators(directInput, parseOptions);
-    AssertNoCompilationErrors(directOutput, "direct-static closed formatter graph", ignoreRoslyn43RefReadonlyMismatch: true);
+    var directOutput = RunFormatterGenerators(directInput, parseOptions);
+    AssertNoCompilationErrors(directOutput, "direct-static closed formatter graph", ignoreRoslyn43RefReadonlyMismatch: true,
+        ignoreRoslyn43ScopedInputMismatch: true);
 
-    string normalizedDirectGenerated = directGenerated.Replace("\r\n", "\n");
-    if (!normalizedDirectGenerated.Contains(
-            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)\n" +
-            "            {\n" +
-            "                var dictionaryView = LuminPackMarshal.GetDictionaryView(value);\n" +
-            "                if (dictionaryView._count == count)",
-            StringComparison.Ordinal))
+    var dictionaryRoots = directOutput.SyntaxTrees.Skip(directInput.SyntaxTrees.Count())
+        .SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+        .Where(method => method.ParameterList.Parameters.Count == 2 &&
+            method.ParameterList.Parameters[1].Type?.ToString().Replace(" ", "").TrimEnd('?') ==
+                "global::System.Collections.Generic.Dictionary<int,long>").ToArray();
+    var binaryWrite = dictionaryRoots.Single(method => method.Identifier.ValueText == "RootWrite");
+    var binaryRead = dictionaryRoots.Single(method => method.Identifier.ValueText == "RootRead");
+    var jsonWrite = dictionaryRoots.Single(method => method.Identifier.ValueText == "RootWriteJson");
+    if (!binaryWrite.DescendantNodes().OfType<IfStatementSyntax>().Any(gate =>
+        gate.Condition.ToString().Contains("SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
+        gate.Statement.ToString().Contains(".GetDictionaryView(", StringComparison.Ordinal) &&
+        gate.Statement.ToString().Contains("._count == count", StringComparison.Ordinal)))
     {
         throw new InvalidOperationException(
             "The unmanaged Dictionary binary fast path reads layout-sensitive state without a 64-bit guard.");
     }
-    if (!normalizedDirectGenerated.Contains(
-            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)\n" +
-            "            {\n" +
-            "                var fallback = new global::System.Collections.Generic.Dictionary<int, long>(length);",
-            StringComparison.Ordinal) ||
-        normalizedDirectGenerated.IndexOf(
-            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)", StringComparison.Ordinal) >
-        normalizedDirectGenerated.IndexOf(
-            "var dictionaryView = LuminPackMarshal.GetDictionaryView(result);", StringComparison.Ordinal))
+    var fallback = binaryRead.DescendantNodes().OfType<IfStatementSyntax>().SingleOrDefault(gate =>
+        gate.Condition.ToString().Contains("SizeOf<global::System.IntPtr>() != 8", StringComparison.Ordinal) &&
+        gate.Statement.ToString().Contains("new global::System.Collections.Generic.Dictionary<int, long>", StringComparison.Ordinal) &&
+        gate.Statement.ToString().Contains(".Add(", StringComparison.Ordinal));
+    if (fallback == null || !binaryRead.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+        call.Expression.ToString().EndsWith(".GetDictionaryView", StringComparison.Ordinal) && call.SpanStart > fallback.Span.End))
     {
         throw new InvalidOperationException(
             "The Dictionary reader touches its runtime-layout view before the 32-bit public-API fallback.");
     }
-    if (!normalizedDirectGenerated.Contains(
-            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)\n" +
-            "                {\n" +
-            "                    nuint dictIndex = 0;\n" +
-            "                    var dictView = LuminPackMarshal.GetDictionaryView(value);",
-            StringComparison.Ordinal) ||
-        !normalizedDirectGenerated.Contains(
-            "else\n" +
-            "                {\n" +
-            "                    foreach (var entry in value)",
-            StringComparison.Ordinal))
+    if (!jsonWrite.DescendantNodes().OfType<IfStatementSyntax>().Any(gate =>
+        gate.Condition.ToString().Contains("SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
+        gate.Statement.ToString().Contains(".GetDictionaryView(", StringComparison.Ordinal) &&
+        gate.Else?.Statement.DescendantNodes().OfType<ForEachStatementSyntax>().Any() == true))
     {
         throw new InvalidOperationException(
             "The Dictionary JSON formatter is missing its guarded dense path or public-enumerator 32-bit fallback.");
     }
 
-    const string generatedContainer = "LuminPack.Generated.LuminPackExtensions_DirectStaticDispatch";
+    const string generatedContainer = "LuminPack.Binary_LuminPackExtensions_DirectStaticDispatch_";
     int directWrites = 0;
     int directReads = 0;
     int directCalculates = 0;
@@ -793,11 +788,12 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
                 runtimeFallbacks.Add(invocation.ToString());
             }
 
-            if (containingType != generatedContainer || method.IsGenericMethod)
+            if (!containingType.StartsWith(generatedContainer, StringComparison.Ordinal) ||
+                method.TypeParameters.Any(parameter => parameter.Name is not ("TOptions" or "TLuminProfile")))
                 continue;
 
-            if (method.Name == "WriteValue") directWrites++;
-            else if (method.Name == "ReadValue") directReads++;
+            if (method.Name == "Write") directWrites++;
+            else if (method.Name == "Read") directReads++;
             else if (method.Name == "MeasureRecordWidth")
             {
                 directCalculates++;
@@ -866,29 +862,29 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
         new[] { CSharpSyntaxTree.ParseText(consumerSource, parseOptions) },
         references.Append(externalReference),
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
-    var (consumerOutput, _) = RunFormatterGenerators(consumerInput, parseOptions);
-    AssertNoCompilationErrors(consumerOutput, "external packable collection fallback", ignoreRoslyn43RefReadonlyMismatch: true);
+    var consumerOutput = RunFormatterGenerators(consumerInput, parseOptions);
+    AssertNoCompilationErrors(consumerOutput, "external packable collection fallback", ignoreRoslyn43RefReadonlyMismatch: true,
+        ignoreRoslyn43ScopedInputMismatch: true);
 
     int fallbackWrites = 0;
     int fallbackReads = 0;
     int fallbackCalculates = 0;
-    const string fallbackContainer = "LuminPack.Generated.LuminPackExtensions_ExternalConsumer";
+    var externalInvocations = new List<string>();
     foreach (SyntaxTree tree in consumerOutput.SyntaxTrees.Skip(consumerInput.SyntaxTrees.Count()))
     {
         SemanticModel model = consumerOutput.GetSemanticModel(tree);
         foreach (InvocationExpressionSyntax invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
-                method.ContainingType?.ToDisplayString() != fallbackContainer ||
                 !method.IsGenericMethod ||
-                method.TypeArguments.Length != 1 ||
-                method.TypeArguments[0].ToDisplayString().TrimEnd('?') != "ExternalContracts.ExternalContract")
+                !method.TypeArguments.Any(argument => argument.ToDisplayString().TrimEnd('?') == "ExternalContracts.ExternalContract"))
             {
                 continue;
             }
 
-            if (method.Name == "WriteValue") fallbackWrites++;
-            else if (method.Name == "ReadValue") fallbackReads++;
+            externalInvocations.Add(method.ContainingType.ToDisplayString() + "." + method.Name);
+            if (method.Name is "WriteValue" or "Write" or "Serialize") fallbackWrites++;
+            else if (method.Name is "ReadValue" or "Read" or "Deserialize") fallbackReads++;
             else if (method.Name == "MeasureRecordWidth") fallbackCalculates++;
         }
     }
@@ -897,7 +893,7 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
     {
         throw new InvalidOperationException(
             $"Referenced [LuminPackable] fallback bindings missing: Write={fallbackWrites}, " +
-            $"Read={fallbackReads}, Calculate={fallbackCalculates}.");
+            $"Read={fallbackReads}, Calculate={fallbackCalculates}. " + string.Join(" | ", externalInvocations.Distinct()));
     }
 }
 
@@ -1251,13 +1247,13 @@ static (Compilation Output, string Generated) RunPruneModeGenerators(
 // <summary>Verifies run formatter generators.</summary>
 // <param name="input">The input data to process.</param>
 // <param name="parseOptions">The parse options used by this operation.</param>
-// <returns>The result of the operation.</returns>
-static (Compilation Output, string Generated) RunFormatterGenerators(
+// <returns>The consumer compilation including the generated formatter owners.</returns>
+static Compilation RunFormatterGenerators(
     CSharpCompilation input,
     CSharpParseOptions parseOptions)
 {
     GeneratorDriver driver = CSharpGeneratorDriver.Create(
-        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackJsonGenerator().AsSourceGenerator(), new LuminPackFormatterGenerator().AsSourceGenerator() },
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
     var runResult = driver.GetRunResult();
@@ -1267,25 +1263,25 @@ static (Compilation Output, string Generated) RunFormatterGenerators(
             throw new InvalidOperationException("Formatter generator failed.", result.Exception);
     }
 
-    string generated = string.Join(
-        Environment.NewLine,
-        runResult.Results.SelectMany(static result => result.GeneratedSources)
-            .Select(static source => source.SourceText.ToString()));
-    return (output, generated);
+    return output;
 }
 
 // <summary>Verifies assert no compilation errors.</summary>
 // <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
 // <param name="scenario">The scenario used by this operation.</param>
 // <param name="ignoreRoslyn43RefReadonlyMismatch">The ignore roslyn43 ref readonly mismatch used by this operation.</param>
+// <param name="ignoreRoslyn43ScopedInputMismatch">Whether to ignore the old host's missing scoped metadata on the fixture's fixed header write.</param>
 static void AssertNoCompilationErrors(
     Compilation compilation,
     string scenario,
-    bool ignoreRoslyn43RefReadonlyMismatch = false)
+    bool ignoreRoslyn43RefReadonlyMismatch = false,
+    bool ignoreRoslyn43ScopedInputMismatch = false)
 {
     Diagnostic[] errors = compilation.GetDiagnostics()
         .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
         .Where(diagnostic => !ignoreRoslyn43RefReadonlyMismatch || !IsRoslyn43RefReadonlyMismatch(diagnostic))
+        .Where(diagnostic => !ignoreRoslyn43ScopedInputMismatch || diagnostic.Id != "CS8374" ||
+            !DiagnosticLine(diagnostic).Contains("= ref writer.WriteRecord(ref cursor, (byte)", StringComparison.Ordinal))
         .ToArray();
     if (errors.Length != 0)
     {
@@ -1306,14 +1302,15 @@ static void AssertNoCompilationErrors(
 // <param name="diagnostic">The diagnostic used by this operation.</param>
 // <returns>Whether the requested condition or operation succeeded.</returns>
 static bool IsRoslyn43RefReadonlyMismatch(Diagnostic diagnostic)
-{
-    if (diagnostic.Id != "CS1620" || diagnostic.Location.SourceTree is not { } tree)
-        return false;
+    => diagnostic.Id == "CS1620" && DiagnosticLine(diagnostic).Contains("Unsafe.AsRef(in value)", StringComparison.Ordinal);
 
-    var span = diagnostic.Location.GetLineSpan();
-    return tree.GetText().Lines[span.StartLinePosition.Line].ToString()
-        .Contains("Unsafe.AsRef(in value)", StringComparison.Ordinal);
-}
+// <summary>Gets the source line for a compiler diagnostic, if available.</summary>
+// <param name="diagnostic">The compiler diagnostic to locate.</param>
+// <returns>The complete source line, or an empty string for a metadata diagnostic.</returns>
+static string DiagnosticLine(Diagnostic diagnostic) =>
+    diagnostic.Location.SourceTree is { } tree
+        ? tree.GetText().Lines[diagnostic.Location.GetLineSpan().StartLinePosition.Line].ToString()
+        : string.Empty;
 
 // <summary>Verifies verify formatter scope.</summary>
 // <param name="references">The references used by this operation.</param>

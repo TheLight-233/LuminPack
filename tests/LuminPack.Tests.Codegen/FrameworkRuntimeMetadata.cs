@@ -6,6 +6,24 @@ using System.Reflection.PortableExecutable;
 /// <summary>Builds metadata-only older-runtime images for optional generated API binding checks.</summary>
 internal static class FrameworkRuntimeMetadata
 {
+    /// <summary>Supplies the legacy pointer cursor signature for generator selection without executing the modified image.</summary>
+    /// <param name="references">The platform references and compatible Core asset.</param>
+    /// <returns>The same reference set with the writer cursor represented as a native pointer.</returns>
+    internal static Microsoft.CodeAnalysis.MetadataReference[] WithPointerCursor(Microsoft.CodeAnalysis.MetadataReference[] references)
+    {
+        var runtime = references.Single(reference => Path.GetFileName(reference.Display) == "LuminPack.Core.dll");
+        using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(runtime.Display!);
+        var module = assembly.MainModule;
+        var cursor = module.GetType("LuminPack.Core.LuminPackWriter").Fields.Single(field => field.Name == "Cursor");
+        cursor.FieldType = new Mono.Cecil.PointerType(module.TypeSystem.Byte);
+        module.Mvid = Guid.NewGuid();
+        using var stream = new MemoryStream();
+        assembly.Write(stream);
+        return references.Select(reference => ReferenceEquals(reference, runtime)
+            ? Microsoft.CodeAnalysis.MetadataReference.CreateFromImage(stream.ToArray(), filePath: "PointerCore.dll")
+            : reference).ToArray();
+    }
+
     /// <summary>Renames selected methods and refreshes the module identity without executing the resulting image.</summary>
     /// <param name="path">The referenced runtime image.</param>
     /// <param name="names">The optional method names to hide, optionally qualified by declaring type name.</param>

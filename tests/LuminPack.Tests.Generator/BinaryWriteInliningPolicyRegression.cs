@@ -67,19 +67,19 @@ internal static class BinaryWriteInliningPolicyRegression
             .Replace("\r\n", "\n");
 
         AssertWriteAttribute(generated, "int[]", "AggressiveInlining");
-        AssertWriteAttribute(generated, "string[]", "NoInlining");
-        AssertWriteAttribute(generated, "string[,]", "NoInlining");
+        AssertWriteAttribute(generated, "string[]", "AggressiveInlining");
+        AssertWriteAttribute(generated, "string[,]", null);
         AssertWriteAttribute(generated, "global::System.Collections.Generic.List<int>", "AggressiveInlining");
         AssertWriteAttribute(generated, "global::System.Collections.Generic.List<string>", "NoInlining");
-        AssertWriteAttribute(generated, "global::System.Collections.Generic.Dictionary<int, int>", "NoInlining");
-        AssertWriteAttribute(generated, "global::System.Collections.Generic.Dictionary<string, long>", "NoInlining");
+        AssertWriteAttribute(generated, "global::System.Collections.Generic.Dictionary<int, int>", "AggressiveInlining");
+        AssertWriteAttribute(generated, "global::System.Collections.Generic.Dictionary<string, long>", "AggressiveInlining");
     }
 
     /// <summary>Verifies assert write attribute.</summary>
     /// <param name="generated">The generated used by this operation.</param>
     /// <param name="typeName">The C# type name to use in generated source.</param>
-    /// <param name="expectedAttribute">The expected attribute used by this operation.</param>
-    private static void AssertWriteAttribute(string generated, string typeName, string expectedAttribute)
+    /// <param name="expectedAttribute">The expected inlining flag, or null when the root leaves the decision to the JIT.</param>
+    private static void AssertWriteAttribute(string generated, string typeName, string? expectedAttribute)
     {
         var methods = CSharpSyntaxTree.ParseText(generated).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(method => method.Identifier.ValueText == "RootWrite" && method.ParameterList.Parameters.Count == 2 &&
@@ -89,10 +89,12 @@ internal static class BinaryWriteInliningPolicyRegression
                 string.Join(", ", CSharpSyntaxTree.ParseText(generated).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()
                     .Where(method => method.Identifier.ValueText == "RootWrite" && method.ParameterList.Parameters.Count == 2)
                     .Select(method => method.ParameterList.Parameters[1].Type!.ToString())));
-        if (methods.Any(method => !method.AttributeLists.ToString().Contains("MethodImplOptions." + expectedAttribute, StringComparison.Ordinal)))
+        if (methods.Any(method => expectedAttribute == null
+            ? method.AttributeLists.ToString().Contains("Inlining", StringComparison.Ordinal)
+            : !method.AttributeLists.ToString().Contains("MethodImplOptions." + expectedAttribute, StringComparison.Ordinal)))
         {
             throw new InvalidOperationException(
-                typeName + " did not use the expected " + expectedAttribute + " write inlining policy." +
+                typeName + " did not use the expected " + (expectedAttribute ?? "default") + " write inlining policy." +
                 Environment.NewLine + string.Join(Environment.NewLine, methods.Select(method => method.AttributeLists.ToString())));
         }
     }

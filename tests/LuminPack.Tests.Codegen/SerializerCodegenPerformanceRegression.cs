@@ -15,7 +15,7 @@ internal static partial class SerializerCodegenPerformanceRegression
         VerifyProvenObjectWrites(references);
         VerifyProvenProfileIdentity(references);
         VerifyCursorAliasStorage();
-        VerifyCheckedReaderAdvances();
+        VerifyCheckedReaderAdvances(references);
         VerifyNativeOffsets(references);
         SerializerPayloadAliasRegression.Run(references);
         const string source = """
@@ -104,11 +104,37 @@ internal static partial class SerializerCodegenPerformanceRegression
             {
                 public static int ReadNarrowPair(ReadOnlySpan<byte> bytes, ref KeyValuePair<byte,string> value) => LuminPackSerializer.Deserialize(bytes,ref value);
                 public static int ReadWidePair(ReadOnlySpan<byte> bytes, ref KeyValuePair<Guid,string> value) => LuminPackSerializer.Deserialize(bytes,ref value);
+                private static void CheckPairs()
+                {
+                    var narrow = new KeyValuePair<byte,string>(19, "narrow");
+                    var wide = new KeyValuePair<Guid,string>(Guid.Parse("a97ad526-7789-4b72-8bac-37a4c6b2b0d0"), "wide");
+                    var narrowBytes = LuminPackSerializer.Serialize(narrow);
+                    var wideBytes = LuminPackSerializer.Serialize(wide);
+                    for (int prefix = 0; prefix < narrowBytes.Length; prefix++)
+                    {
+                        var target = new KeyValuePair<byte,string>(7, "original");
+                        var original = target;
+                        bool rejected = false;
+                        try { ReadNarrowPair(narrowBytes.AsSpan(0, prefix), ref target); }
+                        catch (Exception error) when (error.GetType().Name == "LuminPackException") { rejected = true; }
+                        if (!rejected || !target.Equals(original)) throw new Exception("A truncated narrow pair changed its destination.");
+                    }
+                    for (int prefix = 0; prefix < wideBytes.Length; prefix++)
+                    {
+                        var target = new KeyValuePair<Guid,string>(Guid.Empty, "original");
+                        var original = target;
+                        bool rejected = false;
+                        try { ReadWidePair(wideBytes.AsSpan(0, prefix), ref target); }
+                        catch (Exception error) when (error.GetType().Name == "LuminPackException") { rejected = true; }
+                        if (!rejected || !target.Equals(original)) throw new Exception("A truncated wide pair changed its destination.");
+                    }
+                }
                 public static byte[] WriteNullable(int? value) => LuminPackSerializer.Serialize(value);
                 public static byte[] WriteNullableGuid(Guid? value) => LuminPackSerializer.Serialize(value);
                 public static byte[] WriteManagedNullable(ManagedNullableBody? value) => LuminPackSerializer.Serialize(value);
                 public static void Check()
                 {
+                    CheckPairs();
                     Raw first = default, second = default;
                     Unsafe.InitBlockUnaligned(ref Unsafe.As<Raw, byte>(ref first), 0xA5, 16);
                     Unsafe.InitBlockUnaligned(ref Unsafe.As<Raw, byte>(ref second), 0x5A, 16);
@@ -352,8 +378,7 @@ internal static partial class SerializerCodegenPerformanceRegression
         }
         foreach (string type in new[] { "int?", "global::System.Guid?" })
         {
-            var entry = methods.Single(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } &&
-                method.Identifier.ValueText == "Serialize" && method.TypeParameterList?.Parameters.Count == 1 &&
+            var entry = methods.Single(method => method.Identifier.ValueText == "Serialize" && method.TypeParameterList?.Parameters.Count == 1 &&
                 method.ParameterList.Parameters.Count == 1 && method.ParameterList.Parameters[0].Type!.ToString() == type);
             Require(entry.Body!.ToString().Contains("value.HasValue ? 1 + Unsafe.SizeOf<", StringComparison.Ordinal) &&
                 !entry.Body.ToString().Contains("directEvaluator", StringComparison.Ordinal) &&
@@ -361,8 +386,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                 entry.Body.ToString().Contains("ref writer, in value", StringComparison.Ordinal),
                 "A fixed Nullable scalar retained redundant evaluation/pool fallback or bypassed its existing root.");
         }
-        var managedNullable = methods.Single(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } &&
-            method.Identifier.ValueText == "Serialize" && method.TypeParameterList?.Parameters.Count == 1 &&
+        var managedNullable = methods.Single(method => method.Identifier.ValueText == "Serialize" && method.TypeParameterList?.Parameters.Count == 1 &&
             method.ParameterList.Parameters.Count == 1 && method.ParameterList.Parameters[0].Type!.ToString() == "global::ManagedNullableBody?");
         Require(managedNullable.Body!.ToString().Contains("LuminBufferWriterPool.Rent", StringComparison.Ordinal),
             "A state-dependent Nullable acquired a raw scalar convenience entry.");
@@ -392,14 +416,14 @@ internal static partial class SerializerCodegenPerformanceRegression
         Require(sequences.Length >= 2, "The architecture regression lost its concrete unmanaged sequence entries.");
         foreach (var sequence in sequences)
         {
-            // The staged value read adds the writer's at-most-four-byte allowance to its architecture gate; the
-            // wider fixture types still keep the 32-bit block-copy fallback.
-            var branches = sequence.DescendantNodes().OfType<IfStatementSyntax>().Where(statement =>
-                statement.Condition.ToString().StartsWith("global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8",
-                    StringComparison.Ordinal)).ToArray();
-            Require(branches.Length == 3 && branches.All(branch => branch.Else!.Statement.ToString().Contains("LuminPackMarshal.CopyBlockUnaligned", StringComparison.Ordinal) &&
-                !branch.Else.Statement.ToString().Contains("Unsafe.ReadUnaligned", StringComparison.Ordinal)),
-                "A direct or staged sequence bypasses the 32-bit block-copy path.");
+            var calls = sequence.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            var semantic = output.GetSemanticModel(sequence.SyntaxTree);
+            Require(calls.Count(call => semantic.GetSymbolInfo(call).Symbol is IMethodSymbol
+                { IsStatic: true, Name: "Read", Parameters.Length: 1 } method &&
+                method.ContainingType.ToDisplayString() == "LuminPack.Core.LuminPackReader" &&
+                method.Parameters[0] is { RefKind: RefKind.Ref, Type.SpecialType: SpecialType.System_Byte }) == 3 &&
+                !calls.Any(call => call.Expression.ToString().Contains("ReadUnaligned", StringComparison.Ordinal)),
+                "A direct or staged sequence bypasses the architecture-aware Core scalar read: " + sequence);
         }
         var dispatch = methods.Single(method => method.TypeParameterList == null && !method.Identifier.ValueText.Contains("_Options_", StringComparison.Ordinal) &&
             method.Identifier.ValueText.StartsWith("LuminPackUnionSerialize_", StringComparison.Ordinal) &&
@@ -431,28 +455,31 @@ internal static partial class SerializerCodegenPerformanceRegression
         var pairs = methods.Where(method => method.Identifier.ValueText == "RootRead" && method.ParameterList.Parameters.Count == 2 &&
             method.ParameterList.Parameters[1].Type!.ToString().Contains("KeyValuePair<", StringComparison.Ordinal)).ToArray();
         Require(pairs.Length >= 2, "The pair preaccess fixture lost its scalar roots.");
-        int checkedLoads = 0;
         foreach (var method in pairs)
-        foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
-                     // Untrusted reads load Boolean storage through the checked adapter.
-                     call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText is "ReadUnaligned" or "CopyBlockUnaligned" or "ReadBoolean"))
         {
-            if (((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.ValueText == "CopyBlockUnaligned")
-                Require(call.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned",
-                    "A pair scalar fallback bypassed the shared raw-copy contract: " + call);
-            var statement = call.Ancestors().OfType<StatementSyntax>().First();
-            var block = statement.Parent as BlockSyntax;
-            if (block == null || !block.Statements.Any(item => item.ToString().Contains("EnsureReadable", StringComparison.Ordinal)))
+            var calls = method.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
+            var explicitLoads = calls.Where(call =>
+                     // Untrusted reads load Boolean storage through the checked adapter.
+                     call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText is "ReadUnaligned" or "CopyBlockUnaligned" or "ReadBoolean").ToArray();
+            Require(explicitLoads.Length != 0 || calls.Any(call => call.Expression is MemberAccessExpressionSyntax access &&
+                access.Name.Identifier.ValueText is "Read" or "ReadValue" or "ReadValueAt"), "A pair root lost its checked field reads: " + method);
+            foreach (var call in explicitLoads)
             {
-                statement = statement.Ancestors().OfType<IfStatementSyntax>().FirstOrDefault() ?? statement;
-                block = statement.Parent as BlockSyntax;
+                if (((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.ValueText == "CopyBlockUnaligned")
+                    Require(call.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned",
+                        "A pair scalar fallback bypassed the shared raw-copy contract: " + call);
+                var statement = call.Ancestors().OfType<StatementSyntax>().First();
+                var block = statement.Parent as BlockSyntax;
+                if (block == null || !block.Statements.Any(item => item.ToString().Contains("EnsureReadable", StringComparison.Ordinal)))
+                {
+                    statement = statement.Ancestors().OfType<IfStatementSyntax>().FirstOrDefault() ?? statement;
+                    block = statement.Parent as BlockSyntax;
+                }
+                Require(block != null && block.Statements.TakeWhile(item => !ReferenceEquals(item, statement))
+                    .Any(item => item.ToString().Contains("EnsureReadable", StringComparison.Ordinal)),
+                    "A pair scalar projection accesses bytes before its preaccess range check: " + call);
             }
-            Require(block != null && block.Statements.TakeWhile(item => !ReferenceEquals(item, statement))
-                .Any(item => item.ToString().Contains("EnsureReadable", StringComparison.Ordinal)),
-                "A pair scalar projection accesses bytes before its preaccess range check: " + call);
-            checkedLoads++;
         }
-        Require(checkedLoads >= 3, "The pair preaccess fixture did not cover narrow and architecture-gated wide loads.");
     }
 
     /// <summary>Checks target feature gates and preserves both storage paths for unconstrained generic elements.</summary>
@@ -563,27 +590,35 @@ internal static partial class SerializerCodegenPerformanceRegression
     }
 
     /// <summary>Preserves the approved all-build Reader check when cursor advances are lowered for either target.</summary>
-    private static void VerifyCheckedReaderAdvances()
+    /// <param name="references">The modern runtime and platform metadata references.</param>
+    private static void VerifyCheckedReaderAdvances(MetadataReference[] references)
     {
         var projection = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.Code.Core.BinaryCursorProjection", throwOnError: true)!;
-        foreach (bool pointer in new[] { false, true })
-        foreach (bool allowUnsafe in new[] { false, true })
+        var parse = new CSharpParseOptions(LanguageVersion.Preview);
+        var metadata = new MetaInfo(parse, parse.LanguageVersion, isNet8: true, isNet9OrGreater: true, allowUnsafe: true);
+        var platform = references.Where(reference => !string.Equals(System.IO.Path.GetFileName(reference.Display), "LuminPack.Core.dll", StringComparison.OrdinalIgnoreCase));
+        foreach (string cursor in new[] { "managed", "span", "pointer" })
         {
+            var compilation = cursor == "managed" ? CSharpCompilation.Create("ManagedCore", references: references) :
+                CSharpCompilation.Create("CompatibilityCore", new[] { CSharpSyntaxTree.ParseText(
+                    "namespace LuminPack.Core { public unsafe ref struct LuminPackWriter { public " +
+                    (cursor == "pointer" ? "byte*" : "global::System.Span<byte>") + " Cursor; } }", parse) }, platform,
+                    new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
             var rewrite = (CSharpSyntaxRewriter)Activator.CreateInstance(projection,
-                BindingFlags.Instance | BindingFlags.NonPublic, binder: null, [pointer, allowUnsafe], culture: null)!;
+                BindingFlags.Instance | BindingFlags.NonPublic, binder: null, [compilation, metadata], culture: null)!;
             var method = (MethodDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(
                 "static void Read(ref LuminPackReader reader) { reader.Advance(4); reader.Advance(GetCount()); reader.Advance(source.Length); }")!;
             var result = (MethodDeclarationSyntax)rewrite.Visit(method)!;
             var calls = result.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
-            if (pointer && !allowUnsafe)
+            if (cursor == "pointer")
             {
                 Require(calls.Count(call => call.Expression.ToString() == "reader.Advance") == 3,
-                    "A pointer-disabled Reader lost its checked Advance helper.");
+                    "A pointer Reader lost its checked Advance helper.");
                 continue;
             }
             var block = result.Body!.Statements[0] as BlockSyntax;
             Require(block?.Statements.Count == 2 && block.Statements[0].ToString() == "reader.EnsureReadable(4);" &&
-                block.Statements[1].ToString().Contains("reader.Cursor", StringComparison.Ordinal),
+                block.Statements[1].ToString().Contains(cursor == "span" ? "CreateSpan" : "ref reader.Cursor", StringComparison.Ordinal),
                 "A lowered Reader cursor advance bypassed its all-build range check.");
             Require(calls.Count(call => call.Expression.ToString() == "reader.Advance") == 2,
                 "A side-effecting or property-based advance width no longer uses its original checked helper.");
