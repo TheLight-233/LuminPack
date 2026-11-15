@@ -282,10 +282,13 @@ internal static partial class BinaryEmitter
         if (returns)
             for (int index = 0; index < members.Length; index++)
                 body.Add(schema.TypeNames[index] + " " + temps[index] + "2 = default;");
-        body.Add("scoped global::System.Span<int> widths = stackalloc int[count2];");
-        body.Add("scoped global::System.Span<int> slots = stackalloc int[count2];");
-        body.Add("scoped global::System.Span<byte> present = stackalloc byte[" + count + "];");
-        body.Add("reader2.ReadVersionTable(" + schema.Schema + ".Fields, revision2, slots, widths, present);");
+        body.Add("global::System.Span<int> widths = stackalloc int[count2];");
+        body.Add("global::System.Span<int> slots = stackalloc int[count2];");
+        body.Add("global::System.Span<byte> present = stackalloc byte[" + count + "];");
+        string tableArguments = schema.Schema + ".Fields, revision2, slots, widths, present";
+        body.Add(model.Net8
+            ? "reader2.ReadVersionTable(" + tableArguments + ");"
+            : "reader2.Position = " + Reader() + ".ReadVersionTable(reader2, " + tableArguments + ");");
         body.Add("for (int i = 0; i < count2; i++)");
         body.Add("{");
         body.Add("int length = widths[i] >= 0 ? widths[i] : reader2.ReadVersionPayloadLength();");
