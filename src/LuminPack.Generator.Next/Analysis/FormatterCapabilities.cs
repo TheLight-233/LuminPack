@@ -287,7 +287,7 @@ internal static class FormatterCapabilities
             FormatterConcurrentTraits.HasBinaryTextPairWriter(compilation))
             result.Add("BinaryTextPair");
         if (definition is "System.Collections.Generic.IDictionary" or "System.Collections.Generic.IReadOnlyDictionary" &&
-            modern && !unity && named.TypeArguments.All(argument => argument.SpecialType == SpecialType.System_String) &&
+            modern && !unity && named.TypeArguments[0].SpecialType == SpecialType.System_String &&
             compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2") is { } dictionary &&
             FormatterConcurrentTraits.HasDictionaryView(compilation, dictionary))
             result.Add("DenseDictionaryView");

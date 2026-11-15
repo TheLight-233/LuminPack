@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -5,6 +7,28 @@ namespace LuminPack.SourceGenerator.Next.Rendering.Formatters;
 /// <summary>Emits static element operations without specializing the containing collection for its element type.</summary>
 internal static class FormatterElementEmitter
 {
+    /// <summary>Finds an ordinary positional element with public fixed, string or raw-list fields and no callbacks.</summary>
+    /// <param name="set">The shared formatter publication facts.</param>
+    /// <param name="model">The closed element formatter contract.</param>
+    /// <returns>The bounded collection element model when one of its fields is a raw list.</returns>
+    internal static PayloadRenderModel? ReservableCollectionElement(SharedFormatterSet set, FormatterModel? model)
+    {
+        if (model?.Payload is not RecordModel { Derived: false, Versioned: false, Rejection: null } record ||
+            set.Options == null || !set.Options.Net8 || RenderModelFactory.Create(record, set.Options) is not { } element ||
+            element.HasCallbacks || element.Bounded != null || element.DeclaredProfile != null || element.Mirror != null ||
+            element.TypeParameters.Length != 0)
+            return null;
+        return element.Members.Any(RawList) && element.Members.All(member => !member.Volatile && !member.Mirrored &&
+            !member.Property && member.ScopeProfile == null && (member.IsFixed || member.Kind == RenderMemberKind.Text || RawList(member)))
+            ? element : null;
+
+        bool RawList(RenderMember member) => member.Nested == null && !member.FormatterCall &&
+            (member.Kind == RenderMemberKind.List && GenericIdentity.IsRaw(member.Scalar) ||
+                member.Kind == RenderMemberKind.Special && !member.Formatter.EndsWith(RenderMember.CompressedOwner.ToString(), StringComparison.Ordinal) &&
+                set.FindFormatter(member.TypeName) is { Definition: "System.Collections.Generic.List", Arguments.Length: 1 } list &&
+                list.Arguments[0] is { Raw: true, Layout: null } item && GenericIdentity.IsRaw(item.Type));
+    }
+
     /// <summary>Names an element's concrete formatter owner.</summary>
     /// <param name = "set">The shared formatter publication facts.</param>
     /// <param name = "model">The normalized formatter or storage contract.</param>

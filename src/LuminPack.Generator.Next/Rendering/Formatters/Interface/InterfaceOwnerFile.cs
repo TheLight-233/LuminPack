@@ -183,6 +183,8 @@ internal static class InterfaceOwnerFile
 
     private static void ReadArray(EnumerableOwnerContext c)
     {
+        if (c.ReadObjectInterfaceItems())
+            return;
         var w = c.W;
         c.ReadInterfaceTargets();
         w.Line("if (length == 0)");

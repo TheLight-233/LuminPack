@@ -6,6 +6,7 @@ using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
 using LuminPack.Option;
+using LuminPack.Utility;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -496,6 +497,29 @@ public class CollectionFastPathTest
             System.Collections.Specialized.NotifyCollectionChangedAction.Add,
             System.Collections.Specialized.NotifyCollectionChangedAction.Add
         }, actions);
+    }
+
+    /// <summary>Checks that an array-backed wrapper keeps the array wire without allocating an enumerator.</summary>
+    [Fact]
+    public void ArrayBackedObjectWrapperWritesWithoutAllocations()
+    {
+        var items = new PooledElement[] { new() { Value = 17 }, null!, new() { Value = -31 } };
+        var wrapper = new ReadOnlyCollection<PooledElement>(items);
+        using var buffer = new LuminBufferWriter(true);
+        for (int i = 0; i < 32; i++)
+        {
+            buffer.ResetCore();
+            LuminPackSerializer.Serialize(wrapper, buffer);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 32; i++)
+        {
+            buffer.ResetCore();
+            LuminPackSerializer.Serialize(wrapper, buffer);
+        }
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(LuminPackSerializer.Serialize(items), buffer.GetSpan().ToArray());
     }
 
     private sealed class ReverseEnumerableList : List<string>, IList<string>

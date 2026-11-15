@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using LuminPack.SourceGenerator.Next.Model;
 using LuminPack.SourceGenerator.Next.Rendering.Emitters;
 
@@ -9,23 +8,7 @@ internal sealed partial class EnumerableOwnerContext
     private const string PackMarshal = "global::LuminPack.Code.LuminPackMarshal";
 
     /// <summary>Finds a concrete record that the legacy exact List writer can reserve and write together.</summary>
-    internal PayloadRenderModel? ReservableListElement()
-    {
-        if (_element?.Payload is not RecordModel { Derived: false, Versioned: false, Rejection: null } record ||
-            _set.Options == null || !_set.Options.Net8 || RenderModelFactory.Create(record, _set.Options) is not { } element ||
-            element.HasCallbacks || element.Bounded != null || element.DeclaredProfile != null || element.Mirror != null ||
-            element.TypeParameters.Length != 0)
-            return null;
-        return element.Members.Any(RawList) && element.Members.All(member => !member.Volatile && !member.Mirrored &&
-            !member.Property && member.ScopeProfile == null && (member.IsFixed || member.Kind == RenderMemberKind.Text || RawList(member)))
-            ? element : null;
-
-        bool RawList(RenderMember member) => member.Nested == null && !member.FormatterCall &&
-            (member.Kind == RenderMemberKind.List && GenericIdentity.IsRaw(member.Scalar) ||
-                member.Kind == RenderMemberKind.Special && !member.Formatter.EndsWith(RenderMember.CompressedOwner.ToString(), System.StringComparison.Ordinal) &&
-                _set.FindFormatter(member.TypeName) is { Definition: "System.Collections.Generic.List", Arguments.Length: 1 } list &&
-                list.Arguments[0] is { Raw: true, Layout: null } item && GenericIdentity.IsRaw(item.Type));
-    }
+    internal PayloadRenderModel? ReservableListElement() => FormatterElementEmitter.ReservableCollectionElement(_set, _element);
 
     /// <summary>Writes an exact framework List with the legacy counted span and record reservation.</summary>
     internal void WriteReservedList(string list, PayloadRenderModel element)
@@ -81,6 +64,46 @@ internal sealed partial class EnumerableOwnerContext
     /// <summary>Whether the forwarded element is a nullable reference-free scalar without a storage layout.</summary>
     internal bool NativeNullableElement => _element is { Definition: GenericIdentity.Nullable, Layout: null } element &&
         element.Arguments.Length == 1 && element.Arguments[0].RawCollection;
+
+    /// <summary>Shares one object element loop across exact list, exact array and fresh interface destinations.</summary>
+    /// <returns>Whether the object interface read was emitted.</returns>
+    internal bool ReadObjectInterfaceItems()
+    {
+        if (_element?.OrdinaryObject != true || !Supports("InterfaceTargetReuse"))
+            return false;
+
+        string list = "global::System.Collections.Generic.List<" + Scalar + ">";
+        string array = ContiguousOwnerFile.ArrayType(Scalar);
+        W.Line(Sequence + " selected;");
+        W.Line("global::System.Span<" + Scalar + "> target;");
+        W.Line("if (value is not null && value.GetType() == typeof(" + list + "))");
+        W.Open();
+        W.Line("var list = (" + list + ")value;");
+        W.Line("target = " + PackMarshal + ".GetListSpan(list, length);");
+        W.Line("selected = list;");
+        W.Close();
+        W.Line("else if (value is not null && value.GetType() == typeof(" + array + "))");
+        W.Open();
+        W.Line("var array = (" + array + ")value;");
+        W.Line("if (array.Length != length)");
+        W.Indented(() => W.Line("array = " + PackMarshal + ".AllocateUninitializedArray<" + Scalar + ">(length);"));
+        W.Line("target = " + ArraySpan("array") + ";");
+        W.Line("selected = array;");
+        W.Close();
+        W.Line("else");
+        W.Open();
+        W.Line("var array = length == 0 ? global::System.Array.Empty<" + Scalar + ">() : " +
+            PackMarshal + ".AllocateUninitializedArray<" + Scalar + ">(length);");
+        W.Line("target = " + ArraySpan("array") + ";");
+        W.Line("selected = array;");
+        W.Close();
+        ReadBlock("target");
+        W.Line("value = selected;");
+        return true;
+
+        string ArraySpan(string source) => PackMarshal + ".CreateSpan(ref " + PackMarshal + ".GetNotNullArrayReference(" + source + "), length)";
+    }
+
     /// <summary>Retains exact mutable List and array targets selected by the legacy interface reader.</summary>
     internal void ReadInterfaceTargets()
     {
@@ -152,7 +175,7 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("global::LuminPack.Security.LuminPackInputPolicy.CheckBooleans(" + span + ");");
     }
 
-    /// <summary>Preserves the wrapper's underlying-list probe and its scalar fallback.</summary>
+    /// <summary>Writes the wrapper's recognized backing storage or falls back to enumeration.</summary>
     /// <param name = "local">The local used by this operation.</param>
     internal void WrapperWrite(string local)
     {
@@ -166,10 +189,25 @@ internal sealed partial class EnumerableOwnerContext
         W.Open();
         W.Line("int countPosition = operationState.BeginCollection();");
         W.Line("int count = 0;");
+        bool arrayTraversal = !_element!.RawCollection && Supports("WrapperJsonStorage");
+        if (arrayTraversal)
+        {
+            W.Line("if (global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + Scalar + ">(" + local + ") is " +
+                ContiguousOwnerFile.ArrayType(Scalar) + " wrapperArray)");
+            W.Open();
+            W.Line("count = wrapperArray.Length;");
+            W.Line("foreach (var item in wrapperArray)");
+            W.Open();
+            WriteElement("item");
+            W.Close();
+            W.Close();
+            W.Line("else");
+            W.Open();
+        }
         W.Line("foreach (var item in " + local + ")");
         W.Open();
         W.Line("count++;");
-        if (_element!.RawCollection)
+        if (_element.RawCollection)
         {
             W.Line("operationState.CheckBuffer();");
             W.Line("operationState.Write(ref " + Memory + ".As<" + Scalar + ", byte>(ref " + Memory + ".AsRef(in item)), " + Memory + ".SizeOf<" + Scalar + ">());");
@@ -177,6 +215,8 @@ internal sealed partial class EnumerableOwnerContext
         else
             WriteElement("item");
         W.Close();
+        if (arrayTraversal)
+            W.Close();
         W.Line("operationState.EndCollection(countPosition, count);");
         W.Line("operationState.CheckBuffer();");
         W.Close();

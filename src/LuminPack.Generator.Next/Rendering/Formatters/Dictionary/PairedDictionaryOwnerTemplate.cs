@@ -61,6 +61,9 @@ internal sealed partial class PairedDictionaryContext
     /// <summary>Whether matching keys may seed a string or ordinary object value.</summary>
     internal bool ReferenceValue => Value == "string" || Payload != null || _contract?.Arguments[1].OrdinaryObject == true;
 
+    /// <summary>Whether the value can run in a dense traversal without invoking user code.</summary>
+    internal bool DenseCompoundValue => FormatterElementEmitter.ReservableCollectionElement(_set, _contract?.Arguments[1] ?? _set.FindFormatter(Value)) != null;
+
     internal bool RawPairs => UsesRawOrStringEntries && Key != "string" && Value != "string";
 
     /// <summary>Whether both members use the direct scalar or string operations.</summary>
@@ -165,9 +168,6 @@ internal sealed partial class PairedDictionaryContext
             W.Line("operationState.Write<TLuminProfile>(" + expression + ");");
     }
 
-    /// <summary>Reads one entry member from the isolated operation state into an assignable location.</summary>
-    /// <param name="type">The member keyword or <c>string</c>.</param>
-    /// <param name="destination">The assignable destination.</param>
     /// <summary>Whether an entry contract is a nullable reference-free scalar without a storage layout.</summary>
     /// <remarks>Only the families the original wrote as raw pairs (Dictionary and its interfaces) store it natively; a sorted
     /// list frames each entry.</remarks>
@@ -177,7 +177,11 @@ internal sealed partial class PairedDictionaryContext
          Dictionary.StartsWith("global::System.Collections.Generic.IDictionary<", StringComparison.Ordinal) ||
          Dictionary.StartsWith("global::System.Collections.Generic.IReadOnlyDictionary<", StringComparison.Ordinal));
 
-    internal void ReadMember(string type, string destination)
+    /// <summary>Reads one entry member from the isolated operation state into an assignable location.</summary>
+    /// <param name="type">The member keyword or <c>string</c>.</param>
+    /// <param name="destination">The assignable destination.</param>
+    /// <param name="fresh">Whether the destination was initialized to its default value.</param>
+    internal void ReadMember(string type, string destination, bool fresh = false)
     {
         if (_nativeEntries)
         {
@@ -194,7 +198,7 @@ internal sealed partial class PairedDictionaryContext
         }
         if (_contract != null)
         {
-            FormatterElementEmitter.Read(W, _set, _contract.Arguments[type == Key ? 0 : 1], destination, "operationState");
+            FormatterElementEmitter.Read(W, _set, _contract.Arguments[type == Key ? 0 : 1], destination, "operationState", fresh: fresh);
             return;
         }
         if (Payload != null && type == Payload.GlobalName)
@@ -239,8 +243,8 @@ internal sealed partial class PairedDictionaryContext
         W.Open();
         W.Line(Key + " k = default !;");
         W.Line(Value + " v = default !;");
-        ReadMember(Key, "k");
-        ReadMember(Value, "v");
+        ReadMember(Key, "k", fresh: true);
+        ReadMember(Value, "v", fresh: true);
         W.Line(Memory + ".Add(ref first, (nint)(uint)index) = new " + Pair + "(k!, v);");
         W.Close();
         W.Line("while (++index < length);");

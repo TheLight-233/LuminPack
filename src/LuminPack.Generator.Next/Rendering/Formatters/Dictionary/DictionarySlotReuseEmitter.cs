@@ -15,7 +15,9 @@ internal static class DictionarySlotReuseEmitter
     /// <param name = "target">The target used by this operation.</param>
     /// <param name = "length">The length used by this operation.</param>
     /// <param name = "rawPair">The raw pair used by this operation.</param>
-    internal static void Emit(CodeWriter w, SharedFormatterSet set, FormatterModel model, string state, string target, string length, bool rawPair)
+    /// <param name = "returnOnMatch">Whether the slot refill completes an outlined read directly.</param>
+    internal static void Emit(CodeWriter w, SharedFormatterSet set, FormatterModel model, string state, string target, string length,
+        bool rawPair, bool returnOnMatch = false)
     {
         bool scalar = model.Supports("DictionaryScalarSlots");
         bool leaf = model.Supports("DictionaryLeafSlots");
@@ -32,7 +34,7 @@ internal static class DictionarySlotReuseEmitter
         w.Line("if (global::System.Object.ReferenceEquals(" + target + ".Comparer, global::System.Collections.Generic.EqualityComparer<" + key.Type + ">.Default))");
         w.Open();
         w.Line("ReadSlots(ref " + state + ", " + target + ", " + length + ");");
-        w.Line("goto operationComplete_RootRead;");
+        w.Line(returnOnMatch ? "return;" : "goto operationComplete_RootRead;");
         w.Close();
         w.Line("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         w.Line("static void ReadSlots(ref global::LuminPack.Core.LuminPackReader reader, " + model.Type + " destination, int count)");

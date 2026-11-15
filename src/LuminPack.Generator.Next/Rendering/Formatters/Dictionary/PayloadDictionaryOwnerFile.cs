@@ -34,26 +34,31 @@ internal static class PayloadDictionaryOwnerFile
         w.Blank();
         w.Line("if (value is not null)");
         w.Open();
-        c.ReadExistingDictionary();
+        w.Line("ReadExisting(ref operationState, ref value, length);");
         w.Line("goto operationComplete_RootRead;");
         w.Close();
+        w.Blank();
+        w.Line(w.MethodImpl("NoInlining"));
+        w.Line("static void ReadExisting(scoped ref " + w.A("LuminPackReader") + " reader, scoped ref " + c.Dictionary + " value, int length)");
+        w.Open();
+        w.Line("ref var operationState = ref reader;");
+        c.ReadExistingDictionary();
+        w.Close();
+        w.Blank();
         if (c.UnionValue is { } union && c.Dictionary.StartsWith("global::System.Collections.Generic.Dictionary<", System.StringComparison.Ordinal))
         {
             FreshUnionDictionary(c, union);
             return;
         }
-        w.Line("if (value is null)");
-        w.Indented(() => w.Line("value = new " + c.Dictionary + "(length);"));
-        w.Line("else");
-        w.Indented(() => w.Line("value.Clear();"));
+        w.Line("value = new " + c.Dictionary + "(length);");
         w.Blank();
         w.Line("int remaining = length;");
         w.Line("do");
         w.Open();
         w.Line(c.Key + " k = default !;");
         w.Line(c.Value + " v = default !;");
-        c.ReadMember(c.Key, "k");
-        c.ReadMember(c.Value, "v");
+        c.ReadMember(c.Key, "k", fresh: true);
+        c.ReadMember(c.Value, "v", fresh: true);
         w.Line("value.Add(k!, v);");
         w.Close();
         w.Line("while (--remaining != 0);");

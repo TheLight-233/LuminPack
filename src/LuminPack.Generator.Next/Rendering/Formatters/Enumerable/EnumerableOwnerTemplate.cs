@@ -288,7 +288,9 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("do");
             W.Open();
             W.Line("ref var blockSlot = ref " + Memory + ".Add(ref firstBlockItem, (nint)(uint)blockIndex);");
-            if (foreign)
+            if (foreign && Text)
+                W.Line("blockSlot = operationState.Read<TLuminProfile>((string?)null);");
+            else if (foreign)
             {
                 W.Line(Scalar + " blockItem = default!;");
                 ReadElement("blockItem", fresh: true);
