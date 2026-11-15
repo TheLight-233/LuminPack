@@ -10,11 +10,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonReader
-#else
-    public unsafe ref partial struct LuminPackJsonReader
-#endif
     {
         /// <summary>Reads a complete statically selected JSON value through the canonical API.</summary>
         /// <typeparam name = "T">The scalar or immutable string type selected by the caller.</typeparam>

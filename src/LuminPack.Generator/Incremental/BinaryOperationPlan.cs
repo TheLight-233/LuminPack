@@ -171,13 +171,13 @@ internal sealed class BinaryOperationPlan
         // Plans bind executable syntax. Caller-facing XML is completed after the final projection.
         var templateOptions = metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None);
         var tree = CSharpSyntaxTree.Create(template, templateOptions);
-        tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(tree.GetRoot())))), templateOptions);
+        tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(compilation, metadata).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(tree.GetRoot())))), templateOptions);
         input ??= CompiledOptions.Resolve(type, compilation).Input is { Enabled: true } own ? own : null;
         if (input != null)
         {
             var checkedRoot = SafeOperationProjection.Rewrite((CompilationUnitSyntax)tree.GetRoot(), type, compilation, metadata, input);
             template = checkedRoot;
-            tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(checkedRoot), templateOptions);
+            tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(compilation, metadata).Visit(checkedRoot), templateOptions);
         }
         var binding = compilation.AddSyntaxTrees(tree);
         var model = binding.GetSemanticModel(tree);

@@ -302,18 +302,7 @@ public static class LuminCompressor
             int compLen = Compress(source, rent.AsSpan(0, maxLen));
             writer.EnsureAdditionalCapacity(compLen);
             ref byte p = ref LuminPackMarshal.GetArrayDataReference(rent);
-#if NET8_0_OR_GREATER
-            LuminPackMarshal.CopyBlockUnaligned(
-                ref writer.Cursor,
-                ref p, (uint)compLen);
-#else
-            unsafe
-            {
-                LuminPackMarshal.CopyBlockUnaligned(
-                    ref Unsafe.AsRef<byte>(writer.Cursor),
-                    ref p, (uint)compLen);
-            }
-#endif
+            LuminPackMarshal.CopyBlockUnaligned(ref writer.CurrentReference, ref p, (uint)compLen);
             writer.Advance(compLen);
         }
         finally

@@ -10,11 +10,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonReader
-#else
-    public unsafe ref partial struct LuminPackJsonReader
-#endif
     {
         /// <summary>Applies <c>TryReadEntry</c> with the library default profile.</summary>
         /// <param name = "key">Receives the entry key.</param>

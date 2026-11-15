@@ -59,7 +59,7 @@ Core 的复用缓存共用 `Utility/Pool/AtomicSlotPool<T>`：可内联的首槽
 
 共享的 UTF-8 到字符 token 解码保留宿主的替换字符分组。便携资产针对旧版默认 `UTF8Encoding` 实现使用有界标量和打包字内核，避免临时替换回退对象；现代或无法识别的默认编码子类保留 BCL 解码器。选择过程没有缓存策略对象，也不增加原生 hook 调用。完整输出窗口无需逐标量检查输出容量；较短且容量受限的 token 先在栈上暂存至多 768 个字符，仅在成功时复制结果。现代目标的有界准入同样使用暂存，避免独立的 BCL 字符计数扫描及其在非法输入上的回退分配；暂存前通过 BCL ASCII 验证器直接拒绝过长的 ASCII 前缀。容量失败保留 BCL 的异常和部分写入行为。这些操作覆盖 builder 和旧目标标量读取、字符读取、时区快照及 UTF-16 属性名，二进制表示不变。池未命中、解析失败和较长的受限 BCL 回退路径仍可能分配。
 
-- **游标。** 每个读写器只前进一个游标：新版 .NET 上是 `ref byte`，`netstandard2.1` 上是 `byte*`。保留的 `Buffer` 窗口提供长度信息和回填位置。
+- **游标。** 新版 .NET 的读写器使用 `ref byte`。`netstandard2.1` 使用长度为 1 的 `Span<byte>` 保存托管游标地址，通过 `MemoryMarshal.GetReference` 和 `Unsafe` 访问及推进。保留的 `Buffer` 窗口提供长度信息和回填位置。
 - **双寄存器。** 每个状态在游标旁缓存窗口的结束位置（`_end`，写入器为扩容阈值 `_recordLimit`）。范围检查只需一次减法和一次有符号比较。设置 `Buffer`、`BufferCheckLimit` 或 `Owner`（internal setter）会刷新缓存。
 - **生成代码的局部游标写入。** 生成的对象写入代码把游标放在局部变量 `ref byte cursor` 中（JIT 会把它放在寄存器里），并调用返回 `ref` 的写入操作。连续的有界成员共享一次 `ReserveRecord` 检查，之后不再检查。在任何需要使用写入器本身的操作之前，用 `CommitRecords` 发布游标。
 - **Reader 检查。** `EnsureReadable(count)` 在每次 unsafe 加载前与缓存的结束位置比较；Debug 和 Release 下都启用。

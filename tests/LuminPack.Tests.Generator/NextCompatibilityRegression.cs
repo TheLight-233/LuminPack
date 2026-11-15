@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Emit;
 
-/// <summary>Verifies Next against the pointer runtime with the Roslyn 4.3 compiler.</summary>
+/// <summary>Verifies Next against the span-cursor runtime with the Roslyn 4.3 compiler.</summary>
 internal static class NextCompatibilityRegression
 {
     /// <summary>Compiles C# 9 and 10 fixtures and executes their IL-rewritten and registered entries.</summary>
@@ -30,7 +30,7 @@ internal static class NextCompatibilityRegression
                 string source = Fixture.Replace("REGISTRATION", rewrite ? "Disabled" : "Auto");
                 var tree = CSharpSyntaxTree.ParseText(source, parse, name + ".cs", Encoding.UTF8);
                 var input = CSharpCompilation.Create(name, new[] { tree }, references,
-                    new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+                    new CSharpCompilationOptions(OutputKind.ConsoleApplication, allowUnsafe: false, optimizationLevel: OptimizationLevel.Release));
                 GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { NextAnalyzer.Create() }, parseOptions: parse)
                     .RunGeneratorsAndUpdateCompilation(input, out Compilation output, out var diagnostics);
                 foreach (Diagnostic diagnostic in diagnostics)

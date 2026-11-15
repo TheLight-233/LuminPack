@@ -14,18 +14,14 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
     [SkipLocalsInit]
 #endif
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonWriter
-#else
-    public unsafe ref partial struct LuminPackJsonWriter
-#endif
     {
         private Span<byte> _buffer;
         /// <summary>The first byte after the current storage window, cached with every window change.</summary>
 #if NET8_0_OR_GREATER
         private ref byte _end;
 #else
-        private byte* _end;
+        private Span<byte> _end;
 #endif
 
         /// <summary>Gets the current output storage window.</summary>
@@ -39,7 +35,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 _end = ref Unsafe.Add(ref MemoryMarshal.GetReference(value), (nint)(uint)value.Length);
 #else
-                _end = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(value)) + value.Length;
+                _end = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(value), (nint)value.Length), 0);
 #endif
             }
         }
@@ -47,8 +43,8 @@ namespace LuminPack.Core
         /// <summary>The advancing JSON data cursor.</summary>
         public ref byte Cursor;
 #else
-        /// <summary>The advancing JSON data cursor for compatibility targets.</summary>
-        public byte* Cursor;
+        /// <summary>A one-element span carrying the cursor address. Use only after validating the accessed range.</summary>
+        public Span<byte> Cursor;
 #endif
         /// <summary>The native buffer owner, when writing to a reusable buffer.</summary>
         public LuminBufferWriter? Owner {[MethodImpl(MethodImplOptions.AggressiveInlining)] readonly get; internal set; }
@@ -100,7 +96,7 @@ namespace LuminPack.Core
         /// <summary>Initializes a new instance of <c>LuminPackJsonWriter</c>.</summary>
         /// <param name = "bufferReference">The buffer reference used by this operation.</param>
         /// <param name = "state">The reusable state associated with the operation.</param>
-        /// <remarks>On netstandard2.1, managed span storage must remain pinned for the complete writer lifetime. Dispose an external streaming writer to release its staging lease after a failure.</remarks>
+        /// <remarks>Dispose an external streaming writer to release its staging lease after a failure.</remarks>
         public LuminPackJsonWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState state)
         {
             _options = state;
@@ -180,12 +176,12 @@ namespace LuminPack.Core
 
 #region Cursor and helpers
         /// <summary>Dereferences the current cursor inside shared token implementation kernels.</summary>
-        private ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private readonly ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
             get =>
 #if NET8_0_OR_GREATER
             ref Cursor;
 #else
-            ref Unsafe.AsRef<byte>(Cursor);
+            ref MemoryMarshal.GetReference(Cursor);
 #endif
         }
 
@@ -196,8 +192,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Cursor);
 #else
-            // Native-width byte offsets avoid Mono's element-size division and retain pointer wrap semantics.
-            get => (int)unchecked((nint)Cursor - (nint)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)));
+            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Current);
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
@@ -205,7 +200,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)value);
 #else
-                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)) + value;
+                Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)value), 1);
 #endif
             }
         }
@@ -276,7 +271,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             Cursor = ref Unsafe.Add(ref Cursor, (nint)(uint)count);
 #else
-            Cursor += count;
+            Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Current, (nint)count), 1);
 #endif
         }
 
@@ -289,7 +284,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) >= (long)(uint)count && count >= 0)
 #else
-            if ((long)unchecked((nint)_end - (nint)Cursor) >= (long)(uint)count && count >= 0)
+            if ((long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end)) >= (long)(uint)count && count >= 0)
 #endif
                 return;
             EnsureCapacitySlow(count);

@@ -6,7 +6,7 @@ LuminPack is a typed serializer with performance-oriented native storage paths. 
 
 ## Runtime support and wire portability
 
-The runtime supplies netstandard2.1 and modern .NET assets. Runtime availability and wire portability are separate guarantees. The netstandard2.1 asset uses pointer cursors for Unity/Mono/IL2CPP: low-level readers/writers over managed storage require pinning for their complete lifetime. Generated convenience entry points retain their existing pinning and cleanup.
+The runtime supplies netstandard2.1 and modern .NET assets. Low-level readers and writers track managed input and output through their cursor references. A cursor span in the netstandard2.1 asset carries an address. Validate the accessed range against the state window before dereferencing it.
 
 Native primitives and raw unmanaged storage retain process byte order and representation. Raw structs can contain padding, runtime-dependent layout and pointer-sized members. Avoid `IntPtr`, `UIntPtr`, pointers, runtime-sized vectors and unanalyzable native external structs in portable persistence/network schemas. Matching type names do not establish a matching ABI across runtime versions.
 
@@ -56,7 +56,7 @@ The caller must keep the input and its backing storage stable for the entire syn
 
 Public advancing Reader `EnsureReadable`, existing `Advance` checks, fixed preaccess checks, Union framing and dynamic collection/string payload checks remain enabled in Release. A span facade rejects short fixed input before loading data or mutating its destination. Address-only kernels cannot infer allocation bounds and retain caller-owned valid-range contracts. Fixed Writer stores require reserved output storage.
 
-Bounded raw collection APIs reject elements containing managed references. Such types need generated/specialized formatters. Passing managed-reference storage to unchecked raw address kernels, overlapping ranges to a non-overlapping copy, stale pointers or unpinned cursor storage violates their contracts. Do not expose input-controlled pointer/type selection to these APIs.
+Bounded raw collection APIs reject elements containing managed references. Such types need generated/specialized formatters. Passing managed-reference storage to unchecked raw address kernels, overlapping ranges to a non-overlapping copy, stale references or native pointers violates their contracts. Do not expose input-controlled pointer/type selection to these APIs.
 
 Trusted operations (`UntrustedData = false`) do not check the object markers, Boolean domains, collection, string and depth limits described above. Valid input can still consume substantial resources. Stack sufficiency and compression plausibility checks are not application quotas. Bound encoded frame size, declared decompressed size before allocation, application collection sizes and request/process resources. Catching memory or stack exhaustion is not a resource-control strategy.
 

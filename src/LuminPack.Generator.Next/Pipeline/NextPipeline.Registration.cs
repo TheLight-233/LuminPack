@@ -119,7 +119,7 @@ internal static partial class NextPipeline
         {
             string key = GeneratedNames.PayloadKey(type);
             string suffix = "_" + ReadableTypeName.Of(key);
-            if (!shared.Contains(key) || options.KnownFormatters && IsKnown(key, options.PointerCursor) ||
+            if (!shared.Contains(key) || options.KnownFormatters && IsKnown(key, options.PointerCursor || options.SpanCursor) ||
                 !entries.TryGetValue(suffix, out GeneratedOperations emitted))
                 return;
             string spelling = key.IndexOf('.') >= 0 && !type.StartsWith("global::", StringComparison.Ordinal) ? "global::" + type : type;

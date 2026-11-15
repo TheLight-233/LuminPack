@@ -11,11 +11,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonReader
-#else
-    public unsafe ref partial struct LuminPackJsonReader
-#endif
     {
 #if NET8_0_OR_GREATER
         /// <summary>Reads a quoted framework value through its original parser.</summary>

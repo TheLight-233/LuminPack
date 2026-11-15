@@ -10,24 +10,37 @@ namespace LuminPack.Code.Core;
 /// <summary>Lowers absolute-position templates without exposing mutable integer storage from binary states.</summary>
 internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
 {
+    private readonly bool _span;
     private readonly bool _pointer;
-    private readonly bool _allowUnsafe;
 
-    /// <summary>Selects direct managed references or compatibility pointer dereferences.</summary>
-    /// <param name="pointer">Whether the target runtime exposes a native pointer cursor.</param>
-    /// <param name="allowUnsafe">Whether the consumer permits direct pointer dereferencing.</param>
-    internal BinaryCursorProjection(bool pointer = false, bool allowUnsafe = true)
+    /// <summary>Reads the advancing cursor representation from the selected Core reference.</summary>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <param name="metadata">The fallback framework facts when the reference is missing.</param>
+    internal BinaryCursorProjection(Compilation compilation, global::LuminPack.SourceGenerator.MetaInfo metadata)
     {
-        _pointer = pointer;
-        _allowUnsafe = allowUnsafe; }
+        _span = CursorField(compilation)?.Type is INamedTypeSymbol { Name: "Span", Arity: 1 };
+        _pointer = UsesPointerCursor(compilation, metadata);
+    }
 
-    /// <summary>Reads the referenced runtime's actual cursor storage independently of consumer feature symbols.</summary>
-    /// <param name="compilation">The consumer's selected runtime reference.</param>
-    /// <param name="metadata">Fallback target information for an incomplete compilation.</param>
-    /// <returns>Whether the runtime uses native pointer cursor fields.</returns>
+    /// <summary>Identifies a Core reference with a legacy pointer cursor.</summary>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <param name="metadata">The fallback framework facts when the reference is missing.</param>
+    /// <returns>Whether the selected Core reference requires stationary input.</returns>
     internal static bool UsesPointerCursor(Compilation compilation, global::LuminPack.SourceGenerator.MetaInfo metadata)
-        => compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter")?.GetMembers("Cursor").OfType<IFieldSymbol>().FirstOrDefault() is { } field
-            ? field.Type is IPointerTypeSymbol : !metadata.IsNet8;
+        => CursorField(compilation) is { } field ? field.Type is IPointerTypeSymbol : !metadata.IsNet8;
+
+    /// <summary>Identifies the targets on which writers can reassign the cursor by reference.</summary>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <param name="metadata">The fallback framework facts when the reference is missing.</param>
+    /// <returns>Whether the field itself is a managed reference.</returns>
+    internal static bool UsesRefCursor(Compilation compilation, global::LuminPack.SourceGenerator.MetaInfo metadata)
+        => CursorField(compilation) is { } field ? field.RefKind == RefKind.Ref : metadata.IsNet8;
+
+    /// <summary>Finds the cursor field in the selected Core reference.</summary>
+    /// <param name="compilation">The consumer compilation.</param>
+    /// <returns>The field, when Core is referenced.</returns>
+    private static IFieldSymbol CursorField(Compilation compilation)
+        => compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter")?.GetMembers("Cursor").OfType<IFieldSymbol>().FirstOrDefault();
 
     /// <summary>Rewrites binary operation methods while leaving JSON's independent state untouched.</summary>
     /// <param name="node">One generated method.</param>
@@ -69,17 +82,13 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
                 reference.Expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } &&
                 access.Name.Identifier.ValueText == "GetCurrentSpanOffset" && states.Contains(access.Expression.ToString()))
                 aliases[declaration.Declaration.Variables[0].Identifier.ValueText] = access.Expression.ToString();
-        bool allowUnsafe = _allowUnsafe && !node.Modifiers.Any(SyntaxKind.AsyncKeyword);
-        var positions = new Positions(states, aliases, _pointer, allowUnsafe);
+        var positions = new Positions(states, aliases, _pointer, _span);
         var body = (BlockSyntax)positions.Visit(node.Body);
         body = (BlockSyntax)new BinaryHeaderProjection(states).Visit(body);
         body = (BlockSyntax)new Arguments(states).Visit(body);
         // Runs after header fusion, which still recognizes the original advance statements.
-        var advances = new Advances(readers, _pointer, allowUnsafe);
-        var result = node.WithBody((BlockSyntax)advances.Visit(body));
-        if ((positions.UsedPointer || advances.UsedPointer) && !result.Modifiers.Any(SyntaxKind.UnsafeKeyword))
-            result = result.WithModifiers(result.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
-        return result;
+        var advances = new Advances(readers, _pointer, _span);
+        return node.WithBody((BlockSyntax)advances.Visit(body));
     }
 
     /// <summary>Recognizes the binary state family independently from source qualification.</summary>
@@ -99,20 +108,20 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
         private readonly HashSet<string> _states;
         private readonly Dictionary<string, string> _aliases;
         private readonly bool _pointer;
-        private readonly bool _allowUnsafe;
-        internal bool UsedPointer;
+        private readonly bool _span;
 
         /// <summary>Captures this operation's state and unique generated aliases.</summary>
         /// <param name="states">Binary receiver identities.</param>
         /// <param name="aliases">Generated aliases and their owning receivers.</param>
         /// <param name="pointer">Whether direct storage uses a native pointer.</param>
-        /// <param name="allowUnsafe">Whether generated source may dereference pointers.</param>
-        internal Positions(HashSet<string> states, Dictionary<string, string> aliases, bool pointer, bool allowUnsafe)
+        /// <param name="span">Whether the cursor is stored in a one-element span.</param>
+        internal Positions(HashSet<string> states, Dictionary<string, string> aliases, bool pointer, bool span)
         {
             _states = states;
             _aliases = aliases;
             _pointer = pointer;
-            _allowUnsafe = allowUnsafe; }
+            _span = span;
+        }
 
         /// <summary>Removes obsolete byref declarations after replacing their uses.</summary>
         /// <param name="node">The generated declaration.</param>
@@ -133,27 +142,11 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
             return SyntaxFactory.ParseExpression(state + ".Position").WithTriviaFrom(node);
         }
 
-        /// <summary>Retains the unsafe requirement of cursor expressions embedded by an earlier operation plan.</summary>
-        /// <param name="node">An existing state cursor access.</param>
-        /// <returns>The same access with its owning method's pointer requirement recorded.</returns>
-        public override SyntaxNode VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
-        {
-            if (_pointer && _allowUnsafe && node.Name.Identifier.ValueText == "Cursor" && _states.Contains(node.Expression.ToString()))
-                UsedPointer = true;
-            return base.VisitMemberAccessExpression(node);
-        }
-
         /// <summary>Replaces old offset getters, including direct assignments and byref arguments.</summary>
         /// <param name="node">An emitted cursor accessor.</param>
         /// <returns>The binary position property or the original invocation.</returns>
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
-            if (_pointer && !_allowUnsafe && node.Expression is MemberAccessExpressionSyntax
-                { Name: GenericNameSyntax { Identifier.ValueText: "AsRef" } } native && native.Expression.ToString().EndsWith("Unsafe", StringComparison.Ordinal) &&
-                node.ArgumentList.Arguments.Count == 1 && node.ArgumentList.Arguments[0].Expression is MemberAccessExpressionSyntax
-                    { Name.Identifier.ValueText: "Cursor" } cursorAccess && _states.Contains(cursorAccess.Expression.ToString()))
-                return SyntaxFactory.ParseExpression("global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" +
-                    cursorAccess.Expression + ".Buffer), (nint)(uint)" + cursorAccess.Expression + ".Position)").WithTriviaFrom(node);
             if (node.Expression is MemberAccessExpressionSyntax access && _states.Contains(access.Expression.ToString()) &&
                 access.Name.Identifier.ValueText is "GetCurrentSpanOffset" or "GetCurrentSpanIndex")
                 return SyntaxFactory.ParseExpression(access.Expression + ".Position").WithTriviaFrom(node);
@@ -162,15 +155,14 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
             {
                 string state = current.Expression.ToString();
                 string name = current.Name.Identifier.ValueText;
-                string cursor = !_pointer ? state + ".Cursor" : _allowUnsafe
-                    ? "global::System.Runtime.CompilerServices.Unsafe.AsRef<byte>(" + state + ".Cursor)"
-                    : "global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" + state + ".Buffer), (nint)(uint)" + state + ".Position)";
+                string cursor = _span ? "global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" + state + ".Cursor)" : _pointer
+                    ? "global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(" + state + ".Buffer), (nint)(uint)" + state + ".Position)"
+                    : state + ".Cursor";
                 if (_states.Contains(state))
                 {
                     if (name == "GetCurrentSpanReference" || name == "GetSpanReference" && rewritten.ArgumentList.Arguments.Count == 1 &&
                         rewritten.ArgumentList.Arguments[0].Expression.ToString() == state + ".Position")
                     {
-                        UsedPointer |= _pointer && _allowUnsafe;
                         return SyntaxFactory.ParseExpression(cursor).WithTriviaFrom(node);
                     }
                     if (name == "GetSpanReference" && rewritten.ArgumentList.Arguments.Count == 1)
@@ -194,18 +186,18 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
     {
         private readonly HashSet<string> _readers;
         private readonly bool _pointer;
-        private readonly bool _allowUnsafe;
-        internal bool UsedPointer;
+        private readonly bool _span;
 
         /// <summary>Captures the Reader receivers and the target cursor representation.</summary>
         /// <param name="readers">The binary Reader receivers.</param>
         /// <param name="pointer">Whether the cursor is a native pointer.</param>
-        /// <param name="allowUnsafe">Whether generated source may use pointer arithmetic.</param>
-        internal Advances(HashSet<string> readers, bool pointer, bool allowUnsafe)
+        /// <param name="span">Whether the cursor is stored in a one-element span.</param>
+        internal Advances(HashSet<string> readers, bool pointer, bool span)
         {
             _readers = readers;
             _pointer = pointer;
-            _allowUnsafe = allowUnsafe; }
+            _span = span;
+        }
 
         /// <summary>Retains the Reader's range check before lowering a fixed advance to cursor arithmetic.</summary>
         /// <param name="node">A generated statement.</param>
@@ -215,24 +207,21 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
             var result = (ExpressionStatementSyntax)base.VisitExpressionStatement(node);
             if (result.Expression is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Advance" } access } call ||
                 call.ArgumentList.Arguments.Count != 1 || call.ArgumentList.Arguments[0].RefKindKeyword.RawKind != 0 ||
-                !_readers.Contains(access.Expression.ToString()) || _pointer && !_allowUnsafe)
+                !_readers.Contains(access.Expression.ToString()) || _pointer)
                 return result;
             var count = call.ArgumentList.Arguments[0].Expression;
             // Only side-effect-free widths are lowered, so the cursor is still read after the width is known.
             if (!IsPure(count))
                 return result;
             string state = access.Expression.ToString();
-            if (_pointer)
-                UsedPointer = true;
-            var lowered = SyntaxFactory.ParseExpression(_pointer
-                ? state + ".Cursor += (uint)(__luminCount)"
-                : state + ".Cursor = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref " + state + ".Cursor, (nint)(uint)(__luminCount))");
-            var placeholder = lowered.DescendantNodes().OfType<IdentifierNameSyntax>().Single(identifier => identifier.Identifier.ValueText == "__luminCount");
-            // A constant width needs no zero extension, so it stays a plain literal offset.
-            var advance = result.WithExpression(count is LiteralExpressionSyntax && !_pointer
-                ? SyntaxFactory.ParseExpression(state + ".Cursor = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref " + state + ".Cursor, " +
-                    count.WithoutTrivia() + ")")
-                : lowered.ReplaceNode(placeholder, SyntaxFactory.ParenthesizedExpression(count.WithoutTrivia())));
+            string offset = count is LiteralExpressionSyntax ? count.WithoutTrivia().ToString() : "(nint)(uint)(" + count.WithoutTrivia() + ")";
+            const string marshal = "global::System.Runtime.InteropServices.MemoryMarshal";
+            const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
+            string cursor = state + ".Cursor";
+            string update = _span
+                ? cursor + " = " + marshal + ".CreateSpan(ref " + unsafeType + ".Add(ref " + marshal + ".GetReference(" + cursor + "), " + offset + "), 1)"
+                : cursor + " = ref " + unsafeType + ".Add(ref " + cursor + ", " + offset + ")";
+            var advance = result.WithExpression(SyntaxFactory.ParseExpression(update));
             var check = SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
                 SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, access.Expression,
                     SyntaxFactory.IdentifierName("EnsureReadable")),

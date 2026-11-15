@@ -7,7 +7,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Checks byte-distance boundaries against the actual netstandard asset, including 32-bit hosts.</summary>
-public sealed unsafe class PortableByteCursorTest
+public sealed class PortableByteCursorTest
 {
     /// <summary>Preserves public cursor offsets without dereferencing intentionally out-of-window positions.</summary>
     [Fact]
@@ -28,6 +28,10 @@ public sealed unsafe class PortableByteCursorTest
             Assert.Equal(position, writer.Position);
             Assert.Equal(position, jsonReader.CurrentIndex);
             Assert.Equal(position, jsonWriter.CurrentIndex);
+            Assert.Equal(1, reader.Cursor.Length);
+            Assert.Equal(1, writer.Cursor.Length);
+            Assert.Equal(1, jsonReader.Cursor.Length);
+            Assert.Equal(1, jsonWriter.Cursor.Length);
         }
     }
 
@@ -63,7 +67,7 @@ public sealed unsafe class PortableByteCursorTest
         CheckJson<LuminPackUtf16LengthOptions>(Encoding.Unicode);
     }
 
-    /// <summary>Runs one closed JSON profile with pinned windows across parsing allocations and exceptions.</summary>
+    /// <summary>Runs one closed JSON profile with movable managed windows across parsing allocations and exceptions.</summary>
     /// <typeparam name="TOptions">The compile-time encoding profile.</typeparam>
     /// <param name="encoding">The matching byte encoding.</param>
     private static void CheckJson<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
@@ -73,38 +77,37 @@ public sealed unsafe class PortableByteCursorTest
             byte[] buffer = new byte[4096];
             var writeState = new LuminPackWriterOptionalState();
             var readState = new LuminPackReaderOptionalState();
-            fixed (byte* address = buffer)
+            Span<byte> output = buffer.AsSpan(3, buffer.Length - 6);
+            var writer = new LuminPackJsonWriter(ref output, writeState);
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            writer.Write<TOptions>(value);
+            int length = writer.Position;
+            string wire = encoding.GetString(buffer, 3, length);
+            Assert.StartsWith("\"", wire);
+            Assert.EndsWith("\"", wire);
+            output = buffer.AsSpan(3, length);
+            writer = new LuminPackJsonWriter(ref output, writeState);
+            writer.Write<TOptions>(value);
+            Assert.Equal(length, writer.Position);
+            ReadOnlySpan<byte> framed = buffer.AsSpan(0, length + 3);
+            var reader = new LuminPackJsonReader(ref framed, readState) { Position = 3 };
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            string restored = null!;
+            reader.Read<TOptions>(ref restored);
+            reader.EnsureEndOfDocument<TOptions>();
+            Assert.Equal(value, restored);
+            Assert.Equal(length + 3, reader.Position);
+            for (int prefix = 0; prefix < length; prefix++)
             {
-                Span<byte> output = new Span<byte>(address + 3, buffer.Length - 6);
-                var writer = new LuminPackJsonWriter(ref output, writeState);
-                writer.Write<TOptions>(value);
-                int length = writer.Position;
-                string wire = encoding.GetString(buffer, 3, length);
-                Assert.StartsWith("\"", wire);
-                Assert.EndsWith("\"", wire);
-                output = new Span<byte>(address + 3, length);
-                writer = new LuminPackJsonWriter(ref output, writeState);
-                writer.Write<TOptions>(value);
-                Assert.Equal(length, writer.Position);
-                ReadOnlySpan<byte> framed = new ReadOnlySpan<byte>(address, length + 3);
-                var reader = new LuminPackJsonReader(ref framed, readState) { Position = 3 };
-                string restored = null!;
-                reader.Read<TOptions>(ref restored);
-                reader.EnsureEndOfDocument<TOptions>();
-                Assert.Equal(value, restored);
-                Assert.Equal(length + 3, reader.Position);
-                for (int prefix = 0; prefix < length; prefix++)
-                {
-                    ReadOnlySpan<byte> shortened = new ReadOnlySpan<byte>(address + 3, prefix);
-                    var shortReader = new LuminPackJsonReader(ref shortened, readState);
-                    bool rejected = false;
-                    try { shortReader.Read<TOptions>(ref restored); shortReader.EnsureEndOfDocument<TOptions>(); }
-                    catch (Exception) { rejected = true; }
-                    Assert.True(rejected);
-                }
-                Assert.Equal(0, buffer[2]);
-                Assert.Equal(0, buffer[3 + length]);
+                ReadOnlySpan<byte> shortened = buffer.AsSpan(3, prefix);
+                var shortReader = new LuminPackJsonReader(ref shortened, readState);
+                bool rejected = false;
+                try { shortReader.Read<TOptions>(ref restored); shortReader.EnsureEndOfDocument<TOptions>(); }
+                catch (Exception) { rejected = true; }
+                Assert.True(rejected);
             }
+            Assert.Equal(0, buffer[2]);
+            Assert.Equal(0, buffer[3 + length]);
         }
     }
 }

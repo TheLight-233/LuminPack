@@ -10,11 +10,7 @@ using LuminPack.Utility;
 namespace LuminPack.Core;
 
 /// <summary>Provides allocation-free assembly-qualified name writing through the existing text kernels.</summary>
-#if NET8_0_OR_GREATER
 public ref partial struct LuminPackJsonWriter
-#else
-public unsafe ref partial struct LuminPackJsonWriter
-#endif
 {
     /// <summary>Writes a non-null type name after removing its established assembly qualifiers.</summary>
     /// <param name="fullName">The validated assembly-qualified name.</param>

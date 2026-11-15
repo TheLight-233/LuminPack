@@ -9,11 +9,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonWriter
-#else
-    public unsafe ref partial struct LuminPackJsonWriter
-#endif
     {
         /// <summary>Writes property name to the current output.</summary>
         /// <param name = "propertyName">The property name used by this operation.</param>
@@ -183,7 +179,7 @@ namespace LuminPack.Core
             if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) < 4)
                 return false;
 #else
-            if ((long)unchecked((nint)_end - (nint)Cursor) < 4)
+            if ((long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end)) < 4)
                 return false;
 #endif
             Unsafe.WriteUnaligned(ref Current, (uint)'\\' | ((uint)escaped << 16));
@@ -792,7 +788,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             return (long)Unsafe.ByteOffset(ref Cursor, ref _end) >= count;
 #else
-            return (long)unchecked((nint)_end - (nint)Cursor) >= count;
+            return (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end)) >= count;
 #endif
         }
 

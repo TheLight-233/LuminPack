@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 /// <summary>Provides matching reference metadata for older Roslyn and Unity fixture compilations.</summary>
 internal static class CompatibilityCompilationReferences
 {
-    /// <summary>Loads the built pointer runtime with its .NET Standard reference pack and package dependencies.</summary>
+    /// <summary>Loads the built compatibility runtime with its .NET Standard reference pack and package dependencies.</summary>
     /// <returns>References consumable by C# 10 without newer runtime metadata features.</returns>
     internal static MetadataReference[] Create()
     {

@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackReader
-#else
-    public unsafe ref partial struct LuminPackReader
-#endif
     {
         /// <summary>Reads var int byte from the current input.</summary>
         /// <returns>The result of the operation.</returns>
@@ -306,7 +302,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             if ((ulong)(uint)length > (ulong)Unsafe.ByteOffset(ref Cursor, ref _end))
 #else
-            if ((ulong)(uint)length > (ulong)unchecked((nint)_end - (nint)Cursor))
+            if ((ulong)(uint)length > (ulong)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end)))
 #endif
                 ThrowVersionPayloadLength(length);
             return length;

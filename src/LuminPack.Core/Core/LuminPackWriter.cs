@@ -24,19 +24,15 @@ namespace LuminPack.Core
 {
     /// <summary>Writes complete binary records with an advancing output cursor.</summary>
     [StructLayout(LayoutKind.Sequential)]
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackWriter
-#else
-    public unsafe ref partial struct LuminPackWriter
-#endif
     {
 #if NET8_0_OR_GREATER
-        /// <summary>The advancing data cursor; caller-owned managed storage must remain pinned on netstandard2.1.</summary>
+        /// <summary>The advancing data cursor.</summary>
         public ref byte Cursor;
 #endif
 #if !NET8_0_OR_GREATER
-        /// <summary>The advancing data cursor; caller-owned managed storage must remain pinned on netstandard2.1.</summary>
-        public byte* Cursor;
+        /// <summary>A one-element span carrying the cursor address. Use only after validating the accessed range.</summary>
+        public Span<byte> Cursor;
 #endif
         private Span<byte> _buffer;
         private uint _bufferCheckLimit = uint.MaxValue;
@@ -45,7 +41,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
         private ref byte _recordLimit;
 #else
-        private byte* _recordLimit;
+        private Span<byte> _recordLimit;
 #endif
         /// <summary>Gets the complete retained storage window used for dynamic bounds and framing patches.</summary>
         /// <remarks>Only the writer replaces its storage, so the cached record limit always describes it.</remarks>
@@ -104,7 +100,6 @@ namespace LuminPack.Core
         /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
         /// <param name = "bufferReference">The buffer reference used by this operation.</param>
         /// <param name = "option">An explicit shared reference context, or null for a lazily owned independent context.</param>
-        /// <remarks>On netstandard2.1, caller-owned managed span storage must remain pinned for the complete operation lifetime.</remarks>
         public LuminPackWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState? option = null)
         {
             _options = option;
@@ -163,12 +158,12 @@ namespace LuminPack.Core
         }
 
         /// <summary>Dereferences the architecture-specific advancing cursor inside shared implementation kernels.</summary>
-        private ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private readonly ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
             get =>
 #if NET8_0_OR_GREATER
             ref Cursor;
 #else
-            ref Unsafe.AsRef<byte>(Cursor);
+            ref MemoryMarshal.GetReference(Cursor);
 #endif
         }
 
@@ -248,7 +243,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>Grows the owning buffer for a capacity request outside the hot comparison.</summary>
-        /// <param name = "owner">The owning native output buffer.</param>
+        /// <param name = "owner">The owning output buffer.</param>
         /// <param name = "position">The current absolute output position.</param>
         /// <param name = "index">The position at which the operation starts.</param>
         /// <param name = "count">The number of bytes required from that position.</param>
@@ -261,8 +256,8 @@ namespace LuminPack.Core
             return Grow(owner, position, checked(index + count), threshold: false);
         }
 
-        /// <summary>Grows native storage without passing the ref-struct state across a call boundary.</summary>
-        /// <param name = "owner">The owning native output buffer.</param>
+        /// <summary>Grows managed storage without passing the ref-struct state across a call boundary.</summary>
+        /// <param name = "owner">The owning output buffer.</param>
         /// <param name = "position">The current absolute output position, which growth preserves.</param>
         /// <param name = "required">The absolute requested capacity or threshold position.</param>
         /// <param name = "threshold">Whether to apply the established collection growth threshold.</param>
@@ -287,7 +282,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             _recordLimit = ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)limit);
 #else
-            _recordLimit = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)) + limit;
+            _recordLimit = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)limit), 0);
 #endif
         }
 
@@ -299,12 +294,11 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             return Unsafe.ByteOffset(ref Cursor, ref _recordLimit);
 #else
-            // Native-width byte offsets avoid Mono's element-size division and retain pointer wrap semantics.
-            return unchecked((nint)_recordLimit - (nint)Cursor);
+            return Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_recordLimit));
 #endif
         }
 
-        /// <summary>Restores the hot cursor fields after native storage has grown.</summary>
+        /// <summary>Restores the hot cursor fields after managed storage has grown.</summary>
         /// <param name = "storage">The cursor fields over the grown storage.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Apply(GrownStorage storage)
@@ -318,7 +312,7 @@ namespace LuminPack.Core
             BufferCheckLimit = storage.CheckLimit;
         }
 
-        /// <summary>The cursor fields over grown native storage, returned by value so growth never receives a writer's address.</summary>
+        /// <summary>The cursor fields over grown managed storage, returned by value so growth never receives a writer's address.</summary>
         private readonly ref struct GrownStorage
         {
 #if NET8_0_OR_GREATER
@@ -326,7 +320,7 @@ namespace LuminPack.Core
             public readonly ref byte Cursor;
 #else
             /// <summary>The cursor at the preserved position.</summary>
-            public readonly byte* Cursor;
+            public readonly Span<byte> Cursor;
 #endif
             /// <summary>The complete grown storage window.</summary>
             public readonly Span<byte> Buffer;
@@ -334,7 +328,7 @@ namespace LuminPack.Core
             public readonly uint CheckLimit;
 
             /// <summary>Captures the owner's current storage.</summary>
-            /// <param name = "owner">The owning native output buffer.</param>
+            /// <param name = "owner">The owning output buffer.</param>
             /// <param name = "position">The preserved absolute output position.</param>
             public GrownStorage(LuminBufferWriter owner, int position)
             {
@@ -342,8 +336,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)position);
 #else
-                // The owner keeps its storage pinned until the array is returned.
-                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)) + position;
+                Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)position), 1);
 #endif
                 CheckLimit = (uint)owner.BufferCheckLimit + 1;
             }
@@ -368,12 +361,12 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             Cursor = ref Unsafe.Add(ref Cursor, (nint)(uint)count);
 #else
-            Cursor += count;
+            Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Current, (nint)count), 1);
 #endif
         }
 
         /// <summary>
-        /// Advances the target pointer.
+        /// Advances the current cursor.
         /// </summary>
         /// <param name = "count"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -383,12 +376,12 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             Cursor = ref Unsafe.Add(ref Cursor, (nint)(uint)count);
 #else
-            Cursor += count;
+            Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Current, (nint)count), 1);
 #endif
         }
 
         /// <summary>
-        /// Advances the target pointer.
+        /// Advances the current cursor.
         /// </summary>
         /// <param name = "count"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -497,7 +490,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor);
 #else
-            get => (int)unchecked((nint)Cursor - (nint)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)));
+            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Current);
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
@@ -505,7 +498,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)value);
 #else
-                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)) + value;
+                Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)value), 1);
 #endif
             }
         }

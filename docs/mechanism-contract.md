@@ -58,7 +58,7 @@ The history of individual approvals lives in Git. When this document, the code a
 
 ### Execution state
 
-- **Advancing cursors.** Binary and JSON readers and writers advance a `ref byte` cursor on modern targets and a `byte*` cursor on `netstandard2.1`.
+- **Advancing cursors.** Binary and JSON readers and writers use a `ref byte` cursor on modern .NET and a one-element `Span<byte>` to carry the managed cursor address on `netstandard2.1`. The span length describes the cursor representation. The retained window and cached end define the accessible range. Low-level callers can get the cursor reference through `MemoryMarshal.GetReference`.
 - **Cached ends.** Writer, Reader, JSON Writer and JSON Reader cache the end of their window (or the writer's growth threshold) beside the cursor. `Buffer`, `BufferCheckLimit` and `Owner` have public getters and internal setters that refresh the cache; every constructor and window change must refresh it.
 - **Cursor publication.** Generated code may keep the cursor in a local between state-observing boundaries. It must publish the cursor before calling a formatter, a Union or recursive operation, a callback, or a capacity check, and resume from the resulting state afterwards. Never keep a buffer reference across a resize.
 - **Scalar reads.** Generated scalar loads call `LuminPackReader.Read`. A fixed batch or a sequence window may use the address-based overload after validating the entire range. The Reader owns the 32-bit scalar access decision. Storage proofs and validation for batched and untrusted reads still apply.
@@ -124,7 +124,7 @@ The history of individual approvals lives in Git. When this document, the code a
 ## 3. Safety rules
 
 1. **Reader checks stay on in Release.** The advancing Reader's public `EnsureReadable` and its callers (`Advance`, fixed storage batches, Union framing) are active in every configuration. Do not restore `Conditional("DEBUG")`, wrap checks in `#if DEBUG`, or bypass them for performance.
-2. **Check before access.** Generated cursor arithmetic that replaces `Advance` keeps its range check before moving the reference or pointer. Scalar reads and fixed-field fallbacks validate the complete range before any unsafe load or destination write.
+2. **Check before access.** Generated cursor arithmetic that replaces `Advance` keeps its range check before moving the cursor. Scalar reads and fixed-field fallbacks validate the complete range before any unsafe load or destination write.
 3. **Dynamic checks stay.** Collection, string and bulk-payload header and payload validation is mandatory. A count is validated against the remaining input before any allocation sized from it.
 4. **Separate unchecked contracts.** Fixed Writer stores into reserved room and address-only raw kernels keep their existing unchecked contracts. This does not permit removing Reader checks or adding blanket Writer checks.
 5. **Recursion.** Operations of recursive payloads call `EnsureSufficientStack`, and recursive binary writes check capacity on re-entry.

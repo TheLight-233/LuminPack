@@ -29,7 +29,7 @@ internal static class UnityNullableMergeCompatibilityRegression
             "UnityNullableMergeCompatibility",
             new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: false));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() },

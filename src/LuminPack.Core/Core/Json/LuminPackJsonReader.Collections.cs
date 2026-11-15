@@ -10,11 +10,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonReader
-#else
-    public unsafe ref partial struct LuminPackJsonReader
-#endif
     {
         /// <summary>Counts validated array elements without advancing this reader or reading application values.</summary>
         /// <returns>The number of elements in the current array.</returns>

@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackReader
-#else
-    public unsafe ref partial struct LuminPackReader
-#endif
     {
         /// <summary>Validates string length before the operation continues.</summary>
         /// <param name = "buffer">The complete retained input window.</param>
@@ -570,7 +566,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 (int)Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-                (int)unchecked((nint)_end - (nint)Cursor);
+                (int)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
         }
 

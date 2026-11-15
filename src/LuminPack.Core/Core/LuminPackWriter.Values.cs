@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackWriter
-#else
-    public unsafe ref partial struct LuminPackWriter
-#endif
     {
         /// <summary>Copies a proven fixed storage group and advances once without adding a Release bounds check.</summary>
         /// <param name = "source">The first byte of the proven adjacent fields.</param>

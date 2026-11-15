@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackReader
-#else
-    public unsafe ref partial struct LuminPackReader
-#endif
     {
         /// <summary>Validates and copies into a proven fixed storage group, then advances the input cursor.</summary>
         /// <param name = "destination">The first byte of the proven adjacent fields.</param>
@@ -53,7 +49,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             available = (long)Unsafe.ByteOffset(ref Cursor, ref _end) >= length;
 #else
-            available = (long)unchecked((nint)_end - (nint)Cursor) >= length;
+            available = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end)) >= length;
 #endif
             return ref Current;
         }
@@ -236,7 +232,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             ref var firstTag = ref Current;
 #else
-            ref var firstTag = ref Unsafe.AsRef<byte>(Cursor);
+            ref var firstTag = ref MemoryMarshal.GetReference(Cursor);
 #endif
             if (firstTag < LuminPackCode.WideTag)
             {
@@ -292,7 +288,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             long remaining = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-            long remaining = (long)unchecked((nint)_end - (nint)Cursor);
+            long remaining = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
             // A cursor before the buffer has more than its full length remaining.
             if (remaining < size || remaining > _buffer.Length)

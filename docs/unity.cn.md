@@ -11,12 +11,12 @@ LuminPack 通过 `netstandard2.1` 资产支持 Unity Mono 和 IL2CPP。请把 AP
 1. 把包中 `netstandard2.1` 版本的 `LuminPack.Core.dll` 及其依赖放到 `Assets/Plugins`。
 2. 把 `LuminPack.Generator.dll` 放到 `Assets/RoslynAnalyzers`，并在 Inspector 中为它添加 `RoslynAnalyzer` 标签。
 3. 安装 `com.unity.nuget.mono-cecil`（1.11.4 或兼容版本）。把 `src/LuminPack.ILPostProcessor/Core` 和 `src/LuminPack.ILPostProcessor/Unity` 中的文件放到同一个 `Assets/LuminPack.CodeGen` 目录，保留其中的 `Unity.LuminPack.CodeGen.asmdef`。
-4. 在 `Assets/csc.rsp` 中添加 `-define:LUMINPACK_IL_REWRITE`，并保持 unsafe 编译开启。生成器与后处理器需要配套安装；只添加 define 不会执行改写。
+4. 在 `Assets/csc.rsp` 中添加 `-define:LUMINPACK_IL_REWRITE`。生成器与后处理器需要配套安装；只添加 define 不会执行改写。
 5. 声明一个 `[LuminPackable]` 类型，验证 `Serialize(value)` 及闭合静态 `Save<T>` 包装调用。Unity 后处理器在 Mono 加载和 IL2CPP 转换前替换这些调用。不透明目标保留注册兜底。
 
 在仓库中运行 `python .github/scripts/stage_unity_il.py /path/to/project` 可安装后处理器源码、Cecil 依赖及编译 define，不改变 Runtime DLL 的安装。改写器仅在构建时使用，不是运行时依赖。源码包装方法边界、编译器能力选择与兼容开关见[自动生成](generation-modes.cn.md)。
 
-在 `netstandard2.1` 上，读写游标是原生指针。生成的入口会在整个调用期间固定（pin）托管输入；你自己在托管内存上创建的底层读写器，需要在其整个生命周期内保持内存固定。
+在 `netstandard2.1` 上，读写游标使用长度为 1 的 `Span<byte>` 字段保存托管引用。GC 通过 Span 跟踪调用方提供的托管存储。`LuminBufferWriter` 在租期内固定自己租用的数组，以保持 64 字节对齐。
 
 32 位 IL2CPP 规则贯穿始终：大于 4 字节的固定值用块复制搬运，绝不使用类型化的非对齐访问，后者可能让 IL2CPP 崩溃。
 

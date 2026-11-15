@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackReader
-#else
-    public unsafe ref partial struct LuminPackReader
-#endif
     {
         /// <summary>Validates a generated fixed-width collection's complete dynamic payload in every build.</summary>
         /// <param name = "index">The absolute beginning of the collection header or payload.</param>

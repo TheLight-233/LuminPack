@@ -3,7 +3,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>13</LangVersion>
     <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <IsRoslynComponent>true</IsRoslynComponent>
     <IsAnalyzer>true</IsAnalyzer>
     <RootNamespace>LuminPack.SourceGenerator.Next</RootNamespace>

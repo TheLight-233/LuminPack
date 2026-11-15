@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackWriter
-#else
-    public unsafe ref partial struct LuminPackWriter
-#endif
     {
         /// <summary>Writes a value using the smallest tagged variable-width integer record.</summary>
         /// <param name = "x">The value to encode.</param>

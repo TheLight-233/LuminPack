@@ -30,8 +30,8 @@ internal static partial class NextPipeline
         context.RegisterPostInitializationOutput(static production =>
         {
             const string facade = "LuminPackGen.LuminPackSerializer.g.cs";
-            production.AddSource(PublicationHint(GenerationKind.Binary, facade), FixedSources.Binary);
-            production.AddSource(PublicationHint(GenerationKind.Json, facade), FixedSources.Json);
+            production.AddSource(PublicationHint(GenerationKind.Binary, facade), FixedSources.Binary.Declarations);
+            production.AddSource(PublicationHint(GenerationKind.Json, facade), FixedSources.Json.Declarations);
             production.AddSource(PublicationHint(GenerationKind.Formatter, "LuminPackGen.FormatterDispatch.g.cs"), FixedSources.Dispatch);
             production.AddSource(PublicationHint(GenerationKind.Formatter, "LuminPackGen.Generated.g.cs"), GeneratedNamespace);
         });
@@ -66,20 +66,26 @@ internal static partial class NextPipeline
     /// <summary>Retains compiler-independent target spellings across drivers in the same host.</summary>
     private static class FixedSources
     {
-        internal static readonly string Binary = ScopedForTarget(SerializerDocumentation.BinaryFacade);
-        internal static readonly string Json = ScopedForTarget(SerializerDocumentation.JsonFacade);
+        internal static readonly (string Declarations, string Readers) Binary = FacadeForTarget(SerializerDocumentation.BinaryFacade);
+        internal static readonly (string Declarations, string Readers) Json = FacadeForTarget(SerializerDocumentation.JsonFacade);
         internal static readonly string Dispatch = ScopedForTarget(SerializerFacadeSource.Dispatch);
+    }
+
+    /// <summary>Separates compatibility facade readers so their input lifetime can follow the referenced Core.</summary>
+    /// <param name="text">The compiler-independent facade text.</param>
+    /// <returns>The facade for discovery and the separate compatibility reader bodies.</returns>
+    private static (string Declarations, string Readers) FacadeForTarget(string text)
+    {
+        var portable = CompatibleCursorProjection.SplitFacade(ScopedModifier.Replace(text, string.Empty));
+        return ("#if NET8_0_OR_GREATER\n" + text + "\n#else\n" + portable.Declarations + "\n#endif\n", portable.Readers);
     }
 
     /// <summary>Publishes the facade's compatibility-target spelling beside the .NET 8 one, as payload files are spelled.</summary>
     /// <param name="text">The fixed facade text.</param>
-    /// <returns>The text, with a copy for targets without .NET 8: no <c>scoped</c> parameters, and readers over a stationary
-    /// pooled copy of managed input, which the pointer cursor of those targets requires.</returns>
-    /// <remarks>Post-initialization output cannot see the language version or the unsafe setting, so the target symbol
-    /// selects the spelling and the copy uses the input pinning that needs no unsafe code.</remarks>
+    /// <returns>The facade with a spelling for targets that omit scoped parameters.</returns>
     private static string ScopedForTarget(string text)
     {
-        string compatible = PointerCursorProjection.PinReaders(ScopedModifier.Replace(text, string.Empty));
+        string compatible = ScopedModifier.Replace(text, string.Empty);
         return string.Equals(compatible, text, StringComparison.Ordinal) ? text :
             "#if NET8_0_OR_GREATER\n" + text + "\n#else\n" + compatible + "\n#endif\n";
     }
@@ -169,15 +175,25 @@ internal static partial class NextPipeline
                 }
                 token.ThrowIfCancellationRequested();
                 _sources = CompactPublication.Create(sources, token, snapshot.Compact);
-                // Compatibility targets advance a pointer cursor; the projection leaves other targets' text untouched.
-                if (_options.PointerCursor)
+                // Adapt cursor expressions to the Core asset selected by the consumer.
+                if (_options.SpanCursor || _options.PointerCursor)
                     for (int index = 0; index < _sources.Length; index++)
                     {
                         GeneratedSource source = _sources[index];
-                        string projected = PointerCursorProjection.Apply(source.Text, _options.Unsafe, numericIntPtr: false);
+                        string projected = CompatibleCursorProjection.Apply(source.Text, _options.PointerCursor);
                         if (!ReferenceEquals(projected, source.Text))
                             _sources[index] = new GeneratedSource(source.Hint, projected, source.Kind);
                     }
+                if (!_options.Net8)
+                {
+                    const string readers = "LuminPackGen.LuminPackSerializer.Readers.g.cs";
+                    int firstReader = _sources.Length;
+                    Array.Resize(ref _sources, firstReader + 2);
+                    _sources[firstReader] = new GeneratedSource(readers,
+                        CompatibleCursorProjection.FacadeReaders(FixedSources.Binary.Readers, _options.PointerCursor), GenerationKind.Binary);
+                    _sources[firstReader + 1] = new GeneratedSource(readers,
+                        CompatibleCursorProjection.FacadeReaders(FixedSources.Json.Readers, _options.PointerCursor), GenerationKind.Json);
+                }
                 _snapshot = snapshot;
                 cache.Snapshot = snapshot;
                 return report ? WithReport(_sources, snapshot, plan) : _sources;
@@ -202,8 +218,8 @@ internal static partial class NextPipeline
                 counts.AddOwner(plan.Owners.For(root));
             foreach (GeneratedSource source in sources)
                 counts.AddSource(source.Kind, source.Text);
-            counts.AddSource(GenerationKind.Binary, FixedSources.Binary);
-            counts.AddSource(GenerationKind.Json, FixedSources.Json);
+            counts.AddSource(GenerationKind.Binary, FixedSources.Binary.Declarations);
+            counts.AddSource(GenerationKind.Json, FixedSources.Json.Declarations);
             counts.AddSource(GenerationKind.Formatter, FixedSources.Dispatch);
             counts.AddSource(GenerationKind.Formatter, GeneratedNamespace);
             var reported = new GeneratedSource[sources.Length + 1];

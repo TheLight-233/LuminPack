@@ -369,8 +369,8 @@ public static partial class LuminPackSerializerGenerator
         if (options.Input.Enabled || types.Length == 0 && SafeFacadeProjection.HasPolicies(compilation))
             root = (CompilationUnitSyntax)new SafeFacadeProjection(options, types.Length == 0).Visit(root);
         if (RequiresStationaryInput(compilation, metadata))
-            root = (CompilationUnitSyntax)new PinnedReaderProjection(metadata.AllowUnsafe).Visit(root);
-        root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(root);
+            root = (CompilationUnitSyntax)new PinnedReaderProjection().Visit(root);
+        root = (CompilationUnitSyntax)new BinaryCursorProjection(compilation, metadata).Visit(root);
         root = root.NormalizeWhitespace("    ", Environment.NewLine).WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine));
         string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata, navigationTargets);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
@@ -424,9 +424,7 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="metadata">The consumer's conditional feature settings.</param>
     /// <returns>Whether a complete read must keep pointer-based input stationary.</returns>
     private static bool RequiresStationaryInput(Compilation compilation, MetaInfo metadata)
-        => !metadata.IsNet8 || compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackReader")?.ContainingAssembly.GetAttributes().Any(attribute =>
-            attribute.AttributeClass?.ToDisplayString() == "System.Runtime.Versioning.TargetFrameworkAttribute" && attribute.ConstructorArguments.Length == 1 &&
-            attribute.ConstructorArguments[0].Value is string framework && framework.StartsWith(".NETStandard", StringComparison.Ordinal)) == true;
+        => BinaryCursorProjection.UsesPointerCursor(compilation, metadata);
 
     /// <summary>Builds the type overloads source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>

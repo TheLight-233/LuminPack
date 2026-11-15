@@ -2,7 +2,7 @@
 <!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
 <Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <!-- Existing target-specific contracts, not permission to remove APIs from a released version.
-       Burst hooks and pointer cursors exist only on netstandard2.1. Modern cursors are managed references.
+       Burst hooks and span cursor fields exist on netstandard2.1. Modern cursor fields are references.
        BitArray changes its private CLR storage in .NET 10, so its established layout view changes with it.
        The existing ObjectPool uses an instance policy on Standard and a static policy constraint on modern .NET.
        Keep every diagnostic, target and left/right asset exact; never replace these with wildcard suppressions. -->

@@ -24,26 +24,22 @@ namespace LuminPack.Core
 {
     /// <summary>Reads complete binary records with an advancing input cursor and reusable storage.</summary>
     [StructLayout(LayoutKind.Sequential)]
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackReader
-#else
-    public unsafe ref partial struct LuminPackReader
-#endif
     {
 #if NET8_0_OR_GREATER
-        /// <summary>The advancing data cursor; caller-owned managed storage must remain pinned on netstandard2.1.</summary>
+        /// <summary>The advancing data cursor.</summary>
         public ref byte Cursor;
 #endif
 #if !NET8_0_OR_GREATER
-        /// <summary>The advancing data cursor; caller-owned managed storage must remain pinned on netstandard2.1.</summary>
-        public byte* Cursor;
+        /// <summary>A one-element span carrying the cursor address. Use only after validating the accessed range.</summary>
+        public Span<byte> Cursor;
 #endif
         private Span<byte> _buffer;
         /// <summary>The first byte after the readable window, cached with every window change.</summary>
 #if NET8_0_OR_GREATER
         private ref byte _end;
 #else
-        private byte* _end;
+        private Span<byte> _end;
 #endif
 
         /// <summary>Gets the complete retained storage window used for dynamic bounds and framing patches.</summary>
@@ -57,7 +53,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 _end = ref Unsafe.Add(ref MemoryMarshal.GetReference(value), (nint)(uint)value.Length);
 #else
-                _end = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(value)) + value.Length;
+                _end = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(value), (nint)value.Length), 0);
 #endif
             }
         }
@@ -89,7 +85,6 @@ namespace LuminPack.Core
         /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
         /// <param name = "bufferReference">The buffer reference used by this operation.</param>
         /// <param name = "option">An explicit shared reference context, or null for a lazily owned independent context.</param>
-        /// <remarks>On netstandard2.1, caller-owned managed span storage must remain pinned for the complete operation lifetime.</remarks>
         public LuminPackReader(ref Span<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _options = option;
@@ -100,7 +95,6 @@ namespace LuminPack.Core
         /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
         /// <param name = "bufferReference">The buffer reference used by this operation.</param>
         /// <param name = "option">An explicit shared reference context, or null for a lazily owned independent context.</param>
-        /// <remarks>On netstandard2.1, caller-owned managed span storage must remain pinned for the complete operation lifetime.</remarks>
         public LuminPackReader(ref ReadOnlySpan<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _options = option;
@@ -122,13 +116,20 @@ namespace LuminPack.Core
 
         #region Cursor and helpers
 
+        /// <summary>Exposes the advancing cursor to internal reference-based kernels on every target.</summary>
+        internal readonly ref byte CurrentReference
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => ref Current;
+        }
+
         /// <summary>Dereferences the architecture-specific advancing cursor inside shared implementation kernels.</summary>
-        private ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private readonly ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
             get =>
 #if NET8_0_OR_GREATER
             ref Cursor;
 #else
-            ref Unsafe.AsRef<byte>(Cursor);
+            ref MemoryMarshal.GetReference(Cursor);
 #endif
         }
 
@@ -176,8 +177,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             long room = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-            // Native-width byte offsets avoid Mono's element-size division and retain pointer wrap semantics.
-            long room = (long)unchecked((nint)_end - (nint)Cursor);
+            long room = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
             if (room < (long)(uint)count || count < 0)
 #if NET8_0_OR_GREATER
@@ -212,7 +212,7 @@ namespace LuminPack.Core
                 : (uint)index > (uint)length || (uint)count > (uint)(length - index);
 
         /// <summary>
-        /// Advances the target pointer.
+        /// Advances the current cursor.
         /// </summary>
         /// <param name = "count"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -230,7 +230,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             Cursor = ref Unsafe.Add(ref Cursor, (nint)(uint)count);
 #else
-            Cursor += count;
+            Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Current, (nint)count), 1);
 #endif
         }
 
@@ -282,7 +282,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor);
 #else
-            get => (int)unchecked((nint)Cursor - (nint)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)));
+            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Current);
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
@@ -290,7 +290,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)value);
 #else
-                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)) + value;
+                Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)value), 1);
 #endif
             }
         }

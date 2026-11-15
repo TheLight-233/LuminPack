@@ -41,18 +41,14 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
     [SkipLocalsInit]
 #endif
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonReader
-#else
-    public unsafe ref partial struct LuminPackJsonReader
-#endif
     {
         private ReadOnlySpan<byte> _buffer;
         /// <summary>The first byte after the input window, cached with every window change.</summary>
 #if NET8_0_OR_GREATER
         private ref byte _end;
 #else
-        private byte* _end;
+        private Span<byte> _end;
 #endif
 
         /// <summary>Gets the complete JSON input window.</summary>
@@ -66,7 +62,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 _end = ref Unsafe.Add(ref MemoryMarshal.GetReference(value), (nint)(uint)value.Length);
 #else
-                _end = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(value)) + value.Length;
+                _end = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(value), (nint)value.Length), 0);
 #endif
             }
         }
@@ -78,8 +74,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-            // Native-width byte offsets avoid Mono's element-size division and retain pointer wrap semantics.
-            get => unchecked((nint)_end - (nint)Cursor);
+            get => Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
         }
         /// <summary>The operation's options and reference tracking state.</summary>
@@ -98,8 +93,8 @@ namespace LuminPack.Core
         /// <summary>The advancing JSON data cursor.</summary>
         public ref byte Cursor;
 #else
-        /// <summary>The advancing JSON data cursor for compatibility targets.</summary>
-        public byte* Cursor;
+        /// <summary>A one-element span carrying the cursor address. Use only after validating the accessed range.</summary>
+        public Span<byte> Cursor;
 #endif
         /// <summary>The current JSON container nesting depth.</summary>
         public int Depth;
@@ -258,7 +253,6 @@ namespace LuminPack.Core
         /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c>.</summary>
         /// <param name = "bufferReference">The buffer reference used by this operation.</param>
         /// <param name = "state">The reusable state associated with the operation.</param>
-        /// <remarks>On netstandard2.1, caller-owned managed input must remain pinned throughout parsing, allocations and callbacks.</remarks>
         public LuminPackJsonReader(ref Span<byte> bufferReference, LuminPackReaderOptionalState state)
         {
             _options = state;
@@ -279,7 +273,6 @@ namespace LuminPack.Core
         /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c>.</summary>
         /// <param name = "bufferReference">The buffer reference used by this operation.</param>
         /// <param name = "state">The reusable state associated with the operation.</param>
-        /// <remarks>On netstandard2.1, caller-owned managed input must remain pinned throughout parsing, allocations and callbacks.</remarks>
         public LuminPackJsonReader(ref ReadOnlySpan<byte> bufferReference, LuminPackReaderOptionalState state)
         {
             _options = state;
@@ -321,12 +314,12 @@ namespace LuminPack.Core
 
 #region Cursor and helpers
         /// <summary>Dereferences the current cursor inside shared token implementation kernels.</summary>
-        private ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private readonly ref byte Current {[MethodImpl(MethodImplOptions.AggressiveInlining)]
             get =>
 #if NET8_0_OR_GREATER
             ref Cursor;
 #else
-            ref Unsafe.AsRef<byte>(Cursor);
+            ref MemoryMarshal.GetReference(Cursor);
 #endif
         }
 
@@ -337,7 +330,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Cursor);
 #else
-            get => (int)unchecked((nint)Cursor - (nint)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)));
+            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Current);
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
@@ -345,7 +338,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)value);
 #else
-                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)) + value;
+                Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)value), 1);
 #endif
             }
         }
@@ -385,7 +378,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             Cursor = ref Unsafe.Add(ref Cursor, (nint)(uint)count);
 #else
-            Cursor += count;
+            Cursor = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Current, (nint)count), 1);
 #endif
         }
 

@@ -54,11 +54,7 @@ older language versions bind through this backend.
 
 ## Compatibility targets
 
-A runtime whose writer and reader states keep a native pointer cursor, such as netstandard2.1, gets the same rendered operations
-projected onto that cursor: reference-cursor stores, loads and advances become pointer arithmetic (or position arithmetic when unsafe
-code is disabled), and a reader over managed input reads a pinned or pooled copy, as the legacy `PinnedReaderProjection` did. The
-facade selects a `scoped`-free, pinned-reader variant on targets below .NET 8. These consumers compile with C# 9, as they did with
-the legacy generator. .NET 8 and later targets keep the reference-cursor code and still need C# 13.
+For netstandard2.1, generated reads and writes address the one-element cursor span through `MemoryMarshal.GetReference`. They publish advances through `MemoryMarshal.CreateSpan`. The compatibility facade and operations compile with C# 9. Modern targets retain the `ref byte` cursor.
 
 ## How operations are retained
 
@@ -106,10 +102,7 @@ A checked item covers the scope stated here. Related combinations still listed b
   without LINQ grouping.
 - [x] **Trusted Boolean scalar reads.** Ordinary and inline trusted fields use the advancing reader operation and retain Reader
   bounds checks; untrusted fields keep their Boolean-domain checks.
-- [x] **Compatibility targets.** Pointer-cursor runtimes such as netstandard2.1 get projected cursor code, pinned or pooled reader
-  input and a compatible facade. The benchmark corpus compiles against the netstandard2.1 runtime with C# 9 and no generated errors,
-  and an IL-rewritten fixture on netstandard2.1 with C# 9 produces the same result and bytes as on .NET 10. The safe-code variant
-  without unsafe code is not run yet.
+- [x] **Compatibility targets.** The Roslyn 4.3 compatibility fixture tests C# 9 and 10 with unsafe code disabled through both registered and IL-rewritten entries.
 - [x] **Declaration member order.** Members without an explicit order follow declaration order everywhere, including nested
   records expanded in their parents. The legacy rule that put each level's auto-properties before its fields is intentionally
   dropped, so payloads of nested classes that mix auto-properties and fields differ from legacy bytes; the four benchmark fixtures

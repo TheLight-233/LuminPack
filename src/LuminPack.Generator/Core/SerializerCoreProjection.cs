@@ -36,7 +36,7 @@ internal static class SerializerCoreProjection
     /// <returns>State overloads, shared dispatch, and per-type cache declarations.</returns>
     internal static string Project(CompilationUnitSyntax template, Compilation compilation, MetaInfo metadata, BinaryOperationPlanCache plans, ITypeSymbol closedRoot = null)
     {
-        var root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(template))));
+        var root = (CompilationUnitSyntax)new BinaryCursorProjection(compilation, metadata).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(template))));
         var tree = CSharpSyntaxTree.Create(root, metadata.ParseOptions);
         root = tree.GetCompilationUnitRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -226,7 +226,7 @@ internal static class SerializerCoreProjection
         rewritten = GeneratedOperationScopes.Rewrite(rewritten);
         rewritten = GeneratedOperationNames.Rewrite(rewritten);
         rewritten = new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(rewritten)));
-        rewritten = new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(rewritten);
+        rewritten = new BinaryCursorProjection(compilation, metadata).Visit(rewritten);
         rewritten = new BinaryExtensionProjection.Calls().Visit(rewritten);
         rewritten = new DirectStorageProjection(compilation).Visit(rewritten);
         rewritten = new RootOperationProjection().Visit(rewritten);
@@ -234,7 +234,7 @@ internal static class SerializerCoreProjection
         rewritten = new ProvenObjectWriteProjection(compilation, metadata, types).Visit(rewritten);
         rewritten = new JsonValueProjection().Visit(rewritten);
         rewritten = new JsonScalarLoopProjection().Visit(rewritten);
-        rewritten = new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(rewritten);
+        rewritten = new BinaryCursorProjection(compilation, metadata).Visit(rewritten);
         rewritten = new NativeOffsetProjection().Visit(rewritten);
         rewritten = new RecursionGuardProjection(payload => (closedRoot != null && FormatterTypeName.Get(closedRoot) == payload
             ? closedRoot : types.TryGetValue(payload, out var symbol) ? symbol : null) is { } payloadType &&
@@ -243,7 +243,7 @@ internal static class SerializerCoreProjection
             rewritten = new ClosedMemberResetProjection(types).Visit(rewritten);
         rewritten = GeneratedOperationNames.Rewrite(rewritten);
         rewritten = RootContainerProjection.Apply(rewritten);
-        if (!BinaryCursorProjection.UsesPointerCursor(compilation, metadata))
+        if (BinaryCursorProjection.UsesRefCursor(compilation, metadata))
         {
             rewritten = new BinaryLiteralWriteProjection().Visit(rewritten);
             rewritten = new BinaryReservedStoreProjection(compilation).Visit(rewritten);
@@ -288,7 +288,7 @@ internal static class SerializerCoreProjection
                 .WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
         var tree = CSharpSyntaxTree.Create(sourceRoot, metadata.ParseOptions);
         var rewritten = new CallRewriter(compilation.AddSyntaxTrees(tree).GetSemanticModel(tree), compilation).Visit(tree.GetRoot());
-        return new JsonValueProjection().Visit(new BinaryExtensionProjection.Calls().Visit(new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation)).Visit(rewritten))))))).ToFullString();
+        return new JsonValueProjection().Visit(new BinaryExtensionProjection.Calls().Visit(new BinaryCursorProjection(compilation, metadata).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation)).Visit(rewritten))))))).ToFullString();
     }
 
     /// <summary>Emits only opaque binary and JSON state fallback bridges.</summary>

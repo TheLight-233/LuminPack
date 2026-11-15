@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackWriter
-#else
-    public unsafe ref partial struct LuminPackWriter
-#endif
     {
         /// <summary>Returns the fixed framing width or the variable-length header upper bound of the current mode.</summary>
         /// <returns>The result of the operation.</returns>
@@ -438,7 +434,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             return Unsafe.ByteOffset(ref cursor, ref _recordLimit);
 #else
-            return unchecked((nint)_recordLimit - (nint)Unsafe.AsPointer(ref cursor));
+            return Unsafe.ByteOffset(ref cursor, ref MemoryMarshal.GetReference(_recordLimit));
 #endif
         }
 
@@ -448,12 +444,12 @@ namespace LuminPack.Core
         /// any operation that uses the writer itself and resume from the writer's cursor afterwards.</remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe void CommitRecords(ref byte cursor)
+        public void CommitRecords(ref byte cursor)
         {
 #if NET8_0_OR_GREATER
-            Cursor = ref cursor;
+            Cursor = ref MemoryMarshal.GetReference(MemoryMarshal.CreateSpan(ref cursor, 1));
 #else
-            Cursor = (byte*)Unsafe.AsPointer(ref cursor);
+            Cursor = MemoryMarshal.CreateSpan(ref cursor, 1);
 #endif
         }
 

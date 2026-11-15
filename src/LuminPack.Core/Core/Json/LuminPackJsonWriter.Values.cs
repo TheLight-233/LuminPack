@@ -9,11 +9,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackJsonWriter
-#else
-    public unsafe ref partial struct LuminPackJsonWriter
-#endif
     {
         /// <summary>Writes byte raw to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
@@ -1561,7 +1557,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) < byteCount)
 #else
-            if ((long)unchecked((nint)_end - (nint)Cursor) < byteCount)
+            if ((long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end)) < byteCount)
 #endif
                 return false;
             ref byte destination = ref Current;

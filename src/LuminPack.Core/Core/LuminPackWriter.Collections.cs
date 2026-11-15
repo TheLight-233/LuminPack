@@ -22,11 +22,7 @@ using System.Text.Unicode;
 #endif
 namespace LuminPack.Core
 {
-#if NET8_0_OR_GREATER
     public ref partial struct LuminPackWriter
-#else
-    public unsafe ref partial struct LuminPackWriter
-#endif
     {
         /// <summary>Applies the established collection growth threshold to the owning buffer outside the hot comparison.</summary>
         /// <param name = "owner">The owning native output buffer.</param>

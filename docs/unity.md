@@ -11,12 +11,12 @@ Install the `LuminPack` package with a NuGet workflow such as NuGetForUnity, or 
 1. Put the `netstandard2.1` `LuminPack.Core.dll` from the package and its dependencies under `Assets/Plugins`.
 2. Put `LuminPack.Generator.dll` under `Assets/RoslynAnalyzers` and give it the `RoslynAnalyzer` label in the Inspector.
 3. Install `com.unity.nuget.mono-cecil` (1.11.4 or compatible). Copy the files from `src/LuminPack.ILPostProcessor/Core` and `src/LuminPack.ILPostProcessor/Unity` into one `Assets/LuminPack.CodeGen` directory, keeping `Unity.LuminPack.CodeGen.asmdef` with them.
-4. Add `-define:LUMINPACK_IL_REWRITE` to `Assets/csc.rsp`. Keep unsafe compilation enabled. The matching generator and postprocessor are installed together; the define alone does not perform rewriting.
+4. Add `-define:LUMINPACK_IL_REWRITE` to `Assets/csc.rsp`. The matching generator and postprocessor are installed together; the define alone does not perform rewriting.
 5. Declare one `[LuminPackable]` type and verify both `Serialize(value)` and a closed static `Save<T>` wrapper. Unity's postprocessor replaces their calls before Mono loading and IL2CPP conversion. Opaque targets retain registered fallback.
 
 From a repository checkout, `python .github/scripts/stage_unity_il.py /path/to/project` installs the postprocessor sources, Cecil dependency and compiler define without changing the runtime DLL installation. The build-only rewriter is not a runtime dependency. See [automatic generation](generation-modes.md) for source-wrapper boundaries, compiler capability selection and compatibility controls.
 
-On `netstandard2.1` the reader and writer cursors are native pointers. Generated entry points pin managed input for the whole call; low-level readers and writers you create over managed memory need that memory pinned for their whole lifetime.
+On `netstandard2.1` the reader and writer cursors store managed references in one-element `Span<byte>` fields. The GC tracks caller-owned managed storage through the spans. `LuminBufferWriter` pins its own pooled array for the rental to preserve 64-byte alignment.
 
 The 32-bit IL2CPP rule applies throughout: fixed values larger than four bytes are moved with block copies, never with typed unaligned access, which can crash IL2CPP.
 

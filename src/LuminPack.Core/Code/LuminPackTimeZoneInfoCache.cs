@@ -11,7 +11,7 @@ namespace LuminPack.Code;
 /// <remarks>The read table retains at most eight snapshots of at most 256 characters each. Its bound excludes parsed
 /// rule metadata and the separate weak-key writer table, whose entries live as long as their source instances.</remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static unsafe class LuminPackTimeZoneInfoCache
+public static class LuminPackTimeZoneInfoCache
 {
     internal const int MaximumCachedTextLength = 256;
     private static readonly ConditionalWeakTable<TimeZoneInfo, string> Texts = new();
@@ -100,11 +100,7 @@ public static unsafe class LuminPackTimeZoneInfoCache
         if (default(TOptions).StringRecording != LuminPackStringRecording.Length)
             return null;
         int available = reader.Buffer.Length - reader.Position;
-#if NET8_0_OR_GREATER
-        ref byte cursor = ref reader.Cursor;
-#else
-        ref byte cursor = ref Unsafe.AsRef<byte>(reader.Cursor);
-#endif
+        ref byte cursor = ref reader.CurrentReference;
         if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && available >= sizeof(int))
             return Find(LuminPackReader.Read<int>(ref cursor) >> 1);
         if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && available >= 2 * sizeof(int))
@@ -127,11 +123,7 @@ public static unsafe class LuminPackTimeZoneInfoCache
             default(TOptions).StringRecording != LuminPackStringRecording.Length || candidate is null)
             return false;
         reader.EnsureReadable(reader.Position, sizeof(int));
-#if NET8_0_OR_GREATER
-        ref byte cursor = ref reader.Cursor;
-#else
-        ref byte cursor = ref Unsafe.AsRef<byte>(reader.Cursor);
-#endif
+        ref byte cursor = ref reader.CurrentReference;
         int length = candidate.Text.Length;
         int header = LuminPackReader.Read<int>(ref cursor);
         // Snapshots are written through the string kernel, so ASCII text arrives in the compact Latin-1 form.

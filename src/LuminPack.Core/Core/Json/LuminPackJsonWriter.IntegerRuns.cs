@@ -6,11 +6,7 @@ using LuminPack.Option;
 
 namespace LuminPack.Core;
 
-#if NET8_0_OR_GREATER
 public ref partial struct LuminPackJsonWriter
-#else
-public unsafe ref partial struct LuminPackJsonWriter
-#endif
 {
     /// <summary>Writes consecutive integer elements after the caller has opened an array.</summary>
     /// <typeparam name="TOptions">The compiled JSON profile.</typeparam>
@@ -59,7 +55,7 @@ public unsafe ref partial struct LuminPackJsonWriter
 #if NET8_0_OR_GREATER
         long room = (long)Unsafe.ByteOffset(ref start, ref _end);
 #else
-        long room = (long)unchecked((nint)_end - (nint)Cursor);
+        long room = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
         bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
         int scale = utf8 ? 1 : 2;
@@ -117,7 +113,7 @@ public unsafe ref partial struct LuminPackJsonWriter
 #if NET8_0_OR_GREATER
             long room = (long)Unsafe.ByteOffset(ref start, ref _end);
 #else
-            long room = (long)unchecked((nint)_end - (nint)Cursor);
+            long room = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
             int written = 0;
             // A derived culture can call user code during formatting. Overlap also needs the scalar load order.
