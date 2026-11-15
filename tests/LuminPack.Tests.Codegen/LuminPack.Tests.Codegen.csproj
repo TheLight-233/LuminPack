@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/LuminPack.ILPostProcessor/LuminPack.ILPostProcessor.csproj" />
+    <Compile Include="../LuminPack.Tests.Generator/CompatibilityCompilationReferences.cs" Link="CompatibilityCompilationReferences.cs" />
     <EmbeddedResource Include="../LuminPack.Tests/ConcreteReads.cs" LogicalName="TestSupport.ConcreteReads.cs" />
     <EmbeddedResource Include="../../src/LuminPack.Core/Utility/Collections/LuminPackCollectionViews.cs" LogicalName="TestSupport.CollectionViews.cs" />
     <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />

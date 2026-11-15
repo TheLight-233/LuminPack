@@ -46,7 +46,7 @@ public static partial class LuminPackSerializerGenerator
         if (_currentRawScalar)
         {
             sb.AppendLine("            var buffer = AllocateUninitializedArray<byte>(Unsafe.SizeOf<" + typeName + ">());");
-            sb.AppendLine("            LuminPackWriter.Write(ref MemoryMarshal.GetArrayDataReference(buffer), in value);");
+            sb.AppendLine("            LuminPackWriter.Write(ref GetNotNullArrayReference(buffer), in value);");
             sb.AppendLine("            return buffer;");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -72,7 +72,7 @@ public static partial class LuminPackSerializerGenerator
             // The count-prefixed two's-complement record of RootWrite, with its byte count computed once.
             sb.AppendLine("            int byteCount = value.GetByteCount();");
             sb.AppendLine("            var buffer = AllocateUninitializedArray<byte>(checked(sizeof(int) + byteCount));");
-            sb.AppendLine("            LuminPackWriter.Write(ref MemoryMarshal.GetArrayDataReference(buffer), byteCount);");
+            sb.AppendLine("            LuminPackWriter.Write(ref GetNotNullArrayReference(buffer), byteCount);");
             sb.AppendLine("            value.TryWriteBytes(buffer.AsSpan(sizeof(int)), out _);");
             sb.AppendLine("            return buffer;");
             sb.AppendLine("        }");

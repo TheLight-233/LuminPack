@@ -325,14 +325,7 @@ internal static partial class SerializerInterceptorRegression
 
     /// <summary>Uses the actual portable runtime and reference pack supported by Unity's compiler.</summary>
     /// <returns>The netstandard 2.1 reference closure.</returns>
-    private static MetadataReference[] PortableReferences()
-    {
-        string dotnet = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "../../.."));
-        string pack = Path.Combine(dotnet, "packs", "NETStandard.Library.Ref", "2.1.0", "ref", "netstandard2.1");
-        string core = Path.GetFullPath("src/LuminPack.Core/bin/Release/netstandard2.1");
-        return Directory.GetFiles(pack, "*.dll").Concat(new[] { "LuminPack.Core.dll", "System.Collections.Immutable.dll", "System.Runtime.CompilerServices.Unsafe.dll" }
-                .Select(name => Path.Combine(core, name))).Select(path => MetadataReference.CreateFromFile(path)).ToArray();
-    }
+    private static MetadataReference[] PortableReferences() => CompatibilityCompilationReferences.Create();
 
     /// <summary>Rejects a mismatched generated mapping before publishing an invalid assembly.</summary>
     /// <param name="image">A valid consumer image before rewriting.</param>
