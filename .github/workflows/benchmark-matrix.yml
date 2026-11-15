@@ -1,0 +1,81 @@
+name: Benchmark matrix
+
+on:
+  pull_request:
+    paths:
+      - 'benchmarks/LuminPack.MatrixBenchmark/**'
+      - 'src/**'
+      - 'eng/**'
+      - 'Directory.Build.targets'
+      - 'global.json'
+      - '.github/workflows/benchmark-matrix.yml'
+  push:
+    branches: [main, refactor]
+    paths:
+      - 'benchmarks/LuminPack.MatrixBenchmark/**'
+      - 'src/**'
+      - 'eng/**'
+      - 'Directory.Build.targets'
+      - 'global.json'
+      - '.github/workflows/benchmark-matrix.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-matrix-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      DOTNET_TieredCompilation: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - name: Build the matrix
+        run: >
+          dotnet build benchmarks/LuminPack.MatrixBenchmark -c Release
+          -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false
+          -p:GeneratePackageOnBuild=false
+      - name: Validate fixtures and sample the matrix
+        shell: bash
+        env:
+          TIMING: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/matrix-artifacts
+          dotnet --info > .tmp/matrix-artifacts/dotnet-info.txt
+          lscpu > .tmp/matrix-artifacts/cpu.txt
+          dll=benchmarks/LuminPack.MatrixBenchmark/bin/Release/net10.0/LuminPack.MatrixBenchmark.dll
+          rounds=0
+          processes=1
+          if [[ "$TIMING" == true ]]; then
+            rounds=9
+            processes=3
+          fi
+          for format in binary json; do
+            for scene in main small regular large changing; do
+              for ((process=1; process<=processes; process++)); do
+                dotnet "$dll" "$format" "$scene" "$rounds" ".tmp/matrix-artifacts/$format-$scene-$process.jsonl"
+              done
+            done
+          done
+      - name: Summarize the matrix
+        run: |
+          python3 benchmarks/LuminPack.MatrixBenchmark/report.py .tmp/matrix-artifacts
+          cat .tmp/matrix-artifacts/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload matrix data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-matrix
+          path: .tmp/matrix-artifacts

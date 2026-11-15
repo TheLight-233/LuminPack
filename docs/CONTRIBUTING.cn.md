@@ -71,14 +71,24 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 - 配置 `UNITY_EMAIL`、`UNITY_PASSWORD` 和 `UNITY_SERIAL` 后，所有分支的推送和同仓库拉取请求会在 Linux 托管运行器上用 Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Player、Unity 对象和 Burst Editor 合约测试，并在无头 Chrome 中运行 WebGL IL2CPP smoke Player，共用一个许可证。Personal 序列号可按 GameCI 激活文档从本机 `.ulf` 提取，现有 `UNITY_LICENSE` 可保留；也可以使用有效的 `UNITY_LICENSE` 代替序列号。未配置密钥时许可证检查会失败。各次运行共用一个许可证，最多排队 100 次，不会取消先前的排队运行。Fork 拉取请求跳过需要许可证的任务。手动运行的 Windows 和 macOS 原生 Player 检查仍需要预先激活许可证的自托管运行器；Linux 测试不能验证这些平台。
 - `test-areas.yml` 在 Windows、Linux 和 macOS 上以 Debug、Release 运行 Safety 测试区；三个系统均执行 AspNetCore、Avalonia、Maui、MonoGame、SkiaSharp 适配契约，Windows 额外执行 Drawing 和 Wpf。适配模块使用已有 Core 二进制，因此先构建 Core。
 - 推送到 `main`、`refactor` 或创建拉取请求均会触发托管检查。Unity 执行需要配置许可证密钥；`.github/scripts` 下的辅助脚本随工作流纳入版本控制。
-- 基准测试只能通过手动的 `run_benchmarks` 输入触发，明确限定为现有四类：`SimpleBenchmark`、`SerializeBenchmark`、`JsonBenchmark`、`PolymorphismBenchmark`，不作为正确性门禁。
-- 基准测试矩阵使用 Linux x64、macOS Intel x64 和 Linux ARM64 原生主机。计时前校验实际进程与操作系统架构，以及 Intel 主机的 CPUID 厂商；各主机分别上传结果和环境信息。应在同一主机内比较各库的比值，跨主机的操作系统和 CPU 均有差异。
+- `ci.yml` 中的 BenchmarkDotNet 任务通过手动的 `run_benchmarks` 输入触发，运行 `SimpleBenchmark`、`SerializeBenchmark`、`JsonBenchmark` 和 `PolymorphismBenchmark`。
+- BenchmarkDotNet 任务使用 Linux x64、macOS Intel x64 和 Linux ARM64 原生主机。计时前校验进程与操作系统架构，以及 Intel 主机的 CPUID 厂商。各主机分别上传结果和环境信息，应在同一主机内比较各库的比值。
 - 手动输入 `benchmark_jit` 默认为 `both`，分别运行 `TieredPGO`（启用分层编译和动态 PGO）及 `FullOpts`（两者均关闭）。FullOpts 是用于排查 JIT 稳定性的对照，不能替代生产环境 PGO 结果。每组使用三个进程、8–30 次自适应预热和 15 次以一秒为目标的正式测量，保留离群值。固定随机种子与时间戳保证各进程的输入字节一致；计时前用 `--verify-fixtures` 验证新实例及重复初始化。
 - 完整 JSON 和测量 CSV 产物保留每个进程的数据。`process-stability.md` 与任务摘要报告进程均值、变异系数、最大值/最小值、分配量，以及相同操作、相同 JIT 配置下的 LuminPack/参照库比值。进程差异超过 10% 时发出警告；宣称提升前应检查分布与原生代码。各库的独立进程不能按进程编号当作配对样本。
 - BenchmarkDotNet 的多态反汇编在 Windows/Linux 上运行；当前版本不支持 macOS 上的 CoreCLR 反汇编。独立的非计时 JIT 探针在 Linux 基准主机上采集 LuminPack 和 Nino 多态读写的优化后汇编及生成方法信息。Intel macOS 主机运行全部四类耗时和分配测试，但不运行这些探针。基准验证、执行或必需探针失败会使任务失败。
 - CI 按事件区分并发组，推送不会取消手动启动的基准测试。注册表子进程测试启动测试程序集旁的 apphost，以保持与测试进程一致的架构，包括自包含 x86。
 
 ## 基准测试
+
+独立的[序列化矩阵](../benchmarks/LuminPack.MatrixBenchmark)覆盖框架类型、模型图和 51 类集合。[Benchmark matrix 工作流](../.github/workflows/benchmark-matrix.yml)在相关推送和拉取请求上校验往返。可以单独手动触发，或手动运行 CI 时启用 `run_benchmarks`，生成耗时和分配报告。
+
+本地校验时，向 Release 可执行程序传入格式、场景、轮数和 JSONL 输出路径。轮数为零时只做校验。
+
+```bash
+dotnet run --project benchmarks/LuminPack.MatrixBenchmark -c Release -p:LuminPackLegacyGeneratorReference=false -p:LuminPackUseSatori=false -- binary small 0 matrix.jsonl
+```
+
+二进制对照 MemoryPack，JSON 对照使用源生成元数据的 System.Text.Json。Write 返回新字节数组或字符串。Fresh 从空目标读入，Reuse 从已有目标读入。System.Text.Json 没有对等的根对象 Reuse 操作。报告列出不支持和未通过往返校验的操作，比值只使用同一进程中通过校验的配对。
 
 ```text
 dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SimpleBenchmark*
