@@ -65,13 +65,31 @@ internal static class ContiguousOwnerFile
             ContiguousShape.ImmutableArray => "value.AsSpan()",
             _ => "value.Span",
         };
+        bool measure = element.RawCollection && layout == null && shape is
+            (ContiguousShape.Memory or ContiguousShape.ReadOnlyMemory or ContiguousShape.ArraySegment);
         return SpecialOwnerFile.Render(set, operations, suffix, model.Type, reference, BinaryWrite, BinaryRead, JsonWrite, JsonRead, w =>
         {
             if (layout != null)
                 FormatterStorageEmitter.Support(w, layout);
         }, compressedEntries: shape is ContiguousShape.Array or ContiguousShape.List, outlineJson: true,
             outlineBinaryWrite: scalarElements || (!raw && layout == null && element.Type != "string"),
+            binaryWriteEntries: measure ? MeasureRecord : null,
             jsonWriteRun: !scalarElements && JsonIntegerRunWriter.Supports(set, model.Type, element.Type));
+
+        void MeasureRecord(CodeWriter w)
+        {
+            string count = shape == ContiguousShape.ArraySegment ? "value.Count" : "value.Length";
+            w.Line(w.Preserve);
+            w.Line(w.MethodImpl("AggressiveInlining"));
+            w.Line("internal static void MeasureRecord_" + suffix + "<TLuminProfile>(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator,");
+            w.Line("    scoped ref " + model.Type + " value)");
+            w.Line("    where TLuminProfile : struct, " + w.A("ILuminPackOptions"));
+            w.Open();
+            w.Line("evaluator.Add(checked(sizeof(int) + " + count + " * " + Unsafe + ".SizeOf<" + element.Type + ">()));");
+            w.Close();
+            w.Blank();
+        }
+
         void NullWrite(CodeWriter w, bool json)
         {
             if (absent == "false")

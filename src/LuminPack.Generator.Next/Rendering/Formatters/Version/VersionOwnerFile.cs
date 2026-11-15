@@ -13,8 +13,26 @@ internal static class VersionOwnerFile
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, GeneratedOperations operations) =>
         SpecialOwnerFile.Render(set, operations, "Version", "global::System.Version", true, BinaryWrite, BinaryRead, JsonWrite,
-            JsonRead);
+            JsonRead, binaryWriteEntries: MeasureRecord);
 
+    /// <summary>Emits the exact width used by allocating binary entries.</summary>
+    /// <param name="w">The formatter source writer.</param>
+    private static void MeasureRecord(CodeWriter w)
+    {
+        w.Line(w.Preserve);
+        w.Line(w.MethodImpl("AggressiveInlining"));
+        w.Line("internal static void MeasureRecord_Version<TLuminProfile>(scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator,");
+        w.Line("    scoped ref global::System.Version value)");
+        w.Line("    where TLuminProfile : struct, " + w.A("ILuminPackOptions"));
+        w.Open();
+        w.Line("evaluator.Add(value is null ? 1 : 17);");
+        w.Close();
+        w.Blank();
+    }
+
+    /// <summary>Emits the fixed binary record writer.</summary>
+    /// <param name="w">The formatter source writer.</param>
+    /// <param name="context">The aliases and profile of the owning formatter.</param>
     private static void BinaryWrite(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (value == null)");
@@ -23,6 +41,20 @@ internal static class VersionOwnerFile
         w.Line("return;");
         w.Close();
         w.Blank();
+        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
+        w.Line("#if NET8_0_OR_GREATER");
+        w.Line("if (" + unsafeType + ".SizeOf<global::System.IntPtr>() == 8)");
+        w.Open();
+        w.Line("ref byte record = ref writer.Cursor;");
+        w.Line("record = 4;");
+        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 1), value.Major);");
+        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 5), value.Minor);");
+        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 9), value.Build);");
+        w.Line("LuminPackWriter.Write(ref " + unsafeType + ".Add(ref record, 13), value.Revision);");
+        w.Line("writer.Advance(17);");
+        w.Line("return;");
+        w.Close();
+        w.Line("#endif");
         w.Line("writer.WriteObjectHeader(4);");
         w.Line("writer.Write(value.Major);");
         w.Line("writer.Write(value.Minor);");
@@ -30,6 +62,9 @@ internal static class VersionOwnerFile
         w.Line("writer.Write(value.Revision);");
     }
 
+    /// <summary>Emits the checked binary component reads and original BCL construction.</summary>
+    /// <param name="w">The formatter source writer.</param>
+    /// <param name="context">The aliases and profile of the owning formatter.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
     {
         w.Line("if (!reader.TryReadObjectHead())");
@@ -38,10 +73,26 @@ internal static class VersionOwnerFile
         w.Line("return;");
         w.Close();
         w.Blank();
-        w.Line("int major = reader.Read<int>();");
-        w.Line("int minor = reader.Read<int>();");
-        w.Line("int build = reader.Read<int>();");
-        w.Line("int revision = reader.Read<int>();");
+        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
+        w.Line("int major, minor, build, revision;");
+        w.Line("#if NET8_0_OR_GREATER");
+        w.Line("ref byte payload = ref reader.PeekInput(16, out bool complete);");
+        w.Line("if (" + unsafeType + ".SizeOf<global::System.IntPtr>() == 8 && complete)");
+        w.Open();
+        w.Line("reader.Advance(16);");
+        w.Line("major = LuminPackReader.Read<int>(ref payload);");
+        w.Line("minor = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref payload, 4));");
+        w.Line("build = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref payload, 8));");
+        w.Line("revision = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref payload, 12));");
+        w.Close();
+        w.Line("else");
+        w.Line("#endif");
+        w.Open();
+        w.Line("major = reader.Read<int>();");
+        w.Line("minor = reader.Read<int>();");
+        w.Line("build = reader.Read<int>();");
+        w.Line("revision = reader.Read<int>();");
+        w.Close();
         w.Line("if (revision == -1)");
         w.Open();
         w.Line("value = build == -1 ? new global::System.Version(major, minor) : new global::System.Version(major, minor, build);");
@@ -52,6 +103,9 @@ internal static class VersionOwnerFile
         w.Close();
     }
 
+    /// <summary>Emits the JSON version writer and its compatible text fallback.</summary>
+    /// <param name="w">The formatter source writer.</param>
+    /// <param name="context">The aliases and profile of the owning formatter.</param>
     private static void JsonWrite(CodeWriter w, SpecialOwnerContext context)
     {
         if (context.Supports("CanWriteJsonVersion"))
@@ -68,6 +122,9 @@ internal static class VersionOwnerFile
         w.Line("writer.Write<" + context.Profile + ">(value.ToString());");
     }
 
+    /// <summary>Emits the JSON version reader and its compatible text fallback.</summary>
+    /// <param name="w">The formatter source writer.</param>
+    /// <param name="context">The aliases and profile of the owning formatter.</param>
     private static void JsonRead(CodeWriter w, SpecialOwnerContext context)
     {
         if (context.Supports("CanReadJsonVersion"))

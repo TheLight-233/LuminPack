@@ -63,12 +63,15 @@ internal static partial class TypeModelFactory
                     return new EntryShape(EntryKind.BigInteger);
                 if (!fixedRecord && type is INamedTypeSymbol compound)
                 {
-                    if (name is "global::System.Text.StringBuilder" or "global::System.Collections.BitArray" &&
+                    if (name is "global::System.Text.StringBuilder" or "global::System.Collections.BitArray" or "global::System.Version" &&
                         IsFrameworkCollection(compound, name.Substring("global::".Length)))
                         return new EntryShape(EntryKind.StatelessSpanRecord);
                     string definition = compound.OriginalDefinition.ContainingNamespace.ToDisplayString() + "." + compound.Name;
                     if (definition is GenericIdentity.Tuple or GenericIdentity.ValueTuple or GenericIdentity.KeyValuePair or GenericIdentity.Lazy)
                         return new EntryShape(EntryKind.CompoundDirect);
+                    if (definition is "System.Memory" or "System.ReadOnlyMemory" or "System.ArraySegment" &&
+                        IsFrameworkCollection(compound, definition + "`1"))
+                        return new EntryShape(EntryKind.StatelessSpanRecord);
                     if ((definition is "System.Collections.Generic.Queue" or "System.Collections.Generic.LinkedList") &&
                         compound.TypeArguments.Length == 1 && IsKnownScalar(compound.TypeArguments[0]) &&
                         IsFrameworkCollection(compound, definition + "`1"))
