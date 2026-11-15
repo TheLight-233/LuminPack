@@ -6,7 +6,7 @@ Read the [mechanism contract](docs/mechanism-contract.md) and the [architecture]
 
 ## Building
 
-The solution includes `net11.0` targets, so use a .NET 11 preview SDK. `global.json` rolls forward from .NET 10 and allows prerelease SDKs.
+The solution includes `net11.0` targets. Use .NET SDK 11.0.100 or a later .NET 11.0 feature band, as specified by `global.json`.
 
 ```text
 dotnet build LuminPack.sln -c Release

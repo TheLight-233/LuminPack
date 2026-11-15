@@ -75,11 +75,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Target frameworks in scope: netstandard2.0/2.1, net8.0, net9.0,
-      # net10.0 and net11.0. Runtimes for net8.0/net9.0/net10.0 come from their
-      # own SDKs; the net11.0 targets need the .NET 11 SDK.
-      - uses: actions/setup-dotnet@v4
+      # Cache restore invokes the .NET CLI in the checkout, so install the SDK
+      # selected by global.json in the same step as the older test runtimes.
+      - name: Install .NET SDKs and restore NuGet cache
+        uses: actions/setup-dotnet@v4
         with:
+          global-json-file: global.json
           dotnet-version: |
             8.0.x
             9.0.x
@@ -88,10 +89,6 @@ jobs:
           cache-dependency-path: |
             **/*.csproj
             LuminPack.sln
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 11.0.x
 
       - name: Show resolved SDK
         run: dotnet --version
@@ -197,19 +194,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The benchmark project targets net10.0 only; the solution it references
-      # also carries net11.0 targets, so install the .NET 11 SDK alongside it.
-      - uses: actions/setup-dotnet@v4
+      # BenchmarkDotNet uses the .NET 10 runtime. Cache restore and builds use
+      # the SDK selected by global.json.
+      - name: Install .NET SDKs and restore NuGet cache
+        uses: actions/setup-dotnet@v4
         with:
+          global-json-file: global.json
           dotnet-version: 10.0.x
           cache: true
           cache-dependency-path: |
             **/*.csproj
             LuminPack.sln
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 11.0.x
 
       - name: Build benchmarks
         run: dotnet build benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false

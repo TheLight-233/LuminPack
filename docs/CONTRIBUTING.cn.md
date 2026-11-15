@@ -6,7 +6,7 @@
 
 ## 构建
 
-解决方案包含 `net11.0` 目标，需要 .NET 11 预览版 SDK。`global.json` 允许从 .NET 10 前滚并允许预览版 SDK。
+解决方案包含 `net11.0` 目标。请使用 `global.json` 指定的 .NET SDK 11.0.100，或 .NET 11.0 后续的功能版本。
 
 ```text
 dotnet build LuminPack.sln -c Release
