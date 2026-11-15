@@ -78,7 +78,9 @@ public static partial class LuminPackMarshal
     {
         Vector256.LoadUnsafe(ref source).StoreUnsafe(ref destination);
         nuint last = count - (nuint)Vector256<byte>.Count;
-        nuint offset = (nuint)Vector256<byte>.Count - ((nuint)Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref destination) & (nuint)(Vector256<byte>.Count - 1));
+        // Complement the address bits to avoid the .NET 11 JIT fallback when computing the next vector boundary.
+        nuint address = (nuint)Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref destination);
+        nuint offset = (~address & (nuint)(Vector256<byte>.Count - 1)) + 1;
         for (; offset + 3 * (nuint)Vector256<byte>.Count <= last; offset += 4 * (nuint)Vector256<byte>.Count)
         {
             var first = Vector256.LoadUnsafe(ref source, offset);

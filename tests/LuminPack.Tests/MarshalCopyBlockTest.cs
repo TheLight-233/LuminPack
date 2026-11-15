@@ -207,7 +207,7 @@ public unsafe class MarshalCopyBlockTest
         LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.NullRef<byte>(), ref Unsafe.NullRef<byte>(), 0);
     }
 
-    /// <summary>Checks every length across the short-to-native boundary and former medium dispatch bands.</summary>
+    /// <summary>Checks medium copy lengths and all destination alignments within a 256-bit vector.</summary>
     [Fact]
     public void MediumCopiesPreserveExactRangesForEveryRemainder()
     {
@@ -218,7 +218,7 @@ public unsafe class MarshalCopyBlockTest
             new Random(431).NextBytes(new Span<byte>(source, 2048));
             for (int length = 257; length <= 1280; length++)
             foreach (int sourceOffset in new[] { 0, 1, 31, 63 })
-            foreach (int destinationOffset in new[] { 0, 1, 31, 63 })
+            for (int destinationOffset = 0; destinationOffset < 32; destinationOffset++)
             {
                 CheckCopy(destination + 64 + destinationOffset, source + sourceOffset, length);
             }
