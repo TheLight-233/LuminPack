@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -82,7 +83,7 @@ public static partial class LuminPackCollectionAccess
     {
         if (!LuminPackMarshal.ConstantStringProfile<TOptions>() || !writer.UsesUtf16LengthRecords<TOptions>())
             return false;
-        object? storage = GetWrapperStorage(wrapper);
+        object? storage = GetObservableStringList(wrapper) ?? GetWrapperStorage(wrapper);
         if (storage is string?[] array)
         {
             int position = writer.BeginCollection();
@@ -114,6 +115,25 @@ public static partial class LuminPackCollectionAccess
         writer.EndCollection(header, count);
         writer.CheckBuffer();
         return true;
+    }
+
+    /// <summary>Finds the exact list behind a framework observable wrapper through the known layouts.</summary>
+    /// <param name="wrapper">The wrapped string sequence.</param>
+    /// <returns>The exact backing list, or null when the general storage probe is needed.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static List<string?>? GetObservableStringList(IEnumerable<string?>? wrapper)
+    {
+        var type = wrapper?.GetType();
+        if (type == typeof(ReadOnlyObservableCollection<string?>) && LuminCollectionLayouts.ReadOnlyObservableCollectionList >= 0)
+        {
+            wrapper = LuminFieldLayout.Field<IList<string?>?>(wrapper!, LuminCollectionLayouts.ReadOnlyObservableCollectionList);
+            type = wrapper?.GetType();
+        }
+        if (type != typeof(ObservableCollection<string?>) || LuminCollectionLayouts.ObservableCollectionItems < 0)
+            return null;
+
+        var items = LuminFieldLayout.Field<IList<string?>?>(wrapper!, LuminCollectionLayouts.ObservableCollectionItems);
+        return items?.GetType() == typeof(List<string?>) ? Unsafe.As<List<string?>>(items!) : null;
     }
 
     /// <summary>Writes integers directly from the storage selected by an exact wrapper's enumeration.</summary>
