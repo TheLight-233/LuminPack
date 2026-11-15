@@ -90,6 +90,7 @@ python benchmarks/make-charts.py .tmp/benchmark-artifacts .tmp/benchmark-charts 
 
 Judge results by LuminPack's time divided by the reference library's, from the same run on the same machine; see section 5 of the contract.
 Binary tables use MemoryPack as the baseline within each operation; JSON tables use System.Text.Json. Chart generation requires `--job` when reports contain multiple JIT jobs, and never merges their rows.
+`LUMINPACK_BENCHMARK_SATORI` selects the measured runtime: `1` or `only` measures only the Satori GC runtime prepared by `eng/SatoriCompiler`, `both` adds `TieredPGO-Satori` and `FullOpts-Satori` jobs next to the stock jobs, and `off` keeps the stock runtime. The host keeps using the installed SDK; each measured process launches its apphost against the private .NET 11 framework, and the run fails if Satori GC is not active. `--verify-runtime` prints the current process runtime, server-GC state and Satori-GC state. The manual `benchmark_satori` CI input defaults to `only`; select `off` or `both` for stock-only or same-run comparisons. Use the `-Satori` job id with `--job` when charting a Satori run.
 
 ## Source conventions
 

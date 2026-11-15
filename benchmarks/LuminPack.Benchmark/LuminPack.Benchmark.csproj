@@ -26,6 +26,10 @@
   <ItemGroup>
     <AssemblyMetadata Include="LuminPack.Generator" Value="$(LuminPackGenerator)" />
     <AssemblyMetadata Include="LuminPack.LegacyAnalyzer" Value="$(LuminPackLegacyAnalyzer)" />
+    <!-- Optional measured-runtime opt-in; eng/SatoriCompiler prepares the private host and Satori overlay. -->
+    <AssemblyMetadata Include="LuminPack.SatoriRuntime" Value="$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..\..\eng\SatoriCompiler\bin\$(Configuration)\net11.0\satori'))" />
+    <!-- BenchmarkDotNet resolves this exact project when experiment copies reuse the benchmark project name. -->
+    <AssemblyMetadata Include="LuminPack.ProjectPath" Value="$(MSBuildProjectFullPath)" />
   </ItemGroup>
   <ItemGroup>
   </ItemGroup>

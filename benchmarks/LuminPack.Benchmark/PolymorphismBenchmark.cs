@@ -816,6 +816,7 @@ public class PolymorphismBenchmark
     [GlobalSetup]
     public void SetUp()
     {
+        SatoriRuntime.EnsureSatoriIfRequested();
         ((PolymorphismClass)myClass).Numbers2.Clear();
         for (int i = 0; i < 1000; i++)
         {

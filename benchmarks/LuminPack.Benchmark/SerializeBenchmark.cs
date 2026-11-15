@@ -1072,6 +1072,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     [GlobalSetup]
     public void SetUp()
     {
+        SatoriRuntime.EnsureSatoriIfRequested();
         _luminBuffer = LuminPackSerializer.Serialize<CharacterSaveData, LuminPackUtf16LengthOptions>(_data);
         _memoryBuffer = MemoryPackSerializer.Serialize(_data, memoryPackSerializerOption);
         _msgpackBuffer = MessagePackSerializer.Serialize(_data);

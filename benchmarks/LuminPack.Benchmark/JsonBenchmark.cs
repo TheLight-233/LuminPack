@@ -2,9 +2,13 @@ using System.Text.Json.Serialization;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using LuminPack;
-using LuminPack.Option;
 using LuminPack.Utility;
 using Newtonsoft.Json;
+using StrictJsonOptions = LuminPack.Option.LuminPackOptions<
+    LuminPack.Option.LuminPackUtf16LengthOptions,
+    LuminPack.Option.LuminPackGeneralFormat,
+    LuminPack.Option.LuminPackDefaultDepth,
+    LuminPack.Option.LuminPackStrictJson>;
 
 namespace LuminPackBenchmark;
 
@@ -97,7 +101,8 @@ public class JsonBenchmark
     [GlobalSetup]
     public void SetUp()
     {
-        _luminPackJson = LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data);
+        SatoriRuntime.EnsureSatoriIfRequested();
+        _luminPackJson = LuminPackSerializer.SerializeJson<CharacterSaveData, StrictJsonOptions>(_data);
         _systemTextJson = System.Text.Json.JsonSerializer.Serialize(_data, StjOptions);
         _newtonsoftJson = JsonConvert.SerializeObject(_data, NjSettings);
         _redoxJson = REDox.Json.JsonSerializer.Serialize(_data, RedoxSettings);
@@ -110,12 +115,11 @@ public class JsonBenchmark
     // ── Serialize ────────────────────────────────────────────────────────────
 
     /// <summary>Measures lumin pack serialize to json for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("Serialize")]
-    public void LuminPackSerializeToJson()
-    {
-        LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data);
-    }
+    public string LuminPackSerializeToJson()
+        => LuminPackSerializer.SerializeJson<CharacterSaveData, StrictJsonOptions>(_data);
 
     /// <summary>Measures system text json serialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
@@ -145,7 +149,7 @@ public class JsonBenchmark
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserializeFromJson()
-        { CharacterSaveData value = null!; LuminPackSerializer.DeserializeJson<CharacterSaveData, LuminPackDefaultOptions>(_luminPackJson, ref value); return value; }
+        { CharacterSaveData value = null!; LuminPackSerializer.DeserializeJson<CharacterSaveData, StrictJsonOptions>(_luminPackJson, ref value); return value; }
 
     /// <summary>Measures system text json deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>

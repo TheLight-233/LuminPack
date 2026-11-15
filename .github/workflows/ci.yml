@@ -15,6 +15,11 @@ on:
         type: choice
         options: [both, tiered, fullopts]
         default: both
+      benchmark_satori:
+        description: Measured GC for the benchmark job; only uses Satori, both adds stock jobs
+        type: choice
+        options: [only, both, off]
+        default: only
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -229,6 +234,7 @@ jobs:
         shell: bash
         env:
           LUMINPACK_BENCHMARK_JIT: ${{ inputs.benchmark_jit }}
+          LUMINPACK_BENCHMARK_SATORI: ${{ inputs.benchmark_satori || 'only' }}
         run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 --no-build -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' 'LuminPackBenchmark.PolymorphismBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 600
 
       - name: Report process dispersion and reference ratios

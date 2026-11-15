@@ -197,6 +197,7 @@ public class SimpleBenchmark
     [GlobalSetup]
     public void SetUp()
     {
+        SatoriRuntime.EnsureSatoriIfRequested();
         buffer1 = LuminPackSerializer.Serialize(myClass);
         buffer2 = MemoryPackSerializer.Serialize(myClass);
         buffer3 = MessagePackSerializer.Serialize(myClass);

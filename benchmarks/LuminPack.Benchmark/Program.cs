@@ -23,6 +23,8 @@ internal static class Program
             .FirstOrDefault(attribute => attribute.Key == "LuminPack.Generator")?.Value ?? "unknown"));
         if (args is ["--verify-host", var architecture, var vendor])
             return VerifyHost(architecture, vendor);
+        if (args is ["--verify-runtime"])
+            return VerifyRuntime();
         if (args is ["--polymorphism-native-probe", var operation])
             return CapturePolymorphismNativeCode(operation);
         if (args is ["--verify-fixtures"])
@@ -196,6 +198,22 @@ internal static class Program
             (vendor != "any" && !string.Equals(actualVendor, vendor, StringComparison.Ordinal)))
         {
             Console.Error.WriteLine($"Expected a native {architecture} host with CPU vendor {vendor}.");
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /// <summary>Reports the runtime and GC configuration of the current process.</summary>
+    /// <returns>Zero when the optionally requested Satori GC is active, or one otherwise.</returns>
+    private static int VerifyRuntime()
+    {
+        bool satori = GC.GetConfigurationVariables().TryGetValue("SatoriGC", out object? enabled) && enabled is true;
+        Console.WriteLine($"Runtime: {RuntimeInformation.FrameworkDescription}; {RuntimeInformation.ProcessArchitecture}; " +
+            $"server GC: {GCSettings.IsServerGC}; Satori GC: {satori}");
+        if (LuminPackBenchmark.SatoriRuntime.RequestedMode() == LuminPackBenchmark.SatoriRuntime.RequestMode.Only && !satori)
+        {
+            Console.Error.WriteLine("LUMINPACK_BENCHMARK_SATORI requested Satori GC, but the process runs on the stock runtime.");
             return 1;
         }
 

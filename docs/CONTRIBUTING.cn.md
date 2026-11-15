@@ -90,6 +90,7 @@ python benchmarks/make-charts.py .tmp/benchmark-artifacts .tmp/benchmark-charts 
 
 用 LuminPack 耗时除以参照库耗时来评判结果，数据必须来自同一台机器的同一次运行；见契约第 5 节。
 二进制表格在每种操作内以 MemoryPack 为基线，JSON 表格以 System.Text.Json 为基线。报告含有多个 JIT 配置时，生成图表必须用 `--job` 选择，不能合并不同配置的数据行。
+`LUMINPACK_BENCHMARK_SATORI` 选择被测运行时：`1` 或 `only` 只测 `eng/SatoriCompiler` 准备的 Satori GC 运行时，`both` 在 stock 任务旁增加 `TieredPGO-Satori` 和 `FullOpts-Satori`，`off` 保持 stock。宿主仍使用已安装的 SDK；被测进程通过 apphost 加载私有的 .NET 11 框架，若 Satori GC 未生效则本次运行失败。`--verify-runtime` 输出当前进程的运行时、服务器 GC 和 Satori GC 状态。CI 的手动 `benchmark_satori` 输入默认 `only`；需要只测 stock 或同一轮对照时选择 `off` 或 `both`。为 Satori 运行生成图表时用 `--job` 选择带 `-Satori` 的任务。
 
 ## 源码规范
 
