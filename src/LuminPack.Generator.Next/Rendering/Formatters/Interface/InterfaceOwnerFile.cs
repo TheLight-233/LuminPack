@@ -224,6 +224,16 @@ internal static class InterfaceOwnerFile
         w.Close();
         w.Blank();
         w.Line("var hashSet = new " + set + "(length);");
+        if (!c.Counted && c.Supports("ReadRawHashSet"))
+        {
+            // Keep the inline rebuild for short records where the shared transfer's setup costs more.
+            w.Line("if (length >= 16)");
+            w.Open();
+            w.Line("global::LuminPack.Code.LuminPackMarshal.ReadRawHashSet(ref operationState, hashSet, length);");
+            w.Line("value = hashSet;");
+            w.Line("goto operationComplete_RootRead;");
+            w.Close();
+        }
         w.Line("var setView = global::LuminPack.Code.LuminPackMarshal.GetHashSetView(hashSet);");
         w.Line("ref var entryRef = ref global::LuminPack.Code.LuminPackMarshal.GetArrayReference(setView._entries);");
         w.Line("int index = 0;");

@@ -203,6 +203,12 @@ internal static class FormatterCapabilities
                     "LuminPack.Code.LuminPackMarshal", "ReadRawHashSet", "LuminPackReader", SpecialType.System_Void, takesCount: true))
                 result.Add("ReadRawHashSet");
         }
+        else if (definition is "System.Collections.Generic.ISet" or "System.Collections.Generic.IReadOnlySet" && modern && !unity &&
+            RawCallbackFreeSetElement(named.TypeArguments[0]) &&
+            compilation.GetTypeByMetadataName("System.Collections.Generic.HashSet`1") is { } setStorage &&
+            FormatterRuntimeTraits.HasCollectionTransfer(compilation, setStorage.Construct(named.TypeArguments[0]),
+                "LuminPack.Code.LuminPackMarshal", "ReadRawHashSet", "LuminPackReader", SpecialType.System_Void, takesCount: true))
+            result.Add("ReadRawHashSet");
         if (definition == "System.Collections.Generic.SortedSet")
         {
             var element = named.TypeArguments[0];
