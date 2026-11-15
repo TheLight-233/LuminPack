@@ -67,7 +67,6 @@ jobs:
         if: steps.hardware.outputs.supported == 'true'
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Require AVX-512BW and exercise the real encoder
         if: steps.hardware.outputs.supported == 'true'
         env:
@@ -186,7 +185,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Run runtime regressions
         env:
           DOTNET_EnableAVX512F: ${{ matrix.avx512 }}
@@ -242,7 +240,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Install native toolchain
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
@@ -292,7 +289,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Execute the suite in a self-contained x86 test host
         run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net9.0 -r win-x86 -p:SelfContained=true -p:PublishAot=false --logger trx --results-directory .tmp/x86-results
       - name: Execute netstandard Core hook contracts in an x86 process
@@ -335,7 +331,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Verify actual vendor and execute generated roots
         env:
           LUMINPACK_REQUIRE_VENDOR: ${{ matrix.vendor }}
@@ -365,7 +360,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Publish ARM32 self-contained fixture
         run: dotnet publish tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -r linux-arm --self-contained -p:LuminPackGenerationMode=Full -p:PublishAot=false -o .tmp/arm32
       - uses: actions/upload-artifact@v4

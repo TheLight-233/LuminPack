@@ -18,14 +18,14 @@
     <TargetFrameworks Condition="'$(LuminPackTestArea)' == 'Hooks'">net9.0;net10.0</TargetFrameworks>
     <GenerateProgramFile Condition="'$(LuminPackTestArea)' == 'All'">false</GenerateProgramFile>
     <GenerateProgramFile Condition="'$(LuminPackTestArea)' != 'All'">true</GenerateProgramFile>
-    <LangVersion>preview</LangVersion>
+    <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-  <!-- LuminPackGenerator selects Legacy (default) or the Next prototype generator, for example
-       -p:LuminPackGenerator=Next -p:LuminPackTestArea=Safety. Next builds skip the legacy generator project.
+  <!-- LuminPackGenerator selects Next (default) or the legacy generator, for example
+       -p:LuminPackGenerator=Legacy -p:LuminPackTestArea=Safety. Next builds skip the legacy generator project.
        A prebuilt legacy analyzer replaces the legacy project with -p:LuminPackLegacyAnalyzer=<path to LuminPack.Generator.dll>. -->
   <PropertyGroup>
-    <LuminPackGenerator Condition="'$(LuminPackGenerator)' == ''">Legacy</LuminPackGenerator>
+    <LuminPackGenerator Condition="'$(LuminPackGenerator)' == ''">Next</LuminPackGenerator>
     <_LuminPackSkipLegacyProject Condition="'$(LuminPackGenerator)' == 'Next' or '$(LuminPackLegacyAnalyzer)' != ''">true</_LuminPackSkipLegacyProject>
     <DisableTransitiveProjectReferences Condition="'$(_LuminPackSkipLegacyProject)' == 'true'">true</DisableTransitiveProjectReferences>
     <!-- Tests that override generated Union slots spell the selected generator's slot names. -->
@@ -75,6 +75,16 @@
     <Compile Include="CompressionSafetyPerfTest.cs" />
     <Compile Include="NativeHooks/*.cs;Latin1KernelFallbackTest.cs;JsonCapacityScanTest.cs;JsonIntegerUtf16WriteTest.cs;JsonDeepLookaheadTest.cs;JsonXjbFormatterTest.cs" />
   </ItemGroup>
+  <!-- xunit is a metapackage without analyzer assets; xunit.analyzers arrives as a transitive dependency.
+       Excluding its analyzers asset on the package reference has no effect because this SDK resolves package
+       analyzers from the restored file list, so the analyzer files are dropped from the item list instead.
+       Only xunit.analyzers is filtered; every other analyzer, including the source generator, stays enabled. -->
+  <Target Name="_DisableXUnitAnalyzers" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <_XUnitAnalyzer Include="@(Analyzer)" Condition="'%(Analyzer.NuGetPackageId)' == 'xunit.analyzers'" />
+      <Analyzer Remove="@(_XUnitAnalyzer)" />
+    </ItemGroup>
+  </Target>
   <Target Name="ValidateTestArea" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(LuminPackTestArea)' != 'All' And '$(LuminPackTestArea)' != 'Safety' And '$(LuminPackTestArea)' != 'Simd' And '$(LuminPackTestArea)' != 'Hooks'" Text="LuminPackTestArea must be All, Safety, Simd or Hooks." />
   </Target>

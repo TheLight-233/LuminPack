@@ -9,7 +9,7 @@ New-Item -ItemType Directory -Force -Path $consumer | Out-Null
 '<Project />' | Set-Content -LiteralPath (Join-Path $consumer 'Directory.Build.targets')
 @"
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net11.0</TargetFramework><OutputType>Exe</OutputType><AllowUnsafeBlocks>true</AllowUnsafeBlocks><LangVersion>preview</LangVersion></PropertyGroup>
+  <PropertyGroup><TargetFramework>net11.0</TargetFramework><OutputType>Exe</OutputType><AllowUnsafeBlocks>true</AllowUnsafeBlocks><LangVersion>latest</LangVersion></PropertyGroup>
   <ItemGroup><PackageReference Include="LuminPack" Version="$Version" /></ItemGroup>
 </Project>
 "@ | Set-Content -LiteralPath (Join-Path $consumer 'Consumer.csproj')

@@ -48,7 +48,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Check Unity license configuration
         shell: bash
         run: |
@@ -159,7 +158,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Check Unity license configuration
         shell: bash
         run: |
@@ -238,7 +236,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Build and execute the actual native desktop Player
         shell: pwsh
         run: .github/scripts/invoke-unity.ps1

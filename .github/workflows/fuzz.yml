@@ -45,7 +45,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - name: Replay seeds, truncations and deterministic mutations
         shell: pwsh
         run: ./.github/scripts/fuzz.ps1 -Configuration ${{ matrix.configuration }} -Iterations 1000
@@ -74,7 +73,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - uses: actions/cache@v4
         with:
           path: .tmp/fuzz/corpus/${{ matrix.target }}

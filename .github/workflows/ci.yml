@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_benchmarks:
-        description: Run the four timing benchmarks on x64, Intel x64 and ARM64 hosts
+        description: Run BenchmarkDotNet on three hosts and time the serialization matrix
         type: boolean
         default: false
       benchmark_jit:
@@ -53,7 +53,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
 
       - name: Run repository checks
         run: dotnet run --project tools/LuminPack.RepositoryChecks/LuminPack.RepositoryChecks.csproj -c Release -- .
@@ -77,8 +76,8 @@ jobs:
       - uses: actions/checkout@v4
 
       # Target frameworks in scope: netstandard2.0/2.1, net8.0, net9.0,
-      # net10.0 and net11.0 (preview). Runtimes for net8.0/net9.0/net10.0 come
-      # from their own SDKs; the net11.0 targets need the preview SDK.
+      # net10.0 and net11.0. Runtimes for net8.0/net9.0/net10.0 come from their
+      # own SDKs; the net11.0 targets need the .NET 11 SDK.
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -93,7 +92,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
 
       - name: Show resolved SDK
         run: dotnet --version
@@ -170,6 +168,11 @@ jobs:
 
   # Compare libraries within each native host; absolute times across operating
   # systems and CPU families are not directly comparable.
+  serialization-matrix:
+    name: Full serialization matrix
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
+    uses: ./.github/workflows/benchmark-matrix.yml
+
   benchmark:
     name: Benchmark (${{ matrix.host }})
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
@@ -195,7 +198,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # The benchmark project targets net10.0 only; the solution it references
-      # also carries net11.0 targets, so install the preview SDK alongside it.
+      # also carries net11.0 targets, so install the .NET 11 SDK alongside it.
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
@@ -207,7 +210,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
 
       - name: Build benchmarks
         run: dotnet build benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false
