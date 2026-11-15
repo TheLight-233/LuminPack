@@ -219,6 +219,14 @@ namespace LuminPack.Core
         public void Advance(int count)
         {
             EnsureReadable(count);
+            AdvanceValidated(count);
+        }
+
+        /// <summary>Moves the cursor after the caller has validated the complete input range.</summary>
+        /// <param name="count">The nonnegative, validated byte count.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void AdvanceValidated(int count)
+        {
 #if NET8_0_OR_GREATER
             Cursor = ref Unsafe.Add(ref Cursor, (nint)(uint)count);
 #else

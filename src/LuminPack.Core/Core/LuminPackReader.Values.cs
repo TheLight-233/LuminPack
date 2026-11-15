@@ -288,8 +288,17 @@ namespace LuminPack.Core
         public void Read<T>(ref T value)
             where T : unmanaged
         {
-            EnsureReadable(Position, Unsafe.SizeOf<T>());
-            Advance(Read(ref Current, out value));
+            int size = Unsafe.SizeOf<T>();
+#if NET8_0_OR_GREATER
+            long remaining = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
+#else
+            long remaining = (long)unchecked((nint)_end - (nint)Cursor);
+#endif
+            // A cursor before the buffer has more than its full length remaining.
+            if (remaining < size || remaining > _buffer.Length)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + size);
+            Read(ref Current, out value);
+            AdvanceValidated(size);
         }
 
         /// <summary>Reads and returns complete scalar storage through the advancing API.</summary>
