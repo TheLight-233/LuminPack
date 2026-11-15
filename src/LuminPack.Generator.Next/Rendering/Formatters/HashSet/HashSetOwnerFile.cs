@@ -17,7 +17,18 @@ internal static class HashSetOwnerFile
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
-        EnumerableOwnerTemplate.Render(set, fact, operations, Spec, nonEmptyRawHeaderBytes: sizeof(int));
+        EnumerableOwnerTemplate.Render(set, fact, operations, Spec, nonEmptyRawHeaderBytes: sizeof(int), directRawWrite: WriteDirect);
+
+    /// <summary>Writes a nonempty or empty raw set to its fixed destination without copying writer state.</summary>
+    private static void WriteDirect(EnumerableOwnerContext c)
+    {
+        var w = c.W;
+        w.Line("if (writer.Owner is null && input is not null)");
+        w.Open();
+        WriteRaw(c, "writer", "input");
+        w.Line("return;");
+        w.Close();
+    }
 
     private static void Write(EnumerableOwnerContext c)
     {
@@ -27,8 +38,12 @@ internal static class HashSetOwnerFile
             c.CountedWrite("value");
             return;
         }
-        c.W.Line("global::LuminPack.Code.LuminPackMarshal." + (c.Supports("SmallHashSetWrite") ? "WriteSmallHashSetRaw" : "WriteHashSetRaw") + "(ref operationState, value);");
+        WriteRaw(c, "operationState", "value");
     }
+
+    private static void WriteRaw(EnumerableOwnerContext c, string state, string value) =>
+        c.W.Line("global::LuminPack.Code.LuminPackMarshal." + (c.Supports("SmallHashSetWrite") ? "WriteSmallHashSetRaw" : "WriteHashSetRaw") +
+            "(ref " + state + ", " + value + ");");
 
     private static void Read(EnumerableOwnerContext c)
     {

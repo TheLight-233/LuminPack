@@ -493,9 +493,10 @@ internal static class EnumerableOwnerTemplate
     /// <param name="spec">The family algorithms.</param>
     /// <param name="nonEmptyRawHeaderBytes">The complete header width of a measurable nonempty raw collection, or zero.</param>
     /// <param name="inlineRawRead">Whether to inline binary reads of direct raw elements.</param>
+    /// <param name="directRawWrite">The raw family's direct write probe before falling back to isolated state.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations, EnumerableOwnerSpec spec,
-        int nonEmptyRawHeaderBytes = 0, bool inlineRawRead = false)
+        int nonEmptyRawHeaderBytes = 0, bool inlineRawRead = false, Action<EnumerableOwnerContext>? directRawWrite = null)
     {
         using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
@@ -598,6 +599,16 @@ internal static class EnumerableOwnerTemplate
                     if (text)
                         w.Line("    where TLuminProfile : struct, " + options);
                     w.Open();
+                    if (measureRaw && directRawWrite != null)
+                    {
+                        directRawWrite(context);
+                        w.Line("WriteFallback(ref writer, input);");
+                        w.Close();
+                        w.Blank();
+                        w.Line(w.MethodImpl("NoInlining"));
+                        w.Line("private static void WriteFallback(scoped ref " + writer + " writer, " + sequence + " input)");
+                        w.Open();
+                    }
                     w.Line(writer + " operationState = default;");
                     w.Line("writer.CopyTo(ref operationState);");
                     w.Line("var value = input;");
