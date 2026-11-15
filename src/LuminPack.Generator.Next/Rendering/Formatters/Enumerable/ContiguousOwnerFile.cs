@@ -602,7 +602,11 @@ internal static class ContiguousOwnerFile
             if (json)
             {
                 w.Line("reader.Read<TLuminProfile>();");
-                w.Line(FormatterElementEmitter.Owner(set, element) + ".Read<TLuminProfile>(ref reader, ref " + slot + ");");
+                if (shape == ContiguousShape.ArraySegment && element.Definition == FormatterDefinitions.Scalar &&
+                    element.Underlying == null && GenericFormatterReuse.Real(element.Type) is "int" or "long")
+                    w.Line(slot + " = reader.Read<" + element.Type + ", TLuminProfile>();");
+                else
+                    w.Line(FormatterElementEmitter.Owner(set, element) + ".Read<TLuminProfile>(ref reader, ref " + slot + ");");
             }
             else
                 FormatterElementEmitter.Read(w, set, element, slot);
