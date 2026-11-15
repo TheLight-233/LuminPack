@@ -19,7 +19,7 @@ internal static class QueueOwnerFile
     /// <param name="operations">The operations requested for this owner.</param>
     /// <returns>The complete source.</returns>
     internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations) =>
-        EnumerableOwnerTemplate.Render(set, fact, operations, Spec);
+        EnumerableOwnerTemplate.Render(set, fact, operations, Spec, nonEmptyRawHeaderBytes: 4 * sizeof(int));
 
     /// <summary>Sizes a fresh queue from the structural hint and clears a reused queue before its element loop.</summary>
     /// <param name="c">The queue owner's JSON read context.</param>

@@ -491,8 +491,10 @@ internal static class EnumerableOwnerTemplate
     /// <param name="fact">The closed sequence owner.</param>
     /// <param name="operations">The operations requested for this owner.</param>
     /// <param name="spec">The family algorithms.</param>
+    /// <param name="nonEmptyRawHeaderBytes">The complete header width of a measurable nonempty raw collection, or zero.</param>
     /// <returns>The complete source.</returns>
-    internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations, EnumerableOwnerSpec spec)
+    internal static string Render(SharedFormatterSet set, SequenceOwnerFact fact, GeneratedOperations operations, EnumerableOwnerSpec spec,
+        int nonEmptyRawHeaderBytes = 0)
     {
         using var w = new CodeWriter(set.AvailableAliases);
         string serializer = w.A("LuminPackSerializer");
@@ -521,6 +523,7 @@ internal static class EnumerableOwnerTemplate
         string owner = "Binary_" + extension + "_" + type;
         // A string element needs the profile, so its binary roots are generic in it.
         bool text = scalar == "string" || payload != null || fact.ForwardedType != null;
+        bool measureRaw = !text && nonEmptyRawHeaderBytes != 0;
         string minimum = fact.ForwardedType != null ? (fact.Family.ContiguousElements && set.FindFormatter(scalar)?.RawCollection == true ?
             memory + ".SizeOf<" + scalar + ">()" : fact.Family.ContiguousElements && set.FindFormatter(scalar)?.Layout != null ? "0" :
             FormatterElementEmitter.Minimum(set.FindFormatter(scalar) ?? new FormatterModel(scalar, FormatterDefinitions.PayloadReference))) :
@@ -552,6 +555,21 @@ internal static class EnumerableOwnerTemplate
                     w.Line("    scoped in " + sequence + " input)");
                     w.Line("    where TLuminProfile : struct, " + options + " => " + roots + ".RootWrite" + (text ? "<TLuminProfile>" : "") + "(ref writer, input);");
                     w.Blank();
+                    if (measureRaw)
+                    {
+                        w.Line(preserve);
+                        w.Line(inline);
+                        w.Line("internal static void MeasureRecord_" + type + "<TLuminProfile>(");
+                        w.Line("    scoped ref global::LuminPack.Core.LuminPackEvaluator evaluator, scoped ref " + sequence + " value)");
+                        w.Line("    where TLuminProfile : struct, " + options);
+                        w.Open();
+                        w.Line("int count = value?.Count ?? 0;");
+                        string header = nonEmptyRawHeaderBytes == 4 ? "sizeof(int)" :
+                            "(count == 0 ? sizeof(int) : " + nonEmptyRawHeaderBytes.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")";
+                        w.Line("evaluator.Add(checked(" + header + " + count * " + memory + ".SizeOf<" + scalar + ">()));");
+                        w.Close();
+                        w.Blank();
+                    }
                     if (spec.CompressEntries)
                     {
                         w.Line(preserve);
@@ -572,7 +590,7 @@ internal static class EnumerableOwnerTemplate
                     break;
                 case FormatterSection.Roots:
                     w.Line(preserve);
-                    w.Line(w.MethodImpl("NoInlining"));
+                    w.Line(measureRaw ? inline : w.MethodImpl("NoInlining"));
                     w.Line("internal static void RootWrite" + (text ? "<TLuminProfile>" : "") + "(");
                     w.Line("    scoped ref " + writer + " writer,");
                     w.Line("    " + sequence + " input)" + (text ? "" : ""));
