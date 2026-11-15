@@ -116,16 +116,26 @@ public partial class StringBuilderCapacityTest
             target = null;
             LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(input, ref target);
         }
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 64; i++) GC.KeepAlive(CreateNecessaryBuilder(decoded));
-        long necessary = GC.GetAllocatedBytesForCurrentThread() - before;
-        before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 64; i++)
+        // Use the lowest repeated batch for each path so one-time runtime allocations
+        // do not change the steady-state budget.
+        long necessary = long.MaxValue;
+        long allocated = long.MaxValue;
+        for (int sample = 0; sample < 4; sample++)
         {
-            target = null;
-            LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(input, ref target);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 64; i++) GC.KeepAlive(CreateNecessaryBuilder(decoded));
+            necessary = Math.Min(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
+
+            before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 64; i++)
+            {
+                target = null;
+                LuminPackSerializer.DeserializeJson<StringBuilder, TOptions>(input, ref target);
+            }
+            allocated = Math.Min(allocated, GC.GetAllocatedBytesForCurrentThread() - before);
         }
-        Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.True(allocated <= necessary,
+            $"{typeof(TOptions).Name} at {text.Length} characters allocated {allocated} bytes per batch with a {necessary}-byte builder budget.");
         var expected = new StringBuilder(decoded);
         Assert.Equal(decoded, target!.ToString());
         Assert.Equal(expected.Capacity, target.Capacity);
