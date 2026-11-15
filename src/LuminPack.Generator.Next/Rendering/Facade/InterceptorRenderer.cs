@@ -505,9 +505,10 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
             : "                    " + marshal + "." + (shape.Kind == EntryKind.ExactSmallHashSet ? "WriteSmallHashSetRaw" : "WriteHashSetRaw") +
               "(ref writer, exact);\n";
         return """
-                        if (value is not null && value.GetType() == typeof(%IMPLEMENTATION%))
+                        var selectedValue = value;
+                        if (selectedValue is not null && selectedValue.GetType() == typeof(%IMPLEMENTATION%))
                         {
-                            var exact = Unsafe.As<%IMPLEMENTATION%>(value);
+                            var exact = Unsafe.As<%IMPLEMENTATION%>(selectedValue);
                             int directLength = checked(sizeof(int) + exact.Count * Unsafe.SizeOf<%ELEMENT%>());
                             var directBuffer = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<byte>(directLength);
                             var directSpan = directBuffer.AsSpan();
@@ -517,7 +518,7 @@ using ILuminPackOptions = global::LuminPack.Option.ILuminPackOptions;
                             if (writer.Position == directLength)
                                 return directBuffer;
                         }
-                        return SerializeInterfaceSlow(in value);
+                        return SerializeInterfaceSlow(in selectedValue);
 
                         [MethodImpl(MethodImplOptions.NoInlining)]
                         static byte[] SerializeInterfaceSlow(in %TYPE% value)
