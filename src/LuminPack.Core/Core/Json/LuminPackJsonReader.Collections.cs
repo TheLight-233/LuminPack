@@ -76,8 +76,8 @@ namespace LuminPack.Core
 
                 if (token is JsonTokenType.ObjectStart or JsonTokenType.ArrayStart)
                     SkipContainer<TOptions>();
-                else if (token is not (JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null))
-                    Skip<TOptions>();
+                else
+                    SkipScalarToken<TOptions>();
 
                 count = checked(count + 1);
             }
