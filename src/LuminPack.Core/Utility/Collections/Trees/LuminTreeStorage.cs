@@ -148,11 +148,11 @@ public static partial class LuminTreeStorage
                     set.Add(item);
                 }
             }
-            catch
+            catch (Exception exception)
             {
                 if (!streaming)
                     AddPrefix();
-                throw;
+                LuminPackExceptionHelper.Rethrow(exception);
             }
 
             if (!streaming && count != 0)

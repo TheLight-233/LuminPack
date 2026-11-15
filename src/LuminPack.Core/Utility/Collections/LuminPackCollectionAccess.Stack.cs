@@ -129,10 +129,10 @@ public static partial class LuminPackCollectionAccess
             slots.Clear();
             reader.ReadStrings<TOptions>(slots);
         }
-        catch
+        catch (Exception exception)
         {
             slots.Clear();
-            throw;
+            LuminPackExceptionHelper.Rethrow(exception);
         }
         PublishStackSize(stack, count);
         return true;

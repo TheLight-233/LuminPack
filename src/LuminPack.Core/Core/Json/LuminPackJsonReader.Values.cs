@@ -456,10 +456,18 @@ namespace LuminPack.Core
             JsonTokenType token;
             switch (head)
             {
-                case '{': token = JsonTokenType.ObjectStart; break;
-                case '}': token = JsonTokenType.ObjectEnd; break;
-                case '[': token = JsonTokenType.ArrayStart; break;
-                case ']': token = JsonTokenType.ArrayEnd; break;
+                case '{':
+                    token = JsonTokenType.ObjectStart;
+                    break;
+                case '}':
+                    token = JsonTokenType.ObjectEnd;
+                    break;
+                case '[':
+                    token = JsonTokenType.ArrayStart;
+                    break;
+                case ']':
+                    token = JsonTokenType.ArrayEnd;
+                    break;
                 default: return false;
             }
 
