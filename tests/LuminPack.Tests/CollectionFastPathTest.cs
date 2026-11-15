@@ -201,7 +201,7 @@ public class CollectionFastPathTest
         writer = new LuminPackJsonWriter(output, default!, 12);
         LuminPackSerializer.SerializeJson<Memory<int>, LuminPackUtf8LengthOptions>(ref writer, memory);
         writer.FlushToBufferWriter();
-        Assert.Equal(prefix + "7]", output.Text);
+        Assert.Equal(prefix + "1234]", output.Text);
 
         output = new MutatingJsonOutput(() => segmentItems[1] = 1234);
         writer = new LuminPackJsonWriter(output, default!, 12);
