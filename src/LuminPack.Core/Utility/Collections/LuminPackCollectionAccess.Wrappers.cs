@@ -153,7 +153,20 @@ public static partial class LuminPackCollectionAccess
             (typeof(T) != typeof(int) && typeof(T) != typeof(long)))
             return false;
 
-        object? storage = GetWrapperStorage(wrapper);
+        if (wrapper is ReadOnlyCollectionBuilder<T> builder)
+        {
+            int builderItemsOffset = LuminCollectionLayouts.BuilderItems;
+            int builderVersionOffset = BuilderVersion<T>.Offset;
+            if ((builderItemsOffset | builderVersionOffset) < 0)
+                return false;
+
+            ref int builderVersion = ref LuminFieldLayout.Field<int>(builder, builderVersionOffset);
+            ref var builderItems = ref LuminFieldLayout.Field<T[]>(builder, builderItemsOffset);
+            WriteWrappedIntegerStorage<TOptions, T>(ref writer, ref builderItems, builder.Count, ref builderVersion, builderVersion);
+            return true;
+        }
+
+        object? storage = GetSequenceStorage(wrapper);
         if (storage is T[] array)
         {
             if (typeof(T) == typeof(int))
