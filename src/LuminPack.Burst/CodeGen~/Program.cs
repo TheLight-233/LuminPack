@@ -28,7 +28,7 @@ var options = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbol
 foreach (var input in inputs)
 {
     string path = Path.Combine(coreRoot, input.File);
-    string source = File.ReadAllText(path);
+    string source = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
     builder.Append("// Core source SHA256: ").Append(input.File).Append(' ').Append(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source)))).Append('\n');
     var root = CSharpSyntaxTree.ParseText(source, options).GetRoot();
     foreach (string name in input.Methods)

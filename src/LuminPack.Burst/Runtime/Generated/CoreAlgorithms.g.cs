@@ -9,7 +9,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreAlgorithms
     {
-// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs A8302629E8908D39A536FEDD0DC1CBAEE4A5780FE1D649F66BBF71F9CCD9C1B2
+// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs A138BA75FE10D0B34692FDF201AFC9058CA25F03CA596E1A32FEAFA6AB92812A
 /// <summary>Copies at most sixteen bytes with scalar head and tail accesses inside the ranges.</summary>
 /// <param name = "destination">The valid writable range on a 64-bit target.</param>
 /// <param name = "source">The valid readable non-overlapping range.</param>
@@ -61,7 +61,7 @@ internal static void CopyShortBlock(ref byte destination, ref byte source, uint 
     Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<Vector128<byte>>(ref source));
     Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(count - 16)), Unsafe.ReadUnaligned<Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(count - 16))));
 }
-// Core source SHA256: Utility/Compression/LuminCompressor.cs 4F78C2AF76CC40350144B4EA825A6D2E209FF0D94A4A46F6E67829602889179F
+// Core source SHA256: Utility/Compression/LuminCompressor.cs A82A9E2A8CBAB67B00B6965ECDDD4BDF3CCE408C877595C6B2FD57E09C2312F5
 /// <summary>Copies match to the supplied destination.</summary>
 /// <param name = "dst">The destination receiving the result.</param>
 /// <param name = "src">The input data to process.</param>
@@ -452,7 +452,7 @@ internal static int TrailingZeroBytes(ulong v)
 {
     return BitOperations.TrailingZeroCount(v) >> 3;
 }
-// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs 403AEB347EDDA6B35CBF990E4AC457087115CBA0CE0F2501D7E5436C8D318A25
+// Core source SHA256: Cryptography/LuminChaCha20Poly1305.cs A7A7E856869DEA7BFC218F099226FD8A256AEBEEC007EF78327ECB3C739F4290
 /// <summary>
 /// XORs <paramref name = "length"/> bytes of keystream <paramref name = "key"/> into
 /// <paramref name = "src"/>, writing the result to <paramref name = "dst"/>. Uses the widest
@@ -465,12 +465,12 @@ internal static int TrailingZeroBytes(ulong v)
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static void XorKeystream(byte* dst, byte* src, byte* key, int length)
 {
+    ref byte d = ref *dst;
+    ref byte s = ref *src;
+    ref byte k = ref *key;
     int i = 0;
     if (Avx512F.IsSupported)
     {
-        ref byte d = ref Unsafe.AsRef<byte>(dst);
-        ref byte s = ref Unsafe.AsRef<byte>(src);
-        ref byte k = ref Unsafe.AsRef<byte>(key);
         for (; i + 64 <= length; i += 64)
             Vector512.StoreUnsafe(Vector512.LoadUnsafe(ref s, (nuint)i) ^ Vector512.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
         for (; i + 32 <= length; i += 32)
@@ -486,9 +486,6 @@ internal static void XorKeystream(byte* dst, byte* src, byte* key, int length)
 
     if (Avx2.IsSupported)
     {
-        ref byte d = ref Unsafe.AsRef<byte>(dst);
-        ref byte s = ref Unsafe.AsRef<byte>(src);
-        ref byte k = ref Unsafe.AsRef<byte>(key);
         for (; i + 32 <= length; i += 32)
             Vector256.StoreUnsafe(Vector256.LoadUnsafe(ref s, (nuint)i) ^ Vector256.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
         for (; i + 16 <= length; i += 16)
@@ -502,9 +499,6 @@ internal static void XorKeystream(byte* dst, byte* src, byte* key, int length)
 
     if (Vector128.IsHardwareAccelerated)
     {
-        ref byte d = ref Unsafe.AsRef<byte>(dst);
-        ref byte s = ref Unsafe.AsRef<byte>(src);
-        ref byte k = ref Unsafe.AsRef<byte>(key);
         for (; i + 16 <= length; i += 16)
             Vector128.StoreUnsafe(Vector128.LoadUnsafe(ref s, (nuint)i) ^ Vector128.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
         for (; i + 4 <= length; i += 4)
@@ -515,9 +509,6 @@ internal static void XorKeystream(byte* dst, byte* src, byte* key, int length)
     }
 
     {
-        ref byte d = ref Unsafe.AsRef<byte>(dst);
-        ref byte s = ref Unsafe.AsRef<byte>(src);
-        ref byte k = ref Unsafe.AsRef<byte>(key);
         for (; i + 4 <= length; i += 4)
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref d, unchecked((nint)(uint)(i))), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref s, unchecked((nint)(uint)(i)))) ^ Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref k, unchecked((nint)(uint)(i)))));
         for (; i < length; i++)

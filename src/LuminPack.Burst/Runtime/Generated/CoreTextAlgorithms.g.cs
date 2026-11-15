@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs 7B612F09BC490EFF0E84CB3E8F6C0BB2459503038F757B5E3E8FD27DD225A1F7
+// Core source SHA256: Utility/Text/StringSerializer.cs D7AACC13223E10F6A4471469DB52065458389E1312D8A4BCFCDCF057AD797CD7
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -256,18 +256,19 @@ internal static unsafe OperationStatus SerializeAsUtf8Slow(ReadOnlySpan<char> so
         return Utf8.FromUtf16(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
     }
 
-    fixed (char* originalInput = &MemoryMarshal.GetReference(source))
-    fixed (byte* originalOutput = &MemoryMarshal.GetReference(destination))
+    // The Burst source projector extracts this bounded fallback region.
+    fixed (char* pinnedSource = source)
     {
-        char* input = originalInput;
-        byte* output = originalOutput;
-        char* inputEnd = input + source.Length;
-        byte* outputEnd = output + destination.Length;
+        ref char input = ref MemoryMarshal.GetReference(source);
+        ref byte output = ref MemoryMarshal.GetReference(destination);
+        int inputIndex = 0;
+        int outputIndex = 0;
         OperationStatus status;
         while (true)
         {
-            // Subtract byte addresses at native width before widening; Mono otherwise retains division by one.
-            status = TranscodeToUtf8(input, (int)((long)(unchecked((nint)inputEnd - (nint)input) >> 1)), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out input, out output);
+            status = TranscodeToUtf8(ref Unsafe.Add(ref input, inputIndex), source.Length - inputIndex, ref Unsafe.Add(ref output, outputIndex), destination.Length - outputIndex, out int consumed, out int written);
+            inputIndex += consumed;
+            outputIndex += written;
             if (status == OperationStatus.Done || status == OperationStatus.DestinationTooSmall)
                 break;
             if (status == OperationStatus.NeedMoreData && !isFinalBlock)
@@ -278,7 +279,7 @@ internal static unsafe OperationStatus SerializeAsUtf8Slow(ReadOnlySpan<char> so
                 break;
             }
 
-            if ((long)unchecked((nint)outputEnd - (nint)output) < 3)
+            if (destination.Length - outputIndex < 3)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
@@ -286,77 +287,71 @@ internal static unsafe OperationStatus SerializeAsUtf8Slow(ReadOnlySpan<char> so
 
             // A malformed UTF-16 code unit consumes exactly one char. At the
             // end of a final block the only incomplete sequence is a lone high surrogate.
-            ++input;
-            output[0] = 0xEF;
-            output[1] = 0xBF;
-            output[2] = 0xBD;
-            output += 3;
+            inputIndex++;
+            Unsafe.Add(ref output, outputIndex) = 0xEF;
+            Unsafe.Add(ref output, outputIndex + 1) = 0xBF;
+            Unsafe.Add(ref output, outputIndex + 2) = 0xBD;
+            outputIndex += 3;
         }
 
-        charsRead = (int)((long)(unchecked((nint)input - (nint)originalInput) >> 1));
-        bytesWritten = (int)((long)unchecked((nint)output - (nint)originalOutput));
+        charsRead = inputIndex;
+        bytesWritten = outputIndex;
         return status;
     }
 }
 internal static unsafe OperationStatus DeserializeFromUtf8(ReadOnlySpan<byte> source, Span<char> destination, out int bytesRead, out int charsWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)
 {
-    fixed (byte* pSource = &MemoryMarshal.GetReference(source))
-    fixed (char* pDest = &MemoryMarshal.GetReference(destination))
+    ref byte input = ref MemoryMarshal.GetReference(source);
+    ref char output = ref MemoryMarshal.GetReference(destination);
+    int inputIndex = 0;
+    int outputIndex = 0;
+    OperationStatus status;
+    while (true)
     {
-        byte* pInput = pSource;
-        char* pOutput = pDest;
-        byte* inputEnd = pSource + source.Length;
-        char* outputEnd = pDest + destination.Length;
-        OperationStatus status;
-        while (true)
+        status = TranscodeToUtf16(ref Unsafe.Add(ref input, inputIndex), source.Length - inputIndex, ref Unsafe.Add(ref output, outputIndex), destination.Length - outputIndex, out int consumed, out int written);
+        inputIndex += consumed;
+        outputIndex += written;
+        if (status is OperationStatus.Done or OperationStatus.DestinationTooSmall)
+            break;
+        if (status == OperationStatus.NeedMoreData && !isFinalBlock)
+            break;
+        if (!replaceInvalidSequences)
         {
-            status = TranscodeToUtf16(pInput, (int)((long)unchecked((nint)inputEnd - (nint)pInput)), pOutput, (int)((long)(unchecked((nint)outputEnd - (nint)pOutput) >> 1)), out byte* pInputRemaining, out char* pOutputRemaining);
-            pInput = pInputRemaining;
-            pOutput = pOutputRemaining;
-            if (status is OperationStatus.Done or OperationStatus.DestinationTooSmall)
-                break;
-            if (status == OperationStatus.NeedMoreData && !isFinalBlock)
-                break;
-            if (!replaceInvalidSequences)
-            {
-                status = OperationStatus.InvalidData;
-                break;
-            }
-
-            if (pOutput == outputEnd)
-            {
-                status = OperationStatus.DestinationTooSmall;
-                break;
-            }
-
-            int invalidLength = status == OperationStatus.NeedMoreData ? (int)((long)unchecked((nint)inputEnd - (nint)pInput)) : GetInvalidUtf8SequenceLength(pInput, (int)((long)unchecked((nint)inputEnd - (nint)pInput)));
-            pInput += invalidLength;
-            *pOutput++ = '\uFFFD';
+            status = OperationStatus.InvalidData;
+            break;
         }
 
-        bytesRead = (int)((long)unchecked((nint)pInput - (nint)pSource));
-        charsWritten = (int)((long)(unchecked((nint)pOutput - (nint)pDest) >> 1));
-        return status;
+        if (outputIndex == destination.Length)
+        {
+            status = OperationStatus.DestinationTooSmall;
+            break;
+        }
+
+        int invalidLength = status == OperationStatus.NeedMoreData ? source.Length - inputIndex : GetInvalidUtf8SequenceLength(ref Unsafe.Add(ref input, inputIndex), source.Length - inputIndex);
+        inputIndex += invalidLength;
+        Unsafe.Add(ref output, outputIndex++) = '\uFFFD';
     }
+
+    bytesRead = inputIndex;
+    charsWritten = outputIndex;
+    return status;
 }
-internal static unsafe OperationStatus TranscodeToUtf8(char* pInputBuffer, int inputLength, byte* pOutputBuffer, int outputBytesRemaining, out char* pInputBufferRemaining, out byte* pOutputBufferRemaining)
+internal static unsafe OperationStatus TranscodeToUtf8(ref char input, int inputLength, ref byte output, int outputLength, out int charsRead, out int bytesWritten)
 {
-    char* input = pInputBuffer;
-    byte* output = pOutputBuffer;
-    char* inputEnd = input + inputLength;
-    byte* outputEnd = output + outputBytesRemaining;
-    if (BitConverter.IsLittleEndian && inputLength >= 32 && outputBytesRemaining >= 24)
+    int inputIndex = 0;
+    int outputIndex = 0;
+    if (BitConverter.IsLittleEndian && inputLength >= 32 && outputLength >= 24)
     {
         // Long all-ASCII prefix: branch once, then copy 32 chars at a time.
         // A short or mixed string stays on the low-overhead portable path.
-        if (Sse2.IsSupported && inputLength >= 128 && outputBytesRemaining >= 128)
+        if (Sse2.IsSupported && inputLength >= 128 && outputLength >= 128)
         {
-            Vector128<ushort> first = KernelVectorMemory.Read128<ushort>(input);
+            Vector128<ushort> first = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
             Vector128<ushort> mask = Vector128.Create((ushort)0xFF80);
             Vector128<short> initial = Sse2.CompareEqual(Sse2.And(first, mask).AsInt16(), Vector128<short>.Zero);
             if (Sse2.MoveMask(initial.AsByte()) == 0xFFFF)
             {
-                EncodeAsciiRun(ref input, ref output, inputEnd, outputEnd);
+                EncodeAsciiRun(ref input, ref output, inputLength, outputLength, ref inputIndex, ref outputIndex);
             }
         }
 
@@ -365,19 +360,19 @@ internal static unsafe OperationStatus TranscodeToUtf8(char* pInputBuffer, int i
         // not for every character in general text.
         if (Ssse3.IsSupported)
         {
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
+            while ((inputLength - inputIndex) >= 32 && (outputLength - outputIndex) >= 24)
             {
-                uint lead = *input;
+                uint lead = Unsafe.Add(ref input, inputIndex);
                 if (lead >= 0x80 && (lead < 0x800 || IsBmp3(lead)))
                 {
-                    if (TryEncodeVectorRun(ref input, ref output, inputEnd, outputEnd, lead))
+                    if (TryEncodeVectorRun(ref input, ref output, inputLength, outputLength, ref inputIndex, ref outputIndex, lead))
                     {
                         // Sparse ASCII delimiter between large CJK runs.
                         // Only consume it here when the next vector-friendly
                         // run is plausibly of the same 3-byte class.
-                        if ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 33 && (long)unchecked((nint)outputEnd - (nint)output) >= 25 && *input < 0x80 && IsBmp3(input[1]))
+                        if ((inputLength - inputIndex) >= 33 && (outputLength - outputIndex) >= 25 && Unsafe.Add(ref input, inputIndex) < 0x80 && IsBmp3(Unsafe.Add(ref input, inputIndex + 1)))
                         {
-                            *output++ = (byte)*input++;
+                            Unsafe.Add(ref output, outputIndex++) = (byte)Unsafe.Add(ref input, inputIndex++);
                             continue;
                         }
                     }
@@ -394,17 +389,24 @@ internal static unsafe OperationStatus TranscodeToUtf8(char* pInputBuffer, int i
     // that tail to the native bounded transcoder. `false, false` preserves
     // this low-level method's InvalidData / NeedMoreData behavior; the
     // outer SerializeAsUtf8 loop performs replacement if requested.
-    if (input != pInputBuffer && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 64)
+    if (inputIndex != 0 && (inputLength - inputIndex) >= 64)
     {
-        OperationStatus nativeStatus = Utf8.FromUtf16(new ReadOnlySpan<char>(input, (int)((long)(unchecked((nint)inputEnd - (nint)input) >> 1))), new Span<byte>(output, (int)((long)unchecked((nint)outputEnd - (nint)output))), out int nativeChars, out int nativeBytes, replaceInvalidSequences: false, isFinalBlock: false);
-        pInputBufferRemaining = input + nativeChars;
-        pOutputBufferRemaining = output + nativeBytes;
-        return nativeStatus;
+        // Preserve the Burst projection's native span construction.
+        fixed (char* inputPointer = &input)
+        fixed (byte* outputPointer = &output)
+        {
+            var remainingInput = new ReadOnlySpan<char>(inputPointer + inputIndex, inputLength - inputIndex);
+            var remainingOutput = new Span<byte>(outputPointer + outputIndex, outputLength - outputIndex);
+            OperationStatus nativeStatus = Utf8.FromUtf16(remainingInput, remainingOutput, out int nativeChars, out int nativeBytes, replaceInvalidSequences: false, isFinalBlock: false);
+            charsRead = inputIndex + nativeChars;
+            bytesWritten = outputIndex + nativeBytes;
+            return nativeStatus;
+        }
     }
 
-    OperationStatus status = TranscodeToUtf8Scalar(input, (int)((long)(unchecked((nint)inputEnd - (nint)input) >> 1)), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out char* remainingInput, out byte* remainingOutput);
-    pInputBufferRemaining = remainingInput;
-    pOutputBufferRemaining = remainingOutput;
+    OperationStatus status = TranscodeToUtf8Scalar(ref Unsafe.Add(ref input, inputIndex), inputLength - inputIndex, ref Unsafe.Add(ref output, outputIndex), outputLength - outputIndex, out int consumed, out int written);
+    charsRead = inputIndex + consumed;
+    bytesWritten = outputIndex + written;
     return status;
 }
 /// <summary>
@@ -414,93 +416,93 @@ internal static unsafe OperationStatus TranscodeToUtf8(char* pInputBuffer, int i
 /// </summary>
 /// <param name = "input">The input data to process.</param>
 /// <param name = "output">The destination receiving the result.</param>
-/// <param name = "inputEnd">The input end used by this operation.</param>
-/// <param name = "outputEnd">The output end used by this operation.</param>
+/// <param name = "inputLength">The complete input character count.</param>
+/// <param name = "outputLength">The complete output capacity in bytes.</param>
+/// <param name = "inputIndex">The number of consumed characters.</param>
+/// <param name = "outputIndex">The number of written bytes.</param>
 [MethodImpl(MethodImplOptions.NoInlining)]
-internal static unsafe void EncodeAsciiRun(ref char* input, ref byte* output, char* inputEnd, byte* outputEnd)
+internal static unsafe void EncodeAsciiRun(ref char input, ref byte output, int inputLength, int outputLength, ref int inputIndex, ref int outputIndex)
 {
     ;
     if (Avx2.IsSupported)
     {
-        while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
+        while ((inputLength - inputIndex) >= 32 && (outputLength - outputIndex) >= 32)
         {
-            var a = Vector256.Load((ushort*)input);
-            var b = Vector256.Load((ushort*)(input + 16));
+            var a = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
+            var b = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex + 16)));
             if (!Vector256.EqualsAll((a | b) & Vector256.Create((ushort)0xFF80), Vector256<ushort>.Zero))
                 break;
             var packed = Avx2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16());
-            Avx2.Permute4x64(packed.AsUInt64(), 0xD8).AsByte().Store(output);
-            input += 32;
-            output += 32;
+            Avx2.Permute4x64(packed.AsUInt64(), 0xD8).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+            inputIndex += 32;
+            outputIndex += 32;
         }
     }
 
     Vector128<ushort> nonAsciiMask = Vector128.Create((ushort)0xFF80);
     Vector128<short> zero = Vector128<short>.Zero;
-    while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
+    while ((inputLength - inputIndex) >= 32 && (outputLength - outputIndex) >= 32)
     {
-        Vector128<ushort> a = KernelVectorMemory.Read128<ushort>(input);
-        Vector128<ushort> b = KernelVectorMemory.Read128<ushort>(input + 8);
-        Vector128<ushort> c = KernelVectorMemory.Read128<ushort>(input + 16);
-        Vector128<ushort> d = KernelVectorMemory.Read128<ushort>(input + 24);
+        Vector128<ushort> a = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
+        Vector128<ushort> b = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex + 8)));
+        Vector128<ushort> c = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex + 16)));
+        Vector128<ushort> d = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex + 24)));
         Vector128<ushort> upper = Sse2.And(Sse2.Or(Sse2.Or(a, b), Sse2.Or(c, d)), nonAsciiMask);
         if (Sse2.MoveMask(Sse2.CompareEqual(upper.AsInt16(), zero).AsByte()) != 0xFFFF)
             break;
-        Unsafe.WriteUnaligned(output, Sse2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()));
-        Unsafe.WriteUnaligned(output + 16, Sse2.PackUnsignedSaturate(c.AsInt16(), d.AsInt16()));
-        input += 32;
-        output += 32;
+        Sse2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+        Sse2.PackUnsignedSaturate(c.AsInt16(), d.AsInt16()).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex + 16));
+        inputIndex += 32;
+        outputIndex += 32;
     }
 
-    while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
+    while ((inputLength - inputIndex) >= 16 && (outputLength - outputIndex) >= 16)
     {
-        Vector128<ushort> a = KernelVectorMemory.Read128<ushort>(input);
-        Vector128<ushort> b = KernelVectorMemory.Read128<ushort>(input + 8);
+        Vector128<ushort> a = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
+        Vector128<ushort> b = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex + 8)));
         Vector128<ushort> upper = Sse2.And(Sse2.Or(a, b), nonAsciiMask);
         if (Sse2.MoveMask(Sse2.CompareEqual(upper.AsInt16(), zero).AsByte()) != 0xFFFF)
             break;
-        Unsafe.WriteUnaligned(output, Sse2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()));
-        input += 16;
-        output += 16;
+        Sse2.PackUnsignedSaturate(a.AsInt16(), b.AsInt16()).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+        inputIndex += 16;
+        outputIndex += 16;
     }
 }
-internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer, int inputLength, byte* pOutputBuffer, int outputBytesRemaining, out char* pInputBufferRemaining, out byte* pOutputBufferRemaining)
+internal static unsafe OperationStatus TranscodeToUtf8Scalar(ref char input, int inputLength, ref byte output, int outputLength, out int charsRead, out int bytesWritten)
 {
-    char* input = pInputBuffer;
-    byte* output = pOutputBuffer;
-    char* inputEnd = input + inputLength;
-    byte* outputEnd = output + outputBytesRemaining;
+    int inputIndex = 0;
+    int outputIndex = 0;
     OperationStatus status = OperationStatus.Done;
     bool littleEndian = BitConverter.IsLittleEndian;
-    while (input < inputEnd)
+    while (inputIndex < inputLength)
     {
-        uint c = *input;
+        uint c = Unsafe.Add(ref input, inputIndex);
         if (c < 0x80)
         {
             // ASCII SWAR: 4 UTF-16 code units -> one exact 32-bit write.
             // This is the portable fast path for netstandard2.1 as well.
-            if (littleEndian && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 4 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
+            if (littleEndian && (inputLength - inputIndex) >= 4 && (outputLength - outputIndex) >= 4)
             {
                 // IL2CPP permits typed unaligned values only up to four bytes on 32-bit.
-                ulong four = IntPtr.Size == 8 ? Unsafe.ReadUnaligned<ulong>(input) : Unsafe.ReadUnaligned<uint>(input) | ((ulong)Unsafe.ReadUnaligned<uint>(input + 2) << 32);
+                ulong four = IntPtr.Size == 8 ? Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref input, inputIndex))) : Unsafe.ReadUnaligned<uint>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref input, inputIndex))) | ((ulong)Unsafe.ReadUnaligned<uint>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref input, inputIndex + 2))) << 32);
                 if ((four & 0xFF80FF80FF80FF80UL) == 0)
                 {
                     uint ascii = (uint)(four & 0xFFUL) | (uint)((four >> 8) & 0xFF00UL) | (uint)((four >> 16) & 0xFF0000UL) | (uint)((four >> 24) & 0xFF000000UL);
-                    Unsafe.WriteUnaligned(output, ascii);
-                    input += 4;
-                    output += 4;
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex), ascii);
+                    inputIndex += 4;
+                    outputIndex += 4;
                     continue;
                 }
             }
 
-            if (output == outputEnd)
+            if (outputIndex == outputLength)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
             }
 
-            *output++ = (byte)c;
-            ++input;
+            Unsafe.Add(ref output, outputIndex++) = (byte)c;
+            ++inputIndex;
             continue;
         }
 
@@ -508,92 +510,92 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
         {
             // Two adjacent Latin / Cyrillic / Arabic UTF-16 code units can be
             // emitted with a single 32-bit store. No unrelated CJK checks here.
-            if (littleEndian && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
+            if (littleEndian && (inputLength - inputIndex) >= 2 && (outputLength - outputIndex) >= 4)
             {
-                uint next = input[1];
+                uint next = Unsafe.Add(ref input, inputIndex + 1);
                 if (next >= 0x80 && next < 0x800)
                 {
                     uint bytes = (0xC0U | (c >> 6)) | ((0x80U | (c & 0x3FU)) << 8) | ((0xC0U | (next >> 6)) << 16) | ((0x80U | (next & 0x3FU)) << 24);
-                    Unsafe.WriteUnaligned(output, bytes);
-                    input += 2;
-                    output += 4;
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex), bytes);
+                    inputIndex += 2;
+                    outputIndex += 4;
                     continue;
                 }
             }
 
-            if ((long)unchecked((nint)outputEnd - (nint)output) < 2)
+            if ((outputLength - outputIndex) < 2)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
             }
 
-            output[0] = (byte)(0xC0 | (c >> 6));
-            output[1] = (byte)(0x80 | (c & 63));
-            output += 2;
-            ++input;
+            Unsafe.Add(ref output, outputIndex) = (byte)(0xC0 | (c >> 6));
+            Unsafe.Add(ref output, outputIndex + 1) = (byte)(0x80 | (c & 63));
+            outputIndex += 2;
+            ++inputIndex;
             continue;
         }
 
         if (IsBmp3(c))
         {
             // Two BMP characters -> exactly 6 UTF-8 bytes (4 + 2 stores).
-            if (littleEndian && (long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 6)
+            if (littleEndian && (inputLength - inputIndex) >= 2 && (outputLength - outputIndex) >= 6)
             {
-                uint next = input[1];
+                uint next = Unsafe.Add(ref input, inputIndex + 1);
                 if (IsBmp3(next))
                 {
                     uint firstFour = (0xE0U | (c >> 12)) | ((0x80U | ((c >> 6) & 0x3FU)) << 8) | ((0x80U | (c & 0x3FU)) << 16) | ((0xE0U | (next >> 12)) << 24);
                     ushort lastTwo = (ushort)((0x80U | ((next >> 6) & 0x3FU)) | ((0x80U | (next & 0x3FU)) << 8));
-                    Unsafe.WriteUnaligned(output, firstFour);
-                    Unsafe.WriteUnaligned(output + 4, lastTwo);
-                    input += 2;
-                    output += 6;
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex), firstFour);
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex + 4), lastTwo);
+                    inputIndex += 2;
+                    outputIndex += 6;
                     continue;
                 }
             }
 
-            if ((long)unchecked((nint)outputEnd - (nint)output) < 3)
+            if ((outputLength - outputIndex) < 3)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
             }
 
-            output[0] = (byte)(0xE0 | (c >> 12));
-            output[1] = (byte)(0x80 | ((c >> 6) & 63));
-            output[2] = (byte)(0x80 | (c & 63));
-            output += 3;
-            ++input;
+            Unsafe.Add(ref output, outputIndex) = (byte)(0xE0 | (c >> 12));
+            Unsafe.Add(ref output, outputIndex + 1) = (byte)(0x80 | ((c >> 6) & 63));
+            Unsafe.Add(ref output, outputIndex + 2) = (byte)(0x80 | (c & 63));
+            outputIndex += 3;
+            ++inputIndex;
             continue;
         }
 
         if (c <= 0xDBFF) // high surrogate
         {
-            if ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) < 2)
+            if ((inputLength - inputIndex) < 2)
             {
                 status = OperationStatus.NeedMoreData;
                 break;
             }
 
-            uint low = input[1];
+            uint low = Unsafe.Add(ref input, inputIndex + 1);
             if (low < 0xDC00 || low > 0xDFFF)
             {
                 status = OperationStatus.InvalidData;
                 break;
             }
 
-            if ((long)unchecked((nint)outputEnd - (nint)output) < 4)
+            if ((outputLength - outputIndex) < 4)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
             }
 
             uint scalar = 0x10000 + ((c - 0xD800) << 10) + (low - 0xDC00);
-            output[0] = (byte)(0xF0 | (scalar >> 18));
-            output[1] = (byte)(0x80 | ((scalar >> 12) & 63));
-            output[2] = (byte)(0x80 | ((scalar >> 6) & 63));
-            output[3] = (byte)(0x80 | (scalar & 63));
-            input += 2;
-            output += 4;
+            Unsafe.Add(ref output, outputIndex) = (byte)(0xF0 | (scalar >> 18));
+            Unsafe.Add(ref output, outputIndex + 1) = (byte)(0x80 | ((scalar >> 12) & 63));
+            Unsafe.Add(ref output, outputIndex + 2) = (byte)(0x80 | ((scalar >> 6) & 63));
+            Unsafe.Add(ref output, outputIndex + 3) = (byte)(0x80 | (scalar & 63));
+            inputIndex += 2;
+            outputIndex += 4;
         }
         else // isolated low surrogate
         {
@@ -602,101 +604,101 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
         }
     }
 
-    pInputBufferRemaining = input;
-    pOutputBufferRemaining = output;
+    charsRead = inputIndex;
+    bytesWritten = outputIndex;
     return status;
 }
-internal static unsafe OperationStatus TranscodeToUtf16(byte* pInputBuffer, int inputLength, char* pOutputBuffer, int outputCharsRemaining, out byte* pInputBufferRemaining, out char* pOutputBufferRemaining)
+internal static unsafe OperationStatus TranscodeToUtf16(ref byte input, int inputLength, ref char output, int outputLength, out int bytesRead, out int charsWritten)
 {
-    byte* inputEnd = pInputBuffer + inputLength;
-    char* outputEnd = pOutputBuffer + outputCharsRemaining;
-    while (pInputBuffer < inputEnd)
+    int inputIndex = 0;
+    int outputIndex = 0;
+    while (inputIndex < inputLength)
     {
-        pInputBufferRemaining = pInputBuffer;
-        pOutputBufferRemaining = pOutputBuffer;
-        uint firstByte = *pInputBuffer;
+        bytesRead = inputIndex;
+        charsWritten = outputIndex;
+        uint firstByte = Unsafe.Add(ref input, inputIndex);
         if (firstByte < 0x80)
         {
-            if (pOutputBuffer == outputEnd)
+            if (outputIndex == outputLength)
                 return Complete(OperationStatus.DestinationTooSmall);
-            *pOutputBuffer = (char)firstByte;
-            pInputBuffer++;
-            pOutputBuffer++;
+            Unsafe.Add(ref output, outputIndex) = (char)firstByte;
+            inputIndex++;
+            outputIndex++;
             continue;
         }
 
         // Only C2..DF are valid two-byte leaders. C0/C1 are overlong.
         if (firstByte is >= 0xC2 and <= 0xDF)
         {
-            if (pInputBuffer + 2 > inputEnd)
+            if (inputLength - inputIndex < 2)
                 return Complete(OperationStatus.NeedMoreData);
-            uint secondByte = pInputBuffer[1];
+            uint secondByte = Unsafe.Add(ref input, inputIndex + 1);
             if (!IsUtf8ContinuationByte(secondByte))
                 return Complete(OperationStatus.InvalidData);
-            if (pOutputBuffer == outputEnd)
+            if (outputIndex == outputLength)
                 return Complete(OperationStatus.DestinationTooSmall);
             uint codePoint = ((firstByte & 0x1F) << 6) | (secondByte & 0x3F);
-            *pOutputBuffer = (char)codePoint;
-            pInputBuffer += 2;
-            pOutputBuffer++;
+            Unsafe.Add(ref output, outputIndex) = (char)codePoint;
+            inputIndex += 2;
+            outputIndex++;
             continue;
         }
 
         if (firstByte is >= 0xE0 and <= 0xEF)
         {
-            if (pInputBuffer + 2 > inputEnd)
+            if (inputLength - inputIndex < 2)
                 return Complete(OperationStatus.NeedMoreData);
-            uint secondByte = pInputBuffer[1];
+            uint secondByte = Unsafe.Add(ref input, inputIndex + 1);
             if (!IsUtf8ContinuationByte(secondByte) || (firstByte == 0xE0 && secondByte < 0xA0) || (firstByte == 0xED && secondByte >= 0xA0))
                 return Complete(OperationStatus.InvalidData);
-            if (pInputBuffer + 3 > inputEnd)
+            if (inputLength - inputIndex < 3)
                 return Complete(OperationStatus.NeedMoreData);
-            uint thirdByte = pInputBuffer[2];
+            uint thirdByte = Unsafe.Add(ref input, inputIndex + 2);
             if (!IsUtf8ContinuationByte(thirdByte))
                 return Complete(OperationStatus.InvalidData);
-            if (pOutputBuffer == outputEnd)
+            if (outputIndex == outputLength)
                 return Complete(OperationStatus.DestinationTooSmall);
             uint codePoint = ((firstByte & 0x0F) << 12) | ((secondByte & 0x3F) << 6) | (thirdByte & 0x3F);
-            *pOutputBuffer = (char)codePoint;
-            pInputBuffer += 3;
-            pOutputBuffer++;
+            Unsafe.Add(ref output, outputIndex) = (char)codePoint;
+            inputIndex += 3;
+            outputIndex++;
             continue;
         }
 
         // F0..F4 are the only valid four-byte leaders.
         if (firstByte is >= 0xF0 and <= 0xF4)
         {
-            if (pInputBuffer + 2 > inputEnd)
+            if (inputLength - inputIndex < 2)
                 return Complete(OperationStatus.NeedMoreData);
-            uint secondByte = pInputBuffer[1];
+            uint secondByte = Unsafe.Add(ref input, inputIndex + 1);
             if (!IsUtf8ContinuationByte(secondByte) || (firstByte == 0xF0 && secondByte < 0x90) || (firstByte == 0xF4 && secondByte > 0x8F))
                 return Complete(OperationStatus.InvalidData);
-            if (pInputBuffer + 3 > inputEnd)
+            if (inputLength - inputIndex < 3)
                 return Complete(OperationStatus.NeedMoreData);
-            uint thirdByte = pInputBuffer[2];
+            uint thirdByte = Unsafe.Add(ref input, inputIndex + 2);
             if (!IsUtf8ContinuationByte(thirdByte))
                 return Complete(OperationStatus.InvalidData);
-            if (pInputBuffer + 4 > inputEnd)
+            if (inputLength - inputIndex < 4)
                 return Complete(OperationStatus.NeedMoreData);
-            uint fourthByte = pInputBuffer[3];
+            uint fourthByte = Unsafe.Add(ref input, inputIndex + 3);
             if (!IsUtf8ContinuationByte(fourthByte))
                 return Complete(OperationStatus.InvalidData);
-            if ((long)(unchecked((nint)outputEnd - (nint)pOutputBuffer) >> 1) < 2)
+            if ((outputLength - outputIndex) < 2)
                 return Complete(OperationStatus.DestinationTooSmall);
             uint codePoint = ((firstByte & 0x07) << 18) | ((secondByte & 0x3F) << 12) | ((thirdByte & 0x3F) << 6) | (fourthByte & 0x3F);
             codePoint -= 0x10000;
-            pOutputBuffer[0] = (char)((codePoint >> 10) + 0xD800);
-            pOutputBuffer[1] = (char)((codePoint & 0x3FF) + 0xDC00);
-            pInputBuffer += 4;
-            pOutputBuffer += 2;
+            Unsafe.Add(ref output, outputIndex) = (char)((codePoint >> 10) + 0xD800);
+            Unsafe.Add(ref output, outputIndex + 1) = (char)((codePoint & 0x3FF) + 0xDC00);
+            inputIndex += 4;
+            outputIndex += 2;
             continue;
         }
 
         return Complete(OperationStatus.InvalidData);
     }
 
-    pInputBufferRemaining = pInputBuffer;
-    pOutputBufferRemaining = pOutputBuffer;
+    bytesRead = inputIndex;
+    charsWritten = outputIndex;
     return OperationStatus.Done;
     // <summary>Performs the complete step for the current operation.</summary>
     // <param name="status">The status used by this operation.</param>
@@ -713,26 +715,26 @@ internal static unsafe bool IsBmp3(uint ch) => ch >= 0x0800 && (ch < 0xD800 || c
 /// <returns>Whether the requested condition or operation succeeded.</returns>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static unsafe bool IsUtf8ContinuationByte(uint value) => (value & 0xC0) == 0x80;
-internal static unsafe int GetInvalidUtf8SequenceLength(byte* input, int remaining)
+internal static unsafe int GetInvalidUtf8SequenceLength(ref byte input, int remaining)
 {
     if (remaining <= 1)
         return 1;
-    uint b0 = input[0];
-    uint b1 = input[1];
+    uint b0 = input;
+    uint b1 = Unsafe.Add(ref input, 1);
     if (b0 >= 0xE0 && b0 <= 0xEF)
     {
         if (!IsUtf8ContinuationByte(b1) || (b0 == 0xE0 && b1 < 0xA0) || (b0 == 0xED && b1 >= 0xA0))
             return 1;
-        return remaining > 2 && !IsUtf8ContinuationByte(input[2]) ? 2 : 1;
+        return remaining > 2 && !IsUtf8ContinuationByte(Unsafe.Add(ref input, 2)) ? 2 : 1;
     }
 
     if (b0 >= 0xF0 && b0 <= 0xF4)
     {
         if (!IsUtf8ContinuationByte(b1) || (b0 == 0xF0 && b1 < 0x90) || (b0 == 0xF4 && b1 > 0x8F))
             return 1;
-        if (remaining > 2 && !IsUtf8ContinuationByte(input[2]))
+        if (remaining > 2 && !IsUtf8ContinuationByte(Unsafe.Add(ref input, 2)))
             return 2;
-        if (remaining > 3 && !IsUtf8ContinuationByte(input[3]))
+        if (remaining > 3 && !IsUtf8ContinuationByte(Unsafe.Add(ref input, 3)))
             return 3;
     }
 
@@ -746,47 +748,49 @@ internal static unsafe int GetInvalidUtf8SequenceLength(byte* input, int remaini
 /// </summary>
 /// <param name = "input">The input data to process.</param>
 /// <param name = "output">The destination receiving the result.</param>
-/// <param name = "inputEnd">The input end used by this operation.</param>
-/// <param name = "outputEnd">The output end used by this operation.</param>
+/// <param name = "inputLength">The complete input character count.</param>
+/// <param name = "outputLength">The complete output capacity in bytes.</param>
+/// <param name = "inputIndex">The number of consumed characters.</param>
+/// <param name = "outputIndex">The number of written bytes.</param>
 /// <param name = "lead">The lead used by this operation.</param>
 /// <returns>Whether the requested condition or operation succeeded.</returns>
 [MethodImpl(MethodImplOptions.NoInlining)]
-internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output, char* inputEnd, byte* outputEnd, uint lead)
+internal static unsafe bool TryEncodeVectorRun(ref char input, ref byte output, int inputLength, int outputLength, ref int inputIndex, ref int outputIndex, uint lead)
 {
-    char* original = input;
+    int original = inputIndex;
     ;
     if (lead < 0x80)
     {
         if (Avx2.IsSupported)
         {
             Vector256<ushort> highMask = Vector256.Create((ushort)0xFF80);
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
+            while ((inputLength - inputIndex) >= 16 && (outputLength - outputIndex) >= 16)
             {
-                Vector256<ushort> chars = KernelVectorMemory.Read256<ushort>(input);
+                Vector256<ushort> chars = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
                 Vector256<short> ascii = Avx2.CompareEqual(Avx2.And(chars, highMask).AsInt16(), Vector256<short>.Zero);
                 if (Avx2.MoveMask(ascii.AsByte()) != -1)
                     break;
                 Vector256<byte> packed = Avx2.PackUnsignedSaturate(chars.AsInt16(), chars.AsInt16());
-                Unsafe.WriteUnaligned(output, packed.GetLower().AsUInt64().GetElement(0));
-                Unsafe.WriteUnaligned(output + 8, packed.GetUpper().AsUInt64().GetElement(0));
-                input += 16;
-                output += 16;
+                KernelMemory.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex), packed.GetLower().AsUInt64().GetElement(0));
+                KernelMemory.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex + 8), packed.GetUpper().AsUInt64().GetElement(0));
+                inputIndex += 16;
+                outputIndex += 16;
             }
         }
 
         if (Ssse3.IsSupported)
         {
             Vector128<ushort> highMask = Vector128.Create((ushort)0xFF80);
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 8)
+            while ((inputLength - inputIndex) >= 8 && (outputLength - outputIndex) >= 8)
             {
-                Vector128<ushort> chars = KernelVectorMemory.Read128<ushort>(input);
+                Vector128<ushort> chars = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
                 Vector128<short> ascii = Sse2.CompareEqual(Sse2.And(chars, highMask).AsInt16(), Vector128<short>.Zero);
                 if (Sse2.MoveMask(ascii.AsByte()) != 0xFFFF)
                     break;
                 Vector128<byte> packed = Sse2.PackUnsignedSaturate(chars.AsInt16(), chars.AsInt16());
-                Unsafe.WriteUnaligned(output, packed.AsUInt64().GetElement(0));
-                input += 8;
-                output += 8;
+                KernelMemory.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex), packed.AsUInt64().GetElement(0));
+                inputIndex += 8;
+                outputIndex += 8;
             }
         }
     }
@@ -799,10 +803,10 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector256<ushort> sixBits = Vector256.Create((ushort)63);
             Vector256<ushort> leadBits = Vector256.Create((ushort)0xC0);
             Vector256<ushort> trailBits = Vector256.Create((ushort)0x80);
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 64)
+            while ((inputLength - inputIndex) >= 32 && (outputLength - outputIndex) >= 64)
             {
-                var a = KernelVectorMemory.Read256<ushort>(input);
-                var b = KernelVectorMemory.Read256<ushort>(input + 16);
+                var a = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
+                var b = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex + 16)));
                 var validA = Avx2.And(Avx2.CompareGreaterThan(a.AsInt16(), min), Avx2.CompareGreaterThan(max, a.AsInt16()));
                 var validB = Avx2.And(Avx2.CompareGreaterThan(b.AsInt16(), min), Avx2.CompareGreaterThan(max, b.AsInt16()));
                 if (Avx2.MoveMask(Avx2.And(validA, validB).AsByte()) != -1)
@@ -811,23 +815,23 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
                 var highA = Avx2.ShiftLeftLogical(Avx2.Or(Avx2.And(a, sixBits), trailBits), 8);
                 var lowB = Avx2.Or(Avx2.ShiftRightLogical(b, 6), leadBits);
                 var highB = Avx2.ShiftLeftLogical(Avx2.Or(Avx2.And(b, sixBits), trailBits), 8);
-                Unsafe.WriteUnaligned(output, Avx2.Or(lowA, highA));
-                Unsafe.WriteUnaligned(output + 32, Avx2.Or(lowB, highB));
-                input += 32;
-                output += 64;
+                Avx2.Or(lowA, highA).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+                Avx2.Or(lowB, highB).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex + 32));
+                inputIndex += 32;
+                outputIndex += 64;
             }
 
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
+            while ((inputLength - inputIndex) >= 16 && (outputLength - outputIndex) >= 32)
             {
-                Vector256<ushort> chars = KernelVectorMemory.Read256<ushort>(input);
+                Vector256<ushort> chars = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
                 Vector256<short> valid = Avx2.And(Avx2.CompareGreaterThan(chars.AsInt16(), min), Avx2.CompareGreaterThan(max, chars.AsInt16()));
                 if (Avx2.MoveMask(valid.AsByte()) != -1)
                     break;
                 Vector256<ushort> low = Avx2.Or(Avx2.ShiftRightLogical(chars, 6), leadBits);
                 Vector256<ushort> high = Avx2.ShiftLeftLogical(Avx2.Or(Avx2.And(chars, sixBits), trailBits), 8);
-                Unsafe.WriteUnaligned(output, Avx2.Or(low, high));
-                input += 16;
-                output += 32;
+                Avx2.Or(low, high).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+                inputIndex += 16;
+                outputIndex += 32;
             }
         }
 
@@ -838,17 +842,17 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector128<ushort> sixBits = Vector128.Create((ushort)63);
             Vector128<ushort> leadBits = Vector128.Create((ushort)0xC0);
             Vector128<ushort> trailBits = Vector128.Create((ushort)0x80);
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
+            while ((inputLength - inputIndex) >= 8 && (outputLength - outputIndex) >= 16)
             {
-                Vector128<ushort> chars = KernelVectorMemory.Read128<ushort>(input);
+                Vector128<ushort> chars = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
                 Vector128<short> valid = Sse2.And(Sse2.CompareGreaterThan(chars.AsInt16(), min), Sse2.CompareGreaterThan(max, chars.AsInt16()));
                 if (Sse2.MoveMask(valid.AsByte()) != 0xFFFF)
                     break;
                 Vector128<ushort> low = Sse2.Or(Sse2.ShiftRightLogical(chars, 6), leadBits);
                 Vector128<ushort> high = Sse2.ShiftLeftLogical(Sse2.Or(Sse2.And(chars, sixBits), trailBits), 8);
-                Unsafe.WriteUnaligned(output, Sse2.Or(low, high));
-                input += 8;
-                output += 16;
+                Sse2.Or(low, high).AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+                inputIndex += 8;
+                outputIndex += 16;
             }
         }
     }
@@ -861,9 +865,9 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector256<ushort> e0 = Vector256.Create((ushort)0xE0);
             Vector256<ushort> trail = Vector256.Create((ushort)0x80);
             Vector256<ushort> sixBits = Vector256.Create((ushort)63);
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 48)
+            while ((inputLength - inputIndex) >= 16 && (outputLength - outputIndex) >= 48)
             {
-                Vector256<ushort> chars = KernelVectorMemory.Read256<ushort>(input);
+                Vector256<ushort> chars = Vector256.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
                 Vector256<short> top = Avx2.And(chars, topMask).AsInt16();
                 Vector256<short> invalid = Avx2.Or(Avx2.CompareEqual(top, Vector256<short>.Zero), Avx2.CompareEqual(top, surrogate));
                 if (Avx2.MoveMask(invalid.AsByte()) != 0)
@@ -876,12 +880,12 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
                 Vector256<byte> c = Avx2.PackUnsignedSaturate(lastBytes.AsInt16(), lastBytes.AsInt16());
                 Vector256<byte> first = Avx2.Or(Avx2.Or(Avx2.Shuffle(a, BmpF0x2), Avx2.Shuffle(b, BmpF1x2)), Avx2.Shuffle(c, BmpF2x2));
                 Vector256<byte> second = Avx2.Or(Avx2.Or(Avx2.Shuffle(a, BmpS0x2), Avx2.Shuffle(b, BmpS1x2)), Avx2.Shuffle(c, BmpS2x2));
-                Unsafe.WriteUnaligned(output, first.GetLower());
-                Unsafe.WriteUnaligned(output + 16, second.GetLower().AsUInt64().GetElement(0));
-                Unsafe.WriteUnaligned(output + 24, first.GetUpper());
-                Unsafe.WriteUnaligned(output + 40, second.GetUpper().AsUInt64().GetElement(0));
-                input += 16;
-                output += 48;
+                first.GetLower().AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+                KernelMemory.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex + 16), second.GetLower().AsUInt64().GetElement(0));
+                first.GetUpper().AsByte().StoreUnsafe(ref Unsafe.Add(ref output, outputIndex + 24));
+                KernelMemory.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex + 40), second.GetUpper().AsUInt64().GetElement(0));
+                inputIndex += 16;
+                outputIndex += 48;
             }
         }
 
@@ -892,9 +896,9 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector128<ushort> e0 = Vector128.Create((ushort)0xE0);
             Vector128<ushort> trail = Vector128.Create((ushort)0x80);
             Vector128<ushort> sixBits = Vector128.Create((ushort)63);
-            while ((long)(unchecked((nint)inputEnd - (nint)input) >> 1) >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
+            while ((inputLength - inputIndex) >= 8 && (outputLength - outputIndex) >= 24)
             {
-                Vector128<ushort> chars = KernelVectorMemory.Read128<ushort>(input);
+                Vector128<ushort> chars = Vector128.LoadUnsafe(ref Unsafe.As<char, ushort>(ref Unsafe.Add(ref input, inputIndex)));
                 Vector128<short> top = Sse2.And(chars, topMask).AsInt16();
                 Vector128<short> invalid = Sse2.Or(Sse2.CompareEqual(top, Vector128<short>.Zero), Sse2.CompareEqual(top, surrogate));
                 if (Sse2.MoveMask(invalid.AsByte()) != 0)
@@ -907,15 +911,15 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
                 Vector128<byte> c = Sse2.PackUnsignedSaturate(lastBytes.AsInt16(), lastBytes.AsInt16());
                 Vector128<byte> first = Sse2.Or(Sse2.Or(Ssse3.Shuffle(a, BmpF0), Ssse3.Shuffle(b, BmpF1)), Ssse3.Shuffle(c, BmpF2));
                 Vector128<byte> second = Sse2.Or(Sse2.Or(Ssse3.Shuffle(a, BmpS0), Ssse3.Shuffle(b, BmpS1)), Ssse3.Shuffle(c, BmpS2));
-                Unsafe.WriteUnaligned(output, first);
-                Unsafe.WriteUnaligned(output + 16, second.AsUInt64().GetElement(0));
-                input += 8;
-                output += 24;
+                first.StoreUnsafe(ref Unsafe.Add(ref output, outputIndex));
+                KernelMemory.WriteUnaligned(ref Unsafe.Add(ref output, outputIndex + 16), second.AsUInt64().GetElement(0));
+                inputIndex += 8;
+                outputIndex += 24;
             }
         }
     }
 
-    return input != original;
+    return inputIndex != original;
 }
 internal static unsafe bool MatchesUtf8(ReadOnlySpan<byte> bytes, ReadOnlySpan<char> text)
 {
@@ -997,18 +1001,19 @@ internal static unsafe OperationStatus SerializeLatin1AsUtf8(ReadOnlySpan<char> 
 [MethodImpl(MethodImplOptions.NoInlining)]
 internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences, bool isFinalBlock)
 {
-    fixed (char* originalInput = &MemoryMarshal.GetReference(source))
-    fixed (byte* originalOutput = &MemoryMarshal.GetReference(destination))
+    // The Burst source projector extracts this bounded fallback region.
+    fixed (char* pinnedSource = source)
     {
-        char* input = originalInput;
-        byte* output = originalOutput;
-        char* inputEnd = input + source.Length;
-        byte* outputEnd = output + destination.Length;
+        ref char input = ref MemoryMarshal.GetReference(source);
+        ref byte output = ref MemoryMarshal.GetReference(destination);
+        int inputIndex = 0;
+        int outputIndex = 0;
         OperationStatus status;
         while (true)
         {
-            // Subtract byte addresses at native width before widening; Mono otherwise retains division by one.
-            status = CoreTextAlgorithms.TranscodeToUtf8Scalar(input, (int)((long)(unchecked((nint)inputEnd - (nint)input) >> 1)), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out input, out output);
+            status = CoreTextAlgorithms.TranscodeToUtf8Scalar(ref Unsafe.Add(ref input, inputIndex), source.Length - inputIndex, ref Unsafe.Add(ref output, outputIndex), destination.Length - outputIndex, out int consumed, out int written);
+            inputIndex += consumed;
+            outputIndex += written;
             if (status == OperationStatus.Done || status == OperationStatus.DestinationTooSmall)
                 break;
             if (status == OperationStatus.NeedMoreData && !isFinalBlock)
@@ -1019,7 +1024,7 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
                 break;
             }
 
-            if ((long)unchecked((nint)outputEnd - (nint)output) < 3)
+            if (destination.Length - outputIndex < 3)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
@@ -1027,15 +1032,15 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
 
             // A malformed UTF-16 code unit consumes exactly one char. At the
             // end of a final block the only incomplete sequence is a lone high surrogate.
-            ++input;
-            output[0] = 0xEF;
-            output[1] = 0xBF;
-            output[2] = 0xBD;
-            output += 3;
+            inputIndex++;
+            Unsafe.Add(ref output, outputIndex) = 0xEF;
+            Unsafe.Add(ref output, outputIndex + 1) = 0xBF;
+            Unsafe.Add(ref output, outputIndex + 2) = 0xBD;
+            outputIndex += 3;
         }
 
-        charsRead = (int)((long)(unchecked((nint)input - (nint)originalInput) >> 1));
-        bytesWritten = (int)((long)unchecked((nint)output - (nint)originalOutput));
+        charsRead = inputIndex;
+        bytesWritten = outputIndex;
         return status;
     }
 }
@@ -1136,7 +1141,7 @@ internal static unsafe bool NeedsJsonEscape(Vector128<byte> bytes)
     return !Vector128.EqualsAll(escapes, Vector128<byte>.Zero);
 }
     }
-// Core source SHA256: Internal/Utf8Latin1Transcoder.cs BF4B37A1D48BA592CBCB0E65817756F88921F8F4C4F62E7AD5C7AF7B11C392AF
+// Core source SHA256: Internal/Utf8Latin1Transcoder.cs A8E75CACB7FDDFE0E8F0C30C8C9945B51B239271B067468549C38F8442CF74D4
     internal static unsafe class CoreLatinUtf8
     {
 private static readonly ulong[] ShuffleMaskWords = new ulong[] {
@@ -1147,8 +1152,10 @@ internal static unsafe void EncodePrefix(ReadOnlySpan<char> source, Span<byte> d
 {
     charsRead = 0;
     bytesWritten = 0;
+    ref char input = ref MemoryMarshal.GetReference(source);
+    ref byte target = ref MemoryMarshal.GetReference(destination);
+    // The Burst projector substitutes native vector loads for this pinned input.
     fixed (char* start = source)
-    fixed (byte* target = destination)
     {
         ;
         if (Avx2.IsSupported)
@@ -1161,8 +1168,8 @@ internal static unsafe void EncodePrefix(ReadOnlySpan<char> source, Span<byte> d
                 var ascii = NativeVectorOps.Equals16_256(NativeVectorOps.And256(chars, NativeVectorOps.Broadcast16_256((ushort)0x80)), default(global::Unity.Burst.Intrinsics.v256));
                 var pairs = NativeVectorOps.Select256(ascii, chars, NativeVectorOps.Or256(NativeVectorOps.Or256((NativeVectorOps.Right16_256(chars, 6)), NativeVectorOps.Broadcast16_256((ushort)0xC0)), (NativeVectorOps.Left16_256((NativeVectorOps.Or256((NativeVectorOps.And256(chars, NativeVectorOps.Broadcast16_256((ushort)63))), NativeVectorOps.Broadcast16_256((ushort)0x80))), 8))));
                 var packed = NativeVectorOps.Shuffle256(pairs, NativeVectorOps.Join256(ReadShuffleMask(mask & 255), ReadShuffleMask(mask >> 8)));
-                StoreLane(target, ref bytesWritten, packed.Lo128, (byte)mask);
-                StoreLane(target, ref bytesWritten, packed.Hi128, (byte)(mask >> 8));
+                StoreLane(ref target, ref bytesWritten, packed.Lo128, (byte)mask);
+                StoreLane(ref target, ref bytesWritten, packed.Hi128, (byte)(mask >> 8));
                 charsRead += 16;
             }
 
@@ -1175,21 +1182,21 @@ internal static unsafe void EncodePrefix(ReadOnlySpan<char> source, Span<byte> d
                 uint mask = NativeVectorOps.WordSigns128(NativeVectorOps.Left16_128(chars, 8));
                 var ascii = NativeVectorOps.Equals16_128(NativeVectorOps.And128(chars, NativeVectorOps.Broadcast16_128((ushort)0x80)), default(global::Unity.Burst.Intrinsics.v128));
                 var pairs = NativeVectorOps.Select128(ascii, chars, NativeVectorOps.Or128(NativeVectorOps.Or128((NativeVectorOps.Right16_128(chars, 6)), NativeVectorOps.Broadcast16_128((ushort)0xC0)), (NativeVectorOps.Left16_128((NativeVectorOps.Or128((NativeVectorOps.And128(chars, NativeVectorOps.Broadcast16_128((ushort)63))), NativeVectorOps.Broadcast16_128((ushort)0x80))), 8))));
-                StoreLane(target, ref bytesWritten, NativeVectorOps.Shuffle128(pairs, ReadShuffleMask(mask)), (byte)mask);
+                StoreLane(ref target, ref bytesWritten, NativeVectorOps.Shuffle128(pairs, ReadShuffleMask(mask)), (byte)mask);
                 charsRead += 8;
             }
 
         while (charsRead < source.Length)
         {
-            uint value = start[charsRead];
+            uint value = Unsafe.Add(ref input, charsRead);
             if (value > 255)
                 break;
             int length = value < 128 ? 1 : 2;
             if (length > destination.Length - bytesWritten)
                 break;
-            target[bytesWritten++] = (byte)(value < 128 ? value : 0xC0 | value >> 6);
+            Unsafe.Add(ref target, bytesWritten++) = (byte)(value < 128 ? value : 0xC0 | value >> 6);
             if (length == 2)
-                target[bytesWritten++] = (byte)(0x80 | value & 63);
+                Unsafe.Add(ref target, bytesWritten++) = (byte)(0x80 | value & 63);
             charsRead++;
         }
     }
@@ -1200,11 +1207,11 @@ internal static unsafe void EncodePrefix(ReadOnlySpan<char> source, Span<byte> d
 /// <param name = "packed">The first eight bytes followed by the last eight bytes.</param>
 /// <param name = "mask">The non-ASCII character mask.</param>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
-internal static unsafe void StoreLane(byte* destination, ref int offset, global::Unity.Burst.Intrinsics.v128 packed, byte mask)
+internal static unsafe void StoreLane(ref byte destination, ref int offset, global::Unity.Burst.Intrinsics.v128 packed, byte mask)
 {
     int length = 8 + BitOperations.PopCount((uint)mask);
-    Unsafe.WriteUnaligned(destination + offset, packed.ULong0);
-    Unsafe.WriteUnaligned(destination + offset + length - 8, packed.ULong1);
+    KernelMemory.WriteUnaligned(ref Unsafe.Add(ref destination, offset), packed.ULong0);
+    KernelMemory.WriteUnaligned(ref Unsafe.Add(ref destination, offset + length - 8), packed.ULong1);
     offset += length;
 }
     }
@@ -1816,7 +1823,7 @@ internal static unsafe ulong GetQuotePrefix(ulong quotes, int width)
     return quotes;
 }
 }
-// Core source SHA256: Cryptography/ChaCha20.cs 7F5828D28558D0ACA00693AFC95A444F20ED3585F58A45189B920E0E8D501375
+// Core source SHA256: Cryptography/ChaCha20.cs 6218BCAB12388D38C41793D4B1CCE528EC40C08D534567ECC8AD4F8D9D1C6B9C
 internal static unsafe class CoreChaCha20
 {
 private static bool UseSse2 => Sse2.IsSupported;
@@ -1850,47 +1857,47 @@ internal static unsafe void QuarterRound(ref uint a, ref uint b, ref uint c, ref
 /// <returns>The result of the operation.</returns>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static unsafe uint Rotl(uint x, int n) => (x << n) | (x >> (32 - n));
-internal static unsafe void Block(uint* state, byte* output)
+internal static unsafe void Block(ref uint state, ref byte output)
 {
     if (UseSse2)
     {
-        BlockSse2(state, output);
+        BlockSse2(ref state, ref output);
         return;
     }
 
-    BlockScalar(state, output);
+    BlockScalar(ref state, ref output);
 }
-internal static unsafe void Block2(uint* state, byte* output)
+internal static unsafe void Block2(ref uint state, ref byte output)
 {
     if (UseAvx2)
     {
-        BlockAvx2x2(state, output);
+        BlockAvx2x2(ref state, ref output);
         return;
     }
 
     // Safe fallback (the AEAD fast path never calls Block2 without AVX2; kept for correctness).
-    uint counter = state[12];
-    Block(state, output);
-    state[12] = counter + 1u;
-    Block(state, output + 64);
-    state[12] = counter;
+    uint counter = Unsafe.Add(ref state, 12);
+    Block(ref state, ref output);
+    Unsafe.Add(ref state, 12) = counter + 1u;
+    Block(ref state, ref Unsafe.Add(ref output, 64));
+    Unsafe.Add(ref state, 12) = counter;
 }
-internal static unsafe void Block4(uint* state, byte* output)
+internal static unsafe void Block4(ref uint state, ref byte output)
 {
     ;
     // Safe fallback (the AEAD fast path never calls Block4 without AVX-512; kept for correctness).
-    uint counter = state[12];
-    Block2(state, output);
-    state[12] = counter + 2u;
-    Block2(state, output + 128);
-    state[12] = counter;
+    uint counter = Unsafe.Add(ref state, 12);
+    Block2(ref state, ref output);
+    Unsafe.Add(ref state, 12) = counter + 2u;
+    Block2(ref state, ref Unsafe.Add(ref output, 128));
+    Unsafe.Add(ref state, 12) = counter;
 }
-internal static unsafe void BlockScalar(uint* state, byte* output)
+internal static unsafe void BlockScalar(ref uint state, ref byte output)
 {
-    uint x0 = state[0], x1 = state[1], x2 = state[2], x3 = state[3];
-    uint x4 = state[4], x5 = state[5], x6 = state[6], x7 = state[7];
-    uint x8 = state[8], x9 = state[9], x10 = state[10], x11 = state[11];
-    uint x12 = state[12], x13 = state[13], x14 = state[14], x15 = state[15];
+    uint x0 = state, x1 = Unsafe.Add(ref state, 1), x2 = Unsafe.Add(ref state, 2), x3 = Unsafe.Add(ref state, 3);
+    uint x4 = Unsafe.Add(ref state, 4), x5 = Unsafe.Add(ref state, 5), x6 = Unsafe.Add(ref state, 6), x7 = Unsafe.Add(ref state, 7);
+    uint x8 = Unsafe.Add(ref state, 8), x9 = Unsafe.Add(ref state, 9), x10 = Unsafe.Add(ref state, 10), x11 = Unsafe.Add(ref state, 11);
+    uint x12 = Unsafe.Add(ref state, 12), x13 = Unsafe.Add(ref state, 13), x14 = Unsafe.Add(ref state, 14), x15 = Unsafe.Add(ref state, 15);
     for (int i = 0; i < 10; i++)
     {
         QuarterRound(ref x0, ref x4, ref x8, ref x12);
@@ -1903,38 +1910,38 @@ internal static unsafe void BlockScalar(uint* state, byte* output)
         QuarterRound(ref x3, ref x4, ref x9, ref x14);
     }
 
-    x0 += state[0];
-    x1 += state[1];
-    x2 += state[2];
-    x3 += state[3];
-    x4 += state[4];
-    x5 += state[5];
-    x6 += state[6];
-    x7 += state[7];
-    x8 += state[8];
-    x9 += state[9];
-    x10 += state[10];
-    x11 += state[11];
-    x12 += state[12];
-    x13 += state[13];
-    x14 += state[14];
-    x15 += state[15];
-    WriteUnaligned(ref output[0], x0);
-    WriteUnaligned(ref output[4], x1);
-    WriteUnaligned(ref output[8], x2);
-    WriteUnaligned(ref output[12], x3);
-    WriteUnaligned(ref output[16], x4);
-    WriteUnaligned(ref output[20], x5);
-    WriteUnaligned(ref output[24], x6);
-    WriteUnaligned(ref output[28], x7);
-    WriteUnaligned(ref output[32], x8);
-    WriteUnaligned(ref output[36], x9);
-    WriteUnaligned(ref output[40], x10);
-    WriteUnaligned(ref output[44], x11);
-    WriteUnaligned(ref output[48], x12);
-    WriteUnaligned(ref output[52], x13);
-    WriteUnaligned(ref output[56], x14);
-    WriteUnaligned(ref output[60], x15);
+    x0 += state;
+    x1 += Unsafe.Add(ref state, 1);
+    x2 += Unsafe.Add(ref state, 2);
+    x3 += Unsafe.Add(ref state, 3);
+    x4 += Unsafe.Add(ref state, 4);
+    x5 += Unsafe.Add(ref state, 5);
+    x6 += Unsafe.Add(ref state, 6);
+    x7 += Unsafe.Add(ref state, 7);
+    x8 += Unsafe.Add(ref state, 8);
+    x9 += Unsafe.Add(ref state, 9);
+    x10 += Unsafe.Add(ref state, 10);
+    x11 += Unsafe.Add(ref state, 11);
+    x12 += Unsafe.Add(ref state, 12);
+    x13 += Unsafe.Add(ref state, 13);
+    x14 += Unsafe.Add(ref state, 14);
+    x15 += Unsafe.Add(ref state, 15);
+    WriteUnaligned(ref output, x0);
+    WriteUnaligned(ref Unsafe.Add(ref output, 4), x1);
+    WriteUnaligned(ref Unsafe.Add(ref output, 8), x2);
+    WriteUnaligned(ref Unsafe.Add(ref output, 12), x3);
+    WriteUnaligned(ref Unsafe.Add(ref output, 16), x4);
+    WriteUnaligned(ref Unsafe.Add(ref output, 20), x5);
+    WriteUnaligned(ref Unsafe.Add(ref output, 24), x6);
+    WriteUnaligned(ref Unsafe.Add(ref output, 28), x7);
+    WriteUnaligned(ref Unsafe.Add(ref output, 32), x8);
+    WriteUnaligned(ref Unsafe.Add(ref output, 36), x9);
+    WriteUnaligned(ref Unsafe.Add(ref output, 40), x10);
+    WriteUnaligned(ref Unsafe.Add(ref output, 44), x11);
+    WriteUnaligned(ref Unsafe.Add(ref output, 48), x12);
+    WriteUnaligned(ref Unsafe.Add(ref output, 52), x13);
+    WriteUnaligned(ref Unsafe.Add(ref output, 56), x14);
+    WriteUnaligned(ref Unsafe.Add(ref output, 60), x15);
 }
 /// <summary>Performs the rotl step for the current operation.</summary>
 /// <param name = "v">The v used by this operation.</param>
@@ -1990,12 +1997,12 @@ internal static unsafe void QuarterRound(ref Vector256<uint> a, ref Vector256<ui
     b = Avx2.Xor(b, c);
     b = Rotl(b, 7);
 }
-internal static unsafe void BlockSse2(uint* state, byte* output)
+internal static unsafe void BlockSse2(ref uint state, ref byte output)
 {
-    Vector128<uint> va = Sse2.LoadVector128(state); // x0..x3
-    Vector128<uint> vb = Sse2.LoadVector128(state + 4); // x4..x7
-    Vector128<uint> vc = Sse2.LoadVector128(state + 8); // x8..x11
-    Vector128<uint> vd = Sse2.LoadVector128(state + 12); // x12..x15
+    Vector128<uint> va = Vector128.LoadUnsafe(ref state); // x0..x3
+    Vector128<uint> vb = Vector128.LoadUnsafe(ref state, 4); // x4..x7
+    Vector128<uint> vc = Vector128.LoadUnsafe(ref state, 8); // x8..x11
+    Vector128<uint> vd = Vector128.LoadUnsafe(ref state, 12); // x12..x15
     Vector128<uint> ova = va, ovb = vb, ovc = vc, ovd = vd;
     for (int i = 0; i < 10; i++)
     {
@@ -2015,18 +2022,18 @@ internal static unsafe void BlockSse2(uint* state, byte* output)
     vb = Sse2.Add(vb, ovb);
     vc = Sse2.Add(vc, ovc);
     vd = Sse2.Add(vd, ovd);
-    Sse2.Store((uint*)output, va);
-    Sse2.Store((uint*)(output + 16), vb);
-    Sse2.Store((uint*)(output + 32), vc);
-    Sse2.Store((uint*)(output + 48), vd);
+    va.AsByte().StoreUnsafe(ref output);
+    vb.AsByte().StoreUnsafe(ref output, 16);
+    vc.AsByte().StoreUnsafe(ref output, 32);
+    vd.AsByte().StoreUnsafe(ref output, 48);
 }
-internal static unsafe void BlockAvx2x2(uint* state, byte* output)
+internal static unsafe void BlockAvx2x2(ref uint state, ref byte output)
 {
-    Vector256<uint> va = Vector256.Create(state[0], state[1], state[2], state[3], state[0], state[1], state[2], state[3]);
-    Vector256<uint> vb = Vector256.Create(state[4], state[5], state[6], state[7], state[4], state[5], state[6], state[7]);
-    Vector256<uint> vc = Vector256.Create(state[8], state[9], state[10], state[11], state[8], state[9], state[10], state[11]);
-    Vector128<uint> vdLow = Vector128.Create(state[12], state[13], state[14], state[15]);
-    Vector128<uint> vdHigh = Vector128.Create(state[12] + 1u, state[13], state[14], state[15]);
+    Vector256<uint> va = Vector256.Create(state, Unsafe.Add(ref state, 1), Unsafe.Add(ref state, 2), Unsafe.Add(ref state, 3), state, Unsafe.Add(ref state, 1), Unsafe.Add(ref state, 2), Unsafe.Add(ref state, 3));
+    Vector256<uint> vb = Vector256.Create(Unsafe.Add(ref state, 4), Unsafe.Add(ref state, 5), Unsafe.Add(ref state, 6), Unsafe.Add(ref state, 7), Unsafe.Add(ref state, 4), Unsafe.Add(ref state, 5), Unsafe.Add(ref state, 6), Unsafe.Add(ref state, 7));
+    Vector256<uint> vc = Vector256.Create(Unsafe.Add(ref state, 8), Unsafe.Add(ref state, 9), Unsafe.Add(ref state, 10), Unsafe.Add(ref state, 11), Unsafe.Add(ref state, 8), Unsafe.Add(ref state, 9), Unsafe.Add(ref state, 10), Unsafe.Add(ref state, 11));
+    Vector128<uint> vdLow = Vector128.Create(Unsafe.Add(ref state, 12), Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
+    Vector128<uint> vdHigh = Vector128.Create(Unsafe.Add(ref state, 12) + 1u, Unsafe.Add(ref state, 13), Unsafe.Add(ref state, 14), Unsafe.Add(ref state, 15));
     Vector256<uint> vd = Vector256.Create(vdLow, vdHigh);
     Vector256<uint> ova = va, ovb = vb, ovc = vc, ovd = vd;
     for (int i = 0; i < 10; i++)
@@ -2046,15 +2053,18 @@ internal static unsafe void BlockAvx2x2(uint* state, byte* output)
     vb = Avx2.Add(vb, ovb);
     vc = Avx2.Add(vc, ovc);
     vd = Avx2.Add(vd, ovd);
-    Sse2.Store((uint*)output, va.GetLower()); // block A (counter c) -> [0..63]
-    Sse2.Store((uint*)(output + 16), vb.GetLower());
-    Sse2.Store((uint*)(output + 32), vc.GetLower());
-    Sse2.Store((uint*)(output + 48), vd.GetLower());
-    Sse2.Store((uint*)(output + 64), va.GetUpper()); // block B (counter c+1) -> [64..127]
-    Sse2.Store((uint*)(output + 80), vb.GetUpper());
-    Sse2.Store((uint*)(output + 96), vc.GetUpper());
-    Sse2.Store((uint*)(output + 112), vd.GetUpper());
+    va.GetLower().AsByte().StoreUnsafe(ref output); // block A (counter c) -> [0..63]
+    vb.GetLower().AsByte().StoreUnsafe(ref output, 16);
+    vc.GetLower().AsByte().StoreUnsafe(ref output, 32);
+    vd.GetLower().AsByte().StoreUnsafe(ref output, 48);
+    va.GetUpper().AsByte().StoreUnsafe(ref output, 64); // block B (counter c+1) -> [64..127]
+    vb.GetUpper().AsByte().StoreUnsafe(ref output, 80);
+    vc.GetUpper().AsByte().StoreUnsafe(ref output, 96);
+    vd.GetUpper().AsByte().StoreUnsafe(ref output, 112);
 }
+internal static unsafe void Block(uint* state, byte* output) => Block(ref *state, ref *output);
+internal static unsafe void Block2(uint* state, byte* output) => Block2(ref *state, ref *output);
+internal static unsafe void Block4(uint* state, byte* output) => Block4(ref *state, ref *output);
 /// <summary>Reads unaligned from the current input.</summary>
 /// <param name = "b">The b used by this operation.</param>
 /// <returns>The result of the operation.</returns>
@@ -2404,7 +2414,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 5DD01A155E001A6B32DE3A3277E5C3624311966FFF46A1FCEB8EDFEAF761A712
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 02C92E15E540B99C7BF20F37B0B21F8EEFEF0FA9FCAE3E1A1DA2A889B6BEC967
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Checks a character span using the same bounded Latin-1 kernels as string records.</summary>
