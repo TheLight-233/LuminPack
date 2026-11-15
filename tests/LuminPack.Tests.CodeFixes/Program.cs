@@ -314,8 +314,10 @@ internal static class CodeFixChecks
         using var package = ZipFile.OpenRead(path);
         string[] assemblies = package.Entries.Where(entry => entry.FullName.EndsWith(".dll", StringComparison.Ordinal))
             .Select(entry => entry.FullName).OrderBy(name => name, StringComparer.Ordinal).ToArray();
-        Require(assemblies.SequenceEqual(new[] { "analyzers/dotnet/cs/LuminPack.CodeFixes.dll", "analyzers/dotnet/cs/LuminPack.Generator.dll" }),
-            "The generator package must contain exactly the generator and code-fix assemblies under analyzers/dotnet/cs.");
+        string[] requiredAssemblies = ["analyzers/dotnet/cs/LuminPack.CodeFixes.dll", "analyzers/dotnet/cs/LuminPack.Generator.dll",
+            "tools/LuminPack.ILPostProcessor.dll", "tools/Mono.Cecil.dll"];
+        Require(assemblies.Where(name => name != "tools/next/LuminPack.SourceGenerator.dll").SequenceEqual(requiredAssemblies),
+            "The generator package must contain the analyzer pair and the build-only IL rewriting tools in their own directories.");
         foreach (string name in new[] { "LuminPack.Generator", "LuminPack.CodeFixes" })
         {
             Require(package.GetEntry($"analyzers/dotnet/cs/{name}.xml") != null, "Missing analyzer XML documentation.");
