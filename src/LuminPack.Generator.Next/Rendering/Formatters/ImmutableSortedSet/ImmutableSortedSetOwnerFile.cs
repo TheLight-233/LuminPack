@@ -40,6 +40,7 @@ internal static class ImmutableSortedSetOwnerFile
         string owner = "Binary_" + extension + "_ImmutableSortedSetOf" + readable;
         string candidate = "LuminImmutableCandidate<" + sequence + ">";
         string tree = "global::LuminPack.Utility.LuminTreeStorage";
+        bool orderedSet = set.FindFormatter(sequence)?.Supports("BuildOrderedImmutableSortedSet") == true;
 
         return FormatterOwnerFile.Render(w, operations, "internal static partial class " + roots, "internal static partial class " + owner,
             null, EmitBinaryWrite, EmitBinaryRead, EmitJsonWrite, EmitJsonRead);
@@ -432,12 +433,15 @@ internal static class ImmutableSortedSetOwnerFile
                     w.Line("return;");
                     w.Close();
                     w.Blank();
-                    w.Line("if (" + tree + ".CreateOrderedSetIfSupported(buffer, count) is { } ordered)");
-                    w.Open();
-                    w.Line("value = ordered;");
-                    w.Line("return;");
-                    w.Close();
-                    w.Blank();
+                    if (orderedSet)
+                    {
+                        w.Line("if (" + tree + ".CreateOrderedSetIfSupported(buffer, count) is { } ordered)");
+                        w.Open();
+                        w.Line("value = ordered;");
+                        w.Line("return;");
+                        w.Close();
+                        w.Blank();
+                    }
                     w.Line("var builder = global::LuminPack.Utility.LuminImmutableBuilders.RentSortedSet<" + scalar + ">();");
                     w.Line("try");
                     w.Open();
