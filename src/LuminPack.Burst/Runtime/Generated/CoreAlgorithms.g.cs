@@ -9,7 +9,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreAlgorithms
     {
-// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs A138BA75FE10D0B34692FDF201AFC9058CA25F03CA596E1A32FEAFA6AB92812A
+// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs CFB53A2EDE9AEF6BFB7B6DA9099B51A6C52CA82B02D367E7DCD47BBFC10D2B9B
 /// <summary>Copies at most sixteen bytes with scalar head and tail accesses inside the ranges.</summary>
 /// <param name = "destination">The valid writable range on a 64-bit target.</param>
 /// <param name = "source">The valid readable non-overlapping range.</param>
