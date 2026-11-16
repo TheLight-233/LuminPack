@@ -118,7 +118,17 @@ internal sealed partial class EnumerableOwnerContext
             W.Line("selected = array;");
         }
         W.Close();
-        ReadBlock("target");
+        W.Line("if (length != 0)");
+        W.Open();
+        W.Line("ref var slot = ref " + Marshal + ".GetReference(target);");
+        W.Line("int remaining = length;");
+        W.Line("do");
+        W.Open();
+        ReadElement("slot");
+        W.Line("slot = ref " + Memory + ".Add(ref slot, 1);");
+        W.Close();
+        W.Line("while (--remaining != 0);");
+        W.Close();
         W.Line("value = selected;");
         return true;
 
