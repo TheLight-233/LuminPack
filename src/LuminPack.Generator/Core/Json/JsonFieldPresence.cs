@@ -55,12 +55,17 @@ internal sealed class JsonFieldPresence
     /// <param name="indent">The assignment indentation.</param>
     internal void AppendMark(StringBuilder builder, LuminDataField field, string indent)
     {
-        if (!_positions.TryGetValue(field, out int position))
-            return;
-        builder.AppendLine(indent + (_packed
-            ? _locals[position / 32] + " |= " + Mask(position) + ";"
-            : _locals[position] + " = true;"));
+        string statement = Mark(field);
+        if (statement != null)
+            builder.AppendLine(indent + statement);
     }
+
+    /// <summary>Spells the assignment that marks a directly writable field as present.</summary>
+    /// <param name="field">The recognized member.</param>
+    /// <returns>The existing mark statement, or null for a staged field.</returns>
+    internal string Mark(LuminDataField field) => !_positions.TryGetValue(field, out int position) ? null : _packed
+        ? _locals[position / 32] + " |= " + Mask(position) + ";"
+        : _locals[position] + " = true;";
 
     /// <summary>Builds the original post-read missing-field test without accessing user storage.</summary>
     /// <param name="field">The directly assigned member.</param>

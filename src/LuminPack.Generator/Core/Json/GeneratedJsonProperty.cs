@@ -29,10 +29,11 @@ internal static class GeneratedJsonProperty
 
     /// <summary>Spells the two encodings of the complete generated property head.</summary>
     /// <param name="name">The property name emitted by the existing reference-tracked writer.</param>
+    /// <param name="separated">Whether the head begins with a comma.</param>
     /// <returns>The arguments for the bounded write.</returns>
-    internal static string Arguments(string name)
+    internal static string Arguments(string name, bool separated = true)
     {
-        string literal = SymbolDisplay.FormatLiteral(",\"" + name + "\":", true);
+        string literal = SymbolDisplay.FormatLiteral((separated ? "," : string.Empty) + "\"" + name + "\":", true);
         return literal + "u8, global::System.MemoryExtensions.AsSpan(" + literal + ")";
     }
 }

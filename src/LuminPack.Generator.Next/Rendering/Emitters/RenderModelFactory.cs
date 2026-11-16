@@ -115,7 +115,8 @@ internal static class RenderModelFactory
             declaredOrder: constructor?.DeclaredOrder!, rentByRef: structure?.RentByRef ?? false,
             declaredProfile: model.Policy.Declared ? ProfileNames.Type(model.Policy.Strings) : null,
             constantSpans: options.Net8 && options.CSharpVersion >= 1200, mirrors: record?.Mirrors!, rejection: record?.Rejection ?? structure?.Rejection,
-            limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null, recursive: record?.Recursive ?? false);
+            limits: model.Policy.Input == InputPolicy.Untrusted ? model.Policy.Limits : null, recursive: record?.Recursive ?? false,
+            generatedInt32Runs: json && options.GeneratedJsonInt32Reader && options.CSharpVersion >= 1100);
     }
 
     /// <summary>Projects the modeled schema onto the emitter's schema contract.</summary>

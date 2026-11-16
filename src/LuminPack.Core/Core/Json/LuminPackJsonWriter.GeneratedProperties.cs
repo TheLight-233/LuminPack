@@ -52,7 +52,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The closed document profile.</typeparam>
         /// <returns>Whether the encoding is fixed through the property head.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool HasConstantGeneratedPropertyEncoding<TOptions>() where TOptions : struct, ILuminPackOptions =>
+        internal static bool HasConstantGeneratedPropertyEncoding<TOptions>() where TOptions : struct, ILuminPackOptions =>
             LuminPackMarshal.ConstantStringProfile<TOptions>() ||
             typeof(TOptions) == typeof(LuminPackOptions<LuminPackUtf8LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>) ||
             typeof(TOptions) == typeof(LuminPackOptions<LuminPackUtf16LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>);

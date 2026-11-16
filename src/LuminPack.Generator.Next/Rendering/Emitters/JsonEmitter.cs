@@ -513,6 +513,11 @@ internal static class JsonEmitter
         string jsonReader = w.A("LuminPackJsonReader");
         bool fresh = model.FreshResult;
         bool packed = members.Length is >= 4 and <= 32;
+        var runs = model.GeneratedInt32Runs && fresh && !model.IsStruct && !model.HasCallbacks && model.Version == null &&
+            model.TypeParameters.Length == 0 && model.Rent == null
+            ? GeneratedJsonInt32Runs.Find(members.Length, index => members[index] is
+                { Kind: RenderMemberKind.Fixed, FieldType: ScalarKind.Int, Mirrored: false, Volatile: false })
+            : null;
         var body = new List<string>();
         if (model.IsStruct)
         {
@@ -574,6 +579,7 @@ internal static class JsonEmitter
         body.Add("reader.TryConsumeObjectStart<" + Profile + ">();");
         body.Add("bool isUtf8 = default(" + Profile + ").StringEncoding == " + w.A("LuminPackStringEncoding") + ".UTF8;");
         body.Add("int nextPropertyIndex = 0;");
+        AppendRun(body, 0);
         body.Add("while (true)");
         body.Add("{");
         body.Add("int propertyIndex = nextPropertyIndex;");
@@ -616,7 +622,7 @@ internal static class JsonEmitter
                     caseLines.Add("\t" + target + " = LuminPackMarshal.As<" + model.GlobalName + ", " + model.Mirror + ">(ref result)." + member.Name + ";");
                 }
                 else
-                    caseLines.Add(packed ? "seenFields |= " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u;" : Camel(member.Name) + "Seen = true;");
+                    caseLines.Add(Mark(index));
             }
             else
             {
@@ -627,24 +633,20 @@ internal static class JsonEmitter
             {
                 // A type-parameter member is read by the generic serializer, which owns its null handling.
                 caseLines.Add(w.A("LuminPackSerializer") + ".DeserializeJson<" + member.Scalar + ", " + Profile + ">(ref reader, ref " + target + ");");
-                caseLines.Add("break;");
             }
             else if (member.Raw)
             {
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
-                caseLines.Add("break;");
             }
             else if (member.Kind is RenderMemberKind.CultureInfo or RenderMemberKind.Special or RenderMemberKind.ForwardedCollection or RenderMemberKind.Sequence)
             {
                 caseLines.Add(member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
-                caseLines.Add("break;");
             }
             else if (member.IsFixed)
             {
                 string options = member.IsBoolean ? w.A("LuminPackDefaultOptions") : Profile;
                 caseLines.Add(target + " = " + (member.IsFloating ? "\u0001" + member.Scalar + "\u0001" : member.Underlying != null
                     ? "(" + member.Scalar + ")reader.Read<" + member.Underlying + ", " + options + ">()" : "reader.Read<" + member.Scalar + ", " + options + ">()") + ";");
-                caseLines.Add("break;");
             }
             else
             {
@@ -658,8 +660,9 @@ internal static class JsonEmitter
                     : member.Formatter + ".Read<" + Profile + ">(ref reader, ref " + target + ");");
                 caseLines.Add("}");
                 caseLines.Add("");
-                caseLines.Add("break;");
             }
+            AppendRun(caseLines, index + 1);
+            caseLines.Add("break;");
             caseLines.Add("}");
             caseLines.Add("");
         }
@@ -776,6 +779,14 @@ internal static class JsonEmitter
                 body.Add("");
             body.Add(w.MethodImpl("NoInlining"));
             body.Add("static " + scalar + " " + name + "(ref " + jsonReaderType + " " + state + ") => " + state + ".Read<" + scalar + ", " + Profile + ">();");
+        }
+        string Mark(int index) => packed ? "seenFields |= " + (1u << index).ToString(CultureInfo.InvariantCulture) + "u;" : Camel(members[index].Name) + "Seen = true;";
+
+        void AppendRun(List<string> lines, int first)
+        {
+            if (runs != null && first < runs.Length && runs[first] != 0)
+                GeneratedJsonInt32Runs.Emit(lines.Add, first, runs[first], index => members[index].Name,
+                    index => "result." + members[index].Name, Mark, "<" + Profile + ">");
         }
         Lines(w, body);
     }

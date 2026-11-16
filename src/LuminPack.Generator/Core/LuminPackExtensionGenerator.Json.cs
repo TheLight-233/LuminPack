@@ -122,7 +122,9 @@ public static partial class LuminPackExtensionGenerator
             LuminPackJsonCodeGenerator.GenerateStaticUtf8Fields(sb, data);
             LuminPackJsonCodeGenerator.GenerateJsonSerialize(sb, data, typeName, metaInfo);
             sb.AppendLine();
-            LuminPackJsonCodeGenerator.GenerateJsonDeserialize(sb, data, typeName, metaInfo);
+            bool integerRuns = metaInfo.IsNet8 && !metaInfo.IsForUnity && (int)metaInfo.CSharpVersion >= 1100 &&
+                GeneratedJsonInt32Runs.Available(compilation);
+            LuminPackJsonCodeGenerator.GenerateJsonDeserialize(sb, data, typeName, metaInfo, integerRuns);
         }
         sb.AppendLine("        }");
         sb.AppendLine();

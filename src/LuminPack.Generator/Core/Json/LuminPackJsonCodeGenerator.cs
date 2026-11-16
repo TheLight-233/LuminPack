@@ -578,9 +578,24 @@ public static class LuminPackJsonCodeGenerator
     /// <param name="classGlobalName">The class global name used by this operation.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
     public static void GenerateJsonDeserialize(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
+        => GenerateJsonDeserialize(sb, data, classGlobalName, metaInfo, integerRuns: false);
+
+    /// <summary>Appends the object reader and its supported ordered integer runs.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="classGlobalName">The C# spelling of the payload type.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <param name="integerRuns">Whether the selected Core supports generated integer runs.</param>
+    internal static void GenerateJsonDeserialize(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo, bool integerRuns)
     {
         bool flag = CanDeserializeDirectlyIntoFreshResult(data);
         var presence = flag ? new JsonFieldPresence(data) : null;
+        var runs = integerRuns && flag && !data.isValueType && !data.isGeneric && data.generatorType == GeneratorType.Object &&
+            data.callBackMethods.Count == 0 && data.RentPoolMethod == null
+            ? GeneratedJsonInt32Runs.Find(data.fields.Count, index => data.fields[index] is
+                { Type: LuminFiledType.Int, TypeSymbol.SpecialType: Microsoft.CodeAnalysis.SpecialType.System_Int32,
+                    IsVolatile: false, IsPrivate: false, isProperty: false })
+            : null;
         sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         if (data.isValueType)
         {
@@ -635,6 +650,7 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine("            bool isUtf8 = reader.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;");
         sb.AppendLine();
         sb.AppendLine("            int nextPropertyIndex = 0;");
+        AppendRun(0, "            ");
         sb.AppendLine("            while (true)");
         sb.AppendLine("            {");
         sb.AppendLine("                int propertyIndex = nextPropertyIndex;");
@@ -671,6 +687,7 @@ public static class LuminPackJsonCodeGenerator
             else
                 sb.AppendLine("                        if (reuseExisting) " + field.Name + "Temp = reuseLocal." + field.Identifier + ";");
             GenerateJsonDeserializeField(sb, field, flag && CanDeserializeDirectlyIntoConstructedObject(field) ? ("result." + field.Identifier) : (field.Name + "Temp"), "                        ");
+            AppendRun(fieldIndex + 1, "                        ");
             sb.AppendLine("                        break;");
             sb.AppendLine("                    }");
         }
@@ -714,6 +731,14 @@ public static class LuminPackJsonCodeGenerator
             sb.AppendLine("            }");
         }
         sb.AppendLine("        }");
+
+        void AppendRun(int first, string indent)
+        {
+            if (runs == null || first >= runs.Length || runs[first] == 0)
+                return;
+            GeneratedJsonInt32Runs.Emit(line => sb.AppendLine(indent + line), first, runs[first], index => data.fields[index].Name,
+                index => "result." + data.fields[index].Identifier, index => presence.Mark(data.fields[index]), string.Empty);
+        }
     }
 
     /// <summary>Performs the can deserialize directly into fresh result step for the current operation.</summary>

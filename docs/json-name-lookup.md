@@ -2,7 +2,9 @@
 
 [Chinese](json-name-lookup.cn.md)
 
-LuminPack generates property-name lookup tables for each model. Ordered properties first use the existing ordinal matcher. Unordered names, escaped names after decoding, and former names use the generated lookup for the document's encoding.
+LuminPack generates property-name lookup tables for each model. Ordered properties can match the next expected name directly. Unordered names, escaped names after decoding, and former names use the generated lookup for the document's encoding.
+
+On modern Core targets, both generators can read consecutive directly writable, nonvolatile `Int32` fields of ordinary classes as one ordered run. The generated code matches the complete property head, including punctuation, and parses each integer through a local managed cursor. A completed chunk or the first mismatch publishes the consumed prefix once. The normal reader resumes at the first unconsumed field and keeps its syntax, name lookup and reuse behavior. UTF-8 and UTF-16 share the run structure.
 
 Small tables use a length switch and exact comparisons. Larger tables also use this path when every length bucket contains at most four candidates. The generator decides independently for UTF-8 byte lengths and UTF-16 code-unit lengths, including aliases and reference metadata. The decision is made during compilation; there is no runtime dictionary or strategy selection.
 
