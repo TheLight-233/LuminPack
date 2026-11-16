@@ -117,6 +117,38 @@ internal static class RectangularArrayOwnerFile
 
         void BinaryRead(CodeWriter w)
         {
+            const string header = "1 + 3 * sizeof(int)";
+            bool boundedReuse = rank == 2 && raw && layout == null && reuseArraySlots && set.Options.Net8 && !set.Options.Unity;
+            if (boundedReuse)
+            {
+                // A matching destination proves the product and the exact payload width. An unavailable
+                // complete window or a different shape keeps the original checked read and failure cursor.
+                const string binaryReader = "global::LuminPack.Core.LuminPackReader";
+                w.Line("#if NET8_0_OR_GREATER");
+                w.Line("int copyBytes;");
+                w.Line("ref byte payload = ref " + Unsafe + ".NullRef<byte>();");
+                w.Line("var target = value;");
+                w.Line("if (target is not null && " + Unsafe + ".SizeOf<global::System.IntPtr>() == 8)");
+                w.Open();
+                w.Line("long recordBytes = " + header + " + (long)target.Length * " + width + ";");
+                w.Line("var input = reader.Buffer;");
+                w.Line("ref byte record = ref reader.Cursor;");
+                w.Line("long position = (long)" + Unsafe + ".ByteOffset(ref " + Marshal + ".GetReference(input), ref record);");
+                w.Line("if (recordBytes <= input.Length && (ulong)position <= (ulong)(input.Length - recordBytes) &&");
+                w.Line("    record != global::LuminPack.Code.LuminPackCode.NullObject &&");
+                w.Line("    " + binaryReader + ".Read<int>(ref " + Unsafe + ".Add(ref record, 1)) == target.GetLength(0) &&");
+                w.Line("    " + binaryReader + ".Read<int>(ref " + Unsafe + ".Add(ref record, 1 + sizeof(int))) == target.GetLength(1) &&");
+                w.Line("    " + binaryReader + ".Read<int>(ref " + Unsafe + ".Add(ref record, 1 + 2 * sizeof(int))) == target.Length &&");
+                w.Line("    (target.GetLowerBound(0) | target.GetLowerBound(1)) == 0)");
+                w.Open();
+                w.Line("reader.Cursor = ref " + Unsafe + ".Add(ref record, (nint)(uint)recordBytes);");
+                w.Line("payload = ref " + Unsafe + ".Add(ref record, " + header + ");");
+                w.Line("copyBytes = (int)(recordBytes - (" + header + "));");
+                w.Line("goto CopyRawPayload;");
+                w.Close();
+                w.Close();
+                w.Line("#endif");
+            }
             w.Line("if (!reader.TryReadObjectHead())");
             w.Open();
             w.Line("value = null;");
@@ -164,7 +196,21 @@ internal static class RectangularArrayOwnerFile
                 }
                 else
                     w.Line("value = " + array + ";");
+                if (boundedReuse)
+                {
+                    w.Line("#if NET8_0_OR_GREATER");
+                    w.Line("target = value;");
+                    w.Line("payload = ref reader.Cursor;");
+                    w.Line("reader.Advance(payloadBytes);");
+                    w.Line("copyBytes = payloadBytes;");
+                    w.Line("CopyRawPayload:");
+                    w.Line(PackMarshal + ".CopyBlockUnaligned(ref " + PackMarshal + ".DangerousGetArrayDataReference<" + item +
+                        ">(target), ref payload, (uint)copyBytes);");
+                    w.Line("#else");
+                }
                 w.Line("reader.Read(ref " + PackMarshal + ".DangerousGetArrayDataReference<" + item + ">(value), payloadBytes);");
+                if (boundedReuse)
+                    w.Line("#endif");
                 return;
             }
 

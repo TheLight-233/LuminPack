@@ -115,6 +115,24 @@ public sealed class RectangularArrayReuseTest
         Assert.Equal(11, firstAlias.Id);
         Assert.Equal(-2, secondAlias.Id);
     }
+
+    /// <summary>Requires the full raw matrix payload before overwriting a matching array.</summary>
+    [Fact]
+    public void RawMatrixRequiresTheCompleteWindowBeforeOverwritingAliases()
+    {
+        int[,] source = { { 11, -7 }, { 26, 18 } };
+        int[,] alias = { { 5, 6 }, { 7, 8 } };
+        var target = alias;
+        byte[] wire = LuminPackSerializer.Serialize(source);
+
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(wire.AsSpan(0, wire.Length - 1), ref target));
+        Assert.Same(alias, target);
+        Assert.Equal(new[] { 5, 6, 7, 8 }, alias.Cast<int>());
+
+        LuminPackSerializer.Deserialize(wire, ref target);
+        Assert.Same(alias, target);
+        Assert.Equal(source.Cast<int>(), alias.Cast<int>());
+    }
 }
 
 /// <summary>An ordinary element that opts in to independent slot reuse.</summary>
