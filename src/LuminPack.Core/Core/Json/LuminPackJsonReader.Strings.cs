@@ -30,7 +30,7 @@ namespace LuminPack.Core
                 return default;
             }
 
-            if (CurrentTokenType == JsonTokenType.String && CanReadQuotedScalarToken<T, TOptions>())
+            if (CurrentTokenType == JsonTokenType.String && CanReadQuotedScalarToken<TOptions>())
             {
                 const int StackTokenLimit = 128;
                 if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
@@ -66,19 +66,16 @@ namespace LuminPack.Core
             return ParseQuotedScalar<T>(Read<string, TOptions>());
         }
 
-        /// <summary>Recognizes the existing token profiles and exact built-in strict timestamp profiles.</summary>
-        /// <typeparam name="T">The requested framework scalar.</typeparam>
+        /// <summary>Recognizes built-in profiles whose encoding and token rules have no user callbacks.</summary>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>Whether token reads use only built-in option getters.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool CanReadQuotedScalarToken<T, TOptions>()
-            where T : struct where TOptions : struct, ILuminPackOptions =>
+        private static bool CanReadQuotedScalarToken<TOptions>() where TOptions : struct, ILuminPackOptions =>
             LuminPackMarshal.ConstantStringProfile<TOptions>() ||
-            (typeof(T) == typeof(DateTime) || typeof(T) == typeof(DateTimeOffset)) &&
-            (typeof(TOptions) == typeof(LuminPackOptions<LuminPackUtf8LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>) ||
-             typeof(TOptions) == typeof(LuminPackOptions<LuminPackUtf16LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>) ||
-             typeof(TOptions) == typeof(LuminPackFixedOptions<LuminPackOptions<LuminPackUtf8LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>>) ||
-             typeof(TOptions) == typeof(LuminPackFixedOptions<LuminPackOptions<LuminPackUtf16LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>>));
+            typeof(TOptions) == typeof(LuminPackOptions<LuminPackUtf8LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>) ||
+            typeof(TOptions) == typeof(LuminPackOptions<LuminPackUtf16LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>) ||
+            typeof(TOptions) == typeof(LuminPackFixedOptions<LuminPackOptions<LuminPackUtf8LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>>) ||
+            typeof(TOptions) == typeof(LuminPackFixedOptions<LuminPackOptions<LuminPackUtf16LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>>);
 
         /// <summary>Parses a complete private character range through the framework's span overloads.</summary>
         /// <typeparam name="T">The validated framework scalar type.</typeparam>

@@ -6,6 +6,8 @@ using LuminPack.Core;
 using LuminPack.Option;
 using LuminPack.Utility;
 using Xunit;
+using StrictUtf8 = LuminPack.Option.LuminPackOptions<LuminPack.Option.LuminPackUtf8LengthOptions, LuminPack.Option.LuminPackGeneralFormat, LuminPack.Option.LuminPackDefaultDepth, LuminPack.Option.LuminPackStrictJson>;
+using StrictUtf16 = LuminPack.Option.LuminPackOptions<LuminPack.Option.LuminPackUtf16LengthOptions, LuminPack.Option.LuminPackGeneralFormat, LuminPack.Option.LuminPackDefaultDepth, LuminPack.Option.LuminPackStrictJson>;
 
 namespace LuminPackUnitTest;
 
@@ -96,6 +98,49 @@ public partial class JsonFormattedScalarTest
         for (int i = 0; i < 4096; i++) WriteModernScalars(buffer);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(0, allocated);
+    }
+
+    /// <summary>Checks that strict JSON scalar reads avoid allocating a string for each quoted token.</summary>
+    [Fact]
+    public void StrictQuotedScalarReadsDoNotAllocateTokenStrings()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            Check(new TimeOnly(12, 34, 56).Add(TimeSpan.FromTicks(1234567)), "12:34:56.1234567");
+            Check(new TimeSpan(2, 3, 4, 5).Add(TimeSpan.FromTicks(6)).Negate(), "-2.03:04:05.0000006");
+            Check(new Guid("35a8c7d1-bd3a-48b6-b043-432096f520ff"), "35a8c7d1-bd3a-48b6-b043-432096f520ff");
+            Check(Int128.MinValue, Int128.MinValue.ToString(CultureInfo.InvariantCulture));
+            Check(UInt128.MaxValue, UInt128.MaxValue.ToString(CultureInfo.InvariantCulture));
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
+
+        static void Check<T>(T expected, string text) where T : struct
+        {
+            string token = "\"" + text + "\"";
+            Verify<StrictUtf8>(Encoding.UTF8.GetBytes(token));
+            Verify<LuminPackFixedOptions<StrictUtf16>>(Encoding.Unicode.GetBytes(token));
+
+            void Verify<TOptions>(byte[] input) where TOptions : struct, ILuminPackOptions
+            {
+                var state = new LuminPackReaderOptionalState();
+                for (int i = 0; i < 64; i++) Read(input, state);
+                T result = default;
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                for (int i = 0; i < 256; i++) result = Read(input, state);
+                long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                Assert.Equal(expected, result);
+                Assert.Equal(0, allocated);
+
+                static T Read(ReadOnlySpan<byte> input, LuminPackReaderOptionalState state)
+                {
+                    var reader = new LuminPackJsonReader(ref input, state);
+                    if (!reader.Read<TOptions>()) throw new InvalidOperationException("Missing scalar token.");
+                    return reader.ReadQuotedScalar<T, TOptions>();
+                }
+            }
+        }
     }
 
     /// <summary>Writes modern concrete scalar roots into retained storage.</summary>
