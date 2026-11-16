@@ -49,6 +49,8 @@ public static partial class LuminPackCollectionAccess
     {
         private object? _next;
         private readonly IEnumerator<T>? _fallback;
+        private readonly int _valueOffset;
+        private readonly int _nextOffset;
         /// <summary>Gets the captured current value.</summary>
         public T Current { get; private set; }
 
@@ -59,8 +61,14 @@ public static partial class LuminPackCollectionAccess
             Current = default!;
             _next = null;
             _fallback = null;
+            _valueOffset = 0;
+            _nextOffset = 0;
             if (ConcurrentStackStorage<T>.Available)
+            {
                 _next = Volatile.Read(ref LuminFieldLayout.Field<object?>(stack, ConcurrentStackStorage<T>.Head));
+                _valueOffset = ConcurrentStackStorage<T>.Value;
+                _nextOffset = ConcurrentStackStorage<T>.Next;
+            }
             else
                 _fallback = stack.GetEnumerator();
         }
@@ -84,8 +92,8 @@ public static partial class LuminPackCollectionAccess
             object? node = _next;
             if (node is null)
                 return false;
-            Current = LuminFieldLayout.Field<T>(node, ConcurrentStackStorage<T>.Value);
-            _next = LuminFieldLayout.Field<object?>(node, ConcurrentStackStorage<T>.Next);
+            Current = LuminFieldLayout.Field<T>(node, _valueOffset);
+            _next = LuminFieldLayout.Field<object?>(node, _nextOffset);
             return true;
         }
 
