@@ -117,16 +117,19 @@ public class JsonOrderedPropertyTest
         CheckPropertyWindows<TestUtf16Length>();
         CheckPropertyWindows<TestStrictUtf8Length>();
         CheckPropertyWindows<TestStrictUtf16Length>();
+        CheckPropertyWindows<LuminPackOptions<LuminPackUtf8LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>>(readNextToken: true);
+        CheckPropertyWindows<LuminPackOptions<LuminPackUtf16LengthOptions, LuminPackGeneralFormat, LuminPackDefaultDepth, LuminPackStrictJson>>(readNextToken: true);
     }
 
     /// <summary>Checks both comma states, all short windows, unaligned input and scalar completion.</summary>
     /// <typeparam name="TOptions">The statically selected encoding and grammar profile.</typeparam>
-    private static void CheckPropertyWindows<TOptions>() where TOptions : struct, ILuminPackOptions
+    /// <param name="readNextToken">Whether to check the grammar transition after a completed scalar.</param>
+    private static void CheckPropertyWindows<TOptions>(bool readNextToken = false) where TOptions : struct, ILuminPackOptions
     {
         var encoding = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode;
         foreach (bool comma in new[] { false, true })
         foreach (string gap in new[] { "", "\n " })
-        foreach (string tail in new[] { "0", "-1", "1.25", "-", "\"x\"", "\"a\\n\\u4E2D\"", "null", "true", "[]", "\"bad" })
+        foreach (string tail in new[] { "0", "-1", "1.25", "-", "\"x\"", "\"a\\n\\u4E2D\"", "null", "true", "[]", "\"bad", "0,\"Name\":1", "\"x\"\"Name\":1", "\"x\",\"Name\":true" })
         {
             string prefix = (comma ? "," : "") + "\"Name\":";
             byte[] data = encoding.GetBytes(prefix + gap + tail + "}");
@@ -135,8 +138,8 @@ public class JsonOrderedPropertyTest
             foreach (int offset in new[] { 0, 1 })
             for (int kind = 0; kind <= 2; kind++)
             {
-                string expected = ObservePropertyWindow<TOptions>(data, length, prefixLength, comma, kind, offset, canonical: true);
-                string actual = ObservePropertyWindow<TOptions>(data, length, prefixLength, comma, kind, offset, canonical: false);
+                string expected = ObservePropertyWindow<TOptions>(data, length, prefixLength, comma, kind, offset, readNextToken, canonical: true);
+                string actual = ObservePropertyWindow<TOptions>(data, length, prefixLength, comma, kind, offset, readNextToken, canonical: false);
                 Assert.Equal(expected, actual);
             }
         }
@@ -150,9 +153,10 @@ public class JsonOrderedPropertyTest
     /// <param name="comma">Whether the initial state follows a preceding property value.</param>
     /// <param name="kind">Zero for token selection, one for string completion, two for integer completion.</param>
     /// <param name="offset">The unaligned byte offset after the leading guard.</param>
+    /// <param name="readNextToken">Whether to inspect the token following a completed scalar.</param>
     /// <param name="canonical">Whether to replay the original checked token operation after the known prefix.</param>
     /// <returns>The matched flag, public reader state, value, scratch widths and exception observation.</returns>
-    private static unsafe string ObservePropertyWindow<TOptions>(byte[] data, int length, int prefixLength, bool comma, int kind, int offset, bool canonical)
+    private static unsafe string ObservePropertyWindow<TOptions>(byte[] data, int length, int prefixLength, bool comma, int kind, int offset, bool readNextToken, bool canonical)
         where TOptions : struct, ILuminPackOptions
     {
         byte[] backing = Enumerable.Repeat((byte)0xCC, data.Length + 34).ToArray();
@@ -185,6 +189,8 @@ public class JsonOrderedPropertyTest
                     value = text is null ? "null" : Convert.ToHexString(MemoryMarshal.AsBytes(text.AsSpan()));
                 }
                 else if (matched && kind == 2) value = reader.Read<long, TOptions>().ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (matched && kind != 0 && readNextToken)
+                    value += reader.Read<TOptions>() ? "|next token" : "|end of input";
             }
             catch (Exception exception) { failure = exception.GetType().FullName + ":" + exception.Message; }
             Assert.Equal((byte)0xCC, pinned[0]);

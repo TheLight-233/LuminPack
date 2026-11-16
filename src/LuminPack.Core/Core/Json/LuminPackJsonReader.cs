@@ -1137,15 +1137,22 @@ namespace LuminPack.Core
             }
 
             Position = end;
-            if (!default(TOptions).ValidateJsonSyntax && TryReadCurrentChar<TOptions>(out char head))
+            bool strict = default(TOptions).ValidateJsonSyntax;
+            // Fixed strict profiles have already established the value state for this property.
+            if ((!strict || LuminPackJsonWriter.HasConstantGeneratedPropertyEncoding<TOptions>()) &&
+                TryReadCurrentChar<TOptions>(out char head))
             {
                 if (head == '"')
                 {
+                    if (strict)
+                        GrammarState = JsonStateAfterValue;
                     CurrentTokenType = JsonTokenType.String;
                     return true;
                 }
                 if ((uint)(head - '0') <= 9u || head == '-')
                 {
+                    if (strict)
+                        GrammarState = JsonStateAfterValue;
                     CurrentTokenType = JsonTokenType.Number;
                     return true;
                 }
