@@ -67,27 +67,33 @@ internal static class VersionOwnerFile
     /// <param name="context">The aliases and profile of the owning formatter.</param>
     private static void BinaryRead(CodeWriter w, SpecialOwnerContext context)
     {
+        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
+        w.Line("int major, minor, build, revision;");
+        w.Line("#if NET8_0_OR_GREATER");
+        // The complete window proves both the marker and every component. The fallback preserves short-read cursor progress.
+        w.Line("ref byte record = ref reader.PeekInput(17, out bool complete);");
+        w.Line("if (" + unsafeType + ".SizeOf<global::System.IntPtr>() == 8 && complete)");
+        w.Open();
+        w.Line("if (record == global::LuminPack.Code.LuminPackCode.NullObject)");
+        w.Open();
+        w.Line("reader.Cursor = ref " + unsafeType + ".Add(ref record, 1);");
+        w.Line("value = null;");
+        w.Line("return;");
+        w.Close();
+        w.Line("reader.Cursor = ref " + unsafeType + ".Add(ref record, 17);");
+        w.Line("major = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref record, 1));");
+        w.Line("minor = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref record, 5));");
+        w.Line("build = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref record, 9));");
+        w.Line("revision = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref record, 13));");
+        w.Close();
+        w.Line("else");
+        w.Line("#endif");
+        w.Open();
         w.Line("if (!reader.TryReadObjectHead())");
         w.Open();
         w.Line("value = null;");
         w.Line("return;");
         w.Close();
-        w.Blank();
-        const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
-        w.Line("int major, minor, build, revision;");
-        w.Line("#if NET8_0_OR_GREATER");
-        w.Line("ref byte payload = ref reader.PeekInput(16, out bool complete);");
-        w.Line("if (" + unsafeType + ".SizeOf<global::System.IntPtr>() == 8 && complete)");
-        w.Open();
-        w.Line("reader.Advance(16);");
-        w.Line("major = LuminPackReader.Read<int>(ref payload);");
-        w.Line("minor = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref payload, 4));");
-        w.Line("build = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref payload, 8));");
-        w.Line("revision = LuminPackReader.Read<int>(ref " + unsafeType + ".Add(ref payload, 12));");
-        w.Close();
-        w.Line("else");
-        w.Line("#endif");
-        w.Open();
         w.Line("major = reader.Read<int>();");
         w.Line("minor = reader.Read<int>();");
         w.Line("build = reader.Read<int>();");
