@@ -76,7 +76,7 @@ internal static class DictionarySlotReuseEmitter
         w.Line("while (++index < count);");
         w.Line("if (seen is not null)");
         w.Open();
-        w.Line("var keys = new global::System.Collections.Generic.HashSet<" + key.Type + ">();");
+        w.Line("var keys = new global::System.Collections.Generic.HashSet<" + key.Type + ">(global::System.Math.Min(count, destination.Count));");
         w.Line("ref var firstSeen = ref " + arrayReference + "(seen);");
         w.Line("index = 0;");
         w.Line("do");

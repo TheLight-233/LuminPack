@@ -201,6 +201,39 @@ public class DictionaryBucketRangeTest
         Assert.Equal(24, target[3]);
     }
 
+    /// <summary>Checks that refilling reordered scalar pairs does not grow the temporary membership set.</summary>
+    [Fact]
+    public void ReorderedScalarRefillAllocatesOnlyOneKeySet()
+    {
+        const int count = 120;
+        const int repetitions = 8;
+        var target = Enumerable.Range(0, count).ToDictionary(key => key, key => -key);
+        var source = Enumerable.Range(0, count).Reverse().ToDictionary(key => key, key => key);
+        byte[] payload = LuminPackSerializer.Serialize(source);
+
+        for (int iteration = 0; iteration < repetitions; iteration++)
+            LuminPackSerializer.Deserialize(payload.AsSpan(), ref target);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < repetitions; iteration++)
+        {
+            var keys = new HashSet<int>(count);
+            for (int key = 0; key < count; key++)
+                keys.Add(key);
+            GC.KeepAlive(keys);
+        }
+        long budget = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < repetitions; iteration++)
+            LuminPackSerializer.Deserialize(payload.AsSpan(), ref target);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.InRange(allocated, 0, budget);
+        Assert.Equal(Enumerable.Range(0, count), target.Keys);
+        Assert.All(target, item => Assert.Equal(item.Key, item.Value));
+    }
+
     /// <summary>Preserves immutable keys, enumeration version effects and staged failure publication for scalar refills.</summary>
     [Fact]
     public void StringScalarRefillsRetainKeysAndCheckedFailurePublication()
