@@ -87,6 +87,34 @@ internal static class LinkedListOwnerFile
     private static void Read(EnumerableOwnerContext c)
     {
         var w = c.W;
+        // A reused list reads each element into its existing node in order, as a reused List<T> reads into its slots, then
+        // appends missing nodes or removes surplus ones. A failed read exposes the completed prefix.
+        w.Line("if (value is not null && length != 0 && value.First is { } reuseNode)");
+        w.Open();
+        w.Line("int reuseIndex = 0;");
+        w.Line("do");
+        w.Open();
+        w.Line("var reuseItem = reuseNode.Value;");
+        c.ReadElement("reuseItem");
+        w.Line("reuseNode.Value = reuseItem;");
+        w.Line("reuseNode = reuseNode.Next!;");
+        w.Close();
+        w.Line("while (++reuseIndex < length && reuseNode is not null);");
+        w.Line("for (; reuseIndex < length; reuseIndex++)");
+        w.Open();
+        w.Line(c.Scalar + " addedItem = default!;");
+        c.ReadElement("addedItem", fresh: true);
+        w.Line("value.AddLast(addedItem);");
+        w.Close();
+        w.Line("while (reuseNode is not null)");
+        w.Open();
+        w.Line("var nextNode = reuseNode.Next;");
+        w.Line("value.Remove(reuseNode);");
+        w.Line("reuseNode = nextNode!;");
+        w.Close();
+        w.Line("goto operationComplete_RootRead;");
+        w.Close();
+        w.Blank();
         w.Line("if (value is null)");
         w.Indented(() => w.Line("value = new " + c.Sequence + "();"));
         w.Line("else");
