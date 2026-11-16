@@ -35,7 +35,7 @@ namespace LuminPack.Core
                 const int StackTokenLimit = 128;
                 if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
                 {
-                    var utf8 = ReadStringUtf8<TOptions>();
+                    var utf8 = ReadSelectedStringUtf8<TOptions>(true);
                     if (utf8.Length <= StackTokenLimit)
                     {
                         Span<char> decoded = stackalloc char[utf8.Length];
@@ -49,7 +49,7 @@ namespace LuminPack.Core
                     return ParseQuotedScalar<T>(decodedString);
                 }
 
-                var token = ReadStringUtf16<TOptions>();
+                var token = ReadSelectedStringUtf16<TOptions>(true);
                 if (token.Length <= StackTokenLimit)
                 {
                     // A culture callback can reenter the serializer or change the original input.
