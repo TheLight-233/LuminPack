@@ -71,6 +71,11 @@ internal static class InterfaceOwnerFile
         bool stringSpan = !setInterface && c.Text && c.Supports("WriteInterfaceStrings");
         var reservedElement = setInterface ? null : c.ReservableListElement();
         bool rawSpan = !setInterface && !c.Counted;
+        const string collections = "global::System.Collections.Generic.";
+        string[] concreteSequences = c.Sequence.StartsWith(collections + "IEnumerable<", System.StringComparison.Ordinal) ||
+            c.Sequence.StartsWith(collections + "IReadOnlyCollection<", System.StringComparison.Ordinal)
+            ? new[] { "Queue", "Stack", "LinkedList" }
+            : c.Sequence.StartsWith(collections + "ICollection<", System.StringComparison.Ordinal) ? new[] { "LinkedList" } : System.Array.Empty<string>();
         if (rawSpan)
             w.Line("global::System.ReadOnlySpan<" + scalar + "> items;");
         w.Line("if (value.GetType() == typeof(" + type + "))");
@@ -105,6 +110,17 @@ internal static class InterfaceOwnerFile
                 w.Line("WriteArray(ref operationState, " + array + ");");
             else
                 w.Line("items = " + array + ";");
+            w.Close();
+        }
+        foreach (string name in concreteSequences)
+        {
+            string sequenceType = ConcreteSequence(name);
+            w.Line("else if (value.GetType() == typeof(" + sequenceType + "))");
+            w.Open();
+            // The counted writer starts the collection before it captures the public struct enumerator.
+            w.Line("Write" + name + "(ref operationState, " + c.Memory + ".As<" + sequenceType + ">(value));");
+            if (rawSpan)
+                w.Line("goto operationComplete_RootWrite;");
             w.Close();
         }
         if (setInterface)
@@ -154,6 +170,8 @@ internal static class InterfaceOwnerFile
             if (!setInterface)
                 WriteCounted("WriteArray", arrayType);
         }
+        foreach (string name in concreteSequences)
+            WriteCounted("Write" + name, ConcreteSequence(name));
         if (outlineFallback)
             WriteCounted("WriteInterface", c.Sequence);
         if (setInterface)
@@ -170,6 +188,8 @@ internal static class InterfaceOwnerFile
             w.Line("static void WriteStringItem(scoped ref " + writer + " operationState, string item)");
             w.Indented(() => w.Line("=> operationState.Write<TLuminProfile>(item);"));
         }
+
+        string ConcreteSequence(string name) => collections + name + "<" + scalar + ">";
 
         void WriteCounted(string method, string input)
         {
