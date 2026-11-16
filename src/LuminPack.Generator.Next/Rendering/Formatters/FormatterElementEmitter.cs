@@ -85,8 +85,16 @@ internal static class FormatterElementEmitter
         // Clear a reused slot on a null marker before the element's own read runs its deserializing callbacks.
         if (model.OrdinaryObject && !fresh)
         {
-            w.Line("if (" + state + ".PeekIsNullObject())");
-            w.Indented(() => w.Line(expression + " = default!;"));
+            if (model.Definition == "$strategy")
+            {
+                // The generated comment keeps the ordinary and nonordinary shared owner shapes distinct.
+                w.Line("// The concrete element strategy clears the slot before reading a null object.");
+            }
+            else
+            {
+                w.Line("if (" + state + ".PeekIsNullObject())");
+                w.Indented(() => w.Line(expression + " = default!;"));
+            }
         }
 
         ForwardedElementRead.Emit(w, model.Type, state, expression, Owner(set, model) + ".Read<" + profile + ">(ref " + state + ", ref " + expression + ");");
