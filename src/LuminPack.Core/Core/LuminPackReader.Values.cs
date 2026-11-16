@@ -234,19 +234,19 @@ namespace LuminPack.Core
         public bool TryPeekUnionHeader(out ushort tag)
         {
             ref byte marker = ref Current;
-            EnsureReadableUnionMarker(ref marker);
+            EnsureReadableByte(ref marker);
             tag = marker;
             AdvanceValidated(1);
             return tag is not LuminPackCode.NullObject;
         }
 
-        /// <summary>Validates a Union marker before accessing it and returns its window-relative offset.</summary>
-        /// <param name="marker">The current marker address.</param>
-        /// <returns>The validated offset of the marker.</returns>
+        /// <summary>Validates one byte and returns its window-relative offset.</summary>
+        /// <param name="source">The current input byte.</param>
+        /// <returns>The validated offset of the input byte.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private readonly int EnsureReadableUnionMarker(scoped ref byte marker)
+        private readonly int EnsureReadableByte(scoped ref byte source)
         {
-            nint offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref marker);
+            nint offset = Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref source);
             if (unchecked((nuint)offset) >= (uint)_buffer.Length)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)unchecked((int)offset) + 1);
             return (int)offset;
@@ -259,7 +259,7 @@ namespace LuminPack.Core
         public bool TryPeekWideUnionHeader(out ushort tag)
         {
             ref byte marker = ref Current;
-            int position = EnsureReadableUnionMarker(ref marker);
+            int position = EnsureReadableByte(ref marker);
             byte firstTag = marker;
             if (firstTag < LuminPackCode.WideTag)
             {
@@ -313,14 +313,19 @@ namespace LuminPack.Core
             where T : unmanaged
         {
             int size = Unsafe.SizeOf<T>();
+            if (size == 1)
+                EnsureReadableByte(ref Current);
+            else
+            {
 #if NET8_0_OR_GREATER
-            long remaining = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
+                long remaining = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-            long remaining = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
+                long remaining = (long)Unsafe.ByteOffset(ref Current, ref MemoryMarshal.GetReference(_end));
 #endif
-            // A cursor before the buffer has more than its full length remaining.
-            if (remaining < size || remaining > _buffer.Length)
-                LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + size);
+                // A cursor before the buffer has more than its full length remaining.
+                if (remaining < size || remaining > _buffer.Length)
+                    LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + size);
+            }
             Read(ref Current, out value);
             AdvanceValidated(size);
         }
